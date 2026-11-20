@@ -19,6 +19,8 @@ const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const MAIL_FILES = {
   'src/server/mail': ['layout.ts', 'logo.ts', 'mail-service.ts', 'microsoft-token.ts', 'send.ts', 'transport.ts'],
   'src/lib/mail': ['codes.ts', 'events.ts'],
+  // STORY-09.03: the message of each alert is a pure function from a fixed DTO of plain strings (no cost field), on top of the shared layout.
+  'src/server/mail/templates': ['task-assigned.ts'],
 } as const;
 
 const JOB_FILE = 'src/server/jobs/outbox-send.ts';
@@ -30,6 +32,9 @@ const ALLOWED_SPECIFIER = [
   /^zod$/,
   /^\.\/(layout|logo|mail-service|microsoft-token|send|transport)$/,
   /^\.\.\/\.\.\/lib\/(env|time)$/,
+  // From `src/server/mail/templates/`: the shared layout above it, and `formatIst` from the time module, three levels up.
+  /^\.\.\/layout$/,
+  /^\.\.\/\.\.\/\.\.\/lib\/time$/,
   /^\.\.\/\.\.\/lib\/mail\/(codes|events)$/,
   /^\.\.\/mail\/send$/,
   /^\.\.\/repositories\/(email-outbox-repository|transaction)$/,

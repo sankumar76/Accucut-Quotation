@@ -62,8 +62,11 @@ export const assignedTaskSchema = z.strictObject({
   }),
 });
 
-/** `GET /api/v1/options/assign-context` (AC-5): the active Engineers, by ID and name, and nothing else. */
-export const assignContextSchema = z.strictObject({ engineers: z.array(engineerSchema).readonly() });
+/**
+ * `GET /api/v1/options/assign-context` (AC-5): the active Engineers, by ID and name, and one boolean of the settings, whether e-mail alerts are on (STORY-09.03 AC-6, for the notice of
+ * SCR-04). A Lead cannot read Settings, so nothing else of them is here: no sender, no address.
+ */
+export const assignContextSchema = z.strictObject({ engineers: z.array(engineerSchema).readonly(), alertsEnabled: z.boolean() });
 
 const LIMIT_MESSAGE = `The limit must be a whole number from 1 to ${QUEUE_MAX_LIMIT}.`;
 const CURSOR_MESSAGE = 'This is not a place in the list. Start again from the first page.';
