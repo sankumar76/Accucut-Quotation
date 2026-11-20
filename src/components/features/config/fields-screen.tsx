@@ -17,6 +17,7 @@ import { filterFields, isKindFilter, KIND_FILTER_OPTIONS, type KindFilter } from
 
 import { useMasterList } from '../masters/use-master-list';
 
+import { DELETED_NOTICE_TITLE, DIALOG_FAILED_LINE } from './delete-field-texts';
 import { FieldsList } from './fields-table';
 import {
   CLEAR_FILTERS,
@@ -33,12 +34,14 @@ import {
   VIEW_ONLY_TEXT,
   VIEW_ONLY_TITLE,
 } from './fields-texts';
+import { useFieldsDelete, type FieldsDelete } from './use-fields-delete';
 
 /**
  * SCR-17 "Fields and formulas" (STORY-08.01 AC-1, AC-4, AC-7): every field in column order with its kind and formula, a search by letter, name or formula, and a filter by kind.
  * The page has checked the role and sent nothing but the role's reading of it (`viewOnly`); the screen asks `GET /api/v1/config/fields` itself, so its Loading and Error states are real:
  * the skeleton after 300 ms, and "We could not load the fields and formulas" with "Try again". It decides nothing: the letters, the kinds and the formulas are the server's.
- * A Lead sees the same table under the banner "View only" and has no action; the Admin's "Edit formula" (STORY-08.02) opens SCR-18 on a field that has a formula.
+ * A Lead sees the same table under the banner "View only" and has no action; the Admin's "Edit formula" (STORY-08.02) opens SCR-18 on a field that has a formula, and "Delete" (STORY-08.04) opens the dialog of SCR-20 on a
+ * field that is not protected; the dialog's code is fetched on the first press and is not in the first load (NFR-009). After a delete the list is read again and the server's sentence shows above it.
  *
  * The list state is the shared `useMasterList` (latest read wins, the skeleton delay, the filter), the one hook that a screen which lists rows read from the server composes (DL-150 (5)).
  * There is deliberately no `loading.tsx` beside the page (it would turn the 403 of a refused role into a streamed 200, QLT-72), so the page itself holds no data.
@@ -107,6 +110,27 @@ function SearchBar({ query, kind, onQuery, onKind, inputRef }: SearchBarProps) {
   );
 }
 
+/** After a delete (STORY-08.04 AC-3): the sentence of the server, polite, above the list; and the line for a dialog whose code did not arrive. */
+function DeleteNotices({ removal }: { readonly removal: FieldsDelete }) {
+  return (
+    <>
+      {removal.notice === null ? null : (
+        <Notice tone="success" title={DELETED_NOTICE_TITLE}>
+          {removal.notice}
+        </Notice>
+      )}
+      {removal.loader.failed ? <Notice tone="danger">{DIALOG_FAILED_LINE}</Notice> : null}
+    </>
+  );
+}
+
+/** The dialog of SCR-20, once its code is here (not in the first load, NFR-009). The field it is about stays set after it closes, so its text does not change while the panel fades out. */
+function DeleteDialogHost({ removal }: { readonly removal: FieldsDelete }) {
+  const Dialog = removal.loader.Overlay;
+  if (Dialog === null || removal.target === null) return null;
+  return <Dialog open={removal.open} onOpenChange={removal.setOpen} target={removal.target} onDeleted={removal.onDeleted} onStale={removal.onStale} onCloseAutoFocus={removal.onCloseAutoFocus} />;
+}
+
 function NoMatch({ query, onClear }: { readonly query: string; readonly onClear: () => void }) {
   return (
     <div role="status">
@@ -133,6 +157,7 @@ export function FieldsScreen({ viewOnly }: FieldsScreenProps) {
     filter: (items, query) => filterFields(items, query, kind),
   });
   const { read } = list;
+  const removal = useFieldsDelete({ readAgain: list.refresh, listFailed: list.status === 'error' });
 
   // The first read starts when the screen opens: the status is `loading` already, so nothing is set first (`useMasterList`).
   useEffect(() => {
@@ -149,10 +174,12 @@ export function FieldsScreen({ viewOnly }: FieldsScreenProps) {
     <>
       <PageHeader title={FIELDS_TITLE} description={FIELDS_DESCRIPTION} />
       {viewOnly ? <ViewOnlyBanner /> : null}
+      <DeleteNotices removal={removal} />
       <Card aria-busy={list.status === 'loading' || undefined}>
         <SearchBar query={list.query} kind={kind} onQuery={list.setQuery} onKind={setKind} inputRef={search} />
-        <FieldsResults list={list} onClear={clearFilters} canEdit={!viewOnly} />
+        <FieldsResults list={list} onClear={clearFilters} canEdit={!viewOnly} removal={removal} />
       </Card>
+      <DeleteDialogHost removal={removal} />
     </>
   );
 }
@@ -160,7 +187,7 @@ export function FieldsScreen({ viewOnly }: FieldsScreenProps) {
 type FieldsListState = ReturnType<typeof useMasterList<ConfigFieldRow, null>>;
 
 /** What the card shows below the search: the error with "Try again", the skeleton, "No field matches", or the rows. */
-function FieldsResults({ list, onClear, canEdit }: { readonly list: FieldsListState; readonly onClear: () => void; readonly canEdit: boolean }) {
+function FieldsResults({ list, onClear, canEdit, removal }: { readonly list: FieldsListState; readonly onClear: () => void; readonly canEdit: boolean; readonly removal: FieldsDelete }) {
   if (list.status === 'error' && list.items === null) {
     return (
       <ErrorState
@@ -177,5 +204,5 @@ function FieldsResults({ list, onClear, canEdit }: { readonly list: FieldsListSt
   }
   if (list.items === null) return <SkeletonBlock rows={SKELETON_ROWS} label={LOADING_LABEL} />;
   if (list.shown === null || list.shown.length === 0) return <NoMatch query={list.query} onClear={onClear} />;
-  return <FieldsList rows={list.shown} canEdit={canEdit} />;
+  return <FieldsList rows={list.shown} canEdit={canEdit} onDelete={removal.onDelete} pressedDeleteId={removal.pressedId} />;
 }

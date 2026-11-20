@@ -2,10 +2,12 @@ import { z } from 'zod';
 
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
+import { describeDeleteAfter, describeDeleteBefore } from '../../lib/config/field-delete-audit';
 import { describeInsertAudit, NOT_IN_THE_WORKSHEET } from '../../lib/config/field-insert-audit';
 import { MAX_REASON_LENGTH } from '../../lib/estimate/approve-price';
 import { ESTIMATE_STATUSES, type EstimateStatus } from '../../lib/estimate/state-machine';
 import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
+import { FIELD_KINDS } from '../../lib/fields/types';
 import { formatRupees } from '../../lib/money';
 import { CONTACT_FIELD_NAMES, type ContactFieldName } from '../../lib/masters/customers';
 import { EXCHANGE_RATE_FIELDS, EXCHANGE_RATE_LABELS } from '../../lib/masters/exchange-rates';
@@ -371,6 +373,19 @@ const insertedAfterState = z.strictObject({
   version: z.number().int().positive(),
 });
 
+/** STORY-08.04: what a delete keeps (`config.field_deleted`). Before is the column as it was; after is runs of OLD letters with the number of places they moved to the left. */
+const deletedBeforeState = z.strictObject({
+  letter: z.string().min(1).max(10),
+  label: z.string().min(1).max(200),
+  kind: z.enum(FIELD_KINDS),
+  // No upper bound, as `config.formula_changed` has none: the entry keeps the formula in display form (review SQR-02 of AQP-358).
+  formula: z.string().min(1).nullable(),
+});
+const deletedAfterState = z.strictObject({
+  moved: z.array(z.strictObject({ from: z.string().min(1).max(10), to: z.string().min(1).max(10), by: z.number().int().positive() })),
+  version: z.number().int().positive(),
+});
+
 export const AUDIT_EVENTS = {
   // ---- Wired in this story: the six user events of the Users screen (STORY-01.04) -----------------------------------------
   'user.created': defineEvent({
@@ -553,6 +568,19 @@ export const AUDIT_EVENTS = {
     before: z.null(),
     after: insertedAfterState,
     describe: (_before, after) => ({ before: NOT_IN_THE_WORKSHEET, after: describeInsertAudit(after) }),
+  }),
+
+  // ---- Wired in STORY-08.04: a field deleted from the field registry --------------------------------------------------------------
+  // One entry per delete, in the transaction that stores the new configuration version: the column as it was (letter, label, kind, and the formula of an output in display form), and which columns moved to
+  // the left, as runs of their old letters. The Object is the deleted field ("AY Cutting Cost"). The log is read by the Admin alone (NFR-002); no password (the step-up reaches `verifyStepUp` and nowhere
+  // else, NFR-004), figure or rate value has a key to sit in.
+  'config.field_deleted': defineEvent({
+    objectType: 'field',
+    category: 'config_change',
+    status: 'wired',
+    before: deletedBeforeState,
+    after: deletedAfterState,
+    describe: (before, after) => ({ before: describeDeleteBefore(before), after: describeDeleteAfter(after) }),
   }),
 
   // ---- Declared for later stories: each adds the call, the shapes, the words and the test --------------------------------

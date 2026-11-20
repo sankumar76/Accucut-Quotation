@@ -63,3 +63,23 @@ export const PRICE_PER_TOOL_COST_KEY = 'price-per-tool-cost';
 /** Keys of Unit Production Price in US dollars (BJ) and in euros (BK): the two figures SCR-06 holds for a row besides its BG (STORY-06.02, FR-029). */
 export const UNIT_PRICE_USD_KEY = 'unit-price-usd';
 export const UNIT_PRICE_EUR_KEY = 'unit-price-eur';
+
+/** Keys of the two exchange-rate columns (BH and BI): the Exchange rates tab's hints name them and the review's row calculation divides by them (STORY-02.04 AC-5; STORY-08.04 AC-5). */
+export const EXCHANGE_RATE_USD_KEY = 'exchange-rate-usd';
+export const EXCHANGE_RATE_EUR_KEY = 'exchange-rate-eur';
+
+/**
+ * The fields the code finds by key and would fail without (STORY-08.04 AC-5): the Admin may not delete them, as well as every field that has a system role (`SYSTEM_ROLES`). A field is in this list when a
+ * lookup by its key throws or returns a figure that is wrong when it is missing (the review, the export's product cells, the exchange-rate hints, the calculation's material lookups). A key that a
+ * lookup only tolerates, such as the two that name a part (`PART_NAME_KEYS`), is not here. `tests/unit/config/protected-keys.test.ts` fails when a lookup names a key that is in neither group.
+ */
+export const PROTECTED_FIELD_KEYS: ReadonlyArray<string> = [
+  MATERIAL_IN_DRAWING_KEY,
+  MATERIAL_CONSIDERED_KEY,
+  MATERIAL_RATE_KEY,
+  PRICE_PER_TOOL_COST_KEY,
+  UNIT_PRICE_USD_KEY,
+  UNIT_PRICE_EUR_KEY,
+  EXCHANGE_RATE_USD_KEY,
+  EXCHANGE_RATE_EUR_KEY,
+];

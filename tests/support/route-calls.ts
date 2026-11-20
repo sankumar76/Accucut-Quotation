@@ -52,6 +52,9 @@ export interface CallContext {
  */
 export const CUTTING_COST_FIELD_ID = seedId(FIELD_ID_NAMESPACE, columnLetterToIndex('AL'));
 
+/** The ID of Unit Production Price (BG), a system field the Admin may never delete (STORY-08.04): the delete's valid call names it, so the call is refused 409 and stores nothing. Made from the seed's own ID rule, for the same reason. */
+const SYSTEM_FIELD_ID = seedId(FIELD_ID_NAMESPACE, columnLetterToIndex('BG'));
+
 /** The seed rate that no formula uses (`Plating-rate-per-sqin`, D-40), so a valid delete of it succeeds. */
 const PLATING_ITEM_ID = '00000000-0000-4000-8000-000400000009';
 
@@ -292,6 +295,13 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
       return { id, body: { spec: INSERT_AFTER_AX, lettersOnly: true }, status: 200 };
     case 'POST /api/v1/config/fields':
       return { id, body: { spec: INSERT_AFTER_AX, baseVersion: STALE_BASE_VERSION }, status: 409 };
+    // STORY-08.04: the delete dialog's two routes. The references read stores nothing, so it answers 200 at any state: Cutting Cost is read by the total, so the answer lists a formula. The delete's valid call is the one that stores
+    // nothing too: BG (a system field) is refused 409 `SYSTEM_FIELD` before any password is asked for, for the one role that may call it, at every state of the harness. A delete that really writes, the password step and the
+    // 409s are `config-delete-routes.test.ts`'s and `tests/integration/config/delete-field.test.ts`'s. The answers name formulas and column labels: Admin only, and the scan reads the refusals.
+    case 'GET /api/v1/config/fields/[id]/references':
+      return { id: CUTTING_COST_FIELD_ID, status: 200 };
+    case 'DELETE /api/v1/config/fields/[id]':
+      return { id: SYSTEM_FIELD_ID, body: { password: HARNESS_PASSWORD }, status: 409 };
     default:
       return undefined;
   }

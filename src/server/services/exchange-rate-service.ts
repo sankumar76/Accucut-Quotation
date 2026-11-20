@@ -1,6 +1,7 @@
 import { FieldValidationError } from '../../lib/errors';
 import { columnOfKey } from '../../lib/fields/lookup';
 import type { ConfigDocument } from '../../lib/fields/schema';
+import { EXCHANGE_RATE_EUR_KEY, EXCHANGE_RATE_USD_KEY, UNIT_PRICE_EUR_KEY, UNIT_PRICE_USD_KEY } from '../../lib/fields/types';
 import {
   changedExchangeRates,
   EXCHANGE_RATE_FIELDS,
@@ -41,8 +42,8 @@ import type { AuditContext, AuditService } from './audit-service';
 
 /** The fields of the registry the hints name, by key (`prisma/seed/config/seed-config.ts`): the rate column and the price that divides by it. */
 const COLUMN_KEYS: Readonly<Record<ExchangeRateField, { readonly rate: string; readonly price: string }>> = {
-  usd: { rate: 'exchange-rate-usd', price: 'unit-price-usd' },
-  eur: { rate: 'exchange-rate-eur', price: 'unit-price-eur' },
+  usd: { rate: EXCHANGE_RATE_USD_KEY, price: UNIT_PRICE_USD_KEY },
+  eur: { rate: EXCHANGE_RATE_EUR_KEY, price: UNIT_PRICE_EUR_KEY },
 };
 
 /** The two rates as SCR-13 shows them: decimal text, or null while never set; who saved them and when; and the columns the hints name. */
