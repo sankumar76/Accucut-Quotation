@@ -220,8 +220,12 @@ test.describe('AC-6: Enter moves to the next field', () => {
   });
 });
 
+// DEF-049 (AQP-378): AC-9 was one test that opened the form once and took three whole-form axe scans. Measured on CI (runs 44737067927, 44546695829 and 44580739670): opening the form is 6 to 9 s on
+// the development server and each whole-form scan 2.2 to 3.4 s, so the one test took 10.8 to 17.9 s on a quiet runner (run 44737067927), 19.8 to 27.1 s on a busy one, and ran out of its 30 s on the busiest (tablet, 30.2 s). It is now one
+// test per state of the form (as opened, with an error showing, with a value saved), each opening the form once and taking one scan, and none of its checks is left out. A scan is never shortened: the
+// same rules and tags.
 test.describe('AC-9: the screen', () => {
-  test('AC-9: no sideways scroll, axe finds nothing (with an error showing and with a value saved), every control is 44 px high and every label is visible', async ({ page }, testInfo) => {
+  test('AC-9 (as opened): no sideways scroll, axe finds nothing, every control is 44 px high and every label is visible', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);
@@ -232,13 +236,19 @@ test.describe('AC-9: the screen', () => {
     for (const label of ['Sl. No', 'Part No.', 'Description', 'QTY per Assy', 'Material in Drawing', 'Material Considered', 'Length', 'Width', 'Thickness', 'Part Weight']) {
       await expect(partForm(page).locator('label', { hasText: label }).first(), label).toBeVisible();
     }
+  });
 
+  test('AC-9 (with an error showing): the rule is shown, there is no sideways scroll and axe finds nothing', async ({ page }, testInfo) => {
+    await openForm(page, testInfo);
     await control(page, 'J').fill('-1');
     await control(page, 'J').blur();
     await expect(partForm(page).getByText(NUMBER_RULE)).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);
+  });
 
+  test('AC-9 (with a value saved): the value is kept as 7.00, there is no sideways scroll and axe finds nothing', async ({ page }, testInfo) => {
+    await openForm(page, testInfo);
     const saved = nextSave(page);
     await control(page, 'J').fill('7');
     await control(page, 'J').blur();
