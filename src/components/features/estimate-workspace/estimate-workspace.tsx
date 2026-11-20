@@ -11,6 +11,7 @@ import type { CustomerView } from '@/lib/estimates/estimates-client';
 import { askToLeave } from '@/lib/estimates/leave-registry';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
+import type { AutosaveProps } from './autosave';
 import type { CalculateBarProps } from './calculate-bar';
 import type { CalculateSummaryProps } from './calculate-summary';
 import type { ChangeCustomerDialogProps } from './change-customer-dialog';
@@ -43,6 +44,8 @@ const loadSummary = () => import('./calculate-summary').then((module) => module.
 const loadChangeDialog = () => import('./change-customer-dialog').then((module) => module.ChangeCustomerDialog);
 /** The warning on leaving (STORY-05.08): typing is possible only once the form's code is here, and this is asked for on mount beside it. Its dialog is an overlay, so it is never imported with a plain import. */
 const loadGuard = () => import('./leave-guard').then((module) => module.LeaveGuard);
+/** The 30-second save (STORY-05.10): the one timer of the page, in the form's lazy part, asked for on mount beside the form's own code. */
+const loadAutosave = () => import('./autosave').then((module) => module.Autosave);
 const stay = (): void => undefined;
 
 /**
@@ -84,6 +87,8 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
   const ChangeDialog = changeDialog.Component;
   const guard = useLazyComponent<LeaveGuardProps>(loadGuard, true);
   const Guard = guard.Component;
+  const autosave = useLazyComponent<AutosaveProps>(loadAutosave, false);
+  const Autosave = autosave.Component;
   /**
    * Another part, or a new one, takes the form that shows the part now away, with whatever was typed into it and is not saved (STORY-05.08 AC-4, AC-5). So while anything is unsaved the person is asked
    * first, once the saves in flight have finished; with nothing unsaved the choice goes through at once, as before.
@@ -114,6 +119,7 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
   return (
     <>
       <WorkspaceHeader view={{ ...header, status }} />
+      {Autosave === null ? null : <Autosave gate={saves} enabled={editable} calculating={calculation.busy} />}
       {Guard !== null ? (
         <Guard gate={saves} />
       ) : guard.failed ? (
