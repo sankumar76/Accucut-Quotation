@@ -1,7 +1,7 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
-import { readApproval, readEstimateState, useFreshAddress } from './support/auth';
-import { calculateAsEngineer, engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
+import { E2E_PASSWORD, readApproval, readEstimateState, useFreshAddress } from './support/auth';
+import { calculateAsEngineer, engineerWithEstimate, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
 
 /**
@@ -44,6 +44,25 @@ const PRICE_MESSAGE = 'Enter a price in rupees, 0 or more, with up to 2 decimals
 const NO_REASON_GIVEN = 'No reason given.';
 const REASON = 'Rounded down to a whole hundred for the customer quote.';
 const ZERO_WIDTH_JOINER = '‍';
+
+/**
+ * DIAGNOSTIC ONLY (AQP-380, DEF-050); this commit is never the final head. Phase marks in ms since the case's first line, printed as one line:
+ * `AQP380 <case> w=<project> start=<testInfo.duration at the first line> <phase>=<ms>... end=<ms> duration=<testInfo.duration>`.
+ */
+function startPhases(testInfo: TestInfo, label: string): { readonly mark: (name: string) => void; readonly print: () => void } {
+  const startedAt = Date.now();
+  const startDuration = testInfo.duration;
+  const marks: string[] = [];
+  return {
+    mark: (name) => {
+      marks.push(`${name}=${Date.now() - startedAt}`);
+    },
+    print: () => {
+      // eslint-disable-next-line no-console -- diagnostic output, read from the CI log
+      console.log(`AQP380 ${label} w=${testInfo.project.name} start=${Math.round(startDuration)} ${marks.join(' ')} end=${Date.now() - startedAt} duration=${Math.round(testInfo.duration)}`);
+    },
+  };
+}
 
 const tiles = (page: Page) => page.getByRole('region', { name: 'Totals' });
 const approveButton = (page: Page) => page.locator(APPROVE_BUTTON_ID);
@@ -153,30 +172,62 @@ test.describe('AC-2: an override with no reason', () => {
 
 test.describe('AC-3, AC-7: an override with a reason', () => {
   test('the reason is kept trimmed, in the audit entry too, and shown next to BO; the Engineer sees neither it nor the difference', async ({ page }, testInfo) => {
-    const { owner, code } = await openedAsLead(page, testInfo);
-    const shown = await totalAsShown(page);
-    const higher = moved(plain(shown), ONE_PAISA);
-    await openDialog(page);
-    await priceField(page).fill(higher);
-    await reasonField(page).fill(`  ${REASON}  `);
-    const response = await approveAndWait(page, owner.id);
-    expect(response.status()).toBe(200);
+    const phases = startPhases(testInfo, 'approve-override:155');
+    try {
+      const { owner, code } = await engineerWithEstimate(testInfo);
+      phases.mark('made');
+      await calculateAsEngineer(page, owner, code);
+      phases.mark('calculated');
+      await signInAsLead(page, testInfo);
+      phases.mark('leadSignedIn');
+      const leadOpen = await page.goto(`/estimates/${code}`);
+      expect(leadOpen?.status()).toBe(200);
+      phases.mark('leadGoto');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+      await expect(approveButton(page)).toBeEnabled();
+      await waitUntilHydrated(page, APPROVE_BUTTON_ID);
+      phases.mark('leadHydrated');
+      const shown = await totalAsShown(page);
+      const higher = moved(plain(shown), ONE_PAISA);
+      await openDialog(page);
+      phases.mark('dialogOpen');
+      await priceField(page).fill(higher);
+      await reasonField(page).fill(`  ${REASON}  `);
+      const response = await approveAndWait(page, owner.id);
+      expect(response.status()).toBe(200);
+      phases.mark('approved');
 
-    await expect(dialogOf(page)).toHaveCount(0);
-    await expect(tiles(page)).toContainText(`₹ 0.01 higher than the calculated total (${shown}).`);
-    await expect(tiles(page)).toContainText(`Reason given: ${REASON}`);
-    await expect(tiles(page)).not.toContainText(NO_REASON_GIVEN);
-    expect(await readApproval(owner.id)).toEqual({ approvedPrice: higher, calculatedBl: plain(shown), isOverride: true, overrideReason: REASON, entryReason: REASON });
+      await expect(dialogOf(page)).toHaveCount(0);
+      await expect(tiles(page)).toContainText(`₹ 0.01 higher than the calculated total (${shown}).`);
+      await expect(tiles(page)).toContainText(`Reason given: ${REASON}`);
+      await expect(tiles(page)).not.toContainText(NO_REASON_GIVEN);
+      phases.mark('tilesShown');
+      expect(await readApproval(owner.id)).toEqual({ approvedPrice: higher, calculatedBl: plain(shown), isOverride: true, overrideReason: REASON, entryReason: REASON });
+      phases.mark('auditRead');
 
-    // The Engineer, on the same address, is told it is approved and locked and sees no price, no difference and no reason (FR-011, NFR-002); `/costs` is refused.
-    await signInAs(page, owner);
-    const own = await page.goto(`/estimates/${code}`);
-    expect(own?.status()).toBe(200);
-    await expect(page.getByText('Approved and locked.', { exact: true })).toBeVisible();
-    const html = await page.content();
-    for (const hidden of [REASON, 'than the calculated total', 'Reason given', NO_REASON_GIVEN]) expect(html, hidden).not.toContain(hidden);
-    const costs = await page.evaluate(async (id) => (await fetch(`/api/v1/estimates/${id}/costs`)).status, owner.id);
-    expect(costs).toBe(403);
+      // The Engineer, on the same address, is told it is approved and locked and sees no price, no difference and no reason (FR-011, NFR-002); `/costs` is refused.
+      await page.context().clearCookies();
+      phases.mark('cookiesCleared');
+      const csrf = await page.request.get('/api/auth/csrf');
+      phases.mark('csrf');
+      const { csrfToken } = (await csrf.json()) as { readonly csrfToken: string };
+      const credentials = await page.request.post('/api/auth/callback/credentials', { form: { csrfToken, email: owner.email, password: E2E_PASSWORD, json: 'true' } });
+      expect(credentials.ok()).toBe(true);
+      phases.mark('credentials');
+      phases.mark('engineerSignedIn');
+      const own = await page.goto(`/estimates/${code}`);
+      expect(own?.status()).toBe(200);
+      phases.mark('engineerGoto');
+      await expect(page.getByText('Approved and locked.', { exact: true })).toBeVisible();
+      const html = await page.content();
+      for (const hidden of [REASON, 'than the calculated total', 'Reason given', NO_REASON_GIVEN]) expect(html, hidden).not.toContain(hidden);
+      phases.mark('engineerAsserted');
+      const costs = await page.evaluate(async (id) => (await fetch(`/api/v1/estimates/${id}/costs`)).status, owner.id);
+      expect(costs).toBe(403);
+      phases.mark('costs');
+    } finally {
+      phases.print();
+    }
   });
 });
 

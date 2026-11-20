@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 import { E2E_PASSWORD, readEstimateState, useFreshAddress } from './support/auth';
 import { signInAs } from './support/calculated-estimate';
@@ -30,6 +30,25 @@ const RUPEES_APPROVED = '₹ 48,271.37';
 const STEP_UP_FAILED = 'That password is not correct.';
 const DIALOG_TEXT =
   'The price ₹ 48,271.37 will be removed from every screen and from the Excel file. The audit log keeps it, and only you can read it. This cannot be undone. A new approval, after a Recalculate, is the way to set a price again.';
+
+/**
+ * DIAGNOSTIC ONLY (AQP-380, DEF-050); this commit is never the final head. Phase marks in ms since the case's first line, printed as one line:
+ * `AQP380 <case> w=<project> start=<testInfo.duration at the first line> <phase>=<ms>... end=<ms> duration=<testInfo.duration>`.
+ */
+function startPhases(testInfo: TestInfo, label: string): { readonly mark: (name: string) => void; readonly print: () => void } {
+  const startedAt = Date.now();
+  const startDuration = testInfo.duration;
+  const marks: string[] = [];
+  return {
+    mark: (name) => {
+      marks.push(`${name}=${Date.now() - startedAt}`);
+    },
+    print: () => {
+      // eslint-disable-next-line no-console -- diagnostic output, read from the CI log
+      console.log(`AQP380 ${label} w=${testInfo.project.name} start=${Math.round(startDuration)} ${marks.join(' ')} end=${Date.now() - startedAt} duration=${Math.round(testInfo.duration)}`);
+    },
+  };
+}
 
 const tiles = (page: Page) => page.getByRole('region', { name: 'Totals' });
 const removeButton = (page: Page) => page.locator('#review-remove-price');
@@ -136,7 +155,22 @@ test.describe('AC-3, AC-6, AC-7: a good removal', () => {
   test('shows "Removing" while it is under way, then the notice, BO "Not set yet" and no price anywhere on the page or in the costs; the row and the audit entry keep the price; a Lead sees the same with no button; the Engineer sees nothing of it; the password is in no audit row', async ({
     page,
   }, testInfo) => {
-    const { code, owner, lead, admin } = await openedAsAdmin(page, testInfo);
+    const phases = startPhases(testInfo, 'remove-price:136');
+    try {
+    const approved = await approvedEstimate(page, testInfo);
+    phases.mark('approvedViaApi');
+    const admin = await signInAsTheAdmin(page);
+    phases.mark('adminSignedIn');
+    expect(await cancelThroughTheApi(page, approved.owner.id, 'The wrong customer was priced.'), 'the Admin\'s cancel').toBe(200);
+    phases.mark('cancelled');
+    const { code, owner, lead } = approved;
+    const adminOpen = await page.goto(`/estimates/${code}`);
+    expect(adminOpen?.status()).toBe(200);
+    phases.mark('adminGoto');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+    await expect(removeButton(page)).toBeEnabled();
+    await waitUntilHydrated(page, '#review-remove-price');
+    phases.mark('adminHydrated');
     await page.route(REMOVE_ROUTE, async (route) => {
       await new Promise<void>((resolve) => {
         setTimeout(resolve, SLOW_MILLISECONDS);
@@ -144,15 +178,18 @@ test.describe('AC-3, AC-6, AC-7: a good removal', () => {
       await route.continue();
     });
     const dialog = await openDialog(page);
+    phases.mark('dialogOpen');
     await passwordOf(dialog).fill(E2E_PASSWORD);
     const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${owner.id}/approval/remove-price`));
     await submitOf(dialog).click();
     await expect(dialog.getByRole('button', { name: 'Removing' })).toBeDisabled();
+    phases.mark('removingShown');
     // The dialog cannot be dismissed while the request is under way.
     await page.keyboard.press('Escape');
     await expect(dialog).toBeVisible();
     const response = await answered;
     expect(response.status()).toBe(200);
+    phases.mark('removeAnswered');
     const text = await response.text();
     // The answer is a time and nothing else: no price (AC-6), and not the password (AC-7).
     expect(Object.keys(JSON.parse(text) as object)).toEqual(['removedAt']);
@@ -173,30 +210,50 @@ test.describe('AC-3, AC-6, AC-7: a good removal', () => {
     await expect(page.getByText('Approval cancelled')).toHaveCount(0);
     await expect(removeButton(page)).toHaveCount(0);
     await expect(page.locator('#review-cancel')).toHaveCount(0);
+    phases.mark('adminAsserted');
     // No route serves the price to a screen: the costs the page is drawn from hold no price either.
     const costs = await page.request.get(`/api/v1/estimates/${owner.id}/costs`);
     expect(costs.status()).toBe(200);
     expect(await costs.text()).not.toContain('48271');
+    phases.mark('adminCosts');
     // The row keeps the price, the removal is stored, and the audit entry keeps what was removed, once (AC-6).
     expect(await readRemoval(owner.id)).toEqual({ approvedPrice: APPROVED_PRICE, cancelled: true, removedBy: admin.id, entries: 1, entryKeeps: APPROVED_PRICE, passwordInAudit: false });
     expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 1 });
+    phases.mark('dbRead');
     await expectNoAxeViolations(page);
+    phases.mark('axe');
 
     // A Lead sees the same notice and "Not set yet", with no button.
     await signInAs(page, lead);
+    phases.mark('leadSignedIn');
     await page.goto(`/estimates/${code}`);
+    phases.mark('leadGoto');
     await expect(noticeOf(page)).toContainText(`by ${admin.name}.`);
     await expect(tiles(page)).toContainText('Not set yet');
     await expect(page.getByText('48,271.37')).toHaveCount(0);
     await expect(removeButton(page)).toHaveCount(0);
+    phases.mark('leadAsserted');
 
     // The Engineer, on the same address, sees no price and nothing of the removal (NFR-002).
-    await signInAs(page, owner);
+    await page.context().clearCookies();
+    phases.mark('cookiesCleared');
+    const csrf = await page.request.get('/api/auth/csrf');
+    phases.mark('csrf');
+    const { csrfToken } = (await csrf.json()) as { readonly csrfToken: string };
+    const credentials = await page.request.post('/api/auth/callback/credentials', { form: { csrfToken, email: owner.email, password: E2E_PASSWORD, json: 'true' } });
+    expect(credentials.ok()).toBe(true);
+    phases.mark('credentials');
+    phases.mark('engineerSignedIn');
     const own = await page.goto(`/estimates/${code}`);
     expect(own?.status()).toBe(200);
+    phases.mark('engineerGoto');
     await expect(page.getByText('48,271.37')).toHaveCount(0);
     await expect(page.getByText('Approved Quote Price')).toHaveCount(0);
     await expect(page.getByText('The approved price was removed')).toHaveCount(0);
+    phases.mark('engineerAsserted');
+    } finally {
+      phases.print();
+    }
   });
 });
 
