@@ -222,6 +222,8 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     'config.formula_changed': 'tests/integration/config/save-formula.test.ts',
     // STORY-08.03: a field or a pair inserted; the one test is the insert's own, against the real configuration table.
     'config.field_inserted': 'tests/integration/config/insert-field.test.ts',
+    // STORY-08.04: a field deleted; the one test is the delete's own, against the real configuration table.
+    'config.field_deleted': 'tests/integration/config/delete-field.test.ts',
   };
 
   it('has a scenario for every event the registry wires, and for no other', () => {

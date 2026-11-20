@@ -60,6 +60,8 @@ function world(beforeInsert?: (versions: ConfigVersionRecord[]) => void, extraRa
   const service = createConfigStructureService({
     configurations,
     masters: { listProcessItems: () => Promise.resolve([...SEED_PROCESS_ITEMS, ...extraRates.map((rate) => ({ ...rate, unit: 'per piece' }))].map((item) => ({ ...item, defaultValue: '0.00' }))) },
+    // An insert asks for no password (FR-080): the check is there for the delete (STORY-08.04), and here it fails the test if an insert ever reaches it.
+    stepUp: { verifyStepUp: () => Promise.reject(new Error('An insert must not ask for a password.')) },
     transactions: audit.transactions,
     audit: createAuditService({ audit: audit.audit }),
     cache: createConfigVersionCache(),
@@ -242,7 +244,7 @@ describe('AC-4: one new version for one field or two, with the base version chec
     expect(w.audit.audit.committed).toEqual([]);
   });
 
-  it('asks for no password: the call has no password in it and the service has no step-up dependency (FR-080)', async () => {
+  it('asks for no password: the call has no password in it and the step-up of the delete is never reached (FR-080)', async () => {
     const saved = await world().service.insertFields(ADMIN, { spec: inputAfterAx(), baseVersion: 1 });
     expect(saved.version).toBe(2);
   });
