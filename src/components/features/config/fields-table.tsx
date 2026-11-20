@@ -13,7 +13,7 @@ import { cn } from '@/lib/cn';
 import type { ConfigFieldRow } from '@/lib/config/fields-client';
 import { KIND_LABELS } from '@/lib/config/fields-list';
 
-import { CARDS_LABEL, EDIT_FORMULA, NO_FORMULA, NO_PLACE, SYSTEM_TAG, SYSTEM_TAG_HINT, TABLE_CAPTION, TABLE_REGION_LABEL } from './fields-texts';
+import { CARDS_LABEL, EDIT_FORMULA, INSERT_AFTER, NO_FORMULA, NO_PLACE, SYSTEM_TAG, SYSTEM_TAG_HINT, TABLE_CAPTION, TABLE_REGION_LABEL } from './fields-texts';
 
 /**
  * The rows of SCR-17 (STORY-08.01 AC-1 to AC-3, AC-7): a table from 768 px, where it scrolls inside its own named, focusable region and never the page, and a card for each
@@ -44,6 +44,21 @@ function EditFormulaLink({ row }: { readonly row: ConfigFieldRow }) {
   );
 }
 
+/** "Insert after" for one column (STORY-08.03 AC-1): a link drawn as a button that opens SCR-19 with this column chosen, named for the column it follows. */
+function InsertAfterLink({ row }: { readonly row: ConfigFieldRow }) {
+  return (
+    <Button asChild variant="secondary" className="self-start">
+      <Link href={`/config/fields/new?after=${row.id}`}>
+        {INSERT_AFTER}
+        <span className="sr-only">
+          {' '}
+          {row.letter} {row.label}
+        </span>
+      </Link>
+    </Button>
+  );
+}
+
 function SystemTag() {
   return (
     <Badge tone="neutral" title={SYSTEM_TAG_HINT}>
@@ -63,7 +78,12 @@ function FormulaBlock({ row, canEdit }: { readonly row: ConfigFieldRow; readonly
         <code className={cn('font-mono text-body text-ink', BREAK_LONG_NAMES)}>{row.formula}</code>
       )}
       {row.note === null ? null : <p className="max-w-prose text-label text-ink-2">{row.note}</p>}
-      {canEdit && row.canEditFormula ? <EditFormulaLink row={row} /> : null}
+      {canEdit ? (
+        <div className="flex flex-wrap gap-s-2">
+          {row.canEditFormula ? <EditFormulaLink row={row} /> : null}
+          <InsertAfterLink row={row} />
+        </div>
+      ) : null}
     </div>
   );
 }

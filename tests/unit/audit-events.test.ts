@@ -34,7 +34,7 @@ const WIRED_CALCULATION: ReadonlyArray<AuditEventName> = ['calculation.warning_a
 /** STORY-06.06: an estimate approved and locked; STORY-06.07: a price that differs from the calculated total; STORY-06.08: an approved estimate unlocked; STORY-06.12: an approval cancelled; STORY-06.13: the price of a cancelled approval removed. Registry order puts them before the quantity warning. */
 const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.price_overridden', 'approval.unlocked', 'approval.cancelled', 'approval.price_removed'];
 /** STORY-08.02: a formula of the field registry changed. Registry order puts it after the approval events and before the calculation event. */
-const WIRED_CONFIG: ReadonlyArray<AuditEventName> = ['config.formula_changed'];
+const WIRED_CONFIG: ReadonlyArray<AuditEventName> = ['config.formula_changed', 'config.field_inserted'];
 /** STORY-04.07: a task given to another Engineer, a new deadline, or both. */
 const WIRED_TASK: ReadonlyArray<AuditEventName> = ['task.reassigned'];
 const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CONFIG, ...WIRED_CALCULATION, ...WIRED_TASK];
@@ -404,6 +404,55 @@ describe('STORY-08.02 AC-5: the words and the shapes of the formula change', () 
     expect(event.describeStored({ formula: 'P' }, { formula: 'P', version: 0 })).toBeNull();
     expect(event.before.safeParse({ formula: 'P', password: 'x' }).success).toBe(false);
     expect(event.after.safeParse({ formula: 'P', version: 2, password: 'x' }).success).toBe(false);
+  });
+});
+
+describe('STORY-08.03 AC-9: the words and the shapes of a field insert', () => {
+  const event = AUDIT_EVENTS['config.field_inserted'];
+  const NEW_INPUT = { letter: 'AY', label: 'Invented Notch Count', kind: 'input', follows: 'AX', formula: null } as const;
+  const NEW_COST = { letter: 'AZ', label: 'Invented Notch Cost', kind: 'output', follows: 'AY', formula: 'AY * 2' } as const;
+
+  it('is wired, in the "Configuration change" category, about a field', () => {
+    expect(event).toMatchObject({ status: 'wired', category: 'config_change', objectType: 'field' });
+  });
+
+  it('says the new column and what moved, with the number of the version it made (SPEC 14.6: AY, and AY to BO one to the right)', () => {
+    expect(event.describeStored(null, { fields: [NEW_INPUT], moved: [{ from: 'AY', to: 'BO', by: 1 }], version: 10 })).toEqual({
+      before: 'Not in the worksheet',
+      after: 'Added as AY after AX. Columns AY to BO moved one to the right (configuration version 10)',
+    });
+  });
+
+  it('reads a pair side by side as one, and says "two" for the places the later columns moved', () => {
+    expect(event.describeStored(null, { fields: [NEW_INPUT, NEW_COST], moved: [{ from: 'AY', to: 'BO', by: 2 }], version: 11 })).toEqual({
+      before: 'Not in the worksheet',
+      after: 'Added as AY and AZ after AX. Columns AY to BO moved two to the right (configuration version 11)',
+    });
+  });
+
+  it('names each place when the cost column is not next to its input, and says so when nothing moved (an insert after the last column)', () => {
+    const apart = { ...NEW_COST, follows: 'BC' };
+    expect(event.describeStored(null, { fields: [NEW_INPUT, apart], moved: [], version: 12 })?.after).toBe('Added as AY after AX and AZ after BC. No other column moved (configuration version 12)');
+  });
+
+  it('keeps the formula typed for an output (the log is read by the Admin alone) and has no key a password, a figure or a rate value could use', () => {
+    expect(event.after.safeParse({ fields: [NEW_INPUT, NEW_COST], moved: [], version: 2 }).success).toBe(true);
+    expect(event.after.safeParse({ fields: [NEW_INPUT], moved: [], version: 2, password: 'x' }).success).toBe(false);
+    expect(event.after.safeParse({ fields: [{ ...NEW_INPUT, rate: 1 }], moved: [], version: 2 }).success).toBe(false);
+  });
+
+  it('keeps a formula longer than 2,000 characters: the display form of a rate name is longer than the stored form (review SQR-02)', () => {
+    const long = `AY * ${'Invented-Rate '.repeat(190)}`.trim();
+    expect(long.length).toBeGreaterThan(2_500);
+    expect(event.after.safeParse({ fields: [NEW_INPUT, { ...NEW_COST, formula: long }], moved: [], version: 2 }).success).toBe(true);
+    expect(event.after.safeParse({ fields: [{ ...NEW_COST, formula: '' }], moved: [], version: 2 }).success).toBe(false);
+  });
+
+  it('has no "before" (the field did not exist), no empty or three-field entry, and no version that is not a positive whole number', () => {
+    expect(event.before.safeParse({}).success).toBe(false);
+    expect(event.after.safeParse({ fields: [], moved: [], version: 2 }).success).toBe(false);
+    expect(event.after.safeParse({ fields: [NEW_INPUT, NEW_COST, NEW_COST], moved: [], version: 2 }).success).toBe(false);
+    expect(event.describeStored(null, { fields: [NEW_INPUT], moved: [], version: 0 })).toBeNull();
   });
 });
 

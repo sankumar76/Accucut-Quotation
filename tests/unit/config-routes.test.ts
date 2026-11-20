@@ -87,8 +87,8 @@ describe('AC-1 and AC-3: GET /api/v1/config/fields', () => {
     for (const letter of ['A', 'F', 'I', 'BO']) expect(defined(fields.find((field) => field['letter'] === letter))['canEditFormula'], letter).toBe(false);
   });
 
-  it('has no write method: POST, PUT, PATCH and DELETE are not exported, so Next.js answers 405', () => {
-    expect(Object.keys(fieldsRoute).sort()).toEqual(['GET']);
+  it('has no write method but the insert of STORY-08.03: PUT, PATCH and DELETE are not exported, so Next.js answers 405 (the POST is config-structure-routes.test.ts)', () => {
+    expect(Object.keys(fieldsRoute).sort()).toEqual(['GET', 'POST']);
     expect(Object.keys(currentRoute).sort()).toEqual(['GET']);
   });
 });

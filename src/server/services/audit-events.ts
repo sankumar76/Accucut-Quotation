@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
+import { describeInsertAudit, NOT_IN_THE_WORKSHEET } from '../../lib/config/field-insert-audit';
 import { MAX_REASON_LENGTH } from '../../lib/estimate/approve-price';
 import { ESTIMATE_STATUSES, type EstimateStatus } from '../../lib/estimate/state-machine';
 import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
@@ -355,6 +356,21 @@ function describeMasterChange(objectType: string, before: unknown, after: unknow
 // With STORY-06.13 no event of Release 1 is left declared and unwired. A story that declares one for a later story adds an entry with `status: 'reserved'`, schemas that accept any JSON (`z.json()`) and
 // `describe: () => NO_DETAIL`, and the story that wires it gives it its own shapes, words and test.
 
+/** STORY-08.03: what an insert keeps (`config.field_inserted`). Letters are the ones of the finished worksheet; `moved` is runs of OLD letters with the number of places they moved. */
+const insertedColumn = z.strictObject({
+  letter: z.string().min(1).max(10),
+  label: z.string().min(1).max(200),
+  kind: z.enum(['input', 'output']),
+  follows: z.string().min(1).max(10).nullable(),
+  // No upper bound, as `config.formula_changed` has none: the entry keeps the formula in display form, which is longer than the stored form when it names rates (review SQR-02).
+  formula: z.string().min(1).nullable(),
+});
+const insertedAfterState = z.strictObject({
+  fields: z.array(insertedColumn).min(1).max(2),
+  moved: z.array(z.strictObject({ from: z.string().min(1).max(10), to: z.string().min(1).max(10), by: z.number().int().positive() })),
+  version: z.number().int().positive(),
+});
+
 export const AUDIT_EVENTS = {
   // ---- Wired in this story: the six user events of the Users screen (STORY-01.04) -----------------------------------------
   'user.created': defineEvent({
@@ -524,6 +540,19 @@ export const AUDIT_EVENTS = {
     before: z.strictObject({ formula: z.string().min(1) }),
     after: z.strictObject({ formula: z.string().min(1), version: z.number().int().positive() }),
     describe: (before, after) => ({ before: before.formula, after: `${after.formula} (configuration version ${String(after.version)})` }),
+  }),
+
+  // ---- Wired in STORY-08.03: a field or a pair inserted into the field registry --------------------------------------------------
+  // One entry per insert, in the transaction that stores the new configuration version: the new column or columns (letter, label, kind, the column each follows), the formula typed for an output, and which
+  // columns moved, as runs of their old letters. The Object is the first new field ("AY Notch Cost"). The log is read by the Admin alone (NFR-002); no password (an insert asks for none, FR-080), figure or rate
+  // value has a key to sit in. Before is empty: the field did not exist.
+  'config.field_inserted': defineEvent({
+    objectType: 'field',
+    category: 'config_change',
+    status: 'wired',
+    before: z.null(),
+    after: insertedAfterState,
+    describe: (_before, after) => ({ before: NOT_IN_THE_WORKSHEET, after: describeInsertAudit(after) }),
   }),
 
   // ---- Declared for later stories: each adds the call, the shapes, the words and the test --------------------------------

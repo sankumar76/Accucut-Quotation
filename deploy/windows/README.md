@@ -164,7 +164,7 @@ the previous release are kept.
 |----------|----|
 | See the services | `Get-Service AccucutApp, AccucutWorker, postgresql-x64-17` |
 | Restart the portal | `Restart-Service AccucutWorker, AccucutApp` |
-| Check it is alive | Open `http://127.0.0.1:3000/api/health` on the server: `{"status":"ok"}` |
+| Check it is alive | Open `http://127.0.0.1:3000/api/health` on the server: `{"status":"ok"}`. It answers **503** `{"status":"unavailable"}` when the database does not answer **or when the worker has stopped**: the worker writes a heartbeat every minute, and the check turns red when the newest one is 3 minutes old. For a 503, look at `Get-Service AccucutWorker` first, then `AccucutWorker.*.err.log` in the logs folder |
 | Read the logs | `C:\Accucut\logs\` (`AccucutApp.*.err.log` first) |
 | Start over after a failed install | Drop what is left (`DROP DATABASE accucut; DROP ROLE accucut_restore, accucut_app, accucut_owner, accucut_backup;` in `psql` as `postgres`; and `DROP DATABASE` for any `accucut_new_...`, `accucut_old_...` or `accucut_failed_...` that a restore left), run `C:\Accucut\services\AccucutApp.exe uninstall` and the same for `AccucutWorker`, run `Unregister-ScheduledTask 'Accucut weekly backup' -Confirm:$false`, take `AccucutBackup` out of "Log on as a batch job" (Local Security Policy, Local Policies, User Rights Assignment; do this **before** the next command, or a bare SID stays in the list) and run `Remove-LocalUser AccucutBackup`, delete `C:\Accucut`, run the install again. |
 | See the last backups | `Get-ChildItem C:\Accucut\backups` as an administrator, or the "Last backup" line on the portal's Settings page (Admin). |

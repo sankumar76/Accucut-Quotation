@@ -283,7 +283,7 @@ describe('AC-7: the switch takes effect at claim time, without a restart', () =>
     expect(await statusOf(whileOff)).toEqual({ status: 'skipped', last_error: 'ALERTS_OFF' });
 
     clock.advance(MILLISECONDS_PER_MINUTE);
-    await performOutboxSend({ ...dependencies, clock }, () => undefined);
+    await performOutboxSend({ ...dependencies, clock });
     expect(await statusOf(whileOff)).toEqual({ status: 'skipped', last_error: 'ALERTS_OFF' });
   });
 });
