@@ -262,13 +262,15 @@ export function getConfigEditService(): ConfigEditService {
 }
 
 /**
- * The insert wizard (STORY-08.03): the options SCR-19 offers, the preview of the letter changes and the insert of a field or a pair, with no password step (FR-080). Restricted (ADR-008): the routes that call it are in the
- * manifest for the Admin alone. It shares the runtime-role client and the audit service, so the new version and its entry are one transaction. STORY-08.04 adds delete to it.
+ * The structure of the field registry: the insert wizard (STORY-08.03: the options SCR-19 offers, the preview of the letter changes and the insert of a field or a pair, with no password step) and the delete of a field
+ * (STORY-08.04: the references read and the delete, with the password step, FR-080). Restricted (ADR-008): the routes that call it are in the manifest for the Admin alone. It shares the runtime-role client, the step-up
+ * check and the audit service, so the new version and its entry are one transaction.
  */
 export function getConfigStructureService(): ConfigStructureService {
   configStructureService ??= createConfigStructureService({
     configurations: createConfigRepository(runtimeClient()),
     masters: createMasterRepository(runtimeClient()),
+    stepUp: getStepUpService(),
     transactions: createTransactionRunner(runtimeClient()),
     audit: getAuditService(),
   });
