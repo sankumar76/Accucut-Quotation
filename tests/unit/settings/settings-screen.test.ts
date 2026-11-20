@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SettingsScreen } from '@/components/features/settings/settings-screen';
 import { readingAgeText } from '@/components/features/settings/texts';
-import type { BackupStatusView } from '@/server/services/settings-service';
+import type { AlertSettingsView, BackupStatusView } from '@/server/services/settings-service';
 
 /**
  * STORY-02.09 AC-1 to AC-5 without a browser: what SCR-15 draws from the status the server sends, in every state: a good backup, "Backup late", no backup yet, "Disk nearly full", a fresh and
@@ -20,7 +20,11 @@ const GOOD: BackupStatusView = {
   diskNearlyFull: false,
 };
 
-const render = (status: BackupStatusView): string => renderToStaticMarkup(createElement(SettingsScreen, { status }));
+const ALERTS_OFF: AlertSettingsView = { alertsEnabled: false, senderName: '', senderAddress: '', emailEnabled: true };
+const ADMIN_ADDRESS = 'admin.own@example.com';
+
+const render = (status: BackupStatusView, alerts: AlertSettingsView = ALERTS_OFF): string =>
+  renderToStaticMarkup(createElement(SettingsScreen, { status, alerts, adminAddress: ADMIN_ADDRESS }));
 
 describe('AC-1: a good backup and no warning', () => {
   const html = render(GOOD);
@@ -112,22 +116,67 @@ describe('AC-4: the server disk', () => {
   });
 });
 
-describe('AC-5: read-only, with a labelled place for the alert settings', () => {
+describe('AC-5: the Backups card is read-only', () => {
   const html = render({ ...GOOD, backupLate: true, diskNearlyFull: true });
 
-  it('has no button, link, field or switch: nothing starts, restores or deletes a backup', () => {
-    expect(html).not.toMatch(/<(button|a|input|select|textarea|form)[\s>]/);
-    expect(html).not.toContain('role="switch"');
-    expect(html).not.toMatch(/\b(Start|Restore|Delete|Run) (a |the )?backup/i);
+  it('has no link, and no word that starts, restores or deletes a backup', () => {
+    expect(html).not.toMatch(/<a[s>]/);
+    expect(html).not.toMatch(/(Start|Restore|Delete|Run) (a |the )?backup/i);
   });
 
-  it('has a heading for the e-mail alerts, which are not built yet, and says so', () => {
-    expect(html).toContain('E-mail alerts');
-    expect(html).toContain('The switch for e-mail alerts and the sender address will be added here.');
-  });
-
-  it('has one h1 and the cards under h2', () => {
+  it('has one h1 and the two cards under h2', () => {
     expect(html.match(/<h1/g)).toHaveLength(1);
     expect(html.match(/<h2/g)).toHaveLength(2);
+  });
+});
+
+describe('STORY-09.02 AC-1: the e-mail alerts card replaces the placeholder', () => {
+  const html = render(GOOD);
+
+  it('no longer says the switch will be added', () => {
+    expect(html).not.toContain('will be added here');
+  });
+
+  it('has the switch with its state in words, the two fields and the two buttons', () => {
+    expect(html).toContain('>E-mail alerts</h2>');
+    expect(html).toContain('role="switch"');
+    expect(html).toContain('aria-checked="false"');
+    expect(html).toContain('E-mail alerts: OFF');
+    expect(html).toContain('When OFF, nothing is sent.');
+    expect(html).toContain('>Sender name</label>');
+    expect(html).toContain('>Sender e-mail address</label>');
+    expect(html).toContain('>Save settings<');
+    expect(html).toContain('>Send test e-mail<');
+  });
+
+  it('says in words that the mail server credentials are set on the server by Accucut IT, and has no password field', () => {
+    expect(html).toContain('The mail server password is set on the server by Accucut IT, not here.');
+    expect(html).not.toMatch(/type="password"/);
+  });
+
+  it('says where the test e-mail goes: the signed-in Admin own address', () => {
+    expect(html).toContain('The test e-mail goes to your own address, admin.own@example.com.');
+  });
+
+  it('draws the saved values and the ON state', () => {
+    const on = render(GOOD, { alertsEnabled: true, senderName: 'Accucut Portal', senderAddress: 'portal@example.com', emailEnabled: true });
+    expect(on).toContain('aria-checked="true"');
+    expect(on).toContain('E-mail alerts: ON');
+    expect(on).toContain('daily digest at 11:00 IST');
+    expect(on).toContain('value="Accucut Portal"');
+    expect(on).toContain('value="portal@example.com"');
+  });
+
+  it('AC-8: says that sending is not enabled yet only while FEATURE_EMAIL is off, and still shows every control', () => {
+    const off = render(GOOD, { ...ALERTS_OFF, emailEnabled: false });
+    expect(off).toContain('Sending is not enabled on this server yet. Accucut IT turns it on.');
+    expect(off).toContain('role="switch"');
+    expect(off).toContain('>Send test e-mail<');
+    expect(html).not.toContain('Sending is not enabled');
+  });
+
+  it('keeps the Last backup lines unchanged', () => {
+    expect(html).toContain('Sunday 01 Nov 2026, 02:00 IST. Finished without errors.');
+    expect(html).toContain('Backups are kept on the same server.');
   });
 });

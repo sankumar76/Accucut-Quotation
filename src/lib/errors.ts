@@ -283,3 +283,17 @@ export class ExportBusyError extends AppError {
 export function isAppError(value: unknown): value is AppError {
   return value instanceof AppError;
 }
+
+/** The code of a 422 for a test e-mail that cannot be sent because no usable sender is saved (STORY-09.02 AC-5). */
+export const NO_SENDER_CODE = 'NO_SENDER';
+
+/**
+ * The mail server refused or did not answer when the Settings test e-mail was sent (STORY-09.02 AC-5). The code is the class of the failure (`SENDER_NOT_ALLOWED`, `AUTH_FAILED`,
+ * `CONNECTION`, `UNKNOWN`: `src/lib/mail/codes.ts`) and nothing of the server's own words is kept, because a reply can carry an address or a host and a token request can carry a secret.
+ * `withRoute` maps it to 502 with that code and the generic title; the page chooses its words from the code.
+ */
+export class MailTestFailedError extends AppError {
+  constructor(code: string) {
+    super(code, 502, 'The test e-mail was not sent.');
+  }
+}
