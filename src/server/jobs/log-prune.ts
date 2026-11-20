@@ -3,6 +3,8 @@ import { isAbsolute, join } from 'node:path';
 
 import { schedule, type ScheduledTask } from 'node-cron';
 
+import { runJob, type JobLogger } from './run-job';
+
 /**
  * The daily `log-prune` job of the worker (STORY-10.04, ADR-015 Amendment 2.1; architecture section 9.9): it deletes the service logs and the install and
  * update logs that are older than 30 days from the Windows log folder, so that no scheduled task and no second account is needed for it. It runs as
@@ -16,6 +18,9 @@ import { schedule, type ScheduledTask } from 'node-cron';
  *   - only when the file was last written more than 30 days ago.
  * It writes no `job_runs` row, and its log lines hold counts and reasons only: never a file name's contents, never a file's contents.
  */
+
+/** The job's name in the log and in the worker's schedule. It writes no `job_runs` row. */
+export const LOG_PRUNE_JOB = 'log-prune';
 
 /** How long a log is kept (NFR-024). */
 export const LOG_RETENTION_DAYS = 30;
@@ -113,7 +118,7 @@ export function describePrune(result: PruneResult): string {
  * Schedules the daily run, or returns `undefined` (and says why) when `LOG_DIRECTORY` is missing or not an absolute path. The folder is checked again at
  * every run, because it may change between runs.
  */
-export function scheduleLogPrune(configured: string | undefined, log: (message: string) => void): ScheduledTask | undefined {
+export function scheduleLogPrune(configured: string | undefined, log: JobLogger): ScheduledTask | undefined {
   const checked = checkDirectory(configured);
   if ('reason' in checked) {
     log(`log-prune is off: ${checked.reason}`);
@@ -122,10 +127,8 @@ export function scheduleLogPrune(configured: string | undefined, log: (message: 
   const directory = checked.folder;
   const task = schedule(
     LOG_PRUNE_CRON,
-    async () => {
-      log(describePrune(await pruneLogs(directory, new Date())));
-    },
-    { name: 'log-prune', timezone: LOG_PRUNE_TIMEZONE, noOverlap: true },
+    () => runJob({ name: LOG_PRUNE_JOB, log, now: () => new Date() }, async () => ({ summary: describePrune(await pruneLogs(directory, new Date())) })),
+    { name: LOG_PRUNE_JOB, timezone: LOG_PRUNE_TIMEZONE, noOverlap: true },
   );
   log('log-prune scheduled daily at 03:30 IST');
   return task;
