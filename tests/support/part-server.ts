@@ -21,6 +21,7 @@ const state = {
   /** The number (1 is the first save since `reset`) of the save that waits for `hold`, or 0 for the next one. */
   holdAt: 0,
   failNext: false,
+  refuseNext: false,
   churn: false,
 };
 
@@ -35,6 +36,7 @@ export const partServer = {
     state.hold = null;
     state.holdAt = 0;
     state.failNext = false;
+    state.refuseNext = false;
     state.churn = false;
   },
   /** The nth save since `reset` (1 is the first) waits until the returned function is called. */
@@ -46,6 +48,10 @@ export const partServer = {
   /** The next save is lost on the way, as a dropped connection loses it: no answer came. */
   failNextSave(): void {
     state.failNext = true;
+  },
+  /** The next save is refused by the server's own rule (422) for the field it carries, though the text passed the screen's rule. */
+  refuseNextSave(): void {
+    state.refuseNext = true;
   },
   /** While on, somebody else saves just before every save of this tab arrives, so every save is refused with 409. */
   churn(on: boolean): void {
@@ -79,6 +85,11 @@ export const partServer = {
     if (state.failNext) {
       state.failNext = false;
       return { status: 'failed' };
+    }
+    if (state.refuseNext) {
+      state.refuseNext = false;
+      const fieldId = Object.keys(request.values)[0] ?? '';
+      return { status: 'refused', httpStatus: 422, code: 'VALIDATION_FAILED', title: 'A value is not accepted.', fields: { [fieldId]: 'The server does not accept this value.' }, body: {} };
     }
     const waits = state.hold !== null && (state.holdAt === 0 || state.holdAt === state.sent.length);
     const held = waits ? state.hold : null;

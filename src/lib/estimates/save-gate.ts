@@ -7,6 +7,8 @@
  * **The same two facts say whether anything typed would be lost** (STORY-05.08 AC-4): `isDirty()` is true while a save is in flight or a field shows a value the server does not hold, and
  * the warning on leaving, the guard on choosing another part and Save draft all read it from here, so there is one save path and one answer.
  */
+export type FlushMode = 'draft' | 'auto';
+
 export interface SaveGate {
   /** A save was queued: `settle()` waits for it. */
   readonly track: (save: Promise<unknown>) => void;
@@ -18,19 +20,21 @@ export interface SaveGate {
   readonly settle: () => Promise<boolean>;
   /** A save is in flight, or a field shows a value that is not saved: leaving the page now could lose typing. */
   readonly isDirty: () => boolean;
+  /** A save is in flight (apart from whether something is unsaved): the 30-second tick is skipped while one is, and never queued (STORY-05.10 AC-7). */
+  readonly isSaving: () => boolean;
   /** Told after every change of what is dirty (never for a change that changes nothing). Answers the way to stop listening. */
   readonly subscribe: (listener: () => void) => () => void;
-  /** A part form offers the way to send again what it shows (Save draft, STORY-05.08 AC-1). Answers the way to withdraw it. */
-  readonly offerFlush: (flush: () => void) => () => void;
-  /** Asks every part form that offered one to send again what it shows. The saves it starts are tracked like any other. */
-  readonly flush: () => void;
+  /** A part form offers the way to send again what it shows (Save draft, STORY-05.08 AC-1; the 30-second save, STORY-05.10). It is told which of the two asks. Answers the way to withdraw it. */
+  readonly offerFlush: (flush: (mode: FlushMode) => void) => () => void;
+  /** Asks every part form that offered one to send again what it shows: `draft` (the default) is a press of Save draft, `auto` is the 30-second tick, which says nothing under a field. The saves it starts are tracked like any other. */
+  readonly flush: (mode?: FlushMode) => void;
 }
 
 export function createSaveGate(): SaveGate {
   const inFlight = new Set<Promise<unknown>>();
   const unsaved = new Set<string>();
   const listeners = new Set<() => void>();
-  const flushers = new Set<() => void>();
+  const flushers = new Set<(mode: FlushMode) => void>();
   const keyOf = (partId: string, fieldId: string): string => `${partId}/${fieldId}`;
   const notify = (): void => {
     for (const listener of [...listeners]) listener();
@@ -67,6 +71,7 @@ export function createSaveGate(): SaveGate {
       return unsaved.size === 0;
     },
     isDirty: () => inFlight.size > 0 || unsaved.size > 0,
+    isSaving: () => inFlight.size > 0,
     subscribe(listener) {
       listeners.add(listener);
       return () => void listeners.delete(listener);
@@ -75,8 +80,8 @@ export function createSaveGate(): SaveGate {
       flushers.add(flush);
       return () => void flushers.delete(flush);
     },
-    flush() {
-      for (const flush of [...flushers]) flush();
+    flush(mode = 'draft') {
+      for (const flush of [...flushers]) flush(mode);
     },
   };
 }

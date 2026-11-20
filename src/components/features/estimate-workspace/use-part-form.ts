@@ -6,12 +6,13 @@ import type { Outcome } from '@/lib/api-client';
 import { loadPartInputs, PART_CHANGED_CODE, savePartInputs, type FormField, type PartInputs } from '@/lib/estimates/form-client';
 import { fieldVisibility, readTyped, watchersOf } from '@/lib/estimates/form-values';
 import { planAfterNewerPart, type FieldConflict } from '@/lib/estimates/part-conflict';
-import type { SaveGate } from '@/lib/estimates/save-gate';
+import type { FlushMode, SaveGate } from '@/lib/estimates/save-gate';
 import type { Completeness } from '@/lib/estimates/tree-client';
 import { systemClock } from '@/lib/time';
 
 import { PART_SAVED, partCompleteText } from './estimate-texts';
 import { CONFLICT_RETRY_FAILED, conflictFieldMessage } from './save-texts';
+import { useAutosaveTrail } from './use-autosave-trail';
 import { LOADING, loadedFrom, type Loaded } from './use-form-definition';
 
 /**
@@ -70,7 +71,11 @@ export interface UsePartValuesProps {
  * **Nothing typed is lost, and nothing is overwritten unseen** (STORY-05.08). A field is marked on the gate as soon as it is typed into and differs from what the server holds, and unmarked when it is
  * left and saved, so the warning on leaving knows. Save draft asks this form to send again what it shows (`sendAgain`, offered to the gate). A save refused because the part moved on (409) reads the part
  * again and plans by field (`planAfterNewerPart`): what only this tab changed is sent again with the new revision, what only the other side changed is shown as it is, and what both changed to
- * different values keeps the typed text under a message with the newer value, until the person chooses (`resolveConflict`). The 30-second save is STORY-05.10's.
+ * different values keeps the typed text under a message with the newer value, until the person chooses (`resolveConflict`).
+ *
+ * **The 30-second save** (STORY-05.10) is the same save asked for by the page's timer (`gate.flush('auto')`, `sendAgain('auto')`): it sends what is unsaved and readable through `queueSave`, and differs from a press
+ * of Save draft only in what it says. Nothing under a field and no alert, because the person may be typing in it: a value the rule refuses is left unsent and unsaved, the text shown is not rewritten, and a failure
+ * is one polite status (`autosaveFailedAt`, `use-autosave-trail.ts`). A conflict pauses it until the person has chosen.
  */
 export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onWrote, gate }: UsePartValuesProps) {
   const partId = part.id;
@@ -84,6 +89,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   // The server's last word on the part: the polite "Part 1.1 is complete." is said only when a save makes it `COMPLETE`, not on every save (STORY-05.11 AC-8).
   const completenessRef = useRef<Completeness>('EMPTY');
   const [attempt, setAttempt] = useState(0);
+  const [autosaveFailedAt, trail] = useAutosaveTrail();
 
   // What a save reads when it runs, not when it was asked for: the text of every field, the values the server holds and the revision to send.
   const textsRef = useRef<Readonly<Record<string, string>>>({});
@@ -112,6 +118,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
       setStored(loadedFrom(outcome));
       if (outcome.status === 'ok') {
         gate.forget(partId);
+        trail.reset();
         heldRef.current = outcome.value.inputs;
         textsRef.current = outcome.value.inputs;
         completenessRef.current = outcome.value.completeness;
@@ -123,7 +130,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
       live.current = false;
       gate.forget(partId);
     };
-  }, [estimateId, partId, attempt, gate]);
+  }, [estimateId, partId, attempt, gate, trail]);
 
   /** A field shows a value the server does not hold (or no longer does). A form that is no longer on the screen has nothing to show, so it is not marked. */
   const mark = (fieldId: string, unsaved: boolean): void => {
@@ -135,9 +142,10 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     setTexts(textsRef.current);
   }
 
+  const dropUnstored = (fieldId: string): void => setUnstored((current) => (current.has(fieldId) ? new Set([...current].filter((id) => id !== fieldId)) : current));
   const dropError = (fieldId: string): void => {
     setErrors((current) => (fieldId in current ? Object.fromEntries(Object.entries(current).filter(([key]) => key !== fieldId)) : current));
-    setUnstored((current) => (current.has(fieldId) ? new Set([...current].filter((id) => id !== fieldId)) : current));
+    dropUnstored(fieldId);
   };
   const clearError = (fieldId: string): void => {
     mark(fieldId, false);
@@ -165,13 +173,21 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
       });
     }
     const field = fieldOf(fieldId);
-    mark(fieldId, field !== undefined && differsFromHeld(field, text));
+    const unsaved = field !== undefined && differsFromHeld(field, text);
+    mark(fieldId, unsaved);
+    // Typed back to what the server holds: nothing is left to save, so an earlier failure of the automatic save is answered.
+    if (!unsaved) trail.saved(fieldId);
   }
 
   /** The server did not accept the save: say why, in its words, where the person will look. */
   function explain(outcome: Exclude<Outcome<PartInputs>, { readonly status: 'ok' }>, fieldId: string): void {
     mark(fieldId, true);
     setUnstored((current) => new Set([...current, fieldId]));
+    // The 30-second save that could not save (no answer, a 5xx, or the server's own rule on a field, 422) is one polite status and nothing under the field: the person may be typing there (STORY-05.10 AC-3, AC-5).
+    if (trail.isAutomatic(fieldId) && (outcome.status === 'failed' || (outcome.status === 'refused' && outcome.httpStatus === 422))) {
+      trail.fail(fieldId, outcome.status === 'refused' ? (onItsWayRef.current.get(fieldId) ?? '') : null);
+      return;
+    }
     if (outcome.status === 'refused' && outcome.httpStatus === 422) {
       setErrors((current) => ({ ...current, [fieldId]: outcome.fields[fieldId] ?? Object.values(outcome.fields)[0] ?? outcome.title }));
     } else if (outcome.status === 'refused' && outcome.httpStatus === 404) {
@@ -281,6 +297,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     }
     revisionRef.current = outcome.value.revision;
     heldRef.current = outcome.value.inputs;
+    trail.saved(fieldId);
     // A good save of another field does not answer a conflict: its notice and its two buttons stay until the person chooses (review SQR-02).
     showProblem(null);
     reportSaved({ id: partId, revision: outcome.value.revision, completeness: outcome.value.completeness, inputs: outcome.value.inputs });
@@ -303,16 +320,39 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     // the box alone changes nothing and a part with nothing typed stays EMPTY (STORY-05.04 AC-3).
     showText(field.id, standIn(field, check.value) ?? '');
     if (standIn(field, heldRef.current[field.id] ?? null) === standIn(field, check.value)) return;
-    const value = check.value ?? '';
+    queueSave(field, check.value ?? '');
+  }
+
+  /** Queues the save of one field's value, behind the saves already queued. `automatic` is the 30-second save's (STORY-05.10): a failure of it is told quietly. */
+  function queueSave(field: FormField, value: string, automatic = false): void {
     // The same text is already on its way (leaving the field and then pressing Save draft ask for it twice): one request, not two. A save that fails clears this, so the next leave sends it again.
     if (onItsWayRef.current.get(field.id) === value) return;
     onItsWayRef.current.set(field.id, value);
+    if (automatic) trail.begin(field.id);
     const ticket = newTicket(field.id);
     queueRef.current = queueRef.current.then(() => send(field.id, value, 0, ticket)).finally(() => {
       if (onItsWayRef.current.get(field.id) === value) onItsWayRef.current.delete(field.id);
+      if (automatic) trail.end(field.id);
     });
     if (watchersOf(fields, field.id).length > 0) queueRef.current = queueRef.current.then(() => syncWatchers(field.id));
     gate.track(queueRef.current);
+  }
+
+  /**
+   * The 30-second save of one field (STORY-05.10 AC-1, AC-3): what `commit` does when the person leaves the field, without the parts that speak or change what is shown. A text the rule cannot read (a number
+   * half-typed, a value over the limit) is not sent and says nothing: it stays marked unsaved, so the warning on leaving still guards it. The text shown is never rewritten (`1.5` stays `1.5` while the
+   * person types, and is shown as `1.50` when they leave), a field that shows a message is left to the person, and the text the server refused is not sent again until it changes.
+   */
+  function autosaveField(field: FormField): void {
+    if (!editable || !field.editable) return;
+    const check = readTyped(field.rule, textsRef.current[field.id] ?? '');
+    if (!check.ok || errors[field.id] !== undefined) return;
+    if (standIn(field, heldRef.current[field.id] ?? null) === standIn(field, check.value)) return;
+    const value = check.value ?? '';
+    if (trail.refusedBefore(field.id, value)) return;
+    mark(field.id, false);
+    dropUnstored(field.id);
+    queueSave(field, value, true);
   }
 
   /**
@@ -362,18 +402,23 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
 
   /**
    * Save draft (STORY-05.08 AC-1, AC-5): leave every field again, as if the person had tabbed through the form. A field that is the same after normalisation sends nothing (AC-2); one still being typed in,
-   * and one whose last save failed, is sent. A field the registry hides is left alone, as it is by every save. Not a second save path: each goes through `commit`.
+   * and one whose last save failed, is sent. A field the registry hides is left alone, as it is by every save. Not a second save path: each goes through `commit`. `auto` is the 30-second save: the same
+   * fields, through `autosaveField`, and nothing at all while a conflict waits for the person to choose (STORY-05.10 AC-6).
    */
-  function sendAgain(): void {
-    if (!live.current) return;
+  function sendAgain(mode: FlushMode = 'draft'): void {
+    if (!live.current || (mode === 'auto' && conflictRef.current.size > 0)) return;
     const shown = fieldVisibility(fields, textsRef.current);
-    for (const field of fields) if (shown(field) && textsRef.current[field.id] !== undefined) commit(field);
+    for (const field of fields) {
+      if (!shown(field) || textsRef.current[field.id] === undefined) continue;
+      if (mode === 'auto') autosaveField(field);
+      else commit(field);
+    }
   }
   const sendAgainRef = useRef(sendAgain);
   useEffect(() => {
     sendAgainRef.current = sendAgain;
   });
-  useEffect(() => gate.offerFlush(() => sendAgainRef.current()), [gate]);
+  useEffect(() => gate.offerFlush((mode) => sendAgainRef.current(mode)), [gate]);
 
   /** The person chose between their text and the newer value of every field marked as changed somewhere else. Their own text goes through the one save, so it is shown to be sent. */
   function resolveConflict(choice: 'mine' | 'newer'): void {
@@ -398,6 +443,8 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     unstored,
     problem,
     announcement,
+    /** The time of the first failure of the 30-second save that no good save has answered yet, or null (STORY-05.10 AC-5). */
+    autosaveFailedAt,
     setText,
     commit,
     resolveConflict,
