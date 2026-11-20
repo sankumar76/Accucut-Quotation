@@ -42,6 +42,7 @@ vi.mock('@/server/composition', async () => {
     getEstimateService: () => shared.estimateService,
     getConfigReadService: () => shared.configReadService,
     getConfigEditService: () => shared.configEditService,
+    getConfigStructureService: () => shared.configStructureService,
     getSettingsService: () => shared.settingsService,
     getCalculationService: () => shared.calculationService,
     getEstimateReviewService: () => shared.estimateReviewService,

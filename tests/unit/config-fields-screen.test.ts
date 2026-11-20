@@ -102,6 +102,30 @@ describe('AC-4: the Lead is shown the same table under a banner, and the Admin i
   });
 });
 
+describe('STORY-08.03 AC-1: "Insert after" on every row, for the Admin only', () => {
+  const adminRows = (): string => renderToStaticMarkup(createElement(FieldsList, { rows: ROWS, canEdit: true }));
+
+  it('gives the Admin the action on every row, a table row and a card each, even on a System field and on a column with no formula', () => {
+    const html = adminRows();
+    expect(html.match(/>Insert after</g)).toHaveLength(ROWS.length * 2);
+    for (const row of ROWS) expect(html).toContain(`href="/config/fields/new?after=${row.id}"`);
+  });
+
+  it('names the column the action follows for a screen reader ("Insert after ZC Invented Cost")', () => {
+    const html = adminRows();
+    expect(html).toContain('Insert after<span class="sr-only"> ZC Invented Cost</span>');
+  });
+
+  it('is a link drawn as a button, so it opens the wizard with that column pre-chosen', () => {
+    expect(adminRows()).toMatch(/<a [^>]*data-slot="button"[^>]*href="\/config\/fields\/new\?after=00000000-0000-4000-8000-00000000f012"/);
+  });
+
+  it('gives a Lead, who has no action, none (view only, STORY-08.01 AC-4)', () => {
+    expect(render(ROWS)).not.toContain('Insert after');
+    expect(render(ROWS)).not.toContain('/config/fields/new');
+  });
+});
+
 describe('AC-1 and AC-7: the search, the filter and the states', () => {
   it('opens with a labelled search and a kind filter, with the title and the line under it', () => {
     const html = renderToStaticMarkup(createElement(FieldsScreen, { viewOnly: false }));
