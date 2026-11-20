@@ -6,12 +6,27 @@
 | Severity | **Sev-3 Moderate, graded by qa-engineer, provisional**, on the test-plan scale (section 6): a Test-type defect, fails closed (a red required check), workaround is a re-run (rule R5), no product behaviour affected as far as the evidence shows. **Re-grade to a Product defect** (Sev-2 if the Users page serves or renders slowly enough to matter to a person, graded by the figures) if hypothesis 4 below shows `GET /users` or the first render slow. Same grade family as DEF-007, DEF-012, DEF-041 to DEF-046 |
 | Priority | P3 on its own; **takes a lane at once** under DL-255 (D), because the test runs in the one required check on every PR and `master` push (not because of the grade) |
 | Type | **Test** (E2E, Playwright, `desktop` project; duration-tail class). No product defect found |
-| Status | New. Not fixed by QA (measurement and fix: developer) |
+| Status | **Closed 2026-11-20 (qa-engineer), on master's DL-263 (B).** The amended proof (DL-257 (A), in the form DL-257 (7) allows) is met: PR #527's run of record 44738649937 and the first `master` push run after the merge, 44752152410. See "Closure". Fixed by the developer (PR #527, squash 5d6d72b: `masters-table-actions.spec.ts` only); not fixed by QA |
 | Jira / GitHub | [AQP-376](https://sankumar76.atlassian.net/browse/AQP-376) / [#522](https://github.com/sankumar76/Accucut-Quotation/issues/522); Jira "relates to" AQP-245, AQP-348 and AQP-1. Separate follow-up for the `pg` warning: [#523](https://github.com/sankumar76/Accucut-Quotation/issues/523) |
-| Risk / rule | RISK-031 reopens at 9 (P 3, I 3), DL-255 (6). Rule **R5** (DL-255 (3)) governs re-runs until the fix PR has merged |
+| Risk / rule | RISK-031 stays open at 9 (DL-263 (7)); this Bug's part of its close-out is met. Rule **R5 ended at this close-out** (DL-263 (3)): no re-run may cite it, and a recurrence of its signature is a new failure that comes to master. R5's text below is history. The three axe cases are on the near-budget watch list in the test plan (section 6, "Near-budget watch list (E2E)"), with master's trigger (DL-263 (6)(b)) |
 | Found by / date | CI. `master` push run 44487090650 (head 0898563, the squash of #501) and PR #503 run 44490599806, job 135446235990 (head 3d5aebe). Evidence read by master (DL-255, 2026-11-19) and re-read by qa-engineer from the job log; logged by qa-engineer, 2026-11-19 |
 | Build / commit | `origin/master` source of the spec; #503's 36 files touch no E2E spec, no `tests/e2e/support/` file, no Users page, service or repository, no auth or hashing code and no Playwright or axe version (DL-255 (1)); not re-checked by QA beyond reading the spec at `origin/master` |
 | Environment | GitHub Actions `ubuntu-latest` (image ubuntu-26.04), "Runner: 4 vCPU, 15983 MB memory", step Stage 12 E2E shard 4 of 4, `Running 447 tests using 4 workers` (log line 840); one development server and one PostgreSQL shared by the four workers; invented data only |
+
+## Closure (2026-11-20; qa-engineer, on DL-263)
+**Result: P1 met, P2 met, P3 met in the diff; 15 s reported, not gated. DEF-047 is closed.** The proof cases are the three "AC-5: at N px axe finds no violation on the forced table, after a Tab through the long-name row" cases, `[desktop]`, in the describe "SCR-14 Users: axe scan of the forced table (DEF-021, AQP-245 AC-5)" of `tests/e2e/masters-table-actions.spec.ts` (N = 768, 1024, 1366; :407 on 5d6d72b). QA read the job logs of each run itself (every shard; durations matched by project, file, line and title), and the figures agree with master's (DL-263) and the orchestrator's (AQP-376 comments 12407 and 12411).
+
+| Run | Head | Required check | P1: first attempt | 768 / 1024 / 1366 px, s | P2: worst | Over 15 s |
+|---|---|---|---|---|---|---|
+| PR #527 run of record 44738649937 | fb15d167 | `Stages 1 to 11` success; shards 468 / 473 / 469 / 454 passed (2 flaky elsewhere, neither a DEF-047 case) | 3 of 3, no retry | 19.3 / 18.9 / 19.5 | **19.5 s** | 3 of 3 |
+| PR #527 merged-head run 44748674828 (extra, QA) | 0fbf789 | fully green; 0 flaky | 3 of 3 | 13.0 / 13.9 / 14.7 | 14.7 s | 0 of 3 |
+| `master` push 44752152410 | 5d6d72b (#527's squash) | fully green; 1 flaky (`approve-override:155` [mobile], DEF-050) | 3 of 3, no retry | 15.6 / 14.9 / 15.6 | **15.6 s** | 2 of 3 |
+
+**Diagnostic (DL-260 (5), draft PR #542, closed without merging, run 44752992735, QA read the same three cases):** 21.2 / 23.3 / 22.1 s on a 1.30x shard-4 draw. Master's reading (DL-263 (2)): phases account for each case to within 0.21 s; the floor above 15 s is the one required whole-page scan (8 to 9 s on a normal draw), outside the spec. P3 spot-check by QA: the PR diff is the one spec file; each new axe case opens the page once and runs one scan.
+
+**After the closure (not part of the proof, for the watch list).** `master` push 44755812730 (f652c22c, fully green, 0 flaky; its shard 4 about 1.37x the run above): **23.4 / 24.7 / 25.2 s** at 768 / 1024 / 1366. The 25.2 s reading meets master's watch trigger (a reading of 25 s or more on any run, DL-263 (6)(b)) and is reported to master the same day. #540's run 44752189754: 23.9 / 24.8 / 24.0 s. They did not fail and do not reopen this Bug.
+
+**R5:** ended. Re-runs made under R5 (orchestrator's record, on AQP-348 and RISK-031; QA holds none) are not listed here. A red on any of these cases is a new failure for master; QA reopens this Bug (Status Reopened) if one fails on a `master` push run or on both attempts.
 
 ## Steps to Reproduce
 Not reproducible on demand: two occurrences on two heads, none locally attempted (CLAUDE.md section 9 (5): heavy browser tests run in CI).
@@ -76,6 +91,8 @@ A red run may have its failed jobs re-run once per head only when all of (a) to 
 | 2026-11-19 | PR #503, run 44490599806, failed jobs, ruling A | 3d5aebe | Not known to QA when this record was written; the orchestrator adds it (here, on AQP-348, on RISK-031 and in the daily update) |
 
 ## Issues for other roles (no defect)
+**2026-11-20 (closure):** the three axe cases are on the near-budget watch list (test plan, section 7); the 25.2 s reading of 1366 px on `master` push 44755812730 is reported to master under DL-263 (6)(b).
+
 - **orchestrator / master:** the `pg` DeprecationWarning "Calling client.query() when the client is already executing a query" (1 line in this job at 08:58:07Z; 13 lines on each of `master` push runs 44490526653, 44482838527, 44475841405, per master) is **not** part of this signature. It is filed as follow-up [#523](https://github.com/sankumar76/Accucut-Quotation/issues/523) (`follow-up`, `ai-delivery`) for the final review. No link to the time-outs is shown.
 - **orchestrator:** RISK-031 (reopen at 9, DL-255 (6)) and the occurrence list (44487090650 and `estimate-fasteners:58` and `:69`) are the orchestrator's and master's to write in `docs/00-governance/risk-register.md`; QA did not edit it. The register line in the records worktree is already modified and uncommitted, so QA left it alone.
 - **developer:** the spec's header says Users filler people "cost one argon2id hash (QLT-04)"; the cost of that hash on the CI runner has not been measured.
@@ -85,8 +102,8 @@ A red run may have its failed jobs re-run once per head only when all of (a) to 
 |------|----|------|---------------------|
 | Hypotheses 1 to 4 measured; mechanism confirmed or refuted | developer | | AQP-376 comment |
 | Fixed (spec or test-only helper) | developer | | `fix/AQP-376-<slug>`, a lane at once (DL-255 (D)) |
-| Verified: every SCR-14 Users case at most 15 s | orchestrator reads, qa-engineer confirms at hardening | | fix PR's run and the first `master` push run after merge |
-| RISK-031 closed again | master | | fix proof plus a `master` push run with 0 time-out-mode flaky |
+| Verified: amended proof P1, P2, P3 (15 s reported), on DL-263 (B) | orchestrator reads, qa-engineer confirms | 2026-11-20 | #527's run of record 44738649937 (3 of 3 on attempt 1, worst 19.5 s) and `master` push 44752152410 on 5d6d72b (3 of 3 on attempt 1, worst 15.6 s); read by QA from the job logs (see "Closure"). Replaces "every case at most 15 s". **Closed 2026-11-20** |
+| RISK-031 closed again | master | | DEF-047's part is met (2026-11-20). The other conditions (DEF-049 and DEF-050 proofs, a `master` push run with 0 time-out-mode flaky) are master's to read; see the hand-off of 2026-11-20 |
 
 ## Severity history and routing
 - QA graded Sev-3, type Test, 2026-11-19, provisional, for the reasons in the table. It holds no story gate (AQP-245 is Done; #503 is not the cause). It changes to a Product defect only if the measurement of hypothesis 4 shows the Users page itself slow; the master is told at once, and QA re-grades.

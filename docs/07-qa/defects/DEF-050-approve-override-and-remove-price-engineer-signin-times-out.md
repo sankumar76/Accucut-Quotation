@@ -1,4 +1,4 @@
-# DEF-050: `approve-override.spec.ts:155` [mobile] times out at 30 s in the Engineer's closing step (5 runs in 2 days, 2 of them `master` pushes, once on both attempts); `remove-price.spec.ts:136` [tablet] fails the same way (3 runs)
+# DEF-050: `approve-override.spec.ts:155` [mobile] times out at 30 s in the Engineer's closing step (7 runs in 2 days, 3 of them `master` pushes, once on both attempts); `remove-price.spec.ts:136` [tablet] fails the same way (3 runs)
 
 | Field | Value |
 |-------|-------|
@@ -39,6 +39,8 @@ Every failing attempt says only `Test timeout of 30000ms exceeded.` with a `page
 | 6 | 2026-11-19 | `master` push 44490526653 (8b51872d, green) | (ii) [tablet] | **failed 30.3 s** | passed 19.2 s | `page.goto` of `/estimates/<code>` at spec :195 |
 | 7 | 2026-11-20 | PR run 44662178640 (#526, 0307d91) | (ii) [tablet] | flaky, time-out mode | passed | `page.goto` (master's reading, DL-259 (1), under a 1.74x runner wave; QA did not re-read this log) |
 | 8 | 2026-11-20 | PR run 44738649937 (fb15d167, #527) | (ii) [tablet] | **failed 30.1 s** | passed 23.6 s | `page.goto` of `/estimates/<code>` at :195 |
+| 9 | 2026-11-20 | `master` push 44752152410 (5d6d72b, green) | (i) [mobile] | **failed 30.2 s** | passed 26.6 s | `page.evaluate` :178 (test no. 29 of shard 1). Added by QA at the 2026-11-20 close-outs; no re-run was used (green run) |
+| 10 | 2026-11-20 | #542 diagnostic run 44752992735 (ffc0d93a) | (i) [mobile] | **failed 31.1 s** | passed 24.9 s | `page.evaluate` :178 (test no. 29 of shard 1). Added by QA; no re-run was used. The developer also reports (i) flaky on #540 run 44745410528 (AQP-378 comment 12401); QA did not read that log |
 
 **Other readings (QA's census of the logs it holds; overlapping runs, not a full census).** (i) on `[mobile]`: 5 failed attempts of 25 first-attempt readings; the passing ones 13.7 to 28.1 s (median about 18 s). On `[tablet]` and `[desktop]` (i) has never failed in the logs read (worst 29.5 s tablet, 27.1 s desktop). (ii) on `[tablet]`: 2 failed attempts of 18 first-attempt readings, with passing readings at 28.4, 28.1, 28.9, 29.9 and 25.9 s; on `[mobile]` and `[desktop]` none failed (worst 26.0 s and 27.0 s). On `master` push 44739529276 the sibling cases of (i) on `[mobile]` were also long: `approve-override` :184 25.5 s, :133 24.9 s, :96 22.1 s; `approve` :171 23.8 s, :101 22.8 s.
 

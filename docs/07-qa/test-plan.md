@@ -218,7 +218,46 @@ Priority P1 to P3 follows the severity unless the master changes it. Type is Pro
 | Docker, scripts, backup, restore | Install walk-through if the README changed, backup and retention tests, restore failure paths |
 | Layout, tokens, shell | Three widths, axe, touch-target size, raw-colour search, the keyboard run |
 
-**Flaky tests.** A test that fails and then passes on rerun is a defect of type Test, raised the same day, quarantined within a day with a ticket, and never deleted to get green. Retries are off in unit and integration tests; Playwright allows one retry and the report shows it. Canary and role-matrix tests are never quarantined. A suite that is green only on retry is not green at G7. **Near-budget watch list (E2E cases at 20 s or more on a 30 s budget):** kept in `docs/07-qa/defects/DEF-049-estimate-form-and-treatments-e2e-cases-near-30s-budget.md`, section "Near-budget watch list" (moved there from DEF-048 on 2026-11-20 when DEF-048 closed); it moves again when DEF-049 closes.
+**Flaky tests.** A test that fails and then passes on rerun is a defect of type Test, raised the same day, quarantined within a day with a ticket, and never deleted to get green. Retries are off in unit and integration tests; Playwright allows one retry and the report shows it. Canary and role-matrix tests are never quarantined. A suite that is green only on retry is not green at G7.
+
+**Near-budget watch list (E2E, live; owner qa-engineer; moved here on 2026-11-20 from DEF-048 and then DEF-049, both closed; last refreshed 2026-11-20 evening).** Evidence, not scope: a case on this list is in no Bug's scope unless master widens it. **Lines:** 25 s is the near-budget line for a 30 s budget (the P2 line of DL-257 (A)); 20 s is the lower line of DL-259 (3). Cases on a 60 s or 90 s budget (`estimate-save`, `estimate-picture`, `estimate-tree` :269 with `test.slow()`, `estimate-fasteners`) are counted against that budget and are not listed unless over 80 %. All cases below have the 30 s default (no `test.slow()` or `test.setTimeout` in their specs at `origin/master`). **Triggers.** (1) A time-out-mode flaky on two non-wave runs in one day, or a failure on both attempts, and no open Bug covers the case: QA logs a Bug the same day and tells master (RISK-031 practice; DL-257 (D), DL-261). A ruled runner wave (DL-259) does not count towards (1) but is listed. (2) For the three SCR-14 axe cases (DL-263 (6)(b)): a reading of 25 s or more on any run, or any attempt-1 failure, is reported to master the same day. **Refresh:** from the first `master` push run after each merge that touches E2E, and at the hardening window. Rules in force with this list: R8 (DEF-050) only.
+
+**A. The three SCR-14 Users axe cases, `masters-table-actions.spec.ts`, describe "SCR-14 Users: axe scan of the forced table (DEF-021, AQP-245 AC-5)", "AC-5: at N px axe finds no violation on the forced table, after a Tab through the long-name row", `[desktop]`, N = 768 / 1024 / 1366 (DEF-047, closed 2026-11-20).**
+
+| Run | 768 / 1024 / 1366 px, s | Note |
+|---|---|---|
+| #527 run 44591769411 (older head) | 17.4 / 17.1 / 19.4 | from DL-260 and DL-263 (6)(b) |
+| #527 run of record 44738649937 (fb15d167) | 19.3 / 18.9 / 19.5 | DEF-047 P2 reading |
+| #527 merged-head run 44748674828 (0fbf789) | 13.0 / 13.9 / 14.7 | QA |
+| `master` push 44752152410 (5d6d72b) | 15.6 / 14.9 / 15.6 | DEF-047 P1 and P2 reading |
+| #542 diagnostic run 44752992735 (ffc0d93a) | 21.2 / 23.3 / 22.1 | a 1.30x draw (DL-263) |
+| #540 run 44752189754 (06474b76) | 23.9 / 24.8 / 24.0 | QA; shard 4 about 1.39x the `master` run above |
+| `master` push 44755812730 (f652c22c) | 23.4 / 24.7 / **25.2** | QA; shard 4 about 1.37x. **Trigger (2) reached at 1366 px; reported to master 2026-11-20** |
+
+**B. Cases master asked to add (DL-259 (3), readings on green run 44667850276, read by master) and QA's readings of the same cases (mobile / tablet / desktop, s).**
+
+| Case | DL-259 | `master` push 44752152410 | `master` push 44755812730 |
+|---|---|---|---|
+| `users.spec.ts:58` AC-1, AC-7 | 24.6 [desktop] | 10.9 / 10.8 / 17.6 | 5.1 / 11.6 / **26.8** |
+| `remove-price.spec.ts:136` (DEF-050, R8) | 22.5 | 23.5 / 18.2 / 20.6 | 16.3 / 19.0 / **25.5** |
+| `lead-warning.spec.ts:253` AC-8 | 21.5 | **28.0 / 25.1** / 20.9 | 16.4 / 16.2 / **29.4** (98 % of the budget) |
+| `estimate-warning.spec.ts:117` AC-6 | 20.8 | 21.7 / 23.0 / 18.6 | 18.4 / 12.9 / 21.6 |
+| `estimate-review.spec.ts:166` | 20.0 | 18.9 / 13.9 / 15.5 | 12.9 / 14.9 / 21.9 |
+
+**C. Cases that failed attempt 1 on a non-master run, or sit at 25 s or more on a `master` push run, with no open Bug (2026-11-20).**
+
+| Case | Evidence | Status |
+|---|---|---|
+| `estimate-form-sections.spec.ts:145` AC-2 `[desktop]` | #540 run 44752189754: **failed attempt 1 at 30.1 s** (a 15 s `expect(...).toHaveValue` after `page.reload()` cut by the 30 s budget, "element(s) not found"; test no. 6 of shard 4, about 70 s into the shard), retry passed in 19.7 s. `master` push 44755812730: **29.8 s** (99 %), passed. Other readings 10.3 to 19.5 s | One failure (RISK-031 already lists it). No Bug: trigger (1) not met. **Next time-out-mode flaky on any non-wave run: Bug the same day** |
+| `lead-warning.spec.ts:229` AC-5 `[desktop]` | #540 run 44752189754: **failed attempt 1 at 30.2 s** (15 s `expect(#review-approved-notice).toBeVisible()` at spec :245 cut by the budget), retry passed in 16.4 s. #526 run 44662178640: flaky at the same line :245 inside the ruled runner wave (DL-259 (1)). Desktop readings 25.0 to 29.6 s on six passing runs; `master` push 44755812730: 25.0 s | Letter of trigger (1) met only by counting the wave run, which DL-259 (B) ruled out. **Reported to master with the DEF-047 and DEF-049 close-outs for a ruling** |
+| `estimate-treatments.spec.ts:87` AC-1 (the eight, :61 before 2026-11-20) | `master` push 44755812730: **26.1 s** [desktop]; #540 run 44752189754: **28.5 s** [tablet] (95 %), 23.0 [desktop], 21.2 [mobile]; 26.0 [mobile] on 44739529276. Never failed | Not DEF-049's scope (its fix covers AC-2 and estimate-form AC-9). **Reported to master**; trigger (1) not met |
+| `estimate-form-sections.spec.ts:92` AC-1 `[desktop]` | 25.0 s on 44755812730 | watch |
+| `estimate-warning.spec.ts:63` AC-6 `[desktop]` | 24.4 s on 44755812730 | watch |
+| `approve-override.spec.ts:184` | 25.5 [mobile] on 44739529276; 24.0 [tablet] on 44755812730 | watch (DEF-050's file; the case is not in its scope) |
+
+**D. Cases that were this list's reason and are fixed (readings after the fix, 2026-11-20).** `estimate-form.spec.ts` AC-9, three cases, and `estimate-treatments.spec.ts` AC-2, two cases (DEF-049, PR #540, f652c22): `master` push 44755812730, first attempt, 9.2 to 19.5 s (worst 19.5 s); #540's final run 44752189754 worst 18.7 s. The five replacing cases of DEF-048 (PR #531, 402485c): `master` push 44739529276 worst 18.3 s (see DEF-048). Cases that stay under the P2 line are listed here only if they reach 25 s again.
+
+**E. Read the draw before reading a case.** On 2026-11-20 shard 4 ran about 1.37x to 1.39x the `master` push run 44752152410 on both 44755812730 and 44752189754 (455 and 457 tests in common; per-test totals), while those runs' `next build` figures were not slower than other shards (TypeScript 5.1 to 6.7 s). Several desktop cases read 25 to 30 s on the otherwise fully green `master` push 44755812730. Its "0 flaky" is therefore a narrow margin (29.8 s, 29.4 s), not a wide one. The architecture issue for after G8 (DL-257 (9)) is the common root.
 
 **Regression result in a report** states the command, the count passed, failed and skipped, and the commit. A skipped test is explained or it is a failure. `quantity-cases-complete` (strategy 5.4) must be among the passing tests.
 
