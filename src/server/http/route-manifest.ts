@@ -288,6 +288,11 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/config/fields/preview', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
   { path: '/api/v1/config/insert-options', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
   { path: '/config/fields/new', kind: 'page', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2', screen: 'SCR-19' },
+  // STORY-08.04 (SCR-20, the delete dialog over SCR-17; architecture section 6 "Delete field": A, with the password step, FR-080). The Admin alone (NFR-001): a Lead and an Engineer are refused 403 and a signed-out caller 401, before the
+  // field or the body is looked at. The references read is the dialog's own (it must know what uses the field before it asks for a password) and is not in section 6 yet; the answers hold formulas, so neither route is in any
+  // Engineer's list and the cost scan calls both as routes an Engineer is refused (NFR-002). The dialog is opened from SCR-17 ("Delete") and has no page of its own.
+  { path: '/api/v1/config/fields/[id]', kind: 'api', methods: ['DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
+  { path: '/api/v1/config/fields/[id]/references', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
   // STORY-05.09 (SCR-05's Calculate; architecture section 6 "Calculate"): the Engineer's own, on their own draft. Only the Engineer is listed (a Lead's and an Admin's is Recalculate, STORY-06.04), so
   // every other role is refused 403 before the ID is looked at. The answer is `{status, message}` through one strict schema with two literals, so it is in the Engineer's list and the cost scan calls it.
   // STORY-05.12 adds an optional body, `{acknowledge: {inputsRevision}}`, and the 409 `CALCULATE_ACK_REQUIRED` a 0 in QTY per Assy earns a first press (one strict schema, no figure, the same for every role).

@@ -116,7 +116,7 @@ export interface SessionHarness {
   readonly configReadService: ConfigReadService;
   /** The formula editor (STORY-08.02) over the same in-memory versions, the 15 seed rates, the fake calculation store, the real step-up check over the harness's people and throttles, and the audit world (`getConfigEditService` in the composition mock). */
   readonly configEditService: ConfigEditService;
-  /** The insert wizard (STORY-08.03) over the same in-memory versions, the 15 seed rates and the audit world; it asks for no password (`getConfigStructureService` in the composition mock). */
+  /** The structure service (STORY-08.03 insert, STORY-08.04 delete) over the same in-memory versions, the 15 seed rates, the real step-up check over the harness's people and throttles, and the audit world; an insert asks for no password, a delete does (`getConfigStructureService` in the composition mock). */
   readonly configStructureService: ConfigStructureService;
   /** The in-memory configuration versions behind `configReadService`: its members are plain functions, so a test can spy on each one. */
   readonly configRepository: ConfigRepository;
@@ -419,7 +419,7 @@ export function createSessionHarness(): SessionHarness {
       audit: auditService,
       cache: createConfigVersionCache(),
     }),
-    configStructureService: createConfigStructureService({ configurations: configRepository, masters, transactions: auditWorld.transactions, audit: auditService, cache: createConfigVersionCache() }),
+    configStructureService: createConfigStructureService({ configurations: configRepository, masters, stepUp: stepUpService, transactions: auditWorld.transactions, audit: auditService, cache: createConfigVersionCache() }),
     mastersService: createMastersService({
       masters,
       transactions: auditWorld.transactions,

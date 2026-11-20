@@ -1,3 +1,4 @@
+import { blockedSentence, type FieldUse } from './fields/uses';
 import { blockedSummary, CALCULATE_BLOCKED_CODE } from './estimate/calculate-words';
 import type { PartView } from './estimate/part-view';
 import type { BlockedPart } from './estimate/calculate-check';
@@ -191,6 +192,23 @@ export class ProcessItemInUseError extends ConflictError {
     readonly usedBy: ReadonlyArray<FormulaUse>,
   ) {
     super(`${rateName} cannot be deleted while a formula uses it`, { code: PROCESS_ITEM_IN_USE_CODE });
+  }
+}
+
+/** A field was deleted that a formula, a hide-when-zero rule, a visibility rule or a stage total uses (STORY-08.04 AC-2). The code of the 409, which the dialog compares with. */
+export const FIELD_IN_USE_CODE = 'FIELD_IN_USE';
+
+/**
+ * The refusal of deleting a field that something uses: 409, with every use named so the dialog can list them and link each formula to SCR-18. The message is the SCR-20 sentence ("Cannot delete AL Cutting Cost
+ * yet. 1 formula uses this field."). **Restricted** (NFR-002): a formula use holds the formula's text in display form, so the only route that raises it is the Admin's.
+ */
+export class FieldInUseError extends ConflictError {
+  constructor(
+    letter: string,
+    label: string,
+    readonly uses: ReadonlyArray<FieldUse>,
+  ) {
+    super(blockedSentence(letter, label, uses), { code: FIELD_IN_USE_CODE });
   }
 }
 
