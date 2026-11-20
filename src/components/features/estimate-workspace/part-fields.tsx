@@ -34,7 +34,7 @@ import { controlIdFor, NEXT_FIELD } from './field-ids';
 import { FieldRenderer } from './field-renderer';
 import { PartProgress, PartProgressSkeleton } from './part-progress';
 import { PictureSlot } from './picture-slot';
-import { CONFLICT_BODY, CONFLICT_KEEP_MINE, CONFLICT_TITLE, CONFLICT_USE_NEWER } from './save-texts';
+import { CONFLICT_BODY, CONFLICT_KEEP_MINE, CONFLICT_TITLE, CONFLICT_USE_NEWER, saveStatusText } from './save-texts';
 import { SectionCard } from './section-card';
 import { SectionStrip } from './section-strip';
 import { TREATMENT_MISSING_MESSAGE } from './surface-texts';
@@ -146,7 +146,11 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
           {partFormTitle(part.slNo)}
         </h3>
         <p className="text-label text-ink-3">{FORM_INTRO}</p>
-        <p className="text-label text-ink-3">{lastSavedAt === null ? NOT_SAVED_YET : lastSavedText(formatIst(new Date(lastSavedAt)))}</p>
+        {/* The one status line of saving (STORY-05.10 AC-4, AC-5): when something was last saved (every save that stored something moves it, `onWrote`), that the form saves on its own, and, once, that the automatic
+            save could not. A polite live region that is on the page from the first paint, so it speaks only when its words change, which is when a save stored something or failed, never on a silent tick. */}
+        <p role="status" data-last-saved="" className="text-label text-ink-3">
+          {saveStatusText(lastSavedAt === null ? NOT_SAVED_YET : lastSavedText(formatIst(new Date(lastSavedAt))), editable, values.autosaveFailedAt)}
+        </p>
       </div>
       {editable ? null : <Notice tone="info">{FORM_LOCKED}</Notice>}
       {problem?.kind !== 'conflict' ? null : (
