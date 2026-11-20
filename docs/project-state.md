@@ -13,8 +13,45 @@
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target 1 Dec 2026, range 1 to 3 Dec (DL-248)** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-19 by orchestrator (run after pause 2: Gitleaks blocker) |
+| Last updated       | 2026-11-20 by orchestrator (resume point, pause 3) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Resume point (2026-11-19, pause 3)
+
+> **Graceful pause at the delivery lead's request.** This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.** No agent is running, no background command is running, no dev server is running. Everything is committed and pushed. (Written in the early hours of 2026-11-20 UTC.)
+
+**`master` = 241922f** (#525 AQP-349 09.02). Its push runs (CI 44667806338, Windows package 44667806344) were **in progress at the pause: read them first**. The previous tip 9f9981f (#534) was **fully green** (CI 44662130558).
+
+**Merged since pause 2 (5):** #520 AQP-374 DEF-046 test fix (4232a36); #519 AQP-312 AC-8 kit step (1e6a4d4; kit on master: https://github.com/sankumar76/Accucut-Quotation/blob/master/deploy/windows/manual/AC-8-jea-prompt-check.md); #534 **AQP-379** effect override for GHSA-7589-6fvf-x4pw (9f9981f, DL-258; Jira Done); #525 **AQP-349** 09.02 (241922f; Jira still to move to Done on resume). QA closed AQP-373 (DEF-045) and AQP-374 (DEF-046).
+
+**Blockers cleared this run:** (1) Gitleaks Stage 2 red on every run from invented test strings on the old branch `feat/AQP-375-observability`; the delivery lead deleted it; Stage 2 green again. (2) Stage 7 `npm audit` red from GHSA-7589-6fvf-x4pw (`effect` via Prisma); fixed by #534 (`overrides.effect = 3.22.4`).
+
+**Rulings this run:** DL-256 (#510 red run: update and merge on green; DEF-048; rule R6; R3 and R4 ended), DL-257 (DEF-048 proof amended to P1 first-attempt pass at every width, P2 each case under 25 s, P3 one page open and at most one scan per case; R6 re-pointed; DEF-049 and rule R7; watch-only `estimate-save:107`, `rates-changed:135`, `unlock:186`; the amended proof applies to #527 only if its PR body shows per-case CI timings), DL-258 (merge #534).
+
+**Open PRs at the pause (do not act until resume):**
+| PR | Item | Head | CI at pause | Next on resume |
+|---|---|---|---|---|
+| #526 | AQP-358 08.03 [c] | 0307d91 | Run 44662178640: Stages 1 to 11b **green** (first full unit/build/integration pass in CI), shards 1 to 3 green, **shard 4 red: a broad time-out wave** (about 14 desktop failures across estimate-fasteners, estimate-form :224, estimate-review :166, estimate-warning, lead-warning, masters-table-actions :315 at 768/1024/1366, remove-price :136, users :58). Not covered by R5, R6 or R7 (more than one test). Combined review **APPROVE WITH COMMENTS** at 76ab509 (re-review). | **Ask master for a ruling** on the shard-4 wave (slow runner or caused by #526); then update branch and merge on fully green |
+| #510 | AQP-336 07.06 | 3caadda | Updated after #525 merged; run in progress at pause | Read; merge on fully green |
+| #529 | AQP-375 H-OBS | 57da6e9 | **All green** (incl. Stage 13), but now BEHIND (#525 merged). Combined review APPROVE WITH COMMENTS (Minor in #532). Its earlier run 44550007854 had shard 4 re-run together with the Stage 2 re-run (DEF-047 signature; R5 (a) not strictly met): recorded for master, not a run of record | Update branch; merge on fully green |
+| #531 | AQP-377 DEF-048 fix | 54093e7 | **All green**, now BEHIND | Update branch; merge on fully green; then read P1 and P2 on the first `master` push run and post on AQP-377 |
+| #527 | AQP-376 DEF-047 fix | c6baf52 | Draft, BEHIND. Run 44591769411: all E2E green (Stage 2 red then, from the old branch). Users layout cases 4.8 to 6.1 s; axe cases 17.4 / 17.1 / 19.4 s (each its own case); card list 3.7 s. Root cause: about 170 never-deleted users in the list and about 1,000 `expect()` calls per `expectActionsInside` call; axe whole page 7.5 to 9.6 s | Resume the developer: PR title and body with per-case CI timings (needed for DL-257's amended proof), read the notice-case timings, mark ready, AQP-376 to In Review, Jira hand-off; sync with master; master confirms the proof; merge on fully green |
+| #494 | records | 54a0f8e (now later) | Draft | Merges at the end of the run (docs-auto) |
+| #476 | next 16.4.6 (Dependabot) | 141cfe0 | Green | Hardening window (#513); do not touch |
+
+**Merge order on resume:** #526, #510, #529, #531, #527 (#525 is done). One at a time, each on a fully green run with the head up to date with `master`.
+
+**Queue (not started):** DEF-049 fix (AQP-378; first free lane after #531, DL-257), then 09.03 AQP-350, 08.04 AQP-359 (after #526), 05.10 AQP-367, 07.07 AQP-364, 07.05 AQP-335 (after #510), 02.08 AQP-365 [c], 04.06 AQP-366, 10.07 AQP-369. Slip watch: last story merged by 26 Nov for the 1 Dec G8 target (DL-248).
+
+**Hardening issues added this run:** #532 (H-OBS SQR-01, SQR-02), #535 (remove the `effect` override once Prisma allows `effect` >= 3.22.1), #536 (`uuid` < 11.1.1 via `exceljs`, moderate), #537 (`basic-ftp` <= 6.2.3, high, dev-only); #524 extended to the insert service (AQP-358 SQR-05); AQP-358 SQR-07 wording (mandatory input with no default stops Calculate on open Drafts) for product-owner and ux-expert. Earlier: #513, #516, #523, #524; G8 conditions G8-C-AC8, G8-C-NFR9.
+
+**Bugs open:** AQP-376 DEF-047 (#527), AQP-377 DEF-048 (#531, GitHub #530), AQP-378 DEF-049 (GitHub #533, not started). Rules in force: R5 (DEF-047), R6 as amended (DEF-048), R7 (DEF-049). RISK-031 at 9.
+
+**Worktrees (6 + main):** records-t; aqp-336 (#510); aqp-358 (#526); aqp-375 (#529); aqp-376 (#527; untracked `.bench-tmp/` scratch and agent memory, an earlier clean-up was denied); aqp-377 (**checked out on `fix/AQP-379-effect-advisory`**, merged; switch back to `fix/AQP-377-estimate-e2e-timeouts` if #531 needs changes, or remove it after #531 merges). Removed this run: aqp-373, ac8-kit, aqp-349 (agent memory archived to records-t `.claude/agent-memory/_archive-2026-11-19/`). **C: 9.9 GB free.**
+
+**Containers (all stopped, none removed):** aqp358-db, aqp349-db (its PR has merged; can be removed on resume), aqp336-db. Other projects' containers are untouched.
+
+**For the delivery lead / main session:** no decision is pending. Housekeeping: aqp349-db can be removed (#525 merged); orphan folder `aqp-338` (from before) still in `.claude/worktrees`; `.bench-tmp/` in aqp-376; developer memory notes sit untracked in the aqp-375, aqp-376 and aqp-377 worktrees (archive before removing those worktrees).
 
 ## Run after pause 2 (2026-11-19, orchestrator)
 
