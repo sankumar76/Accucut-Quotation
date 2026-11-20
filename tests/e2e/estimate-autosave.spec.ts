@@ -23,9 +23,9 @@ test.beforeEach(async ({ context }) => {
 
 const SAVE_ROUTE = '**/api/v1/estimates/*/nodes/*/inputs';
 const TICK_MS = 30_000;
-const NEVER_SAVED = 'Nothing saved yet. Auto-save every 30 s.';
+// The recipe's estimate already has a first write (its part is created with one), so the line always begins with the time of the last save.
 const SAVED_LINE = /^Last saved .+ IST\. Auto-save every 30 s\.$/;
-const FAILED_LINE = /^Nothing saved yet\. Auto-save every 30 s\. Auto-save could not save at \d{2}:\d{2} IST\. What you typed is kept\. Press Save draft to try again\.$/;
+const FAILED_LINE = /^Last saved .+ IST\. Auto-save every 30 s\. Auto-save could not save at \d{2}:\d{2} IST\. What you typed is kept\. Press Save draft to try again\.$/;
 
 /** The one status line of saving, under the part form's title. */
 const statusLine = (page: Page) => partForm(page).locator('[data-last-saved]');
@@ -50,8 +50,7 @@ test.describe('STORY-05.10: autosave every 30 seconds', () => {
 
     // AC-4, AC-9: the one status line is a polite live region from the first paint and holds the words; it wraps inside the header with no sideways scroll; axe finds nothing.
     await expect(statusLine(page)).toHaveAttribute('role', 'status');
-    await expect(statusLine(page)).toHaveText(NEVER_SAVED);
-    await expect(page.getByText(/^Last saved /)).toHaveCount(0);
+    await expect(statusLine(page)).toHaveText(SAVED_LINE);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);
 
