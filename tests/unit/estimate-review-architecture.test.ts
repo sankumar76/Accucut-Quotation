@@ -80,10 +80,11 @@ describe('AC-7: every read of a figure goes through figure-state', () => {
     expect(service.match(/findReviewFigures\(/g)).toHaveLength(1);
   });
 
-  it('STORY-06.10 AC-6 (NFR-002): the stored warnings of a calculation leave the repository by the one read of the figures, so only the review service holds them; the name of who went ahead is named by no one else', () => {
+  it('STORY-06.10 AC-6, STORY-07.06 AC-4 (NFR-002): the stored warnings of a calculation leave the repository by the reads of the figures, so only the review service and the export service (both for the Lead and the Admin) hold them; the name of who went ahead is named by no one else', () => {
     // `warnings` and `madeByName` are members of what `findReviewFigures` returns: the repository defines them and the review service passes them into the costs view, behind the Lead's and the Admin's roles.
-    expect(pathsMatching(ALL, /\bmadeByName\b/).sort()).toEqual([REPOSITORY, REVIEW_SERVICE].sort());
-    expect(pathsMatching(ALL, /\bfigures\.warnings\b/)).toEqual([REVIEW_SERVICE]);
+    // STORY-07.06 AC-4 adds the export service, which passes them into SCR-10's summary behind the same two roles (the file never holds them: `export-service.test.ts` A-24).
+    expect(pathsMatching(ALL, /\bmadeByName\b/).sort()).toEqual([REPOSITORY, REVIEW_SERVICE, EXPORT_SERVICE].sort());
+    expect(pathsMatching(ALL, /\bfigures\.warnings\b/).sort()).toEqual([REVIEW_SERVICE, EXPORT_SERVICE].sort());
     // No Engineer route, page or component imports the review service or the costs view that carries the list.
     const engineerReachable = ALL.filter((file) => /^src\/app\/api\/v1\/estimates\/\[id\]\/(calculate|nodes)|^src\/components\/features\/estimate-workspace\//.test(file.path));
     expect(engineerReachable.length).toBeGreaterThan(10);

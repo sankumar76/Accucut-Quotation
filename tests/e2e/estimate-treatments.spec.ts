@@ -234,15 +234,22 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
   });
 });
 
+// DEF-048 (AQP-377): AC-8 was one test with three whole-form axe scans. Measured on CI (run 44567048767): the form takes 6 to 9 s to open on the development server (sign-in,
+// the customer, the page load, the materials and the treatments) and each whole-form scan takes 2.2 to 3.4 s, so the one test took 15 to 19 s on a quiet runner and ran out of
+// its 30 s on a busy one. It is now one test per state of the form, each with its own scan and every check the one test had. A scan is never shortened: the same rules and tags.
 test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
-  test('AC-8: no sideways scroll, axe finds nothing (closed, open, with "Other" showing), and every control is 44 px high', async ({ page }, testInfo) => {
+  test('AC-8 (closed): no sideways scroll, axe finds nothing, and the trigger and the field are 44 px high', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
     await treatmentsLoaded(page);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);
     expect((await trigger(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     expect((await control(page, 'G').boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
+  });
 
+  test('AC-8 (list open): every checkbox is 44 px, there is no sideways scroll, axe finds nothing, and Escape closes the list', async ({ page }, testInfo) => {
+    await openForm(page, testInfo);
+    await treatmentsLoaded(page);
     await openList(page);
     for (const box of await list(page).getByRole('checkbox').all()) {
       const size = await box.boundingBox();
@@ -253,8 +260,12 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
     await expectNoAxeViolations(page);
     await page.keyboard.press('Escape');
     await expect(list(page)).toHaveCount(0);
+  });
 
-    // "Other" last: leaving its empty box shows a message and moves the cards below, so nothing is pressed after it.
+  test('AC-8 ("Other" showing): the box is 44 px high, there is no sideways scroll and axe finds nothing', async ({ page }, testInfo) => {
+    await openForm(page, testInfo);
+    await treatmentsLoaded(page);
+    // "Other" last in the original order: leaving its empty box shows a message and moves the cards below, so nothing is pressed after it.
     await control(page, 'G').selectOption({ label: 'Other' });
     expect((await otherBox(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);

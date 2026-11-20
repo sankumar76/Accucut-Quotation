@@ -1,6 +1,8 @@
 import { APPROVED_NOTICE_ID } from '@/components/features/estimate-approve/approve-ids';
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { Notice } from '@/components/shared/notice';
+import { warnedNodeIds } from '@/components/shared/quantity-tag';
+import { WarningNotice } from '@/components/shared/warning-notice';
 import { Card, CardContent } from '@/components/ui/card';
 import type { RoleName } from '@/lib/auth/roles';
 import { cn } from '@/lib/cn';
@@ -13,12 +15,10 @@ import { BuildTable } from './build-table';
 import { CancelledNotice } from './cancelled-notice';
 import { FigureTiles, type ApprovedTileView } from './figure-tiles';
 import { PriceRemovedNotice } from './price-removed-notice';
-import { warnedNodeIds } from './quantity-tag';
 import { RatesChangedNotice } from './rates-changed-notice';
 import { approveOffer, cancelOffer, removeOffer, ReviewActions } from './review-actions';
 import { ReviewTree } from './review-tree';
 import { UnlockedNotice } from './unlocked-notice';
-import { WarningNotice } from './warning-notice';
 import {
   APPROVED_NOTICE_BODY,
   APPROVED_NOTICE_TITLE_PLAIN,

@@ -126,6 +126,9 @@ function watchLookups(): () => string[] {
   watch('review', harness.reviewReads);
   // STORY-02.09: the backup and disk readings of `job_runs`. A refused role must not cause a read of either.
   watch('jobRuns', harness.jobRuns);
+  // STORY-09.02: the settings row (the alerts switch and the sender) and the mail transport. A refused role must not cause a read of the row or a message.
+  watch('settings', harness.settingsRepository);
+  watch('mail', harness.settingsMail);
   watch('users', harness.users, ['findAccountById']);
   return () => spies.filter(([, spy]) => spy.mock.calls.length > 0).map(([name]) => name);
 }

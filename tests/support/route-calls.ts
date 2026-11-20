@@ -304,6 +304,13 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
     // whenever `signInAs` names it, so the call repeats as every role; the real scan makes it once for a person made for the run.
     case 'POST /api/v1/account/password':
       return { id: NO_RECIPE_ID, body: { currentPassword: HARNESS_PASSWORD, newPassword: HARNESS_NEXT_PASSWORD }, status: 204 };
+    // STORY-09.02: the Settings routes, Admin only. The valid calls change nothing and answer the same in every environment the scan runs in (the harness, a real database, a server with no mail
+    // server of its own): a PUT that turns alerts ON with no sender address is refused 422 by content, and the test e-mail is refused 422 `NO_SENDER` before the transport is touched, because no
+    // sender address is saved (the settings tests that save one put it back to none). The saves, the sends and the failures are `alerts-routes.test.ts`'s and `tests/integration/settings`'s.
+    case 'PUT /api/v1/settings':
+      return { id: NO_RECIPE_ID, body: { alertsEnabled: true, senderName: 'Invented Sender', senderAddress: '' }, status: 422 };
+    case 'POST /api/v1/settings/test-email':
+      return { id: NO_RECIPE_ID, status: 422 };
     case 'GET /api/v1/users':
       return DEFAULT_CALL;
     case 'POST /api/v1/users':

@@ -8,6 +8,7 @@ import { createJobRunRepository, type JobRunRepository } from '@/server/reposito
 import { createSettingsService, type SettingsService } from '@/server/services/settings-service';
 
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
+import { fakeSettingsDependencies } from '../../support/fake-settings';
 
 /**
  * STORY-02.09 (AQP-307) against real PostgreSQL, in a throwaway database with every migration applied, as the runtime role the web process uses:
@@ -65,7 +66,7 @@ async function failureOf(run: () => Promise<unknown>): Promise<{ readonly code?:
 beforeAll(async () => {
   db = await openAuthDatabase();
   repository = createJobRunRepository(db.prisma);
-  service = createSettingsService({ jobRuns: repository, clock });
+  service = createSettingsService({ ...fakeSettingsDependencies(), jobRuns: repository, clock });
 });
 
 afterAll(async () => {

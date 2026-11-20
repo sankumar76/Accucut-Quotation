@@ -101,7 +101,13 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
       return Promise.resolve(
         found === undefined
           ? null
-          : { productValues: found.productValues, rows: found.rows, materials: found.masterSnapshot.materials.map(({ materialInDrawing, pricePerKg }) => ({ materialInDrawing, pricePerKg })) },
+          : {
+              productValues: found.productValues,
+              rows: found.rows,
+              materials: found.masterSnapshot.materials.map(({ materialInDrawing, pricePerKg }) => ({ materialInDrawing, pricePerKg })),
+              warnings: found.warnings.map((warning) => warning as StoredWarning),
+              madeByName: FAKE_MADE_BY_NAME,
+            },
       );
     },
     findRowWorking: (calculationId: string, nodeId: string) => {

@@ -76,3 +76,19 @@ export async function calculateWithoutThePage(page: Page, owner: E2eUser & { rea
   expect(answer.status(), 'the Calculate of the Engineer').toBe(200);
   expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
 }
+
+/**
+ * The Engineer presses Calculate on an estimate whose part has 0 in QTY per Assy and goes ahead past the warning (STORY-07.06 AC-6), with the requests the button and its dialog send and **without loading a
+ * page**: the first press is the 409 `CALCULATE_ACK_REQUIRED` with the estimate's revision, the second carries that revision as the acknowledgement. The estimate is Submitted afterwards, with one calculation
+ * that holds the warning, whose `created_by` is this Engineer.
+ */
+export async function calculateAnywayWithoutThePage(page: Page, owner: E2eUser & { readonly id: string }, origin: string = DEVELOPMENT_URL): Promise<void> {
+  await signInAs(page, owner);
+  const url = `/api/v1/estimates/${owner.id}/calculate`;
+  const asked = await page.request.post(url, { headers: { origin } });
+  expect(asked.status(), 'the first press is asked about the 0').toBe(409);
+  const { inputsRevision } = (await asked.json()) as { inputsRevision: number };
+  const went = await page.request.post(url, { headers: { origin }, data: { acknowledge: { inputsRevision } } });
+  expect(went.status(), 'the Calculate anyway of the Engineer').toBe(200);
+  expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+}

@@ -33,6 +33,8 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   '/api/v1/audit': ['ADMIN'],
   // The API behind Settings (SPEC section 9: Settings is the Admin's; architecture section 6 row "Settings", STORY-02.09 AC-6, CR-33).
   '/api/v1/settings': ['ADMIN'],
+  // STORY-09.02: the test e-mail goes to the Admin's own address, and only the Admin may ask for it (architecture section 6 row "Test e-mail", AC-6).
+  '/api/v1/settings/test-email': ['ADMIN'],
   // The API behind Fields and formulas (STORY-08.01; architecture section 6 row "Configuration": A L): the Admin and the Lead read the formulas, an Engineer never does (NFR-002, CR-33).
   // Two rows, one per method, because the roles differ (STORY-08.03): the read is the Admin's and the Lead's, the insert is the Admin's alone.
   'GET /api/v1/config/fields': ['ADMIN', 'LEAD'],
