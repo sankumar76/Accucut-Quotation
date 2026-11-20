@@ -31,6 +31,8 @@ export const JSON_HEADERS = { 'Content-Type': 'application/json', Accept: 'appli
 export const ACCEPT_JSON = { Accept: 'application/json' } as const;
 
 const SERVER_FAULT = 500;
+/** A 502 is a refusal by something the portal asked (the mail server, for the Settings test e-mail): its problem body names the class in `code`, so a screen can choose its words (STORY-09.02 AC-5). */
+const BAD_GATEWAY = 502;
 const NO_CONTENT = 204;
 
 /** Is this value an object whose keys can be read? (JSON from the server is checked with it, field by field.) */
@@ -57,9 +59,9 @@ function fieldMessages(errors: unknown): Record<string, string> {
   return fields;
 }
 
-/** A problem body read as a refusal. A 5xx, or a body that is not a problem, is `failed`. */
+/** A problem body read as a refusal. A 5xx other than 502, or a body that is not a problem, is `failed`. */
 function refusalFrom(httpStatus: number, body: unknown): Refusal | { readonly status: 'failed' } {
-  if (httpStatus >= SERVER_FAULT || !isRecord(body) || typeof body['code'] !== 'string' || typeof body['title'] !== 'string') return { status: 'failed' };
+  if ((httpStatus >= SERVER_FAULT && httpStatus !== BAD_GATEWAY) || !isRecord(body) || typeof body['code'] !== 'string' || typeof body['title'] !== 'string') return { status: 'failed' };
   return { status: 'refused', httpStatus, code: body['code'], title: body['title'], fields: fieldMessages(body['errors']), body };
 }
 

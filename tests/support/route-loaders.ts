@@ -17,6 +17,7 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/config/sample-rows': () => import('@/app/api/v1/config/sample-rows/route'),
   '/api/v1/config/fields/[id]/formula': () => import('@/app/api/v1/config/fields/[id]/formula/route'),
   '/api/v1/settings': () => import('@/app/api/v1/settings/route'),
+  '/api/v1/settings/test-email': () => import('@/app/api/v1/settings/test-email/route'),
   '/api/v1/users': () => import('@/app/api/v1/users/route'),
   '/api/v1/users/[id]': () => import('@/app/api/v1/users/[id]/route'),
   '/api/v1/users/[id]/password-reset': () => import('@/app/api/v1/users/[id]/password-reset/route'),
