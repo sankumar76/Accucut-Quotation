@@ -1,11 +1,14 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 import { FIELD_ID_NAMESPACE, seedId } from '../../prisma/seed/config/seed-sections-and-stages';
 import { columnLetterToIndex } from '../../src/lib/columns';
+import { CUSTOMER_CANARIES } from '../support/customer-canary';
+import { canaryTaskCodeFor } from '../support/estimate-recipe';
+import { defined } from '../support/defined';
 
-import { useFreshAddress } from './support/auth';
+import { connectToTestDatabase, ensureCanaryCustomers, ensureCanaryMaterials, useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { control, expectFormAccessible, nextSave, openForm, partForm } from './support/part-form';
+import { control, expectFormAccessible, nextSave, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 import { deleteTreatment, insertTreatment, newTreatmentName, readPartInputs, renameTreatment, storeTreatmentInPart } from './support/treatment-rows';
 
@@ -30,6 +33,8 @@ const G = idOf('G');
 const PRIMER = idOf('AA');
 const FOAM = idOf('AF');
 const ALL_TREATMENTS = ['Hot Dip Galvanizing', 'Primer', 'Shot Blasting', 'Polishing', 'Plating', 'Powder Coating', 'Foam', 'Soft Anodize'];
+/** What the eight saves of AC-2 leave in the part: the eight flags of section 07 (Z to AG), each as 1, the way AC-1 reads a chosen one back. */
+const EVERY_TREATMENT_STORED: Record<string, string> = Object.fromEntries(['Z', 'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG'].map((letter) => [idOf(letter), '1']));
 const OTHER_REQUIRED = 'Enter the treatment or colour.';
 
 const region = (page: Page, name: string): Locator => page.getByRole('region', { name });
@@ -55,6 +60,27 @@ async function optionNamesOfG(page: Page): Promise<string[]> {
 /** The list is read after the form is on the page: until it arrives it holds the empty choice only, then also "Not applicable" and "Other" at least. */
 async function treatmentsLoaded(page: Page): Promise<void> {
   await expect.poll(async () => (await optionNamesOfG(page)).length).toBeGreaterThan(2);
+}
+
+/**
+ * The form of a new Engineer whose part already holds all eight treatments, as `openForm` opens it (the customer through the route the drop-down calls, the page loaded once) with the eight
+ * flags written to the part before the page loads, so the page opens on them. For the axe test of AC-2, whose subject is the page in that state and not the eight saves: those are AC-2's other
+ * test, and the first test of AC-1 judges the list and what one save stores. The part has the person's ID, like its estimate (the recipe of the scan).
+ */
+async function openFormWithEveryTreatmentStored(page: Page, testInfo: TestInfo): Promise<void> {
+  await ensureCanaryCustomers();
+  await ensureCanaryMaterials();
+  const owner = await signInAsNewEngineer(page, testInfo);
+  const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers: { origin: DEVELOPMENT_URL }, data: { customerId: defined(CUSTOMER_CANARIES[0]).id } });
+  expect(chosen.status(), 'the customer is chosen').toBe(200);
+  const client = await connectToTestDatabase();
+  try {
+    await client.query('UPDATE estimate_nodes SET inputs = inputs || $2::jsonb WHERE id = $1::uuid', [owner.id, JSON.stringify(EVERY_TREATMENT_STORED)]);
+  } finally {
+    await client.end();
+  }
+  await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
+  await waitForForm(page);
 }
 
 test.describe('AC-1, AC-2: the eight surface treatments as one multi-select', () => {
@@ -272,13 +298,23 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
     await expectFormAccessible(page);
   });
 
+  // DEF-049 (AQP-378): AC-2 was one test with eight saves, the form open and one whole-form scan, 15.9 to 17.5 s on a quiet runner (run 44737067927) and 25.3 to 29.4 s on a busy one (runs 44580739670 and
+  // 44509175744). It is now two. The eight saves are its subject and stay real saves, one request each, in the first test, which has every other check the one test had but the scan. The scan is the
+  // second test, on a part that holds what those saves leave (the first test reads it back and the trigger of the second names all eight before the scan), so the scan test does not repeat the saves.
   test('AC-2: with every treatment chosen the trigger shows every name as text and the page still does not scroll sideways', async ({ page }, testInfo) => {
-    await openForm(page, testInfo);
+    const owner = await openForm(page, testInfo);
     await openList(page);
     for (const name of ALL_TREATMENTS) await toggle(page, name);
     await page.keyboard.press('Escape');
     await expect(trigger(page)).toContainText(`8 selected: ${ALL_TREATMENTS.join(', ')}`);
+    expect(await readPartInputs(owner.id)).toEqual(EVERY_TREATMENT_STORED);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+
+  test('AC-2 (axe): with every treatment chosen, as the eight saves leave them, axe finds nothing', async ({ page }, testInfo) => {
+    await openFormWithEveryTreatmentStored(page, testInfo);
+    // The page is judged as the eight saves leave it: the trigger names all eight.
+    await expect(trigger(page)).toContainText(`8 selected: ${ALL_TREATMENTS.join(', ')}`);
     await expectFormAccessible(page);
   });
 });
