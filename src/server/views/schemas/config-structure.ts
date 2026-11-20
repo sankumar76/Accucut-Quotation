@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { INSERTABLE_DATA_TYPES } from '../../../lib/config/field-insert-check';
 import { FIELD_KINDS } from '../../../lib/fields/types';
+import { stepUpPasswordSchema } from './step-up';
 
 /**
  * The contract of the insert wizard's routes (STORY-08.03; architecture section 6 "Insert preview" and "Insert field"; SCR-19). Every body and answer is a strict object, so a key that is not named is an error
@@ -85,3 +86,25 @@ export const insertOptionsAnswerSchema = z.strictObject({
   stages: z.array(z.strictObject({ id: z.string().min(1), number: z.number().int(), name: z.string().min(1), subHeadings: z.array(z.string().min(1)) })),
   numberFormats: z.array(z.string().min(1)),
 });
+
+/**
+ * The delete's contract (STORY-08.04; architecture section 6 "Delete field"; SCR-20). The body is the password alone, in a strict object: an unknown key is a 422, and the password is never echoed. The answer is the
+ * number of the version that no longer holds the field and the sentence to show. The references are what the dialog reads before it asks for a password, and what a 409 `FIELD_IN_USE` carries: **a formula use holds
+ * the formula's text in display form**, so this is Restricted and the routes are the Admin's alone (NFR-002).
+ */
+export const deleteFieldBodySchema = z.strictObject({ password: stepUpPasswordSchema });
+
+export const deleteFieldAnswerSchema = z.strictObject({ version: z.number().int().min(1), message: z.string().min(1) });
+
+const useColumn = { fieldId: z.string().min(1), letter: z.string().min(1), label: z.string().min(1) };
+
+/** One thing that uses the field: a formula (with its text), a hide-when-zero rule, a visibility rule, or the total of a stage. */
+export const fieldUseSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('formula'), ...useColumn, formula: z.string().min(1) }),
+  z.strictObject({ kind: z.literal('hide-when-zero'), ...useColumn }),
+  z.strictObject({ kind: z.literal('visibility-rule'), ...useColumn }),
+  z.strictObject({ kind: z.literal('stage-total'), stageId: z.string().min(1), number: z.number().int(), name: z.string().min(1) }),
+]);
+
+/** `GET /api/v1/config/fields/{id}/references`: the field and everything that uses it (an empty list means it can be deleted). */
+export const fieldReferencesAnswerSchema = z.strictObject({ fieldId: z.string().min(1), letter: z.string().min(1), label: z.string().min(1), uses: z.array(fieldUseSchema) });

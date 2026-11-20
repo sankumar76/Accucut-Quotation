@@ -37,6 +37,8 @@ function buildService(over: { audit?: ReturnType<typeof createAuditService> } = 
   return createConfigStructureService({
     configurations: createConfigRepository(db.prisma),
     masters: db.masterRepository,
+    // An insert asks for no password (FR-080): the check is the delete's, and fails the test if an insert ever reaches it.
+    stepUp: { verifyStepUp: () => Promise.reject(new Error('An insert must not ask for a password.')) },
     transactions: db.transactions,
     audit: over.audit ?? db.audit,
     cache: createConfigVersionCache(),

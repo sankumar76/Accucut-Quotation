@@ -22,6 +22,8 @@ export const configFieldSchema = z.strictObject({
   systemRole: z.enum(SYSTEM_ROLES).nullable(),
   note: z.string().min(1).nullable(),
   canEditFormula: z.boolean(),
+  /** The lock tag "System" and no Delete (STORY-08.04 AC-5): a System field, or a field the code finds by key and cannot do without. */
+  isProtected: z.boolean(),
 });
 
 /** `GET /api/v1/config/fields` (AC-1): every field, in column order. */
