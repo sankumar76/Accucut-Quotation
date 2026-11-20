@@ -75,19 +75,36 @@ test.describe('the alerts notice (STORY-09.03 AC-6)', () => {
 
   // The stored state of the E2E database is alerts OFF: `settings-alerts.spec.ts` never saves ON for real, because the three widths share one database. The ON state (no notice) is
   // `tests/unit/tasks/alerts-off-notice.test.ts` and the service's own tests.
-  test('AC-6: with alerts OFF, choosing an Engineer shows "E-mail alerts are OFF." with their name, choosing no Engineer takes it away, no sideways scroll, axe 0 violations', async ({ page }) => {
+  test('AC-6: with alerts OFF, choosing an Engineer shows "E-mail alerts are OFF." with their name', async ({ page }) => {
     await openAssign(page);
     await expect(page.getByText(ALERTS_OFF_TITLE)).toHaveCount(0);
 
     await page.getByLabel('Engineer').selectOption({ label: E2E_ENGINEER.name });
-    const notice = page.getByRole('main').getByText(ALERTS_OFF_TITLE);
-    await expect(notice).toBeVisible();
+    await expect(page.getByRole('main').getByText(ALERTS_OFF_TITLE)).toBeVisible();
     await expect(page.getByRole('main').getByText(ALERTS_OFF_BODY)).toBeVisible();
-    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectNoAxeViolations(page);
+  });
+
+  test('AC-6: choosing no Engineer again takes the notice away', async ({ page }) => {
+    await openAssign(page);
+    await page.getByLabel('Engineer').selectOption({ label: E2E_ENGINEER.name });
+    await expect(page.getByRole('main').getByText(ALERTS_OFF_TITLE)).toBeVisible();
 
     await page.getByLabel('Engineer').selectOption({ label: 'Choose an Engineer' });
     await expect(page.getByText(ALERTS_OFF_TITLE)).toHaveCount(0);
+  });
+
+  test('AC-6: with the notice showing there is no sideways scroll', async ({ page }) => {
+    await openAssign(page);
+    await page.getByLabel('Engineer').selectOption({ label: E2E_ENGINEER.name });
+    await expect(page.getByRole('main').getByText(ALERTS_OFF_BODY)).toBeVisible();
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+
+  test('AC-6: with the notice showing axe finds 0 violations', async ({ page }) => {
+    await openAssign(page);
+    await page.getByLabel('Engineer').selectOption({ label: E2E_ENGINEER.name });
+    await expect(page.getByRole('main').getByText(ALERTS_OFF_BODY)).toBeVisible();
+    await expectNoAxeViolations(page);
   });
 
   test('AC-6: the notice is information, not a block: with it showing, the task is still assigned as before', async ({ page }, testInfo) => {
