@@ -35,7 +35,7 @@ async function openReview(page: Page, testInfo: TestInfo, role: 'LEAD' | 'ADMIN'
 }
 
 test.describe('AC-1, AC-5: the button on SCR-06 is on while the figures are current', () => {
-  test('it is a link named Download .xlsx to SCR-10, the width of the bar buttons, with a visible focus, operable with Enter, and axe finds nothing', async ({ page }, testInfo) => {
+  test('it is a link named Download .xlsx to SCR-10, with no reason, the width of the bar buttons, no sideways scroll, and axe finds nothing', async ({ page }, testInfo) => {
     const code = await openReview(page, testInfo, 'LEAD');
 
     const link = reviewDownload(page);
@@ -58,6 +58,13 @@ test.describe('AC-1, AC-5: the button on SCR-06 is on while the figures are curr
       else expect(linkBox.width).toBeLessThan(barBox.width * 0.5);
     }
 
+    await expectNoAxeViolations(page);
+  });
+
+  test('by keyboard: it takes focus with a visible indicator and Enter opens SCR-10', async ({ page }, testInfo) => {
+    const code = await openReview(page, testInfo, 'LEAD');
+
+    const link = reviewDownload(page);
     await link.focus();
     await expect(link).toBeFocused();
     const focusIndicator = await link.evaluate((element) => {
@@ -65,8 +72,6 @@ test.describe('AC-1, AC-5: the button on SCR-06 is on while the figures are curr
       return { visible: element.matches(':focus-visible'), drawn: (style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0) || (style.boxShadow !== 'none' && style.boxShadow !== '') };
     });
     expect(focusIndicator).toEqual({ visible: true, drawn: true });
-
-    await expectNoAxeViolations(page);
 
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(new RegExp(`/estimates/${code}/export$`));
