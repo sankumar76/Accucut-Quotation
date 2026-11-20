@@ -3,11 +3,13 @@ import { systemClock } from '../lib/time';
 import { scheduleBackupWatch, type BackupWatchStore } from '../server/jobs/backup-watch';
 import { type HeartbeatStore, scheduleHeartbeat } from '../server/jobs/heartbeat';
 import { scheduleLogPrune } from '../server/jobs/log-prune';
+import { scheduleOverdueScan } from '../server/jobs/overdue-scan';
 import { scheduleMailJobs } from '../server/jobs/outbox-send';
 import type { JobLogFields, JobLogLevel } from '../server/jobs/run-job';
 import { createMailer } from '../server/mail/send';
 import { createMailTransport } from '../server/mail/transport';
 import { createEmailOutboxRepository } from '../server/repositories/email-outbox-repository';
+import { createOverdueScanStore } from '../server/repositories/overdue-repository';
 import { getPrismaClient } from '../server/repositories/prisma-client';
 import { createHeartbeatRepository, createJobRunRepository, createJobRunWriter } from '../server/repositories/job-run-repository';
 
@@ -17,9 +19,9 @@ import { createHeartbeatRepository, createJobRunRepository, createJobRunWriter }
  * Scope note (STORY-10.04): this is the start-up shell only. It checks the settings exactly as the web process does, stays
  * running and stops cleanly on a stop request, so the service can be installed, started and supervised. The one job it runs is
  * `log-prune` (`src/server/jobs/log-prune.ts`, daily at 03:30 IST, only when LOG_DIRECTORY is set) and, since STORY-10.05, `backup-watch`
- * (`src/server/jobs/backup-watch.ts`, daily at 09:00 IST, only when PG_DATA_VOLUME or BACKUP_VOLUME is set). Since STORY-09.01, `outbox-send` (every minute, only when FEATURE_EMAIL=on). Since STORY-10.09a, `heartbeat`
+ * (`src/server/jobs/backup-watch.ts`, daily at 09:00 IST, only when PG_DATA_VOLUME or BACKUP_VOLUME is set). Since STORY-09.01, `outbox-send` (every minute, only when FEATURE_EMAIL=on). Since STORY-09.04, `overdue-scan` (`src/server/jobs/overdue-scan.ts`, every minute, only when FEATURE_EMAIL=on). Since STORY-10.09a, `heartbeat`
  * (`src/server/jobs/heartbeat.ts`, every minute and once at start, always on): `GET /api/health` is red when the worker's newest heartbeat is 3 minutes old. Every job runs through `runJob`
- * (`src/server/jobs/run-job.ts`), which writes its start and outcome lines and, for a job that throws, one `error` line. The other cron jobs (overdue scan, digest) are later stories',
+ * (`src/server/jobs/run-job.ts`), which writes its start and outcome lines and, for a job that throws, one `error` line. The other cron job (the digest) is a later story's,
  * which add them here and run through the same wrapper; nothing below changes how the service is installed.
  * It takes no part in coverage: it is a start-up file and the job logic belongs in `src/server/jobs` (test strategy section 11).
  */
@@ -70,8 +72,9 @@ function start(): void {
   // The daily backup-watch job (ADR-015 Amendment 3 point 5): the install writes the two drive roots into `.env`; with neither set it is off.
   const backupWatch = scheduleBackupWatch({ dataVolume: process.env.PG_DATA_VOLUME, backupVolume: process.env.BACKUP_VOLUME }, store, log);
   // The mail jobs (STORY-09.01 AC-6): scheduled only when FEATURE_EMAIL=on. With it off nothing is built, so no mail transport and no extra database client exist.
+  const emailOn = loadEmailFeature();
   const mailJobs = scheduleMailJobs(
-    loadEmailFeature(),
+    emailOn,
     () => {
       const env = loadAppEnv();
       return {
@@ -82,12 +85,22 @@ function start(): void {
     },
     log,
   );
+  // The overdue scan (STORY-09.04) queues the overdue e-mail; `outbox-send` above sends it. Same flag, same rule: nothing is built when it is off. The links in the message come from `APP_ORIGIN`.
+  const overdueScan = scheduleOverdueScan(
+    emailOn,
+    () => {
+      const env = loadAppEnv();
+      return { store: createOverdueScanStore(getPrismaClient('worker', env.DATABASE_URL)), clock: systemClock, appOrigin: () => env.APP_ORIGIN };
+    },
+    log,
+  );
   const stop = (signal: string): void => {
     log(`worker stopping (${signal})`);
     void heartbeat.stop();
     void logPrune?.stop();
     void backupWatch?.stop();
     for (const job of mailJobs) void job.stop();
+    void overdueScan?.stop();
     clearInterval(keepAlive);
   };
   process.once('SIGINT', () => stop('SIGINT'));
