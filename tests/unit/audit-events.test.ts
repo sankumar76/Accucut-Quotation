@@ -34,7 +34,7 @@ const WIRED_CALCULATION: ReadonlyArray<AuditEventName> = ['calculation.warning_a
 /** STORY-06.06: an estimate approved and locked; STORY-06.07: a price that differs from the calculated total; STORY-06.08: an approved estimate unlocked; STORY-06.12: an approval cancelled; STORY-06.13: the price of a cancelled approval removed. Registry order puts them before the quantity warning. */
 const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.price_overridden', 'approval.unlocked', 'approval.cancelled', 'approval.price_removed'];
 /** STORY-08.02: a formula of the field registry changed. Registry order puts it after the approval events and before the calculation event. */
-const WIRED_CONFIG: ReadonlyArray<AuditEventName> = ['config.formula_changed', 'config.field_inserted'];
+const WIRED_CONFIG: ReadonlyArray<AuditEventName> = ['config.formula_changed', 'config.field_inserted', 'config.field_deleted'];
 /** STORY-04.07: a task given to another Engineer, a new deadline, or both. */
 const WIRED_TASK: ReadonlyArray<AuditEventName> = ['task.reassigned'];
 const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CONFIG, ...WIRED_CALCULATION, ...WIRED_TASK];

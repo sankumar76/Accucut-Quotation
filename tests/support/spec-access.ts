@@ -47,6 +47,9 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   // The insert wizard's routes (STORY-08.03 AC-1; architecture section 6 rows "Insert preview" and "Insert field": A): the Admin alone. `insert-options` is the third route (a deviation recorded in the PR).
   '/api/v1/config/fields/preview': ['ADMIN'],
   '/api/v1/config/insert-options': ['ADMIN'],
+  // The delete dialog's two routes (STORY-08.04 AC-1; architecture section 6 row "Delete field": A, with the password; the references read is the dialog's own): the Admin alone.
+  '/api/v1/config/fields/[id]': ['ADMIN'],
+  '/api/v1/config/fields/[id]/references': ['ADMIN'],
   // The API behind the Process master screen (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Process items", CR-33).
   '/api/v1/process-items': ['ADMIN'],
   '/api/v1/process-items/[id]': ['ADMIN'],

@@ -126,6 +126,15 @@ describe('AC-2: system fields are tagged, and a formula is offered only where th
     expect(rowAt(fields, 'BM').systemRole).toBe('tool-cost');
   });
 
+  it('marks as protected (lock tag, no Delete: STORY-08.04 AC-5) every System field and every field the code finds by key and cannot do without, and no other', async () => {
+    const { fields } = await serviceOver().service.getFields();
+    expect(fields.filter((row) => row.isProtected).map((row) => row.letter)).toEqual(['A', 'E', 'F', 'H', 'I', 'BG', 'BH', 'BI', 'BJ', 'BK', 'BL', 'BM', 'BN', 'BO']);
+    // Every System field is protected; the rest of the list is the eight keys, and the two that only name a part (B and D) are not.
+    for (const row of fields.filter((each) => each.systemRole !== null)) expect(row.isProtected, row.letter).toBe(true);
+    expect(rowAt(fields, 'B').isProtected).toBe(false);
+    expect(rowAt(fields, 'D').isProtected).toBe(false);
+  });
+
   it('does not offer Edit formula on A, F, I and BO, which have no formula to edit', async () => {
     const { fields } = await serviceOver().service.getFields();
     for (const letter of ['A', 'F', 'I', 'BO']) expect(rowAt(fields, letter).canEditFormula, letter).toBe(false);
