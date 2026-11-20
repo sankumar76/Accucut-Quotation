@@ -76,6 +76,8 @@ const REPOSITORIES = {
     'master-repository',
     'material-repository',
     'prisma-client',
+    // STORY-09.02: the one `settings` row (the alerts switch and the sender mailbox), for the Admin's Settings page. No cost data and no credential, but nothing an Engineer's view has a use for, so it stays blocked.
+    'settings-repository',
     'task-repository',
     'throttle-repository',
     'treatment-repository',
