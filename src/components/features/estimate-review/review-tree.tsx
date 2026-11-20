@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
+import { QuantityTag } from '@/components/shared/quantity-tag';
 import { cn } from '@/lib/cn';
 import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
 import type { CostNode, CostsView } from '@/server/views/schemas/costs';
 
-import { QuantityTag } from './quantity-tag';
 import {
   CLEARED,
   COST_DETAILS_LINK,

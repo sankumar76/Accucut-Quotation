@@ -174,6 +174,8 @@ describe('AC-6: the summary', () => {
       // Never calculated: the state says so and no figure of any kind is in the answer (STORY-07.03 AC-8).
       state: 'none',
       figures: null,
+      // Nor a warning (STORY-07.06 AC-4): it is carried only while the calculation is current.
+      warning: null,
     });
   });
 
