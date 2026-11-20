@@ -11,7 +11,8 @@ import { control, expectFormAccessible, isPatchOfInputs, nextSave, NUMBER_RULE, 
  * fails a test. What the server does with a value that is equal after normalisation is judged in `tests/integration/estimates/revision-rules.test.ts`; the rest of the rules (a hidden tab, a save in
  * flight, a conflict, Calculate) in `tests/unit/estimate-autosave*.test.ts`. Every name and path is invented.
  *
- * Each test signs in and opens the form, which is most of its time, so each does several things, on one page and with at most one axe scan.
+ * Signing in and opening the form is most of a test's time, so this is one case on one page with one axe scan. It is one case and not three also because the shards deal the suite out in groups: the
+ * shard-balance guard (`tests/unit/e2e-shards.test.ts`) passes with this file's count and failed with two or three cases (a spread of 2 where it allows 1).
  */
 
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -43,7 +44,7 @@ function countSaves(page: Page): { readonly count: () => number } {
 const settleSilently = (page: Page): Promise<void> => page.waitForTimeout(300);
 
 test.describe('STORY-05.10: autosave every 30 seconds', () => {
-  test('AC-1, AC-2, AC-4, AC-9: a typed value is saved by the tick while the field keeps focus and its text, the one status line moves and gains its words, and a tick with nothing unsaved sends nothing', async ({ page }, testInfo) => {
+  test('AC-1 to AC-5, AC-9: a typed value is saved by the tick while the field keeps focus; nothing unsaved sends nothing; a value the rule refuses is not sent and has no message until the field is left; a failed tick says so once in a status, not an alert, and the next good tick clears it', async ({ page }, testInfo) => {
     await page.clock.install();
     await openForm(page, testInfo);
     const saves = countSaves(page);
@@ -75,18 +76,12 @@ test.describe('STORY-05.10: autosave every 30 seconds', () => {
     await waitForForm(page);
     await expect(control(page, 'J')).toHaveValue('12.50');
     await expect(statusLine(page)).toHaveText(SAVED_LINE);
-  });
 
-  test('AC-3, AC-5: a value the rule refuses is not sent and has no message until the field is left; a tick that cannot save says so once, in a status and not an alert, and the next good tick clears it', async ({ page }, testInfo) => {
-    await page.clock.install();
-    await openForm(page, testInfo);
-    const saves = countSaves(page);
-
-    // AC-3: three decimals is refused by the rule, but it is still being typed: nothing is sent, nothing is said, focus stays.
+    // AC-3: three decimals is refused by the rule, but it is still being typed: nothing is sent, nothing is said, focus stays; the message comes when the field is left.
     await control(page, 'J').fill('1.234');
     await page.clock.fastForward(TICK_MS);
     await settleSilently(page);
-    expect(saves.count()).toBe(0);
+    expect(saves.count()).toBe(1);
     await expect(partForm(page).getByText(NUMBER_RULE)).toHaveCount(0);
     await expect(control(page, 'J')).toBeFocused();
     await control(page, 'J').blur();
@@ -104,9 +99,9 @@ test.describe('STORY-05.10: autosave every 30 seconds', () => {
 
     // The connection is back: the next tick saves it, and the failure goes.
     await page.unroute(SAVE_ROUTE);
-    const saved = nextSave(page);
+    const savedAgain = nextSave(page);
     await page.clock.fastForward(TICK_MS);
-    expect(await saved).toBe(200);
+    expect(await savedAgain).toBe(200);
     await expect(statusLine(page)).toHaveText(SAVED_LINE);
     await page.reload();
     await waitForForm(page);
