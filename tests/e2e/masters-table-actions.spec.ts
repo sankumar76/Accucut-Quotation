@@ -196,15 +196,19 @@ interface Edges {
  * Makes the case's person, opens the screen at `width` and waits until it is hydrated and holds the person. One page open per case: a case that
  * needs a second open or a second scan is a second case (AQP-376, the same split as the Estimate cases of DEF-048).
  */
-async function openScreen(page: Page, testInfo: TestInfo, screen: Screen, width: number): Promise<{ readonly region: Locator; readonly row: Locator }> {
+async function openScreen(page: Page, testInfo: TestInfo, screen: Screen, width: number, mark: (label: string) => void = () => undefined): Promise<{ readonly region: Locator; readonly row: Locator }> {
   const length = nameLengthOf(screen);
   const name = longName(testInfo, length);
   expect(name).toHaveLength(length);
   await screen.make(page, name);
+  mark('person');
   await page.setViewportSize({ width, height: HEIGHT });
   await page.goto(screen.path);
+  mark('goto');
   await expect(page.getByRole('heading', { level: 1, name: screen.title })).toBeVisible();
+  mark('heading');
   await waitUntilHydrated(page, 'main button[data-action="add"]');
+  mark('hydrated');
   await screen.open?.(page);
 
   const region = page.getByRole('region', { name: screen.region });
@@ -212,7 +216,23 @@ async function openScreen(page: Page, testInfo: TestInfo, screen: Screen, width:
   const row = page.locator(`${rowSelectorOf(screen)}:visible`).filter({ hasText: name });
   await expect(page.locator(`${rowSelectorOf(screen)}:visible button[data-action]`).first()).toBeVisible();
   await expect(row).toBeVisible();
+  mark('rows');
   return { region, row };
+}
+
+/**
+ * DIAGNOSTIC ONLY (AQP-376, DL-260 (5)); this branch is never merged. Phase marks of one case, in ms since the case's first line, printed as one line
+ * per case: `AQP376 w=<width> start=<testInfo.duration at the first line: fixtures and hooks> <phase>=<ms>... end=<ms> duration=<testInfo.duration>`.
+ */
+function startPhases(testInfo: TestInfo, width: number): { readonly mark: (label: string) => void; readonly print: () => void } {
+  const startedAt = Date.now();
+  const startDuration = testInfo.duration;
+  const marks: string[] = [];
+  return {
+    mark: (label) => { marks.push(`${label}=${Date.now() - startedAt}`); },
+    // eslint-disable-next-line no-console -- diagnostic output, read from the CI log
+    print: () => { console.log(`AQP376 w=${width} start=${Math.round(startDuration)} ${marks.join(' ')} end=${Date.now() - startedAt} duration=${Math.round(testInfo.duration)}`); },
+  };
 }
 
 /** The table is made wider than the region, so it scrolls and only the sticky column keeps the actions inside the box (ux-spec 6.0, part 2). */
@@ -405,14 +425,24 @@ for (const screen of SCREENS) {
 test.describe('SCR-14 Users: axe scan of the forced table (DEF-021, AQP-245 AC-5)', () => {
   for (const width of AXE_WIDTHS) {
     test(`AC-5: at ${width} px axe finds no violation on the forced table, after a Tab through the long-name row`, async ({ page }, testInfo) => {
-      const screen = usersScreen();
-      const { region, row } = await openScreen(page, testInfo, screen, width);
-      await forceTableToScroll(region);
-      await region.focus();
-      await page.keyboard.press('Tab');
-      await expect(page.locator(':focus')).toHaveAttribute('data-action', firstActionOf(screen));
-      await expectTabThroughRow(page, region, screen, row, 'forced to scroll, tabbing the long-name row');
-      await expectNoAxeViolations(page);
+      const phases = startPhases(testInfo, width);
+      try {
+        const screen = usersScreen();
+        const { region, row } = await openScreen(page, testInfo, screen, width, phases.mark);
+        await forceTableToScroll(region);
+        phases.mark('forced');
+        await region.focus();
+        await page.keyboard.press('Tab');
+        await expect(page.locator(':focus')).toHaveAttribute('data-action', firstActionOf(screen));
+        phases.mark('tab');
+        await expectTabThroughRow(page, region, screen, row, 'forced to scroll, tabbing the long-name row');
+        phases.mark('throughRow');
+        phases.mark('scanStart');
+        await expectNoAxeViolations(page);
+        phases.mark('scanEnd');
+      } finally {
+        phases.print();
+      }
     });
   }
 });
