@@ -1,11 +1,11 @@
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { ColumnTag } from '@/components/shared/column-tag';
+import { QuantityTag } from '@/components/shared/quantity-tag';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/cn';
 import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { QuantityTag } from './quantity-tag';
 import {
   BUILD_CAPTION,
   BUILD_EXAMPLE,

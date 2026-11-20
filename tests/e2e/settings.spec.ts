@@ -53,7 +53,7 @@ test.describe('the Admin', () => {
     await expect(full.locator('svg')).toHaveCount(1);
 
     await expect(main.getByText('Backups are kept on the same server.', { exact: true })).toBeVisible();
-    // The labelled place the alert switch and the sender will fill (story 09.02): a heading and a sentence, and no control.
+    // The e-mail alerts card (story 09.02) is above the Backups card; its own spec is `settings-alerts.spec.ts`.
     await expect(main.getByRole('heading', { level: 2, name: 'E-mail alerts' })).toBeVisible();
 
     // The page shows no file path and no volume name, though the rows hold both.
@@ -62,17 +62,17 @@ test.describe('the Admin', () => {
     expect(text).not.toContain('InventedVolumeLabel');
   });
 
-  test('AC-5, AC-7: the page has no control that starts, restores or deletes a backup, and no control at all to reach by keyboard', async ({ page }) => {
+  test('AC-5, AC-7: the Backups card has no control that starts, restores or deletes a backup, and nothing in it to reach by keyboard (the only controls on the page are those of the e-mail alerts card)', async ({ page }) => {
     await openSettings(page);
     const main = page.getByRole('main');
-    await expect(main.getByRole('button')).toHaveCount(0);
+    const backups = main.locator('[data-slot="card"]').filter({ has: page.getByRole('heading', { level: 2, name: 'Backups' }) });
+    await expect(backups).toHaveCount(1);
+    await expect(backups.locator('a, button, input, select, textarea, [role="switch"], [tabindex]:not([tabindex="-1"])')).toHaveCount(0);
     await expect(main.getByRole('link')).toHaveCount(0);
-    await expect(main.getByRole('switch')).toHaveCount(0);
-    await expect(main.getByRole('textbox')).toHaveCount(0);
-    await expect(main.locator('a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])')).toHaveCount(0);
-    // The heading is where focus lands after a move to the page, so a keyboard user starts at the title and has nothing to tab through below it.
-    await page.keyboard.press('Tab');
-    await expect(main.locator(':focus')).toHaveCount(0);
+    // Everything the page offers is the e-mail alerts form's: its switch, two fields and two buttons.
+    await expect(main.getByRole('switch')).toHaveCount(1);
+    await expect(main.getByRole('textbox')).toHaveCount(2);
+    await expect(main.getByRole('button')).toHaveCount(2);
   });
 
   test('AC-7: no sideways scroll of the page, and axe finds 0 violations', async ({ page }) => {

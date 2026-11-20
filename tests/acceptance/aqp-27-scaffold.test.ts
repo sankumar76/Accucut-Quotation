@@ -53,7 +53,7 @@ describe('[AQP-27 AC-1] pinned dependencies and the next-auth override', () => {
   const manifest = JSON.parse(read('package.json')) as {
     dependencies: Record<string, string>;
     devDependencies: Record<string, string>;
-    overrides: unknown;
+    overrides: Record<string, unknown>;
   };
   const all = { ...manifest.dependencies, ...manifest.devDependencies };
 
@@ -68,7 +68,17 @@ describe('[AQP-27 AC-1] pinned dependencies and the next-auth override', () => {
   });
 
   it('[AQP-27 AC-1] package.json carries the next-auth to nodemailer override, exactly', () => {
-    expect(manifest.overrides).toEqual({ 'next-auth': { nodemailer: '$nodemailer' } });
+    expect(manifest.overrides['next-auth']).toEqual({ nodemailer: '$nodemailer' });
+  });
+
+  // AQP-379: `effect` is a transitive dependency of the Prisma CLI (prisma > @prisma/config), pinned exactly by that
+  // package at 3.20.0, which GHSA-7589-6fvf-x4pw (ReDoS in Schema.TemplateLiteral, effect <= 3.22.0) makes a high finding.
+  // The override must stay an exact version at or above the first patched release, 3.22.1, on the 3.x line.
+  it('[AQP-379] package.json pins effect by override to an exact release at or above 3.22.1 (GHSA-7589-6fvf-x4pw)', () => {
+    const pinned = manifest.overrides['effect'];
+    expect(pinned).toMatch(/^3\.\d+\.\d+$/);
+    const [, minor = 0, patch = 0] = (pinned as string).split('.').map(Number);
+    expect(minor > 22 || (minor === 22 && patch >= 1)).toBe(true);
   });
 
   it('[AQP-27 AC-1] package-lock.json is committed', () => {
