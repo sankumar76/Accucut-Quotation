@@ -15,6 +15,7 @@ import {
   type OutboxSendDependencies,
   type OutboxSendStore,
 } from '@/server/jobs/outbox-send';
+import { runJob, type JobLogFields, type JobLogLevel } from '@/server/jobs/run-job';
 import type { Mailer, OutgoingMail } from '@/server/mail/send';
 
 const cron = vi.hoisted(() => ({ schedule: vi.fn() }));
@@ -198,10 +199,9 @@ describe('runOutboxSend: skipped and failed rows (AC-5, AC-7)', () => {
 
     it('the log says NOT_RECORDED at error level, with a count and no id, address or error text', async () => {
       const { dependencies } = withMarkSent(() => Promise.reject(new Error('connection to server at "10.1.2.3" failed')), [row(0)]);
-      const lines: Array<[string, string | undefined]> = [];
-      await performOutboxSend(dependencies, (message, level) => lines.push([message, level]));
-      expect(lines).toEqual([['outbox-send: claimed 1, sent 1, skipped 0, failed 0; NOT_RECORDED 1 (sent, but the result could not be saved, so the row stays sending)', 'error']]);
-      expect(JSON.stringify(lines)).not.toMatch(/10.1.2.3|example.com|Subject|Body/);
+      const outcome = await performOutboxSend(dependencies);
+      expect(outcome).toEqual({ summary: 'outbox-send: claimed 1, sent 1, skipped 0, failed 0; NOT_RECORDED 1 (sent, but the result could not be saved, so the row stays sending)', level: 'error' });
+      expect(JSON.stringify(outcome)).not.toMatch(/10.1.2.3|example.com|Subject|Body/);
     });
 
     it('a send that failed whose `failed` mark also cannot be saved does not throw, and leaves the row sending for 09.06', async () => {
@@ -232,33 +232,32 @@ describe('the log (AC-7)', () => {
 
   it('AC-7: a run writes counts and codes, and never an address, a subject, a body or an id', async () => {
     const { dependencies } = harness({ claimed: [row(0), row(1)], sendResult: (mail) => (mail.to.startsWith('to-1') ? { ok: false, code: 'CONNECTION' } : { ok: true }) });
-    const lines: Array<[string, string | undefined]> = [];
-    await performOutboxSend(dependencies, (message, level) => lines.push([message, level]));
-    expect(lines).toEqual([['outbox-send: claimed 2, sent 1, skipped 0, failed 1 (CONNECTION 1)', 'error']]);
-    const printed = JSON.stringify(lines);
+    const outcome = await performOutboxSend(dependencies);
+    expect(outcome).toEqual({ summary: 'outbox-send: claimed 2, sent 1, skipped 0, failed 1 (CONNECTION 1)', level: 'error' });
+    const printed = JSON.stringify(outcome);
     for (const value of ['example.com', 'Subject', 'Body', IDS[0], 'to-0']) expect(printed).not.toContain(value);
   });
 
-  it('a run with nothing due writes no line', async () => {
+  it('a run with nothing due is a debug line, so an empty outbox every minute does not fill the log (STORY-10.09a AC-3)', async () => {
     const { dependencies } = harness();
-    const lines: string[] = [];
-    await performOutboxSend(dependencies, (message) => lines.push(message));
-    expect(lines).toEqual([]);
+    expect(await performOutboxSend(dependencies)).toEqual({ level: 'debug' });
   });
 
   it('a clean run is logged at info', async () => {
     const { dependencies } = harness({ claimed: [row(0)] });
-    const lines: Array<[string, string | undefined]> = [];
-    await performOutboxSend(dependencies, (message, level) => lines.push([message, level]));
-    expect(lines).toEqual([['outbox-send: claimed 1, sent 1, skipped 0, failed 0', 'info']]);
+    expect(await performOutboxSend(dependencies)).toEqual({ summary: 'outbox-send: claimed 1, sent 1, skipped 0, failed 0', level: 'info' });
   });
 
-  it('AC-7: a claim that fails is logged as one fixed line at error, with none of the error text, and the callback does not throw', async () => {
+  it('AC-7, STORY-10.09a AC-3: a claim that fails throws, and the wrapper logs it as one error line with the job name and the class of the error and none of the error text, and does not throw', async () => {
     const { dependencies } = harness();
     const failing: OutboxSendDependencies = { ...dependencies, store: { ...dependencies.store, claimDue: () => Promise.reject(new Error('password authentication failed for user "accucut_app"')) } };
-    const lines: Array<[string, string | undefined]> = [];
-    await expect(performOutboxSend(failing, (message, level) => lines.push([message, level]))).resolves.toBeUndefined();
-    expect(lines).toEqual([['outbox-send could not read or write the outbox', 'error']]);
+    await expect(performOutboxSend(failing)).rejects.toThrow();
+    const lines: Array<[string, JobLogLevel | undefined, JobLogFields | undefined]> = [];
+    await expect(
+      runJob({ name: 'outbox-send', log: (message, level, fields) => void lines.push([message, level, fields]), now: () => NOW, frequent: true }, () => performOutboxSend(failing)),
+    ).resolves.toBeUndefined();
+    expect(lines.filter(([, level]) => level === 'error')).toEqual([['outbox-send failed after 0 ms', 'error', { job: 'outbox-send', durationMs: 0, errorName: 'Error' }]]);
+    expect(JSON.stringify(lines)).not.toMatch(/password|accucut_app/);
   });
 });
 

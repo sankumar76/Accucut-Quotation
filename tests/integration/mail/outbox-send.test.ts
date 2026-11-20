@@ -5,6 +5,7 @@ import type { SmtpEnv } from '@/lib/env';
 import { idempotencyKeys, type MailEvent } from '@/lib/mail/events';
 import { createFixedClock, MILLISECONDS_PER_MINUTE, type FixedClock } from '@/lib/time';
 import { performOutboxSend, runOutboxSend, type OutboxSendDependencies } from '@/server/jobs/outbox-send';
+import { runJob } from '@/server/jobs/run-job';
 import { LOGO_CONTENT_ID, renderMail } from '@/server/mail/layout';
 import { createMailer } from '@/server/mail/send';
 import { buildTransportOptions, type MailTransport } from '@/server/mail/transport';
@@ -285,7 +286,8 @@ describe('AC-7: no secret leaks (forced failures with a planted fake secret)', (
     vi.spyOn(process.stdout, 'write').mockImplementation(record);
     vi.spyOn(process.stderr, 'write').mockImplementation(record);
     const deps: OutboxSendDependencies = { ...dependencies, mailer: createMailer(transport) };
-    await performOutboxSend(deps, (line) => logs.push(line));
+    // Through the job wrapper, as the worker runs it: every line it writes is kept, with its fields.
+    await runJob({ name: 'outbox-send', log: (message, level, fields) => void logs.push(JSON.stringify({ message, level, ...fields })), now: () => new Date(NOW) }, () => performOutboxSend(deps));
     const summary = await runOutboxSend({ ...deps, clock: createFixedClock(new Date(NOW.getTime() + MILLISECONDS_PER_MINUTE)) });
     vi.restoreAllMocks();
     return { text: await everythingKept([...logs, ...printed], [summary, planted.length]), logs };
@@ -296,7 +298,8 @@ describe('AC-7: no secret leaks (forced failures with a planted fake secret)', (
     const planted = await enqueue();
     const { text, logs } = await forcedFailure(clearTextTransport(passwordMode, smtp.port), [planted]);
     expect(await rowOf(planted.idempotencyKey)).toMatchObject({ status: 'failed', last_error: 'AUTH_FAILED', attempts: 1 });
-    expect(logs).toEqual(['outbox-send: claimed 1, sent 0, skipped 0, failed 1 (AUTH_FAILED 1)']);
+    expect(logs.join('\n')).toContain('"summary":"outbox-send: claimed 1, sent 0, skipped 0, failed 1 (AUTH_FAILED 1)"');
+    expect(logs.join('\n')).toContain('"level":"error"');
     expect(smtp.lines.some((line) => line.startsWith('AUTH PLAIN'))).toBe(true);
     expect(text).not.toContain(PLANTED_PASSWORD);
   });

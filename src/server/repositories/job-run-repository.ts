@@ -1,3 +1,6 @@
+import { z } from 'zod';
+
+import { HEARTBEAT_JOB } from '../../lib/health/heartbeat';
 import { BACKUP_JOB, BACKUP_WATCH_JOB, RUN_STATUS_OK, type DiskReadingRow } from '../../lib/settings/backup-status';
 
 import { withDatabaseErrors } from './database-errors';
@@ -85,6 +88,44 @@ export function createJobRunRepository(db: PrismaClient): JobRunRepository {
           LIMIT 1`;
         const row = rows[0];
         return row === undefined ? null : { readAt: row.finished_at, freeBytes: row.free_bytes, totalBytes: row.total_bytes };
+      }),
+  };
+}
+
+/**
+ * The worker's heartbeat and what reads it (STORY-10.09a AC-4, AC-5, AC-6; architecture sections 4.7 and 5.1). Two questions, both in SQL:
+ *
+ *   - `latestHeartbeatAt`: when the newest `heartbeat` row finished, for `GET /api/health`. One index descent (`idx_job_runs_job_finished_at`), `finished_at` only.
+ *   - `pruneHeartbeatRuns`: removes the heartbeat rows older than 7 days by calling `prune_heartbeat_runs()`, a SECURITY DEFINER function of the owner role
+ *     (migration `20261119120000_prune_heartbeat_runs`). The runtime role has no DELETE on `job_runs`; the function is the only way it removes anything, it takes no argument and its
+ *     predicate is fixed in the function, so nothing here can widen it. It answers how many rows it removed.
+ */
+export interface HeartbeatRepository {
+  /** When the newest `heartbeat` row finished, or null when there is none. */
+  latestHeartbeatAt(): Promise<Date | null>;
+  /** Removes the heartbeat rows older than 7 days and returns how many went. */
+  pruneHeartbeatRuns(): Promise<number>;
+}
+
+const prunedRowsSchema = z.array(z.object({ removed: z.number().int().nonnegative() })).length(1);
+
+export function createHeartbeatRepository(db: PrismaClient): HeartbeatRepository {
+  return {
+    latestHeartbeatAt: () =>
+      withDatabaseErrors(async () => {
+        const rows = await db.$queryRaw<FinishedAtRow[]>`
+          SELECT finished_at
+          FROM job_runs
+          WHERE job = ${HEARTBEAT_JOB}
+          ORDER BY finished_at DESC
+          LIMIT 1`;
+        return rows[0]?.finished_at ?? null;
+      }),
+
+    pruneHeartbeatRuns: () =>
+      withDatabaseErrors(async () => {
+        const rows = await db.$queryRaw`SELECT public.prune_heartbeat_runs() AS removed`;
+        return prunedRowsSchema.parse(rows)[0]?.removed ?? 0;
       }),
   };
 }

@@ -24,7 +24,7 @@ const MAX_TEXT = 200;
 const MAX_FORMULA = 2_000;
 const MAX_KEY = 60;
 /** Excel's widest column, in characters. */
-const MAX_EXCEL_WIDTH = 255;
+export const MAX_EXCEL_WIDTH = 255;
 
 const id = z.uuid();
 const shortText = z.string().min(1).max(MAX_TEXT);

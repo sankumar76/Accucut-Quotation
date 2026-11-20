@@ -15,7 +15,7 @@ import { createEstimateNodeRepository } from './repositories/estimate-node-repos
 import { createEstimateRepository } from './repositories/estimate-repository';
 import { createExportRepository } from './repositories/export-repository';
 import { createImageRepository } from './repositories/image-repository';
-import { createJobRunRepository } from './repositories/job-run-repository';
+import { createHeartbeatRepository, createJobRunRepository, type HeartbeatRepository } from './repositories/job-run-repository';
 import { createEmailOutboxRepository } from './repositories/email-outbox-repository';
 import { createSettingsRepository } from './repositories/settings-repository';
 import { createMasterRepository } from './repositories/master-repository';
@@ -33,6 +33,7 @@ import { type CancelApprovalService, createCancelApprovalService } from './servi
 import { type CalculationService, createCalculationService } from './services/calculation-service';
 import { createConfigEditService, type ConfigEditService } from './services/config-edit-service';
 import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
+import { createConfigStructureService, type ConfigStructureService } from './services/config-structure-service';
 import { getCurrentVersion, getVersionById } from './services/config-service';
 import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
@@ -70,6 +71,7 @@ let mastersService: MastersService | undefined;
 let taskService: TaskService | undefined;
 let estimateService: EstimateService | undefined;
 let configReadService: ConfigReadService | undefined;
+let configStructureService: ConfigStructureService | undefined;
 let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
 let approvalService: ApprovalService | undefined;
@@ -80,6 +82,7 @@ let costDetailsService: CostDetailsService | undefined;
 let exportService: ExportService | undefined;
 let settingsService: SettingsService | undefined;
 let mailService: MailService | undefined;
+let heartbeatRepository: HeartbeatRepository | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -89,6 +92,12 @@ function runtimeClient() {
 export function getUserRepository(): UserRepository {
   userRepository ??= createUserRepository(runtimeClient());
   return userRepository;
+}
+
+/** The worker's heartbeat, as `GET /api/health` reads it (STORY-10.09a AC-6). The web process only reads it: the worker writes the rows and prunes them. */
+export function getHeartbeatRepository(): HeartbeatRepository {
+  heartbeatRepository ??= createHeartbeatRepository(runtimeClient());
+  return heartbeatRepository;
 }
 
 export function getAuthService(): AuthService {
@@ -243,6 +252,20 @@ export function getConfigEditService(): ConfigEditService {
     audit: getAuditService(),
   });
   return configEditService;
+}
+
+/**
+ * The insert wizard (STORY-08.03): the options SCR-19 offers, the preview of the letter changes and the insert of a field or a pair, with no password step (FR-080). Restricted (ADR-008): the routes that call it are in the
+ * manifest for the Admin alone. It shares the runtime-role client and the audit service, so the new version and its entry are one transaction. STORY-08.04 adds delete to it.
+ */
+export function getConfigStructureService(): ConfigStructureService {
+  configStructureService ??= createConfigStructureService({
+    configurations: createConfigRepository(runtimeClient()),
+    masters: createMasterRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
+  });
+  return configStructureService;
 }
 
 /**

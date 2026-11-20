@@ -24,7 +24,7 @@ import { actionsOf, JSON_HEADERS, makeTreatment, openTreatments } from './suppor
  *
  * Users (AQP-245) adds what only that screen has: three buttons in every row (AC-1), the Admin's own row with its two disabled ones, in place
  * (AC-3, as drawn), the prop `actionButtons={3}` read from computed styles (AC-2), a Tab through the three enabled buttons of the long-name row,
- * in order, none covered by the sticky column and each with a focus ring (AC-5), axe on the forced table at 768, 1024 and 1366 px (AC-5), and the
+ * in order, none covered by the sticky column and each with a focus ring (AC-5), axe on the forced table at 768, 1024 and 1366 px (AC-5; one case of its own for each width since AQP-376, so no case holds more than one page open and one scan), and the
  * card list below 768 px, which this change does not touch (AC-4). Filler people are made only to reach six, inside each test (AC-1).
  *
  * AQP-275 (DEF-030) adds the Users notice "<name> can sign in again.": after Activate on a person with a 120-character name the notice stays inside the
@@ -170,6 +170,13 @@ const SCREENS: ReadonlyArray<Screen> = [
   },
 ];
 
+/** The Users screen of `SCREENS`, which the Users-only tests use. */
+function usersScreen(): Screen {
+  const screen = SCREENS.find((candidate) => candidate.users === true);
+  if (screen === undefined) throw new Error('the Users screen is not in the list of screens');
+  return screen;
+}
+
 /** A name of exactly `length` letters with no space that nobody else has: the project, repeat, retry and a random part are in it. */
 function longName(testInfo: TestInfo, length: number): string {
   const unique = `E2E234-${testInfo.repeatEachIndex}-${testInfo.retry}-${randomBytes(4).toString('hex')}`;
@@ -183,6 +190,38 @@ const FORCED_EXTRA = 200;
 interface Edges {
   readonly left: number;
   readonly right: number;
+}
+
+/**
+ * Makes the case's person, opens the screen at `width` and waits until it is hydrated and holds the person. One page open per case: a case that
+ * needs a second open or a second scan is a second case (AQP-376, the same split as the Estimate cases of DEF-048).
+ */
+async function openScreen(page: Page, testInfo: TestInfo, screen: Screen, width: number): Promise<{ readonly region: Locator; readonly row: Locator }> {
+  const length = nameLengthOf(screen);
+  const name = longName(testInfo, length);
+  expect(name).toHaveLength(length);
+  await screen.make(page, name);
+  await page.setViewportSize({ width, height: HEIGHT });
+  await page.goto(screen.path);
+  await expect(page.getByRole('heading', { level: 1, name: screen.title })).toBeVisible();
+  await waitUntilHydrated(page, 'main button[data-action="add"]');
+  await screen.open?.(page);
+
+  const region = page.getByRole('region', { name: screen.region });
+  await expect(region).toBeVisible();
+  const row = page.locator(`${rowSelectorOf(screen)}:visible`).filter({ hasText: name });
+  await expect(page.locator(`${rowSelectorOf(screen)}:visible button[data-action]`).first()).toBeVisible();
+  await expect(row).toBeVisible();
+  return { region, row };
+}
+
+/** The table is made wider than the region, so it scrolls and only the sticky column keeps the actions inside the box (ux-spec 6.0, part 2). */
+async function forceTableToScroll(region: Locator): Promise<void> {
+  const regionWidth = (await region.boundingBox())?.width ?? 0;
+  const forcedWidth = Math.max(FORCED_MIN_WIDTH, Math.ceil(regionWidth) + FORCED_EXTRA);
+  await region.locator('table').evaluate((table, minWidth) => { table.style.minWidth = `${minWidth}px`; }, forcedWidth);
+  expect(await region.evaluate((element) => element.scrollWidth > element.clientWidth), 'the forced table scrolls').toBe(true);
+  expect(await region.evaluate((element) => element.scrollLeft)).toBe(0);
 }
 
 /** The left and right edges of every element `locator` finds, read in one call, so a list of many rows costs one round trip, not one per button. */
@@ -205,10 +244,14 @@ async function expectActionsInside(page: Page, region: Locator, screen: Screen, 
   expect(right, `${mode}: the region ends inside the window`).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
   const actions = await edgesOf(page.locator(`${rowSelectorOf(screen)}:visible button[data-action]`));
   expect(actions.length, `${mode}: there are row actions`).toBeGreaterThan(0);
-  actions.forEach((button, index) => {
-    expect(button.left, `${mode}: action ${index} starts inside the region`).toBeGreaterThanOrEqual(left);
-    expect(button.right, `${mode}: action ${index} ends inside the region`).toBeLessThanOrEqual(right);
-  });
+  // One assertion for the whole list, not two `expect` calls per button (AQP-376): each synchronous `expect` costs about 0.3 ms on a laptop and
+  // more on a CI runner, and the Users list holds some 170 people by the time this runs, so 1,000 of them took about 0.8 s a call, seven calls a case.
+  // A list of the buttons that are outside says which one, and how far, the way the two per-button messages did.
+  const outside = actions.flatMap((button, index) => [
+    ...(button.left < left ? [`action ${index} starts ${left - button.left} px before the region`] : []),
+    ...(button.right > right ? [`action ${index} ends ${button.right - right} px after the region`] : []),
+  ]);
+  expect(outside, `${mode}: every action is inside the region`).toEqual([]);
 }
 
 /** Every visible row holds the same number of row actions (Users: three, the Admin's own row too, with two of them disabled). */
@@ -313,21 +356,7 @@ for (const screen of SCREENS) {
       // The Users titles name the acceptance criteria of AQP-245 they check; the two masters titles are unchanged.
       const criteria = screen.users ? 'AC-1, AC-2, AC-3, AC-5: ' : '';
       test(`${criteria}at ${width} px every row action is fully inside the region's visible box: as drawn, with the table forced to scroll, and scrolled to its end`, async ({ page }, testInfo) => {
-        const length = nameLengthOf(screen);
-        const name = longName(testInfo, length);
-        expect(name).toHaveLength(length);
-        await screen.make(page, name);
-        await page.setViewportSize({ width, height: HEIGHT });
-        await page.goto(screen.path);
-        await expect(page.getByRole('heading', { level: 1, name: screen.title })).toBeVisible();
-        await waitUntilHydrated(page, 'main button[data-action="add"]');
-        await screen.open?.(page);
-
-        const region = page.getByRole('region', { name: screen.region });
-        await expect(region).toBeVisible();
-        const row =page.locator(`${rowSelectorOf(screen)}:visible`).filter({ hasText: name });
-        await expect(page.locator(`${rowSelectorOf(screen)}:visible button[data-action]`).first()).toBeVisible();
-        await expect(row).toBeVisible();
+        const { region, row } = await openScreen(page, testInfo, screen, width);
 
         // 1. As drawn (part 3, the fit): the headings and names wrap, so the table needs no scrolling. `scrollWidth - clientWidth` is the proof:
         //    a table that overflows its region has more width than it shows, and the sticky Actions column hides that from every position check.
@@ -344,11 +373,7 @@ for (const screen of SCREENS) {
 
         // 2. Forced to scroll (part 2, the guarantee): the table is made wider than the region, at its start. Only the sticky column keeps the
         //    actions inside the region's box.
-        const regionWidth = (await region.boundingBox())?.width ?? 0;
-        const forcedWidth = Math.max(FORCED_MIN_WIDTH, Math.ceil(regionWidth) + FORCED_EXTRA);
-        await region.locator('table').evaluate((table, minWidth) => { table.style.minWidth = `${minWidth}px`; }, forcedWidth);
-        expect(await region.evaluate((element) => element.scrollWidth > element.clientWidth), 'the forced table scrolls').toBe(true);
-        expect(await region.evaluate((element) => element.scrollLeft)).toBe(0);
+        await forceTableToScroll(region);
         await expectActionsInside(page, region, screen, 'forced to scroll, at its start');
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
 
@@ -361,7 +386,6 @@ for (const screen of SCREENS) {
         if (screen.users) {
           await expectTabThroughRow(page, region, screen, row, 'forced to scroll, tabbing the long-name row');
           expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-          if (AXE_WIDTHS.includes(width)) await expectNoAxeViolations(page);
         }
 
         // 4. Scrolled to its far end.
@@ -373,6 +397,25 @@ for (const screen of SCREENS) {
     }
   });
 }
+
+// AC-5, the axe scan of the forced table, in its own case at each of the three AXE_WIDTHS (AQP-376, DEF-047). It was the last step of the layout case
+// above, where it added 8 to 12 s to a case that already took 8 to 10 s; scanning the whole page costs what the page holds, and by now the list holds
+// some 170 people. Same scan (the suite's rules, the whole page, no scope or rule dropped) on the same state the layout case left it in: the table
+// forced wider than its region, after the Tab through the long-name row, so the focus ring of the last button is what axe sees.
+test.describe('SCR-14 Users: axe scan of the forced table (DEF-021, AQP-245 AC-5)', () => {
+  for (const width of AXE_WIDTHS) {
+    test(`AC-5: at ${width} px axe finds no violation on the forced table, after a Tab through the long-name row`, async ({ page }, testInfo) => {
+      const screen = usersScreen();
+      const { region, row } = await openScreen(page, testInfo, screen, width);
+      await forceTableToScroll(region);
+      await region.focus();
+      await page.keyboard.press('Tab');
+      await expect(page.locator(':focus')).toHaveAttribute('data-action', firstActionOf(screen));
+      await expectTabThroughRow(page, region, screen, row, 'forced to scroll, tabbing the long-name row');
+      await expectNoAxeViolations(page);
+    });
+  }
+});
 
 test.describe('SCR-14 Users: the card list below 768 px is unchanged (AQP-245 AC-4)', () => {
   test(`AC-4: at ${CARD_WIDTH} px the cards show text on every button, wrap, and do not scroll the page sideways`, async ({ page }, testInfo) => {
