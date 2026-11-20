@@ -6,9 +6,31 @@
 | Severity | **Sev-3 Moderate, graded by qa-engineer, provisional** (DL-256 (B)), on the test-plan scale: a Test-type defect, fails closed (a red required check), workaround is a re-run under rule R6, no product behaviour affected as far as the evidence shows. **Re-grade to a Product defect** (Sev-2 if the part form serves or renders slowly enough to matter to a person, graded by the figures) if hypothesis 4 below shows it. Same grade family as DEF-045 to DEF-047 |
 | Priority | P3 on its own; **takes the first lane that frees and is not already promised**, ahead of any new story (DL-256 (D)). Pre-emption: a second head red on R6's signature, or any `master` push run red on it, gives it a lane at once, but never a slot the delivery lead promised without asking the delivery lead first |
 | Type | **Test** (E2E, Playwright, `tablet` project; duration-tail class). No product defect found |
-| Status | **Fix in review: PR #531 (head b0320c05), proof accepted as amended and merge on a fully green required check (DL-257 (A)). Open until closed under the amended proof** (below). Not fixed by QA (measurement and fix: developer) |
+| Status | **Closed 2026-11-20 (qa-engineer).** Both halves of the amended proof (DL-257 (A)) are met: PR #531's run of record 44737067927 and the first `master` push run after the merge whose Stage 2 is green, 44739529276. See "Closure" below. Fixed by the developer (PR #531, squash 402485c); not fixed by QA |
 | Jira / GitHub | [AQP-377](https://sankumar76.atlassian.net/browse/AQP-377) / [#530](https://github.com/sankumar76/Accucut-Quotation/issues/530); Jira "relates to" AQP-314, AQP-302, AQP-336 and AQP-376, and (2026-11-19) [AQP-378](https://sankumar76.atlassian.net/browse/AQP-378) = DEF-049 |
-| Risk / rule | RISK-031 stays open at 9 (DL-256 (6), DL-257 (8)); its close-out now also needs this Bug's proof in the amended form. Rule **R6** (DL-256 (3)), **amended by DL-257 (4)**, governs re-runs until DEF-048 is closed under the amended proof (see "Re-pointing"). The first-written text below is kept as history where it is marked superseded |
+| Risk / rule | RISK-031 stays open at 9 (DL-256 (6), DL-257 (8), DL-259 (4)); this Bug's part of its close-out is met (proof below), but the risk's other conditions are not (see "Closure"). Rule **R6 ended at this Bug's close-out** (DL-257 (C)); its text below is kept as history. The near-budget watch list moved to DEF-049 (below) |
+
+## Closure (2026-11-20; qa-engineer)
+**Result: P1 met, P2 met, P3 met (in the diff, as master read it in DL-257 (A)); 15 s reported. DEF-048 is closed.** QA read the job logs of both runs itself (every shard of each; per-test durations matched by project, file, line and title; the five cases are the ones listed in "Re-pointing", identified by file and title), not only the orchestrator's comments (AQP-377 comments 12383 and 12390), and the figures agree with them.
+
+| Run | Head | Required check | P1: first attempt, 15 cases | P2: worst | Over the 15 s target |
+|---|---|---|---|---|---|
+| PR #531, run of record 44737067927 (shards: jobs 136291009130, 136291009468, 136291009520, 136291009599) | 85735d86 (up to date with `master`; diff = the two spec files) | `Stages 1 to 11` success; shards 476, 470, 471, 455 passed, 0 flaky, 0 retries | **15 of 15**, no retry | **13.0 s** (list open, mobile) | **0 of 15** |
+| `master` push 44739529276 (jobs 136299349496, 136299349610, 136299349579, 136299349142) | 402485c (#531's squash) | fully green, Stage 2 green; shards 475 (+1 flaky), 470, 471, 455 passed | **15 of 15**, no retry | **18.3 s** (confirm, mobile) | **5 of 15** |
+
+Readings, seconds, mobile / tablet / desktop:
+
+| Case | #531 run 44737067927 | `master` push 44739529276 |
+|---|---|---|
+| treatments AC-8 closed | 8.0 / 11.8 / 9.6 | 12.9 / 16.0 / 8.2 |
+| treatments AC-8 list open | 13.0 / 12.0 / 9.9 | 14.9 / 16.9 / 8.5 |
+| treatments AC-8 "Other" showing | 11.0 / 10.9 / 10.9 | 17.8 / 15.5 / 8.8 |
+| tree AC-3 Cancel | 9.6 / 8.7 / 7.3 | 10.2 / 11.3 / 8.1 |
+| tree AC-3 confirm | 9.8 / 12.2 / 10.0 | 18.3 / 12.1 / 9.9 |
+
+The only flaky on `master` push 44739529276 is `approve-override.spec.ts:155` [mobile], not a DEF-048 case; it is logged as DEF-050 (AQP-380, #539). The earlier reading (master, run 44580739670: all 30 readings first attempt, worst 22.5 s) is unchanged. PR #531 merged 2026-11-20 12:53Z as 402485c (the diff is the two spec files only; nothing under `src/`, support, config, ci.yml or dependencies).
+
+**What stays open.** (1) **RISK-031** (master's): its close-out also needs DEF-047's proof, DEF-049's proof, and a `master` push run with 0 time-out-mode flaky. The last is **not met on 44739529276**: its one flaky (`approve-override:155` [mobile], 30.1 s, `page.evaluate` time-out) is a time-out-mode flaky, now DEF-050. (2) **R6 ended** with this closure (DL-257 (C)); a failure of any of the five cases is no longer covered by a re-run rule. If one fails again, QA reopens this Bug (Status Reopened) and tells master at once. (3) **The near-budget watch list** is no longer here; it lives in DEF-049 (section "Near-budget watch list"), where it is kept current.
 
 ## Re-pointing after the #531 split (DL-257, 2026-11-19; qa-engineer, QA artefacts only)
 **1. The five new cases (replace `estimate-treatments.spec.ts:238` and `estimate-tree.spec.ts:313`), each identified by file and title, not by line** (lines are those of b0320c05):
@@ -74,7 +96,7 @@ The `toBeVisible` and `element(s) not found` lines belong to `estimate-tree :313
 
 Other widths, `master` run 44540107462: :238 at 16.5 s (mobile) and 19.4 s (desktop); :313 at 17.4 s and 21.4 s. So the **tablet** case is the slow one. Per master (DL-256 (1)): on #510's own earlier head a5548c7 (run 44494663177) they took 15.4 s and 18.3 s; the whole of shard 2 on the red run took 1.27x the time of `master` run 44540107462 (median per-test ratio 1.28), led by files #510 does not touch (estimate-form 1.71x, estimate-picture 1.60x, lead-warning 1.48x, cost-details 1.40x). Both runners report 4 vCPU and 15,983 MB. #510's `src/` changes are the export and review screens; neither spec opens them and neither imports `calculated-estimate.ts` or `fake-calculations.ts`.
 
-## Evidence: every E2E case at 25 s or more on the last two `master` push runs
+## Evidence: every E2E case at 25 s or more on the last two `master` push runs (history, 2026-11-19; the live list is in DEF-049, "Near-budget watch list")
 Source: `gh api repos/sankumar76/Accucut-Quotation/actions/jobs/<id>/logs` for all four Stage 12 shards of run **A = 44509175744** (jobs 135508596948, 135508596988, 135508597038, 135508597129) and run **B = 44540107462** (jobs 135615825924, 135615825981, 135615826064, 135615826150); per-case times are the `(N.Ns)` suffix of each Playwright line (scratch copy, read only, no CI re-run). Each run lists about 1,800 timed lines (cases and retries). "Budget" is the test's own, read from `origin/master`: 30 s default (`playwright.config.ts`), 60 s where the file sets `test.setTimeout(60_000)` (`estimate-save`, `estimate-picture`), 90 s where the test calls `test.slow()` (`estimate-fasteners` :113, :149, :198; `estimate-form` :96; `estimate-tree` :235). The `auth.setup.ts:165` set-up case (27.1 to 36.4 s on every shard of both runs, budget 180 s) is left out.
 
 | Case | A (44509175744) | B (44540107462) | Budget |
@@ -132,8 +154,11 @@ A red run may have its failed jobs re-run once per head only when all of (a) to 
 | When | PR / run | Head | Result |
 |---|---|---|---|
 | 2026-11-19 | PR #510, run 44540150487 | fc8b10a | Not re-run (DL-256 (A)): no rule covered it; R5 (e) excluded #510. #510 takes `master` by "Update branch" |
+| 2026-11-20 | (closed) | | R6 ended with the closure; no re-run was ever made under R6 |
 
 ## Issues for other roles (no defect)
+**2026-11-20 (closure):** the near-budget watch list moved to DEF-049 (this Bug is closed). New Bug DEF-050 (AQP-380, #539) for `approve-override:155` [mobile] and `remove-price:136` [tablet]; master is asked to rule on its scope, a re-run rule and a lane (see DEF-050).
+
 **Answered by DL-257 (2026-11-19):**
 - `unlock.spec.ts:186` [mobile]: watched, no Bug yet (DL-257 (E)); a second occurrence means a Bug the same day. Not re-runnable under any R-rule.
 - `estimate-treatments :264` (28.8 s; 29.4 s on #531): a new Bug, DEF-049 (AQP-378, #533), with `estimate-form.spec.ts` AC-9 (:224) and rule R7 (DL-257 (D)). DEF-048's scope was not widened.
@@ -150,8 +175,8 @@ A red run may have its failed jobs re-run once per head only when all of (a) to 
 | Hypotheses 1 to 4 measured; mechanism confirmed or refuted | developer | 2026-11-19 | PR #531 body (phases on diagnostic run 44567048767: 6 to 9 s to open the part form on `next dev`, 2.2 to 3.4 s per whole-form scan; no step hangs; read by master, DL-257 (1)) |
 | Fixed (spec or test-only helper) | developer | 2026-11-19 | PR #531, head b0320c05: two files, `estimate-treatments.spec.ts` and `estimate-tree.spec.ts`; every assertion and scan kept (diff checked by master); merge on a fully green required check (DL-257 (A)) |
 | Regression test added | developer | 2026-11-19 | the fix is the test change; the original two cases are now the five cases in "Re-pointing" |
-| Verified, amended proof: P1, P2, P3 (15 s reported) for the five cases | orchestrator reads, qa-engineer confirms at hardening | | #531's run of record (44580739670: P1 and P2 met per master) and the first `master` push run after the merge whose Stage 2 is green (pending). Replaces "every case at most 15 s" |
-| RISK-031 close-out (DEF-048 part) | master | | fix proof plus a `master` push run with 0 time-out-mode flaky |
+| Verified, amended proof: P1, P2, P3 (15 s reported) for the five cases | orchestrator reads, qa-engineer confirms | 2026-11-20 | #531's run of record 44737067927 (15 of 15 on attempt 1, worst 13.0 s, 0 over 15 s) and `master` push 44739529276 on 402485c (15 of 15 on attempt 1, worst 18.3 s, 5 over 15 s); read by QA from the job logs (see "Closure"). **Closed 2026-11-20** |
+| RISK-031 close-out (DEF-048 part) | master | | DEF-048's proof is met (2026-11-20). The `master` push run with 0 time-out-mode flaky is **not** met on 44739529276 (`approve-override:155` [mobile] flaky, DEF-050). Master decides |
 
 ## Severity history and routing
 - QA graded Sev-3, type Test, 2026-11-19, provisional (DL-256 (B)). It holds no story gate (AQP-314 and AQP-302 are Done; #510 is not the cause). It changes to a Product defect only if the measurement of hypothesis 4 shows the part form or the tree page itself slow; master is told at once, and QA re-grades.

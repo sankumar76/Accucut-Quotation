@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (qa-engineer, per master's DL-257 (D)): a Test-type defect, fails closed (a red required check), workaround is a re-run under rule R7, no product behaviour affected as far as the evidence shows. Same grade family as DEF-045 to DEF-048 |
 | Priority | P3 on its own; **takes the first lane that frees and is not already promised**, ahead of any new story (DL-257 (5)). Pre-emption: either test failing on both attempts on a second head, or on any `master` push run, gives it a lane at once; a slot the delivery lead promised is never taken without asking the delivery lead first |
 | Type | **Test** (E2E, Playwright, `tablet` project; duration-tail class). No product defect found |
-| Status | New. Not fixed by QA (measurement and fix: developer) |
+| Status | New (2026-11-19). **Fix in progress (AQP-378).** Not fixed by QA (measurement and fix: developer). **From 2026-11-20 this file also holds the near-budget watch list** (section below), moved from DEF-048 when that Bug closed |
 | Jira / GitHub | [AQP-378](https://sankumar76.atlassian.net/browse/AQP-378) / [#533](https://github.com/sankumar76/Accucut-Quotation/issues/533). Jira "relates to" AQP-377 (DEF-048), AQP-314 and AQP-303 |
 | Risk / rule | RISK-031 stays open at 9 (DL-257 (8)); its close-out now also needs this Bug's proof. Rule **R7** (DL-257 (5)) governs re-runs until the fix PR has merged |
 | Found by / date | CI. `master` push run 44546695829 (head 1e6a4d42, tablet) and PR #531 run 44580739670 attempt 2 (head b0320c05, tablet). Evidence read by master (DL-257 (1)); logged by qa-engineer, 2026-11-19 |
@@ -34,6 +34,7 @@ Each case inside its 30 s budget with margin: the amended proof below (P1 to P3,
 | (i) | the other tablet and desktop readings of the three `master` runs master read (44546695829, 44540107462, 44509175744) | 19.8 to 27.1 s (26.1 s on 44509175744, in DEF-048's table) |
 | (ii) `estimate-treatments` AC-2 [tablet] | `master` push 44509175744 | 28.8 s, passed (96 % of 30 s) |
 | (ii) | PR #531 run 44580739670 | attempt 1 25.3 s; attempt 2 **29.4 s (98 % of the budget)**, passed. **Has not failed yet** |
+| (i) and (ii) | 2026-11-20, read by QA from the job logs: PR #531 run of record 44737067927 (85735d86); `master` push 44739529276 (402485c) | **(i)** `estimate-form` AC-9, mobile / tablet / desktop: 14.4 / 17.9 / 10.8 s on #531's run; **26.2 / 23.1 / 18.2 s** on the `master` push run (26.2 s is 87 % of the budget; no failure). **(ii)** treatments AC-2 "every treatment chosen" (:275): 17.5 / 16.2 / 15.9 s on #531's run; **22.5 / 20.7 / 15.9 s** on the `master` push run. All first attempt, no retry. Neither failed on these two runs |
 
 **Mechanism.** (i) is DEF-048's: the form opens, then two whole-form axe scans. (ii) differs: **eight save round trips plus the form open and one scan** (the eight saves are the case's subject). Neither shows an `expect` message or an axe violation list.
 
@@ -59,6 +60,37 @@ Read by the orchestrator from the job logs on the fix PR's run of record and on 
 - **15 s** stays the target for a quiet draw: reported, not gated.
 
 If P1 or P2 fails, this Bug stays open, R7 continues, and the developer brings the measured phases to master.
+
+## Near-budget watch list (moved here from DEF-048 on 2026-11-20; QA keeps it current)
+**Why here.** DEF-048 closed on 2026-11-20 (its proof is met), and DEF-048's table of cases at 25 s or more was the live watch list (DL-256 to DL-259). DEF-049 is open, covers the same class (the E2E per-case floor, DL-257 (9)) and has the same owner lane, so the list lives here until this Bug closes; then it moves to the QA test plan (section "Flaky tests") or to the next open Bug of the class. **Evidence only, not scope**: a case on this list is not part of any Bug's scope unless master widens it (DL-259 (3)). **Lines:** 25 s is the near-budget line for a 30 s budget (P2); 20 s is the lower line master set in DL-259 (3) for green-run readings. A case with `test.slow()` (90 s) or `test.setTimeout(60_000)` is counted against that budget and is not on the list unless it is over 80 %.
+
+**A. Readings over 20 s that master asked to add (DL-259 (3); green run 44667850276 on #510's head 3caadda, read by master; QA did not re-read that log).**
+
+| Case (project as master read it) | Reading | Budget |
+|---|---|---|
+| `users.spec.ts:58` [desktop] | 24.6 s | 30 s |
+| `remove-price.spec.ts:136` | 22.5 s | 30 s |
+| `lead-warning.spec.ts:253` | 21.5 s | 30 s |
+| `estimate-warning.spec.ts:117` | 20.8 s | 30 s |
+| `estimate-review.spec.ts:166` | 20.0 s | 30 s |
+
+On #526's slow run 44662178640 (a 1.74x runner wave) most of these were flaky in the time-out mode; on the fully green `master` shard 4 of run 44667806338 they took 12 to 18 s (DL-259 (1)). The wave run is not a reading of the tests.
+
+**B. QA's reading of the same five on `master` push 44739529276 (402485c, 2026-11-20; mobile / tablet / desktop, s).**
+
+| Case | Reading | Note |
+|---|---|---|
+| `users.spec.ts:58` | 8.4 / 9.9 / **20.3** | desktop is the only reading over 20 s |
+| `remove-price.spec.ts:136` | **25.4** / 19.3 / 19.3 | in DEF-050 (AQP-380), scope (ii) [tablet]: flaky on 3 runs |
+| `lead-warning.spec.ts:253` | **22.1 / 22.0** / 15.4 | |
+| `estimate-warning.spec.ts:117` | **21.3** / 19.7 / 16.8 | |
+| `estimate-review.spec.ts:166` | 15.1 / 15.3 / 18.5 | under 20 s on this run |
+
+**C. This Bug's two cases (verified, 2026-11-20).** (i) `estimate-form` AC-9: **26.2 / 23.1 / 18.2 s** on `master` push 44739529276 (mobile / tablet / desktop), 14.4 / 17.9 / 10.8 s on #531's run 44737067927. (ii) treatments AC-2 "every treatment chosen" (:275): **22.5 / 20.7 / 15.9 s** and 17.5 / 16.2 / 15.9 s on the same two runs. The orchestrator's figures on AQP-377 (comment 12390) agree. The 26.2 s reading is above the P2 line of 25 s on the (i) mobile case; it is a reading of the unfixed test, so it counts as evidence for this Bug, not as a proof miss.
+
+**D. Other 30 s cases at 25 s or more on the same `master` push run 44739529276 (project, s).** `estimate-treatments.spec.ts:61` [mobile] 26.0 (AC-1; 25.0 and 26.5 on the 2026-11-19 runs); `approve-override.spec.ts:184` [mobile] 25.5; `approve-override.spec.ts:133` [mobile] 24.9; and `approve-override.spec.ts:155` [mobile], which failed attempt 1 at 30.1 s and passed on retry in 26.6 s (DEF-050). Cases on a 60 s or 90 s budget are not listed (for example `estimate-save.spec.ts:304` [mobile] 33.0 s on a 60 s budget is 55 %). The `auth.setup.ts:165` set-up test reads 27.1 to 36.6 s on the same run; QA did not check its budget and lists it as a question, not a finding.
+
+**Reading rule.** A case moves to a Bug when it meets the RISK-031 practice (a time-out-mode flaky on two runs in one day, or a failure on both attempts) and no open Bug covers it; QA logs the Bug the same day and tells master. QA refreshes sections B to D from the first `master` push run after each merge that touches E2E, and at the hardening window.
 
 ## Re-run list (orchestrator adds each; R7)
 | When | PR / run | Head | Result |

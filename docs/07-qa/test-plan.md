@@ -218,7 +218,7 @@ Priority P1 to P3 follows the severity unless the master changes it. Type is Pro
 | Docker, scripts, backup, restore | Install walk-through if the README changed, backup and retention tests, restore failure paths |
 | Layout, tokens, shell | Three widths, axe, touch-target size, raw-colour search, the keyboard run |
 
-**Flaky tests.** A test that fails and then passes on rerun is a defect of type Test, raised the same day, quarantined within a day with a ticket, and never deleted to get green. Retries are off in unit and integration tests; Playwright allows one retry and the report shows it. Canary and role-matrix tests are never quarantined. A suite that is green only on retry is not green at G7.
+**Flaky tests.** A test that fails and then passes on rerun is a defect of type Test, raised the same day, quarantined within a day with a ticket, and never deleted to get green. Retries are off in unit and integration tests; Playwright allows one retry and the report shows it. Canary and role-matrix tests are never quarantined. A suite that is green only on retry is not green at G7. **Near-budget watch list (E2E cases at 20 s or more on a 30 s budget):** kept in `docs/07-qa/defects/DEF-049-estimate-form-and-treatments-e2e-cases-near-30s-budget.md`, section "Near-budget watch list" (moved there from DEF-048 on 2026-11-20 when DEF-048 closed); it moves again when DEF-049 closes.
 
 **Regression result in a report** states the command, the count passed, failed and skipped, and the commit. A skipped test is explained or it is a failure. `quantity-cases-complete` (strategy 5.4) must be among the passing tests.
 
