@@ -66,7 +66,7 @@ function UseItem({ use }: { readonly use: FieldUse }) {
 const usageKey = (use: FieldUse): string => `${use.kind}-${use.kind === 'stage-total' ? use.stageId : use.fieldId}`;
 
 /** "Blocked by formulas": every use, as a list (AC-2). No password field. */
-export function BlockedBody({ target, uses }: { readonly target: DeleteTarget; readonly uses: ReadonlyArray<FieldUse> }) {
+function BlockedBody({ target, uses }: { readonly target: DeleteTarget; readonly uses: ReadonlyArray<FieldUse> }) {
   return (
     <>
       <AlertDialogHeader>
@@ -135,7 +135,7 @@ function PhaseBody({ target, state }: { readonly target: DeleteTarget; readonly 
   }
 }
 
-export type DeletePanelState = Pick<DeleteField, 'phase' | 'passwordError' | 'submit' | 'retry'>;
+type DeletePanelState = Pick<DeleteField, 'phase' | 'passwordError' | 'submit' | 'retry'>;
 
 /** The whole dialog body: one form, one footer, for every state (see the note above on focus). The password is held here and cleared as soon as it is sent, whatever the answer is. */
 export function DeleteFieldPanel({ target, state }: { readonly target: DeleteTarget; readonly state: DeletePanelState }) {

@@ -46,7 +46,7 @@ import type { StepUpService } from './step-up-service';
  *   3. **the password**, through `verifyStepUp` on its own throttle key (AC-4): 422 `STEP_UP_FAILED`, 429 `STEP_UP_LOCKED`;
  *   4. one transaction: the new version, stored only if the version the checks read is still the latest (so two deletes, or a delete and a formula save, cannot both win: 409 `CONFIG_VERSION_CHANGED`, which also covers
  *      a save that landed while the password was being checked), and the audit entry `config.field_deleted`. A failure in either rolls back both.
- * The password reaches `verifyStepUp` and nowhere else. The rate list is read only to show a formula in display form; a delete removes no rate, so the race of a rate deleted during the save (GitHub #524) does not apply.
+ * The password reaches `verifyStepUp` and nowhere else. The rate list is read only to show a formula in display form; a delete removes no rate, so the race of a rate deleted during the save (GitHub issue 524) does not apply.
  */
 
 /** The request of the preview: the spec, and whether only the letters are wanted (step 2's live list). */
