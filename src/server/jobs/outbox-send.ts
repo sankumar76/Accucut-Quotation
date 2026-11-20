@@ -4,6 +4,8 @@ import type { OutboxErrorCode, SendFailureCode, SendResult, SkipCode } from '../
 import { type Clock, MILLISECONDS_PER_MINUTE } from '../../lib/time';
 import type { Mailer, MailSender } from '../mail/send';
 
+import { runJob, type JobLogger, type JobOutcome } from './run-job';
+
 /**
  * The worker job `outbox-send` (STORY-09.01 AC-4, AC-5, AC-6; architecture section 4.7; ADR-011; FR-084, NFR-014).
  *
@@ -19,6 +21,9 @@ import type { Mailer, MailSender } from '../mail/send';
  * It imports no repository, service, driver or cost module (`tests/security/engineer-import-rule.test.ts` classes it): the worker passes the store, the mailer and the clock in, and the
  * only mail modules it names are types. The clock is a parameter, so a test controls time.
  */
+
+/** The job's name in the log and in the worker's schedule. It writes no `job_runs` row: its record is the `email_outbox` rows themselves. */
+export const OUTBOX_SEND_JOB = 'outbox-send';
 
 /** Every minute, in Indian Standard Time (architecture section 4.7). */
 export const OUTBOX_SEND_CRON = '* * * * *';
@@ -67,8 +72,6 @@ export interface OutboxSendSummary {
   /** Messages the mail server accepted (counted in `sent`) whose `sent` mark could not be written: the row stays `sending`, never `failed` (code `NOT_RECORDED` in the log). */
   readonly notRecorded: number;
 }
-
-export type OutboxLogger = (message: string, level?: 'info' | 'error') => void;
 
 function sender(settings: { readonly senderName: string; readonly senderMailbox: string }): MailSender {
   return { name: settings.senderName, mailbox: settings.senderMailbox };
@@ -134,16 +137,14 @@ export function describeOutboxSend(summary: OutboxSendSummary): string {
   return `outbox-send: claimed ${summary.claimed}, sent ${summary.sent}, skipped ${summary.skipped}, failed ${summary.failed}${failureText}${unrecordedText}`;
 }
 
-/** One scheduled run, never throwing: the cron callback must survive a database problem. A run that did nothing writes no line. */
-export async function performOutboxSend(dependencies: OutboxSendDependencies, log: OutboxLogger): Promise<void> {
-  try {
-    const summary = await runOutboxSend(dependencies);
-    if (summary.claimed + summary.skipped === 0) return;
-    log(describeOutboxSend(summary), summary.failed > 0 || summary.notRecorded > 0 ? 'error' : 'info');
-  } catch {
-    // The reason is not logged: a database error can carry a connection detail.
-    log('outbox-send could not read or write the outbox', 'error');
-  }
+/**
+ * One scheduled run, for the wrapper's log line (`run-job.ts`). A run that did nothing is a `debug` line, so an empty outbox every minute does not fill the log. It throws only when the claim
+ * fails (`runOutboxSend`); the wrapper then logs the failure by the class of the error only (a database error can carry a connection detail).
+ */
+export async function performOutboxSend(dependencies: OutboxSendDependencies): Promise<JobOutcome> {
+  const summary = await runOutboxSend(dependencies);
+  if (summary.claimed + summary.skipped === 0) return { level: 'debug' };
+  return { summary: describeOutboxSend(summary), level: summary.failed > 0 || summary.notRecorded > 0 ? 'error' : 'info' };
 }
 
 /**
@@ -151,7 +152,7 @@ export async function performOutboxSend(dependencies: OutboxSendDependencies, lo
  * depend on the flag, because it is how Accucut IT proves the mailbox before the flag is turned on. The overdue scan and the digest (09.04, 09.05) are added to this list by those stories.
  */
 /** `dependencies` is a function so that nothing (no database client, no mail transport) is built when the flag is off. */
-export function scheduleMailJobs(enabled: boolean, dependencies: () => OutboxSendDependencies, log: OutboxLogger): ScheduledTask[] {
+export function scheduleMailJobs(enabled: boolean, dependencies: () => OutboxSendDependencies, log: JobLogger): ScheduledTask[] {
   if (!enabled) {
     log('mail jobs are off: FEATURE_EMAIL is not on, so outbox-send is not scheduled');
     return [];
@@ -159,10 +160,8 @@ export function scheduleMailJobs(enabled: boolean, dependencies: () => OutboxSen
   const built = dependencies();
   const outboxSend = schedule(
     OUTBOX_SEND_CRON,
-    async () => {
-      await performOutboxSend(built, log);
-    },
-    { name: 'outbox-send', timezone: OUTBOX_SEND_TIMEZONE, noOverlap: true },
+    () => runJob({ name: OUTBOX_SEND_JOB, log, now: () => built.clock.now(), frequent: true }, () => performOutboxSend(built)),
+    { name: OUTBOX_SEND_JOB, timezone: OUTBOX_SEND_TIMEZONE, noOverlap: true },
   );
   log('outbox-send scheduled every minute');
   return [outboxSend];

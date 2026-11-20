@@ -304,6 +304,14 @@ function Invoke-SuperPsql {
 }
 $okRows = Invoke-SuperPsql -Database 'accucut' -Sql "SELECT count(*) FROM job_runs WHERE job = 'backup' AND result->>'status' = 'ok' AND (result->>'sizeBytes')::bigint > 0 AND (result->>'freeBytes')::bigint > 0 AND (result->>'totalBytes')::bigint > 0"
 Assert-That ([int]$okRows -ge 1) "job_runs has a 'backup' row with status ok, sizeBytes, freeBytes and totalBytes (found $okRows)"
+# STORY-10.09a (AC-4, AC-5, AC-6, AC-7): the worker writes its heartbeat, so /api/health (checked above) answers 200 only while it does; and the runtime role removes old heartbeat rows through
+# prune_heartbeat_runs() and in no other way (a SECURITY DEFINER function of the owner role, executable by accucut_app alone; accucut_app has no DELETE on job_runs).
+$heartbeats = Invoke-SuperPsql -Database 'accucut' -Sql "SELECT count(*) FROM job_runs WHERE job = 'heartbeat' AND finished_at > now() - interval '3 minutes'"
+Assert-That ([int]$heartbeats -ge 1) "the worker wrote a heartbeat row in the last 3 minutes, which is what /api/health reads (found $heartbeats)"
+$pruneFunction = Invoke-SuperPsql -Database 'accucut' -Sql "SELECT prosecdef::text || '|' || pg_get_userbyid(proowner) || '|' || pronargs::text || '|' || coalesce(proconfig::text, '') FROM pg_proc WHERE proname = 'prune_heartbeat_runs' AND pronamespace = 'public'::regnamespace"
+Assert-That ($pruneFunction -eq 'true|accucut_owner|0|{"search_path=pg_catalog, pg_temp"}') "prune_heartbeat_runs() is SECURITY DEFINER, owned by accucut_owner, has no argument and a pinned search_path (found '$pruneFunction')"
+$pruneRights = Invoke-SuperPsql -Database 'accucut' -Sql "SELECT has_function_privilege('accucut_app', 'public.prune_heartbeat_runs()', 'EXECUTE')::text || '|' || has_function_privilege('accucut_backup', 'public.prune_heartbeat_runs()', 'EXECUTE')::text || '|' || has_table_privilege('accucut_app', 'job_runs', 'DELETE')::text"
+Assert-That ($pruneRights -eq 'true|false|false') "accucut_app may EXECUTE prune_heartbeat_runs() and has no DELETE on job_runs; accucut_backup may not execute it (found '$pruneRights')"
 # Decrypt with the run's own key and restore into a scratch database (the file is deleted at once; nothing here is a real key).
 $ageExe = Join-Path $paths.Current 'bin\age.exe'
 $scratchFile = Join-Path $env:RUNNER_TEMP ('accucut-restore-check-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.dump')

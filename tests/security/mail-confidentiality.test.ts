@@ -31,6 +31,8 @@ const ALLOWED_SPECIFIER = [
   /^node-cron$/,
   /^zod$/,
   /^\.\/(layout|logo|mail-service|microsoft-token|send|transport)$/,
+  // STORY-10.09a: the one job wrapper, which imports nothing itself (engineer-import-rule.test.ts classes it).
+  /^\.\/run-job$/,
   /^\.\.\/\.\.\/lib\/(env|time)$/,
   // From `src/server/mail/templates/`: the shared layout above it, and `formatIst` from the time module, three levels up.
   /^\.\.\/layout$/,

@@ -105,6 +105,7 @@ describe('pageRoutesFromManifest (the route manifest of STORY-01.02)', () => {
       { pattern: '/audit', roles: ['ADMIN'] },
       { pattern: '/config/fields', roles: ['ADMIN'] },
       { pattern: '/config/fields/[id]/formula', roles: ['ADMIN'] },
+      { pattern: '/config/fields/new', roles: ['ADMIN'] },
       { pattern: '/design-system', roles: ['ADMIN'] },
       { pattern: '/estimates/[code]', roles: ['ADMIN'] },
       { pattern: '/estimates/[code]/costs/[slNo]', roles: ['ADMIN'] },
@@ -123,7 +124,7 @@ describe('pageRoutesFromManifest (the route manifest of STORY-01.02)', () => {
   it('with the real manifest and no sign-in at all, every signed-in page is a problem and none is dropped', () => {
     const { routes, problems } = pageRoutesFromManifest(ROUTE_MANIFEST, () => false);
     expect(routes.map((route) => route.pattern)).toEqual(['/sign-in']);
-    expect(problems).toHaveLength(18);
+    expect(problems).toHaveLength(19);
   });
 });
 
