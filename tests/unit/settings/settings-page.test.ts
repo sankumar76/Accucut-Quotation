@@ -91,6 +91,7 @@ describe('GET /api/v1/settings (AC-1, AC-4, AC-5, AC-6)', () => {
       senderName: '',
       senderAddress: '',
       emailEnabled: false,
+      mailFailures: null,
     });
     expect(text).not.toContain(JOB_RUN_CANARY_PATH.replaceAll('\\', '\\\\'));
     expect(text).not.toContain(JOB_RUN_CANARY_VOLUME);

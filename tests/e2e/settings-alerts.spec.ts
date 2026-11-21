@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
+import { seedFailedMail } from './support/mail-failures';
 import { ADMIN_STATE, DEVELOPMENT_URL, SIGNED_IN_STATE } from './support/servers';
 
 /**
@@ -109,6 +110,20 @@ test.describe('the Admin', () => {
     await expect(page.getByLabel(/password/i)).toHaveCount(0);
     await expect(page.getByText('Last good backup', { exact: true })).toBeVisible();
     await expect(page.getByText('Backups are kept on the same server.', { exact: true })).toBeVisible();
+  });
+
+  test('STORY-09.06 AC-8: an e-mail that failed for good shows the warning "E-mails not sent" (an icon, a title, role alert, no address, no class code), with no overflow and no axe violation', async ({ page }) => {
+    await seedFailedMail();
+    await openSettings(page);
+    const notice = page.getByRole('alert').filter({ hasText: 'E-mails not sent' });
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText(/\d+ e-mails? could not be sent in the last 7 days\./);
+    await expect(notice).toContainText('Last problem: The mail server could not be reached. Ask Accucut IT.');
+    await expect(notice.locator('svg')).toHaveCount(1);
+    await expect(notice).not.toContainText('@');
+    await expect(notice).not.toContainText('CONNECTION');
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoAxeViolations(page);
   });
 
   test('AC-8: while sending is not enabled on this server, one line says so, and the switch, the sender and the test e-mail are all still offered', async ({ page }) => {

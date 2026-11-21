@@ -67,7 +67,7 @@ describe('AC-2: GET adds the alerts to the backups, and nothing else can leave',
     harness.settingsRepository.current = SAVED;
     const body = (await (await GET(send('GET', '/api/v1/settings'))).json()) as Record<string, unknown>;
     expect(body).toMatchObject({ alertsEnabled: true, senderName: 'Accucut Portal', senderAddress: 'portal@example.com', emailEnabled: false });
-    expect(Object.keys(body).sort()).toEqual(['alertsEnabled', 'backupLate', 'diskNearlyFull', 'diskReading', 'emailEnabled', 'lastGoodBackupAt', 'senderAddress', 'senderName']);
+    expect(Object.keys(body).sort()).toEqual(['alertsEnabled', 'backupLate', 'diskNearlyFull', 'diskReading', 'emailEnabled', 'lastGoodBackupAt', 'mailFailures', 'senderAddress', 'senderName']);
   });
 });
 

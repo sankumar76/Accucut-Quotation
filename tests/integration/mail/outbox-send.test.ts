@@ -5,6 +5,7 @@ import type { SmtpEnv } from '@/lib/env';
 import { idempotencyKeys, type MailEvent } from '@/lib/mail/events';
 import { createFixedClock, MILLISECONDS_PER_MINUTE, type FixedClock } from '@/lib/time';
 import { performOutboxSend, runOutboxSend, type OutboxSendDependencies } from '@/server/jobs/outbox-send';
+import { createJobRunWriter } from '@/server/repositories/job-run-repository';
 import { runJob } from '@/server/jobs/run-job';
 import { LOGO_CONTENT_ID, renderMail } from '@/server/mail/layout';
 import { createMailer } from '@/server/mail/send';
@@ -68,6 +69,13 @@ async function enqueue(overrides: Partial<OutboxMessage> = {}): Promise<OutboxMe
   return planted;
 }
 
+/** A row that has already used 3 attempts: its next send is the 4th, so a failure is final (STORY-09.06 AC-1). The retries themselves are `retries.test.ts`. */
+async function enqueueOnLastAttempt(overrides: Partial<OutboxMessage> = {}): Promise<OutboxMessage> {
+  const planted = await enqueue(overrides);
+  await db.owner.query('UPDATE email_outbox SET attempts = 3 WHERE idempotency_key = $1', [planted.idempotencyKey]);
+  return planted;
+}
+
 async function setting(column: 'alerts_enabled' | 'sender_name' | 'sender_mailbox', value: boolean | string): Promise<void> {
   await db.owner.query(`UPDATE settings SET ${column} = $1 WHERE id = 1`, [value]);
 }
@@ -110,7 +118,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   clock = createFixedClock(NOW);
-  dependencies = { store: repository, mailer: createMailer(capture.transport), clock };
+  dependencies = { store: repository, mailer: createMailer(capture.transport), clock, log: () => undefined, jobRuns: createJobRunWriter(db.prisma) };
   await db.owner.query('DELETE FROM email_outbox');
   await db.owner.query('DELETE FROM job_runs');
   await db.owner.query("UPDATE settings SET alerts_enabled = true, sender_name = 'Accucut Portal', sender_mailbox = 'portal@example.com' WHERE id = 1");
@@ -203,12 +211,12 @@ describe('AC-5: the alerts switch, the sender and the recipients', () => {
     expect((await captured(second.subject))[0]?.from).toEqual({ name: 'Renamed Sender', address: 'other@example.com' });
   });
 
-  it('AC-5: an empty sender fails the row with NO_SENDER, once, and nothing is sent', async () => {
+  it('AC-5: an empty sender fails the attempt with NO_SENDER (final on the 4th), and nothing is sent', async () => {
     await setting('sender_mailbox', '');
-    const planted = await enqueue();
+    const planted = await enqueueOnLastAttempt();
     expect(await runOutboxSend(dependencies)).toMatchObject({ claimed: 1, sent: 0, failed: 1, failures: { NO_SENDER: 1 } });
     expect(await captured(planted.subject)).toEqual([]);
-    expect(await rowOf(planted.idempotencyKey)).toMatchObject({ status: 'failed', last_error: 'NO_SENDER', attempts: 1, locked_until: null });
+    expect(await rowOf(planted.idempotencyKey)).toMatchObject({ status: 'failed', last_error: 'NO_SENDER', attempts: 4, locked_until: null });
   });
 
   it('AC-5 (ruling of 2026-11-18): an address that changed before the send is the one used, and a person who is inactive gets nothing (skipped, NO_RECIPIENT)', async () => {
@@ -295,10 +303,10 @@ describe('AC-7: no secret leaks (forced failures with a planted fake secret)', (
 
   it('AC-7: a refused password sign-in: the row is failed with AUTH_FAILED, and the planted password (echoed by the server) is in no log, row, job_runs row or answer', async () => {
     smtp = await startFakeSmtp({ mechanism: 'PLAIN', auth: 'reject-echo', sender: 'accept' });
-    const planted = await enqueue();
+    const planted = await enqueueOnLastAttempt();
     const { text, logs } = await forcedFailure(clearTextTransport(passwordMode, smtp.port), [planted]);
-    expect(await rowOf(planted.idempotencyKey)).toMatchObject({ status: 'failed', last_error: 'AUTH_FAILED', attempts: 1 });
-    expect(logs.join('\n')).toContain('"summary":"outbox-send: claimed 1, sent 0, skipped 0, failed 1 (AUTH_FAILED 1)"');
+    expect(await rowOf(planted.idempotencyKey)).toMatchObject({ status: 'failed', last_error: 'AUTH_FAILED', attempts: 4 });
+    expect(logs.join('\n')).toContain('"summary":"outbox-send: claimed 1, sent 0, retrying 0, skipped 0, failed 1 (AUTH_FAILED 1)"');
     expect(logs.join('\n')).toContain('"level":"error"');
     expect(smtp.lines.some((line) => line.startsWith('AUTH PLAIN'))).toBe(true);
     expect(text).not.toContain(PLANTED_PASSWORD);
@@ -307,7 +315,7 @@ describe('AC-7: no secret leaks (forced failures with a planted fake secret)', (
   it('AC-7: a failed token request in OAuth mode: AUTH_FAILED, and the planted client secret (echoed by the token endpoint) is nowhere', async () => {
     smtp = await startFakeSmtp({ mechanism: 'XOAUTH2', auth: 'accept', sender: 'accept' });
     const tokenEndpoint = vi.fn<typeof fetch>(() => Promise.resolve(new Response(JSON.stringify({ error: 'invalid_client', error_description: `secret ${PLANTED_SECRET}` }), { status: 401 })));
-    const planted = await enqueue();
+    const planted = await enqueueOnLastAttempt();
     const { text } = await forcedFailure(clearTextTransport(oauthMode, smtp.port, tokenEndpoint), [planted]);
     expect(tokenEndpoint).toHaveBeenCalled();
     expect(await rowOf(planted.idempotencyKey)).toMatchObject({ status: 'failed', last_error: 'AUTH_FAILED' });
@@ -316,7 +324,7 @@ describe('AC-7: no secret leaks (forced failures with a planted fake secret)', (
 
   it('AC-7: Microsoft 5.7.60 gives SENDER_NOT_ALLOWED in the row', async () => {
     smtp = await startFakeSmtp({ mechanism: 'PLAIN', auth: 'accept', sender: 'sender-not-allowed' });
-    const planted = await enqueue();
+    const planted = await enqueueOnLastAttempt();
     await forcedFailure(clearTextTransport(passwordMode, smtp.port), [planted]);
     expect(await rowOf(planted.idempotencyKey)).toMatchObject({ status: 'failed', last_error: 'SENDER_NOT_ALLOWED' });
   });
@@ -325,21 +333,21 @@ describe('AC-7: no secret leaks (forced failures with a planted fake secret)', (
     const closed = await startFakeSmtp({ mechanism: 'PLAIN', auth: 'accept', sender: 'accept' });
     const { port } = closed;
     await closed.close();
-    const planted = await enqueue();
+    const planted = await enqueueOnLastAttempt();
     await forcedFailure(clearTextTransport(passwordMode, port), [planted]);
     expect(await rowOf(planted.idempotencyKey)).toMatchObject({ status: 'failed', last_error: 'CONNECTION' });
   });
 
-  it('AC-7: a failed row is final in this story: failed once with attempts = 1, and the second run does not send it again (retries are STORY-09.06)', async () => {
+  it('AC-7: a row that failed on its 4th attempt is final: attempts = 4, and the second run does not send it again', async () => {
     smtp = await startFakeSmtp({ mechanism: 'PLAIN', auth: 'reject-echo', sender: 'accept' });
-    const planted = await enqueue();
+    const planted = await enqueueOnLastAttempt();
     await forcedFailure(clearTextTransport(passwordMode, smtp.port), [planted]);
-    expect((await rowOf(planted.idempotencyKey)).attempts).toBe(1);
+    expect((await rowOf(planted.idempotencyKey)).attempts).toBe(4);
   });
 
   it('AC-7: a failed secret-bearing row has its link emptied, and last_error is only a class code', async () => {
     smtp = await startFakeSmtp({ mechanism: 'PLAIN', auth: 'reject-echo', sender: 'accept' });
-    const planted = await enqueue({ event: 'password-reset', idempotencyKey: idempotencyKeys.passwordReset('tok-fail'), bodyText: 'https://portal.example.com/reset/live-link', bodyHtml: '<a href="https://portal.example.com/reset/live-link">x</a>' });
+    const planted = await enqueueOnLastAttempt({ event: 'password-reset', idempotencyKey: idempotencyKeys.passwordReset('tok-fail'), bodyText: 'https://portal.example.com/reset/live-link', bodyHtml: '<a href="https://portal.example.com/reset/live-link">x</a>' });
     await forcedFailure(clearTextTransport(passwordMode, smtp.port), [planted]);
     const row = await rowOf(planted.idempotencyKey);
     expect(row).toMatchObject({ status: 'failed', body_html: '', body_text: '' });
@@ -357,18 +365,20 @@ describe('the repository: marks, recipients, settings', () => {
     return { id: claimed.id, planted };
   }
 
-  it('markSent / markFailed / markSkipped change a row only while it is sending, and say whether they did', async () => {
+  it('markSent / markRetry / markFailed / markSkipped change a row only while it is sending, and say whether they did', async () => {
     const { id, planted } = await claimOne();
-    expect(await repository.markSent(id, NOW)).toBe(true);
-    expect(await repository.markFailed(id, 'UNKNOWN')).toBe(false);
-    expect(await repository.markSkipped(id, 'NO_RECIPIENT')).toBe(false);
+    const ref = { id, attempts: 1 };
+    expect(await repository.markSent(ref, NOW)).toBe(true);
+    expect(await repository.markRetry(ref, 'UNKNOWN', LOCK)).toBe(false);
+    expect(await repository.markFailed(ref, 'UNKNOWN', NOW)).toBe(false);
+    expect(await repository.markSkipped(ref, 'NO_RECIPIENT')).toBe(false);
     expect(await rowOf(planted.idempotencyKey)).toMatchObject({ status: 'sent', last_error: null });
   });
 
   it('a row that was never claimed cannot be marked', async () => {
     const planted = await enqueue();
     const { rows } = await db.owner.query<{ id: string }>('SELECT id::text FROM email_outbox WHERE idempotency_key = $1', [planted.idempotencyKey]);
-    expect(await repository.markSent(rows[0]?.id ?? '', NOW)).toBe(false);
+    expect(await repository.markSent({ id: rows[0]?.id ?? '', attempts: 1 }, NOW)).toBe(false);
     expect((await rowOf(planted.idempotencyKey)).status).toBe('pending');
   });
 

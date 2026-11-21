@@ -88,6 +88,16 @@ export function formatIst(date: Date): string {
 }
 
 /**
+ * The day alone, as the subject of the daily digest writes it: "06 Nov 2026" (STORY-09.05 AC-4, SCR-22). Built from the same parts as `formatIst`, so the two cannot disagree. An invalid date is a
+ * mistake in the code and throws.
+ */
+export function formatIstDate(date: Date): string {
+  if (Number.isNaN(date.getTime())) throw new RangeError('formatIstDate needs a valid date.');
+  const parts = IST_PARTS.formatToParts(date);
+  return `${partOf(parts, 'day')} ${partOf(parts, 'month')} ${partOf(parts, 'year')}`;
+}
+
+/**
  * The time of day alone, as a notice writes it: "10:42 IST" (STORY-05.08 AC-1, "Draft saved at 10:42 IST."). Built from the same parts as `formatIst`, so the two cannot disagree. An invalid
  * date is a mistake in the code and throws.
  */

@@ -18,14 +18,18 @@ const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 const MAIL_FILES = {
   'src/server/mail': ['layout.ts', 'logo.ts', 'mail-service.ts', 'microsoft-token.ts', 'send.ts', 'transport.ts'],
-  'src/lib/mail': ['codes.ts', 'events.ts'],
-  // STORY-09.03 and 09.04: the message of each alert is a pure function from a fixed DTO of plain strings (no cost field), on top of the shared layout.
-  'src/server/mail/templates': ['task-assigned.ts', 'task-overdue.ts'],
+  // STORY-09.06: the retry policy (pure) and the length of the Settings window for failed e-mail (one constant and one date rule).
+  'src/lib/mail': ['codes.ts', 'events.ts', 'failure-window.ts', 'retry.ts'],
+  // STORY-09.03, 09.04 and 09.05: the message of each alert is a pure function from a fixed DTO of plain strings (no cost field), on top of the shared layout.
+  // STORY-09.06: the Admin's "server check needed" message is built from two booleans, so it cannot hold a figure or a path.
+  'src/server/mail/templates': ['backup-missed.ts', 'daily-digest.ts', 'task-assigned.ts', 'task-overdue.ts'],
 } as const;
 
 const JOB_FILE = 'src/server/jobs/outbox-send.ts';
 /** The job that queues the overdue e-mail (STORY-09.04): it builds the message from plain fields and takes its store by parameter, as `outbox-send` does. */
 const SCAN_FILE = 'src/server/jobs/overdue-scan.ts';
+/** The job that queues the daily digest (STORY-09.05): the same, from plain fields and a store it is given. */
+const DIGEST_FILE = 'src/server/jobs/daily-digest.ts';
 
 /** The only things these files may import, by exact specifier. Nothing that holds a cost, a rate, a formula or a calculation is on it, and nothing may be added without a review. */
 const ALLOWED_SPECIFIER = [
@@ -39,10 +43,12 @@ const ALLOWED_SPECIFIER = [
   // From `src/server/mail/templates/`: the shared layout above it, `formatIst` from the time module and the overdue rule of a task (STORY-09.04), three levels up.
   /^\.\.\/layout$/,
   /^\.\.\/\.\.\/\.\.\/lib\/(time|tasks\/overdue)$/,
-  // From `src/server/jobs/overdue-scan.ts` (STORY-09.04): the plain, pure rules of a task, and the overdue template.
+  // From `src/server/jobs/overdue-scan.ts` and `daily-digest.ts` (STORY-09.04, 09.05): the plain, pure rules of a task, and the overdue and digest templates.
   /^\.\.\/\.\.\/lib\/tasks\/(folder-path|overdue|task-link)$/,
-  /^\.\.\/mail\/templates\/task-overdue$/,
-  /^\.\.\/\.\.\/lib\/mail\/(codes|events)$/,
+  /^\.\.\/mail\/templates\/(task-overdue|daily-digest)$/,
+  /^\.\.\/\.\.\/lib\/mail\/(codes|events|retry)$/,
+  // From `src/lib/mail/retry.ts` and `failure-window.ts` (STORY-09.06): the time constants of the same lib folder.
+  /^\.\.\/time$/,
   /^\.\.\/mail\/send$/,
   /^\.\.\/repositories\/(email-outbox-repository|transaction)$/,
 ];
@@ -66,7 +72,7 @@ describe('every file of the mail module is classed (AC-10)', () => {
   });
 });
 
-const GUARDED = [...Object.entries(MAIL_FILES).flatMap(([directory, names]) => names.map((name) => `${directory}/${name}`)), JOB_FILE, SCAN_FILE];
+const GUARDED = [...Object.entries(MAIL_FILES).flatMap(([directory, names]) => names.map((name) => `${directory}/${name}`)), JOB_FILE, SCAN_FILE, DIGEST_FILE];
 
 describe('the mail module imports no cost, rate, formula or calculation module (AC-10)', () => {
   it.each(GUARDED)('%s imports only what is on the allowed list', (path) => {
@@ -84,7 +90,7 @@ describe('the mail module imports no cost, rate, formula or calculation module (
     }
   });
 
-  it.each([JOB_FILE, SCAN_FILE])('the job %s takes the data layer by parameter: it names no repository module at all', (job) => {
+  it.each([JOB_FILE, SCAN_FILE, DIGEST_FILE])('the job %s takes the data layer by parameter: it names no repository module at all', (job) => {
     const specifiers = specifiersOf(readFileSync(join(ROOT, job), 'utf8'));
     expect(specifiers.filter((specifier) => /repositories|services|composition|generated|@prisma|\bpg\b/.test(specifier))).toEqual([]);
   });

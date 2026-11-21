@@ -77,7 +77,7 @@ const REPOSITORIES = {
     'master-constraints',
     'master-repository',
     'material-repository',
-    // STORY-09.04: the overdue scan's candidate read (task code, title, folder, deadline, the Engineer's ID, the assigner's ID and name, never an address) and its store. No Engineer view imports it.
+    // STORY-09.04 and 09.05: the overdue scan's candidate read and the daily digest's read (task code, title, folder, deadline, the Engineer's ID, the assigner's ID and name, never an address) and their stores. No Engineer view imports it.
     'overdue-repository',
     'prisma-client',
     // STORY-09.02: the one `settings` row (the alerts switch and the sender mailbox), for the Admin's Settings page. No cost data and no credential, but nothing an Engineer's view has a use for, so it stays blocked.
@@ -358,7 +358,7 @@ describe('every repository and service file is classed, and the lint agrees with
  * `outbox-send` (STORY-09.01) reads and writes `email_outbox` and `settings`: Confidential, names and task details, never a cost or a rate. It takes the same route: its store, its mailer
  * and its clock are parameters, and the only mail modules it names are types. `tests/security/mail-confidentiality.test.ts` checks its imports (and those of `src/server/mail`) against an exact list (AC-10).
  */
-const JOBS = { holdsNoData: ['log-prune'], takesItsStoreByInjection: ['backup-watch', 'heartbeat', 'outbox-send', 'overdue-scan'] } as const;
+const JOBS = { holdsNoData: ['log-prune'], takesItsStoreByInjection: ['backup-watch', 'daily-digest', 'heartbeat', 'outbox-send', 'overdue-scan'] } as const;
 const ALL_JOBS = [...JOBS.holdsNoData, ...JOBS.takesItsStoreByInjection];
 /** Not a job: the wrapper every job runs through. It imports nothing. */
 const JOB_WRAPPER = 'run-job';
@@ -385,10 +385,11 @@ describe('every worker job is classed and takes nothing from the data layer (NFR
     expect(source).not.toMatch(/readFile|createReadStream|open\(/);
   });
 
-  it('backup-watch takes only Node, node-cron and one plain lib module, and its row holds figures of the disk and nothing about an estimate', () => {
+  it('backup-watch takes only Node, node-cron, plain lib modules and one pure template, and its row holds figures of the disk and nothing about an estimate', () => {
     const source = readFileSync(`${ROOT}src/server/jobs/backup-watch.ts`, 'utf8');
     const specifiers = [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '').sort();
-    expect(specifiers).toEqual(['../../lib/settings/backup-status', './run-job', 'node-cron', 'node:fs/promises']);
+    // STORY-09.06 AC-10: the key builders and the IST date, the one "nearly full" rule (already in backup-status) and the Admin's message, a pure template of two flags.
+    expect(specifiers).toEqual(['../../lib/mail/events', '../../lib/settings/backup-status', '../../lib/time', '../mail/templates/backup-missed', './run-job', 'node-cron', 'node:fs/promises']);
     expect(source).not.toMatch(/\b(?:estimates?|customers?|rates?|costs?|prices?)\b/i);
   });
 });

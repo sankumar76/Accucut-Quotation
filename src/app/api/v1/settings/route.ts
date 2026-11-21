@@ -4,7 +4,7 @@ import { alertSettingsBodySchema, alertSettingsSchema, settingsSchema } from '@/
 
 /**
  * `GET /api/v1/settings` (STORY-02.09 AC-1 to AC-6, STORY-09.02 AC-2, AC-6): the last good backup, whether it is late, the newest reading of the server disk (from `job_runs`), and the e-mail alerts
- * (the switch, the sender name and address, and whether this server sends e-mail). Admin only, and the role is checked before anything is looked up (CR-33), so a Lead and an Engineer get the
+ * (the switch, the sender name and address, and whether this server sends e-mail) and `mailFailures` (STORY-09.06 AC-8: null, or the count of e-mails that failed in the last 7 days with the last class code and time). Admin only, and the role is checked before anything is looked up (CR-33), so a Lead and an Engineer get the
  * same fixed 403 and a signed-out caller 401, with no date, no figure and no address in either. No credential of any kind is in the answer: its schema is strict.
  *
  * `PUT /api/v1/settings` (STORY-09.02 AC-3): saves the switch and the sender and answers the e-mail alerts as saved. Only these three values can be sent (a strict body); a wrong name or address is a 422
@@ -18,8 +18,8 @@ export const GET = withRoute({
   output: settingsSchema,
   async handler() {
     const service = getSettingsService();
-    const [backups, alerts] = await Promise.all([service.getBackupStatus(), service.getAlertSettings()]);
-    return { ...backups, ...alerts };
+    const [backups, alerts, mailFailures] = await Promise.all([service.getBackupStatus(), service.getAlertSettings(), service.getMailFailures()]);
+    return { ...backups, ...alerts, mailFailures };
   },
 });
 

@@ -24,10 +24,26 @@ export interface MailAction {
   readonly url: string;
 }
 
+/** A cell that is a link: the words shown and a full http or https address. */
+export interface MailLinkCell {
+  readonly text: string;
+  readonly url: string;
+}
+
+export type MailCell = string | MailLinkCell;
+
+/** A table of plain text (and links), for a message that lists things (the daily digest, STORY-09.05). */
+export interface MailTable {
+  readonly headers: ReadonlyArray<string>;
+  readonly rows: ReadonlyArray<ReadonlyArray<MailCell>>;
+}
+
 export interface MailContent {
   readonly heading: string;
   /** Plain-text paragraphs, in order. */
   readonly paragraphs: ReadonlyArray<string>;
+  /** Drawn after the paragraphs and before the action. */
+  readonly table?: MailTable;
   readonly action?: MailAction;
 }
 
@@ -54,11 +70,29 @@ function safeUrl(value: string): string {
   return parsed.href;
 }
 
+const CELL_STYLE = 'padding:6px 8px;border-bottom:1px solid silver;text-align:left;vertical-align:top;';
+
+function cellHtml(cell: MailCell, tag: 'td' | 'th'): string {
+  const inner = typeof cell === 'string' ? escapeHtml(cell) : `<a href="${escapeHtml(safeUrl(cell.url))}">${escapeHtml(cell.text)}</a>`;
+  return `<${tag} style="${CELL_STYLE}">${inner}</${tag}>`;
+}
+
+function cellText(cell: MailCell): string {
+  return typeof cell === 'string' ? cell : `${cell.text} (${safeUrl(cell.url)})`;
+}
+
+function tableHtml(table: MailTable): string {
+  const head = `<tr>${table.headers.map((header) => cellHtml(header, 'th')).join('')}</tr>`;
+  const body = table.rows.map((row) => `<tr>${row.map((cell) => cellHtml(cell, 'td')).join('')}</tr>`).join('');
+  return `<div style="overflow-x:auto;margin:0 0 12px 0;"><table style="border-collapse:collapse;width:100%;font-size:small;">${head}${body}</table></div>`;
+}
+
 const FOOTER = `${PORTAL_NAME}. This is an automated message; please do not reply.`;
 
 export function renderMail(content: MailContent): RenderedMail {
   const action = content.action === undefined ? undefined : { label: content.action.label, url: safeUrl(content.action.url) };
 
+  const tableBlock = content.table === undefined ? '' : tableHtml(content.table);
   const paragraphsHtml = content.paragraphs.map((paragraph) => `<p style="margin:0 0 12px 0;">${escapeHtml(paragraph).replaceAll('\n', '<br>')}</p>`).join('');
   const actionHtml =
     action === undefined
@@ -75,12 +109,16 @@ export function renderMail(content: MailContent): RenderedMail {
     '<div style="background:white;padding:24px;border-radius:6px;">' +
     `<h1 style="margin:0 0 16px 0;font-size:large;">${escapeHtml(content.heading)}</h1>` +
     paragraphsHtml +
+    tableBlock +
     actionHtml +
     '</div>' +
     `<p style="margin:16px 0 0 0;font-size:x-small;color:gray;">${escapeHtml(FOOTER)}</p>` +
     '</div></body></html>';
 
   const textLines = [content.heading, '', ...content.paragraphs.flatMap((paragraph) => [paragraph, ''])];
+  if (content.table !== undefined) {
+    textLines.push(content.table.headers.join(' | '), ...content.table.rows.map((row) => row.map(cellText).join(' | ')), '');
+  }
   if (action !== undefined) textLines.push(`${action.label}: ${action.url}`, '');
   textLines.push('--', FOOTER);
 
