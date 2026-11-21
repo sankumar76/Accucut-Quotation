@@ -6,7 +6,7 @@ import { call, jsonOf, openSession, type Reply, type Session } from './client';
 import { runClosedLoop, summariseLine, warmupRoundsFor, withinWindow, type LineSamples, type LoadLine, type Sample } from './closed-loop';
 import type { LoadConfig } from './config';
 import { NFR_010_LINE_MS, OWN_PASSWORD_LINE_MS, type PhaseResult } from './judge';
-import { quantityFor } from './plan';
+import { mapLimit, quantityFor } from './plan';
 import { changeOwnPassword, type EstimateWorld, type PartRef } from './seed-estimates';
 import type { MasterData } from './seed-masters';
 
@@ -27,6 +27,7 @@ const NO_CONTENT = 204;
 const PASSWORD_WARMUP_CHANGES = 2;
 const SATURATION_USERS_NOTE = 'saturation: no think time';
 const COST_NODES_CYCLED = 20;
+const SIGN_IN_CONCURRENCY = 3;
 
 /** What every phase needs: the settings, the master data, and the revision of each part of B as the load last saw it (shared by every phase that saves). */
 export interface Context {
@@ -40,9 +41,16 @@ export interface WorldContext extends Context {
   readonly world: EstimateWorld;
 }
 
-/** One signed-in session for each virtual user. */
+/**
+ * One signed-in session for each virtual user. A few sign-ins run at once and no more: the portal counts each sign-in attempt of an account before the password is checked and allows at most 5 at the same
+ * moment (NFR-003, `THROTTLE_POLICY.accountFailureLimit`), and every virtual user is the same Admin, so 25 sign-ins started together are refused with 429.
+ */
 export async function openSessions(config: LoadConfig, users: number): Promise<ReadonlyArray<Session>> {
-  return Promise.all(Array.from({ length: users }, (_, n) => openSession(config.baseUrl, `user-${n + 1}`, config.adminEmail, config.adminPassword)));
+  const sessions: Array<Session | undefined> = Array.from({ length: users }, () => undefined);
+  await mapLimit(Array.from({ length: users }, (_, n) => n), SIGN_IN_CONCURRENCY, async (n) => {
+    sessions[n] = await openSession(config.baseUrl, `user-${n + 1}`, config.adminEmail, config.adminPassword);
+  });
+  return sessions.filter((session): session is Session => session !== undefined);
 }
 
 function sessionOf(sessions: ReadonlyArray<Session>, user: number): Session {
