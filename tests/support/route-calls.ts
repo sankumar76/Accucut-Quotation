@@ -348,6 +348,9 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
       return { id: PLATING_ITEM_ID, body: { defaultValue: '2.37' }, status: 200 };
     case 'DELETE /api/v1/process-items/[id]':
       return { id: PLATING_ITEM_ID, status: 204 };
+    // STORY-02.08: Save choices. No choice for a rate that exists (a real one would change customers): an unknown rate is refused 404 under the lock, writing nothing.
+    case 'POST /api/v1/process-items/[id]/propagation':
+      return { id: UNKNOWN_USER_ID, body: { newDefault: '1.37', choices: [] }, status: 404 };
     // STORY-02.03: the Material Master routes. The ID is a canary material (`material-master-canary.ts`), which every database the scan reads
     // holds; the bodies are invented. `GET /api/v1/options/materials` has no ID or body: the default call is its valid call.
     case 'GET /api/v1/materials':

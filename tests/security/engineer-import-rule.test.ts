@@ -60,6 +60,8 @@ const REPOSITORIES = {
     'config-checkpoint-repository',
     'config-repository',
     'customer-repository',
+    // STORY-02.08 (NFR-002): the customers' rate values moved or listed when a Process Master default changes. Restricted; no Engineer view reads or writes them.
+    'default-propagation-repository',
     // STORY-09.07 (NFR-002): the reset links (a hash of a secret token and a person), for the reset service only. Holds no cost data, but nothing an Engineer view has a use for.
     'password-reset-repository',
     'decimal-text',
@@ -120,6 +122,8 @@ const SERVICES = {
     // STORY-06.03 (AC-8, NFR-002): the cost details of one row read the calculation record and answer with formulas, rate values and costs, for the Lead and the Admin only.
     'cost-details-service',
     'customer-service',
+    // STORY-02.08 (NFR-002): the changed default's reach into the customers' rates, for the Process Master's Admin routes only.
+    'default-propagation-service',
     // STORY-06.08 and STORY-06.12: the check of a customer or a material deleted after the approval, shared by unlock and cancel approval. It reads the estimate's customer and materials, for the Lead's and the Admin's services only.
     'deleted-masters',
     // STORY-05.03: the inputs half of the estimate service (the part form and the save of what was typed). It reads the Material Master and the field registry, so an Engineer view has no use for it.

@@ -39,6 +39,7 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/users/[id]/admin-handover': () => import('@/app/api/v1/users/[id]/admin-handover/route'),
   '/api/v1/process-items': () => import('@/app/api/v1/process-items/route'),
   '/api/v1/process-items/[id]': () => import('@/app/api/v1/process-items/[id]/route'),
+  '/api/v1/process-items/[id]/propagation': () => import('@/app/api/v1/process-items/[id]/propagation/route'),
   '/api/v1/materials': () => import('@/app/api/v1/materials/route'),
   '/api/v1/materials/[id]': () => import('@/app/api/v1/materials/[id]/route'),
   '/api/v1/options/materials': () => import('@/app/api/v1/options/materials/route'),

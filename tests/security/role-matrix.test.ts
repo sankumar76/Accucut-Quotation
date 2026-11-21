@@ -277,6 +277,7 @@ describe('AC-2 and AC-4: API routes, as each role and signed out', () => {
         'POST /api/v1/process-items',
         'PATCH /api/v1/process-items/[id]',
         'DELETE /api/v1/process-items/[id]',
+        'POST /api/v1/process-items/[id]/propagation',
       ];
       for (const route of routes) {
         expect(names, route).toEqual(expect.arrayContaining([`${route} as LEAD`, `${route} as ENGINEER`]));

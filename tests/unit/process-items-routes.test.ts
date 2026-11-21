@@ -18,7 +18,7 @@ vi.mock('next/navigation', async () => {
   return { redirect: shared.redirect, forbidden: shared.forbidden, notFound: shared.notFound };
 });
 vi.mock('next/server', () => ({ connection: () => Promise.resolve() }));
-vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
@@ -70,7 +70,7 @@ describe('GET /api/v1/process-items (AC-1)', () => {
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     const items = z.array(record).parse(record.parse(await response.json())['processItems']);
     expect(items).toHaveLength(15);
-    for (const item of items) expect(Object.keys(item).sort()).toEqual(['defaultValue', 'id', 'name', 'unit', 'usedBy']);
+    for (const item of items) expect(Object.keys(item).sort()).toEqual(['customersWithOwnValue', 'defaultValue', 'id', 'name', 'unit', 'usedBy']);
     expect(items.find((item) => item['id'] === CUTTING)).toMatchObject({ name: 'Cutting-Rate-per-Sec', unit: 'per second', usedBy: [{ letter: 'AL', label: 'Cutting Cost' }] });
     expect(items.find((item) => item['id'] === PLATING)).toMatchObject({ name: 'Plating-rate-per-sqin', usedBy: [] });
   });
@@ -87,6 +87,7 @@ describe('POST /api/v1/process-items (AC-2, AC-5)', () => {
       unit: 'per sq in',
       defaultValue: '1.50',
       usedBy: [],
+      customersWithOwnValue: 0,
     });
     expect(harness.auditWorld.audit.committed.slice(before).map((row) => row.event)).toEqual(['master.created']);
   });
@@ -141,6 +142,9 @@ describe('PATCH /api/v1/process-items/{id} (AC-3, AC-5)', () => {
       unit: 'per kg',
       defaultValue: '21.37',
       usedBy: [{ letter: 'AW', label: 'Foam Cost' }],
+      customersWithOwnValue: 0,
+      // The harness's customers hold the seed's placeholder default, so they follow it (the rules are tests/integration/masters/process-propagation.test.ts and process-propagation-routes.test.ts).
+      propagation: { previousDefault: '0.00', moved: expect.any(Number), differing: [] },
     });
   });
 
