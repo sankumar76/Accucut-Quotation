@@ -1,1 +1,0 @@
-- [AQP-361 checkpoints and revert](aqp361-checkpoints-revert.md) — separate checkpoint repository, test wiring list, local PG recipe, traps
