@@ -36,7 +36,7 @@ import type { Transaction, TransactionRunner } from '../repositories/transaction
 
 import type { AuditContext, AuditService } from './audit-service';
 import { createCustomerOperations, type CustomerOperations } from './customer-service';
-import { createPropagationOperations, propagateChangedDefault, type DefaultPropagation, type PropagationOperations } from './default-propagation-service';
+import { createPropagationOperations, customerRateEntries, propagateChangedDefault, type DefaultPropagation, type PropagationOperations } from './default-propagation-service';
 import { createExchangeRateOperations, type ExchangeRateOperations } from './exchange-rate-service';
 import { assertNameUsable } from './rate-name-rules';
 import { createTreatmentOperations, type TreatmentOperations } from './treatment-service';
@@ -338,8 +338,11 @@ export function createMastersService({ masters, transactions, audit, currentConf
     const after = await masters.updateProcessItem(before.id, next, tx);
     if (after === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
     await audit.record(tx, { event: 'master.edited', ...entryFor(context, after), before: auditState(before), after: auditState(after) });
-    const propagation = next.defaultValue === undefined ? null : await propagateChangedDefault({ masters, audit }, tx, context, before, after);
-    return { record: after, propagation };
+    if (next.defaultValue === undefined) return { record: after, propagation: null };
+    const saved = await propagateChangedDefault(masters, tx, context, before, after);
+    // One entry per customer that moved, after the rate's own, in this transaction (STORY-02.08 AC-9).
+    for (const entry of customerRateEntries(context, after, saved.changes)) await audit.record(tx, entry);
+    return { record: after, propagation: saved.propagation };
   }
 
   async function removeInTransaction(tx: Transaction, context: AuditContext, id: string, document: ConfigDocument): Promise<void> {

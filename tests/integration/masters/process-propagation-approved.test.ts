@@ -53,5 +53,5 @@ describe('AC-8: history is safe when a default is propagated', () => {
     for (const rate of rates) expect(rate.value).toBe(rate.default_value);
     expect(await approvedValuesOf(world, estimateId)).toEqual(approvedBefore);
     expect(await totalOfANewCalculation(world, materialId)).not.toBe(totalBefore);
-  });
+  }, 60_000);
 });

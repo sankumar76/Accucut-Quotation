@@ -53,6 +53,14 @@ async function customer(name: string, value?: string): Promise<string> {
   return id;
 }
 
+/** `count` customers at every default, made in two statements by the owner (a customer made through the service takes the table lock one by one, so 17 of them are slow), and their IDs. */
+async function bulkCustomers(count: number): Promise<ReadonlyArray<string>> {
+  const { rows } = await db.owner.query<{ id: string }>(`INSERT INTO customers (name) SELECT 'Equal ' || lpad(n::text, 3, '0') || ' Works' FROM generate_series(1, ${String(count)}) AS n RETURNING id::text`);
+  const ids = rows.map((row) => row.id);
+  await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) SELECT c.id, pi.id, pi.default_value FROM customers c CROSS JOIN process_items pi WHERE c.id = ANY($1::uuid[])', [ids]);
+  return ids;
+}
+
 async function setValue(customerId: string, value: string, itemId: string = ITEM): Promise<void> {
   await db.owner.query('UPDATE customer_rates SET value = $3::numeric WHERE customer_id = $1::uuid AND process_item_id = $2::uuid', [customerId, itemId, value]);
 }
@@ -88,7 +96,7 @@ async function entriesAfter(skip: number): Promise<ReadonlyArray<EntryRow>> {
 
 describe('AC-1, AC-2: a save that changes the default', () => {
   it('moves the customers that hold the old default, lists the ones that hold another value, and leaves those untouched', async () => {
-    const equal = await Promise.all(Array.from({ length: 17 }, (_, index) => customer(`Equal ${String(index).padStart(2, '0')} Works`)));
+    const equal = await bulkCustomers(17);
     const [marlow, orchid, ridge] = await Promise.all([customer('Marlow Agro', '1.50'), customer('Orchid Rail', '1.45'), customer('Ridgeline Pumps', '1.55')]);
     const answer = await db.mastersService.updateProcessItem(by(), ITEM, { defaultValue: NEW });
     expect(answer).toMatchObject({ id: ITEM, defaultValue: NEW });
