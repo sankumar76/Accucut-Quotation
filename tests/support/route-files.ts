@@ -74,6 +74,11 @@ export function methodsUsingWithRoute(source: string): string[] {
   return HTTP_METHODS.filter((method) => new RegExp(`export\\s+const\\s+${method}\\s*=\\s*withRoute\\s*\\(`).test(source));
 }
 
+/** The methods declared as `export const NAME = withPublicRoute(`: the wrapper of a route that needs no session (STORY-09.07). It refuses, at load, a row that is not public. */
+export function methodsUsingWithPublicRoute(source: string): string[] {
+  return HTTP_METHODS.filter((method) => new RegExp(`export\\s+const\\s+${method}\\s*=\\s*withPublicRoute\\s*\\(`).test(source));
+}
+
 function rowsFor(manifest: ReadonlyArray<RouteRow>, file: RouteFile): ReadonlyArray<RouteRow> {
   return manifest.filter((row) => row.path === file.pattern && row.kind === file.kind);
 }
@@ -110,9 +115,15 @@ function apiProblems(file: RouteFile, rows: ReadonlyArray<RouteRow>, roles: Read
 
   const exempt = Object.hasOwn(OWN_PROTECTION, file.pattern);
   if (exempt && !roles.every((role) => role === 'public')) problems.push(`${file.file}: only a public route can skip withRoute`);
+  const publicWrapped = methodsUsingWithPublicRoute(file.source);
+  const allPublic = roles.every((role) => role === 'public');
+  if (publicWrapped.length > 0 && !allPublic) problems.push(`${file.file}: only a public route can use withPublicRoute`);
   if (!exempt) {
     const guarded = methodsUsingWithRoute(file.source);
-    for (const method of exported) if (!guarded.includes(method)) problems.push(`${file.file}: ${method} is not declared with withRoute`);
+    for (const method of exported) {
+      // A public route may use the public form of the wrapper (it has no session to check); every other route must use withRoute.
+      if (!guarded.includes(method) && !(allPublic && publicWrapped.includes(method))) problems.push(`${file.file}: ${method} is not declared with withRoute`);
+    }
   }
   return problems;
 }

@@ -129,11 +129,12 @@ describe('STORY-01.06 AC-3 and AC-4: telling the page that the browser sent a se
 describe('what the proxy covers', () => {
   const pattern = new RegExp(`^${config.matcher[0] ?? ''}$`);
 
-  it.each(['/queue', '/', '/estimates/Q-2026-0001', '/design-system', '/api/v1/tasks'])('%s is checked', (path) => {
+  it.each(['/queue', '/', '/estimates/Q-2026-0001', '/design-system', '/api/v1/tasks', '/forgot-passwords', '/reset-password-now', '/account/reset-password'])('%s is checked', (path) => {
     expect(pattern.test(path)).toBe(true);
   });
 
-  it.each(['/sign-in', '/sign-in/', '/api/auth/session', '/api/auth/callback/credentials', '/_next/static/chunks/a.js', '/_next/image', '/accucut-logo.jpg'])(
+  // STORY-09.07: the two pages of the reset by e-mailed link are public (a person who forgot their password has no session); a path that only starts like them is still checked.
+  it.each(['/forgot-password', '/forgot-password/', '/reset-password', '/reset-password/', '/sign-in', '/sign-in/', '/api/auth/session', '/api/auth/callback/credentials', '/_next/static/chunks/a.js', '/_next/image', '/accucut-logo.jpg'])(
     '%s is not checked',
     (path) => {
       expect(pattern.test(path)).toBe(false);

@@ -16,6 +16,8 @@ export default defineConfig({
     exclude: ['node_modules/**'],
     globalSetup: ['./tests/support/global-setup.ts'],
     retry: 0,
+    // A timing taken while another file's work runs is not a measure: one file at a time (STORY-07.05).
+    fileParallelism: false,
     hookTimeout: 120_000,
   },
 });

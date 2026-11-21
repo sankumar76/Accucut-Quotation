@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ROUTE_MANIFEST, type RouteRow } from '@/server/http/route-manifest';
 
-import { exportedMethods, findRouteProblems, methodsUsingWithRoute, OWN_PROTECTION, patternOf, readRouteFiles, type RouteFile } from '../support/route-files';
+import { exportedMethods, findRouteProblems, methodsUsingWithPublicRoute, methodsUsingWithRoute, OWN_PROTECTION, patternOf, readRouteFiles, type RouteFile } from '../support/route-files';
 
 /**
  * STORY-01.02 AC-1 and AC-3 (ARCH-R2): every `route.ts` and `page.tsx` of the source tree has a row in the route
@@ -83,6 +83,20 @@ describe('the architecture test can fail (planted faults)', () => {
     expect(findRouteProblems(FILES, demoted).join('\n')).toContain('marked planned, but a route file exists');
   });
 
+  it('STORY-09.07: a public route may use withPublicRoute; a handler that is bare, or that uses it on a route that is not public, fails', () => {
+    const forgotFile = FILES.find((file) => file.pattern === '/api/v1/account/password/forgot');
+    if (forgotFile === undefined) throw new Error('the scan did not find the forgot route');
+    expect(findRouteProblems(FILES, ROUTE_MANIFEST)).toEqual([]);
+    const bare: RouteFile = { ...forgotFile, source: 'export async function POST() { return Response.json({ ok: true }); }' };
+    expect(findRouteProblems(FILES.map((file) => (file === forgotFile ? bare : file)), ROUTE_MANIFEST)).toEqual([
+      'src/app/api/v1/account/password/forgot/route.ts: POST is not declared with withRoute',
+    ]);
+    const closed = ROUTE_MANIFEST.map((row): RouteRow => (row.path === '/api/v1/account/password/forgot' ? { ...row, roles: ['ADMIN'] } : row));
+    const problems = findRouteProblems(FILES, closed).join('\n');
+    expect(problems).toContain('only a public route can use withPublicRoute');
+    expect(problems).toContain('POST is not declared with withRoute');
+  });
+
   it('a route that skips withRoute while not public fails, even if it is the next-auth path', () => {
     const closed = ROUTE_MANIFEST.map((row): RouteRow => (row.path === '/api/auth/[...nextauth]' ? { ...row, roles: ['ADMIN'] } : row));
     expect(findRouteProblems(FILES, closed).join('\n')).toContain('only a public route can skip withRoute');
@@ -96,7 +110,8 @@ describe('the readers of a route file', () => {
     expect(exportedMethods('export const dynamic = "force-dynamic";')).toEqual([]);
   });
 
-  it('knows which methods are declared with withRoute', () => {
+  it('knows which methods are declared with withRoute, and which with withPublicRoute', () => {
     expect(methodsUsingWithRoute('export const GET = withRoute({}); export const POST = other({});')).toEqual(['GET']);
+    expect(methodsUsingWithPublicRoute('export const GET = withRoute({}); export const POST = withPublicRoute({});')).toEqual(['POST']);
   });
 });
