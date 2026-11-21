@@ -10,7 +10,7 @@ import { normaliseEmail } from '../repositories/user-repository';
  */
 
 /** `password-change` is the key of the change form of SCR-23 (STORY-01.05 AC-6, assumption A-2): its own, so a mistyped current password cannot block sign-in. */
-export type ThrottleKind = 'account' | 'ip' | 'password-change' | 'stepup';
+export type ThrottleKind = 'account' | 'ip' | 'password-change' | 'stepup' | 'reset-request' | 'reset-address';
 
 export function throttleKey(secret: string, kind: ThrottleKind, value: string): string {
   return createHmac('sha256', secret).update(`${kind}:${value}`).digest('hex');
@@ -32,4 +32,17 @@ export function stepUpThrottleKey(secret: string, userId: string): string {
 /** The key of the change-password form for one person (by user ID, which never changes, unlike an e-mail), separate from their sign-in key. */
 export function passwordChangeThrottleKey(secret: string, userId: string): string {
   return throttleKey(secret, 'password-change', userId.toLowerCase());
+}
+
+/**
+ * The key of the requests for a reset link, by the typed e-mail (STORY-09.07 AC-4), known or not: its own kind, so a flood of requests for one person's address can never block
+ * their sign-in, step-up or change form, and a sign-in lock-out can never stop them asking for a link.
+ */
+export function resetRequestThrottleKey(secret: string, email: string): string {
+  return throttleKey(secret, 'reset-request', normaliseEmail(email));
+}
+
+/** The key of the requests for a reset link from one client address (STORY-09.07 AC-4): its own kind, apart from the sign-in address key. `null` is "no address reported", which shares one counter. */
+export function resetAddressThrottleKey(secret: string, address: string | null): string {
+  return throttleKey(secret, 'reset-address', address ?? 'unknown');
 }

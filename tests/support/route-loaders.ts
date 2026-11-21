@@ -7,6 +7,15 @@
 
 export type Loader = () => Promise<unknown>;
 
+/**
+ * The public API routes that change state and are declared with `withPublicRoute` (STORY-09.07). They are in no role's list, so the role matrix never calls them; `csrf.test.ts` loads each of these
+ * to hold it to the same origin check as every other state-changing route, and fails for a public state-changing route that is neither here nor in `OWN_PROTECTION`.
+ */
+export const PUBLIC_API_LOADERS: Readonly<Record<string, Loader>> = {
+  '/api/v1/account/password/forgot': () => import('@/app/api/v1/account/password/forgot/route'),
+  '/api/v1/account/password/reset': () => import('@/app/api/v1/account/password/reset/route'),
+};
+
 export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/me': () => import('@/app/api/v1/me/route'),
   '/api/v1/account/password': () => import('@/app/api/v1/account/password/route'),

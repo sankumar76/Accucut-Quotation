@@ -128,6 +128,12 @@ export interface UserRepository {
    */
   changeOwnPassword(id: string, expectedHash: string, newHash: string, tx?: Transaction): Promise<number | null>;
   /**
+   * Sets the password of a person who proved they own the mailbox by the e-mailed link (STORY-09.07 AC-6): the new hash, `must_change_password` cleared and
+   * `session_version` raised (every session ends), in one statement that matches only an **active** person. Returns false when it matched no row (the person was
+   * deactivated meanwhile, or does not exist), and the caller rolls its transaction back. Runs in the caller's transaction, the one that claimed the token.
+   */
+  setPasswordFromReset(id: string, newHash: string, tx: Transaction): Promise<boolean>;
+  /**
    * Raises the user's `session_version` by one, which ends every session they have (ADR-009), **only if it is still
    * `expectedVersion`**: compare and increment in one statement (ADR-009 amendment 1). A token whose version is already
    * out of date therefore changes nothing, and a copied old cookie cannot sign the person out again and again. Returns
@@ -326,6 +332,16 @@ export function createUserRepository(db: PrismaClient): UserRepository {
           if (isRecordNotFound(error)) return null;
           throw error;
         }
+      });
+    },
+
+    setPasswordFromReset(id, newHash, tx) {
+      return withDatabaseErrors(async () => {
+        const { count } = await clientFor(db, tx).user.updateMany({
+          where: { id, isActive: true },
+          data: { passwordHash: newHash, mustChangePassword: false, sessionVersion: { increment: 1 } },
+        });
+        return count === 1;
       });
     },
 
