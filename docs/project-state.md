@@ -28,7 +28,11 @@
 
 **#588** (10.09 load/capacity): every required check green. The one red check is the Nightly workflow's "CI feedback time" job (`scripts/check-ci-time.ts`: p95 28 m 06 s over 4 runs). It is not a required check (required: "Stages 1 to 11", strict) and it is red on every scheduled `master` Nightly since 19 Nov (44490538538, 44703275771, 44884087674) and on #584's PR runs before #584 merged; CI measurement windows are frozen under §9 item 4. Not a blocker for #588.
 
-**Merge order (strict up-to-date rule, so one at a time):** #590, #589, #588, #591, then records #494 and docs #581. #476 waits for the delivery lead.
+**Merge order (strict up-to-date rule, so one at a time):** #590, #589, #588, #591, #592 (`.gitignore` for `.playwright-mcp/`, lane 1), then records #494 and docs #581. #476 waits for the delivery lead.
+
+**BLOCKER (merges):** #590 went fully green and CLEAN at feacd096, but the squash merge failed: the GitHub MCP merge call returned 403 "Resource not accessible by personal access token", and the retry was denied by the session's permission settings. The same token also returned 403 on PR comments in lane 1, so the `gh` CLI was used for comments. No other merge route was used. **Nothing merges until the delivery lead merges #590 or restores merge access** (Jira AQP-1 comment 12568).
+
+**Lane 1 done:** `zz-race-diag.test.ts` dropped. It was a DEF-056 probe, not DEF-057, and outside DL-280; its summary is on #591. `.gitignore` PR #592 is additions only, in worktree aqp-gitignore. **Lane 2 started:** worktree aqp-adv, branch `fix/AQP-1-advisories-536-537` (Jira AQP-1 comment 12566).
 
 **Lanes restarted (at most 3; C: about 15 GB free):** 1: aqp-341, DEF-057 (#591) plus a decision on the untracked `tests/integration/masters/zz-race-diag.test.ts` (commit or drop, with the reason, never silently), then a small `.gitignore` PR for `.playwright-mcp/` (append only). 3: aqp-383, STORY-10.08 (AQP-370; 1 ahead, 1 behind `master`, no PR yet): sync, open the PR. 2: advisories #536 / #537 in a new worktree after #590 merges. QA: DEF-054 closure, DEF-056 leftovers check, test-plan check; the final regression after the hardening merges land.
 
