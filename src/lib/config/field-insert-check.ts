@@ -1,18 +1,24 @@
-import { FORM_SECTION_NUMBERS } from '../estimate/form-fields';
 import { NUMBER_RULE_MESSAGE, validateNumberInput, validateTextInput } from '../estimate/validation';
 import { MAX_EXCEL_WIDTH } from '../fields/field-schema';
 import type { ConfigDocument } from '../fields/schema';
 
+import { MAX_CHOICE_LENGTH, MAX_CHOICES, MAX_SECTION_NAME_LENGTH, MAX_SECTION_SHORT_NAME_LENGTH } from './field-insert-limits';
 import {
   AFTER_REQUIRED_MESSAGE,
+  CHOICES_DUPLICATE_MESSAGE,
+  CHOICES_REQUIRED_MESSAGE,
+  DEFAULT_NOT_A_CHOICE_MESSAGE,
   FORMAT_MESSAGE,
   FORMULA_REQUIRED_MESSAGE,
   GROUP_UNKNOWN_MESSAGE,
   HIDE_FIELD_MESSAGE,
   HIDE_PAIR_MESSAGE,
   LABEL_REQUIRED_MESSAGE,
+  SECTION_NAME_REQUIRED_MESSAGE,
   SECTION_REQUIRED_MESSAGE,
+  SHORT_NAME_REQUIRED_MESSAGE,
   STAGE_REQUIRED_MESSAGE,
+  tooManyChoicesMessage,
   VALUE_TYPE_MESSAGE,
   WATCH_FIELD_MESSAGE,
   WIDTH_MESSAGE,
@@ -24,8 +30,8 @@ import {
  * registry's own schema is the last gate after them (`parseConfigDocument`).
  */
 
-/** The value types an insert offers (decision D-2: the Engineer's form draws only these two). */
-export const INSERTABLE_DATA_TYPES = ['number', 'text'] as const;
+/** The value types an insert offers: Number, Text and, since STORY-08.08, a choice from a list (`select`). The Engineer's form draws all three (`form-fields.ts`). */
+export const INSERTABLE_DATA_TYPES = ['number', 'text', 'select'] as const;
 export type InsertableDataType = (typeof INSERTABLE_DATA_TYPES)[number];
 
 /** The smallest Excel column width (AC-2: "widths are 1 to 255"). */
@@ -34,6 +40,12 @@ export { MAX_EXCEL_WIDTH as MAX_COLUMN_WIDTH };
 
 /** The longest label, unit and hint: the registry schema's own limit. */
 export const MAX_FIELD_TEXT_LENGTH = 200;
+
+/** A section the insert adds (STORY-08.08 AC-6, A-2): its name and the short name on the Engineer form's strip. It takes the next number after the highest and is drawn as cards. */
+export interface NewSection {
+  readonly name: string;
+  readonly shortName: string;
+}
 
 /** What the Admin gives for the new input. Blank text means "none". */
 export interface NewInput {
@@ -47,6 +59,10 @@ export interface NewInput {
   readonly numFmt: string;
   /** The field this one waits for ("Only when another field has a value"), or `null` for "Always". */
   readonly watchFieldId: string | null;
+  /** For a choice input: the choices, one per line (`parseChoices`). Read only when `dataType` is `select`. Absent means none. */
+  readonly choices?: string | undefined;
+  /** "A new section": when given, the input goes in the section it describes and `sectionId` is not read. Absent or `null` means an existing section, the one `sectionId` names. */
+  readonly newSection?: NewSection | null | undefined;
 }
 
 /** What the Admin gives for a new output, or for the cost column of the pair. */
@@ -70,9 +86,22 @@ export function numberFormatsOf(document: ConfigDocument): string[] {
   return [...new Set(document.fields.map((field) => field.numFmt))];
 }
 
-/** The sections an input may go in: the ones the Engineer's form draws (decision D-2). */
+/** The sections an input may go in: every section of the registry, in order. The Engineer's form draws them all (STORY-08.08 AC-4), so the list of 08.03 (sections 1 to 8, decision D-2) no longer applies. */
 export function insertableSections(document: ConfigDocument) {
-  return document.sections.filter((section) => FORM_SECTION_NUMBERS.includes(section.number)).sort((a, b) => a.number - b.number);
+  return [...document.sections].sort((a, b) => a.number - b.number);
+}
+
+/** The number a new section takes: the next after the highest (A-2). */
+export function nextSectionNumber(document: ConfigDocument): number {
+  return document.sections.reduce((highest, section) => Math.max(highest, section.number), 0) + 1;
+}
+
+/** The choices as typed, one per line: each trimmed, a blank line dropped. The one reading of the text, for the check and for the field that is stored. */
+export function parseChoices(text: string | undefined): string[] {
+  return (text ?? '')
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
 }
 
 /** The fields an input or a line may wait on or be hidden by: inputs the Engineer fills (not a picture, which has no value to read). */
@@ -98,7 +127,39 @@ function presentationIssues(document: ConfigDocument, path: string, presentation
   return issues;
 }
 
+/** The choices of a choice input (STORY-08.08 AC-6): 1 to 50, each 1 to 100 characters and free of control characters, different from each other ignoring letter case. */
+function choiceIssues(input: NewInput): InsertIssue[] {
+  const choices = parseChoices(input.choices);
+  if (choices.length === 0) return [{ field: 'input.choices', message: CHOICES_REQUIRED_MESSAGE }];
+  if (choices.length > MAX_CHOICES) return [{ field: 'input.choices', message: tooManyChoicesMessage(MAX_CHOICES) }];
+  for (const choice of choices) {
+    const checked = validateTextInput(choice, { multiline: false, maxLength: MAX_CHOICE_LENGTH });
+    if (!checked.ok) return [{ field: 'input.choices', message: checked.message }];
+  }
+  return new Set(choices.map((choice) => choice.toLowerCase())).size === choices.length ? [] : [{ field: 'input.choices', message: CHOICES_DUPLICATE_MESSAGE }];
+}
+
+/** The section of a new input: an existing one, or a new one with a name and a short name (AC-6). */
+function sectionIssues(document: ConfigDocument, input: NewInput): InsertIssue[] {
+  const added = input.newSection ?? null;
+  if (added === null) return insertableSections(document).some((section) => section.id === input.sectionId) ? [] : [{ field: 'input.sectionId', message: SECTION_REQUIRED_MESSAGE }];
+  return [
+    ...sectionTextIssue('input.newSectionName', added.name, MAX_SECTION_NAME_LENGTH, SECTION_NAME_REQUIRED_MESSAGE),
+    ...sectionTextIssue('input.newSectionShortName', added.shortName, MAX_SECTION_SHORT_NAME_LENGTH, SHORT_NAME_REQUIRED_MESSAGE),
+  ];
+}
+
+function sectionTextIssue(field: string, text: string, longest: number, required: string): InsertIssue[] {
+  const checked = validateTextInput(text, { multiline: false, maxLength: longest });
+  if (checked.ok) return checked.value === null ? [{ field, message: required }] : [];
+  return [{ field, message: checked.message }];
+}
+
 function defaultIssue(input: NewInput): InsertIssue[] {
+  if (input.dataType === 'select') {
+    const chosen = input.defaultValue.trim();
+    return chosen === '' || parseChoices(input.choices).includes(chosen) ? [] : [{ field: 'input.defaultValue', message: DEFAULT_NOT_A_CHOICE_MESSAGE }];
+  }
   if (input.dataType === 'number') {
     const checked = validateNumberInput(input.defaultValue);
     return checked.ok ? [] : [{ field: 'input.defaultValue', message: checked.message || NUMBER_RULE_MESSAGE }];
@@ -110,8 +171,9 @@ function defaultIssue(input: NewInput): InsertIssue[] {
 export function inputIssues(document: ConfigDocument, input: NewInput): InsertIssue[] {
   const issues = [...labelIssue('input', input.label)];
   if (!INSERTABLE_DATA_TYPES.includes(input.dataType)) issues.push({ field: 'input.dataType', message: VALUE_TYPE_MESSAGE });
+  if (input.dataType === 'select') issues.push(...choiceIssues(input));
   issues.push(...defaultIssue(input));
-  if (!insertableSections(document).some((section) => section.id === input.sectionId)) issues.push({ field: 'input.sectionId', message: SECTION_REQUIRED_MESSAGE });
+  issues.push(...sectionIssues(document, input));
   issues.push(...optionalTextIssue('input', 'unit', input.unit), ...optionalTextIssue('input', 'hint', input.hint));
   issues.push(...presentationIssues(document, 'input', input));
   if (input.watchFieldId !== null && !document.fields.some((field) => field.id === input.watchFieldId && isWatchable(field))) issues.push({ field: 'input.watchFieldId', message: WATCH_FIELD_MESSAGE });

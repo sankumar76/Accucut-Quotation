@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
 import { describeDeleteAfter, describeDeleteBefore } from '../../lib/config/field-delete-audit';
-import { describeInsertAudit, NOT_IN_THE_WORKSHEET } from '../../lib/config/field-insert-audit';
+import { describeInsertAudit, describeInsertBefore } from '../../lib/config/field-insert-audit';
 import { describeRevertAfter, describeRevertBefore } from '../../lib/config/revert';
 import { MAX_REASON_LENGTH } from '../../lib/estimate/approve-price';
 import { ESTIMATE_STATUSES, type EstimateStatus } from '../../lib/estimate/state-machine';
@@ -377,6 +377,9 @@ const insertedAfterState = z.strictObject({
   fields: z.array(insertedColumn).min(1).max(2),
   moved: z.array(z.strictObject({ from: z.string().min(1).max(10), to: z.string().min(1).max(10), by: z.number().int().positive() })),
   version: z.number().int().positive(),
+  // STORY-08.08: the section an insert added and the number of choices of a choice input, `null` when none. They default to null, so an entry stored before this story still reads (the log is never rewritten).
+  section: z.strictObject({ number: z.number().int().positive(), name: z.string().min(1).max(200) }).nullable().default(null),
+  choices: z.number().int().positive().nullable().default(null),
 });
 
 /** STORY-08.04: what a delete keeps (`config.field_deleted`). Before is the column as it was; after is runs of OLD letters with the number of places they moved to the left. */
@@ -579,7 +582,7 @@ export const AUDIT_EVENTS = {
     kindLabel: 'Field insert',
     before: z.null(),
     after: insertedAfterState,
-    describe: (_before, after) => ({ before: NOT_IN_THE_WORKSHEET, after: describeInsertAudit(after) }),
+    describe: (_before, after) => ({ before: describeInsertBefore(after), after: describeInsertAudit(after) }),
   }),
 
   // ---- Wired in STORY-08.04: a field deleted from the field registry --------------------------------------------------------------

@@ -296,11 +296,15 @@ describe('AC-7 and decision D-1: what is refused, with whose words', () => {
     expect(refused({ kind: 'input', afterFieldId: after('AX'), input: input({ label: 'Bad\u0007Label' }) })[0]).toMatchObject({ field: 'input.label' });
   });
 
-  it('asks for a section when there is none, or one that the Engineer form does not draw', () => {
+  it('asks for a section when there is none, or one the registry does not have', () => {
     expect(refused({ kind: 'input', afterFieldId: after('AX'), input: input({ sectionId: '' }) })).toContainEqual({ field: 'input.sectionId', message: 'Choose a section.' });
+    expect(refused({ kind: 'input', afterFieldId: after('AX'), input: input({ sectionId: '00000000-0000-4000-8000-0000000000aa' }) })).toContainEqual({ field: 'input.sectionId', message: 'Choose a section.' });
+  });
+
+  it('takes a section above 8, which the Engineer form draws since STORY-08.08 (the limit of decision D-2 is lifted, AC-4)', () => {
     const extended: ConfigDocument = { ...seedConfig, sections: [...seedConfig.sections, { id: '00000000-0000-4000-8000-0000000000aa', number: 9, name: 'Ninth', shortName: 'Ninth', displayMode: 'cards' }] };
     const result = insertFields({ document: extended, rates: RATES, spec: { kind: 'input', afterFieldId: after('AX'), input: input({ sectionId: '00000000-0000-4000-8000-0000000000aa' }) }, newId });
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
   });
 
   it('refuses an "insert after" that is no column of the registry, for the field and for the cost column', () => {
@@ -318,9 +322,9 @@ describe('AC-7 and decision D-1: what is refused, with whose words', () => {
     expect(refused({ kind: 'input', afterFieldId: after('AX'), input: input({ numFmt: '0.000000' }) })).toContainEqual(expect.objectContaining({ field: 'input.numFmt' }));
   });
 
-  it('refuses a value type that is not Number or Text, a field to watch that is no input, and a stage or sub-heading that is none', () => {
+  it('refuses a value type that is not Number, Text or a choice, a field to watch that is no input, and a stage or sub-heading that is none', () => {
     // @ts-expect-error a client may send anything; the server checks it again (the strict body schema is the first gate, this is the second).
-    expect(refused({ kind: 'input', afterFieldId: after('AX'), input: input({ dataType: 'select' }) })).toContainEqual(expect.objectContaining({ field: 'input.dataType' }));
+    expect(refused({ kind: 'input', afterFieldId: after('AX'), input: input({ dataType: 'flag' }) })).toContainEqual(expect.objectContaining({ field: 'input.dataType' }));
     expect(refused({ kind: 'input', afterFieldId: after('AX'), input: input({ watchFieldId: after('AY') }) })).toContainEqual(expect.objectContaining({ field: 'input.watchFieldId' }));
     expect(refused({ kind: 'output', afterFieldId: after('AX'), output: output({ stageId: 'x' }) })).toContainEqual({ field: 'output.stageId', message: 'Choose a stage.' });
     expect(refused({ kind: 'output', afterFieldId: after('AX'), output: output({ group: 'No such heading' }) })).toContainEqual(expect.objectContaining({ field: 'output.group' }));

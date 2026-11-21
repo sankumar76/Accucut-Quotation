@@ -27,7 +27,23 @@ export const HIDE_FIELD_MESSAGE = 'Choose an input that holds a number.';
 /** A pair whose new input is Text cannot hide its cost line when the input is 0. */
 export const HIDE_PAIR_MESSAGE = 'Hide the line only for a Number input.';
 
-export const VALUE_TYPE_MESSAGE = 'Choose Number or Text.';
+export const VALUE_TYPE_MESSAGE = 'Choose Number, Text or Choice from a list.';
+
+/**
+ * A choice input and a new section (STORY-08.08 AC-6). The three sentences the story names are `CHOICES_REQUIRED_MESSAGE`, `CHOICES_DUPLICATE_MESSAGE` and `SECTION_NAME_REQUIRED_MESSAGE`; the others
+ * say the same kind of thing for the limits and are proposed with them (open question OQ-1: the ux-expert rules on every word at the end review).
+ */
+export const CHOICES_REQUIRED_MESSAGE = 'Enter at least one choice.';
+export const CHOICES_DUPLICATE_MESSAGE = 'Each choice must be different.';
+export const SECTION_NAME_REQUIRED_MESSAGE = 'Enter a section name.';
+export const SHORT_NAME_REQUIRED_MESSAGE = 'Enter a short name for the section strip.';
+
+export function tooManyChoicesMessage(most: number): string {
+  return `Enter at most ${String(most)} choices.`;
+}
+
+/** A default for a choice input must be one of its choices, so the form never opens on a value the list does not hold. */
+export const DEFAULT_NOT_A_CHOICE_MESSAGE = 'The default must be one of the choices.';
 
 export const FORMAT_MESSAGE = 'Choose one of the number formats the worksheet uses.';
 
@@ -45,6 +61,11 @@ export function insertVersionChangedMessage(currentVersion: number): string {
 function joinWithAnd(items: ReadonlyArray<string>): string {
   if (items.length <= 1) return items.join('');
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1] ?? ''}`;
+}
+
+/** `Section 09 Welding`: how a section is named in a sentence (its number as the form prints it, two digits). */
+export function sectionWords(number: number, name: string): string {
+  return `section ${String(number).padStart(2, '0')} ${name}`;
 }
 
 /** `Inserted as AY. Configuration version 10.` and, for the pair, `Inserted as AY and AZ. Configuration version 10.` */
