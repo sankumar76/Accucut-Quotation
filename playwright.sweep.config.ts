@@ -1,8 +1,11 @@
+// First: the sweep's helpers address the portal over HTTPS (see the file), and `servers.ts` reads that when it is first loaded.
+import './tests/e2e-sweep/support/https-origin';
+
 import { existsSync } from 'node:fs';
 
 import { defineConfig, type PlaywrightTestProject } from '@playwright/test';
 
-import { DEV_PORT, E2E_AUTH_SECRET } from './tests/e2e/support/servers';
+import { DEV_PORT, DEVELOPMENT_URL, E2E_AUTH_SECRET } from './tests/e2e/support/servers';
 
 /**
  * The sweep, the keyboard-only flows and the browser matrix (STORY-10.08, AQP-370; NFR-016, NFR-018, NFR-019; test strategy sections 4, 9 and 10.9).
@@ -18,8 +21,10 @@ import { DEV_PORT, E2E_AUTH_SECRET } from './tests/e2e/support/servers';
  *   - `chromium-sizes`: the no-sideways-scroll check at the other sizes of NFR-016 (`sizes.spec.ts`).
  *   - `firefox-360`, `firefox-1366`, `webkit-360`, `webkit-1366`: the journeys, in the two other engines (NFR-019).
  *
- * One server: the PRODUCTION build (`next start`), on the port the helpers of tests/e2e/support already name as the portal's own origin (`DEV_PORT`), so their `Origin` header is right
- * with no change. The database is the job's own and `DATABASE_URL` comes from the environment, as in `playwright.config.ts`. One retry, reported; no other retry (AC-8).
+ * One portal: the PRODUCTION build (`next start`) on an internal port, behind a TLS front on the port the helpers of tests/e2e/support already name as the portal's own origin (`DEV_PORT`), so the
+ * browsers use `https://localhost:<DEV_PORT>`. The production build sets its session cookie Secure, and WebKit on Linux does not keep a Secure cookie that comes over plain http, so over http no
+ * WebKit journey could sign in (run 44931496595); real Safari is always on HTTPS. The front passes every request through unchanged (`scripts/lib/tls-front.ts`), the portal's `APP_ORIGIN` is the
+ * https address, and every engine uses it. The database is the job's own and `DATABASE_URL` comes from the environment, as in `playwright.config.ts`. One retry, reported; no other retry (AC-8).
  */
 
 if (existsSync('.env')) process.loadEnvFile('.env');
@@ -27,6 +32,10 @@ if (existsSync('.env')) process.loadEnvFile('.env');
 const IN_CI = Boolean(process.env['CI']);
 const CI_WORKERS = 4;
 const LOCAL_WORKERS = 2;
+
+/** The port `next start` listens on behind the TLS front. */
+const UPSTREAM_PORT = Number(process.env['E2E_SWEEP_UPSTREAM_PORT'] ?? DEV_PORT + 98);
+if (!Number.isInteger(UPSTREAM_PORT) || UPSTREAM_PORT === DEV_PORT) throw new Error('E2E_SWEEP_UPSTREAM_PORT must be a port number other than the one the portal itself uses.');
 
 const DATABASE_URL = process.env['DATABASE_URL'] ?? 'postgresql://accucut_app:invented-e2e-password@localhost:55432/accucut';
 
@@ -87,25 +96,38 @@ export default defineConfig({
   outputDir: 'test-results/sweep',
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report/sweep' }], ['json', { outputFile: 'test-results/sweep-results.json' }]],
   use: {
-    baseURL: `http://localhost:${DEV_PORT}`,
+    baseURL: DEVELOPMENT_URL,
+    // The TLS front's certificate is self-signed and made for the run.
+    ignoreHTTPSErrors: true,
     trace: 'on-first-retry',
   },
   projects: SWEEP_PROJECTS.map(toPlaywrightProject),
-  webServer: {
-    // CI builds before this step (the job's build step); a developer's run builds first, so it never tests a stale build.
-    command: IN_CI ? `npx next start --port ${DEV_PORT}` : `npx next build && npx tsx scripts/build-export-worker.ts && npx next start --port ${DEV_PORT}`,
-    url: `http://localhost:${DEV_PORT}/sign-in`,
-    reuseExistingServer: !IN_CI,
-    timeout: 300_000,
-    env: {
-      DATABASE_URL,
-      AUTH_SECRET: E2E_AUTH_SECRET,
-      APP_ORIGIN: `http://localhost:${DEV_PORT}`,
-      SMTP_HOST: 'localhost',
-      SMTP_PORT: '1025',
-      SMTP_AUTH_MODE: 'none',
-      // The longer keep-alive of the other E2E servers (AQP-340): a `page.request` call is never reset on a connection the server is closing.
-      NODE_OPTIONS: [process.env['NODE_OPTIONS'], '--require ./tests/e2e/support/server-keep-alive.cjs'].filter((option) => option !== undefined && option !== '').join(' '),
+  webServer: [
+    {
+      // CI builds before this step (the job's build step); a developer's run builds first, so it never tests a stale build.
+      command: IN_CI ? `npx next start --port ${UPSTREAM_PORT}` : `npx next build && npx tsx scripts/build-export-worker.ts && npx next start --port ${UPSTREAM_PORT}`,
+      url: `http://localhost:${UPSTREAM_PORT}/sign-in`,
+      reuseExistingServer: !IN_CI,
+      timeout: 300_000,
+      env: {
+        DATABASE_URL,
+        AUTH_SECRET: E2E_AUTH_SECRET,
+        APP_ORIGIN: DEVELOPMENT_URL,
+        SMTP_HOST: 'localhost',
+        SMTP_PORT: '1025',
+        SMTP_AUTH_MODE: 'none',
+        // The longer keep-alive of the other E2E servers (AQP-340): a `page.request` call is never reset on a connection the server is closing.
+        NODE_OPTIONS: [process.env['NODE_OPTIONS'], '--require ./tests/e2e/support/server-keep-alive.cjs'].filter((option) => option !== undefined && option !== '').join(' '),
+      },
     },
-  },
+    {
+      // The TLS front: the browsers' address, passing to the server above. Ready when the portal answers through it.
+      command: 'npx tsx scripts/sweep-tls-front.ts',
+      url: `${DEVELOPMENT_URL}/sign-in`,
+      ignoreHTTPSErrors: true,
+      reuseExistingServer: !IN_CI,
+      timeout: 60_000,
+      env: { SWEEP_TLS_PORT: String(DEV_PORT), SWEEP_UPSTREAM_PORT: String(UPSTREAM_PORT) },
+    },
+  ],
 });

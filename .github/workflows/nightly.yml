@@ -60,6 +60,8 @@ on:
       - playwright.sweep.config.ts
       - scripts/summarise-sweep.ts
       - scripts/lib/sweep-summary.ts
+      - scripts/sweep-tls-front.ts
+      - scripts/lib/tls-front.ts
       - tests/e2e-sweep/browsers.spec.ts
       - tests/e2e-sweep/keyboard-flows.spec.ts
       - tests/e2e-sweep/no-access.spec.ts
@@ -67,6 +69,7 @@ on:
       - tests/e2e-sweep/screens.spec.ts
       - tests/e2e-sweep/sizes.spec.ts
       - tests/e2e-sweep/support/keyboard.ts
+      - tests/e2e-sweep/support/https-origin.ts
       - tests/e2e-sweep/support/sweep.ts
       - tests/e2e-sweep/sweep.setup.ts
 

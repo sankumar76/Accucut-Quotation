@@ -28,14 +28,19 @@ test.beforeEach(async ({ context }) => {
   await useFreshAddress(context);
 });
 
-/** Every field a person types into, in the order of the form (`estimate-form-sections.spec.ts` holds the same list). */
-const FORM_ORDER = ['B', 'D', 'G', 'H', 'E', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'V', 'W', 'X', 'Y', 'AP', 'AU', 'BM', 'AJ'] as const;
+/**
+ * Every field a person types into, in the order of the form (`estimate-form-sections.spec.ts` holds the same list), plus the box for the words of "Other" that Treatment / Color (G) shows once
+ * "Other" is chosen. The part of this flow holds "Other" (`completePartInputsFor`), and Enter goes through the box before it reaches H; `estimate-form-sections.spec.ts` opens a blank part, which has no box.
+ */
+const FORM_ORDER = ['B', 'D', 'G', 'G-other', 'H', 'E', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'V', 'W', 'X', 'Y', 'AP', 'AU', 'BM', 'AJ'] as const;
 const FILE_NAME = /^Quotation_[A-Za-z0-9_-]+_Q-\d{4}-\d{4,}_\d{4}-\d{2}-\d{2}\.xlsx$/;
 const REFLOW_WIDTH = 320;
 const REFLOW_HEIGHT = 640;
 const NARROW_MAX = 360;
 const FLOW_TIMEOUT = 150_000;
 
+/** A field of FORM_ORDER: its control, or for `G-other` the box of the words of "Other" (the form's only control whose ID ends in `-other`). */
+const fieldOf = (page: Page, key: (typeof FORM_ORDER)[number]): Locator => (key === 'G-other' ? partForm(page).locator('[id^="part-field-"][id$="-other"]') : control(page, key));
 const calculateButton = (page: Page): Locator => page.locator('#calculate-button');
 const bar = (page: Page): Locator => page.locator('[data-calculate-bar]');
 const isCalculate = (response: Response): boolean => response.request().method() === 'POST' && /\/api\/v1\/estimates\/[^/]+\/calculate$/.test(new URL(response.url()).pathname);
@@ -49,7 +54,7 @@ async function waitForBarOffset(page: Page): Promise<void> {
 async function enterThrough(page: Page, from: (typeof FORM_ORDER)[number]): Promise<void> {
   for (const next of FORM_ORDER.slice(FORM_ORDER.indexOf(from) + 1)) {
     await page.keyboard.press('Enter');
-    await expect(control(page, next), `Enter should reach ${next}`).toBeFocused();
+    await expect(fieldOf(page, next), `Enter should reach ${next}`).toBeFocused();
     await expectFocusVisible(page, `on field ${next}`);
     await expectClearOfBar(page, bar(page), `on field ${next} at ${page.viewportSize()?.width ?? 0} px`);
   }

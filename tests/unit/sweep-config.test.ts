@@ -137,3 +137,33 @@ describe('AC-8: no sleeps, no blanket skip, no second retry', () => {
     expect(flows).toContain('page.keyboard.press');
   });
 });
+
+describe('AC-6: the portal is served over HTTPS, so WebKit keeps the Secure session cookie', () => {
+  const config = read('playwright.sweep.config.ts');
+
+  it('sets the https scheme before any helper is loaded: the side-effect import is the first import, and the helper that reads it is imported after', () => {
+    const imports = [...config.matchAll(/^import .*$/gm)].map((match) => match[0]);
+    expect(imports[0]).toBe("import './tests/e2e-sweep/support/https-origin';");
+    expect(imports.findIndex((line) => line.includes('tests/e2e/support/servers'))).toBeGreaterThan(0);
+    expect(read('tests/e2e-sweep/support/https-origin.ts')).toContain("process.env['E2E_DEV_SCHEME'] = 'https'");
+  });
+
+  it('keeps the required check on plain http: its configuration never imports the https file, and the scheme is https only when the variable says so', () => {
+    expect(read('playwright.config.ts')).not.toContain('https-origin');
+    expect(read('tests/e2e/support/servers.ts')).toContain("process.env['E2E_DEV_SCHEME'] === 'https' ? 'https' : 'http'");
+  });
+
+  it('runs `next start` on an internal port with the https origin as APP_ORIGIN, and the TLS front on the portal\'s own port, and tells the browsers to accept its certificate', () => {
+    const servers = Array.isArray(sweepConfig.webServer) ? sweepConfig.webServer : [];
+    expect(servers).toHaveLength(2);
+    const [portal, front] = servers;
+    expect(portal?.command).toContain(`npx next start --port ${new URL(portal?.url ?? 'http://x').port}`);
+    expect(portal?.env?.['APP_ORIGIN']).toMatch(/^https:\/\/localhost:\d+$/);
+    expect(new URL(portal?.url ?? 'http://x').port).not.toBe(new URL(portal?.env?.['APP_ORIGIN'] ?? 'https://x').port);
+    expect(front?.command).toBe('npx tsx scripts/sweep-tls-front.ts');
+    expect(front?.url).toBe(`${portal?.env?.['APP_ORIGIN']}/sign-in`);
+    expect(front?.ignoreHTTPSErrors).toBe(true);
+    expect(sweepConfig.use?.baseURL).toBe(portal?.env?.['APP_ORIGIN']);
+    expect(sweepConfig.use?.ignoreHTTPSErrors).toBe(true);
+  });
+});

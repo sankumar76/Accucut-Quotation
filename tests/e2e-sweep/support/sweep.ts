@@ -78,9 +78,17 @@ export function titleOf(row: Pick<SweepRow, 'screen' | 'route' | 'variant'>, rol
 /**
  * Waits until the page has finished loading what it shows: the document is complete and nothing on it is a skeleton or marked busy. A list page loads its rows after the first paint, and
  * a scan of the skeleton would say nothing about the page. No sleep: it waits for a state.
+ *
+ * Only a skeleton that is drawn counts: the figure tiles of SCR-06 hold a skeleton that is `display: none` until a recalculation is under way (`figure-tiles.tsx`), so on a settled review the element
+ * is in the document and not on the screen. A box with no client rectangles is not drawn.
  */
 export async function waitUntilSettled(page: Page): Promise<void> {
-  await page.waitForFunction(() => document.readyState === 'complete' && document.querySelector('[data-slot="skeleton"], [aria-busy="true"]') === null);
+  await page.waitForFunction(
+    () =>
+      document.readyState === 'complete' &&
+      document.querySelector('[aria-busy="true"]') === null &&
+      [...document.querySelectorAll('[data-slot="skeleton"]')].every((skeleton) => skeleton.getClientRects().length === 0),
+  );
 }
 
 export function locatorOf(page: Page, action: PrimaryAction): Locator {

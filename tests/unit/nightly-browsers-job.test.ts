@@ -157,8 +157,8 @@ describe('AC-1, AC-6, AC-7: it runs the sweep configuration on the production bu
 describe('AC-7: a pull request that changes the job, the configuration or a file of the sweep runs it', () => {
   const paths = pullRequestPaths();
 
-  it('lists the configuration, the summary script and its module, and every file of the sweep folder; these files exist', () => {
-    for (const path of ['playwright.sweep.config.ts', 'scripts/summarise-sweep.ts', 'scripts/lib/sweep-summary.ts', ...sourcesOf('tests/e2e-sweep')]) {
+  it('lists the configuration, the summary script and its module, the TLS front and its module, and every file of the sweep folder; these files exist', () => {
+    for (const path of ['playwright.sweep.config.ts', 'scripts/summarise-sweep.ts', 'scripts/lib/sweep-summary.ts', 'scripts/sweep-tls-front.ts', 'scripts/lib/tls-front.ts', ...sourcesOf('tests/e2e-sweep')]) {
       expect(paths, `${path} is not in the pull-request paths of the nightly workflow`).toContain(path);
       expect(existsSync(`${ROOT}${path}`), path).toBe(true);
     }
