@@ -104,6 +104,18 @@ describe('AC-10: the set-up demands the expected status and says nothing of the 
     expect((failure as Error).message).toBe('adding a customer answered HTTP 422, expected 201');
   });
 
+  it('adds the code of the refusal when the answer is a problem with one, and never any other field of it', async () => {
+    stubFetch(() => new Response('{"code":"PICTURE_TYPE","title":"secret-title","errors":[{"message":"secret-field"}]}', { status: 415 }));
+    const failure = await mustCall(session(), 'adding picture 3', 'PUT', '/api/v1/x', 200).catch((error: unknown) => error);
+    expect((failure as Error).message).toBe('adding picture 3 answered HTTP 415 (PICTURE_TYPE), expected 200');
+  });
+
+  it('ignores a code that is not an upper-case identifier', async () => {
+    stubFetch(() => new Response('{"code":"a value with spaces 12345"}', { status: 500 }));
+    const failure = await mustCall(session(), 'x', 'GET', '/api/v1/x', 200).catch((error: unknown) => error);
+    expect((failure as Error).message).toBe('x answered HTTP 500, expected 200');
+  });
+
   it('reads a body that is not JSON as undefined', async () => {
     stubFetch(() => new Response('<html>'));
     expect(jsonOf(await call(session(), 'GET', '/x'))).toBeUndefined();

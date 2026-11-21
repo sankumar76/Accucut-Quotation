@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { checkPicture, MAX_PICTURE_BYTES } from '../../src/lib/images/picture-rules';
 import { buildTree500 } from '../support/builders/tree500';
 import {
   CHANGED_RATES_PER_CUSTOMER,
   CUSTOMER_CHANGE_EVERY,
+  acceptedPicture,
   addCallsFor,
   customerName,
   deadlineText,
@@ -95,6 +97,28 @@ describe('AC-1: the part save writes a value that changes every round', () => {
 describe('AC-3: the values of a complete part travel as texts', () => {
   it('keeps a text as it is and writes a treatment as its JSON text, id first (the wire form of the portal)', () => {
     expect(wireValues({ a: '12.50', b: { id: 'x', text: 'Invented text' } })).toEqual({ a: '12.50', b: '{"id":"x","text":"Invented text"}' });
+  });
+});
+
+describe('AC-4: the pictures of the export are accepted by the content check of the portal, every one', () => {
+  it('is a PNG of 199 KB that checkPicture accepts for 300 indexes, and holds no `<`, so no page or script marker can be in it', () => {
+    for (let index = 0; index < 300; index += 1) {
+      const bytes = acceptedPicture(index);
+      expect(bytes.length, `picture ${index}`).toBe(199 * 1024);
+      expect(bytes.length).toBeLessThan(MAX_PICTURE_BYTES);
+      expect(bytes.includes(0x3c), `picture ${index}`).toBe(false);
+      expect(checkPicture('part.png', bytes), `picture ${index}`).toEqual({ ok: true, mime: 'image/png' });
+    }
+  });
+
+  it('is refused by the check when a `<svg` is left in the filler, so the guard is what the test says it is', () => {
+    const bytes = acceptedPicture(1);
+    bytes.set([0x3c, 0x73, 0x76, 0x67], 1_000);
+    expect(checkPicture('part.png', bytes)).toMatchObject({ ok: false, status: 415 });
+  });
+
+  it('is not the same twice: the filler is random', () => {
+    expect(acceptedPicture(1)).not.toEqual(acceptedPicture(1));
   });
 });
 

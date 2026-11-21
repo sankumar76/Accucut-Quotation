@@ -95,10 +95,19 @@ export function jsonOf(reply: Reply): unknown {
   }
 }
 
-/** A status that is not the one expected, as a message that names the call and the status and holds no body (a body may carry a value). */
+const PROBLEM_CODE = /^[A-Z][A-Z0-9_]{2,59}$/;
+
+/** The `code` of a problem answer (for example `VALIDATION_FAILED`): a fixed identifier of the refusal, never a value. Undefined for any other body. */
+export function problemCodeOf(reply: Reply): string | undefined {
+  const body = jsonOf(reply);
+  if (typeof body !== 'object' || body === null || !('code' in body) || typeof body.code !== 'string') return undefined;
+  return PROBLEM_CODE.test(body.code) ? body.code : undefined;
+}
+
+/** A status that is not the one expected, as a message that names the call, the status and the refusal's code, and holds no body (a body may carry a value). */
 export class UnexpectedReply extends Error {
-  constructor(what: string, status: number, expected: number) {
-    super(`${what} answered HTTP ${status}, expected ${expected}`);
+  constructor(what: string, status: number, expected: number, code?: string) {
+    super(`${what} answered HTTP ${status}${code === undefined ? '' : ` (${code})`}, expected ${expected}`);
     this.name = 'UnexpectedReply';
   }
 }
@@ -106,6 +115,6 @@ export class UnexpectedReply extends Error {
 /** Calls and demands the expected status. Used by the set-up, where a wrong answer means the data is not what the run needs. */
 export async function mustCall(session: Session, what: string, method: string, path: string, expected: number, options: CallOptions = {}): Promise<Reply> {
   const reply = await call(session, method, path, options);
-  if (reply.status !== expected) throw new UnexpectedReply(what, reply.status, expected);
+  if (reply.status !== expected) throw new UnexpectedReply(what, reply.status, expected, problemCodeOf(reply));
   return reply;
 }

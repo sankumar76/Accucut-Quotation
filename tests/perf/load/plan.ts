@@ -1,4 +1,5 @@
 import { encodeTreatment, type TreatmentChoice } from '../../../src/lib/estimate/treatment-value';
+import { incompressiblePicture } from '../../support/builders/export-pictures';
 
 /**
  * The pure parts of the load script's set-up (STORY-10.09 AC-3, AC-10; test strategy 8.1): the invented names, the order in which the parts of an estimate are added through the API, the values
@@ -60,6 +61,19 @@ export function wireValues(inputs: Readonly<Record<string, string | TreatmentCho
 /** The quantity a part's save writes in a round: it changes every round (an equal value changes nothing and raises no revision), and stays a whole number from 1 to 24. */
 export function quantityFor(user: number, round: number): string {
   return String(1 + ((user + round) % 24));
+}
+
+const LESS_THAN = 0x3c;
+const EQUALS = 0x3d;
+
+/**
+ * An incompressible picture of 199 KB that the portal's content check accepts every time. The check refuses a file that holds the opening of a page, a script or an SVG anywhere in it (`<script`, `<svg`,
+ * `<html`...), and random filler can hold one by chance (about 1 picture in 2,500). Every `<` is written as `=`, which keeps the filler random and the length and the first and last bytes as they were.
+ */
+export function acceptedPicture(index: number): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(incompressiblePicture(index));
+  for (let at = 0; at < bytes.length; at += 1) if (bytes[at] === LESS_THAN) bytes[at] = EQUALS;
+  return bytes;
 }
 
 /** Runs `work` over the items with at most `limit` at once, in order of start, and fails with the first error. */

@@ -1,12 +1,11 @@
 import { z } from 'zod';
 
 import { buildTree500 } from '../../support/builders/tree500';
-import { incompressiblePicture } from '../../support/builders/export-pictures';
 import { completePartInputs } from '../../support/complete-part';
 
 import { call, jsonOf, mustCall, openSession, type Reply, type Session } from './client';
 import type { LoadConfig } from './config';
-import { FOLDER_PATH, addCallsFor, deadlineText, engineerEmail, mapLimit, runMark, taskTitle, wireValues } from './plan';
+import { FOLDER_PATH, acceptedPicture, addCallsFor, deadlineText, engineerEmail, mapLimit, runMark, taskTitle, wireValues } from './plan';
 import type { MasterData } from './seed-masters';
 
 /**
@@ -117,8 +116,8 @@ async function completeParts(admin: Session, estimateId: string, parts: Readonly
 async function addPictures(admin: Session, estimateId: string, parts: ReadonlyArray<PartRef>, count: number): Promise<void> {
   await mapLimit(parts.slice(0, count), INPUT_CONCURRENCY, async (part, index) => {
     const form = new FormData();
-    form.set('file', new Blob([new Uint8Array(incompressiblePicture(index))], { type: 'image/png' }), `part-${index + 1}.png`);
-    await mustCall(admin, 'adding a picture', 'PUT', `/api/v1/estimates/${estimateId}/nodes/${part.id}/image`, OK, { form });
+    form.set('file', new Blob([acceptedPicture(index)], { type: 'image/png' }), `part-${index + 1}.png`);
+    await mustCall(admin, `adding picture ${index + 1}`, 'PUT', `/api/v1/estimates/${estimateId}/nodes/${part.id}/image`, OK, { form });
   });
 }
 
