@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** until close (re-typed to Test on master's DL-283, 2026-11-21; the Sev-2 trigger of DL-278 lapsed because the lock is shown to serialise the check) |
 | Priority | P3 |
 | Type | **Test** (DL-283: the test's assumption that every spelling is valid alone was wrong; no product defect). Was logged as Product, provisional |
-| Status | **Open, fix in review**: PR #587 (tests only, head `3d56061d`; CI pending when re-typed). Close-out (DL-283): #587's run of record plus the first `master` push after the merge with `process-items.test.ts` green |
+| Status | **Closed 2026-11-21 (qa-engineer), type Test, on master's DL-283.** Fixed by PR #587 (squash `dcf8a192`, tests only; run of record on head `ae320fbd` all green). First `master` push after the merge, run 44922163960 on `dcf8a192` (green): `process-items.test.ts` green (28 tests, 1,256 ms). Jira AQP-386 Done, GitHub #582 closed |
 | Jira / GitHub | [AQP-386](https://sankumar76.atlassian.net/browse/AQP-386) / [#582](https://github.com/sankumar76/Accucut-Quotation/issues/582). Jira "relates to" AQP-113 and AQP-365 |
 | Found by / date | CI, 2026-11-21; logged by qa-engineer on master's DL-278 |
 | Build / commit | PR #580 head `02d13ec1` (tests only: nothing under `src/`), so the code under test is `master` `7e42970c` plus nothing |
