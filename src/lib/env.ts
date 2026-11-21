@@ -121,7 +121,7 @@ export const EXPORT_TIMEOUT_MAX_SECONDS = 300;
 export const EXPORT_TIMEOUT_DEFAULT_SECONDS = 240;
 
 /**
- * The export's time limit in seconds (ADR-017 decision 1, #575). Unlike the pool sizes it depends on the host, and the reading that sets it may come after the freeze, so it is one line in `.env`.
+ * The export's time limit in seconds (ADR-017 decision 1, GitHub issue 575). Unlike the pool sizes it depends on the host, and the reading that sets it may come after the freeze, so it is one line in `.env`.
  * It is not a secret and is not in `ENV_VARIABLE_NAMES` (like `FEATURE_EMAIL`). Absent or empty gives 240; a value outside 120 to 300, or one that is not a whole number, stops the start.
  */
 export const exportEnvSchema = z.object({

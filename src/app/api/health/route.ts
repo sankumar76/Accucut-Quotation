@@ -14,7 +14,7 @@ import { NO_STORE } from '@/server/http/problem';
  * stranger nothing. One read does both checks: the newest `heartbeat` row's `finished_at` (one index descent), which fails when the database is down.
  *
  * It also says, in `X-Client-Address-Seen`, the address the portal worked out for the caller by the rule of the sign-in limit (`clientAddressFrom`: the last entry of
- * `X-Forwarded-For`, a well-formed address with no port), or `none`. That lets the install see that the reverse proxy writes the real address (check C5 of the install guide, #576). It is
+ * `X-Forwarded-For`, a well-formed address with no port), or `none`. That lets the install see that the reverse proxy writes the real address (check C5 of the install guide, GitHub issue 576). It is
  * the caller's own address, on a 503 as well as a 200, so it tells a stranger nothing.
  */
 const CLIENT_ADDRESS_HEADER = 'X-Client-Address-Seen';

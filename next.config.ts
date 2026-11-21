@@ -15,7 +15,7 @@ const RESET_PAGE_HEADERS = [
 ];
 
 /**
- * The most bytes of a request body Next.js hands to a route (#410, PRF-F-06; ADR-017 decision 3). With a proxy configured Next.js reads up to 10 MB of every request into memory before a route's
+ * The most bytes of a request body Next.js hands to a route (GitHub issue 410, PRF-F-06; ADR-017 decision 3). With a proxy configured Next.js reads up to 10 MB of every request into memory before a route's
  * own checks run. 768 KB is twice the largest JSON body the schemas accept (a save of 64 part values of 2,000 characters of 3 bytes: about 387 KB), above twice the picture upload ceiling
  * (256 KB, which also has its own cap while it reads) and inside the reverse proxy's 1 MB (deploy/windows/README.md, P5), so the app normally decides first.
  * tests/unit/request-body-cap.test.ts sizes it from the real schemas. A body over the cap reaches the route cut off, and the route answers 400 for it.
