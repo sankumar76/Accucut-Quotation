@@ -27,7 +27,7 @@ export type CheckpointNameCheck = { readonly ok: true; readonly name: string } |
 /** Reads a typed name: the name to store, or the words to show under the field. */
 export function checkCheckpointName(typed: string): CheckpointNameCheck {
   const name = canonicalCheckpointName(typed);
-  const checked = validateTextInput(name, { maxLength: CHECKPOINT_NAME_MAX_LENGTH, countCodePoints: true });
+  const checked = validateTextInput(name, { maxLength: CHECKPOINT_NAME_MAX_LENGTH, multiline: false, countCodePoints: true });
   if (!checked.ok) return { ok: false, message: checked.message === TEXT_CHARACTERS_MESSAGE ? TEXT_CHARACTERS_MESSAGE : CHECKPOINT_NAME_TOO_LONG_MESSAGE };
   return checked.value === null ? { ok: false, message: CHECKPOINT_NAME_REQUIRED_MESSAGE } : { ok: true, name: checked.value };
 }

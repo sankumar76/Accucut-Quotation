@@ -2,8 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { StepUpFailed } from '@/lib/errors';
 import { systemClock } from '@/lib/time';
+import { createConfigCheckpointRepository } from '@/server/repositories/config-checkpoint-repository';
 import { createConfigRepository } from '@/server/repositories/config-repository';
 import type { AuditService } from '@/server/services/audit-service';
+import { createConfigCheckpointService, type ConfigCheckpointService } from '@/server/services/config-checkpoint-service';
 import { createConfigEditService, type ConfigEditCaller, type ConfigEditService } from '@/server/services/config-edit-service';
 import { createConfigStructureService, type ConfigStructureService } from '@/server/services/config-structure-service';
 import { createConfigVersionCache } from '@/server/services/config-service';
@@ -20,7 +22,7 @@ import { seedConfig, seedFieldAt } from '../../support/seed-config';
  * STORY-08.05 AC-1 and AC-2 (FR-077, NFR-026) against real PostgreSQL in a throwaway database, as the runtime role, with the real step-up service.
  *
  * AC-1: **every method that changes the configuration is one row of one table**, and the table asserts, for each, that a successful call stores **exactly one** new version and that a refusal, a no-op and a
- * failure part-way store **none**. The methods today are `saveFormula`, `insertFields` and `deleteField`; STORY-08.06 adds its own rows (`tests/unit/config/version-writer-architecture.test.ts` fails until it does).
+ * failure part-way store **none**. The methods today are `saveFormula`, `insertFields`, `deleteField` and `revert` (STORY-08.06; `saveCheckpoint` names a version and stores none, so its rows are `no-op` and `refused`). `tests/unit/config/version-writer-architecture.test.ts` fails for a writer that is not in its table.
  * AC-2: the numbers run 1, 2, 3 with no gap and no duplicate over 20 versions stored one after another; of two writers that began from the same base exactly one is stored and the other gets `null`; and a row made by
  * `insertVersionAfter` (not the seed's) cannot be updated, deleted or truncated, by the runtime role (no grant) or by the owner (trigger). Every name and password is invented.
  */
@@ -30,6 +32,8 @@ let edit: ConfigEditService;
 let structure: ConfigStructureService;
 let failingEdit: ConfigEditService;
 let failingStructure: ConfigStructureService;
+let checkpoints: ConfigCheckpointService;
+let failingCheckpoints: ConfigCheckpointService;
 let admin: ConfigEditCaller;
 
 const RIGHT = 'Tn4#vLm8@Qz-right';
@@ -45,22 +49,35 @@ async function versionNumbers(): Promise<number[]> {
   return rows.map((row) => row.number);
 }
 const latestNumber = async (): Promise<number> => defined((await versionNumbers()).at(-1));
+async function versionIdOf(number: number): Promise<string> {
+  const { rows } = await db.owner.query<{ id: string }>('SELECT id::text AS id FROM config_versions WHERE number = $1', [number]);
+  return defined(rows[0]).id;
+}
 
 /** The audit service as it is, except that writing an entry fails: the version it was made with must go back with it. */
 const failingAudit = (): AuditService => ({ ...db.audit, record: () => Promise.reject(new Error('Invented audit failure.')) });
 
-function services(audit: AuditService): { edit: ConfigEditService; structure: ConfigStructureService } {
+function services(audit: AuditService): { edit: ConfigEditService; structure: ConfigStructureService; checkpoints: ConfigCheckpointService } {
   const stepUp = createStepUpService({ users: db.users, throttles: db.throttles, hasher: createTestHasher(), clock: systemClock, keySecret: KEY_SECRET });
   return {
     edit: createConfigEditService({ configurations: configurations(), masters: db.masterRepository, calculations: db.calculations, stepUp, transactions: db.transactions, audit, cache: createConfigVersionCache() }),
     structure: createConfigStructureService({ configurations: configurations(), masters: db.masterRepository, stepUp, transactions: db.transactions, audit, cache: createConfigVersionCache() }),
+    checkpoints: createConfigCheckpointService({
+      configurations: configurations(),
+      checkpoints: createConfigCheckpointRepository(db.prisma),
+      masters: db.masterRepository,
+      stepUp,
+      transactions: db.transactions,
+      audit,
+      cache: createConfigVersionCache(),
+    }),
   };
 }
 
 beforeAll(async () => {
   db = await openCalculationDatabase();
-  ({ edit, structure } = services(db.audit));
-  ({ edit: failingEdit, structure: failingStructure } = services(failingAudit()));
+  ({ edit, structure, checkpoints } = services(db.audit));
+  ({ edit: failingEdit, structure: failingStructure, checkpoints: failingCheckpoints } = services(failingAudit()));
   const { id } = await insertUser(db.users, createTestHasher(), { email: 'writer@example.test', name: 'Invented Writer', role: 'ADMIN', password: RIGHT });
   admin = { user: { id, name: 'Invented Writer', role: 'ADMIN' }, requestId: 'req-0000a11c' };
 }, 120_000);
@@ -96,12 +113,21 @@ const ROWS: ReadonlyArray<Row> = [
   { name: 'deleteField: a wrong password', outcome: 'refused', run: () => structure.deleteField(admin, PART_NO_ID, { password: WRONG }) },
   { name: 'deleteField: the audit entry fails part-way', outcome: 'refused', run: () => failingStructure.deleteField(admin, PART_NO_ID, { password: RIGHT }) },
   { name: 'deleteField: a field nothing uses', outcome: 'stored', run: () => structure.deleteField(admin, PART_NO_ID, { password: RIGHT }) },
+  // STORY-08.06: a checkpoint names a version and stores none; a revert stores one (a copy of the target) or none. The seed (version 1) differs from the current content here, so a revert to it is a change.
+  { name: 'saveCheckpoint: a name for the latest version (stores a checkpoint, no version)', outcome: 'no-op', run: () => checkpoints.saveCheckpoint(admin, { name: 'Invented Writer Checkpoint' }) },
+  { name: 'saveCheckpoint: a name that is taken', outcome: 'refused', run: () => checkpoints.saveCheckpoint(admin, { name: 'INVENTED writer checkpoint' }) },
+  { name: 'revert: a version that does not exist', outcome: 'refused', run: async () => checkpoints.revert(admin, UNKNOWN_FIELD, { password: RIGHT, baseVersion: await latestNumber() }) },
+  { name: 'revert: a stale base version', outcome: 'refused', run: async () => checkpoints.revert(admin, await versionIdOf(1), { password: RIGHT, baseVersion: (await latestNumber()) - 1 }) },
+  { name: 'revert: a wrong password', outcome: 'refused', run: async () => checkpoints.revert(admin, await versionIdOf(1), { password: WRONG, baseVersion: await latestNumber() }) },
+  { name: 'revert: the audit entry fails part-way', outcome: 'refused', run: async () => failingCheckpoints.revert(admin, await versionIdOf(1), { password: RIGHT, baseVersion: await latestNumber() }) },
+  { name: 'revert: to an earlier version', outcome: 'stored', run: async () => checkpoints.revert(admin, await versionIdOf(1), { password: RIGHT, baseVersion: await latestNumber() }) },
+  { name: 'revert: to a version whose content is the current one (nothing to revert)', outcome: 'refused', run: async () => checkpoints.revert(admin, await versionIdOf(1), { password: RIGHT, baseVersion: await latestNumber() }) },
 ];
 
 describe('AC-1 (FR-077): every method that changes the configuration stores exactly one version per success and none per refusal or no-op', () => {
   it('the table lists every method of the two config edit services that changes the configuration', () => {
     const named = new Set(ROWS.map((row) => row.name.split(':')[0]));
-    expect([...named].sort()).toEqual(['deleteField', 'insertFields', 'saveFormula']);
+    expect([...named].sort()).toEqual(['deleteField', 'insertFields', 'revert', 'saveCheckpoint', 'saveFormula']);
     for (const outcome of ['stored', 'refused', 'no-op'] as const) expect(ROWS.some((row) => row.outcome === outcome)).toBe(true);
   });
 

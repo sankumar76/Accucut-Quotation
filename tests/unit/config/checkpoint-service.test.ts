@@ -29,7 +29,7 @@ const LEAD: ConfigEditCaller = { user: { id: '00000000-0000-4000-8000-0000000000
 const ENGINEER: ConfigEditCaller = { user: { id: '00000000-0000-4000-8000-0000000000c1', name: 'Invented Engineer', role: 'ENGINEER' }, requestId: 'req-0000cccc' };
 
 const RIGHT = 'Invented-right-password-1';
-const RATES = SEED_PROCESS_ITEMS.map(({ id, name }) => ({ id, name, defaultValue: '0.00' }));
+const RATES = SEED_PROCESS_ITEMS.map((item) => ({ ...item, defaultValue: '0.00' }));
 
 const idOf = (number: number): string => `00000000-0000-4000-8000-0ccc000000${String(number).padStart(2, '0')}`;
 const record = (number: number, snapshot: unknown): ConfigVersionRecord => ({ id: idOf(number), number, snapshot, createdBy: null, reason: 'Invented', createdAt: new Date('2026-11-05T09:00:00.000Z') });

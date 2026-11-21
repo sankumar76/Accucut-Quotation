@@ -112,6 +112,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/about': 'redirect:/sign-in?callbackUrl=%2Fabout',
   '/config/fields/[id]/formula': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Ffields%2F%5Bid%5D%2Fformula',
   '/config/fields/new': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Ffields%2Fnew',
+  '/config/checkpoints': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Fcheckpoints',
   '/account': 'redirect:/sign-in?callbackUrl=%2Faccount',
   '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',
   '/masters/materials': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fmaterials',
@@ -427,7 +428,8 @@ describe('AC-2 and AC-4: the page guard on every page row, planned ones included
 describe('planned routes are not reachable', () => {
   it('has no loader and no route file for a planned row, so a request finds nothing to answer it', () => {
     const planned = ROUTE_MANIFEST.filter((row) => row.status === 'planned');
-    expect(planned.length).toBeGreaterThan(0);
+    // STORY-08.06 built the last planned screen, so the manifest may hold none; the rule still holds for any row a later story plans. The lookup below is shown to find an implemented route's loader, so it is not blind.
+    expect(API_LOADERS['/api/v1/config/checkpoints'] ?? PAGE_LOADERS['/config/checkpoints']).toBeDefined();
     for (const row of planned) {
       expect(API_LOADERS[row.path] ?? PAGE_LOADERS[row.path], row.path).toBeUndefined();
     }

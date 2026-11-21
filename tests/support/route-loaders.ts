@@ -82,6 +82,7 @@ export const PAGE_LOADERS: Readonly<Record<string, Loader>> = {
   '/config/fields': () => import('@/app/(portal)/config/fields/page'),
   '/config/fields/[id]/formula': () => import('@/app/(portal)/config/fields/[id]/formula/page'),
   '/config/fields/new': () => import('@/app/(portal)/config/fields/new/page'),
+  '/config/checkpoints': () => import('@/app/(portal)/config/checkpoints/page'),
   '/masters/process': () => import('@/app/(portal)/masters/process/page'),
   '/masters/materials': () => import('@/app/(portal)/masters/materials/page'),
   '/masters/customers': () => import('@/app/(portal)/masters/customers/page'),

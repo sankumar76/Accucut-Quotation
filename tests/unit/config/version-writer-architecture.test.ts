@@ -22,6 +22,7 @@ const REPOSITORY = 'src/server/repositories/config-repository.ts';
 
 /** The files that call `insertVersionAfter`, and how many call sites each holds. */
 const WRITERS: Readonly<Record<string, number>> = {
+  'src/server/services/config-checkpoint-service.ts': 1,
   'src/server/services/config-edit-service.ts': 1,
   'src/server/services/config-structure-service.ts': 2,
 };
