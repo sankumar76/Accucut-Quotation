@@ -6,12 +6,29 @@
 | Severity | **Sev-3 Moderate** (qa-engineer): a Test-type defect, fails closed (a red required check when it fails on both attempts, as it did once), workaround is the retry, no product behaviour affected as far as the evidence shows. Same grade family as DEF-045 to DEF-049 |
 | Priority | P3 on its own. QA asks master to rule on a lane (see "Issues for other roles"): the `approve-override` case has failed attempt 1 on two `master` push runs and on both attempts of one PR run |
 | Type | **Test** (E2E, Playwright; duration-tail class). No product defect found |
-| Status | New (logged 2026-11-20). Not fixed by QA (measurement and fix: developer) |
+| Status | **Closed 2026-11-21 (qa-engineer).** The proof (P1, P2, P3; DL-261 (4), DL-267 (3)) is met: PR #546's runs and the first `master` push run after the merge, 44850302908. See "Closure". Fixed by the developer (PR #546, squash 266db7a9: `approve-override.spec.ts` and `remove-price.spec.ts` only); not fixed by QA |
 | Jira / GitHub | [AQP-380](https://sankumar76.atlassian.net/browse/AQP-380) / [#539](https://github.com/sankumar76/Accucut-Quotation/issues/539). Jira "relates to" AQP-324, AQP-330, AQP-377 (DEF-048) and AQP-378 (DEF-049) |
-| Risk / rule | RISK-031 is open at 9 (DL-257 (8), DL-259 (4)); these are time-out-mode occurrences on it. **No re-run rule covers either test** (R5, R6, R7 name other tests). Whether to write one (R8) is master's |
+| Risk / rule | RISK-031 stays open until master closes it: this Bug's part of its close-out is met, and the `master` push run read for the proof (44850302908) has **0 flaky in all four shards**; DEF-051 is not a condition (DL-264 (3)). Rule **R8 ended at this close-out** (DL-267 (3)); it was written by DL-261 (3) and re-pointed to the eight new cases by DL-267 (3). Rules in force afterwards: R9 (DEF-051, `lead-warning` :229 only) and W1 (DL-265) |
 | Found by / date | CI. Read from the job logs by qa-engineer, 2026-11-20 (the two runs of the day in the brief, then the earlier runs whose logs QA held) |
 | Build / commit | `master` 402485c (run 44739529276); PR head fb15d167 (run 44738649937); the earlier runs in the table. Specs read at `origin/master`; not edited |
 | Environment | GitHub Actions `ubuntu-latest`, 4 vCPU, `Running 474 to 476 tests using 4 workers`, one development server and one PostgreSQL shared by the four workers; invented data only |
+
+## Closure (2026-11-21; qa-engineer, on DL-267)
+**Result: P1 met, P2 met, P3 met in the diff; 15 s reported, not gated. DEF-050 is closed.** The proof cases are the eight that replace the two old cases (named by master in DL-267 (3), by file, describe and title): `tests/e2e/approve-override.spec.ts`, describe "AC-3, AC-7: an override with a reason": C1 "the reason is kept trimmed, in the row and in the audit entry" (:184 on 266db7a9), C2 "the reason is shown next to BO, with the difference" (:198), C3 "the Engineer sees neither the reason nor the difference, and the costs are refused" (:212); `tests/e2e/remove-price.spec.ts`, describe "AC-3, AC-6, AC-7: a good removal": C4 "shows "Removing" while it is under way, then the notice; the row and the audit entry keep the price; the password is in no audit row" (:162), C5 "BO reads "Not set yet" and the price is nowhere on the page or in the costs" (:199), C6 "with the price removed, the page has no axe violation" (:218), C7 "a Lead sees the same notice and "Not set yet", with no button" (:228), C8 "the Engineer sees no price and nothing of the removal" (:240). QA read the job logs of every run below itself (every shard; durations matched by project, file, line and title); the figures agree with the developer's, the orchestrator's (AQP-380 comment 12451) and master's (DL-267).
+
+| Run | Head | Required check | P1: first attempt, 24 readings | P2: worst | Over 15 s |
+|---|---|---|---|---|---|
+| PR #546 first run 44781381557 | 8ce02097 | success; shards 496 / 490 / 491 / 476 passed, 0 flaky | **24 of 24**, no retry | 14.0 s (C5, tablet) | 0 of 24 |
+| PR #546 run 44845556428 | 1de96d7f | success; 506 / 500 / 501 / 485 passed, 0 flaky | **24 of 24**, no retry | **16.0 s** (C5, tablet) | **2 of 24** |
+| `master` push 44850302908 (jobs 136679835612, 136679835842, 136679835849, 136679836348) | 266db7a9 (#546's squash) | fully green; 506 / 500 / 501 / 485 passed, **0 flaky in all four shards** | **24 of 24**, no retry | **13.6 s** (C3, mobile) | **0 of 24** |
+
+Readings on the `master` push run, seconds, mobile / tablet / desktop: C1 11.4 / 7.8 / 10.3; C2 11.7 / 7.8 / 11.4; C3 13.6 / 10.0 / 11.7; C4 11.2 / 9.4 / 11.6; C5 10.7 / 9.8 / 12.2; C6 10.5 / 8.5 / 10.3; C7 6.9 / 6.4 / 8.4; C8 6.1 / 6.1 / 8.1. The earlier cases took 22 to 31 s and failed attempt 1 on 7 runs in 2 days (see "Actual Result").
+
+**Two notes on the PR half.** (1) The PR body's proof paragraph says "worst 14.0 s, none over 15 s", which is the first run only; the second run reads 16.0 s and 2 of 24 over 15 s (master asked for these figures in DL-267 (3); they are stated here and on AQP-380). (2) The merged head is f00952fa (a second merge of `master`, 2026-11-21 01:05Z); the run on it, 44848021750, is also fully green and passed all 24 on attempt 1, worst **17.6 s**, **4 of 24** over 15 s (slower draw: 485 to 506 tests, shards 11.5 to 19.4 minutes). The "final head" run named by the orchestrator, 44845556428, is on the intermediate head 1de96d7f. The diff of all three heads is the same two spec files (`gh pr diff 546 --name-only`: `tests/e2e/approve-override.spec.ts`, `tests/e2e/remove-price.spec.ts`). Neither note changes P1 or P2.
+
+**P3 spot-check by QA.** QA counted the page-open calls per case at `origin/master`: one in each of the eight cases. Sign-ins made inside helpers were not counted by QA; the developer's phase table (PR body) and master's reading (DL-267 (3)) are the source for "one Engineer sign-in per case".
+
+**R8:** ended. No re-run was made under R8 that QA knows of (the orchestrator keeps the list on AQP-380 and RISK-031). A red on any of the eight cases is a new failure for master. QA reopens this Bug (Status Reopened) if one fails on a `master` push run or on both attempts.
 
 ## Scope: two tests, each identified by file and title (not by line)
 **(i)** `tests/e2e/approve-override.spec.ts`, describe "AC-3, AC-7: an override with a reason", test "the reason is kept trimmed, in the audit entry too, and shown next to BO; the Engineer sees neither it nor the difference" (:155), `[mobile]`. **This is the case that meets the trigger.**
@@ -75,7 +92,7 @@ Read by the orchestrator from the job logs on the fix PR's run of record and on 
 - If P1 or P2 fails, the Bug stays open and the developer brings the measured phases to master.
 
 ## Re-run list
-None. No rule covers these tests. A red run on either test is not re-run under R5, R6 or R7; it goes to master (QA's reading of those rules' (b) clauses).
+None. R8 (DL-261 (3), re-pointed by DL-267 (3)) ended at the close-out of 2026-11-21; QA holds no record of a re-run under it. (Written before R8: no rule covered these tests on 2026-11-20 and a red went to master.)
 
 ## Issues for other roles (no defect)
 - **master:** please rule on (1) whether remove-price :136 [tablet] stays in this Bug or goes to a watch list, (2) a re-run rule R8 for (i) and (ii) on the shape of R6 and R7 (exact titles, error is `Test timeout of 30000ms exceeded.`, no `expect` message, once per head), and (3) a lane: (i) failed both attempts on PR run 44498537886 on 2026-11-19, and I found no ruling that names it. QA did not find that run in DL-254 to DL-260.
@@ -85,11 +102,11 @@ None. No rule covers these tests. A red run on either test is not re-run under R
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Phases of (i) and (ii) measured; mechanism confirmed or refuted | developer | | |
-| Fixed (spec or test-only helper) | developer | | `fix/<KEY>-<slug>` |
-| Regression test added | developer | | the fix is the test change; every assertion kept |
-| Verified: P1, P2, P3 on the fix PR's run and on the first `master` push run after merge | orchestrator reads, qa-engineer confirms at hardening | | |
-| RISK-031 close-out (DEF-050 part) | master | | the proof plus a `master` push run with 0 time-out-mode flaky |
+| Phases of (i) and (ii) measured; mechanism confirmed or refuted | developer | 2026-11-20 | diagnostic run 44768174508 (draft, phase prints) and the PR #546 body: no single step slow; the old cases did 17 to 29 s of work in one 30 s budget (three page opens, three or four sign-ins, an axe scan in one) (AQP-380 comment 12438) |
+| Fixed (spec or test-only helper) | developer | 2026-11-20 | PR #546 (`fix/AQP-380-engineer-signin-e2e`), squash 266db7a9 on 2026-11-21: `approve-override.spec.ts` and `remove-price.spec.ts` only; each old case split so every new case opens the page once and signs the Engineer in once |
+| Regression test added | developer | 2026-11-20 | the fix is the test change; the two old cases are the eight cases C1 to C8 (DL-267 (3)); assertion mapping in the PR body, read by master |
+| Verified: P1, P2, P3 on the fix PR's run and on the first `master` push run after merge | orchestrator reads, qa-engineer confirms | 2026-11-21 | PR #546 runs 44781381557 (24 of 24, worst 14.0 s, 0 over 15 s) and 44845556428 (24 of 24, worst 16.0 s, 2 over 15 s); `master` push 44850302908 on 266db7a9 (24 of 24 on attempt 1, worst 13.6 s, 0 over 15 s, 0 flaky); read by QA from the job logs. **Closed 2026-11-21** |
+| RISK-031 close-out (DEF-050 part) | master | | DEF-050's proof is met (2026-11-21), and `master` push 44850302908 has 0 flaky in all four shards. Master decides the close-out (DL-264 (3)) |
 
 ## Severity history and routing
 - qa-engineer graded Sev-3, type Test, 2026-11-20. It holds no story gate (AQP-324 and AQP-330 are Done). It changes to a Product defect only if hypothesis 4 shows the estimate page or `/costs` itself slow; master is told at once and QA re-grades.

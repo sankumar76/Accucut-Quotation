@@ -107,6 +107,18 @@ Same code, a different PostgreSQL draw. A single red does not prove it; a repeat
 - product-owner / developer: AQP-38 is Done and no AC is affected; no story change.
 - test plan: section 7 near-budget list is E2E only. Stage 11 per-case readings for these three cases and the busy-database case are recorded in this file only; QA will add them to the list if a second occurrence appears.
 
+## Readings after DL-266 (step 4; qa-engineer, 2026-11-21; no second occurrence)
+DL-266 (5) gave QA step 4 (read the three cases, the "busy database" case and the `afterAll` in each `master` push and PR Stage 11 log). QA read the "Stages 1 to 11b" job log of each run below (step "Stage 11 ... with combined coverage").
+
+| Run (head) | Kind | Whole file (42 tests) | "with login_throttles locked by another session ..." (the fixed-wait "busy database" case) | The three cases (:298, :318, :330) | `afterAll` / 42501 / "Test timed out" |
+|---|---|---|---|---|---|
+| 44823699480 (a514ad3a) | `master` push, green | **3,331 ms** | 826 ms | not printed (under 0.3 s) | none |
+| 44850302908 (266db7a9, #546's squash) | `master` push, green | **3,161 ms** | 810 ms | not printed (under 0.3 s) | none |
+| 44845556428 (1de96d7f) | PR #546, green | 3,838 ms | - | not printed | none |
+| 44848021750 (f00952fa) | PR #546 merged head, green | 4,194 ms | - | not printed | none |
+
+All four runs: `Test Files` all passed, no "Test timed out in" line and no "permission denied to terminate process" in the log; the only "42501" lines are the unrelated approved-price grant test. The file sits at 3.2 to 4.2 s against 2.0 to 5.4 s on the earlier green runs and 45.7 s on the red run. **None of DL-266 (5)'s second-occurrence triggers has fired** (no case timed out, no `afterAll` 42501 error, the "busy database" case 0.81 to 0.83 s against the 5 s line). The Bug stays in the hardening window; DEF-052 is not closed by these readings (its Verified step is the fix PR's run and a `master` push run after it).
+
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
