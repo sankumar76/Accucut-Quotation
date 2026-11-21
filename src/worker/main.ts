@@ -1,6 +1,7 @@
 import { EnvValidationError, loadAppEnv, loadEmailFeature } from '../lib/env';
 import { systemClock } from '../lib/time';
 import { scheduleBackupWatch, type BackupWatchStore } from '../server/jobs/backup-watch';
+import { scheduleDailyDigest } from '../server/jobs/daily-digest';
 import { type HeartbeatStore, scheduleHeartbeat } from '../server/jobs/heartbeat';
 import { scheduleLogPrune } from '../server/jobs/log-prune';
 import { scheduleOverdueScan } from '../server/jobs/overdue-scan';
@@ -9,7 +10,7 @@ import type { JobLogFields, JobLogLevel } from '../server/jobs/run-job';
 import { createMailer } from '../server/mail/send';
 import { createMailTransport } from '../server/mail/transport';
 import { createEmailOutboxRepository } from '../server/repositories/email-outbox-repository';
-import { createOverdueScanStore } from '../server/repositories/overdue-repository';
+import { createDailyDigestStore, createOverdueScanStore } from '../server/repositories/overdue-repository';
 import { getPrismaClient } from '../server/repositories/prisma-client';
 import { createHeartbeatRepository, createJobRunRepository, createJobRunWriter } from '../server/repositories/job-run-repository';
 
@@ -19,9 +20,9 @@ import { createHeartbeatRepository, createJobRunRepository, createJobRunWriter }
  * Scope note (STORY-10.04): this is the start-up shell only. It checks the settings exactly as the web process does, stays
  * running and stops cleanly on a stop request, so the service can be installed, started and supervised. The one job it runs is
  * `log-prune` (`src/server/jobs/log-prune.ts`, daily at 03:30 IST, only when LOG_DIRECTORY is set) and, since STORY-10.05, `backup-watch`
- * (`src/server/jobs/backup-watch.ts`, daily at 09:00 IST, only when PG_DATA_VOLUME or BACKUP_VOLUME is set). Since STORY-09.01, `outbox-send` (every minute, only when FEATURE_EMAIL=on). Since STORY-09.04, `overdue-scan` (`src/server/jobs/overdue-scan.ts`, every minute, only when FEATURE_EMAIL=on). Since STORY-10.09a, `heartbeat`
+ * (`src/server/jobs/backup-watch.ts`, daily at 09:00 IST, only when PG_DATA_VOLUME or BACKUP_VOLUME is set). Since STORY-09.01, `outbox-send` (every minute, only when FEATURE_EMAIL=on). Since STORY-09.04, `overdue-scan` (`src/server/jobs/overdue-scan.ts`, every minute, only when FEATURE_EMAIL=on). Since STORY-09.05, `daily-digest` (`src/server/jobs/daily-digest.ts`, 11:00 IST, with a catch-up at start-up, only when FEATURE_EMAIL=on). Since STORY-10.09a, `heartbeat`
  * (`src/server/jobs/heartbeat.ts`, every minute and once at start, always on): `GET /api/health` is red when the worker's newest heartbeat is 3 minutes old. Every job runs through `runJob`
- * (`src/server/jobs/run-job.ts`), which writes its start and outcome lines and, for a job that throws, one `error` line. The other cron job (the digest) is a later story's,
+ * (`src/server/jobs/run-job.ts`), which writes its start and outcome lines and, for a job that throws, one `error` line. The jobs that are left (the failure surfacing of STORY-09.06 and 09.07) are later stories',
  * which add them here and run through the same wrapper; nothing below changes how the service is installed.
  * It takes no part in coverage: it is a start-up file and the job logic belongs in `src/server/jobs` (test strategy section 11).
  */
@@ -94,6 +95,15 @@ function start(): void {
     },
     log,
   );
+  // The daily digest (STORY-09.05) queues one e-mail a day per Engineer with overdue tasks at 11:00 IST, and at start-up catches up a day whose run is missing. Same flag, same rule.
+  const dailyDigest = scheduleDailyDigest(
+    emailOn,
+    () => {
+      const env = loadAppEnv();
+      return { store: createDailyDigestStore(getPrismaClient('worker', env.DATABASE_URL)), clock: systemClock, appOrigin: () => env.APP_ORIGIN };
+    },
+    log,
+  );
   const stop = (signal: string): void => {
     log(`worker stopping (${signal})`);
     void heartbeat.stop();
@@ -101,6 +111,7 @@ function start(): void {
     void backupWatch?.stop();
     for (const job of mailJobs) void job.stop();
     void overdueScan?.stop();
+    void dailyDigest?.task.stop();
     clearInterval(keepAlive);
   };
   process.once('SIGINT', () => stop('SIGINT'));

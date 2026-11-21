@@ -20,6 +20,13 @@ import { createTransactionRunner } from './transaction';
  *       - It returns the Engineer's and the assigner's IDs and the assigner's name and whether they are active now, never an address: recipients are user IDs (NFR-028, ruling DL-262) and
  *         `outbox-send` reads `users.email` again when it sends. An inactive Engineer is not a candidate; an inactive assigner is, and is simply left off the Cc.
  *   `createOverdueScanStore(db)`  what the job takes as its store: the switch, the read above, the writes of a batch in ONE transaction, and its `job_runs` rows.
+ *
+ * The same file holds the read of the daily digest (STORY-09.05; FR-083), which asks the same question of the same tables without the 24-hour window:
+ *   `findOverdueTasks(now, istDate)`  ONE read: every open task (the estimate is not APPROVED) with a deadline strictly before `now`, of an active Engineer who has no digest row for `istDate` yet
+ *       (the SQL builds the key `digest:<engineerId>:<istDate>` as `idempotencyKeys.dailyDigest` does, and a test holds them together; it is an optimisation, the outbox's unique key is what makes a
+ *       digest happen once). Oldest deadline first, then by code, so the job's lists and its Cc are in that order. It returns IDs, the assigner's name and whether they are active, never an address.
+ *   `createDailyDigestStore(db)`  what the digest job takes as its store: the switch, the read above, ONE insert per Engineer (one Engineer's failure must not undo the others), the question
+ *       "is a run of this IST date recorded?" that the catch-up asks of `job_runs`, and the job's `job_runs` rows.
  */
 
 /** The rows of a run's candidates, as the job takes them (`OverdueCandidate` in `src/server/jobs/overdue-scan.ts`, which a repository does not import). */
@@ -33,8 +40,19 @@ export interface OverdueCandidateRow {
   readonly assigner: { readonly id: string; readonly name: string; readonly isActive: boolean };
 }
 
+/** An open overdue task of the digest, as the job takes it (`DigestTask` in `src/server/jobs/daily-digest.ts`, which a repository does not import). */
+export interface DigestTaskRow {
+  readonly taskId: string;
+  readonly code: string;
+  readonly title: string | null;
+  readonly deadlineAt: Date;
+  readonly engineerId: string;
+  readonly assigner: { readonly id: string; readonly name: string; readonly isActive: boolean };
+}
+
 export interface OverdueRepository {
   findCandidates(now: Date, since: Date): Promise<ReadonlyArray<OverdueCandidateRow>>;
+  findOverdueTasks(now: Date, istDate: string): Promise<ReadonlyArray<DigestTaskRow>>;
 }
 
 const CANDIDATE_ROWS = z.array(
@@ -50,6 +68,22 @@ const CANDIDATE_ROWS = z.array(
     assignerIsActive: z.boolean(),
   }),
 );
+
+const DIGEST_ROWS = z.array(
+  z.strictObject({
+    taskId: z.string(),
+    code: z.string(),
+    title: z.string().nullable(),
+    deadlineAt: z.date(),
+    engineerId: z.string(),
+    assignerId: z.string(),
+    assignerName: z.string(),
+    assignerIsActive: z.boolean(),
+  }),
+);
+
+/** The `job` of the digest's `job_runs` rows (`DAILY_DIGEST_JOB` in `src/server/jobs/daily-digest.ts`, which a test holds equal). */
+const DAILY_DIGEST_JOB_NAME = 'daily-digest';
 
 /** What `createOverdueScanStore` makes: structurally the job's `OverdueScanStore`, which `src/worker/main.ts` passes in. */
 export interface OverdueScanStoreRepository {
@@ -90,6 +124,32 @@ export function createOverdueRepository(db: PrismaClient): OverdueRepository {
           assigner: { id: row.assignerId, name: row.assignerName, isActive: row.assignerIsActive },
         }));
       }),
+
+    findOverdueTasks: (now, istDate) =>
+      withDatabaseErrors(async () => {
+        const rows = await db.$queryRaw`
+          SELECT t.id::text AS "taskId", t.code AS "code", t.title AS "title", t.deadline_at AS "deadlineAt",
+                 t.engineer_id::text AS "engineerId", a.id::text AS "assignerId", a.name AS "assignerName", a.is_active AS "assignerIsActive"
+          FROM tasks t
+          JOIN estimates e ON e.task_id = t.id
+          JOIN users eng ON eng.id = t.engineer_id AND eng.is_active
+          JOIN users a ON a.id = t.assigned_by
+          WHERE t.deadline_at < ${now}::timestamptz
+            AND e.status::text <> 'APPROVED'
+            AND NOT EXISTS (
+              SELECT 1 FROM email_outbox o
+              WHERE o.idempotency_key = 'digest:' || t.engineer_id::text || ':' || ${istDate}::text
+            )
+          ORDER BY t.deadline_at, t.code`;
+        return DIGEST_ROWS.parse(rows).map((row) => ({
+          taskId: row.taskId,
+          code: row.code,
+          title: row.title,
+          deadlineAt: row.deadlineAt,
+          engineerId: row.engineerId,
+          assigner: { id: row.assignerId, name: row.assignerName, isActive: row.assignerIsActive },
+        }));
+      }),
   };
 }
 
@@ -113,6 +173,49 @@ export function createOverdueScanStore(db: PrismaClient): OverdueScanStoreReposi
           if ((await outbox.enqueue(tx, message, now)) === 'queued') queued += 1;
         }
         return { queued };
+      }),
+    recordRun: jobRuns.recordRun,
+  };
+}
+
+/** What `createDailyDigestStore` makes: structurally the digest job's `DailyDigestStore`, which `src/worker/main.ts` passes in. */
+export interface DailyDigestStoreRepository {
+  /** `settings.alerts_enabled`. */
+  alertsEnabled(): Promise<boolean>;
+  findOverdue: OverdueRepository['findOverdueTasks'];
+  /** Queues one message in its own transaction and says whether it was new. */
+  enqueue(message: OutboxMessage, now: Date): Promise<'queued' | 'already-queued'>;
+  /** Is a `daily-digest` run recorded for this IST date with a status other than `failed`? The catch-up of STORY-09.05 AC-5. */
+  hasRunFor(istDate: string): Promise<boolean>;
+  recordRun: JobRunWriter['recordRun'];
+}
+
+const FOUND_ROWS = z.array(z.strictObject({ found: z.number() }));
+
+/**
+ * The store `daily-digest` is given. `enqueue` is one insert per Engineer, each in its own transaction, so a message that cannot be written does not undo the others (AC-9). `hasRunFor` reads
+ * `job_runs` through `idx_job_runs_job_finished_at`: the job writes one row a day, so the rows of the job are few. A row counts when its `result.istDate` is the date asked and its `result.status`
+ * is not `failed`: the wrapper's row for a run that threw has no date and so never counts, and a row of a run in which a message could not be queued says `failed` (AC-5).
+ */
+export function createDailyDigestStore(db: PrismaClient): DailyDigestStoreRepository {
+  const outbox = createEmailOutboxRepository(db);
+  const transactions = createTransactionRunner(db);
+  const overdue = createOverdueRepository(db);
+  const jobRuns = createJobRunWriter(db);
+  return {
+    alertsEnabled: async () => (await outbox.readMailSettings()).alertsEnabled,
+    findOverdue: overdue.findOverdueTasks,
+    enqueue: (message, now) => transactions.run((tx) => outbox.enqueue(tx, message, now)),
+    hasRunFor: (istDate) =>
+      withDatabaseErrors(async () => {
+        const rows = await db.$queryRaw`
+          SELECT 1::int AS "found"
+          FROM job_runs
+          WHERE job = ${DAILY_DIGEST_JOB_NAME}
+            AND result ->> 'istDate' = ${istDate}::text
+            AND result ->> 'status' IS DISTINCT FROM 'failed'
+          LIMIT 1`;
+        return FOUND_ROWS.parse(rows).length > 0;
       }),
     recordRun: jobRuns.recordRun,
   };
