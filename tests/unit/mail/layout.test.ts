@@ -70,6 +70,49 @@ describe('renderMail', () => {
   });
 });
 
+describe('renderMail with a table (STORY-09.05 AC-4)', () => {
+  const table = {
+    headers: ['Task', 'Title', 'Link'],
+    rows: [
+      ['Q-1', 'Hopper <b>cover</b>', { text: 'Open', url: 'https://portal.example.com/estimates/Q-1' }],
+      ['Q-2', '-', { text: 'Open', url: 'https://portal.example.com/estimates/Q-2?a="1"&b=2' }],
+    ],
+  } as const;
+
+  it('draws a table of the headers and the rows in HTML, between the paragraphs and the action', () => {
+    const { html } = renderMail({ heading: 'H', paragraphs: ['Intro'], table, action: { label: 'Go', url: 'https://portal.example.com/' } });
+    expect(html).toContain('<table');
+    expect(html.match(/<th[ >]/g)).toHaveLength(3);
+    expect(html.match(/<tr[ >]/g)).toHaveLength(3);
+    expect(html.indexOf('Intro')).toBeLessThan(html.indexOf('<table'));
+    expect(html.indexOf('</table>')).toBeLessThan(html.indexOf('>Go<'));
+  });
+
+  it('escapes every cell and every link of the table', () => {
+    const { html } = renderMail({ heading: 'H', paragraphs: ['Intro'], table });
+    expect(html).not.toContain('<b>cover</b>');
+    expect(html).toContain('Hopper &lt;b&gt;cover&lt;/b&gt;');
+    expect(html).not.toContain('"1"');
+    expect(html).toContain('href="https://portal.example.com/estimates/Q-1"');
+    expect(html).toContain('a=%221%22&amp;b=2');
+  });
+
+  it('writes the same lines in plain text: the headers, then one line per row, a link as its address', () => {
+    const { text } = renderMail({ heading: 'H', paragraphs: ['Intro'], table });
+    expect(text).toContain('Task | Title | Link');
+    expect(text).toContain('Q-1 | Hopper <b>cover</b> | Open (https://portal.example.com/estimates/Q-1)');
+    expect(text.indexOf('Intro')).toBeLessThan(text.indexOf('Q-1 |'));
+  });
+
+  it('refuses a link in a cell that is not an http or https address', () => {
+    expect(() => renderMail({ heading: 'H', paragraphs: [], table: { headers: ['L'], rows: [[{ text: 'x', url: 'javascript:alert(1)' }]] } })).toThrow(RangeError);
+  });
+
+  it('draws no table when none is given', () => {
+    expect(renderMail({ heading: 'H', paragraphs: ['P'] }).html).not.toContain('<table');
+  });
+});
+
 describe('the embedded logo', () => {
   it('is exactly public/accucut-logo.jpg (a copy that drifted would put an old logo in every message)', () => {
     expect(LOGO_BYTES.equals(readFileSync(`${ROOT}public/accucut-logo.jpg`))).toBe(true);
