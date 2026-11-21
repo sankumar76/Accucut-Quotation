@@ -62,3 +62,36 @@
 ## Verdict
 
 **REQUEST CHANGES**, for SQR-01 only: the DL-282 migration master has already ordered is not yet in the head. The forward fix at `d63cfe27` is correct and safe, with no Blocker or Critical. When the migration commit lands, I write an addendum here. If the migration is right, the verdict becomes **APPROVE WITH COMMENTS**, and §9 item 2 then allows the merge. SQR-02 is Minor and recommended for this PR. SQR-03 is Minor and can go to the hardening window.
+
+---
+
+## Addendum 1: re-review at `34575e39` (2026-11-21)
+
+| Item | Value |
+|---|---|
+| Head reviewed | `34575e395a9c83ddc34ca128913fe9a8040649e7`. New since `d63cfe27`: `3f11cc2c` (the DL-282 migration and its test), `0e30b674` (a merge of `master`, which brings in AQP-341 / #580 fastener tests that are not part of this story and not reviewed here), and `34575e39` (the SQR-02 and SQR-03 fixes). I read only the story diff, `git diff d63cfe27 34575e39 -- prisma src tests/integration/mail tests/integration/tasks` |
+| CI | Runs 44913181500 and 44913181454 on `34575e39`, green on attempt 1: "Stages 1 to 11b", the required "Stages 1 to 11", E2E shards 1 to 4, and "Stage 13: Windows package" |
+| **Verdict** | **APPROVE WITH COMMENTS.** All three findings are closed. Nothing is open at Blocker, Critical, Major or Minor, so §9 item 2 allows the merge |
+| Counts (open) | Blocker 0 · Critical 0 · Major 0 · Minor 0 · Info 5 (SQR-04 to SQR-07 as before, plus new Info SQR-08) |
+
+### Status of the earlier findings
+
+| ID | Status | Evidence |
+|---|---|---|
+| SQR-01 (Major) | **Fixed** | `prisma/migrations/20261121160000_expire_unsent_assignment_mail/migration.sql` is one data-only statement: `UPDATE email_outbox SET send_before = now() WHERE event = 'task-assigned' AND status = 'pending' AND send_before IS NULL`. It sorts after the last migration on `master` (`20261121120000_password_reset_tokens`) and adds no schema change. It is idempotent, because a changed row is no longer NULL. It cannot touch another event, a row that is not pending, or a row that already has a `send_before`. The test `tests/integration/mail/expire-unsent-assignment-mail-migration.test.ts` runs against real PostgreSQL as the owner, as the deploy does, over 7 cases. It plants every non-target kind of row and asserts all of them are unchanged, byte for byte. It also covers: a target row is skipped as `EXPIRED` by the next claim; a second run changes nothing; an empty outbox changes nothing; and the file is pinned to exactly one statement. My 25 h / 1 h case is there, and both rows are skipped. The statement uses `now()`, as master ruled in DL-282, not the `created_at + 24 h` form I suggested. I accept that: in my report I said `now()` was acceptable, and the only extra loss is a row written in the minutes before an upgrade on an install that is already sending. No real install sends today (FEATURE_EMAIL is switched on only at 09.08) |
+| SQR-02 (Minor) | **Fixed** | `email-outbox-repository.ts:215` now reads `status IN ('pending', 'sending')`, and the doc comment at `:120-125` says why this is safe with the worker. Repository test: a `sending` row is expired and keeps `status = 'sending'`, so the worker's own fenced marks still apply. Service tests: (1) claim, reassign, then `beginSend` returns `'expired'`, the old Engineer gets nothing, and the new Engineer is mailed; (2) claim, reassign, `markRetry`, then the next run skips the old row as `EXPIRED` and mails only the new Engineer. I re-checked the worker's paths: `markSent`, `markRetry`, `markFailed` and `markSkipped` fence on `status` and `attempts` only, so a mail sent just before the reassign is still recorded as `sent` |
+| SQR-03 (Minor) | **Fixed** | `task-service.ts:368` is re-indented |
+
+### New finding
+
+| ID | Severity | Where | Issue and why | Fix |
+|---|---|---|---|---|
+| SQR-08 | Info | `migration.sql` | **The migration leaves `sending` rows alone, while the code now withdraws them.** A pre-fix row that is `sending` at upgrade time with a NULL `send_before` is one the old worker was sending at that moment. It is either sent, or taken back after its lock runs out and sent then. Either way it is a mail that was going out when the upgrade happened, not the stale backlog DEF-055 is about. With FEATURE_EMAIL off until 09.08, no such row can exist on a real install | none |
+
+### Checks run (addendum)
+
+- No local run, as instructed. I read the code at `34575e39` with `git show` / `git diff` on `refs/remotes/pr/586` in the records worktree, without a checkout. The migration order was checked with `git ls-tree` against `origin/master`. CI evidence is listed in the table above.
+
+### Verdict (addendum)
+
+**APPROVE WITH COMMENTS** at `34575e39`. Every finding at Blocker, Critical, Major or Minor is fixed. The Info items go to their owners: the solution-architect updates §4.7 (SQR-05), and the ux-expert may reword the assign-screen notice. The PR label moves to `review:quality-approved`.
