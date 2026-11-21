@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -48,6 +51,10 @@ const render = (
   renderToStaticMarkup(createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST', viewerRole }));
 
 const countOf = (html: string, text: string): number => html.split(text).length - 1;
+
+/** SCR-10 and the control that opens it (STORY-07.07): the link drawn as a button, or `''` while Download is the disabled button. */
+const EXPORT_HREF = '/estimates/Q-2026-0318/export';
+const downloadLink = (html: string): string => /<a[^>]*id="review-download"[^>]*>/.exec(html)?.[0] ?? '';
 
 /** The page without the paths of its icons, whose numbers (`d="M12 1.5 ..."`) are not figures. */
 const withoutIcons = (html: string): string => html.replace(/<svg[\s\S]*?<\/svg>/g, '');
@@ -324,10 +331,10 @@ describe('STORY-06.06 AC-5: the approved state', () => {
     expect(html).not.toContain('Reason for unlocking');
   });
 
-  it('Download is not affected by the approval: it is the same control with the same reason as before', async () => {
+  it('Download is not affected by the approval: it is the same control as before, and with current figures it is the link to SCR-10 (STORY-07.07 AC-4)', async () => {
     const html = render(await current({ approval: { price: '12600.00' } }), undefined, APPROVED_HEADER);
-    expect(html).toMatch(/<button[^>]*id="review-download"/);
-    expect(html).toContain('The Excel download is not available yet.');
+    expect(downloadLink(html)).toContain(`href="${EXPORT_HREF}"`);
+    expect(html).not.toMatch(/<button[^>]*id="review-download"/);
   });
 
   it('an approved estimate with no approvals row says only that it is approved and locked, and BO stays "Not set yet"', async () => {
@@ -806,5 +813,62 @@ describe('the header and the customer', () => {
     expect(render(costs)).toContain('Q-2026-0318');
     expect(render(costs)).toContain('Invented Customer');
     expect(render(costs, null)).toContain('Not chosen yet');
+  });
+});
+
+describe('STORY-07.07: Download .xlsx on SCR-06 is the way to SCR-10 while the figures are current', () => {
+  const NOT_YET = 'The Excel download is not available yet.';
+  const NOT_CALCULATED = 'Calculate or Recalculate first. There is no file until a calculation is current.';
+
+  it.each([
+    ['AC-1 Lead, Submitted', 'LEAD', 'SUBMITTED'],
+    ['AC-1 Admin, Submitted', 'ADMIN', 'SUBMITTED'],
+    ['AC-1 Lead, Draft after an unlock', 'LEAD', 'DRAFT'],
+    ['AC-4 Lead, Approved', 'LEAD', 'APPROVED'],
+    ['AC-4 Admin, Approved', 'ADMIN', 'APPROVED'],
+  ] as const)('%s: a link drawn as a button to SCR-10, with no disabled state, no reason and no "not available yet"', async (_name, role, status) => {
+    const html = render(await current(), undefined, { ...HEADER, status }, role);
+    const link = downloadLink(html);
+    expect(link).toContain(`href="${EXPORT_HREF}"`);
+    expect(link).not.toContain(' disabled=');
+    expect(link).not.toContain('aria-disabled');
+    expect(link).not.toContain('aria-describedby');
+    expect(html).toMatch(/<a[^>]*id="review-download"[^>]*>Download \.xlsx<\/a>/);
+    expect(html).not.toMatch(/<button[^>]*id="review-download"/);
+    expect(html).not.toContain('id="review-download-reason"');
+    expect(html).not.toContain(NOT_YET);
+    expect(html).not.toContain(NOT_CALCULATED);
+  });
+
+  it('AC-1: the link is drawn as the other action-bar buttons (full width on a phone, automatic from 768 px) and carries no figure', async () => {
+    const link = downloadLink(render(await current()));
+    expect(link).toContain('w-full md:w-auto');
+    expect(link).not.toMatch(/\d+\.\d\d/);
+  });
+
+  it.each([
+    ['AC-2: never calculated', { calculated: false }],
+    ['AC-2: the total cleared by an input change', { inputsRevision: 4 }],
+  ] as const)('%s: Download stays a disabled button described by its reason, and no link to SCR-10 is drawn', async (_name, options) => {
+    const html = render(await current(options));
+    const button = defined(/<button[^>]*id="review-download"[^>]*>/.exec(html))[0];
+    expect(button).toContain('disabled=""');
+    expect(button).toContain('aria-describedby="review-download-reason"');
+    expect(html).toMatch(/<p[^>]*id="review-download-reason"[^>]*>Calculate or Recalculate first\. There is no file until a calculation is current\.<\/p>/);
+    expect(downloadLink(html)).toBe('');
+    expect(html).not.toContain(EXPORT_HREF);
+    expect(html).not.toContain(NOT_YET);
+  });
+
+  it('AC-7: the reason "not available yet" is gone from the product', () => {
+    const folder = fileURLToPath(new URL('../../src/components/features/estimate-review/', import.meta.url));
+    const files = readdirSync(folder);
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      const source = readFileSync(`${folder}${file}`, 'utf8');
+      expect(source, file).not.toContain(NOT_YET);
+      expect(source, file).not.toContain('DOWNLOAD_NOT_YET_REASON');
+      expect(source, file).not.toContain("STORY-07.03's");
+    }
   });
 });
