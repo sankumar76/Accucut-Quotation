@@ -1,6 +1,6 @@
 import type { Instrumentation } from 'next';
 
-import { EnvValidationError, loadAppEnv } from '@/lib/env';
+import { EnvValidationError, loadAppEnv, loadExportEnv } from '@/lib/env';
 
 /**
  * Runs once when the Next.js server starts. A missing or invalid setting stops the server here (AC-3,
@@ -17,6 +17,8 @@ export function register(): void {
   if (process.env.NEXT_RUNTIME === 'nodejs' && process.env.NEXT_PHASE !== 'phase-production-build') {
     try {
       loadAppEnv();
+      // The export time limit is read when the first export is asked for; a bad value stops the start here, not at that moment (ADR-017).
+      loadExportEnv();
     } catch (error) {
       if (error instanceof EnvValidationError) {
         process.stderr.write(`${error.message}\n`);

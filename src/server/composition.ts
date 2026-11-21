@@ -1,7 +1,7 @@
 import type { NextAuthOptions } from 'next-auth';
 
-import { loadAppEnv, loadEmailFeature, loadOriginEnv } from '../lib/env';
-import { systemClock } from '../lib/time';
+import { loadAppEnv, loadEmailFeature, loadExportEnv, loadOriginEnv } from '../lib/env';
+import { MILLISECONDS_PER_SECOND, systemClock } from '../lib/time';
 
 import { buildAuthOptions } from './auth/options';
 import { createThreadBuilder, exportThreadFile } from './export/thread-runner';
@@ -502,7 +502,7 @@ export function getExportService(): ExportService {
       images: createImageRepository(runtimeClient()),
       configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
       transactions: createTransactionRunner(runtimeClient()),
-      builder: createThreadBuilder({ entry: exportThreadFile(process.cwd()) }),
+      builder: createThreadBuilder({ entry: exportThreadFile(process.cwd()), timeoutMs: loadExportEnv().EXPORT_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND }),
       clock: systemClock,
     });
   }
