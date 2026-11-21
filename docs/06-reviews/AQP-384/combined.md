@@ -86,3 +86,43 @@
   - `nosniff`, `Referrer-Policy` and `Permissions-Policy` on every page and API answer;
   - no HSTS from the app, matching the architect's split;
   - no new unauthenticated access, and fewer spoofable request headers than before.
+
+---
+
+## Addendum: re-review at `665ab54d` (2026-11-21)
+
+| Item | Value |
+|---|---|
+| Head reviewed | `665ab54dac1ab680d5da93754a7f9b42e8ff631b`. New commits since `d2546e8c`: `ebefb666` (merge of `master` at `0f69aa2`), `9cef7560` (the fixes) and `665ab54d` (E2E expectation). Re-review scope: `git diff ebefb666 665ab54d`, 8 files. The merge changes no file under `src/` and not `next.config.ts` (`git diff --stat d2546e8c ebefb666 -- src next.config.ts` is empty) |
+| CI | Run 44916262364 on `665ab54d`. **Green:** E2E shards 1 to 4 (0 flaky), the Windows package (run 44916262347), and lint, type-check, unit tests, the build and migrations. **Red:** "Stages 1 to 11b", only at Stage 11 integration, on `tests/integration/masters/process-items.test.ts` > "two requests at once" (`expected FieldValidationError … to match { code: 'NAME_TAKEN' }`). That is the DEF-056 test-data race (DL-283), not in this diff. Because of it, **Stage 11 changed-code coverage and Stage 11b JS budget were skipped** on this head |
+| **Verdict** | **APPROVE WITH COMMENTS.** Every Major and Minor finding is fixed and has a test. What remains is Info for other roles. Merge condition (§9 item 1): a fresh fully green run on this PR after #587 merges, including the coverage and JS-budget steps this run skipped |
+| Counts (open) | Blocker 0 · Critical 0 · Major 0 · Minor 0 · Info 3 (SQR-05, SQR-07, SQR-09) |
+
+### Prior findings
+
+| ID | Was | Now | Evidence |
+|---|---|---|---|
+| SQR-01 | Major | **Fixed** | `API_CONTENT_SECURITY_POLICY` is now `default-src 'none'; frame-ancestors 'none'; sandbox`. `/api/auth/*` (the only path both public and API) gets `AUTH_ROUTE_CONTENT_SECURITY_POLICY`, the same without `sandbox` (`csp.ts`, `proxy.ts:94`). Pages never get `sandbox` (tested). `sandbox` is harmless on JSON read by `fetch` and on the signed-out redirect. The comments in `csp.ts`, `proxy.ts` and `file-response.ts` now say that the proxy's policy is the one on the wire, and why. **Tests:** unit, through the proxy: the picture path with and without a cookie; every API answer and the redirect carry `sandbox`; three `/api/auth/*` paths do not; pages do not. E2E on the production build, 3 widths: a signed-in `GET /api/v1/images/<id>` returns 200 `image/png` with CSP exactly `default-src 'none'; frame-ancestors 'none'; sandbox`, `nosniff` and `DENY`. The 401 JSON expectation is updated (`665ab54d`) |
+| SQR-02 | Minor | **Fixed** | `layout.tsx` uses the header only if it matches `NONCE_PATTERN = /^[A-Za-z0-9+/]{16,}={0,2}$/` (no `m` flag, so `$` is the end of the input and a value with a line break is refused, which is tested). The matcher is now `'/((?!_next/static/|_next/image(?:$|/)|accucut-logo\.jpg$).*)'`. The tests: `/_next/staticfoo`, `/_next/static`, `/_next/image-x` and `/_next/imagefoo` go through the proxy, while `/_next/static/chunks/a.js`, `/_next/image` and `/_next/image/` do not. The pattern accepts 20 `createNonce()` values and rejects 9 hostile or malformed ones, including `</script>`. The image optimiser's query string is not part of the path, so `/_next/image?url=…` is still excluded. The E2E suite (which loads `next/image`-free pages and static chunks everywhere) stayed green |
+| SQR-03 | Minor | **Fixed** | `NODE_ENV` stubbed as `test`, `production`, `staging` and `''` gives no `unsafe-` in `script-src` or `style-src`, and `connect-src 'self'` only. `development`, and only it, adds `'unsafe-eval'`, inline styles and `ws:`, still with no `'unsafe-inline'` in `script-src` |
+| SQR-04 | Minor | **Fixed** | `proxy.ts` header comment (no-store only off public paths; the layout "reads the request's headers"), `session.ts:37-38` (the header is deleted on public paths; the matcher covers every path but the build output, `/_next/image` and the logo), `csp.ts`, `file-response.ts`. The PR body was corrected (developer's report; checked against the head's comments) |
+| SQR-05 | Info | Open, for the solution-architect | Update §8's table to the shipped `Permissions-Policy` list, `X-Frame-Options`, and now the data policy with `sandbox` and the next-auth variant |
+| SQR-06 | Info | **Done** | The nonce is made only for page paths (`proxy.ts`, inside the non-API branch) |
+| SQR-07 | Info | Open, optional | `base-uri 'none'`, a `report-to` endpoint |
+| SQR-08 | Info (praise) | — | — |
+
+### New finding
+
+| ID | Severity | Where | Issue and why | Fix |
+|---|---|---|---|---|
+| SQR-09 | Info | `src/proxy.ts:94` | `isPublic && isApi` stands for "a next-auth route", which is true only because `/api/auth` is the sole API entry in `PUBLIC_PATH`. If a public API path were ever added (for example a health check), it would silently lose `sandbox`. The policy would still be strict (`default-src 'none'`), so there is no risk today | Optional: test `pathname === '/api/auth' \|\| pathname.startsWith('/api/auth/')` by name, or add a unit test that pins the auth variant to `/api/auth/*` only |
+
+### Checks run (re-review)
+
+- Read `git diff ebefb666 665ab54d` in full (8 files), and the merge's effect on `src/` and `next.config.ts`, which is none.
+- `gh pr checks 583` and `gh run view 44916262364`: the step list and the failed-log extract above.
+- No local run (brief: read-only, no runs).
+
+### Verdict (re-review)
+
+**APPROVE WITH COMMENTS.** SQR-01 to SQR-04 and SQR-06 are fixed with tests that would catch a regression, the file-route row of DEF-054's fix table included. No new Blocker, Critical, Major or Minor finding. The PR may merge once a fresh run on it is fully green after #587 (DEF-056) merges, including Stage 11 changed-code coverage and Stage 11b JS budget, which this run skipped.
