@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { Prisma } from '../../generated/prisma/client';
+import { escapeLike } from '../../lib/escape-like';
 import type { QueueCounts, QueueTab } from '../../lib/tasks/queue';
 
 import { withDatabaseErrors } from './database-errors';
@@ -9,7 +10,7 @@ import { clientFor, type Transaction } from './transaction';
 
 /**
  * Storage of tasks and their estimates (STORY-04.01; architecture sections 4.1, 5.1 and 6). Three tables: `tasks`, `estimates` and `task_sequences`.
- * STORY-04.01 added the writes of "Assign task" and the list of Engineers it chooses from; STORY-04.02 adds the reads of the queue (`listQueue`, `countQueue`).
+ * STORY-04.01 added the writes of "Assign task" and the list of Engineers it chooses from; STORY-04.02 the reads of the queue (`listQueue`, `countQueue`), STORY-04.06 their filters.
  *
  * **One transaction.** A task, its empty estimate and the number that names it are written with the caller's `Transaction`, so a failure of any
  * insert leaves none of them (AC-1). Every write method takes `tx` as required: none can run alone.
@@ -118,9 +119,22 @@ export interface AssignmentState {
   readonly assignmentRevision: number;
 }
 
+/** What the filter row narrows a read to (STORY-04.06 AC-3), ANDed with the scope and the tab so it can only narrow. Null is "not set"; the service has judged every value. */
+export interface QueueFilter {
+  /** Task ID or title, contains, ignoring letter case, with no wildcard of its own. */
+  readonly text: string | null;
+  readonly engineerId: string | null;
+  /** The customer on the task's estimate; a task whose estimate has none matches no customer. */
+  readonly customerId: string | null;
+  /** A deadline at or after this instant (00:00 IST of the From day) and before that one (00:00 IST of the day after the To day, so the To day is inclusive). */
+  readonly deadlineFrom: Date | null;
+  readonly deadlineBefore: Date | null;
+}
+
 export interface QueueRequest {
   readonly tab: QueueTab;
   readonly scope: QueueScope;
+  readonly filter: QueueFilter;
   /** The instant "overdue" is judged at: a task is overdue when its deadline is before it and it is not closed. */
   readonly now: Date;
   readonly limit: number;
@@ -156,8 +170,8 @@ export interface TaskRepository {
   setAssignment(id: string, state: AssignmentState, tx: Transaction): Promise<void>;
   /** Up to `limit` tasks of the tab, earliest deadline first and then by code, after `after` when it is given (STORY-04.02 AC-1, AC-2). */
   listQueue(request: QueueRequest): Promise<ReadonlyArray<QueueRow>>;
-  /** How many tasks each tab holds in this scope at `now` (STORY-04.02 AC-1). An overdue task is counted in Open as well. */
-  countQueue(scope: QueueScope, now: Date): Promise<QueueCounts>;
+  /** How many tasks each tab holds in this scope, under this filter, at `now` (STORY-04.02 AC-1, STORY-04.06 AC-3). An overdue task is counted in Open as well. */
+  countQueue(scope: QueueScope, now: Date, filter: QueueFilter): Promise<QueueCounts>;
   /** How many tasks in this scope are overdue at `now`: the bell's count (STORY-04.03 AC-2), by the same rule as the Overdue tab and as one count, not three. */
   countOverdue(scope: QueueScope, now: Date): Promise<number>;
 }
@@ -232,6 +246,20 @@ const scopeFilter = (scope: QueueScope): Prisma.TaskWhereInput => ({
   ...(scope.engineerId === null ? {} : { engineerId: scope.engineerId }),
   ...(scope.assignedById === null ? {} : { assignedById: scope.assignedById }),
 });
+
+/** The filter row as a `where` (STORY-04.06 AC-3): every part ANDed, a case-insensitive `contains` on the code and the title; an empty filter is an empty AND. */
+function filterWhere(filter: QueueFilter): Prisma.TaskWhereInput {
+  const conditions: Prisma.TaskWhereInput[] = [];
+  if (filter.text !== null) {
+    const contains = { contains: escapeLike(filter.text), mode: 'insensitive' as const };
+    conditions.push({ OR: [{ code: contains }, { title: contains }] });
+  }
+  if (filter.engineerId !== null) conditions.push({ engineerId: filter.engineerId });
+  if (filter.customerId !== null) conditions.push({ estimate: { is: { customerId: filter.customerId } } });
+  if (filter.deadlineFrom !== null) conditions.push({ deadlineAt: { gte: filter.deadlineFrom } });
+  if (filter.deadlineBefore !== null) conditions.push({ deadlineAt: { lt: filter.deadlineBefore } });
+  return { AND: conditions };
+}
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
 
@@ -337,11 +365,11 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         return row === null || mapped === null ? null : { ...mapped, notes: row.notes };
       }),
 
-    listQueue: ({ tab, scope, now, limit, after }) =>
+    listQueue: ({ tab, scope, now, limit, after, filter }) =>
       withDatabaseErrors(async () => {
         if (!isReadable(scope)) return [];
         const rows = await db.task.findMany({
-          where: { AND: [scopeFilter(scope), tabFilter(tab, now), afterFilter(after)] },
+          where: { AND: [scopeFilter(scope), tabFilter(tab, now), afterFilter(after), filterWhere(filter)] },
           orderBy: [{ deadlineAt: 'asc' }, { code: 'asc' }],
           take: limit,
           select: QUEUE_SELECT,
@@ -353,10 +381,11 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         });
       }),
 
-    countQueue: (scope, now) =>
+    countQueue: (scope, now, filter) =>
       withDatabaseErrors(async () => {
         if (!isReadable(scope)) return { open: 0, closed: 0, overdue: 0 };
-        const count = (tab: QueueTab): Promise<number> => db.task.count({ where: { AND: [scopeFilter(scope), tabFilter(tab, now)] } });
+        const narrowed = filterWhere(filter);
+        const count = (tab: QueueTab): Promise<number> => db.task.count({ where: { AND: [scopeFilter(scope), tabFilter(tab, now), narrowed] } });
         const [open, closed, overdue] = await Promise.all([count('open'), count('closed'), count('overdue')]);
         return { open, closed, overdue };
       }),

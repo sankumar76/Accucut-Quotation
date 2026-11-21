@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { isQueueTab, queueQueryString, QUEUE_TABS } from '@/lib/tasks/queue';
+import { isQueueTab, QUEUE_TABS } from '@/lib/tasks/queue';
+import { queueQueryString } from '@/lib/tasks/queue-filters';
 import { decodeTaskQueueCursor, encodeTaskQueueCursor, TASK_QUEUE_CURSOR_MAX_LENGTH } from '@/server/services/task-queue-cursor';
 import type { TaskQueue } from '@/server/services/task-service';
 import { taskQueueQuerySchema, taskQueueSchema } from '@/server/views/schemas/tasks';
@@ -74,16 +75,30 @@ describe('AC-1, AC-2: the query is strict', () => {
     ['a fractional limit', { limit: '1.5' }],
     ['a limit that is not a number', { limit: 'many' }],
     ['a cursor that is not one', { cursor: 'junk' }],
-    ['whose tasks to list (the scope is the session\'s)', { engineer: '00000000-0000-4000-8000-0000000000e1' }],
-    ['a filter of story 04.06, which is not built yet', { q: 'hopper' }],
-    ['someone else\'s tasks by assignedBy (only "me" exists, STORY-04.03)', { assignedBy: '00000000-0000-4000-8000-0000000000b1' }],
     ['an empty assignedBy', { assignedBy: '' }],
+    ['someone else by assignedBy (only "me" and "anyone" exist, STORY-04.06 AC-4)', { assignedBy: '00000000-0000-4000-8000-0000000000b1' }],
+    ['a name that is not offered (the scope is the session, never the query)', { assignedTo: '00000000-0000-4000-8000-0000000000e1' }],
+    ['an Engineer that is not a UUID (AC-4)', { engineer: 'arjun' }],
+    ['an empty Engineer', { engineer: '' }],
+    ['a customer that is not a UUID (AC-4)', { customer: 'acme' }],
+    ['a start date that is not YYYY-MM-DD (AC-4)', { from: '12/11/2026' }],
+    ['an end date that is not a real date (AC-4)', { to: '2026-02-30' }],
+    ['a search of 121 characters (AC-4)', { q: 'a'.repeat(121) }],
   ])('refuses %s', (_name, query) => {
     expect(taskQueueQuerySchema.safeParse(query).success).toBe(false);
   });
 
-  it('reads assignedBy=me, the one filter a Lead\'s bell needs (STORY-04.03 AC-3), and leaves it out when it is not given', () => {
+  it('reads the filters of STORY-04.06 AC-3: a search trimmed (an empty one is none), IDs, and two real days', () => {
+    const engineer = '00000000-0000-4000-8000-0000000000e1';
+    const customer = '00000000-0000-4000-8000-0000000000c1';
+    expect(taskQueueQuerySchema.parse({ q: '  hopper  ', engineer, customer, from: '2026-11-01', to: '2026-11-30' })).toMatchObject({ q: 'hopper', engineer, customer, from: '2026-11-01', to: '2026-11-30' });
+    expect(taskQueueQuerySchema.parse({ q: '   ' }).q).toBeUndefined();
+    expect(taskQueueQuerySchema.parse({ q: 'a'.repeat(120) }).q).toHaveLength(120);
+  });
+
+  it('reads assignedBy as "me" (a Lead\'s bell, STORY-04.03 AC-3) or "anyone" (STORY-04.06 AC-2), and leaves it out when it is not given', () => {
     expect(taskQueueQuerySchema.parse({ tab: 'overdue', assignedBy: 'me' })).toMatchObject({ tab: 'overdue', assignedBy: 'me' });
+    expect(taskQueueQuerySchema.parse({ assignedBy: 'anyone' })).toMatchObject({ assignedBy: 'anyone' });
     expect(taskQueueQuerySchema.parse({}).assignedBy).toBeUndefined();
   });
 });

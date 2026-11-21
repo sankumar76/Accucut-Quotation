@@ -130,9 +130,9 @@ describe('AC-3: the Overdue tab a Lead\'s bell opens holds the set the bell coun
     expect(tab.counts).toEqual({ open: 4, closed: 1, overdue: 2 });
   });
 
-  it('without assignedBy a Lead still sees the whole queue, and assignedBy=me never widens an Engineer\'s own tasks', async () => {
+  it('without assignedBy the service gives a Lead the whole queue (the page applies the default), and assignedBy is refused for an Engineer (STORY-04.06 AC-5)', async () => {
     await seedSeven();
     expect(codes(await service.listQueue(as(firstLeadId, 'LEAD'), { tab: 'overdue' }))).toEqual(['Q-2026-0003', 'Q-2026-0001', 'Q-2026-0002', 'Q-2026-0004']);
-    expect(codes(await service.listQueue(as(arjunId, 'ENGINEER'), { tab: 'overdue', assignedBy: 'me' }))).toEqual([]);
+    await expect(service.listQueue(as(arjunId, 'ENGINEER'), { tab: 'overdue', assignedBy: 'me' })).rejects.toMatchObject({ fields: [{ field: 'assignedBy' }] });
   });
 });

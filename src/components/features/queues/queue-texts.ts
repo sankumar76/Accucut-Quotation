@@ -18,9 +18,31 @@ export const LIST_LABEL = 'Tasks';
 
 /** The words in front of how late a task is (STORY-04.03 AC-1): "Overdue by 1 d 18 h". */
 export const OVERDUE_BY = 'Overdue by';
-/** Under the title when the page is cut to the tasks the person assigned (a Lead's bell, STORY-04.03 AC-3). */
-export const ASSIGNED_BY_ME_NOTE = 'Showing only the tasks you assigned.';
-export const SHOW_ALL_TASKS = 'Show all tasks';
+/** The filter row (STORY-04.06 AC-3, AC-6, AC-9): every control has a visible label, and "(IST)" says which clock the deadline days are read on. */
+export const FILTERS_LABEL = 'Filter tasks';
+export const SEARCH_LABEL = 'Search tasks';
+export const SEARCH_PLACEHOLDER = 'Task ID or title';
+export const ENGINEER_LABEL = 'Engineer';
+export const ALL_ENGINEERS = 'All Engineers';
+export const CUSTOMER_LABEL = 'Customer';
+export const ALL_CUSTOMERS = 'All customers';
+export const FROM_LABEL = 'Deadline from (IST)';
+export const TO_LABEL = 'Deadline to (IST)';
+export const CLEAR_FILTERS = 'Clear filters';
+
+/** The chip of the Lead's default and of a bell address (STORY-04.06 AC-1, AC-2). The control that puts it back is named like the chip. */
+export const ASSIGNED_BY_ME = 'Assigned by me';
+export const REMOVE_ASSIGNED_BY_ME = 'Remove filter Assigned by me';
+
+/** The No match state of a filtered list (STORY-04.06 AC-6): a Lead and an Admin may clear several filters, an Engineer only has the search. */
+export const NO_MATCH_MANAGER: EmptyText = { title: 'No tasks match your filters.', description: 'Change a filter, or clear them all to see every task.' };
+export const NO_MATCH_ENGINEER: EmptyText = { title: 'No tasks match your search.', description: 'Try a different task ID or part of the title.' };
+
+/** Read out politely after a filter changes (STORY-04.06 AC-9): how many tasks the open tab holds under the filters. */
+export function tasksFoundText(count: number): string {
+  if (count === 0) return 'No tasks found';
+  return count === 1 ? '1 task found' : `${count} tasks found`;
+}
 
 export const ASSIGN_TASK_LABEL = 'Assign task';
 export const NOT_CHOSEN_YET = 'Not chosen yet';

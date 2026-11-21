@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { fetchQueuePage, readQueuePage } from '@/lib/tasks/queue-client';
+import { NO_QUEUE_FILTERS } from '@/lib/tasks/queue-filters';
 
 /**
  * STORY-04.02 T4 (AC-1, AC-4): the browser's side of `GET /api/v1/tasks`. It asks for the tab and the cursor, reads a page, and treats an answer of the wrong shape as
@@ -78,7 +79,7 @@ describe('reading a page', () => {
 describe('asking for a page', () => {
   it('adds assignedBy=me when asked to, which is how a Lead\'s Overdue tab matches the bell (STORY-04.03 AC-3)', async () => {
     const doFetch = answering(200, BODY);
-    await fetchQueuePage('overdue', undefined, doFetch, undefined, true);
+    await fetchQueuePage('overdue', undefined, doFetch, undefined, { ...NO_QUEUE_FILTERS, assignedBy: 'me' });
     expect(doFetch).toHaveBeenCalledWith('/api/v1/tasks?tab=overdue&assignedBy=me', expect.objectContaining({ method: 'GET' }));
   });
 
