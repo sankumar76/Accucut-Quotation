@@ -42,6 +42,7 @@ const buildService = (): EstimateService =>
     transactions: createTransactionRunner(db.prisma),
     materials: createMasterRepository(db.prisma),
     currentConfiguration: () => Promise.resolve(seedConfig),
+    configurationById: () => Promise.resolve(seedConfig),
   });
 
 beforeAll(async () => {
