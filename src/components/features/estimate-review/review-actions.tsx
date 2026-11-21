@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { ApproveButton } from '@/components/features/estimate-approve/approve-button';
 import { CancelButton } from '@/components/features/estimate-cancel/cancel-button';
 import { RemoveButton } from '@/components/features/estimate-remove-price/remove-button';
@@ -27,7 +29,6 @@ import {
   CALCULATING_LINE,
   DOWNLOAD_LABEL,
   DOWNLOAD_NOT_CALCULATED_REASON,
-  DOWNLOAD_NOT_YET_REASON,
   ONLY_ADMIN_CANCELS,
   RECALCULATE_LABEL,
   REMOVE_PRICE_FIRST_OPEN_FAILED,
@@ -46,7 +47,7 @@ import {
  * **Approve and lock** is on only while the guard of STORY-06.05 would let the press through (the estimate is SUBMITTED, its figures are `current` and the page holds the calculation they come from): it is then the
  * button of the one small script `ApproveButton`, which opens the dialog of SCR-08 (fetched on the first press, not in the first load). In every other state it is **off with a reason**: each disabled button names its
  * reason in visible text and is described by it (`aria-describedby`), so a screen reader hears why. The server decides all the same; the button is a convenience. For an **approved** estimate Approve and lock is gone and
- * **Unlock** takes its place (STORY-06.06 AC-5), which opens the dialog of SCR-09 (STORY-06.08; fetched on the first press, not in the first load). The Excel file is STORY-07.03's, so Download is off here and says so. In flow, not sticky.
+ * **Unlock** takes its place (STORY-06.06 AC-5), which opens the dialog of SCR-09 (STORY-06.08; fetched on the first press, not in the first load). **Download .xlsx** (STORY-07.07; UX spec SCR-06 "Download opens SCR-10 and is off unless the figures are current") is the link, drawn as a button, to SCR-10 while the figures are `current`, whatever the status; it is off with its reason in the cleared and never-calculated states. In flow, not sticky.
  */
 
 const APPROVE_REASON_ID = 'review-approve-reason';
@@ -185,7 +186,6 @@ export function ReviewActions({ estimateId, code, state, status, calculated, app
   // and approved without anyone editing an input (AC-11). A Submitted estimate with current figures shows no button: its way on is Approve and lock, unless rates changed since the calculation: the notice's link
   // is to Recalculate, so the button is there then (STORY-06.11).
   const showRecalculate = state !== 'current' || status === 'DRAFT' || ratesChanged;
-  const downloadReason = state === 'current' ? DOWNLOAD_NOT_YET_REASON : DOWNLOAD_NOT_CALCULATED_REASON;
   return (
     <div role="group" aria-label={ACTIONS_LABEL} className="flex flex-col gap-s-3 rounded-md border border-border bg-surface px-s-4 py-s-3">
       {calculated === null ? null : (
@@ -206,10 +206,21 @@ export function ReviewActions({ estimateId, code, state, status, calculated, app
           </div>
         ) : null}
         <div className="flex flex-col gap-s-1">
-          <Button id={REVIEW_DOWNLOAD_ID} variant="secondary" disabled aria-describedby={DOWNLOAD_REASON_ID} className="w-full md:w-auto">
-            {DOWNLOAD_LABEL}
-          </Button>
-          <Reason id={DOWNLOAD_REASON_ID} text={downloadReason} />
+          {state === 'current' ? (
+            // The way to SCR-10, where the file card's own Download .xlsx builds the file; SCR-10 refuses a figure state that changed in between. The link carries no figure.
+            <Button id={REVIEW_DOWNLOAD_ID} asChild variant="secondary" className="w-full md:w-auto">
+              <Link href={`/estimates/${encodeURIComponent(code)}/export`} prefetch={false}>
+                {DOWNLOAD_LABEL}
+              </Link>
+            </Button>
+          ) : (
+            <>
+              <Button id={REVIEW_DOWNLOAD_ID} variant="secondary" disabled aria-describedby={DOWNLOAD_REASON_ID} className="w-full md:w-auto">
+                {DOWNLOAD_LABEL}
+              </Button>
+              <Reason id={DOWNLOAD_REASON_ID} text={DOWNLOAD_NOT_CALCULATED_REASON} />
+            </>
+          )}
         </div>
         <div className="flex flex-col gap-s-1">
           {status === 'APPROVED' ? (

@@ -167,6 +167,8 @@ test.describe('AC-3, AC-6, AC-7: a good cancel', () => {
     await expect(cancelButton(page)).toHaveCount(0);
     expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 1 });
     expect(await readCancel(owner.id)).toEqual({ approvedPrice: APPROVED_PRICE, cancelledBy: admin.id, reason: REASON, unlocked: false, entries: 1, passwordInAudit: false });
+    // STORY-07.07: Download is now the link (no reason line under it), so the page is shorter and the focused notice leaves the folder link half behind the sticky top bar at 768 px. The scan reads the page where it stands, so it is made from the top, as after a page load (the same step as insert-field.spec.ts).
+    await page.evaluate(() => window.scrollTo(0, 0));
     await expectNoAxeViolations(page);
 
     // AC-6: a Lead sees the same, with no button, and is told only the Admin can remove it.
