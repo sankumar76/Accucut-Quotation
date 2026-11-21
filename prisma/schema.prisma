@@ -45,6 +45,7 @@ model User {
   tasksAssigned     Task[]             @relation("TaskAssigner")
   calculations      Calculation[]
   emailOutbox       EmailOutbox[]      @relation("OutboxRecipient")
+  resetTokens       PasswordResetToken[]
   approvals         Approval[]         @relation("ApprovalApprover")
   unlocks           Approval[]         @relation("ApprovalUnlocker")
   cancellations     Approval[]         @relation("ApprovalCanceller")
@@ -545,4 +546,23 @@ model Setting {
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("settings")
+}
+
+/// One link to reset a password (STORY-09.07, FR-003, FR-098; architecture sections 5.1, 6 and 8). The raw token (32 random bytes) is only ever in the e-mail and the link: this table
+/// holds its SHA-256 (`token_hash`, UNIQUE), the person (`user_id`), when it stops working (`expires_at`, 60 minutes after it was made) and when it was used (`used_at`). A token is
+/// claimed by one atomic UPDATE that needs `used_at IS NULL` and `expires_at > now`, so it works once. A row is never deleted: `created_at` and `used_at` are the record of a reset by
+/// link (no audit entry is written, decision A-2). The runtime role has SELECT, INSERT and UPDATE and no DELETE. Class Confidential.
+model PasswordResetToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tokenHash String    @map("token_hash")
+  userId    String    @map("user_id") @db.Uuid
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_password_reset_tokens_user_id")
+
+  @@unique([tokenHash], map: "uq_password_reset_tokens_token_hash")
+  @@index([userId], map: "idx_password_reset_tokens_user_id")
+  @@map("password_reset_tokens")
 }

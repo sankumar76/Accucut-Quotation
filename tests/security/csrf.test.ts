@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { isStateChanging, ROUTE_MANIFEST, type HttpMethod, type RouteRow } from '@/server/http/route-manifest';
 
 import { OWN_PROTECTION } from '../support/route-files';
-import { API_LOADERS } from '../support/route-loaders';
+import { API_LOADERS, PUBLIC_API_LOADERS } from '../support/route-loaders';
 import { CSRF_LOOP, expectEveryCallRan, stateChangingCalls } from '../support/security-loops';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 
@@ -66,6 +66,10 @@ vi.mock('@/server/composition', async () => {
     getCostDetailsService: () => shared.costDetailsService,
     getExportService: () => shared.exportService,
     getAccountService: () => shared.accountService,
+    // STORY-09.07: the two public routes are loaded to be held to the origin check; a request that passes it has an empty body, so it is refused for its input before this is ever called.
+    getPasswordResetService: () => {
+      throw new Error('The origin check should have refused this request, or the schema should have refused its empty body.');
+    },
     getSessionCookieIssuer: () => shared.sessionCookieIssuer,
   };
 });
@@ -173,9 +177,59 @@ describe('AC-5: every state-changing route of the manifest', () => {
     expect(own.every((row) => row.roles === 'public')).toBe(true);
     // A route that changes state and is neither on this list nor in the loop above would be a hole.
     const unchecked = ROUTE_MANIFEST.filter(
-      (row) => row.kind === 'api' && row.status === 'implemented' && row.methods.some((method) => isStateChanging(method)) && !stateChangingRoutes.includes(row) && !own.includes(row),
+      (row) =>
+        row.kind === 'api' &&
+        row.status === 'implemented' &&
+        row.methods.some((method) => isStateChanging(method)) &&
+        !stateChangingRoutes.includes(row) &&
+        !own.includes(row) &&
+        !publicRoutes.includes(row),
     );
     expect(unchecked).toEqual([]);
+  });
+});
+
+/**
+ * STORY-09.07: the two public routes (a person who forgot their password has no session) are declared with `withPublicRoute`, which runs the same origin check before it reads anything. They
+ * are held to it here, with no session at all, and a refused request writes and reads nothing.
+ */
+const publicRoutes = ROUTE_MANIFEST.filter((row) => row.kind === 'api' && row.status === 'implemented' && row.roles === 'public' && Object.hasOwn(PUBLIC_API_LOADERS, row.path));
+
+describe('AC-5: the public state-changing routes (STORY-09.07)', () => {
+  const publicCalls = publicRoutes.flatMap((row) => row.methods.filter((method) => isStateChanging(method)).map((method) => [`${method} ${row.path}`, row, method] as const));
+
+  async function loadPublic(row: RouteRow, method: HttpMethod): Promise<Handler> {
+    const loader = PUBLIC_API_LOADERS[row.path];
+    if (loader === undefined) throw new Error(`no public loader for ${row.path}`);
+    const handler = z.record(z.string(), z.unknown()).parse(await loader())[method];
+    if (typeof handler !== 'function') throw new Error(`${row.path} exports no ${method}`);
+    return async (incoming) => {
+      const answer: unknown = await handler(incoming);
+      if (!(answer instanceof Response)) throw new Error(`${row.path} ${method} did not answer with a Response`);
+      return answer;
+    };
+  }
+
+  it('has the two routes of the reset by link, so the loops below are not empty', () => {
+    expect(publicCalls.map(([name]) => name).sort()).toEqual(['POST /api/v1/account/password/forgot', 'POST /api/v1/account/password/reset']);
+  });
+
+  it.each(publicCalls)('%s refuses a foreign Origin, and a request that says nothing about where it came from', async (_name, row, method) => {
+    harness.signInAs(null);
+    const handler = await loadPublic(row, method);
+    for (const headers of [{ origin: 'https://evil.example', 'sec-fetch-site': 'cross-site' }, {}]) {
+      const answer = await handler(request(method, headers));
+      expect(answer.status).toBe(403);
+      expect(z.record(z.string(), z.unknown()).parse(await answer.json())['code']).toBe('ORIGIN_REFUSED');
+    }
+  });
+
+  it.each(publicCalls)('%s does not refuse a request from APP_ORIGIN for its origin, and needs no session', async (_name, row, method) => {
+    harness.signInAs(null);
+    const handler = await loadPublic(row, method);
+    const answer = await handler(request(method, { origin: APP_ORIGIN }));
+    expect(z.record(z.string(), z.unknown()).parse(await answer.json())['code']).not.toBe('ORIGIN_REFUSED');
+    expect(answer.status).toBe(422);
   });
 });
 

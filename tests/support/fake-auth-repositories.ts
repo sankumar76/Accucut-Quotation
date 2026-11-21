@@ -175,6 +175,13 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
       found.sessionVersion += 1;
       return Promise.resolve(found.sessionVersion);
     },
+    setPasswordFromReset(id, newHash) {
+      const found = records.find((record) => sameUuid(record.id, id));
+      if (found === undefined || !found.isActive) return Promise.resolve(false);
+      Object.assign(found, { passwordHash: newHash, mustChangePassword: false });
+      found.sessionVersion += 1;
+      return Promise.resolve(true);
+    },
     raiseSessionVersion(id, expectedVersion) {
       const found = records.find((record) => sameUuid(record.id, id));
       if (found === undefined || found.sessionVersion !== expectedVersion) return Promise.resolve(false);

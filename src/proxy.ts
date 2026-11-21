@@ -69,9 +69,10 @@ export function proxy(request: NextRequest): NextResponse {
 }
 
 /**
- * Everything except the sign-in page, next-auth's own routes, and static files (the build output, the logo). The
- * sign-in page is public; the rest is behind the check.
+ * Everything except the sign-in page, the two pages of the reset by e-mailed link (STORY-09.07: a person who forgot their password has
+ * no session), next-auth's own routes, and static files (the build output, the logo). Those pages are public; the rest is behind the check.
+ * The reset API routes (`/api/v1/account/password/forgot` and `/reset`) are API paths, which the proxy never redirects.
  */
 export const config = {
-  matcher: ['/((?!sign-in(?:/|$)|api/auth(?:/|$)|_next/static|_next/image|accucut-logo\\.jpg$).*)'],
+  matcher: ['/((?!sign-in(?:/|$)|forgot-password(?:/|$)|reset-password(?:/|$)|api/auth(?:/|$)|_next/static|_next/image|accucut-logo\\.jpg$).*)'],
 };

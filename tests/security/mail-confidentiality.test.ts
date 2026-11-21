@@ -22,7 +22,8 @@ const MAIL_FILES = {
   'src/lib/mail': ['codes.ts', 'events.ts', 'failure-window.ts', 'retry.ts'],
   // STORY-09.03, 09.04 and 09.05: the message of each alert is a pure function from a fixed DTO of plain strings (no cost field), on top of the shared layout.
   // STORY-09.06: the Admin's "server check needed" message is built from two booleans, so it cannot hold a figure or a path.
-  'src/server/mail/templates': ['backup-missed.ts', 'daily-digest.ts', 'task-assigned.ts', 'task-overdue.ts'],
+  // STORY-09.07: the reset-link message is the person's name and a link; it imports the one lib file that holds the lifetime in minutes (no cost, no rate, no formula).
+  'src/server/mail/templates': ['backup-missed.ts', 'daily-digest.ts', 'password-reset.ts', 'task-assigned.ts', 'task-overdue.ts'],
 } as const;
 
 const JOB_FILE = 'src/server/jobs/outbox-send.ts';
@@ -42,7 +43,7 @@ const ALLOWED_SPECIFIER = [
   /^\.\.\/\.\.\/lib\/(env|time)$/,
   // From `src/server/mail/templates/`: the shared layout above it, `formatIst` from the time module and the overdue rule of a task (STORY-09.04), three levels up.
   /^\.\.\/layout$/,
-  /^\.\.\/\.\.\/\.\.\/lib\/(time|tasks\/overdue)$/,
+  /^\.\.\/\.\.\/\.\.\/lib\/(time|tasks\/overdue|auth\/password-reset)$/,
   // From `src/server/jobs/overdue-scan.ts` and `daily-digest.ts` (STORY-09.04, 09.05): the plain, pure rules of a task, and the overdue and digest templates.
   /^\.\.\/\.\.\/lib\/tasks\/(folder-path|overdue|task-link)$/,
   /^\.\.\/mail\/templates\/(task-overdue|daily-digest)$/,
