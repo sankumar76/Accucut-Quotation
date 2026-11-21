@@ -154,7 +154,7 @@ test('DEF-054: a redirect, a JSON answer and a static file carry the headers', a
   const json = await request.get('/api/v1/me');
   expect(json.status()).toBe(401);
   const policy = expectSecurityHeaders(json.headers(), 'same-origin');
-  expect(policy).toBe("default-src 'none'; frame-ancestors 'none'");
+  expect(policy).toBe("default-src 'none'; frame-ancestors 'none'; sandbox");
 
   await page.goto('/forgot-password');
   const source = await page.evaluate(() => [...document.scripts].find((script) => script.src !== '')?.src ?? '');
