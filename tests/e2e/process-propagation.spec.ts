@@ -133,7 +133,10 @@ test.describe('a changed default reaches the customers (AC-1 to AC-3, AC-5, AC-1
       await expect(window.getByRole('button', { name: 'Close' })).toBeFocused();
       await page.keyboard.press('Tab');
       await expect(bravo.keep).toBeFocused();
-      await page.keyboard.press('ArrowLeft');
+      // Radix moves focus a task after the key goes down and checks the radio only if the key is still down when focus arrives, as it is for a person: a press that is over in one tick would miss it.
+      await page.keyboard.down('ArrowLeft');
+      await expect(bravo.apply).toBeFocused();
+      await page.keyboard.up('ArrowLeft');
       await expect(bravo.apply).toBeChecked();
       await window.getByRole('button', { name: 'Apply to all 2' }).click();
       await expect(charlie.apply).toBeChecked();

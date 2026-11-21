@@ -54,7 +54,8 @@ describe('AC-1 (NFR-026): changing the masters changes nothing an approved estim
     expect(await totalOfANewCalculation(world, approved.materialId)).not.toBe(approvedTotal);
 
     expect(await approvedValuesOf(world, approved.estimateId)).toEqual(before);
-  });
+    // Each of the 15 rate changes now also moves the customers that held the old default (STORY-02.08): a few statements more each, and 5 s was too little with the whole suite running.
+  }, 30_000);
 
   it('the price that was approved is the one stored, and BO shows it after the change too', async () => {
     const approved = await approvedEstimateOf(world, '4321.50');
