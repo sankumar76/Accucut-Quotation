@@ -37,6 +37,8 @@ export function canaryRateFieldId(document: ConfigDocument): string {
 function checkedByRule(document: ConfigDocument, fieldId: string, text: string): InputCheck {
   const rule = formFieldById(document, fieldId)?.rule;
   if (rule === undefined || rule.type === 'derived' || rule.type === 'select' || rule.type === 'picture') return { ok: true, value: null };
+  // A choice holds one of the Admin's options, never a typed word: the canary has no value for one.
+  if (rule.type === 'choice') return { ok: true, value: null };
   // Treatment / Color is "Other" with the canary's words, as a person types it (STORY-05.06); a treatment flag is 0 or 1.
   if (rule.type === 'treatment') return readTreatmentInput(encodeTreatment({ id: OTHER_TREATMENT_ID, text }));
   if (rule.type === 'flag') return readFlagInput(text);

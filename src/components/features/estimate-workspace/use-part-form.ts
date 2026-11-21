@@ -258,7 +258,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
       onItsWayRef.current.delete(conflictId);
       mark(conflictId, true);
       const shown = fieldOf(conflictId)?.rule.type;
-      setErrors((current) => ({ ...current, [conflictId]: conflictFieldMessage(shown === 'number' || shown === 'text' ? newerText : null) }));
+      setErrors((current) => ({ ...current, [conflictId]: conflictFieldMessage(shown === 'number' || shown === 'text' || shown === 'choice' ? newerText : null) }));
     }
     conflictRef.current = new Set([...conflictRef.current, ...plan.conflicts.map((conflict) => conflict.fieldId)]);
     // The fields in conflict now, with those still waiting from an earlier read: one notice names them all.

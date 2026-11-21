@@ -212,7 +212,7 @@ export function createConfigStructureService({ configurations, masters, stepUp, 
           const current = latest?.number ?? version.number;
           throw new ConfigVersionChangedError(current, insertVersionChangedMessage(current));
         }
-        const entry = insertAuditAfter(result.changes, result.formulas, stored.number);
+        const entry = insertAuditAfter(result.changes, result.formulas, stored.number, { section: result.section === null ? null : { number: result.section.number, name: result.section.name }, choices: result.choices });
         await audit.record(tx, {
           event: 'config.field_inserted',
           actorId: caller.user.id,

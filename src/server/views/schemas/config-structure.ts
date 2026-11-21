@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { INSERTABLE_DATA_TYPES } from '../../../lib/config/field-insert-check';
+import { MAX_CHOICE_LENGTH, MAX_CHOICES } from '../../../lib/config/field-insert-limits';
 import { FIELD_KINDS } from '../../../lib/fields/types';
 import { stepUpPasswordSchema } from './step-up';
 
@@ -18,8 +19,14 @@ const MAX_TYPED_TEXT_LENGTH = 2_000;
 const MAX_FORMULA_TEXT_LENGTH = 8_000;
 const MAX_FORMAT_LENGTH = 100;
 
+/** Fifty choices of a hundred characters, with a line break between them and some room: only a bound on the size of what is read. The count and the length of each choice are the pure insert's, in its own words. */
+const MAX_CHOICES_TEXT_LENGTH = MAX_CHOICES * (MAX_CHOICE_LENGTH + 2) + 1_000;
+
 const id = z.string().max(MAX_ID_LENGTH);
 const typed = z.string().max(MAX_TYPED_TEXT_LENGTH);
+
+/** A new section (STORY-08.08): its name and the short name of the strip. Sizes only; the rules are the pure insert's. */
+const newSectionSchema = z.strictObject({ name: typed, shortName: typed });
 
 const newInputSchema = z.strictObject({
   label: typed,
@@ -31,6 +38,10 @@ const newInputSchema = z.strictObject({
   width: z.number(),
   numFmt: z.string().max(MAX_FORMAT_LENGTH),
   watchFieldId: id.nullable(),
+  /** Choices, one per line, for a choice input (STORY-08.08). Optional, so a client of 08.03 still parses. */
+  choices: z.string().max(MAX_CHOICES_TEXT_LENGTH).optional(),
+  /** "A new section": when given, `sectionId` is not read. */
+  newSection: newSectionSchema.nullable().optional(),
 });
 
 const outputShape = {

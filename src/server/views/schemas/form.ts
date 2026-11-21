@@ -44,6 +44,8 @@ const ruleSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('number'), decimals: z.number().int().min(0) }),
   z.strictObject({ type: z.literal('text'), maxLength: z.number().int().min(1), multiline: z.boolean() }),
   z.strictObject({ type: z.literal('select'), source: z.literal('materials') }),
+  /** A choice the Admin gave a list for (STORY-08.08): the options are the registry's own words, never a rate or a figure. */
+  z.strictObject({ type: z.literal('choice'), options: z.array(z.string().min(1)).min(1).readonly() }),
   z.strictObject({ type: z.literal('treatment'), maxLength: z.number().int().min(1) }),
   z.strictObject({ type: z.literal('flag') }),
   z.strictObject({ type: z.literal('derived'), from: z.uuid().nullable() }),
