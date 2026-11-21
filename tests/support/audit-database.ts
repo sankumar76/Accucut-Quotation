@@ -33,6 +33,8 @@ export interface AuditDatabase extends AuthDatabase {
     readonly readConfiguration?: () => Promise<ConfigDocument>;
     /** Replaces the clock that stamps an exchange-rate save (STORY-02.04), so a test sets the instant. */
     readonly clock?: Clock;
+    /** Replaces the audit service, for a test that counts how the entries were written (ADR-018). */
+    readonly audit?: AuditService;
   }): MastersService;
 }
 
@@ -56,7 +58,7 @@ export async function openAuditDatabase(): Promise<AuditDatabase> {
     createMastersService({
       masters: masterRepository,
       transactions: options.transactions ?? transactions,
-      audit,
+      audit: options.audit ?? audit,
       currentConfiguration: options.readConfiguration ?? (() => Promise.resolve(options.configuration ?? seedConfig)),
       clock: options.clock,
     });
