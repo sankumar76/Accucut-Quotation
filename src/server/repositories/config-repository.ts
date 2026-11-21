@@ -53,6 +53,8 @@ export interface NewConfigVersion {
   readonly createdBy: string;
 }
 
+const SEED_ROWS = z.array(z.strictObject({ id: z.uuid() }));
+const SEED_CHECKPOINT_TABLE = z.array(z.strictObject({ present: z.boolean() }));
 const INSERTED_ROWS = z.array(z.strictObject({ id: z.uuid(), number: z.number().int() }));
 
 export interface ConfigRepository {
@@ -84,21 +86,27 @@ export interface ConfigRepository {
 export function createConfigRepository(db: PrismaClient): ConfigRepository {
   return {
     insertSeedVersionIfNone({ snapshot, reason }) {
-      return withDatabaseErrors(async () => {
-        // Parameterised; the casts give each parameter a type, which `INSERT ... SELECT` cannot infer.
-        // The count is the rows of the last statement, the checkpoint's: 1 only when the version was inserted, 0 when a version existed and nothing was.
-        const inserted = await db.$executeRaw`
-          WITH seed AS (
+      // One transaction: the version and its checkpoint are stored together or not at all. The checkpoint is made only from a version this call inserted, so a second run, which inserts nothing, leaves one.
+      return withDatabaseErrors(() =>
+        db.$transaction(async (transaction) => {
+          // Parameterised; the casts give each parameter a type, which `INSERT ... SELECT` cannot infer.
+          const rows = await transaction.$queryRaw`
             INSERT INTO config_versions (number, snapshot, created_by, reason)
             SELECT ${SEED_VERSION_NUMBER}::integer, ${JSON.stringify(snapshot)}::jsonb, NULL, ${reason}::text
             WHERE NOT EXISTS (SELECT 1 FROM config_versions)
             ON CONFLICT (number) DO NOTHING
-            RETURNING id
-          )
-          INSERT INTO config_checkpoints (name, config_version_id, created_by)
-          SELECT ${SEED_CHECKPOINT_NAME}::text, seed.id, NULL FROM seed`;
-        return inserted === 1;
-      });
+            RETURNING id::text AS "id"`;
+          const seed = SEED_ROWS.parse(rows)[0];
+          if (seed === undefined) return false;
+          // The step runs right after the migrations, so the table is there; it is asked for all the same, because a step that is run against a schema one migration behind (a restored copy not yet migrated forward,
+          // deploy/windows/tests/Restore.Tests.ps1 R3) must still store version 1, as the step of that release did.
+          const present = SEED_CHECKPOINT_TABLE.parse(await transaction.$queryRaw`SELECT to_regclass('public.config_checkpoints') IS NOT NULL AS "present"`)[0];
+          if (present?.present === true) {
+            await transaction.$executeRaw`INSERT INTO config_checkpoints (name, config_version_id, created_by) VALUES (${SEED_CHECKPOINT_NAME}::text, ${seed.id}::uuid, NULL)`;
+          }
+          return true;
+        }),
+      );
     },
 
     insertVersionAfter({ baseNumber, snapshot, reason, createdBy }, tx) {

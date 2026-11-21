@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { SEED_CHECKPOINT_NAME } from '@/server/repositories/config-repository';
+import { createPrismaClient } from '@/server/repositories/prisma-client';
+import { createConfigRepository, SEED_CHECKPOINT_NAME } from '@/server/repositories/config-repository';
 
 import { createMigratedScratchDatabase, type ScratchDatabase } from '../../support/scratch-database';
 
@@ -78,3 +79,39 @@ function defined<T>(value: T | undefined): T {
   if (value === undefined) throw new Error('Expected a value.');
   return value;
 }
+
+/**
+ * A restored copy that is one migration behind the installed release is migrated forward by the step of that release (`deploy/windows/tests/Restore.Tests.ps1`, R3: the older schema, the newer script). The step must
+ * still store version 1 where the table of checkpoints does not exist yet, and store the seed checkpoint with it where it does.
+ */
+describe('the seed step against a schema without the table of checkpoints', { timeout: 120_000 }, () => {
+  let database: ScratchDatabase;
+
+  beforeAll(async () => {
+    database = await createMigratedScratchDatabase();
+  });
+  afterAll(() => database.drop());
+
+  const seedStep = async (): Promise<boolean> => {
+    const client = createPrismaClient('script', database.ownerUrl);
+    try {
+      return await createConfigRepository(client).insertSeedVersionIfNone({ snapshot: { invented: true }, reason: 'Invented seed step' });
+    } finally {
+      await client.$disconnect();
+    }
+  };
+
+  it('stores version 1, and no checkpoint, when the table is not there', async () => {
+    const owner = new Client({ connectionString: database.ownerUrl });
+    await owner.connect();
+    try {
+      await owner.query('DROP TABLE config_checkpoints');
+      expect(await seedStep()).toBe(true);
+      expect((await owner.query('SELECT number FROM config_versions')).rows).toEqual([{ number: 1 }]);
+      // Run again: nothing changes and it still answers false.
+      expect(await seedStep()).toBe(false);
+    } finally {
+      await owner.end();
+    }
+  });
+});

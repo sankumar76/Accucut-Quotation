@@ -44,13 +44,15 @@ const fulfil = (route: Parameters<Parameters<Page['route']>[1]>[0], answer: Answ
   route.fulfill({ status: answer.status, contentType: answer.status < 300 ? 'application/json' : 'application/problem+json', body: JSON.stringify(answer.body) });
 
 /** Answers the two reads (`GET /config/checkpoints`, `GET /config/current`) with the mock-up's data; `list` may be another answer, and `delayMs` holds the list back. */
-async function answerReads(page: Page, options: { readonly list?: Answer | ReadonlyArray<Answer>; readonly delayMs?: number } = {}): Promise<{ readonly reads: { count: number } }> {
-  const reads = { count: 0 };
+async function answerReads(page: Page, options: { readonly list?: Answer | ReadonlyArray<Answer>; readonly delayMs?: number } = {}): Promise<{ readonly reads: { count: number; failing: boolean } }> {
+  // `failing` answers every list read with a server error until the test turns it off (the dev server reads twice on mount, so "the first read fails" would not hold).
+  const reads = { count: 0, failing: false };
   const lists = options.list === undefined ? [{ status: 200, body: { checkpoints: ROWS } }] : Array.isArray(options.list) ? options.list : [options.list];
   await page.route('**/api/v1/config/current', (route) => fulfil(route, { status: 200, body: CURRENT }));
   await page.route('**/api/v1/config/checkpoints', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     reads.count += 1;
+    if (reads.failing) return fulfil(route, { status: 500, body: {} });
     if (options.delayMs !== undefined) await new Promise((resolve) => setTimeout(resolve, options.delayMs));
     return fulfil(route, lists[Math.min(reads.count, lists.length) - 1] ?? { status: 500, body: {} });
   });
@@ -86,7 +88,7 @@ async function openCheckpoints(page: Page): Promise<void> {
   await page.goto('/config/checkpoints');
   await expect(page.getByRole('heading', { level: 1, name: 'Checkpoints and versions' })).toBeVisible();
   await waitUntilHydrated(page, '#checkpoint-name', 'onChange');
-  await expect(page.getByText('Before AY insert').first()).toBeVisible();
+  await expect(page.locator('[data-item-id]:visible').filter({ hasText: 'Before AY insert' }).first()).toBeVisible();
 }
 
 test.describe('the Admin', () => {
@@ -182,7 +184,7 @@ test.describe('the Admin', () => {
     await password.fill(RIGHT);
     await page.keyboard.press('Enter');
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByRole('status').filter({ hasText: 'Reverted to version 7. This is now configuration version 9.' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Reverted to version 7. This is now configuration version 10.' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Revert to the version from before' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Checkpoints and versions' })).toBeFocused();
     expect(sent.map((request) => request.body)).toEqual([{ password: WRONG, baseVersion: 9 }, { password: RIGHT, baseVersion: 9 }]);
@@ -233,11 +235,13 @@ test.describe('the Admin', () => {
   });
 
   test('AC-10: Error shows "We could not load the checkpoints" with "Try again", which reads again and shows the list', async ({ page }) => {
-    await answerReads(page, { list: [{ status: 500, body: {} }, { status: 200, body: { checkpoints: ROWS } }] });
+    const { reads } = await answerReads(page);
+    reads.failing = true;
     await page.goto('/config/checkpoints');
     await expect(page.getByRole('heading', { name: 'We could not load the checkpoints' })).toBeVisible();
+    reads.failing = false;
     await page.getByRole('button', { name: 'Try again' }).click();
-    await expect(page.getByText('Before AY insert').first()).toBeVisible();
+    await expect(page.locator('[data-item-id]:visible').filter({ hasText: 'Before AY insert' }).first()).toBeVisible();
   });
 });
 
