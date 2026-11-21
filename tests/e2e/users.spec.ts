@@ -73,6 +73,34 @@ test.describe('the list', () => {
     }
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
+    // DIAGNOSTIC ONLY (AQP-383, DL-275 condition 1): plant three violations in the whole page and show the helper still reports them. Never merged.
+    test.setTimeout(150_000);
+    await page.evaluate(() => {
+      const main = document.querySelector('main');
+      if (main === null) throw new Error('no main');
+      const button = document.createElement('button');
+      button.id = 'aqp383-plant-button';
+      const image = document.createElement('img');
+      image.id = 'aqp383-plant-image';
+      image.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+      const text = document.createElement('p');
+      text.id = 'aqp383-plant-contrast';
+      text.textContent = 'Planted low contrast text';
+      text.style.cssText = 'color:#cccccc;background:#ffffff';
+      main.append(button, image, text);
+    });
+    const outcome = await expectNoAxeViolations(page).then(
+      () => 'NOT REPORTED',
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    );
+    const ids = ['button-name', 'image-alt', 'color-contrast'].map((id) => `${id}=${outcome.includes(id)}`).join(' ');
+    const targets = ['aqp383-plant-button', 'aqp383-plant-image', 'aqp383-plant-contrast'].map((id) => `${id}=${outcome.includes(id)}`).join(' ');
+    // eslint-disable-next-line no-console -- diagnostic output
+    console.log(`AQP383PLANT ${testInfo.project.name} r${testInfo.retry} reported=${outcome !== 'NOT REPORTED'} ${ids} ${targets} length=${outcome.length}`);
+    expect(outcome).not.toBe('NOT REPORTED');
+    expect(outcome).toContain('button-name');
+    expect(outcome).toContain('image-alt');
+    expect(outcome).toContain('color-contrast');
   });
 
   test('AC-7: controls are at least 44 px, and the icon buttons of a table row at least 36 px', async ({ page }, testInfo) => {
