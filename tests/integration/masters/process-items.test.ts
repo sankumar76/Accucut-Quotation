@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { FieldValidationError, NAME_REFUSED_CODE, NAME_TAKEN_CODE, NotFoundError, ProcessItemInUseError } from '@/lib/errors';
 import { MasterConstraintError } from '@/server/repositories/master-repository';
-import { createTransactionRunner, type TransactionRunner } from '@/server/repositories/transaction';
+import { createTransactionRunner, type Transaction, type TransactionRunner } from '@/server/repositories/transaction';
 
 import { contextOf, entriesFor, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { defined } from '../../support/defined';
@@ -258,10 +258,44 @@ describe('AC-5 (DEF-017): an entry commits with its change, or not at all', () =
   });
 });
 
+/**
+ * A runner whose first transaction finishes its work and then waits, uncommitted, until `release` is called (a gate, so a second
+ * request can be started while the first holds the table lock). `reached` resolves when the first transaction is waiting.
+ */
+function holdingTheFirstCommit(real: TransactionRunner): { readonly runner: TransactionRunner; readonly reached: Promise<void>; readonly release: () => void } {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reachedGate: () => void = () => undefined;
+  const reached = new Promise<void>((resolve) => {
+    reachedGate = resolve;
+  });
+  let first = true;
+  const runner: TransactionRunner = {
+    run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
+      const holds = first;
+      first = false;
+      return real.run(async (tx) => {
+        const result = await work(tx);
+        if (holds) {
+          reachedGate();
+          await gate;
+        }
+        return result;
+      });
+    },
+  };
+  return { runner, reached, release };
+}
+
 describe('two requests at once', () => {
+  // DEF-056 (AQP-386): the old list held 'RACE-RATE'. In capitals it reads as the columns RACE and RATE with a minus between, so it is
+  // refused on its own (RATE_NAME_REFUSED, AC-3) whenever it takes the table lock before any rate has the name: about one race in four.
+  // Every name here is acceptable alone, so the only thing that can refuse a loser is that the name is taken.
   it('let exactly one of several simultaneous creations of one name (in different letter case) win; the others are told the name is taken', async () => {
     const attempts = await Promise.allSettled(
-      ['Race-Rate', 'RACE-RATE', 'race-rate', 'Race-rate'].map((name) => db.mastersService.createProcessItem(by(), { name, unit: 'per kg', defaultValue: '1.37' })),
+      ['Race-Rate', 'rACE-RATE', 'race-rate', 'Race-rate'].map((name) => db.mastersService.createProcessItem(by(), { name, unit: 'per kg', defaultValue: '1.37' })),
     );
     const winners = attempts.filter((attempt) => attempt.status === 'fulfilled');
     const losers = attempts.flatMap((attempt) => (attempt.status === 'rejected' ? [attempt.reason as unknown] : []));
@@ -269,6 +303,29 @@ describe('two requests at once', () => {
     for (const loser of losers) expect(loser).toMatchObject({ code: NAME_TAKEN_CODE });
     const { rows: found } = await db.owner.query("SELECT 1 FROM process_items WHERE lower(name) = 'race-rate'");
     expect(found).toHaveLength(1);
+  });
+
+  it('a request that gets the table lock after the first has written, but before it commits, reads the winner once it commits: taken, not refused as column letters (DEF-056)', async () => {
+    const gated = holdingTheFirstCommit(db.transactions);
+    const first = db.buildMastersService({ transactions: gated.runner }).createProcessItem(by(), { name: 'Gate-Rate', unit: 'per kg', defaultValue: '1.37' });
+    await gated.reached;
+    // Alone, 'GATE-RATE' reads as the columns GATE and RATE with a minus, so only the winner's row can make the answer "taken".
+    const second = db.mastersService.createProcessItem(by(), { name: 'GATE-RATE', unit: 'per kg', defaultValue: '1.37' });
+    const settledEarly = await Promise.race([second.then(() => true, () => true), new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300))]);
+    gated.release(); // always, so a failed check below does not leave the first transaction open until its time limit
+    expect(settledEarly).toBe(false); // it waited for the table lock the first request held
+    await first;
+    expect(await refusal(second)).toMatchObject({ code: NAME_TAKEN_CODE });
+    const { rows: found } = await db.owner.query("SELECT 1 FROM process_items WHERE lower(name) = 'gate-rate'");
+    expect(found).toHaveLength(1);
+  });
+
+  it('a name that reads as column letters is refused on its own (RATE_NAME_REFUSED) and as taken once another rate has it in other letter case (rule order, AC-2 before AC-3)', async () => {
+    const alone = await refusal(db.mastersService.createProcessItem(by(), { name: 'SAME-RATE', unit: 'per kg', defaultValue: '1.37' }));
+    expect(alone).toMatchObject({ code: NAME_REFUSED_CODE });
+    await db.mastersService.createProcessItem(by(), { name: 'Same-Rate', unit: 'per kg', defaultValue: '1.37' });
+    const again = await refusal(db.mastersService.createProcessItem(by(), { name: 'SAME-RATE', unit: 'per kg', defaultValue: '1.37' }));
+    expect(again).toMatchObject({ code: NAME_TAKEN_CODE });
   });
 });
 
