@@ -8,9 +8,10 @@ import { checkReassign, TASK_CLOSED_CODE, TASK_CLOSED_MESSAGE, type ReassignInpu
 import { formatTaskCode } from '../../lib/tasks/task-code';
 import { istYearOf, type Clock } from '../../lib/time';
 import type { EngineerRecord, EstimateRecord, QueueRow, QueueScope, TaskRepository } from '../repositories/task-repository';
-import type { TransactionRunner } from '../repositories/transaction';
+import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
 import type { AuditContext, AuditService } from './audit-service';
+import type { TaskMail, TaskMailTask } from './task-mail';
 import { encodeTaskQueueCursor, type TaskQueueCursor } from './task-queue-cursor';
 
 /**
@@ -26,6 +27,10 @@ import { encodeTaskQueueCursor, type TaskQueueCursor } from './task-queue-cursor
  *   - **The `file:` link is built here**, from the validated UNC path (AC-4); the browser is never asked to build one.
  *
  * There is no audit entry for the assignment: the audit log of architecture section 8 lists a task change (STORY-04.07), not the first assignment.
+ *
+ * The assignment e-mail (STORY-09.03; FR-081, BR-040, architecture section 4.7): with alerts ON, the outbox row of the message is written **in the same transaction** as the task and its
+ * estimate (and, for a change of Engineer, as the reassign), so a rolled-back task has no message. With alerts OFF nothing is written and the task is made exactly as before. The service
+ * reads the Engineer and the assigner in the transaction and hands them to `TaskMail` by ID: no address is read here or taken from a request. A service built without `mail` writes none.
  *
  * Reassign or change the deadline (STORY-04.07; FR-040, architecture sections 4.4, 6 and 8): `reassignTask` is the one place an open task's Engineer or deadline changes.
  *
@@ -62,6 +67,8 @@ export interface AssignedTask {
 /** What SCR-04 chooses from. */
 export interface AssignContext {
   readonly engineers: ReadonlyArray<EngineerRecord>;
+  /** Whether e-mail alerts are on: the one fact of the settings a Lead may see, for the notice "E-mail alerts are OFF" (STORY-09.03 AC-6). */
+  readonly alertsEnabled: boolean;
 }
 
 /** A task as a row of the queue shows it. The deadline is an instant in UTC; the screen shows it in IST. */
@@ -150,6 +157,8 @@ export interface TaskDependencies {
   readonly clock: Clock;
   /** Needed by `reassignTask` alone (its entry is written in its own transaction); a service built without it refuses to reassign. */
   readonly audit?: AuditService | undefined;
+  /** The assignment e-mail (STORY-09.03). A service built without it writes no row and reports alerts as off. */
+  readonly mail?: TaskMail | undefined;
 }
 
 /** Every task, whoever it is assigned to or by: what a reassign reads back for its answer (the caller's right to change it was decided by the route). */
@@ -202,9 +211,23 @@ function problemsOf(errors: Readonly<Record<string, string | undefined>>): Reado
   return Object.entries(errors).flatMap(([field, message]) => (message === undefined ? [] : [{ field, message }]));
 }
 
-export function createTaskService({ tasks, transactions, clock, audit }: TaskDependencies): TaskService {
+export function createTaskService({ tasks, transactions, clock, audit, mail }: TaskDependencies): TaskService {
+  /**
+   * Writes the assignment e-mail's row in `tx`: the person who assigned or changed the task is read in the same transaction (their name for the message, and whether they are active now for
+   * the Cc, decision D-5). Always a Lead or an Admin: an ID that is neither is a mistake in the code, and refusing it rolls the whole change back.
+   */
+  async function enqueueAssigned(tx: Transaction, task: TaskMailTask, assignerId: string): Promise<void> {
+    if (mail === undefined) return;
+    const assigner = await tasks.findAssigner(assignerId, tx);
+    if (assigner === null) throw new Error('The person who assigned the task could not be read.');
+    await mail.enqueueTaskAssigned(tx, task, assigner);
+  }
+
   return {
-    getAssignContext: async () => ({ engineers: await tasks.listActiveEngineers() }),
+    getAssignContext: async () => {
+      const [engineers, alertsEnabled] = await Promise.all([tasks.listActiveEngineers(), mail === undefined ? Promise.resolve(false) : mail.alertsEnabled()]);
+      return { engineers, alertsEnabled };
+    },
 
     async assignTask(assignedById, input) {
       const now = clock.now();
@@ -213,6 +236,8 @@ export function createTaskService({ tasks, transactions, clock, audit }: TaskDep
       const { values } = checked;
       const folderUrl = folderUrlOf(values.folderPath);
       if (folderUrl === null) throw new Error('A checked folder path has no link.');
+      // Read before the transaction opens: the row is written, or not, by the switch as it is now; a switch turned off before the worker claims the row skips it (STORY-09.01 AC-5).
+      const alertsOn = mail !== undefined && (await mail.alertsEnabled());
 
       return transactions.run(async (tx) => {
         const engineer = await tasks.findActiveEngineer(values.engineerId, tx);
@@ -224,6 +249,13 @@ export function createTaskService({ tasks, transactions, clock, audit }: TaskDep
           tx,
         );
         const estimate = await tasks.createEstimate(task.id, tx);
+        if (alertsOn) {
+          await enqueueAssigned(
+            tx,
+            { id: task.id, code: task.code, title: task.title, notes: task.notes, folderPath: task.folderPath, deadlineAt: task.deadlineAt, assignmentRevision: task.assignmentRevision, engineer },
+            assignedById,
+          );
+        }
         return {
           id: task.id,
           code: task.code,
@@ -291,6 +323,15 @@ export function createTaskService({ tasks, transactions, clock, audit }: TaskDep
           before: { engineer: locked.engineer, deadlineAt: locked.deadlineAt.toISOString() },
           after: { engineer, deadlineAt: deadlineAt.toISOString() },
         });
+        // A new Engineer is told as a first assignment is, with the new revision in the key and the person who made the change copied (STORY-09.03 AC-7). A deadline-only change is not
+        // an assignment: the overdue e-mail follows the deadline (STORY-09.04).
+        if (engineerChanged && mail !== undefined && (await mail.alertsEnabled())) {
+          await enqueueAssigned(
+            tx,
+            { id: locked.id, code: locked.code, title: locked.title, notes: locked.notes, folderPath: locked.folderPath, deadlineAt, assignmentRevision, engineer },
+            context.actorId,
+          );
+        }
         return { engineerChanged, deadlineChanged, assignmentRevision };
       });
       // The answer is the row as the queue shows it, read once the change is committed.

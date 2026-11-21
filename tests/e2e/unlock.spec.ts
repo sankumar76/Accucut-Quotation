@@ -170,6 +170,8 @@ test.describe('AC-2, AC-3, AC-7, AC-11: a good unlock', () => {
     await expect(unlockButton(page)).toHaveCount(0);
     expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 1 });
     expect(await readUnlock(owner.id)).toEqual({ approvedPrice: APPROVED_PRICE, unlockedBy: lead.id, reason: REASON, entries: 1 });
+    // STORY-07.07: Download is now the link (no reason line under it), so the page is shorter and the focused notice leaves the folder link half behind the sticky top bar at 768 px. The scan reads the page where it stands, so it is made from the top, as after a page load (the same step as insert-field.spec.ts).
+    await page.evaluate(() => window.scrollTo(0, 0));
     await expectNoAxeViolations(page);
 
     // AC-7: the Engineer, on the same address, finds the estimate editable again and sees no price (NFR-002).

@@ -150,5 +150,4 @@ export const priceRemovedNoticeTitle = (time: string, name: string): string => `
 export const PRICE_REMOVED_AUDIT_KEEPS = 'The audit log keeps it.';
 export const PRICE_REMOVED_APPROVE_AGAIN = 'Approve again, after a Recalculate, to set a price.';
 export const DOWNLOAD_NOT_CALCULATED_REASON ='Calculate or Recalculate first. There is no file until a calculation is current.';
-export const DOWNLOAD_NOT_YET_REASON = 'The Excel download is not available yet.';
 export const calculatedLine = (at: string, configurationNumber: number): string => `Calculated ${at} · configuration version ${configurationNumber}`;

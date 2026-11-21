@@ -69,6 +69,53 @@ test.describe('the screen (AC-7)', () => {
   });
 });
 
+test.describe('the alerts notice (STORY-09.03 AC-6)', () => {
+  const ALERTS_OFF_TITLE = 'E-mail alerts are OFF.';
+  const ALERTS_OFF_BODY = `${E2E_ENGINEER.name} will not be e-mailed about this task. It still appears in their queue.`;
+
+  // The stored state of the E2E database is alerts OFF: `settings-alerts.spec.ts` never saves ON for real, because the three widths share one database. The ON state (no notice) is
+  // `tests/unit/tasks/alerts-off-notice.test.ts` and the service's own tests.
+  test('AC-6: with alerts OFF, choosing an Engineer shows "E-mail alerts are OFF." with their name', async ({ page }) => {
+    await openAssign(page);
+    await expect(page.getByText(ALERTS_OFF_TITLE)).toHaveCount(0);
+
+    await page.getByLabel('Engineer').selectOption({ label: E2E_ENGINEER.name });
+    await expect(page.getByRole('main').getByText(ALERTS_OFF_TITLE)).toBeVisible();
+    await expect(page.getByRole('main').getByText(ALERTS_OFF_BODY)).toBeVisible();
+  });
+
+  test('AC-6: choosing no Engineer again takes the notice away', async ({ page }) => {
+    await openAssign(page);
+    await page.getByLabel('Engineer').selectOption({ label: E2E_ENGINEER.name });
+    await expect(page.getByRole('main').getByText(ALERTS_OFF_TITLE)).toBeVisible();
+
+    await page.getByLabel('Engineer').selectOption({ label: 'Choose an Engineer' });
+    await expect(page.getByText(ALERTS_OFF_TITLE)).toHaveCount(0);
+  });
+
+  test('AC-6: with the notice showing there is no sideways scroll', async ({ page }) => {
+    await openAssign(page);
+    await page.getByLabel('Engineer').selectOption({ label: E2E_ENGINEER.name });
+    await expect(page.getByRole('main').getByText(ALERTS_OFF_BODY)).toBeVisible();
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+
+  test('AC-6: with the notice showing axe finds 0 violations', async ({ page }) => {
+    await openAssign(page);
+    await page.getByLabel('Engineer').selectOption({ label: E2E_ENGINEER.name });
+    await expect(page.getByRole('main').getByText(ALERTS_OFF_BODY)).toBeVisible();
+    await expectNoAxeViolations(page);
+  });
+
+  test('AC-6: the notice is information, not a block: with it showing, the task is still assigned as before', async ({ page }, testInfo) => {
+    await openAssign(page);
+    await fillValid(page, pathFor(testInfo));
+    await expect(page.getByText(ALERTS_OFF_TITLE)).toBeVisible();
+    await page.getByRole('button', { name: 'Assign task' }).click();
+    await expect(page.getByRole('status').filter({ hasText: `assigned to ${E2E_ENGINEER.name}.` })).toBeVisible();
+  });
+});
+
 test.describe('assigning a task (AC-1, AC-4)', () => {
   test('AC-1, AC-4: by keyboard, a valid form assigns the task, the notice names the code and the Engineer and takes focus, the path is a link and Copy path copies it', async ({ page, context }, testInfo) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -194,7 +241,8 @@ test.describe('the routes (AC-3, AC-5, AC-6)', () => {
     expect(JSON.stringify(await scriptPath.json())).toContain('Enter the network folder path.');
 
     const options = z
-      .object({ engineers: z.array(z.strictObject({ id: z.string(), name: z.string() })) })
+      // The one boolean of the settings a Lead may see (STORY-09.03 AC-6), and nothing else of them: no sender, no address.
+      .strictObject({ engineers: z.array(z.strictObject({ id: z.string(), name: z.string() })), alertsEnabled: z.boolean() })
       .parse(await (await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/assign-context`)).json());
     const ours = options.engineers.find((engineer) => engineer.name === E2E_ENGINEER.name);
     expect(ours).toBeDefined();
