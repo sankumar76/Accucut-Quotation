@@ -16,6 +16,24 @@
 | Last updated       | 2026-11-20 by orchestrator (daily update) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
+## Hardening progress (2026-11-21, evening, orchestrator)
+
+> This section wins over everything below it.
+
+**`master` = c0cf1d2. 31 merges in this run.** Hardening merges today: #579 DEF-034 (7e42970), #571 DEF-053 shared axe helper (efeed21), #580 DEF-038 tests and diagnostic (cb63104), #584 G8-C-NFR9 Lighthouse key screens (0f69aa2), #586 DEF-055 assignment-mail expiry with the DL-282 data migration (ae1bb35), #587 DEF-056 test fix (dcf8a19), #583 DEF-054 security headers and CSP (c0cf1d2). **Every Sev-2 fix is merged**; QA closes DEF-054 on the c0cf1d2 `master` run.
+
+**Final review (21 Nov):** standards REQUEST CHANGES (3 Major), quality REQUEST CHANGES (1 Major), performance REQUEST CHANGES (6 Major), QA "do not recommend G8 yet" (2 new Sev-2). Plan: DL-275 and DL-276 (G8 recommendation about 2 to 3 Dec, freeze about 30 Nov; **slip against 1 Dec reported to the delivery lead, decision pending**).
+
+**Defects:** closed today DEF-034, DEF-053 (then reopened as the accepted Sev-3 known limitation per DL-284; R10 revived for PR runs), DEF-055, DEF-056 (Test, DL-283). Open: DEF-038 Sev-3 (DL-277, diagnostic on watch), DEF-057 Sev-3 (DL-280, diagnostic PR #591), DEF-054 (merged, QA closing). **RISK-031 closed (DL-279)**; trigger (b) count for 21 Nov: 1 of 2 (`estimate-calculate:297`). Live re-run rules: W1, R10 (PR runs).
+
+**Majors status:** #382 already fixed by #406 (DL-284); #568 fixed in #589 (ADR-018 `recordMany`, medians 374 / 198 ms at 500 customers; review APPROVE WITH COMMENTS; merging after its sync push); #485 / G8-C-NFR9 met (#584); #574 downgraded to a watch; #573 met by measurement in #588 (10.09 load/capacity, all lines far under NFR-010/011 on the CI runner; merges next); #575, #576 decided by the architect (ADR-017, docs #581) and built in #590 (export timeout, heap, keep-alive, body cap #410, install proxy checks; merges after its `next.config.ts` merge); #37 / DEF-054 merged; STD-F-03 (#577) waiver with the delivery lead.
+
+**Lanes:** 1: #589 sync, then DEF-057 diagnostic (#591); 2: #590 merge, then the advisories #536/#537 in aqp-384; 3: STORY-10.08 (browser matrix, keyboard flows, sweep). Docs PR #581 merges after records PR #494.
+
+**Worktrees (5 + main):** records-t, aqp-341 (lane 1), aqp-383 (lane 3), aqp-384 (#583 merged; lane 2 next), aqp-410 (links to aqp-384's node_modules; remove links first). **C: about 6.5 GB.**
+
+**For the delivery lead:** the G8-date decision and D2 to D8 (see the latest hand-off); the `.env.example` line `EXPORT_TIMEOUT_SECONDS=240` (agents cannot read or edit that file); housekeeping (scratch files in `.claude/worktrees/`, two stray files at the main checkout root, branches `diag/AQP-376-axe-phases`, `fix/AQP-383-users-list-e2e`, `diag/AQP-383-axe-plant`).
+
 ## Build complete, hardening window open (2026-11-21, later, orchestrator)
 
 > This section wins over everything below it.
