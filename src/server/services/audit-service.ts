@@ -98,7 +98,7 @@ export interface AuditPage {
 export interface AuditService {
   record<E extends AuditEventName>(tx: Transaction, entry: AuditEntryInput<E>): Promise<void>;
   /**
-   * Appends many entries in the caller's transaction with one multi-row statement per 1,000 (ADR-018; GitHub #568: one round trip per customer made a propagation to 500
+   * Appends many entries in the caller's transaction with one multi-row statement per 1,000 (ADR-018; GitHub issue 568: one round trip per customer made a propagation to 500
    * customers take seconds). Each entry passes exactly the checks `record` applies; **all are checked before any is written**, and one refusal throws
    * `AuditEntryRefusedError` with nothing appended. An empty list sends no query. Entries of one call may share a `created_at` millisecond.
    */

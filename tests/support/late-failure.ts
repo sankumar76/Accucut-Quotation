@@ -51,6 +51,7 @@ export function createUserServiceThatFails(db: AuditDatabase, failure: LateFailu
       }
       return db.audit.record(tx, entry);
     },
+    recordMany: db.audit.recordMany,
     list: db.audit.list,
   };
 

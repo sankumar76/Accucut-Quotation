@@ -10,17 +10,26 @@ export interface AuditSink {
   readonly service: AuditService;
   /** The rows appended, oldest first, whether or not the transaction that held them later rolled back (the caller's fake rolls back its own state). */
   readonly rows: NewAuditRow[];
+  /** How the rows arrived: the number of `append` calls (one row each), and the size of each `appendMany` call (ADR-018). */
+  readonly calls: { readonly single: number; readonly batches: ReadonlyArray<number> };
 }
 
 export function createAuditSink(): AuditSink {
   const rows: NewAuditRow[] = [];
+  const calls = { single: 0, batches: [] as number[] };
   const repository: AuditRepository = {
     append(row) {
       rows.push(row);
+      calls.single += 1;
+      return Promise.resolve();
+    },
+    appendMany(batch) {
+      rows.push(...batch);
+      calls.batches.push(batch.length);
       return Promise.resolve();
     },
     list: () => Promise.resolve({ rows: [], hasMore: false }),
     count: () => Promise.resolve(0),
   };
-  return { service: createAuditService({ audit: repository }), rows };
+  return { service: createAuditService({ audit: repository }), rows, calls };
 }
