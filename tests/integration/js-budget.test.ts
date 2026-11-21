@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { LimitEntry } from '../../scripts/lib/js-budget';
 import type { RouteRow } from '../../scripts/lib/js-budget-check';
+import { FORMULA_PAGE_PATH } from '../../scripts/lib/js-budget-records';
 import { runBudgetCheck } from '../../scripts/lib/js-budget-run';
 import {
   STUB_EMAIL,
@@ -32,7 +33,7 @@ import {
  */
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const APP_PATHS = ['/(portal)/page', '/(portal)/account/page', '/(portal)/queue/page', '/(portal)/design-system/page', '/(portal)/users/page', '/(portal)/audit/page', '/(portal)/config/fields/page', '/(portal)/settings/page','/(portal)/masters/materials/page', '/(portal)/masters/process/page', '/(public)/sign-in/page', '/_not-found/page', '/api/auth/[...nextauth]/route'];
+const APP_PATHS = ['/(portal)/page', '/(portal)/about/page', '/(portal)/account/page', '/(portal)/queue/page', '/(portal)/design-system/page', '/(portal)/users/page', '/(portal)/audit/page', '/(portal)/config/fields/page', '/(portal)/settings/page','/(portal)/masters/materials/page', '/(portal)/masters/process/page', '/(public)/sign-in/page', '/_not-found/page', '/api/auth/[...nextauth]/route'];
 const OVERRUN_BYTES = 210_000;
 const LIMIT = 200_000;
 
@@ -42,6 +43,7 @@ const NOT_FOUND = pageNaming('shell.js');
 
 const healthyPages = (): Record<string, StubPage> => ({
   '/': { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  '/about': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/account': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/queue': { signedIn: { status: 200, html: pageNaming('shell.js', 'queue.js') } },
   '/users': { signedIn: { status: 200, html: pageNaming('shell.js') } },
@@ -52,12 +54,20 @@ const healthyPages = (): Record<string, StubPage> => ({
   '/audit': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/settings': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/config/fields': { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  [FORMULA_PAGE_PATH]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  // STORY-08.03: the insert wizard has no dynamic segment, so it is measured at its own address and needs no record.
+  '/config/fields/new': { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  // STORY-08.06: SCR-21 has no dynamic segment either, so it is measured at its own address and needs no record.
+  '/config/checkpoints': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/customers': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   [`/masters/customers/${STUB_CUSTOMER_ID}`]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/materials': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/process': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/design-system': { signedIn: { status: 404, html: NOT_FOUND } },
   '/sign-in': { anonymous: { status: 200, html: pageNaming('shell.js') }, signedIn: { status: 307 } },
+  // STORY-09.07: the two public pages of the reset by e-mailed link answer a signed-out visitor with the page itself, as the sign-in page does.
+  '/forgot-password': { anonymous: { status: 200, html: pageNaming('shell.js') }, signedIn: { status: 200, html: pageNaming('shell.js') } },
+  '/reset-password': { anonymous: { status: 200, html: pageNaming('shell.js') }, signedIn: { status: 200, html: pageNaming('shell.js') } },
 });
 
 const credentialsFor = (role: string) => (role === 'ADMIN' ? { email: STUB_EMAIL, password: STUB_PASSWORD } : undefined);
@@ -109,6 +119,7 @@ describe('the check against a stub portal and a fixture build', () => {
   it('passes a healthy build: every route and the not-found page are measured or accounted for', () => {
     expect(healthy.rows.map((row) => [row.route, row.ok])).toEqual([
       ['/', true],
+      ['/about', true],
       ['/account', true],
       ['/audit', true],
       ['/config/fields', true],
@@ -141,7 +152,7 @@ describe('the check against a stub portal and a fixture build', () => {
 
   it('fails a route that answers 500, names it, and still reports every other route', () => {
     expect(byRoute(serverError, '/queue')).toMatchObject({ ok: false, note: 'ADMIN got HTTP 500, not HTTP 200' });
-    expect(serverError.rows).toHaveLength(12);
+    expect(serverError.rows).toHaveLength(13);
     expect(byRoute(serverError, '/')?.ok).toBe(true);
   });
 
@@ -155,7 +166,7 @@ describe('the check against a stub portal and a fixture build', () => {
   });
 
   it('fails every route when the server cannot be reached, skipping none', () => {
-    expect(unreachable.rows).toHaveLength(12);
+    expect(unreachable.rows).toHaveLength(13);
     for (const row of unreachable.rows) {
       expect(row.ok).toBe(false);
       expect(row.note).toContain('the request did not complete');
@@ -234,15 +245,15 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(passing.code).toBe(0);
     expect(passing.summary).toContain('### JS budget (NFR-009)');
     expect(passing.summary).toContain('| Route | Result | Viewer | Files | Raw bytes | Gzip bytes | Limit | Headroom | Note |');
-    for (const route of ['/', '/account', '/assign', '/audit', '/config/fields', '/design-system', '/estimates/[code]', '/estimates/[code]/costs/[slNo]', '/estimates/[code]/export', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/settings', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
-    expect(passing.summary).toContain('all 18 rows are within their limit');
+    for (const route of ['/', '/about', '/account', '/assign', '/audit', '/config/checkpoints', '/config/fields', '/config/fields/[id]/formula', '/config/fields/new', '/design-system', '/estimates/[code]', '/estimates/[code]/costs/[slNo]', '/estimates/[code]/export', '/forgot-password', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/reset-password', '/settings', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
+    expect(passing.summary).toContain('all 24 rows are within their limit');
   });
 
   it('exits 1 for a planted overrun, and the summary and the log name the route', () => {
     expect(overrun.code).toBe(1);
     expect(overrun.summary).toMatch(/\| \/queue \| FAIL \|/);
     expect(overrun.output).toContain('FAIL  /queue');
-    expect(overrun.output).toContain('1 of 18 rows failed');
+    expect(overrun.output).toContain('1 of 24 rows failed');
   });
 
   it('fails the routes that need sign-in, and says why, when no credentials were provided; it never prints a credential', () => {
@@ -265,7 +276,8 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(noRecords.output).toContain('/estimates/[code]');
     expect(noRecords.output).toContain('/estimates/[code]/costs/[slNo]');
     expect(noRecords.output).toContain('/estimates/[code]/export');
+    expect(noRecords.output).toContain('/config/fields/[id]/formula');
     expect(noRecords.output).toContain('a dynamic segment needs a record made from invented data, and none could be made');
-    expect(noRecords.output).toContain('4 of 18 rows failed');
+    expect(noRecords.output).toContain('5 of 24 rows failed');
   });
 });

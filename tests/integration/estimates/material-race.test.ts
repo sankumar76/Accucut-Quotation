@@ -43,6 +43,7 @@ const serviceOver = (transactions: ReturnType<typeof createHoldingRunner>): Esti
     transactions,
     materials: db.masterRepository,
     currentConfiguration: () => Promise.resolve(seedConfig),
+    configurationById: () => Promise.resolve(seedConfig),
   });
 
 beforeAll(async () => {
@@ -118,9 +119,11 @@ describe('the save of a part\'s material and the delete of that material seriali
     // The delete has either finished (nothing made it wait) or is waiting for the lock the save holds on the material. Only then is the save let go.
     await expect.poll(async () => deleteDone || (await someoneIsWaitingForALock()), { message: 'the delete waits for the material\'s lock, or has finished' }).toBe(true);
     expect(deleteDone, 'the delete did not wait for the save').toBe(false);
+    // The delete is refused as soon as the save lets go, so its refusal is handled before the release (DEF-039: held back, it is an unhandled rejection).
+    const refused = expect(deletion).rejects.toBeInstanceOf(MasterInUseError);
     saving.release();
     await save;
-    await expect(deletion).rejects.toBeInstanceOf(MasterInUseError);
+    await refused;
 
     expect(await isDeleted(alpha.id)).toBe(false);
     expect(await partInputs()).toEqual({ [MATERIAL_FIELD]: alpha.id });
@@ -141,9 +144,11 @@ describe('the save of a part\'s material and the delete of that material seriali
       });
     await expect.poll(async () => saveDone || (await someoneIsWaitingForALock()), { message: 'the save waits for the material\'s lock, or has finished' }).toBe(true);
     expect(saveDone, 'the save did not wait for the delete').toBe(false);
+    // The save is refused as soon as the delete lets go, so its refusal is captured before the release (DEF-039: held back, it is an unhandled rejection).
+    const refused = save.catch((error: unknown) => error);
     deleting.release();
     await deletion;
-    const refusal = await save.catch((error: unknown) => error);
+    const refusal = await refused;
 
     expect(refusal).toBeInstanceOf(FieldValidationError);
     expect(refusal instanceof FieldValidationError && refusal.fields).toEqual([{ field: MATERIAL_FIELD, message: CHOOSE_MATERIAL_MESSAGE }]);

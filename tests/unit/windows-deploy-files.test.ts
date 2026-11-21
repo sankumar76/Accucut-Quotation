@@ -36,6 +36,7 @@ const SCRIPTS = [
   'deploy/windows/update.ps1',
   'deploy/windows/backup.ps1',
   'deploy/windows/clear-copies.ps1',
+  'deploy/windows/restore.ps1',
   'deploy/windows/AccucutOps.psm1',
   'scripts/package-windows.ps1',
   'deploy/windows/ci/exercise-backup.ps1',
@@ -202,7 +203,7 @@ describe('the scripts (AC-1, AC-5)', () => {
     // Nothing else in the module or the scripts makes a user, a task or a group member.
     expect((ops.match(/New-LocalUser/g) ?? []).length).toBe(1);
     expect((ops.match(/Register-ScheduledTask/g) ?? []).length).toBe(1);
-    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/backup.ps1', 'deploy/windows/clear-copies.ps1']) {
+    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/backup.ps1', 'deploy/windows/clear-copies.ps1', 'deploy/windows/restore.ps1']) {
       expect(code(path), path).not.toMatch(/New-LocalUser|Register-ScheduledTask|Add-LocalGroupMember|ConvertTo-SecureString|net user|net1 user/i);
     }
   });
@@ -226,8 +227,9 @@ describe('the scripts (AC-1, AC-5)', () => {
     const update = read('deploy/windows/update.ps1');
     const backup = read('deploy/windows/backup.ps1');
     const clear = read('deploy/windows/clear-copies.ps1');
+    const restore = read('deploy/windows/restore.ps1');
     const pattern = /# >>> ACCUCUT TRUST BLOCK v1\n[\s\S]*?# <<< ACCUCUT TRUST BLOCK v1/;
-    for (const text of [install, update, backup, clear]) {
+    for (const text of [install, update, backup, clear, restore]) {
       expect((text.match(/# >>> ACCUCUT TRUST BLOCK v1/g) ?? []).length).toBe(1);
       expect((text.match(/# <<< ACCUCUT TRUST BLOCK v1/g) ?? []).length).toBe(1);
     }
@@ -236,10 +238,11 @@ describe('the scripts (AC-1, AC-5)', () => {
     expect(update.match(pattern)?.[0]).toBe(block);
     expect(backup.match(pattern)?.[0]).toBe(block);
     expect(clear.match(pattern)?.[0]).toBe(block);
+    expect(restore.match(pattern)?.[0]).toBe(block);
     // The block defines its 18 functions, and none of them is defined outside it (in a script or in the module).
     const names = [...block.matchAll(/^function ([\w-]+) \{$/gm)].map((match) => match[1] ?? '');
     expect(names).toHaveLength(19);
-    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/backup.ps1', 'deploy/windows/clear-copies.ps1', 'deploy/windows/AccucutOps.psm1']) {
+    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/backup.ps1', 'deploy/windows/clear-copies.ps1', 'deploy/windows/restore.ps1', 'deploy/windows/AccucutOps.psm1']) {
       const outside = read(path).replace(pattern, '');
       for (const name of names) expect(outside, `${path} defines ${name} outside the block`).not.toContain(`function ${name}`);
     }
@@ -383,7 +386,7 @@ describe('the scripts (AC-1, AC-5)', () => {
     const pattern = /# >>> ACCUCUT TRUST BLOCK v1\n[\s\S]*?# <<< ACCUCUT TRUST BLOCK v1/;
     const reference = read('deploy/windows/install.ps1').match(pattern)?.[0] ?? '';
     const files = readdirSync(fileURLToPath(new URL('../../deploy/windows', import.meta.url))).filter((name) => /\.(ps1|psm1)$/.test(name));
-    expect(files).toEqual(expect.arrayContaining(['install.ps1', 'update.ps1', 'backup.ps1', 'clear-copies.ps1', 'AccucutOps.psm1']));
+    expect(files).toEqual(expect.arrayContaining(['install.ps1', 'update.ps1', 'backup.ps1', 'clear-copies.ps1', 'restore.ps1', 'AccucutOps.psm1']));
     expect(files).not.toContain('clean-logs.ps1');
     for (const name of files) {
       const source = code('deploy/windows/' + name);
@@ -396,7 +399,7 @@ describe('the scripts (AC-1, AC-5)', () => {
 
   it('the worker prunes the logs: there is no clean-logs.ps1, no scheduled task, no LOCAL SERVICE entry, and exactly the four entries of Amendment 2.1', () => {
     expect(() => readFileSync(fileURLToPath(new URL('../../deploy/windows/clean-logs.ps1', import.meta.url)))).toThrow();
-    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/backup.ps1', 'deploy/windows/clear-copies.ps1', 'deploy/windows/ci/assert-install.ps1', 'scripts/package-windows.ps1']) {
+    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1', 'deploy/windows/backup.ps1', 'deploy/windows/clear-copies.ps1', 'deploy/windows/restore.ps1', 'deploy/windows/ci/assert-install.ps1', 'scripts/package-windows.ps1']) {
       const source = code(path);
       expect(source, path + ' registers a task or names clean-logs').not.toMatch(/Register-ScheduledTask|New-ScheduledTask|schtasks|clean-logs/);
       if (path !== 'deploy/windows/ci/assert-install.ps1') expect(source, path + ' names a shared account').not.toMatch(/S-1-5-19|LOCAL SERVICE/);
@@ -616,7 +619,7 @@ describe('the repository after this story (AC-10)', () => {
 describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (ADR-015 Amendment 3), static guards', () => {
   it('the package carries backup.ps1 and clear-copies.ps1 next to install.ps1 and update.ps1', () => {
     const pack = read('scripts/package-windows.ps1');
-    expect(pack).toContain("'install.ps1', 'update.ps1', 'backup.ps1', 'clear-copies.ps1', 'AccucutOps.psm1'");
+    expect(pack).toContain("'install.ps1', 'update.ps1', 'backup.ps1', 'clear-copies.ps1', 'restore.ps1', 'AccucutOps.psm1'");
   });
 
   it('install: the backup account and task come first, then the entries that name the account, then the services; the first backup runs after the state file is written; the password is never logged', () => {
@@ -691,7 +694,7 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
     expect(backup).toContain("[System.IO.Path]::Combine($settings.PgBinDirectory, 'pg_dump.exe')");
     expect(backup).toContain("[System.IO.Path]::Combine($settings.PgBinDirectory, 'psql.exe')");
     const folder = functionBody(code('deploy/windows/backup.ps1'), 'Assert-AccucutBackupFolderTrusted');
-    expect(folder).toContain('Assert-AccucutTrustedPath -Path $Directory -Root $Root -ProtectedRoot -Writer @($BackupSid)');
+    expect(folder).toContain('Assert-AccucutTrustedPath -Path $Directory -Root $Root -ProtectedRoot -Writer $writers');
     expect(folder).toContain("'S-1-5-32-544'");
     expect(folder).toContain('$security.Protected');
   });
@@ -854,8 +857,42 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
       expect(assertInstall, part).toContain(part);
     }
     // The root has five entries, the logs folder six inherited-or-explicit ones plus two: seven entries in all.
-    expect(assertInstall).toMatch(/the install folder holds exactly five entries/);
+    expect(assertInstall).toMatch(/the install folder holds exactly six entries/);
     expect(assertInstall).toContain("'S-1-5-19', 'S-1-5-20', 'S-1-5-11', 'S-1-5-32-545', 'S-1-1-0'");
+  });
+
+  it('STORY-10.09a AC-7: assert-install checks the heartbeat row and the prune function on the real install, and the README says that a stopped worker turns /api/health to 503', () => {
+    const assertInstall = code('deploy/windows/ci/assert-install.ps1');
+    for (const part of [
+      "job = 'heartbeat' AND finished_at > now() - interval '3 minutes'",
+      'the worker wrote a heartbeat row in the last 3 minutes',
+      "proname = 'prune_heartbeat_runs'",
+      "'true|accucut_owner|0|{\"search_path=pg_catalog, pg_temp\"}'",
+      "has_function_privilege('accucut_app', 'public.prune_heartbeat_runs()', 'EXECUTE')",
+      "has_table_privilege('accucut_app', 'job_runs', 'DELETE')",
+      "'true|false|false'",
+    ]) {
+      expect(assertInstall, part).toContain(part);
+    }
+    // The heartbeat is checked after Invoke-SuperPsql is defined, which it uses.
+    expect(assertInstall.indexOf('the worker wrote a heartbeat row')).toBeGreaterThan(assertInstall.indexOf('function Invoke-SuperPsql'));
+    const readme = read('deploy/windows/README.md');
+    expect(readme).toMatch(/503[^\n]*worker has stopped/);
+    expect(readme).toContain('heartbeat every minute');
+  });
+
+  it('STORY-10.09a AC-7: install, update and restore all still wait for /api/health with the 180 s allowance, and the worker is started before the wait (its first heartbeat is written at start)', () => {
+    for (const path of ['deploy/windows/install.ps1', 'deploy/windows/update.ps1']) {
+      expect(code(path), path).toContain('$HealthTimeoutSeconds = 180');
+      expect(code(path), path).toContain('Wait-AccucutHealth');
+    }
+    expect(functionBody(code('deploy/windows/AccucutOps.psm1'), 'Invoke-AccucutRestore')).toContain('Wait-AccucutHealth -Url $HealthUrl');
+    const ops = code('deploy/windows/AccucutOps.psm1');
+    expect(ops).toMatch(/\$script:ServiceNames = @\('AccucutApp', 'AccucutWorker'\)/);
+    // restore.ps1 starts both services before it waits, so the worker's heartbeat can turn the check green.
+    const restore = functionBody(ops, 'Invoke-AccucutRestore');
+    expect(restore.indexOf('Start-AccucutServices')).toBeGreaterThanOrEqual(0);
+    expect(restore.indexOf('Start-AccucutServices')).toBeLessThan(restore.indexOf('Wait-AccucutHealth'));
   });
 
   it('exercise-backup.ps1 runs a release backup, more copies, a clear with a wrong then the right date, planted things that are not the backup\'s own, and a replaced module', () => {
@@ -877,5 +914,440 @@ describe('STORY-10.05: the weekly backup, the watch and the clear on Windows (AD
       expect(exercise, part).toContain(part);
     }
     expect(exercise).toMatch(/finally \{[^}]*WriteAllBytes\(\$module, \$originalBytes\)[^}]*icacls\.exe[^}]*\/remove:g/);
+  });
+});
+
+describe('STORY-10.11: the guided restore and the Admin endpoint on Windows (ADR-015 Amendment 3 forward note), static guards', () => {
+  const ops = code('deploy/windows/AccucutOps.psm1');
+  // The restore region of the module: from its first constant to the end of the Admin endpoint region (code() has dropped the comment lines).
+  const restoreRegion = ops.slice(ops.indexOf('$script:RestoreDatabaseRole ='));
+
+  it('AC-1, AC-3: restore.ps1 takes no argument, asks nothing itself, writes nothing, starts nothing, checks every program through the trust block, and exits 1 on any failure', () => {
+    const source = read('deploy/windows/restore.ps1');
+    const text = code('deploy/windows/restore.ps1');
+    expect(source.match(/^\[CmdletBinding\(\)\]\r?\nparam\(\)/m)).not.toBeNull();
+    expect(text).not.toMatch(/Read-Host|Add-Content|Out-File|Set-Content|WriteAllText|WriteAllBytes|PGPASSWORD|AGE-SECRET|Start-Process|Invoke-Expression|-FilePath|Process\]::Start\(\$[a-z]*Info/);
+    expect(text).toContain("if ($MyInvocation.InvocationName -ne '.') {");
+    expect(text).toContain('exit 0');
+    expect(text).toContain('exit 1');
+    expect(text).toContain('Hide-AccucutSecrets');
+    expect(text).not.toMatch(/Get-Command -Name (?!Hide-AccucutSecrets)/);
+    const body = functionBody(text, 'Invoke-AccucutRestoreScript');
+    expect((body.match(/Resolve-AccucutTrustedExecutable/g) ?? []).length).toBe(5);
+    for (const program of ["'bin\\age.exe'", "'pg_dump.exe'", "'pg_restore.exe'", "'psql.exe'", '$state.NodeExe']) expect(body).toContain(program);
+    expect(body).toContain('-EndpointSid (Get-AccucutAdminGroupSid)');
+    expect(body).toContain('http://127.0.0.1:$($state.Port)/api/health');
+  });
+
+  it('AC-8 fallback: restore.ps1 and the restore functions do not depend on JEA, a session or a virtual account (the same scripts run as a full administrator)', () => {
+    for (const path of ['deploy/windows/restore.ps1', 'deploy/windows/clear-copies.ps1']) {
+      expect(code(path), path).not.toMatch(/PSSession|Enter-PSSession|Invoke-Command|VirtualAccount|\bJEA\b|AccucutAdmin\b/);
+    }
+    const restore = functionBody(ops, 'Invoke-AccucutRestore');
+    expect(restore).not.toMatch(/PSSession|Invoke-Command|VirtualAccount|\bJEA\b|WinRM/);
+  });
+
+  it('AC-5: the key is read as a SecureString, held as bytes in memory, passed to age on standard input only, cleared at the end, and is in no command line, file, log, event or environment variable', () => {
+    expect(functionBody(restoreRegion, 'Read-AccucutKeyInput')).toContain('-AsSecureString');
+    const restore = functionBody(restoreRegion, 'Invoke-AccucutRestore');
+    expect(restore).toContain('$keyBytes = [System.Text.Encoding]::ASCII.GetBytes($keyText + "`n")');
+    expect(restore).toContain('[array]::Clear($keyBytes, 0, $keyBytes.Length)');
+    expect(restore).toContain('Register-AccucutSecret -Value $keyText');
+    for (const line of restore.split('\n').filter((entry) => /\$key(Text|Bytes|Secure)|\$secure\b/.test(entry))) {
+      expect(line, line).not.toMatch(/Write-Host|Write-AccucutLog|Write-AccucutRestoreRecord|Write-AccucutRestoreEvent|Out-File|Set-Content|WriteAll|Add-Content|Arguments|EnvironmentVariables|Invoke-AccucutNative/);
+    }
+    for (const name of ['Invoke-AccucutRestorePipe', 'Test-AccucutBackupKey']) {
+      const body = functionBody(restoreRegion, name);
+      expect(body, name).toContain("'-d', '-i', '-', $CopyPath");
+      expect(body, name).toContain('StandardInput.BaseStream');
+      expect(body, name).not.toMatch(/FileName\s*=.*cmd|Out-File|Set-Content|WriteAll|Add-Content|\.Arguments[^\n]*KeyBytes|EnvironmentVariables\[[^\]]*\]\s*=\s*\$Key/);
+    }
+    // No literal key anywhere in the repository's restore files: only a pattern made from two pieces.
+    for (const path of ['deploy/windows/AccucutOps.psm1', 'deploy/windows/restore.ps1', 'deploy/windows/manual/AC-8-jea-prompt-check.md']) {
+      expect(read(path), path).not.toMatch(/AGE-SECRET-KEY-1[A-Z0-9]{20,}/);
+    }
+  });
+
+  it('AC-5: no byte order mark can reach the key or the dump: age and pg_restore are started with a console input encoding that has no preamble, which is put back at once', () => {
+    for (const name of ['Invoke-AccucutRestorePipe', 'Test-AccucutBackupKey']) {
+      const body = functionBody(restoreRegion, name);
+      expect(body.indexOf('Set-AccucutConsoleInputNoPreamble')).toBeGreaterThan(0);
+      expect(body.indexOf('Set-AccucutConsoleInputNoPreamble')).toBeLessThan(body.indexOf('.Start()'));
+      expect(body.indexOf('Restore-AccucutConsoleInput')).toBeGreaterThan(body.indexOf('.Start()'));
+      expect(body).not.toMatch(/StandardInput\.(Write|WriteLine|Flush)\b/);
+    }
+    expect(functionBody(restoreRegion, 'Set-AccucutConsoleInputNoPreamble')).toContain('GetEncoding(437)');
+  });
+
+  it('AC-3: the pipe is age to pg_restore as bytes, in one transaction that stops at the first error, with both exit codes checked and the password only in PGPASSFILE', () => {
+    const pipe = functionBody(restoreRegion, 'Invoke-AccucutRestorePipe');
+    expect(pipe).toContain("'--no-password', '--exit-on-error', '--single-transaction'");
+    expect(pipe).toContain('$ageCode = $age.ExitCode');
+    expect(pipe).toContain('$restoreCode = $restore.ExitCode');
+    expect(pipe).toContain('$age.StandardOutput.BaseStream.CopyTo($restore.StandardInput.BaseStream)');
+    expect(pipe).toContain("EnvironmentVariables['PGPASSFILE'] = $PassFile");
+    expect(pipe.indexOf('Clear-AccucutPgEnvironment')).toBeLessThan(pipe.indexOf("EnvironmentVariables['PGPASSFILE']"));
+    expect(pipe).not.toMatch(/PGPASSWORD|\|\s*Out-|Get-Content|ConvertTo-Json|Write-Output|Start-Process/);
+    // The decrypted dump is never written to a file: nothing in the pipe creates one.
+    expect(pipe).not.toMatch(/FileStream|\[System\.IO\.File\]|Set-Content|Out-File/);
+  });
+
+  it('AC-1, AC-2, AC-3, AC-4: the restore does the steps of architecture 9.5 in order, and nothing is stopped or changed before the checks, the typed date and the key have passed', () => {
+    const restore = functionBody(restoreRegion, 'Invoke-AccucutRestore');
+    const order = [
+      'Get-AccucutRestoreChoice',
+      "Read-AccucutHostInput -Prompt 'Type the number of the copy to restore",
+      'Get-AccucutFileSha256 -Path $copy.Path',
+      'Test-AccucutRestoreVersion',
+      'Test-AccucutRestoreRoom',
+      'LOSES everything entered since then',
+      'audit rows too',
+      '-cne $dateText',
+      'Read-AccucutKeyInput',
+      'Test-AccucutBackupKey',
+      "$stage = 'run'",
+      'Stop-AccucutServices',
+      'Invoke-AccucutBackup -Paths $Paths',
+      'New-AccucutRestoreDatabase',
+      'Invoke-AccucutRestorePipe',
+      'Invoke-AccucutMigration',
+      'Switch-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Replacement $newName -Previous $oldName',
+      'Start-AccucutServices',
+      'Wait-AccucutHealth',
+      'Remove-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Name $oldName',
+    ];
+    let position = -1;
+    for (const marker of order) {
+      const found = restore.indexOf(marker, position + 1);
+      expect(found, `${marker} is missing or out of order`).toBeGreaterThan(position);
+      position = found;
+    }
+    // Every failure path says "Call your IT person", and the roll back puts the old database back before the services are started again.
+    expect(restore).toContain('Call your IT person.');
+    const rollBack = restore.slice(restore.indexOf('$failure = $_.Exception'));
+    expect(rollBack.indexOf('Switch-AccucutRestoreDatabase')).toBeGreaterThan(0);
+    expect(rollBack.indexOf('Switch-AccucutRestoreDatabase')).toBeLessThan(rollBack.indexOf('Start-AccucutServices'));
+    // The safety copy is an ordinary release copy, made with the restore role and its password file, not the backup account's.
+    expect(restore).toContain("-Reason release -ReleaseTag 'before-restore' -PassFile $passFile -DatabaseRole $script:RestoreDatabaseRole -SkipPrune");
+    // Outside the database: the record goes to restore.log and one Application event, whatever happens.
+    expect(restore).toContain('Write-AccucutRestoreEvent -EntryType Information -EventId $script:RestoreEventDone');
+    expect(restore).toContain('Write-AccucutRestoreEvent -EntryType Error -EventId $eventId');
+    expect(restore).not.toMatch(/Add-AccucutJobRun/);
+  });
+
+  it('AC-3: the swap is two renames in one transaction, every name that reaches SQL is a name that a restore made, and nothing but those is ever dropped', () => {
+    const swap = functionBody(restoreRegion, 'Switch-AccucutRestoreDatabase');
+    expect(swap).toMatch(/BEGIN;`nALTER DATABASE `"\$live`" RENAME TO `"\$Previous`";`nALTER DATABASE `"\$Replacement`" RENAME TO `"\$live`";`nCOMMIT;/);
+    expect(swap).toContain("Test-AccucutBackupSetting -Name 'database' -Value $live");
+    for (const name of ['New-AccucutRestoreDatabase', 'Switch-AccucutRestoreDatabase', 'Remove-AccucutRestoreDatabase']) expect(functionBody(restoreRegion, name), name).toContain('Assert-AccucutRestoreDatabaseName');
+    expect(restoreRegion).toContain("'^accucut_(new|old|failed)_\\d{14}$'");
+    expect((restoreRegion.match(/DROP DATABASE/g) ?? []).length).toBe(1);
+    expect(functionBody(restoreRegion, 'Remove-AccucutRestoreDatabase')).toContain('WITH (FORCE)');
+    const create = functionBody(restoreRegion, 'New-AccucutRestoreDatabase');
+    expect(create).toContain('OWNER accucut_owner');
+    expect(create).toContain('REVOKE ALL ON DATABASE');
+  });
+
+  it('every SQL of the restore goes to psql on standard input as the restore role with only PGPASSFILE, and the restore writes no file but restore.log and the safety copy', () => {
+    const sql = functionBody(restoreRegion, 'Invoke-AccucutRestoreSql');
+    expect(sql).toContain('$script:RestoreDatabaseRole');
+    expect(sql).toContain("-Environment @{ PGPASSFILE = $PassFile; PGCONNECT_TIMEOUT = '15' } -ClearPgEnvironment -StdIn");
+    expect(sql).not.toMatch(/PGPASSWORD|--password/);
+    const restoreOnly = restoreRegion.slice(0, restoreRegion.indexOf('function Get-AccucutAdminGroupSid'));
+    expect(restoreOnly).not.toMatch(/Out-File|Add-Content|Set-Content|Remove-Item|Directory\]::Delete|File\]::Delete|-Recurse|Get-ChildItem|Start-Process/);
+    // restore.log: created once with CreateNew, locked, appended with FileMode.Append, and a file that is not its own is never written to.
+    const log = functionBody(restoreRegion, 'Add-AccucutRestoreLogLine');
+    expect(log).toContain('[System.IO.FileMode]::CreateNew');
+    expect(log).toContain('[System.IO.FileMode]::Append');
+    expect(log).toContain('Test-AccucutRestoreLogFile');
+    expect(functionBody(restoreRegion, 'Test-AccucutRestoreLogFile')).toContain('ReparsePoint');
+  });
+
+  it('ADR-015 Amendment 3 forward note: the restore role is not a superuser and cannot make roles, has CREATEDB, acts as the owner, and its password never comes from the file itself', () => {
+    const sql = read('deploy/db/create-restore-role.psql');
+    const statements = sql
+      .split(/\r?\n/)
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n');
+    expect(statements).toMatch(/CREATE ROLE accucut_restore LOGIN PASSWORD :'restore_password' NOSUPERUSER CREATEDB NOCREATEROLE;/);
+    expect(statements).toContain('\\getenv restore_password DB_RESTORE_PASSWORD');
+    expect(statements).toContain('GRANT accucut_owner TO accucut_restore WITH INHERIT TRUE, SET TRUE;');
+    expect(statements).toContain('GRANT pg_signal_backend TO accucut_restore;');
+    expect(statements).toContain("ALTER ROLE accucut_restore SET role = 'accucut_owner';");
+    expect(statements).not.toMatch(/(?<!NO)SUPERUSER|(?<!NO)CREATEROLE|PASSWORD\s+'/);
+    // The shared role script (the development database and CI) is not changed by this story: the restore role is Windows only.
+    expect(read('deploy/db/create-roles.psql')).not.toContain('accucut_restore');
+    expect(read('docker/postgres-init/01-create-roles.sh')).not.toContain('accucut_restore');
+  });
+
+  it('install: -AdminAccount has a pattern, is checked before anything is created, goes to the second half, and the endpoint and shortcut come last; the restore role comes after the three roles', () => {
+    const install = code('deploy/windows/install.ps1');
+    expect(install).toContain("[ValidatePattern('^(?:[A-Za-z0-9.][A-Za-z0-9._-]{0,63}\\\\)?[A-Za-z0-9][A-Za-z0-9._ -]{0,63}$')][string]$AdminAccount");
+    expect(install).toContain("'ValuesFile', 'AdminAccount'");
+    const body = functionBody(install, 'Invoke-AccucutInstall');
+    const order = [
+      'Resolve-AccucutAdminAccount -Account $AdminAccount',
+      "'sql\\create-roles.psql'",
+      "'sql\\create-restore-role.psql'",
+      'DB_RESTORE_PASSWORD = $settings.RestorePassword',
+      'Write-AccucutRestoreConfig -Paths $paths -RestorePassword $settings.RestorePassword',
+      'Initialize-AccucutServiceFiles',
+      'Invoke-AccucutFirstBackup -PsqlPath $psql',
+      'Register-AccucutAdminEndpoint -Paths $paths -AdminAccount $AdminAccount -ReleaseDirectory $Release',
+      "New-AccucutAdminShortcut -EndpointName 'AccucutAdmin' -PowerShellPath $powershellExe",
+    ];
+    let position = -1;
+    for (const marker of order) {
+      const found = body.indexOf(marker, position + 1);
+      expect(found, `${marker} is missing or out of order`).toBeGreaterThan(position);
+      position = found;
+    }
+    for (const line of body.split('\n').filter((entry) => /Write-AccucutLog|Write-Host|Invoke-AccucutNative|Set-Content|Out-File/.test(entry))) {
+      expect(line, line).not.toMatch(/RestorePassword|restorePassword/);
+    }
+    // The failed install drops the restore role with the others, and refuses roles that already exist.
+    expect(install).toContain('DROP ROLE IF EXISTS accucut_restore; DROP ROLE IF EXISTS accucut_backup;');
+    expect(install).toContain("'accucut_app', 'accucut_owner', 'accucut_backup', 'accucut_restore'");
+  });
+
+  it('AC-7: the endpoint is a restricted session with a virtual account limited to one group (never an administrator), two visible functions that run the two installed scripts, and nothing else', () => {
+    const pssc = read('deploy/windows/jea/AccucutAdmin.pssc');
+    const psrc = read('deploy/windows/jea/AccucutAdmin.psrc');
+    const sessionCode = pssc.split('\n').filter((line) => !line.trimStart().startsWith('#')).join('\n');
+    const roleCode = psrc.split('\n').filter((line) => !line.trimStart().startsWith('#')).join('\n');
+    expect(sessionCode).toContain("SessionType               = 'RestrictedRemoteServer'");
+    expect(sessionCode).toContain('RunAsVirtualAccount       = $true');
+    expect(sessionCode).toContain("RunAsVirtualAccountGroups = @('{{ADMIN_GROUP}}')");
+    expect(sessionCode).toContain("TranscriptDirectory       = '{{TRANSCRIPT_DIRECTORY}}'");
+    expect(sessionCode).not.toMatch(/Administrators|LanguageMode|RunAsCredential|FullLanguage/);
+    expect(roleCode).toContain("VisibleFunctions    = @('Restore-AccucutBackup', 'Clear-AccucutCopies')");
+    expect(roleCode).toContain("ScriptBlock = { & '{{ROOT}}\\current\\restore.ps1' }");
+    expect(roleCode).toContain("ScriptBlock = { & '{{ROOT}}\\current\\clear-copies.ps1' }");
+    expect(roleCode).not.toMatch(/Visible(Cmdlets|ExternalCommands|Aliases|Providers)|AliasDefinitions|ScriptsToProcess|VariableDefinitions|EnvironmentVariables/);
+    // The module registers an endpoint in one place only, and registers nothing else of Windows remoting.
+    expect((ops.match(/Register-PSSessionConfiguration/g) ?? []).length).toBe(1);
+    expect(functionBody(ops, 'Register-AccucutPSSessionConfiguration')).toContain('Register-PSSessionConfiguration -Name $Name -Path $SessionFile -Force');
+    // (The message that tells a person to run Enable-PSRemoting names it; no line of the module runs it.)
+    expect(ops).not.toMatch(/^\s*Enable-PSRemoting|Set-PSSessionConfiguration|Set-WSManQuickConfig|winrm\s+(quickconfig|set)/im);
+    // The group of the virtual account gets no entry on the logs folder, .env or migrate.env.
+    const grant = functionBody(restoreRegion, 'Grant-AccucutAdminEndpointAccess');
+    expect(grant).not.toMatch(/\$Paths\.(Logs|Config|EnvFile|MigrateEnvFile)\b/);
+    expect(grant).toContain('Grant-AccucutFolderAccess -Path $Paths.Root -Account $GroupSid -Rights ReadAndExecute');
+    expect(grant).toContain('Grant-AccucutFolderAccess -Path $Paths.Backups -Account $GroupSid -Rights Modify');
+    expect(functionBody(restoreRegion, 'Grant-AccucutServiceControl')).toContain('(A;;CCLCSWRPWPLORC;;;$Sid)');
+    // backup.ps1, clear-copies.ps1 and restore.ps1 let the endpoint group (and only it) write in backups beside the backup account.
+    for (const path of ['deploy/windows/backup.ps1', 'deploy/windows/clear-copies.ps1', 'deploy/windows/restore.ps1']) {
+      expect(code(path), path).toContain('-EndpointSid (Get-AccucutAdminGroupSid)');
+    }
+  });
+
+  it('the package carries restore.ps1, the endpoint templates and the restore role SQL, and the module still starts no process, loads no module and makes no folder or service of its own', () => {
+    const pack = read('scripts/package-windows.ps1');
+    expect(pack).toContain("'restore.ps1', 'AccucutOps.psm1'");
+    expect(pack).toContain("Copy-PackageFolder -Source (Join-Path $windows 'jea') -Destination (Join-Path $stage 'jea')");
+    expect(pack).toContain("'deploy\\db\\create-restore-role.psql'");
+    expect(ops).not.toMatch(/Import-Module|Start-Process|Invoke-Expression|powershell\.exe|ZipFile\]::/i);
+  });
+
+  it('AC-8: the manual kit is there, it says to stop and report on a failure, never uses the real key, touches nothing of the Accucut install, and its script makes and removes only its own folder, group and endpoint', () => {
+    const kit = read('deploy/windows/manual/AC-8-jea-prompt-check.md');
+    for (const part of ['-Phase Prepare', '-Phase Finish', '-Phase Cleanup', 'Enter-PSSession -ComputerName localhost -ConfigurationName Ac8Check', 'Test-Ac8Prompt', 'AC-8 RESULT: PASS', 'What to report back', 'stop and report', 'never uses the real backup key', 'Read-Host -AsSecureString', 'full-administrator path', 'AQP-312']) {
+      expect(kit, part).toContain(part);
+    }
+    // The six PASS lines of AC-8 stay exactly as they were, in this order, before the result line.
+    const expectedLines = [
+      'PASS  the session opened and the command ran its script file',
+      'PASS  the script imported a module by its path inside the session',
+      'PASS  the typed answer (a question with Read-Host) reached the script',
+      'PASS  the pasted value (Read-Host -AsSecureString) reached the script intact (74 characters)',
+      'PASS  the session ran as a virtual account in the check group, and not as an administrator',
+      'PASS  the transcript of the session exists and does not contain the pasted value',
+      'AC-8 RESULT: PASS',
+    ].join('\n');
+    expect(kit).toContain('```\n' + expectedLines + '\n```');
+    const script = kit.slice(kit.indexOf('```powershell\n<#'), kit.lastIndexOf('```'));
+    expect(script.length).toBeGreaterThan(5000);
+    expect(script).not.toMatch(/C:\\Accucut|AccucutApp|AccucutWorker|postgres|Register-ScheduledTask|New-Service|Set-Service|Stop-Service|Start-Service|New-EventLog|CreateEventSource|Set-ItemProperty|reg add|sc\.exe/i);
+    expect(script).toContain("$EndpointName = 'Ac8Check'");
+    expect(script).toContain("$GroupName = 'Ac8CheckGroup'");
+    expect(script).toContain("RunAsVirtualAccountGroups = @('$GroupName')");
+    expect(script).toContain('Unregister-PSSessionConfiguration -Name $EndpointName -Force');
+    expect(script).not.toMatch(/AGE-SECRET/);
+  });
+
+  it('AC-8 optional A-35 step (DL-253): a throwaway standard account, listed in the kit and removed by Finish and Cleanup, reported on its own line that cannot change the AC-8 result, with no password in the file', () => {
+    const kit = read('deploy/windows/manual/AC-8-jea-prompt-check.md');
+    const script = kit.slice(kit.indexOf('```powershell\n<#'), kit.lastIndexOf('```'));
+    // The prose: optional, listed under what it changes, its own line, stop and report to the delivery lead.
+    const changes = kit.slice(kit.indexOf('## What it changes, and what it removes'), kit.indexOf('## Before you start'));
+    for (const part of ['Optional', '-StandardAccount', '`Ac8Standard`', 'standard', 'never an administrator', 'remove that account too']) expect(changes, part).toContain(part);
+    for (const part of ['Optional step 5b', 'OPTIONAL A-35 CHECK: PASS', 'OPTIONAL A-35 CHECK: FAIL', 'OPTIONAL A-35 CHECK: NOT RUN', 'never changes `AC-8 RESULT`', 'stop and report it to the delivery lead', 'press Enter without typing anything', 'Restore-AccucutBackup', 'only in the rehearsal before go-live']) expect(kit, part).toContain(part);
+    // The script: the account is made only on request, is in the built-in Users group and never in Administrators, and is removed by the one routine that Finish and Cleanup both run.
+    expect(script).toContain('[switch]$StandardAccount');
+    expect(script).toContain("$StandardName = 'Ac8Standard'");
+    const adds = script.match(/Add-LocalGroupMember[^\n]*/g) ?? [];
+    expect(adds).toHaveLength(1);
+    expect(adds[0]).toContain("'S-1-5-32-545'");
+    const removal = functionBody(script, 'Remove-Ac8Check');
+    expect(removal).toContain('Remove-LocalUser -Name $StandardName');
+    expect(removal).toContain('Win32_UserProfile');
+    expect(script).toContain("if ($Phase -eq 'Cleanup') { Remove-Ac8Check;");
+    const finish = script.slice(script.indexOf('# ---- Finish'));
+    expect(finish).toContain('Remove-Ac8Check');
+    // No password in the file: it is made up when Prepare runs and only printed. Nothing is hard-coded, and nothing reads one from a file or an argument.
+    expect(script).toContain('Get-Random -InputObject $pool');
+    expect(script).not.toMatch(/-Password\s+['"]/);
+    expect(script).not.toMatch(/\[string\]\$(?:Password|StandardPassword)|Read-Host[^\n]*(?:Password|Credential)/i);
+    // The optional line is separate: it is printed after the AC-8 result line, and only the AC-8 verdict decides the exit code.
+    expect(finish).toContain('OPTIONAL A-35 CHECK: PASS  a standard (non-administrator) account opened the endpoint, and its command ran as the limited virtual account and reached its first question');
+    expect(finish).toContain('$ac8Passed = ($failed -eq 0 -and $passed -ge 6)');
+    expect(finish.indexOf("Write-Host 'AC-8 RESULT: PASS'")).toBeLessThan(finish.indexOf('Write-Host $standardLine'));
+    expect(finish).toContain('if ($ac8Passed) { exit 0 }');
+    expect(finish.slice(finish.indexOf('$ac8Passed ='))).not.toContain('$standardOk');
+    // The session script: the standard account (told apart by its connected name) stops after the first question WHATEVER it types, writes its note only AFTER that question has
+    // returned, and can never write result.json (the administrator's AC-8 result), which is written further down, after this block has returned.
+    const session = script.slice(script.indexOf("$script = @'"), script.indexOf("'@\n"));
+    expect(session).toContain("$isStandard = ($sender -like '*\\Ac8Standard')");
+    const firstQuestion = session.indexOf("Read-Host -Prompt 'Type the word PINEAPPLE");
+    const standardBlock = session.slice(session.indexOf('if ($isStandard) {'));
+    const standardEnd = standardBlock.indexOf('\n}\n') + 3;
+    const standardOnly = standardBlock.slice(0, standardEnd);
+    expect(firstQuestion).toBeGreaterThan(0);
+    expect(session.indexOf('if ($isStandard) {')).toBeGreaterThan(firstQuestion);
+    expect(session.indexOf('started-')).toBeGreaterThan(firstQuestion);
+    expect(session.indexOf('started-')).toBeLessThan(session.indexOf('Read-Host -Prompt \'Paste the FAKE'));
+    expect(standardOnly).toContain('if ($promptReached) {');
+    expect(standardOnly).toContain('started-');
+    expect(standardOnly).toMatch(/\n    return\n\}\n$/);
+    expect(standardOnly).not.toContain('result.json');
+    expect(session.match(/result\.json/g)).toHaveLength(1);
+    expect(session.indexOf('result.json')).toBeGreaterThan(session.indexOf('if ($isStandard) {') + standardOnly.length);
+    expect(session.slice(0, session.indexOf('if ($isStandard) {'))).not.toContain('started-');
+  });
+
+  it('AC-10: the README has a restore chapter for a person who is not a system administrator, with the typed-date step and what to say to IT', () => {
+    const readme = read('deploy/windows/README.md');
+    const chapter = readme.slice(readme.indexOf('## Restore a backup (STORY-10.11)'), readme.indexOf('## The shared module'));
+    expect(chapter.length).toBeGreaterThan(5000);
+    for (const part of [
+      'who is **not** a system administrator',
+      'Everything entered after that day is lost',
+      'audit rows too',
+      'TYPE the date of the copy',
+      'Restore-AccucutBackup',
+      'Accucut Admin',
+      'Nothing is shown on the screen',
+      'Call your IT person',
+      'read them the message and say which copy',
+      'restore.log',
+      'JEA',
+      'AccucutAdminRunAs',
+      'AC-8-jea-prompt-check.md',
+      'full administrator',
+    ]) {
+      expect(chapter.toLowerCase(), part).toContain(part.toLowerCase());
+    }
+  });
+
+  it('ADR-015 Amendment 3.3 R1: the endpoint group must stay empty: the install refuses a group with members, both scripts check it through ADSI before the first prompt, and stage 13 asserts it', () => {
+    const newGroup = functionBody(restoreRegion, 'New-AccucutAdminGroup');
+    expect(newGroup).toContain('Get-AccucutAdminGroupMember');
+    expect(newGroup).toContain("has members. It must have none: a member could read the restore's database password. Ask your IT person to remove them. Nothing was changed.");
+    expect(functionBody(restoreRegion, 'Get-AccucutAdminGroupMember')).toContain('WinNT://');
+    for (const path of ['deploy/windows/restore.ps1', 'deploy/windows/clear-copies.ps1']) {
+      const text = code(path);
+      expect(functionBody(text, 'Get-AccucutAdminGroupMemberList'), path).toContain("Invoke('Members')");
+      const assertion = functionBody(text, 'Assert-AccucutAdminGroupEmpty');
+      expect(assertion, path).toContain("The group $groupName has members. It must have none: a member could read the restore's database password. Ask your IT person to remove them. Nothing was changed.");
+      expect(assertion, path).toContain('could not be read');
+      const body = functionBody(text, path.includes('restore') ? 'Invoke-AccucutRestoreScript' : 'Invoke-AccucutClearScript');
+      expect(body.indexOf('Assert-AccucutAdminGroupEmpty'), path).toBeGreaterThan(body.indexOf('Import-AccucutTrustedModule'));
+    }
+    const assertInstall = code('deploy/windows/ci/assert-install.ps1');
+    expect(assertInstall).toContain("'the local group AccucutAdminRunAs exists (the install ran with -AdminAccount)'");
+    expect(assertInstall).toContain('the group AccucutAdminRunAs has no member');
+  });
+
+  it('ADR-015 Amendment 3.3 R2: restore.pgpass is checked at use (owner, protected, only Administrators, SYSTEM and the group with Read), and stage 13 asserts the exact entry counts', () => {
+    const check = functionBody(code('deploy/windows/restore.ps1'), 'Assert-AccucutRestorePassFileTrusted');
+    expect(check).toContain('Get-AccucutTrustSecurity -Path $Path');
+    expect(check).toContain('-bnot [int64]0x120089');
+    expect(check).toContain('deny entry');
+    const body = functionBody(code('deploy/windows/restore.ps1'), 'Invoke-AccucutRestoreScript');
+    expect(body).toContain('Assert-AccucutRestorePassFileTrusted -Path $paths.RestorePgpass -GroupSid (Get-AccucutAdminGroupSid)');
+    expect(body.indexOf('Assert-AccucutRestorePassFileTrusted')).toBeLessThan(body.indexOf('Invoke-AccucutRestore -Paths'));
+    const assertInstall = code('deploy/windows/ci/assert-install.ps1');
+    for (const part of ['restore.pgpass holds exactly three entries', 'holds exactly four entries', 'the install folder holds exactly six entries', '"$groupSid|0x120089|False|0|Allow"', '"$groupSid|0x1200A9|False|3|Allow"']) {
+      expect(assertInstall, part).toContain(part);
+    }
+  });
+
+  it('ADR-015 Amendment 3.3 R3: a copy from a newer release stops with newer-release before the migration and the swap; an older one is migrated forward, and stage 13 does it for real', () => {
+    const newer = functionBody(restoreRegion, 'Assert-AccucutRestoreNotNewer');
+    expect(newer).toContain('SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL');
+    expect(newer).toContain("'migrate\\prisma\\migrations'");
+    expect(newer).toContain("-Code 'newer-release'");
+    expect(newer).toContain('This copy was made by a newer release of the portal than the one installed. Nothing was changed. Ask your IT person to install that release, then run the restore again.');
+    const restore = functionBody(restoreRegion, 'Invoke-AccucutRestore');
+    expect(restore.indexOf('Assert-AccucutRestoreNotNewer')).toBeGreaterThan(restore.indexOf('Invoke-AccucutRestorePipe -AgePath'));
+    expect(restore.indexOf('Assert-AccucutRestoreNotNewer')).toBeLessThan(restore.indexOf('Invoke-AccucutMigration'));
+    expect(restore.indexOf('Assert-AccucutRestoreNotNewer')).toBeLessThan(restore.indexOf('Switch-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Replacement $newName'));
+    expect(read('deploy/windows/tests/Restore.Tests.ps1')).toContain('one migration BEHIND the installed release');
+  });
+
+  it('ADR-015 Amendment 3.3 R4: the service entry is query, start and stop (no pause), read back after sdset, set with the sc.exe that the install resolved through the trust check; stage 13 checks it after install, update and rollback', () => {
+    const grant = functionBody(restoreRegion, 'Grant-AccucutServiceControl');
+    expect(grant).toContain('(A;;CCLCSWRPWPLORC;;;$Sid)');
+    expect(grant).not.toMatch(/CCLCSWRPWPDTLORC|System32|\$env:SystemRoot/);
+    expect(grant).toContain('[Parameter(Mandatory)][string]$ScPath');
+    expect(grant.match(/'sdshow'/g)?.length).toBe(2);
+    expect(grant).toContain('is not what was set');
+    const install = code('deploy/windows/install.ps1');
+    expect(install).toContain("$scExe = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($env:SystemRoot, 'System32\\sc.exe'))");
+    expect(install).toContain('-ScPath $scExe');
+    expect(code('deploy/windows/ci/assert-install.ps1')).toContain('(A;;CCLCSWRPWPLORC;;;$groupSid)');
+    // The install of stage 13 runs with -AdminAccount, so every assert-install call (after the install, the update and the rollback) sees the entry.
+    expect(WORKFLOW).toContain('-NodeExe $env:ACCUCUT_NODE -AdminAccount "$env:USERDOMAIN\\$env:USERNAME"');
+    expect(WORKFLOW).toContain('Make sure PowerShell remoting is on');
+  });
+
+  it('ADR-015 Amendment 3.3 R5: no constrained cmdlet by its short name on the session path, and the top-level handlers redact with a flag, not a Get-Command probe', () => {
+    for (const path of ['deploy/windows/AccucutOps.psm1', 'deploy/windows/restore.ps1', 'deploy/windows/clear-copies.ps1']) {
+      const text = code(path);
+      expect(text, path).not.toMatch(/(?<![\w.\\-])(?:Select-Object|Measure-Object|Get-Command|Get-Help|Out-Default|Get-FormatData)\b/);
+    }
+    expect(code('deploy/windows/AccucutOps.psm1')).toContain('Microsoft.PowerShell.Utility\\Select-Object');
+    for (const path of ['deploy/windows/restore.ps1', 'deploy/windows/clear-copies.ps1']) {
+      const text = code(path);
+      expect(text, path).toContain('$script:AccucutModuleLoaded = $false');
+      expect(text, path).toContain('if ($script:AccucutModuleLoaded) { $message = Hide-AccucutSecrets -Text $message }');
+    }
+  });
+});
+
+describe('no stray carriage return in the deploy texts (STORY-10.11, SQR-05)', () => {
+  function textFiles(directory: string): string[] {
+    const found: string[] = [];
+    for (const entry of readdirSync(fileURLToPath(new URL(`../../${directory}`, import.meta.url)), { withFileTypes: true })) {
+      const path = `${directory}/${entry.name}`;
+      if (entry.isDirectory()) found.push(...textFiles(path));
+      else if (/\.(md|ps1|psm1|psd1|xml|json|yml)$/.test(entry.name)) found.push(path);
+    }
+    return found;
+  }
+
+  it('a carriage return in a deploy .md or script file is always the first half of CRLF (a lone one is a backslash-r that was typed into a path, such as config<CR>estore.pgpass)', () => {
+    const files = textFiles('deploy');
+    expect(files.length).toBeGreaterThan(10);
+    for (const path of files) {
+      const raw = readFileSync(fileURLToPath(new URL(`../../${path}`, import.meta.url)), 'utf8');
+      expect(raw.match(/\r(?!\n)/g) ?? [], path).toEqual([]);
+    }
+  });
+
+  it('the README says who can read restore.pgpass as it is: Administrators, and the endpoint group with -AdminAccount', () => {
+    const readme = read('deploy/windows/README.md');
+    expect(readme).toContain('`config\\restore.pgpass` (Administrators, and the endpoint group with `-AdminAccount`)');
+    expect(readme).not.toContain('(Administrators only)');
   });
 });

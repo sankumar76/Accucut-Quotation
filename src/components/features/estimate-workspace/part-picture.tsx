@@ -13,7 +13,10 @@ import { type FormField, PART_CHANGED_CODE } from '@/lib/estimates/form-client';
 import { dropPicture, pictureUrl, sendPicture, type PartPictureAnswer } from '@/lib/estimates/picture-client';
 import { toPictureView, type PictureView } from '@/lib/estimates/picture-view';
 import { MAX_PICTURE_BYTES, PICTURE_TYPE_MESSAGE, PICTURE_UPLOAD_FAILED_MESSAGE, pictureTooLargeMessage, sanitiseFileName } from '@/lib/images/picture-rules';
+import { convertWebp } from '@/lib/images/convert-webp';
 import { detectImageType, IMAGE_MIMES } from '@/lib/images/signature';
+
+import { browserDecoder } from './browser-decoder';
 
 import { controlIdOf } from './field-renderer';
 import {
@@ -63,6 +66,18 @@ type Busy = 'adding' | 'removing' | null;
 async function problemWith(file: File): Promise<string | null> {
   if (file.size >= MAX_PICTURE_BYTES) return pictureTooLargeMessage(sanitiseFileName(file.name), file.size);
   return detectImageType(new Uint8Array(await file.arrayBuffer())) === null ? PICTURE_TYPE_MESSAGE : null;
+}
+
+/**
+ * The file to send, or the words that say why not (the 200 KB limit applies to the converted file, DL-237). A WebP is made into a PNG or a JPEG first, in the browser (`lib/images/convert-webp.ts`), so the Excel file can hold the picture; the server still
+ * never decodes a picture and still judges what it is sent. Any other kind is judged as it is.
+ */
+async function readyToSend(file: File): Promise<File | string> {
+  if (detectImageType(new Uint8Array(await file.arrayBuffer())) !== 'image/webp') return (await problemWith(file)) ?? file;
+  const converted = await convertWebp(file, browserDecoder);
+  // The refusals are the existing ones (DL-237): a WebP the browser cannot read is "wrong type", and one whose converted file is still 200 KB or more is "too large", with that file's size.
+  if (!converted.ok) return converted.reason === 'too-large' ? pictureTooLargeMessage(sanitiseFileName(file.name), converted.bytes) : PICTURE_TYPE_MESSAGE;
+  return (await problemWith(converted.file)) ?? converted.file;
 }
 
 /** The first picture on the clipboard, or undefined: a paste of text carries none and is left alone. */
@@ -138,9 +153,9 @@ function PictureControl({ field, estimateId, partId, held: initial, editable, in
     return change(
       'adding',
       async () => {
-        const refused = await problemWith(file);
-        if (refused !== null) return refused;
-        const outcome = await sendPicture(estimateId, partId, file);
+        const ready = await readyToSend(file);
+        if (typeof ready === 'string') return ready;
+        const outcome = await sendPicture(estimateId, partId, ready);
         return outcome.status === 'ok' ? outcome.value : wordsFor(outcome);
       },
       () => (replacing ? PICTURE_REPLACED : PICTURE_ADDED),

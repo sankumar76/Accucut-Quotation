@@ -139,11 +139,44 @@ export interface RowWorkingRecord {
   readonly outputs: StoredValues;
 }
 
+/** A calculation an estimate is linked to, with what its figure state is worked out from. No figure. */
+export interface LinkedCalculation {
+  readonly id: string;
+  readonly taskCode: string;
+  /** `estimates.inputs_revision` now. */
+  readonly inputsRevision: number;
+  /** `calculations.inputs_revision` of this calculation. */
+  readonly calculationInputsRevision: number;
+}
+
+/**
+ * What the Excel export is built from (STORY-07.02; architecture section 4.6): every node of one calculation, with its typed values, its stored figures and its picture, and the words and price of
+ * each material in the calculation's own snapshot, and the product's figures (BL, BN and the total Tool Cost: STORY-07.03). Nothing else of the snapshot (no customer, no rate, no exchange rate) is read.
+ */
+export interface ExportFigures {
+  readonly rows: ReadonlyArray<CalculationRowRecord>;
+  /** The stored figures of the product, as the review shows them: the file's BL2, BN2 and footer are these, so they equal SCR-06's to the paisa. */
+  readonly productValues: ProductValues;
+  readonly materials: ReadonlyArray<{ readonly materialInDrawing: string; readonly pricePerKg: string }>;
+  /**
+   * The warnings the person acknowledged for this calculation (STORY-07.06; architecture section 4.3 "What the Lead sees"), as text, and the name now of the person who pressed Calculate or Recalculate: with the
+   * time, the acknowledgement. They are for SCR-10's notice and **never reach the file** (A-24): the cells are made of `rows`, `materials` and `productValues` alone.
+   */
+  readonly warnings: ReadonlyArray<StoredWarning>;
+  readonly madeByName: string;
+}
+
 export interface CalculationRepository {
   /** Inserts the record and one row per node, in the caller's transaction, and returns the new calculation's ID and time. `warnings` is the acknowledged list, or the default `[]` when there is none. */
   insertCalculation(calculation: NewCalculation, rows: ReadonlyArray<NewCalculationRow>, tx: Transaction): Promise<{ readonly id: string; readonly createdAt: Date }>;
   /** One record with its rows, or null for an unknown ID. A plain read; the figure-state rule is the caller's (see above). */
   findCalculation(id: string): Promise<CalculationRecord | null>;
+  /**
+   * The calculations the estimates are linked to now, the newest first, at most `limit`, each with the code of its task and the two revisions the figure state is worked out from (STORY-08.02: the formula
+   * editor tries a formula on a row of the latest calculated estimate, "Sample rows come from the latest calculated estimate, Q-..."). No figure is read: the caller picks the first whose state is
+   * `current` (`figureState`) and reads its record through `readFiguresWhenCurrent`, as every other reader does. **The one caller is the Admin's formula editor** (ADR-008, NFR-002).
+   */
+  findRecentLinked(limit: number): Promise<ReadonlyArray<LinkedCalculation>>;
   /**
    * The basis of the figure state of an estimate (no figure is read), or null for an unknown estimate or an ID that is not a UUID. Pass `tx` to read it in the caller's transaction (STORY-06.05: an approval
    * reads it under the estimate's row lock, on the one connection it already holds); without it the read is a plain one.
@@ -160,10 +193,21 @@ export interface CalculationRepository {
    */
   findRowWorking(calculationId: string, nodeId: string): Promise<RowWorkingRecord | null>;
   /**
+   * The nodes of one calculation and its materials' words and prices, for the Excel file (STORY-07.02): the rows in a fixed order, and from the master snapshot only `materials` (selected as one column, the
+   * rest of it dropped before it leaves). Null for an unknown calculation or an ID that is not a UUID. **The caller reads it only while the state is `current`** (`readFiguresWhenCurrent` of `figure-state.ts`).
+   * Pass `tx` to read in the caller's transaction (STORY-07.04: the export reads the state and these rows in one repeatable-read snapshot).
+   */
+  findExportFigures(calculationId: string, tx?: Transaction): Promise<ExportFigures | null>;
+  /**
    * The calculated total (BL) of one calculation as decimal text, selected on its own (STORY-06.06: the approval keeps it beside the price and pre-fills nothing else): neither a row nor the snapshot is
    * read. Null for an unknown calculation, an ID that is not a UUID, or a calculation with no total. **The caller reads it only while the state is `current`.** Pass `tx` to read in the caller's transaction.
    */
   findCalculatedTotal(calculationId: string, tx?: Transaction): Promise<string | null>;
+  /**
+   * The master snapshot of one calculation and the configuration version it used, selected on their own (STORY-06.08: the unlock preview compares the snapshot with the masters now). Neither a row nor a figure is
+   * read. Null for an unknown calculation or an ID that is not a UUID. **The snapshot holds rates and prices, which are cost data**: only the Lead's and the Admin's code may ask (ADR-008).
+   */
+  findMasterSnapshot(calculationId: string): Promise<{ readonly configVersionId: string; readonly masterSnapshot: MasterSnapshot } | null>;
 }
 
 /**
@@ -252,6 +296,21 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
         };
       }),
 
+    findRecentLinked: (limit) =>
+      withDatabaseErrors(async () => {
+        const found = await db.estimate.findMany({
+          where: { currentCalculationId: { not: null } },
+          orderBy: [{ currentCalculation: { createdAt: 'desc' } }, { id: 'desc' }],
+          take: limit,
+          select: { inputsRevision: true, task: { select: { code: true } }, currentCalculation: { select: { id: true, inputsRevision: true } } },
+        });
+        return found.flatMap((estimate) =>
+          estimate.currentCalculation === null
+            ? []
+            : [{ id: estimate.currentCalculation.id, taskCode: estimate.task.code, inputsRevision: estimate.inputsRevision, calculationInputsRevision: estimate.currentCalculation.inputsRevision }],
+        );
+      }),
+
     findFigureBasis: (estimateId, tx) =>
       withDatabaseErrors(async () => {
         if (!isUuid(estimateId)) return null;
@@ -288,6 +347,45 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
         if (!isUuid(calculationId)) return null;
         const found = await clientFor(db, tx).calculation.findUnique({ where: { id: calculationId }, select: { productValues: true } });
         return found === null ? null : productValuesSchema.parse(found.productValues).totalPrice;
+      }),
+
+    findMasterSnapshot: (calculationId) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(calculationId)) return null;
+        const found = await db.calculation.findUnique({ where: { id: calculationId }, select: { configVersionId: true, masterSnapshot: true } });
+        return found === null ? null : { configVersionId: found.configVersionId, masterSnapshot: masterSnapshotSchema.parse(found.masterSnapshot) };
+      }),
+
+    findExportFigures: (calculationId, tx) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(calculationId)) return null;
+        const found = await clientFor(db, tx).calculation.findUnique({
+          where: { id: calculationId },
+          select: {
+            masterSnapshot: true,
+            productValues: true,
+            warnings: true,
+            creator: { select: { name: true } },
+            rows: { select: { id: true, nodeId: true, parentId: true, sortIndex: true, slNo: true, inputs: true, imageId: true, outputs: true }, orderBy: [{ sortIndex: 'asc' }, { id: 'asc' }] },
+          },
+        });
+        if (found === null) return null;
+        return {
+          productValues: productValuesSchema.parse(found.productValues),
+          warnings: storedWarningsSchema.parse(found.warnings),
+          madeByName: found.creator.name,
+          rows: found.rows.map((row) => ({
+            id: row.id,
+            nodeId: row.nodeId,
+            parentId: row.parentId,
+            sortIndex: row.sortIndex,
+            slNo: row.slNo,
+            inputs: storedValuesSchema.parse(row.inputs),
+            imageId: row.imageId,
+            outputs: storedValuesSchema.parse(row.outputs),
+          })),
+          materials: masterSnapshotSchema.parse(found.masterSnapshot).materials.map(({ materialInDrawing, pricePerKg }) => ({ materialInDrawing, pricePerKg })),
+        };
       }),
 
     findRowWorking: (calculationId, nodeId) =>

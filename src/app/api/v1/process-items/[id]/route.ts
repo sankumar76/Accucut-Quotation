@@ -2,20 +2,21 @@ import { z } from 'zod';
 
 import { getMastersService } from '@/server/composition';
 import { withRoute } from '@/server/http/with-route';
-import { processItemIdParamsSchema, processItemSchema, updateProcessItemBodySchema } from '@/server/views/schemas/process-items';
+import { processItemIdParamsSchema, updateProcessItemBodySchema, updatedProcessItemSchema } from '@/server/views/schemas/process-items';
 
 const NO_CONTENT = 204;
 
 /**
  * `PATCH /api/v1/process-items/{id}` (STORY-02.01 AC-3, AC-5): the Admin changes a rate's name, unit or default value. Admin only,
- * checked before the ID is looked at, so a real ID and an invented one are refused alike (CR-33).
+ * checked before the ID is looked at, so a real ID and an invented one are refused alike (CR-33). A new default reaches the customers that held the old one in the
+ * same transaction and the answer lists the customers that hold another value (`propagation`, STORY-02.08 AC-1, AC-2).
  */
 export const PATCH = withRoute({
   route: '/api/v1/process-items/[id]',
   method: 'PATCH',
   params: processItemIdParamsSchema,
   body: updateProcessItemBodySchema,
-  output: processItemSchema,
+  output: updatedProcessItemSchema,
   handler: ({ user, requestId, params, body }) =>
     getMastersService().updateProcessItem({ actorId: user.id, actorLabel: user.name, requestId }, params.id, body),
 });

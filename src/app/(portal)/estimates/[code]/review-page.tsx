@@ -11,6 +11,10 @@ import type { EstimateViewer } from '@/server/services/estimate-service';
  * review from that one answer. **This file and the folder it draws from are Restricted** (NFR-002): `page.tsx` loads this file with a dynamic `import()` on the Lead's and the Admin's branch
  * alone, so the Engineer's request never loads it and the Engineer's page imports no review code (`tests/unit/estimate-review-architecture.test.ts`). It is a plain function and not an async
  * component, so the page returns the finished element and a test draws it the way the first paint is.
+ *
+ * **The customer's name is the current one, also on an approved estimate** (STORY-06.09 AC-3, NFR-026): `customer` is read by `page.tsx` from `customers` through the estimate's own `customer_id`, so a customer
+ * the Admin renamed after the approval shows under its new name. The name the calculation used is kept in `calculations.master_snapshot` and is shown nowhere; every figure and word that was approved
+ * is read from the calculation record alone (`estimate-review-service.ts`), and `tests/acceptance/aqp-approved-immutable.test.ts` pins both facts.
  */
 
 export interface ReviewPageArgs {
@@ -22,5 +26,5 @@ export interface ReviewPageArgs {
 
 export async function renderReview({ viewer, estimateId, header, customer }: ReviewPageArgs): Promise<ReactElement> {
   const costs = await getEstimateReviewService().getCosts(viewer, estimateId);
-  return <EstimateReview header={header} estimateId={estimateId} customer={customer} costs={costs} calculatedAt={costs.calculatedAt === null ? null : formatIst(new Date(costs.calculatedAt))} />;
+  return <EstimateReview header={header} estimateId={estimateId} customer={customer} costs={costs} calculatedAt={costs.calculatedAt === null ? null : formatIst(new Date(costs.calculatedAt))} viewerRole={viewer.role} />;
 }

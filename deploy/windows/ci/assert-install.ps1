@@ -116,14 +116,22 @@ $systemSid = 'S-1-5-18'
 $backupUser = Get-LocalUser -Name 'AccucutBackup' -ErrorAction SilentlyContinue
 Assert-That ($null -ne $backupUser) 'the local user AccucutBackup exists'
 $backupSid = $backupUser.SID.Value
+# STORY-10.11 (ADR-015 Amendment 3.3 R1): stage 13 installs with -AdminAccount, so the Admin endpoint's group exists, and it has NO member.
+$groupSid = $null
+try { $groupSid = ([System.Security.Principal.NTAccount]::new([string]$env:COMPUTERNAME, 'AccucutAdminRunAs')).Translate([System.Security.Principal.SecurityIdentifier]).Value } catch { $groupSid = $null }
+Assert-That ($null -ne $groupSid) 'the local group AccucutAdminRunAs exists (the install ran with -AdminAccount)'
+$groupMembers = @(([ADSI]"WinNT://$($env:COMPUTERNAME)/AccucutAdminRunAs,group").Invoke('Members'))
+Assert-That ($groupMembers.Count -eq 0) "the group AccucutAdminRunAs has no member (found $($groupMembers.Count))"
+# The root has six entries with the endpoint: the five of ADR-015 Amendment 3, and read and execute for the group (the Admin endpoint's virtual account is in it and nothing else).
 $rootExpected = @(
-    "$adminSid|0x1F01FF|False|3|Allow", "$systemSid|0x1F01FF|False|3|Allow", "$appSid|0x1200A9|False|3|Allow", "$workerSid|0x1200A9|False|3|Allow", "$backupSid|0x1200A9|False|3|Allow"
+    "$adminSid|0x1F01FF|False|3|Allow", "$systemSid|0x1F01FF|False|3|Allow", "$appSid|0x1200A9|False|3|Allow", "$workerSid|0x1200A9|False|3|Allow", "$backupSid|0x1200A9|False|3|Allow",
+    "$groupSid|0x1200A9|False|3|Allow"
 ) | Sort-Object
 $rootActual = Get-AceList -Path $paths.Root
-Assert-That (($rootActual -join "`n") -eq ($rootExpected -join "`n")) "the install folder holds exactly five entries: Administrators and SYSTEM full control, and the two service accounts and AccucutBackup read and execute (found: $($rootActual -join '; '))"
+Assert-That (($rootActual -join "`n") -eq ($rootExpected -join "`n")) "the install folder holds exactly six entries: Administrators and SYSTEM full control, and the two service accounts, AccucutBackup and the Admin endpoint's group read and execute (found: $($rootActual -join '; '))"
 $logsExpected = @(
     "$adminSid|0x1F01FF|True|3|Allow", "$systemSid|0x1F01FF|True|3|Allow", "$appSid|0x1200A9|True|3|Allow", "$workerSid|0x1200A9|True|3|Allow", "$backupSid|0x1200A9|True|3|Allow",
-    "$appSid|0x1301BF|False|3|Allow", "$workerSid|0x1301BF|False|3|Allow"
+    "$groupSid|0x1200A9|True|3|Allow", "$appSid|0x1301BF|False|3|Allow", "$workerSid|0x1301BF|False|3|Allow"
 ) | Sort-Object
 $logsActual = Get-AceList -Path $paths.Logs
 Assert-That (($logsActual -join "`n") -eq ($logsExpected -join "`n")) "the logs folder holds exactly those five inherited entries plus Modify for the two service accounts (found: $($logsActual -join '; '))"
@@ -167,15 +175,28 @@ Assert-That ((-not (Test-Path -LiteralPath $scratch)) -or @(Get-ChildItem -Liter
 # ADR-015 Amendment 3: the backups folder and the two files of the backup account. Each is protected, owned by Administrators, with EXACTLY these entries.
 $backupFolder = Get-AclSids -Path $paths.Backups
 Assert-That ($backupFolder.Protected -and $backupFolder.Owner -eq $adminSid) 'the backups folder is protected (no inheritance) and owned by Administrators'
-$backupsExpected = @("$adminSid|0x1F01FF|False|3|Allow", "$systemSid|0x1F01FF|False|3|Allow", "$backupSid|0x1301BF|False|3|Allow") | Sort-Object
+$backupsExpected = @("$adminSid|0x1F01FF|False|3|Allow", "$systemSid|0x1F01FF|False|3|Allow", "$backupSid|0x1301BF|False|3|Allow", "$groupSid|0x1301BF|False|3|Allow") | Sort-Object
 $backupsActual = Get-AceList -Path $paths.Backups
-Assert-That (($backupsActual -join "`n") -eq ($backupsExpected -join "`n")) "the backups folder holds exactly: Administrators and SYSTEM full control and AccucutBackup Modify, and no entry for the services (found: $($backupsActual -join '; '))"
+Assert-That (($backupsActual -join "`n") -eq ($backupsExpected -join "`n")) "the backups folder holds exactly: Administrators and SYSTEM full control and AccucutBackup and the Admin endpoint's group Modify, and no entry for the services (found: $($backupsActual -join '; '))"
+# ADR-015 Amendment 3.3 R2: exact entry counts. backup.pgpass and backup-settings.json have four (Administrators, SYSTEM, AccucutBackup read, the group read); restore.pgpass has three
+# (Administrators, SYSTEM, the group read) and no AccucutBackup, App or Worker.
 foreach ($file in $paths.BackupPgpass, $paths.BackupSettings) {
     $fileAcl = Get-AclSids -Path $file
     Assert-That ($fileAcl.Protected -and $fileAcl.Owner -eq $adminSid) "$file is protected and owned by Administrators"
-    $expectedFile = @("$adminSid|0x1F01FF|False|0|Allow", "$systemSid|0x1F01FF|False|0|Allow", "$backupSid|0x120089|False|0|Allow") | Sort-Object
+    $expectedFile = @("$adminSid|0x1F01FF|False|0|Allow", "$systemSid|0x1F01FF|False|0|Allow", "$backupSid|0x120089|False|0|Allow", "$groupSid|0x120089|False|0|Allow") | Sort-Object
     $actualFile = Get-AceList -Path $file
-    Assert-That (($actualFile -join "`n") -eq ($expectedFile -join "`n")) "$file holds exactly: Administrators and SYSTEM full control and AccucutBackup read (found: $($actualFile -join '; '))"
+    Assert-That (($actualFile -join "`n") -eq ($expectedFile -join "`n")) "$file holds exactly four entries: Administrators and SYSTEM full control, AccucutBackup read and the Admin endpoint's group read (found: $($actualFile -join '; '))"
+}
+$restoreAcl = Get-AclSids -Path $paths.RestorePgpass
+Assert-That ($restoreAcl.Protected -and $restoreAcl.Owner -eq $adminSid) "$($paths.RestorePgpass) is protected and owned by Administrators"
+$restoreExpected = @("$adminSid|0x1F01FF|False|0|Allow", "$systemSid|0x1F01FF|False|0|Allow", "$groupSid|0x120089|False|0|Allow") | Sort-Object
+$restoreActual = Get-AceList -Path $paths.RestorePgpass
+Assert-That (($restoreActual -join "`n") -eq ($restoreExpected -join "`n")) "restore.pgpass holds exactly three entries: Administrators and SYSTEM full control and the Admin endpoint's group read (found: $($restoreActual -join '; '))"
+# ADR-015 Amendment 3.3 R4: the service entry of the endpoint group, on both services (after the install, the update and the rollback, since this script runs after each).
+foreach ($name in $services) {
+    $descriptor = ((& "$env:SystemRoot\System32\sc.exe" sdshow $name | Out-String)).Trim()
+    Assert-That ($descriptor.Contains("(A;;CCLCSWRPWPLORC;;;$groupSid)")) "$name has the endpoint group's entry (A;;CCLCSWRPWPLORC;;;<group>): query, start and stop, no pause, no change (found: $descriptor)"
+    Assert-That (([regex]::Matches($descriptor, [regex]::Escape($groupSid))).Count -eq 1) "$name names the endpoint group once"
 }
 foreach ($file in $paths.EnvFile, $paths.MigrateEnvFile) {
     Assert-That ((Get-AclSids -Path $file).Sids -notcontains $backupSid) "$file does not name AccucutBackup"
@@ -283,6 +304,14 @@ function Invoke-SuperPsql {
 }
 $okRows = Invoke-SuperPsql -Database 'accucut' -Sql "SELECT count(*) FROM job_runs WHERE job = 'backup' AND result->>'status' = 'ok' AND (result->>'sizeBytes')::bigint > 0 AND (result->>'freeBytes')::bigint > 0 AND (result->>'totalBytes')::bigint > 0"
 Assert-That ([int]$okRows -ge 1) "job_runs has a 'backup' row with status ok, sizeBytes, freeBytes and totalBytes (found $okRows)"
+# STORY-10.09a (AC-4, AC-5, AC-6, AC-7): the worker writes its heartbeat, so /api/health (checked above) answers 200 only while it does; and the runtime role removes old heartbeat rows through
+# prune_heartbeat_runs() and in no other way (a SECURITY DEFINER function of the owner role, executable by accucut_app alone; accucut_app has no DELETE on job_runs).
+$heartbeats = Invoke-SuperPsql -Database 'accucut' -Sql "SELECT count(*) FROM job_runs WHERE job = 'heartbeat' AND finished_at > now() - interval '3 minutes'"
+Assert-That ([int]$heartbeats -ge 1) "the worker wrote a heartbeat row in the last 3 minutes, which is what /api/health reads (found $heartbeats)"
+$pruneFunction = Invoke-SuperPsql -Database 'accucut' -Sql "SELECT prosecdef::text || '|' || pg_get_userbyid(proowner) || '|' || pronargs::text || '|' || coalesce(proconfig::text, '') FROM pg_proc WHERE proname = 'prune_heartbeat_runs' AND pronamespace = 'public'::regnamespace"
+Assert-That ($pruneFunction -eq 'true|accucut_owner|0|{"search_path=pg_catalog, pg_temp"}') "prune_heartbeat_runs() is SECURITY DEFINER, owned by accucut_owner, has no argument and a pinned search_path (found '$pruneFunction')"
+$pruneRights = Invoke-SuperPsql -Database 'accucut' -Sql "SELECT has_function_privilege('accucut_app', 'public.prune_heartbeat_runs()', 'EXECUTE')::text || '|' || has_function_privilege('accucut_backup', 'public.prune_heartbeat_runs()', 'EXECUTE')::text || '|' || has_table_privilege('accucut_app', 'job_runs', 'DELETE')::text"
+Assert-That ($pruneRights -eq 'true|false|false') "accucut_app may EXECUTE prune_heartbeat_runs() and has no DELETE on job_runs; accucut_backup may not execute it (found '$pruneRights')"
 # Decrypt with the run's own key and restore into a scratch database (the file is deleted at once; nothing here is a real key).
 $ageExe = Join-Path $paths.Current 'bin\age.exe'
 $scratchFile = Join-Path $env:RUNNER_TEMP ('accucut-restore-check-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.dump')

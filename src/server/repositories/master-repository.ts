@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { createCustomerMethods, type CustomerMethods } from './customer-repository';
+import { createPropagationMethods, type PropagationMethods } from './default-propagation-repository';
 import { isRecordNotFound, withDatabaseErrors } from './database-errors';
 import { STORED_DECIMALS, trimDecimalText } from './decimal-text';
 import { createExchangeRateMethods, type ExchangeRateMethods } from './exchange-rate-repository';
@@ -50,7 +51,7 @@ export interface ProcessItemChanges {
   readonly defaultValue?: string | undefined;
 }
 
-export interface MasterRepository extends CustomerMethods, ExchangeRateMethods, MaterialMethods, TreatmentMethods {
+export interface MasterRepository extends CustomerMethods, ExchangeRateMethods, MaterialMethods, PropagationMethods, TreatmentMethods {
   /** Every rate, in the order of SPEC section 4.1 (the seed items) and then in the order they were added. */
   listProcessItems(): Promise<ReadonlyArray<ProcessItemRecord>>;
   /**
@@ -88,6 +89,7 @@ export type {
   CustomerSummaryRecord,
   NewCustomer,
 } from './customer-repository';
+export type { ChangedCustomer, CustomerWithOwnValue, PropagationMethods, ShownRate } from './default-propagation-repository';
 export type { ExchangeRateMethods, ExchangeRateStamp, ExchangeRatesRecord, NewExchangeRateStamp } from './exchange-rate-repository';
 export type { MaterialChanges, MaterialMethods, MaterialOptionRecord, MaterialRecord, MaterialValuesRecord, NewMaterial } from './material-repository';
 export { TreatmentNameTakenError } from './treatment-repository';
@@ -102,6 +104,7 @@ function toRecord(row: { readonly id: string; readonly name: string; readonly un
 export function createMasterRepository(db: PrismaClient): MasterRepository {
   return {
     ...createCustomerMethods(db),
+    ...createPropagationMethods(db),
     ...createMaterialMethods(db),
     ...createExchangeRateMethods(db),
     ...createTreatmentMethods(db),

@@ -2,7 +2,9 @@ import type {
   EngineerRecord,
   EstimateRecord,
   EstimateStatus,
+  LockedTask,
   NewTask,
+  QueueFilter,
   QueueRow,
   QueueScope,
   TaskDetailRow,
@@ -100,6 +102,19 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
   const inTab = (row: QueueRow, tab: 'open' | 'closed' | 'overdue', now: Date): boolean =>
     tab === 'closed' ? row.status === 'APPROVED' : row.status !== 'APPROVED' && (tab === 'open' || row.deadlineAt.getTime() < now.getTime());
 
+  /** The filter row of a read, written the way the SQL means it: a literal contains on the code and the title ignoring case, the estimate's customer, and the deadline range. */
+  const passes = (row: QueueRow, filter: QueueFilter): boolean => {
+    const text = filter.text?.toLowerCase() ?? null;
+    const customerId = estimates.find((candidate) => candidate.taskId === row.id)?.customerId ?? null;
+    return (
+      (text === null || row.code.toLowerCase().includes(text) || (row.title ?? '').toLowerCase().includes(text)) &&
+      (filter.engineerId === null || row.engineer.id === filter.engineerId) &&
+      (filter.customerId === null || customerId === filter.customerId) &&
+      (filter.deadlineFrom === null || row.deadlineAt.getTime() >= filter.deadlineFrom.getTime()) &&
+      (filter.deadlineBefore === null || row.deadlineAt.getTime() < filter.deadlineBefore.getTime())
+    );
+  };
+
   /** The rows of a scope: one Engineer's own, the ones one person assigned, both, or all (the same cut as `scopeFilter` of the real repository). */
   const inScope = (scope: QueueScope): QueueRow[] => {
     const assignedBy = new Map(tasks.map((task) => [task.id, task.assignedById]));
@@ -107,22 +122,46 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
   };
 
   const repository: TaskRepository = {
+    findTaskForUpdate: (id) => {
+      const task = tasks.find((candidate) => candidate.id.toLowerCase() === id.toLowerCase());
+      const estimate = task === undefined ? undefined : estimates.find((candidate) => candidate.taskId === task.id);
+      if (task === undefined || estimate === undefined) return Promise.resolve(null);
+      const locked: LockedTask = {
+        id: task.id,
+        code: task.code,
+        engineer: { id: task.engineerId, name: nameOf(task.engineerId) },
+        deadlineAt: task.deadlineAt,
+        assignmentRevision: task.assignmentRevision,
+        status: estimate.status,
+        folderPath: task.folderPath,
+        title: task.title,
+        notes: task.notes,
+      };
+      return Promise.resolve(locked);
+    },
+    setAssignment: (id, state) => {
+      const index = tasks.findIndex((candidate) => candidate.id === id);
+      const held = tasks[index];
+      if (held === undefined) return Promise.reject(new Error('The task to change is not there.'));
+      tasks.splice(index, 1, { ...held, ...state });
+      return Promise.resolve();
+    },
     findTask: (id, scope) => {
       const row = inScope(scope).find((candidate) => candidate.id.toLowerCase() === id.toLowerCase());
       const task = row === undefined ? undefined : tasks.find((candidate) => candidate.id === row.id);
       const detail: TaskDetailRow | null = row === undefined || task === undefined ? null : { ...row, notes: task.notes };
       return Promise.resolve(detail);
     },
-    listQueue: ({ tab, scope, now, limit, after }) => {
+    listQueue: ({ tab, scope, now, limit, after, filter }) => {
       const earlier = (row: QueueRow): boolean =>
         after === null || row.deadlineAt.getTime() > after.deadlineAt.getTime() || (row.deadlineAt.getTime() === after.deadlineAt.getTime() && row.code > after.code);
       const rows = inScope(scope)
-        .filter((row) => inTab(row, tab, now) && earlier(row))
+        .filter((row) => inTab(row, tab, now) && earlier(row) && passes(row, filter))
         .sort((a, b) => a.deadlineAt.getTime() - b.deadlineAt.getTime() || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
       return Promise.resolve(rows.slice(0, limit));
     },
-    countQueue: (scope, now) => {
-      const mine = inScope(scope);
+    countQueue: (scope, now, filter) => {
+      const mine = inScope(scope).filter((row) => passes(row, filter));
       const count = (tab: 'open' | 'closed' | 'overdue'): number => mine.filter((row) => inTab(row, tab, now)).length;
       return Promise.resolve({ open: count('open'), closed: count('closed'), overdue: count('overdue') });
     },
@@ -137,6 +176,10 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
     findActiveEngineer: (id) => {
       const found = people().find((person) => person.id.toLowerCase() === id.toLowerCase() && person.role === 'ENGINEER' && person.isActive);
       return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name });
+    },
+    findAssigner: (id) => {
+      const found = people().find((person) => person.id.toLowerCase() === id.toLowerCase() && (person.role === 'LEAD' || person.role === 'ADMIN'));
+      return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name, isActive: found.isActive });
     },
     takeNextNumber: (year) => {
       const next = (sequences.get(year) ?? 0) + 1;
@@ -162,11 +205,12 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
 
   const transactions: TransactionRunner = {
     async run<T>(work: (tx: Transaction) => Promise<T>): Promise<T> {
-      const before = { tasks: tasks.length, estimates: estimates.length, sequences: new Map(sequences) };
+      const before = { tasks: [...tasks], estimates: estimates.length, sequences: new Map(sequences) };
       try {
         return await work(createTransactionHandle());
       } catch (error) {
-        tasks.length = before.tasks;
+        // A task is replaced (never edited) when its assignment changes, so the records kept are the ones as they were.
+        tasks.splice(0, tasks.length, ...before.tasks);
         estimates.length = before.estimates;
         sequences.clear();
         for (const [year, value] of before.sequences) sequences.set(year, value);

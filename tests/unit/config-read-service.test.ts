@@ -31,6 +31,7 @@ function fakeConfigurations(records: ReadonlyArray<ConfigVersionRecord>, use: Co
   return {
     uses,
     insertSeedVersionIfNone: () => Promise.resolve(false),
+    insertVersionAfter: () => Promise.resolve(null),
     findLatestRef() {
       const latest = records.reduce<ConfigVersionRecord | undefined>((best, row) => (best === undefined || row.number > best.number ? row : best), undefined);
       return Promise.resolve(latest === undefined ? null : { id: latest.id, number: latest.number });
@@ -123,6 +124,15 @@ describe('AC-2: system fields are tagged, and a formula is offered only where th
     const { fields } = await serviceOver().service.getFields();
     expect(fields.filter((row) => row.systemRole !== null).map((row) => row.letter)).toEqual(['A', 'H', 'BG', 'BL', 'BM', 'BO']);
     expect(rowAt(fields, 'BM').systemRole).toBe('tool-cost');
+  });
+
+  it('marks as protected (lock tag, no Delete: STORY-08.04 AC-5) every System field and every field the code finds by key and cannot do without, and no other', async () => {
+    const { fields } = await serviceOver().service.getFields();
+    expect(fields.filter((row) => row.isProtected).map((row) => row.letter)).toEqual(['A', 'E', 'F', 'H', 'I', 'BG', 'BH', 'BI', 'BJ', 'BK', 'BL', 'BM', 'BN', 'BO']);
+    // Every System field is protected; the rest of the list is the eight keys, and the two that only name a part (B and D) are not.
+    for (const row of fields.filter((each) => each.systemRole !== null)) expect(row.isProtected, row.letter).toBe(true);
+    expect(rowAt(fields, 'B').isProtected).toBe(false);
+    expect(rowAt(fields, 'D').isProtected).toBe(false);
   });
 
   it('does not offer Edit formula on A, F, I and BO, which have no formula to edit', async () => {

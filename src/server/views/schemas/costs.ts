@@ -13,8 +13,8 @@ import { z } from 'zod';
  *
  * Every figure is full-precision decimal text, never a JavaScript number (ADR-005); the screen rounds it to two decimals.
  *
- * **BO is not a calculated figure** (STORY-06.06 AC-9, SQR-07 of AQP-321): `approval` is read from the estimate's latest `approvals` row that has not been removed, never through the figure state, so it is there
- * in every state (clearing the calculated figures cannot change it) and `null` only before any approval. `calculationId` is the calculation the figures come from, for the approval's request: it is there only
+ * **BO is not a calculated figure** (STORY-06.06 AC-9, SQR-07 of AQP-321): `approval` is read from the estimate's latest `approvals` row, never through the figure state, so it is there
+ * in every state (clearing the calculated figures cannot change it) and `null` only before any approval or once the Admin removed its price (STORY-06.13: `priceRemoved` then says who and when, and holds no price). `calculationId` is the calculation the figures come from, for the approval's request: it is there only
  * while the state is `current`, like every figure, and it is the only ID of the answer besides the parts'.
  */
 
@@ -60,19 +60,58 @@ const lettersSchema = z.strictObject({
 });
 
 /**
- * The latest approval that has not been removed: the Approved Quote Price (BO) as rupees with two decimals, when it was approved and by whom (their name now). **Whether it is an override** (STORY-06.07 AC-3,
+ * The unlock of the latest approval (STORY-06.08 AC-3): who (their name now), when, the reason as the Lead stored it, and the name of the Engineer whose Open queue the task is back in. Text and a time: nothing here is a
+ * cost. Present only once the approval was unlocked, and then BO is the price "approved earlier".
+ */
+const unlockSchema = z.strictObject({
+  at: z.iso.datetime(),
+  byName: z.string().min(1),
+  reason: z.string().nullable(),
+  engineerName: z.string().min(1),
+});
+
+/**
+ * The cancel of the latest approval (STORY-06.12 AC-6): who (their name now), when, the reason as the Admin stored it, and the name of the Engineer whose task it is. Text and a time: nothing here is a cost. Present only
+ * once the approval was cancelled, and then BO is the price marked "Approval cancelled". Whether the cancel moved the estimate is read from the approval having no unlock: an approval that was never unlocked was cancelled
+ * while the estimate was APPROVED, so the cancel took it to Draft and reopened the task.
+ */
+const cancelSchema = z.strictObject({
+  at: z.iso.datetime(),
+  byName: z.string().min(1),
+  reason: z.string().nullable(),
+  engineerName: z.string().min(1),
+});
+
+/**
+ * The removal of the latest approval's price (STORY-06.13 AC-3): who (their name now) and when. Text and a time, **never the price** (AC-6): once the Admin removed it, no route serves it to a screen, and the only read
+ * of it is the Admin's audit entry. Present only while the latest approval's price is removed, and then `approval` is `null` and BO reads "Not set yet".
+ */
+const priceRemovedSchema = z.strictObject({
+  at: z.iso.datetime(),
+  byName: z.string().min(1),
+});
+
+/**
+ * The estimate's latest approval, unless its price was removed: the Approved Quote Price (BO) as rupees with two decimals, when it was approved and by whom (their name now), and its unlock once it has one (STORY-06.08 AC-3).
+ * **Whether it is an override** (STORY-06.07 AC-3,
  * FR-103): the calculated total (BL) the price was set against, as rupees and paise as the approval kept it, the flag, and the reason the Lead gave (`null` when none; always `null` unless the price is an
  * override). They are the approval's own record, read from its row and never through the figure state, like the price. This answer is the Lead's and the Admin's: the route refuses an Engineer before it reads
  * anything, so the reason and the total reach no Engineer (NFR-002, FR-011).
  */
 const approvalSchema = z
   .strictObject({
+    /** The approval's ID, which the Admin's Cancel approval request names so a newer approval is never cancelled unseen (STORY-06.12 AC-5, `APPROVAL_CHANGED`). */
+    id: z.uuid(),
     price: z.string().regex(/^\d+\.\d{2}$/),
     approvedAt: z.iso.datetime(),
     approverName: z.string().min(1),
+    /** The Engineer whose task it is (their name now): the Cancel approval dialog says whose Open queue the task returns to (STORY-06.12). A person's name, not a cost. */
+    engineerName: z.string().min(1),
     calculatedTotal: z.string().regex(/^\d+\.\d{2}$/),
     isOverride: z.boolean(),
     reason: z.string().min(1).nullable(),
+    unlock: unlockSchema.nullable(),
+    cancel: cancelSchema.nullable(),
   })
   .refine((approval) => approval.isOverride || approval.reason === null, { message: 'A reason belongs to an override.', path: ['reason'] });
 
@@ -89,6 +128,20 @@ const warningSchema = z.strictObject({
     .readonly(),
 });
 
+/**
+ * What changed in the masters since the calculation in view (STORY-06.11 AC-7; FR-106; architecture section 4.8 "Rates changed since the last calculation"): **three counts by kind and nothing else** (NFR-002):
+ * the customer's process rates the formulas read, the materials' prices, and the exchange rates. No old value, no new value and no ID, so the notice can say how many and never how much. It is there only while the
+ * state is `current` and the estimate is not APPROVED, and only when something changed (a master that was saved again with the same number changed nothing); otherwise it is `null` and the screen draws no notice.
+ * It is as true as the page load: a rate that changes while the page is open is not caught (the limit of STORY-06.11).
+ */
+const ratesChangedSchema = z
+  .strictObject({
+    processRates: z.number().int().nonnegative(),
+    materialPrices: z.number().int().nonnegative(),
+    exchangeRates: z.number().int().nonnegative(),
+  })
+  .refine((counts) => counts.processRates + counts.materialPrices + counts.exchangeRates > 0, { message: 'A notice needs a change to tell.' });
+
 export const costsSchema = z.strictObject({
   state: z.enum(FIGURE_STATES),
   /** The calculation the figures come from, while the state is `current`; `null` otherwise. The approval names it (`POST .../approve`, `calculationId`). */
@@ -102,8 +155,12 @@ export const costsSchema = z.strictObject({
   totals: totalsSchema.nullable(),
   /** BO: the approved price and who approved it, or `null` before any approval. */
   approval: approvalSchema.nullable(),
+  /** The removal of the latest approval's price, who and when and never the price (STORY-06.13); `null` unless the latest approval's price was removed. Then `approval` is `null` too. */
+  priceRemoved: priceRemovedSchema.nullable(),
   /** The quantity warning on the calculation the figures come from; `null` when there is none, and always `null` unless the state is `current` (AC-4). */
   warning: warningSchema.nullable(),
+  /** What changed in the masters since this calculation, by kind (STORY-06.11); `null` unless the state is `current`, the estimate is not APPROVED and something changed. */
+  ratesChanged: ratesChangedSchema.nullable(),
 });
 
 export type CostsView = z.infer<typeof costsSchema>;

@@ -31,6 +31,7 @@ vi.mock('@/server/composition', async () => {
     getUserRepository: () => shared.users,
     getUserService: () => shared.userService,
     getConfigReadService: () => shared.configReadService,
+    getConfigEditService: () => shared.configEditService,
   };
 });
 
@@ -65,7 +66,7 @@ describe('AC-1 and AC-3: GET /api/v1/config/fields', () => {
     expect(response.headers.get('X-Request-Id')).toMatch(/^req-[0-9a-f]{8}$/);
     const fields = await fieldsOf(response);
     expect(fields.map((field) => field['letter']).slice(0, 4)).toEqual(['A', 'B', 'C', 'D']);
-    for (const field of fields) expect(Object.keys(field).sort()).toEqual(['canEditFormula', 'formula', 'id', 'kind', 'label', 'letter', 'note', 'place', 'systemRole']);
+    for (const field of fields) expect(Object.keys(field).sort()).toEqual(['canEditFormula', 'formula', 'id', 'isProtected', 'kind', 'label', 'letter', 'note', 'place', 'systemRole']);
   });
 
   it('lists Scrap Weight with its formula and the estimate total as SUM(BG) with its sentence, in display form and never the stored one', async () => {
@@ -86,8 +87,8 @@ describe('AC-1 and AC-3: GET /api/v1/config/fields', () => {
     for (const letter of ['A', 'F', 'I', 'BO']) expect(defined(fields.find((field) => field['letter'] === letter))['canEditFormula'], letter).toBe(false);
   });
 
-  it('has no write method: POST, PUT, PATCH and DELETE are not exported, so Next.js answers 405', () => {
-    expect(Object.keys(fieldsRoute).sort()).toEqual(['GET']);
+  it('has no write method but the insert of STORY-08.03: PUT, PATCH and DELETE are not exported, so Next.js answers 405 (the POST is config-structure-routes.test.ts)', () => {
+    expect(Object.keys(fieldsRoute).sort()).toEqual(['GET', 'POST']);
     expect(Object.keys(currentRoute).sort()).toEqual(['GET']);
   });
 });

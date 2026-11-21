@@ -109,6 +109,25 @@ export const appEnvSchema = z.intersection(
   smtpSchema,
 );
 
+/**
+ * The mail feature flag (STORY-09.01 AC-6): `on` schedules the worker's mail jobs, `off` (the default, also when the line is absent or empty) does not. It is read by the worker only; the
+ * Settings test e-mail does not depend on it, because it is how the IT person proves the mailbox before the flag is turned on. It is not a secret, so it is not in `ENV_VARIABLE_NAMES`.
+ */
+export const featureEnvSchema = z.object({ FEATURE_EMAIL: z.enum(['on', 'off']).default('off') });
+
+/** The shortest and the longest time limit an export may be given, and the one that ships (ADR-017: 3.5 times the slowest measured run of 67.4 s). */
+export const EXPORT_TIMEOUT_MIN_SECONDS = 120;
+export const EXPORT_TIMEOUT_MAX_SECONDS = 300;
+export const EXPORT_TIMEOUT_DEFAULT_SECONDS = 240;
+
+/**
+ * The export's time limit in seconds (ADR-017 decision 1, GitHub issue 575). Unlike the pool sizes it depends on the host, and the reading that sets it may come after the freeze, so it is one line in `.env`.
+ * It is not a secret and is not in `ENV_VARIABLE_NAMES` (like `FEATURE_EMAIL`). Absent or empty gives 240; a value outside 120 to 300, or one that is not a whole number, stops the start.
+ */
+export const exportEnvSchema = z.object({
+  EXPORT_TIMEOUT_SECONDS: z.coerce.number().int().min(EXPORT_TIMEOUT_MIN_SECONDS).max(EXPORT_TIMEOUT_MAX_SECONDS).default(EXPORT_TIMEOUT_DEFAULT_SECONDS),
+});
+
 /** The portal's own origin alone, for the proxy (G6 STD-03): redirects are built from it, never from a request header. */
 export const originEnvSchema = z.object({ APP_ORIGIN: z.string().refine(isOrigin) });
 
@@ -125,7 +144,10 @@ export const adminBootstrapEnvSchema = z.object({
 });
 
 export type AppEnv = z.infer<typeof appEnvSchema>;
+/** The mail sign-in settings alone, one variant per `SMTP_AUTH_MODE` (the part of `AppEnv` that `src/server/mail/transport.ts` reads). */
+export type SmtpEnv = z.infer<typeof smtpSchema>;
 export type OriginEnv = z.infer<typeof originEnvSchema>;
+export type ExportEnv = z.infer<typeof exportEnvSchema>;
 export type DatabaseEnv = z.infer<typeof databaseEnvSchema>;
 export type MigrateEnv = z.infer<typeof migrateEnvSchema>;
 export type AdminBootstrapEnv = z.infer<typeof adminBootstrapEnvSchema>;
@@ -175,6 +197,15 @@ export function parseEnv<Schema extends z.ZodType>(schema: Schema, source: EnvSo
 
 export function loadAppEnv(source: EnvSource = process.env): AppEnv {
   return parseEnv(appEnvSchema, source);
+}
+
+/** True when `FEATURE_EMAIL=on`. A value other than `on` or `off` stops the process at start-up, like any other invalid setting. */
+export function loadEmailFeature(source: EnvSource = process.env): boolean {
+  return parseEnv(featureEnvSchema, source).FEATURE_EMAIL === 'on';
+}
+
+export function loadExportEnv(source: EnvSource = process.env): ExportEnv {
+  return parseEnv(exportEnvSchema, source);
 }
 
 export function loadOriginEnv(source: EnvSource = process.env): OriginEnv {

@@ -11,6 +11,13 @@ export interface AccountUser {
   readonly role: string;
 }
 
+/**
+ * The box around the trigger, in the plain button (`account-menu.tsx`) and around the Radix trigger (`account-menu-panel.tsx`). It is a flex item of the
+ * top bar, and a flex item is never narrower than its content unless it says `min-w-0`: without it a long name (nowrap) would widen the bar and the page
+ * (DEF-034). The two wrappers use this one string, so the swap on the first open changes nothing.
+ */
+export const ACCOUNT_WRAPPER = 'relative min-w-0';
+
 export interface AccountTriggerProps extends ComponentProps<'button'> {
   readonly user: AccountUser;
 }
@@ -26,6 +33,10 @@ export interface AccountTriggerProps extends ComponentProps<'button'> {
  * avatar draws. Real spaces (`{' '}`) separate the text elements, so the visible text reads "EL E2E Lead Lead" and not
  * "ELE2E LeadLead"; they sit between flex items and blocks, so they draw nothing.
  *
+ * Long name (DEF-034, NFR-016): the button is bounded by its wrapper (`max-w-full`; both wrappers carry `min-w-0`, see `ACCOUNT_WRAPPER`), and the
+ * name box has `min-w-0`, so a name of up to 120 characters is cut with an ellipsis inside the top bar and the page never scrolls sideways. The
+ * accessible name keeps the whole name. Without `min-w-0` on every flex ancestor the nowrap name sets the minimum width of the whole row.
+ *
  * Pressed (UX spec 7.3.1 rule 11): the secondary look, held while the first open is pending (`aria-busy`). The
  * `enabled:aria-busy:` classes are keyed to the attribute, so they show before React has run (the early tap, DEF-013).
  */
@@ -36,7 +47,7 @@ export function AccountTrigger({ user, className, ...props }: AccountTriggerProp
       type="button"
       aria-label={`Account menu, ${initials}, ${user.name}, ${user.role}`}
       className={cn(
-        'flex min-h-(--control-h) cursor-pointer items-center gap-s-2 rounded-md border border-border bg-surface px-s-2 text-left transition-colors duration-200 ease-out select-none [-webkit-touch-callout:none] hover:bg-surface-2 active:bg-border active:shadow-pressed active:transition-none enabled:aria-busy:bg-border enabled:aria-busy:shadow-pressed enabled:aria-busy:transition-none md:gap-s-3 md:pr-s-3',
+        'flex max-w-full min-h-(--control-h) cursor-pointer items-center gap-s-2 rounded-md border border-border bg-surface px-s-2 text-left transition-colors duration-200 ease-out select-none [-webkit-touch-callout:none] hover:bg-surface-2 active:bg-border active:shadow-pressed active:transition-none enabled:aria-busy:bg-border enabled:aria-busy:shadow-pressed enabled:aria-busy:transition-none md:gap-s-3 md:pr-s-3',
         className,
       )}
       {...props}

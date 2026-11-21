@@ -10,6 +10,9 @@ import { formatFigure, formatRupees } from '@/lib/money';
 import type { CostsView } from '@/server/views/schemas/costs';
 
 import {
+  APPROVAL_CANCELLED_LABEL,
+  APPROVED_EARLIER_LABEL,
+  APPROVED_EARLIER_STAYS,
   APPROVED_NOT_SET,
   APPROVED_NOT_SET_CLEARED_HINT,
   APPROVED_NOT_SET_HINT,
@@ -83,11 +86,17 @@ export interface ApprovedTileView {
   readonly isOverride: boolean;
   /** The reason given with the override, or `null` when none was given. */
   readonly reason: string | null;
+  /** The approval was unlocked (STORY-06.08 AC-3, AC-12): the price is the one "approved earlier", and the figures it was set against are no longer the estimate's (SQR-05 of the AQP-324 review). */
+  readonly unlocked: boolean;
+  /** The approval was cancelled (STORY-06.12 AC-6): the price stays on screen marked "Approval cancelled", and it is no longer set against the figures on screen either. */
+  readonly cancelled: boolean;
 }
 
 /** What BO adds under the approver line for an override: the difference from the calculated total, and the reason or "No reason given." Nothing for an approval at the calculated total. */
 function OverrideLines({ approval }: { readonly approval: ApprovedTileView }) {
-  if (!approval.isOverride) return null;
+  // After an unlock the old price is no longer set against the figures on screen: they may be the same ones, or cleared, or new after a Recalculate. Comparing the old price with the old total under them would say
+  // something the screen cannot show, so the tile keeps only who approved and when, and the label (AQP-324 review SQR-05; ux-spec SCR-08 "After an unlock").
+  if (approval.unlocked || approval.cancelled || !approval.isOverride) return null;
   const difference = priceDifference(approval.price, approval.calculatedTotal);
   // An override is a price that differs at rupees and paise, so there is a difference; if the record ever said otherwise, nothing is claimed.
   if (difference === null) return null;
@@ -136,7 +145,10 @@ export function FigureTiles({ state, letters, totals, approval = null }: FigureT
           letter={letters.approvedPrice}
           note={
             <>
+              {approval.cancelled ? <strong className="block text-ink">{APPROVAL_CANCELLED_LABEL}</strong> : null}
+              {approval.unlocked && !approval.cancelled ? <strong className="block text-ink">{APPROVED_EARLIER_LABEL}</strong> : null}
               {approvedByLine(approval.approverName, approval.approvedAtLabel)}
+              {approval.unlocked && !approval.cancelled ? <span className="block">{APPROVED_EARLIER_STAYS}</span> : null}
               <OverrideLines approval={approval} />
             </>
           }

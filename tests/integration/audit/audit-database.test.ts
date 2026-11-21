@@ -208,6 +208,24 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     'approval.approved': 'tests/integration/approval/approve.test.ts',
     // STORY-06.07: a price that differs from the calculated total, with the reason the Lead gave; the one test is the override's own.
     'approval.price_overridden': 'tests/integration/approval/override.test.ts',
+    // STORY-06.08: an approved estimate unlocked; the one test is the unlock's own, against the real estimate row lock.
+    'approval.unlocked': 'tests/integration/approval/unlock.test.ts',
+    // STORY-06.12: an approval cancelled by the Admin; the one test is the cancel's own, against the real estimate row lock.
+    'approval.cancelled': 'tests/integration/approval/cancel.test.ts',
+    // STORY-06.13: the price of a cancelled approval removed by the Admin; the one test is the removal's own, against the real estimate row lock.
+    'approval.price_removed': 'tests/integration/approval/remove-price.test.ts',
+    // STORY-01.09: the Admin role handed over; the one test is the hand-over's own, which needs the one-Admin index, two people's rows and a second connection to watch the swap.
+    'user.admin_handed_over': 'tests/integration/users/admin-handover.test.ts',
+    // STORY-04.07: a task given to another Engineer, a new deadline, or both; the one test is the reassign's own, against the real estimate and task row locks.
+    'task.reassigned': 'tests/integration/tasks/reassign.test.ts',
+    // STORY-08.02: a formula of the field registry changed; the one test is the save's own, against the real configuration table.
+    'config.formula_changed': 'tests/integration/config/save-formula.test.ts',
+    // STORY-08.03: a field or a pair inserted; the one test is the insert's own, against the real configuration table.
+    'config.field_inserted': 'tests/integration/config/insert-field.test.ts',
+    // STORY-08.04: a field deleted; the one test is the delete's own, against the real configuration table.
+    'config.field_deleted': 'tests/integration/config/delete-field.test.ts',
+    // STORY-08.06: a revert; the one test is the revert's own, against the real configuration table.
+    'config.reverted': 'tests/integration/config/checkpoints-revert.test.ts',
   };
 
   it('has a scenario for every event the registry wires, and for no other', () => {

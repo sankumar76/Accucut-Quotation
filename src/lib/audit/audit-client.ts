@@ -19,6 +19,8 @@ export interface AuditEntryRow {
   readonly who: string;
   readonly event: string;
   readonly category: { readonly id: string; readonly label: string } | null;
+  /** The Event column for a configuration entry ("Formula edit"); absent for the others, which show their category (STORY-08.07 AC-2). */
+  readonly kindLabel?: string;
   readonly objectLabel: string;
   readonly change: { readonly before: string; readonly after: string };
 }
@@ -53,7 +55,10 @@ function toEntry(value: unknown): AuditEntryRow | null {
   const category = toCategory(value['category']);
   if (typeof id !== 'string' || typeof createdAt !== 'string' || typeof who !== 'string' || typeof event !== 'string' || typeof objectLabel !== 'string') return null;
   if (category === undefined || !isRecord(change) || typeof change['before'] !== 'string' || typeof change['after'] !== 'string') return null;
-  return { id, createdAt, who, event, category, objectLabel, change: { before: change['before'], after: change['after'] } };
+  const kindLabel = value['kindLabel'];
+  // A kind that is not text is a broken answer, as any other field is.
+  if (kindLabel !== undefined && typeof kindLabel !== 'string') return null;
+  return { id, createdAt, who, event, category, ...(kindLabel === undefined ? {} : { kindLabel }), objectLabel, change: { before: change['before'], after: change['after'] } };
 }
 
 function toPage(body: unknown): AuditPageData | null {

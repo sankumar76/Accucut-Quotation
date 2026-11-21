@@ -61,6 +61,14 @@ export const sectionLinkText = (number: number, shortName: string): string => `$
 export const SECTION_COMPLETE_TEXT = 'All filled in';
 export const progressText = (complete: number, total: number): string => `${complete} of ${total} complete`;
 
+/**
+ * The completion line of the open part and the words around it (STORY-05.11; UX spec SCR-05 "Content": "24 of 25 inputs complete"). The wording is the wireframe's and is the ux-expert's to rule at the end review
+ * (OQ-1). No word names a rate, a price or a formula (UX-24).
+ */
+export const inputsProgressText = (complete: number, total: number): string => `${complete} of ${total} inputs complete`;
+export const inputsProgressLabel = (slNo: string): string => `Inputs complete for part ${slNo}`;
+export const partCompleteText = (slNo: string): string => `Part ${slNo} is complete.`;
+
 /** The parts tree (STORY-05.02; UX spec SCR-05 "Tree", "Delete part"). No word names a rate, a price or a formula (UX-24). */
 export const TREE_TITLE = 'Parts tree';
 export const TREE_CLOSE = 'Close parts tree';
@@ -107,6 +115,9 @@ export const LEAVE_GUARD_FAILED_TITLE = 'The warning before leaving could not be
 export const MISSING_TEXT_MESSAGE = 'Enter this value.';
 export const MISSING_NUMBER_MESSAGE = 'Enter this value. Use 0 if the part does not need it.';
 export const MISSING_CHOICE_MESSAGE = 'Choose a material.';
+/** A choice input the Admin added (STORY-08.08): the placeholder of its list and the words under it when Calculate found it blank. Proposed (OQ-1); the ux-expert rules at the end review. */
+export const OPTION_PLACEHOLDER = 'Choose an option';
+export const MISSING_OPTION_MESSAGE = 'Choose an option.';
 /** Spoken after a part in the tree, a card and a link of the section strip that Calculate found a blank in, beside the triangle. */
 export const TREE_MISSING_INPUTS = 'Missing inputs';
 

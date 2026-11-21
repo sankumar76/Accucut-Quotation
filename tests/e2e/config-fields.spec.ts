@@ -37,7 +37,7 @@ function isTabletOrWider(page: Page): boolean {
 test.describe('the Admin', () => {
   test.use({ storageState: ADMIN_STATE });
 
-  test('AC-1, AC-2, AC-3, AC-8: lists the fields in column order, with Scrap Weight, the total and its sentence, the System tags and no action; no sideways scroll, axe 0', async ({ page }) => {
+  test('AC-1, AC-2, AC-3, AC-8: lists the fields in column order, with Scrap Weight, the total and its sentence, the System tags (on every protected field) and a Delete on the others only; no sideways scroll, axe 0', async ({ page }) => {
     await openFields(page);
     await expect(page.getByText('View only')).toHaveCount(0);
 
@@ -49,13 +49,19 @@ test.describe('the Admin', () => {
     const total = rowOf(page, 'BL');
     await expect(total).toContainText('SUM(BG)');
     await expect(total).toContainText(TOTAL_SENTENCE);
-    for (const letter of ['A', 'H', 'BG', 'BL', 'BM', 'BO']) await expect(rowOf(page, letter)).toContainText('System');
+    // The lock tag is on every protected field: the six with a system role and the eight the code finds by key (STORY-08.04 AC-5); none of them has a Delete, and every other column has one.
+    for (const letter of ['A', 'H', 'BG', 'BL', 'BM', 'BO', 'E', 'F', 'I', 'BH', 'BI', 'BJ', 'BK', 'BN']) {
+      await expect(rowOf(page, letter)).toContainText('System');
+      await expect(rowOf(page, letter).getByRole('button', { name: /^Delete/ })).toHaveCount(0);
+    }
     await expect(rowOf(page, 'AL')).not.toContainText('System');
+    await expect(rowOf(page, 'AL').getByRole('button', { name: /^Delete/ })).toBeVisible();
     await expect(rowOf(page, 'F')).toContainText('No formula');
 
     // BH and BI are outputs, not auto fields (UX-26).
     await expect(rowOf(page, 'BH')).toContainText('Output');
-    await expect(page.getByRole('button', { name: /Edit formula|Delete|Insert/ })).toHaveCount(0);
+    // Edit formula and Insert after are links; Delete is a button that opens the dialog of SCR-20 (STORY-08.04), tested in delete-field.spec.ts.
+    await expect(page.getByRole('button', { name: /Edit formula|Insert/ })).toHaveCount(0);
 
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);

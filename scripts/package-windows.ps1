@@ -9,10 +9,11 @@
     app\        the Next.js standalone server (server.js, its node_modules, .next\static, public) and bootstrap-admin.mjs
     worker\     main.mjs, the worker bundled into one file
     migrate\    prisma\ (schema and migrations), prisma.config.mjs, ensure-seed-version.mjs, and node_modules\ holding only the Prisma CLI and what it needs
-    sql\        create-roles.psql, the one SQL source of the three database roles
+    sql\        create-roles.psql, the one SQL source of the three database roles, and create-restore-role.psql (the restore role, Windows only)
+    jea\        AccucutAdmin.psrc and AccucutAdmin.pssc, the templates of the Admin's JEA endpoint (STORY-10.11)
     bin\        winsw.exe (WinSW 2.12.0), age.exe, age-keygen.exe, SHA256SUMS.txt, the licences
     services\   the WinSW service files
-    install.ps1, update.ps1, backup.ps1, clear-copies.ps1, AccucutOps.psm1, .env.example, values.example.txt, README.md, release.json
+    install.ps1, update.ps1, backup.ps1, clear-copies.ps1, restore.ps1, AccucutOps.psm1, .env.example, values.example.txt, README.md, release.json
 
   WinSW and age are checked against the SHA-256 pinned in deploy\windows\tools.psd1 before they go in. The script stops if the package would hold a
   .env file or any other settings file.
@@ -216,6 +217,7 @@ function New-AccucutPackage {
     # sql
     New-Item -ItemType Directory -Path (Join-Path $stage 'sql') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repo 'deploy\db\create-roles.psql') -Destination (Join-Path $stage 'sql\create-roles.psql')
+    Copy-Item -LiteralPath (Join-Path $repo 'deploy\db\create-restore-role.psql') -Destination (Join-Path $stage 'sql\create-restore-role.psql')
 
     # bin: WinSW and age, with their checksums and licences.
     Write-Host 'Package: bin'
@@ -249,9 +251,11 @@ function New-AccucutPackage {
     # scripts, service files, templates
     Write-Host 'Package: scripts'
     $windows = Join-Path $repo 'deploy\windows'
-    foreach ($file in 'install.ps1', 'update.ps1', 'backup.ps1', 'clear-copies.ps1', 'AccucutOps.psm1', 'values.example.txt', 'README.md', 'tools.psd1') {
+    foreach ($file in 'install.ps1', 'update.ps1', 'backup.ps1', 'clear-copies.ps1', 'restore.ps1', 'AccucutOps.psm1', 'values.example.txt', 'README.md', 'tools.psd1') {
         Copy-Item -LiteralPath (Join-Path $windows $file) -Destination (Join-Path $stage $file)
     }
+    # The templates of the Admin's endpoint (STORY-10.11): the install fills them in and registers the endpoint; nothing here runs from the package folder.
+    Copy-PackageFolder -Source (Join-Path $windows 'jea') -Destination (Join-Path $stage 'jea')
     Copy-PackageFolder -Source (Join-Path $windows 'services') -Destination (Join-Path $stage 'services')
     Copy-Item -LiteralPath (Join-Path $repo '.env.example') -Destination (Join-Path $stage '.env.example')
 

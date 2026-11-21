@@ -9,8 +9,8 @@ import type { EstimateDependencies } from '../../src/server/services/estimate-se
  * the form is built from. Both are in memory here: the seed registry (the same module production seeds from) and the invented canary materials, whose names an Engineer
  * may be sent and whose numbers are never read. Every name and ID is invented.
  */
-export type InputsDependencies = Pick<EstimateDependencies, 'materials' | 'currentConfiguration'>;
+export type InputsDependencies = Pick<EstimateDependencies, 'materials' | 'currentConfiguration' | 'configurationById'>;
 
 export function inputsDependencies(masters: FakeMasterRepository = createFakeMasterRepository(undefined, MATERIAL_CANARIES)): InputsDependencies {
-  return { materials: masters, currentConfiguration: () => Promise.resolve(seedConfig) };
+  return { materials: masters, currentConfiguration: () => Promise.resolve(seedConfig), configurationById: () => Promise.resolve(seedConfig) };
 }

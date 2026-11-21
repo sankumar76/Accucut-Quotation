@@ -259,9 +259,12 @@ describe('AC-5 (DEF-017): an entry commits with its change, or not at all', () =
 });
 
 describe('two requests at once', () => {
+  // DEF-056 (AQP-386): the old list held 'RACE-RATE'. In capitals it reads as the columns RACE and RATE with a minus between, so it is
+  // refused on its own (RATE_NAME_REFUSED, AC-3) whenever it takes the table lock before any rate has the name: about one race in four.
+  // Every name here is acceptable alone, so the only thing that can refuse a loser is that the name is taken.
   it('let exactly one of several simultaneous creations of one name (in different letter case) win; the others are told the name is taken', async () => {
     const attempts = await Promise.allSettled(
-      ['Race-Rate', 'RACE-RATE', 'race-rate', 'Race-rate'].map((name) => db.mastersService.createProcessItem(by(), { name, unit: 'per kg', defaultValue: '1.37' })),
+      ['Race-Rate', 'rACE-RATE', 'race-rate', 'Race-rate'].map((name) => db.mastersService.createProcessItem(by(), { name, unit: 'per kg', defaultValue: '1.37' })),
     );
     const winners = attempts.filter((attempt) => attempt.status === 'fulfilled');
     const losers = attempts.flatMap((attempt) => (attempt.status === 'rejected' ? [attempt.reason as unknown] : []));
@@ -269,6 +272,47 @@ describe('two requests at once', () => {
     for (const loser of losers) expect(loser).toMatchObject({ code: NAME_TAKEN_CODE });
     const { rows: found } = await db.owner.query("SELECT 1 FROM process_items WHERE lower(name) = 'race-rate'");
     expect(found).toHaveLength(1);
+  });
+
+  it('a request that gets the table lock after the first has written, but before it commits, reads the winner once it commits: taken, not refused as column letters (DEF-056)', async () => {
+    // The first transaction takes the table lock and writes its rate, then waits, uncommitted, until released (a gate): it uses the real runner and the repository, so no runner is declared here (#130).
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let holding: () => void = () => undefined;
+    const holdingTheLock = new Promise<void>((resolve) => {
+      holding = resolve;
+    });
+    const first = db.transactions.run(async (tx) => {
+      await db.masterRepository.lockProcessItems(tx);
+      await db.masterRepository.createProcessItem({ name: 'Gate-Rate', unit: 'per kg', defaultValue: '1.37' }, tx);
+      holding();
+      await gate;
+    });
+    try {
+      await holdingTheLock;
+      // Alone, 'GATE-RATE' reads as the columns GATE and RATE with a minus, so only the winner's row can make the answer "taken".
+      const second = db.mastersService.createProcessItem(by(), { name: 'GATE-RATE', unit: 'per kg', defaultValue: '1.37' });
+      const settledEarly = await Promise.race([second.then(() => true, () => true), new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300))]);
+      expect(settledEarly).toBe(false); // it waits for the table lock the first request holds
+      release();
+      await first;
+      expect(await refusal(second)).toMatchObject({ code: NAME_TAKEN_CODE });
+    } finally {
+      release(); // a failed check above must not leave the first transaction open until its time limit
+      await first.catch(() => undefined);
+    }
+    const { rows: found } = await db.owner.query("SELECT 1 FROM process_items WHERE lower(name) = 'gate-rate'");
+    expect(found).toHaveLength(1);
+  });
+
+  it('a name that reads as column letters is refused on its own (RATE_NAME_REFUSED) and as taken once another rate has it in other letter case (rule order, AC-2 before AC-3)', async () => {
+    const alone = await refusal(db.mastersService.createProcessItem(by(), { name: 'SAME-RATE', unit: 'per kg', defaultValue: '1.37' }));
+    expect(alone).toMatchObject({ code: NAME_REFUSED_CODE });
+    await db.mastersService.createProcessItem(by(), { name: 'Same-Rate', unit: 'per kg', defaultValue: '1.37' });
+    const again = await refusal(db.mastersService.createProcessItem(by(), { name: 'SAME-RATE', unit: 'per kg', defaultValue: '1.37' }));
+    expect(again).toMatchObject({ code: NAME_TAKEN_CODE });
   });
 });
 

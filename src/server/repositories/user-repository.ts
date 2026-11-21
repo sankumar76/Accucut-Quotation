@@ -106,6 +106,15 @@ export interface UserRepository {
    */
   update(id: string, changes: UserChanges, tx?: Transaction): Promise<UserSummary | null>;
   /**
+   * Moves the Admin role from the active Admin to another active person, in the caller's transaction (STORY-01.09 AC-3). The Admin becomes a Lead **first** and the
+   * other person becomes the Admin **second**, so `uq_users_single_active_admin` is never broken inside the transaction, and both people's `session_version` is
+   * raised in the same statements (the old Admin is signed out; the new one signs in again to hold the role). Each statement matches only the state the caller
+   * locked and read (`FROM` an active Admin, `TO` an active person who is not an Admin), so a row that changed meanwhile is never overwritten. Returns false, having
+   * changed nothing the caller should keep, when either statement matched no row: the caller rolls the transaction back. Throws `UserConstraintError` for a second
+   * active Admin. The caller holds both rows locked (`findAccountForUpdate`) and writes the audit entry in the same transaction.
+   */
+  handOverAdmin(handOver: { readonly fromAdminId: string; readonly toUserId: string }, tx: Transaction): Promise<boolean>;
+  /**
    * Sets the password hash, sets `must_change_password` and raises `session_version` (which ends the person's sessions),
    * in one statement. Returns the person's e-mail address, or null if there is no such user. With `tx` it runs in the caller's
    * transaction.
@@ -118,6 +127,12 @@ export interface UserRepository {
    * or null if there is no such user or the stored hash is no longer `expectedHash`. With `tx` it runs in the caller's transaction.
    */
   changeOwnPassword(id: string, expectedHash: string, newHash: string, tx?: Transaction): Promise<number | null>;
+  /**
+   * Sets the password of a person who proved they own the mailbox by the e-mailed link (STORY-09.07 AC-6): the new hash, `must_change_password` cleared and
+   * `session_version` raised (every session ends), in one statement that matches only an **active** person. Returns false when it matched no row (the person was
+   * deactivated meanwhile, or does not exist), and the caller rolls its transaction back. Runs in the caller's transaction, the one that claimed the token.
+   */
+  setPasswordFromReset(id: string, newHash: string, tx: Transaction): Promise<boolean>;
   /**
    * Raises the user's `session_version` by one, which ends every session they have (ADR-009), **only if it is still
    * `expectedVersion`**: compare and increment in one statement (ADR-009 amendment 1). A token whose version is already
@@ -269,6 +284,25 @@ export function createUserRepository(db: PrismaClient): UserRepository {
       );
     },
 
+    handOverAdmin({ fromAdminId, toUserId }, tx) {
+      return withDatabaseErrors(() =>
+        enforcingConstraints(async () => {
+          const client = clientFor(db, tx);
+          // The order is the point: the Admin steps down before the other person steps up, so the partial unique index never sees two active Admins.
+          const stepsDown = await client.user.updateMany({
+            where: { id: fromAdminId, role: 'ADMIN', isActive: true },
+            data: { role: 'LEAD', sessionVersion: { increment: 1 } },
+          });
+          if (stepsDown.count !== 1) return false;
+          const stepsUp = await client.user.updateMany({
+            where: { id: toUserId, role: { not: 'ADMIN' }, isActive: true },
+            data: { role: 'ADMIN', sessionVersion: { increment: 1 } },
+          });
+          return stepsUp.count === 1;
+        }),
+      );
+    },
+
     setPassword(id, passwordHash, tx) {
       return withDatabaseErrors(async () => {
         try {
@@ -298,6 +332,16 @@ export function createUserRepository(db: PrismaClient): UserRepository {
           if (isRecordNotFound(error)) return null;
           throw error;
         }
+      });
+    },
+
+    setPasswordFromReset(id, newHash, tx) {
+      return withDatabaseErrors(async () => {
+        const { count } = await clientFor(db, tx).user.updateMany({
+          where: { id, isActive: true },
+          data: { passwordHash: newHash, mustChangePassword: false, sessionVersion: { increment: 1 } },
+        });
+        return count === 1;
       });
     },
 

@@ -1,4 +1,5 @@
 import { totalFormulaNote } from '../../lib/config/field-notes';
+import { isProtectedField } from '../../lib/fields/protected';
 import { fieldLetter, findSystemField, referenceContext } from '../../lib/fields/registry';
 import type { FieldDefinition, SectionDefinition, StageDefinition } from '../../lib/fields/field-schema';
 import type { ConfigDocument } from '../../lib/fields/schema';
@@ -40,6 +41,8 @@ export interface ConfigFieldRow {
   readonly note: string | null;
   /** True for an output that has a formula: the one kind of field "Edit formula" is offered on (UX-08: not on A, F, I, BO). */
   readonly canEditFormula: boolean;
+  /** True for a field the Admin may never delete (STORY-08.04 AC-5): a System field, or one the code finds by key and cannot do without. It has the lock tag "System" and no Delete. */
+  readonly isProtected: boolean;
 }
 
 export interface ConfigFieldsView {
@@ -96,6 +99,7 @@ function rowOf(document: ConfigDocument, field: FieldDefinition, context: Refere
     systemRole: field.systemRole,
     note: noteOf(document, field),
     canEditFormula: storedFormula !== null,
+    isProtected: isProtectedField(field),
   };
 }
 

@@ -49,8 +49,15 @@ export async function approvalCount(db: CalculationDatabase, estimateId: string)
   return defined((await db.owner.query<{ n: number }>('SELECT count(*)::int AS n FROM approvals WHERE estimate_id = $1::uuid', [estimateId])).rows[0]).n;
 }
 
-/** The audit entries of one event of an approval of this estimate: `approval.approved` (the default), or `approval.price_overridden` for a price that differs from the calculated total (STORY-06.07). */
-export async function approvalEntries(db: CalculationDatabase, estimateId: string, event: 'approval.approved' | 'approval.price_overridden' = 'approval.approved') {
+/**
+ * The audit entries of one event of an approval of this estimate: `approval.approved` (the default), `approval.price_overridden` for a price that differs from the calculated total (STORY-06.07), or
+ * `approval.unlocked` (STORY-06.08), or `approval.cancelled` (STORY-06.12).
+ */
+export async function approvalEntries(
+  db: CalculationDatabase,
+  estimateId: string,
+  event: 'approval.approved' | 'approval.price_overridden' | 'approval.unlocked' | 'approval.cancelled' | 'approval.price_removed' = 'approval.approved',
+) {
   const { rows } = await db.owner.query<{ event: string; actor_id: string; actor_label: string; object_type: string; object_id: string; object_label: string; before: unknown; after: unknown; request_id: string }>(
     `SELECT event, actor_id::text, actor_label, object_type, object_id::text, object_label, before, after, request_id FROM audit_log WHERE event = $2 AND object_id = $1::uuid ORDER BY created_at, id`,
     [estimateId, event],
@@ -81,7 +88,7 @@ const LOCK_WAIT_LIMIT_MILLISECONDS = 5_000;
  * Resolves once some session waits for a lock it was not granted (read on the owner's connection, apart from the pool under test); throws when none does within the limit. A holder that returned at once could
  * commit before the call under test asked for the lock, and the test would then pass with or without the lock (SQR-02 of the reviews of AQP-321 and AQP-322).
  */
-export async function untilALockWaits(db: CalculationDatabase): Promise<void> {
+export async function untilALockWaits(db: Pick<CalculationDatabase, 'owner'>): Promise<void> {
   const deadline = Date.now() + LOCK_WAIT_LIMIT_MILLISECONDS;
   while (Date.now() < deadline) {
     // Only a session of this test file's own database counts: `pg_locks` is cluster-wide, and another file's wait must not end this poll early (SQR-01 of the review of AQP-323).

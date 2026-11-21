@@ -48,6 +48,7 @@ const buildService = (estimates = estimateRepository()): EstimateService =>
     transactions: createTransactionRunner(db.prisma),
     materials: createMasterRepository(db.prisma),
     currentConfiguration: () => Promise.resolve(seedConfig),
+    configurationById: () => Promise.resolve(seedConfig),
   });
 
 beforeAll(async () => {
@@ -138,13 +139,12 @@ describe('AC-1, AC-4: a picture is stored whole and the part points at it', () =
     expect(await node(second)).toEqual({ image_id: null, revision: 1 });
   });
 
-  it('stores each of the four kinds with the type its content has', async () => {
+  it('stores each of the three kinds the server takes with the type its content has (a WebP is converted in the browser and refused here)', async () => {
     const { estimateId, first } = await setUpEstimate();
     for (const [bytes, mime] of [
       [smallPng(), 'image/png'],
       [jpegOfSize(300), 'image/jpeg'],
       [smallGif(), 'image/gif'],
-      [smallWebp(), 'image/webp'],
     ] as const) {
       const answer = await put(estimateId, first, bytes, 'whatever.bin');
       const { rows } = await db.owner.query<{ mime: string }>('SELECT mime FROM part_images WHERE id = $1::uuid', [defined(answer.picture).id]);
@@ -241,6 +241,7 @@ describe('AC-2: a refusal stores nothing', () => {
     ['a text file renamed .png', () => PLAIN_TEXT, UnsupportedMediaTypeError],
     ['an SVG', () => SVG_TEXT, UnsupportedMediaTypeError],
     ['a file of 0 bytes', () => Buffer.alloc(0), UnsupportedMediaTypeError],
+    ['a WebP that the browser did not convert (DL-237, OQ-PM-10)', () => smallWebp(), UnsupportedMediaTypeError],
   ])('%s: refused, no row, the part and the estimate unchanged', async (_name, bytes, kind) => {
     const { estimateId, first } = await setUpEstimate();
     const revision = await inputsRevision(estimateId);
@@ -384,7 +385,12 @@ describe('ADR-013, FR-065: the table is immutable', () => {
     pictureId = defined((await put(made.estimateId, made.first, smallPng(), 'immutable.png')).picture).id;
   });
 
-  const snapshot = async (): Promise<unknown> => (await db.owner.query('SELECT * FROM part_images ORDER BY id')).rows;
+  /**
+   * Every row of the table, as its id and an md5 over the whole row's text. The row's text carries every column, `bytes` included (hex), so a refused statement that changed any
+   * column of any row, added a row or removed one makes this differ: the ids, the count and the digests are all compared. The digest is computed in PostgreSQL on purpose. Reading
+   * every picture back and comparing the Buffers with `toEqual` took seconds per test once earlier tests had stored the 199 KB and 204,799-byte pictures (DEF-045, AQP-373).
+   */
+  const snapshot = async (): Promise<unknown> => (await db.owner.query('SELECT p.id::text AS id, md5(p::text) AS digest FROM part_images p ORDER BY p.id')).rows;
 
   it('grants the runtime role SELECT and INSERT and nothing else, on the table and on every column', async () => {
     const { rows } = await db.owner.query<{ privilege: string; granted: boolean }>(

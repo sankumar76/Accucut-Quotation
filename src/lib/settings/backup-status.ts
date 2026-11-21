@@ -70,7 +70,7 @@ export interface BackupStatus {
 }
 
 /** A reading the arithmetic can use: finite, a disk with a size, and free space between nothing and the whole. */
-function isUsable(reading: DiskReadingRow): boolean {
+function isUsable(reading: Pick<DiskReadingRow, 'freeBytes' | 'totalBytes'>): boolean {
   const { freeBytes, totalBytes } = reading;
   return Number.isFinite(freeBytes) && Number.isFinite(totalBytes) && totalBytes > 0 && freeBytes >= 0 && freeBytes <= totalBytes;
 }
@@ -84,6 +84,15 @@ function isUsable(reading: DiskReadingRow): boolean {
 export function isBackupLate(latestGoodBackupAt: Date | null, now: Date): boolean {
   if (latestGoodBackupAt === null) return true;
   return now.getTime() - latestGoodBackupAt.getTime() > BACKUP_LATE_AFTER_DAYS * MILLISECONDS_PER_DAY;
+}
+
+/**
+ * Whether a disk is nearly full: less than 20 % free. The ONE rule, used by the Settings status below and by the worker's `backup-watch` job (which e-mails the Admin, STORY-09.06 AC-10), so the
+ * notice and the e-mail cannot disagree. 20 % is one fifth: free < total / 5 is free * 5 < total, with whole bytes, so the edge is exact and no division rounds it. The figures must be usable
+ * (finite, a disk with a size, free space within it); anything else is not "nearly full", it is no reading.
+ */
+export function isDiskNearlyFull(freeBytes: number, totalBytes: number): boolean {
+  return isUsable({ freeBytes, totalBytes }) && freeBytes * (PERCENT / DISK_NEARLY_FULL_BELOW_PERCENT) < totalBytes;
 }
 
 export function deriveBackupStatus(input: BackupStatusInput, now: Date): BackupStatus {
@@ -103,7 +112,6 @@ export function deriveBackupStatus(input: BackupStatusInput, now: Date): BackupS
       ageSeconds: Math.floor(ageMilliseconds / MILLISECONDS_PER_SECOND),
       stale: ageMilliseconds > DISK_READING_STALE_AFTER_DAYS * MILLISECONDS_PER_DAY,
     },
-    // 20 % is one fifth: free < total / 5 is free * 5 < total, with whole bytes, so the edge is exact and no division rounds it.
-    diskNearlyFull: diskReading.freeBytes * (PERCENT / DISK_NEARLY_FULL_BELOW_PERCENT) < diskReading.totalBytes,
+    diskNearlyFull: isDiskNearlyFull(diskReading.freeBytes, diskReading.totalBytes),
   };
 }

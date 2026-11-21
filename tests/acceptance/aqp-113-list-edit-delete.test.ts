@@ -56,10 +56,10 @@ describe('the Process master over the API: list, edit, delete (AC-1, AC-3, AC-4,
       for (const rate of rates) for (const use of rate.usedBy) expect(use.letter).toMatch(/^[A-Z]{1,2}$/);
     });
 
-    it('[AQP-113 AC-1] the answer holds no key other than id, name, unit, defaultValue and usedBy (strict contract)', async () => {
+    it('[AQP-113 AC-1] the answer holds no key other than id, name, unit, defaultValue, usedBy and customersWithOwnValue (strict contract; the last is STORY-02.08)', async () => {
       const answer = await call('GET', null);
       const rates = (answer.body?.['processItems'] ?? []) as Array<Record<string, unknown>>;
-      for (const rate of rates) expect(Object.keys(rate).sort()).toEqual(['defaultValue', 'id', 'name', 'unit', 'usedBy']);
+      for (const rate of rates) expect(Object.keys(rate).sort()).toEqual(['customersWithOwnValue', 'defaultValue', 'id', 'name', 'unit', 'usedBy']);
       expect(Object.keys(answer.body ?? {})).toEqual(['processItems']);
       expect(answer.headers.get('cache-control')).toBe('private, no-store');
     });

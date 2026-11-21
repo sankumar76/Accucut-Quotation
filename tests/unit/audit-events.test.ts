@@ -17,22 +17,36 @@ import {
  * wired, the others are declared and unused, every event belongs to a category the filter offers, and the words are the screen's.
  */
 
-const WIRED_USER: ReadonlyArray<AuditEventName> = ['user.created', 'user.renamed', 'user.role_changed', 'user.deactivated', 'user.activated', 'user.password_reset'];
+/** The six events of the Users screen (STORY-01.04) and, from STORY-01.09, the Admin hand-over: one entry for the one act. */
+const WIRED_USER: ReadonlyArray<AuditEventName> = [
+  'user.created',
+  'user.renamed',
+  'user.role_changed',
+  'user.deactivated',
+  'user.activated',
+  'user.password_reset',
+  'user.admin_handed_over',
+];
 /** STORY-02.01: the three events of the Process Master. */
 const WIRED_MASTER: ReadonlyArray<AuditEventName> = ['master.created', 'master.edited', 'master.deleted'];
 /** STORY-05.12: a Calculate that went ahead past a warning. */
 const WIRED_CALCULATION: ReadonlyArray<AuditEventName> = ['calculation.warning_acknowledged'];
-/** STORY-06.06: an estimate approved and locked; STORY-06.07: a price that differs from the calculated total. Registry order puts them before the quantity warning. */
-const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.price_overridden'];
-const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CALCULATION];
-const RESERVED: ReadonlyArray<AuditEventName> = ['approval.unlocked', 'approval.cancelled', 'approval.price_removed'];
+/** STORY-06.06: an estimate approved and locked; STORY-06.07: a price that differs from the calculated total; STORY-06.08: an approved estimate unlocked; STORY-06.12: an approval cancelled; STORY-06.13: the price of a cancelled approval removed. Registry order puts them before the quantity warning. */
+const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.price_overridden', 'approval.unlocked', 'approval.cancelled', 'approval.price_removed'];
+/** STORY-08.02: a formula of the field registry changed. Registry order puts it after the approval events and before the calculation event. */
+const WIRED_CONFIG: ReadonlyArray<AuditEventName> = ['config.formula_changed', 'config.field_inserted', 'config.field_deleted', 'config.reverted'];
+/** STORY-04.07: a task given to another Engineer, a new deadline, or both. */
+const WIRED_TASK: ReadonlyArray<AuditEventName> = ['task.reassigned'];
+const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CONFIG, ...WIRED_CALCULATION, ...WIRED_TASK];
+/** With STORY-06.13 no event is declared and left unwired. */
+const RESERVED: ReadonlyArray<AuditEventName> = [];
 
 describe('AC-3: what is wired and what is declared', () => {
-  it('wires exactly the six user events of the Users screen, the three events of the Process Master, the approval and the price override, and the quantity warning of Calculate', () => {
+  it('wires exactly the six user events of the Users screen and the Admin hand-over, the three events of the Process Master, the approval, the price override, the unlock, the cancel and the price removal, and the quantity warning of Calculate', () => {
     expect(wiredEvents()).toEqual(WIRED);
   });
 
-  it('declares the events of the later stories and wires none of them: unlock, cancel, remove price', () => {
+  it('declares no event that is not wired: every event of Release 1 has code behind it', () => {
     expect(auditEventNames().filter((name) => !WIRED.includes(name))).toEqual(RESERVED);
     for (const name of RESERVED) expect(AUDIT_EVENTS[name].status, name).toBe('reserved');
   });
@@ -58,13 +72,17 @@ describe('AC-3: every event has a subject and a category the filter offers', () 
     for (const category of AUDIT_CATEGORIES) expect(eventsInCategory(category.id).length, category.id).toBeGreaterThan(0);
   });
 
-  it('puts the six user events under "User change" and the others each under their own', () => {
+  it('puts the user events (the hand-over, AQP-356, too) under "User change" and the others each under their own', () => {
     expect(eventsInCategory('user_change')).toEqual(WIRED_USER);
     expect(eventsInCategory('master_data')).toEqual(WIRED_MASTER);
     expect(eventsInCategory('price_override')).toEqual(['approval.price_overridden']);
     expect(eventsInCategory('approval_cancelled')).toEqual(['approval.cancelled']);
     expect(eventsInCategory('price_removed')).toEqual(['approval.price_removed']);
     expect(eventsInCategory('quantity_warning')).toEqual(['calculation.warning_acknowledged']);
+    expect(eventsInCategory('task_change')).toEqual(WIRED_TASK);
+    expect(auditCategoryLabel('task_change')).toBe('Task change');
+    expect(eventsInCategory('config_change')).toEqual(WIRED_CONFIG);
+    expect(auditCategoryLabel('config_change')).toBe('Configuration change');
     expect(auditCategoryLabel('user_change')).toBe('User change');
     expect(auditCategoryLabel('master_data')).toBe('Master data edit');
     expect(auditCategoryLabel('configuration')).toBeNull();
@@ -80,6 +98,8 @@ describe('AC-3: every event has a subject and a category the filter offers', () 
       'Quantity warning',
       'Master data edit',
       'User change',
+      'Task change',
+      'Configuration change',
     ]);
   });
 });
@@ -112,6 +132,15 @@ describe('AC-3: the words of "Before to after" for the user events', () => {
     expect(words).toEqual({ before: 'Earlier password', after: 'Temporary password set' });
   });
 
+  it('says who the Admin was and who the Admin is now, by name (STORY-01.09 AC-4, SCR-16 style)', () => {
+    const arjun = { adminId: '00000000-0000-4000-8000-0000000000a1', adminName: 'Arjun Rai' };
+    const meera = { adminId: '00000000-0000-4000-8000-0000000000a2', adminName: 'Meera Nair' };
+    expect(describeOf('user.admin_handed_over', arjun, meera)).toEqual({ before: 'Admin was Arjun Rai', after: 'Admin is now Meera Nair' });
+    expect(describeOf('user.admin_handed_over', arjun, { adminId: 'not-an-id', adminName: 'Meera Nair' })).toBeNull();
+    expect(describeOf('user.admin_handed_over', arjun, { ...meera, adminName: '' })).toBeNull();
+    expect(describeOf('user.admin_handed_over', null, meera)).toBeNull();
+  });
+
   it('gives no words for stored values that do not fit the event (an older shape, a damaged row), and the screen shows a dash', () => {
     expect(describeOf('user.created', { role: 'ENGINEER' }, { role: 'ENGINEER', isActive: true })).toBeNull();
     expect(describeOf('user.role_changed', { role: 'OWNER' }, { role: 'LEAD' })).toBeNull();
@@ -120,9 +149,6 @@ describe('AC-3: the words of "Before to after" for the user events', () => {
     expect(NO_DETAIL).toEqual({ before: '—', after: '—' });
   });
 
-  it('gives a declared event no words yet, whatever it holds', () => {
-    expect(describeOf('approval.cancelled', { price: 1 }, null)).toEqual(NO_DETAIL);
-  });
 });
 
 describe('STORY-05.12 AC-3: the quantity warning event names the rows and holds no figure', () => {
@@ -231,6 +257,109 @@ describe('STORY-06.07 AC-2, AC-3 (SCR-16): the price-override event keeps the ca
   });
 });
 
+describe('STORY-06.08 AC-2: the unlock event keeps the price it stood at and the reason, and nothing else', () => {
+  const event = AUDIT_EVENTS['approval.unlocked'];
+  const before = { approvedPrice: '12600.00' };
+  const after = { reason: 'The customer asked for a thicker plate.' };
+
+  it('is wired, about the estimate, under the "Unlock" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'unlock' });
+    expect(eventsInCategory('unlock')).toEqual(['approval.unlocked']);
+  });
+
+  it('says what the approval stood at and why it was unlocked', () => {
+    expect(event.describeStored(before, after)).toEqual({ before: 'Approved at ₹ 12,600.00', after: 'Unlocked. Reason: The customer asked for a thicker plate.' });
+  });
+
+  it.each([
+    ['an extra key in the before (a rate has no place here)', { ...before, rate: '0.37' }, after],
+    ['an extra key in the after', before, { ...after, rate: '0.37' }],
+    ['a price as a number', { approvedPrice: 12600 }, after],
+    ['a negative price', { approvedPrice: '-1.00' }, after],
+    ['no reason', before, {}],
+    ['an empty reason', before, { reason: '' }],
+    ['a reason over 500 characters', before, { reason: 'x'.repeat(501) }],
+    ['a before that is null', null, after],
+    ['an after that is null', before, null],
+  ])('refuses %s', (_name, storedBefore, storedAfter) => {
+    expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
+  });
+
+  it('accepts a reason of exactly 500 characters', () => {
+    expect(event.describeStored(before, { reason: 'x'.repeat(500) })).not.toBeNull();
+  });
+});
+
+describe('STORY-06.12 AC-3, AC-7, AC-10: the cancel event keeps the price it stood at, the reason and the status before and after, and nothing else', () => {
+  const event = AUDIT_EVENTS['approval.cancelled'];
+  const before = { approvedPrice: '4750.00', status: 'APPROVED' };
+  const after = { reason: 'The wrong customer was priced.', status: 'DRAFT' };
+
+  it('is wired, about the estimate, under the "Approval cancelled" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'approval_cancelled' });
+    expect(eventsInCategory('approval_cancelled')).toEqual(['approval.cancelled']);
+  });
+
+  it('says what the approval stood at and why it was cancelled (SCR-16: "Approved at ₹ 4,750.00 to Cancelled. Reason: …")', () => {
+    expect(event.describeStored(before, after)).toEqual({ before: 'Approved at ₹ 4,750.00', after: 'Cancelled. Reason: The wrong customer was priced.' });
+  });
+
+  it.each([
+    ['DRAFT', 'a Draft'],
+    ['SUBMITTED', 'Submitted'],
+  ])('says so when the estimate stayed %s (AC-10): the entry shows that the status did not change', (status, words) => {
+    expect(event.describeStored({ ...before, status }, { ...after, status })).toEqual({
+      before: 'Approved at ₹ 4,750.00',
+      after: `Cancelled, the estimate stayed ${words}. Reason: The wrong customer was priced.`,
+    });
+  });
+
+  it.each([
+    ['an extra key in the before (a rate has no place here)', { ...before, rate: '0.37' }, after],
+    ['an extra key in the after (the password has no place here)', before, { ...after, password: 'x' }],
+    ['a price as a number', { ...before, approvedPrice: 4750 }, after],
+    ['a status that is none', { ...before, status: 'CLOSED' }, after],
+    ['no status in the after', before, { reason: after.reason }],
+    ['no reason', before, { status: 'DRAFT' }],
+    ['an empty reason', before, { ...after, reason: '' }],
+    ['a reason over 500 characters', before, { ...after, reason: 'x'.repeat(501) }],
+    ['a before that is null', null, after],
+    ['an after that is null', before, null],
+  ])('refuses %s', (_name, storedBefore, storedAfter) => {
+    expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
+  });
+
+  it('accepts a reason of exactly 500 characters, counted as code points', () => {
+    expect(event.describeStored(before, { ...after, reason: 'x'.repeat(500) })).not.toBeNull();
+    expect(event.describeStored(before, { ...after, reason: '😀'.repeat(500) })).not.toBeNull();
+  });
+});
+
+describe('STORY-06.13 AC-3, AC-6, AC-7: the price-removed event keeps the price that was removed, and nothing else', () => {
+  const event = AUDIT_EVENTS['approval.price_removed'];
+  const before = { approvedPrice: '4750.00' };
+
+  it('is wired, about the estimate, under the "Price removed" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'price_removed' });
+    expect(eventsInCategory('price_removed')).toEqual(['approval.price_removed']);
+  });
+
+  it('says what was removed (SCR-16: "Price ₹ 4,750.00 removed from the estimate. The audit log keeps it")', () => {
+    expect(event.describeStored(before, null)).toEqual({ before: 'Price ₹ 4,750.00', after: 'Removed from the estimate. The audit log keeps it' });
+  });
+
+  it.each([
+    ['an extra key in the before (the password has no place here)', { ...before, password: 'x' }, null],
+    ['a price as a number', { approvedPrice: 4750 }, null],
+    ['a price with a currency sign', { approvedPrice: '₹ 4,750.00' }, null],
+    ['no price', {}, null],
+    ['an after that is not null', before, { reason: 'x' }],
+    ['a before that is null', null, null],
+  ])('refuses %s', (_name, storedBefore, storedAfter) => {
+    expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
+  });
+});
+
 describe('AC-4: the shapes name their fields, so a secret has no place to go', () => {
   it('refuses an extra key on every wired user event, before and after (the Process Master events are held in masters-audit-events.test.ts)', () => {
     const valid: Record<string, readonly [unknown, unknown]> = {
@@ -240,6 +369,10 @@ describe('AC-4: the shapes name their fields, so a secret has no place to go', (
       'user.deactivated': [{ isActive: true }, { isActive: false }],
       'user.activated': [{ isActive: false }, { isActive: true }],
       'user.password_reset': [{ mustChangePassword: false }, { mustChangePassword: true }],
+      'user.admin_handed_over': [
+        { adminId: '00000000-0000-4000-8000-0000000000a1', adminName: 'Arjun Rai' },
+        { adminId: '00000000-0000-4000-8000-0000000000a2', adminName: 'Meera Nair' },
+      ],
     };
     for (const name of WIRED_USER) {
       const [before, after] = valid[name] ?? [];
@@ -249,5 +382,122 @@ describe('AC-4: the shapes name their fields, so a secret has no place to go', (
       if (before !== null) expect(AUDIT_EVENTS[name].describeStored(withHash(before), after), `${name} before`).toBeNull();
       expect(AUDIT_EVENTS[name].describeStored(before, withHash(after)), `${name} after`).toBeNull();
     }
+  });
+});
+
+describe('STORY-08.02 AC-5: the words and the shapes of the formula change', () => {
+  const event = AUDIT_EVENTS['config.formula_changed'];
+
+  it('is wired, in the "Configuration change" category, about a field', () => {
+    expect(event).toMatchObject({ status: 'wired', category: 'config_change', objectType: 'field' });
+  });
+
+  it('says the old formula and the new one, with the number of the version it made', () => {
+    expect(event.describeStored({ formula: 'P * Cutting-Rate-per-Sec' }, { formula: 'P * Cutting-Rate-per-Sec * 2', version: 10 })).toEqual({
+      before: 'P * Cutting-Rate-per-Sec',
+      after: 'P * Cutting-Rate-per-Sec * 2 (configuration version 10)',
+    });
+  });
+
+  it('refuses an empty formula, a version that is no number, and any other key (a password has no place to go)', () => {
+    expect(event.describeStored({ formula: '' }, { formula: 'P', version: 2 })).toBeNull();
+    expect(event.describeStored({ formula: 'P' }, { formula: 'P', version: 0 })).toBeNull();
+    expect(event.before.safeParse({ formula: 'P', password: 'x' }).success).toBe(false);
+    expect(event.after.safeParse({ formula: 'P', version: 2, password: 'x' }).success).toBe(false);
+  });
+});
+
+describe('STORY-08.03 AC-9: the words and the shapes of a field insert', () => {
+  const event = AUDIT_EVENTS['config.field_inserted'];
+  const NEW_INPUT = { letter: 'AY', label: 'Invented Notch Count', kind: 'input', follows: 'AX', formula: null } as const;
+  const NEW_COST = { letter: 'AZ', label: 'Invented Notch Cost', kind: 'output', follows: 'AY', formula: 'AY * 2' } as const;
+
+  it('is wired, in the "Configuration change" category, about a field', () => {
+    expect(event).toMatchObject({ status: 'wired', category: 'config_change', objectType: 'field' });
+  });
+
+  it('says the new column and what moved, with the number of the version it made (SPEC 14.6: AY, and AY to BO one to the right)', () => {
+    expect(event.describeStored(null, { fields: [NEW_INPUT], moved: [{ from: 'AY', to: 'BO', by: 1 }], version: 10 })).toEqual({
+      before: 'Not in the worksheet',
+      after: 'Added as AY after AX. Columns AY to BO moved one to the right (configuration version 10)',
+    });
+  });
+
+  it('reads a pair side by side as one, and says "two" for the places the later columns moved', () => {
+    expect(event.describeStored(null, { fields: [NEW_INPUT, NEW_COST], moved: [{ from: 'AY', to: 'BO', by: 2 }], version: 11 })).toEqual({
+      before: 'Not in the worksheet',
+      after: 'Added as AY and AZ after AX. Columns AY to BO moved two to the right (configuration version 11)',
+    });
+  });
+
+  it('names each place when the cost column is not next to its input, and says so when nothing moved (an insert after the last column)', () => {
+    const apart = { ...NEW_COST, follows: 'BC' };
+    expect(event.describeStored(null, { fields: [NEW_INPUT, apart], moved: [], version: 12 })?.after).toBe('Added as AY after AX and AZ after BC. No other column moved (configuration version 12)');
+  });
+
+  it('keeps the formula typed for an output (the log is read by the Admin alone) and has no key a password, a figure or a rate value could use', () => {
+    expect(event.after.safeParse({ fields: [NEW_INPUT, NEW_COST], moved: [], version: 2 }).success).toBe(true);
+    expect(event.after.safeParse({ fields: [NEW_INPUT], moved: [], version: 2, password: 'x' }).success).toBe(false);
+    expect(event.after.safeParse({ fields: [{ ...NEW_INPUT, rate: 1 }], moved: [], version: 2 }).success).toBe(false);
+  });
+
+  it('keeps a formula longer than 2,000 characters: the display form of a rate name is longer than the stored form (review SQR-02)', () => {
+    const long = `AY * ${'Invented-Rate '.repeat(190)}`.trim();
+    expect(long.length).toBeGreaterThan(2_500);
+    expect(event.after.safeParse({ fields: [NEW_INPUT, { ...NEW_COST, formula: long }], moved: [], version: 2 }).success).toBe(true);
+    expect(event.after.safeParse({ fields: [{ ...NEW_COST, formula: '' }], moved: [], version: 2 }).success).toBe(false);
+  });
+
+  it('has no "before" (the field did not exist), no empty or three-field entry, and no version that is not a positive whole number', () => {
+    expect(event.before.safeParse({}).success).toBe(false);
+    expect(event.after.safeParse({ fields: [], moved: [], version: 2 }).success).toBe(false);
+    expect(event.after.safeParse({ fields: [NEW_INPUT, NEW_COST, NEW_COST], moved: [], version: 2 }).success).toBe(false);
+    expect(event.describeStored(null, { fields: [NEW_INPUT], moved: [], version: 0 })).toBeNull();
+  });
+});
+
+describe('STORY-04.07 AC-4 (SCR-16 "Task change"): the reassign event keeps the Engineer and the deadline, and nothing else', () => {
+  const event = AUDIT_EVENTS['task.reassigned'];
+  const ARJUN = { id: '00000000-0000-4000-8000-0000000000e1', name: 'Arjun Rao' };
+  const MEERA = { id: '00000000-0000-4000-8000-0000000000e2', name: 'Meera Nair' };
+  /** 17:00 IST on 03 November, and 12:00 IST on 04 November. */
+  const FIRST = '2026-11-03T11:30:00.000Z';
+  const SECOND = '2026-11-04T06:30:00.000Z';
+
+  it('is wired, about the task, under the "Task change" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'task', category: 'task_change' });
+  });
+
+  it('says the two times in IST for a new deadline, as the spec gives them', () => {
+    expect(event.describeStored({ engineer: ARJUN, deadlineAt: FIRST }, { engineer: ARJUN, deadlineAt: SECOND })).toEqual({
+      before: '03 Nov 2026, 17:00 IST',
+      after: '04 Nov 2026, 12:00 IST',
+    });
+  });
+
+  it('says the two names for a new Engineer, as the spec gives them', () => {
+    expect(event.describeStored({ engineer: ARJUN, deadlineAt: FIRST }, { engineer: MEERA, deadlineAt: FIRST })).toEqual({ before: 'Arjun Rao', after: 'Meera Nair' });
+  });
+
+  it('says both for a change of both, the Engineer and then the deadline on each side', () => {
+    expect(event.describeStored({ engineer: ARJUN, deadlineAt: FIRST }, { engineer: MEERA, deadlineAt: SECOND })).toEqual({
+      before: 'Arjun Rao, 03 Nov 2026, 17:00 IST',
+      after: 'Meera Nair, 04 Nov 2026, 12:00 IST',
+    });
+  });
+
+  it('writes a 23:30 IST deadline as 23:30 on that IST day, not as the next UTC day', () => {
+    expect(event.describeStored({ engineer: ARJUN, deadlineAt: FIRST }, { engineer: ARJUN, deadlineAt: '2026-11-09T18:00:00.000Z' })?.after).toBe('09 Nov 2026, 23:30 IST');
+  });
+
+  it.each([
+    ['an extra key (an e-mail address has no place here)', { engineer: ARJUN, deadlineAt: FIRST }, { engineer: { ...MEERA, email: 'a@b.test' }, deadlineAt: FIRST }],
+    ['an extra key on the state (a folder path has no place here)', { engineer: ARJUN, deadlineAt: FIRST, folderPath: 'invented-path' }, { engineer: MEERA, deadlineAt: FIRST }],
+    ['a deadline that is not an instant', { engineer: ARJUN, deadlineAt: FIRST }, { engineer: MEERA, deadlineAt: 'tomorrow' }],
+    ['an Engineer with no name', { engineer: ARJUN, deadlineAt: FIRST }, { engineer: { id: MEERA.id, name: '' }, deadlineAt: FIRST }],
+    ['a before that is null', null, { engineer: MEERA, deadlineAt: FIRST }],
+    ['an after that is null', { engineer: ARJUN, deadlineAt: FIRST }, null],
+  ])('refuses %s', (_name, storedBefore, storedAfter) => {
+    expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
   });
 });

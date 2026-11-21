@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import { withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
 import { clientFor, type Transaction } from './transaction';
@@ -14,6 +16,9 @@ import { clientFor, type Transaction } from './transaction';
 
 /** Version numbers start at 1; the seed is version 1. */
 export const SEED_VERSION_NUMBER = 1;
+
+/** The name of the checkpoint the seed gets (STORY-08.06 AC-1, assumption A-1: proposed words, for the ux-expert). The migration inserts the same name for an install that already holds version 1. */
+export const SEED_CHECKPOINT_NAME = 'Original configuration';
 
 /** Which version is the latest, without its ~35 KB snapshot (architecture ruling R5). */
 export interface ConfigVersionRef {
@@ -38,13 +43,33 @@ export interface ConfigVersionUse {
   readonly estimatesInUse: number;
 }
 
+/** What an edit stores as the next version (STORY-08.02). */
+export interface NewConfigVersion {
+  /** The number of the version the edit was made from. The new version is stored only if it is still the latest. */
+  readonly baseNumber: number;
+  /** The whole edited document, already validated by the service. */
+  readonly snapshot: unknown;
+  readonly reason: string;
+  readonly createdBy: string;
+}
+
+const SEED_ROWS = z.array(z.strictObject({ id: z.uuid() }));
+const SEED_CHECKPOINT_TABLE = z.array(z.strictObject({ present: z.boolean() }));
+const INSERTED_ROWS = z.array(z.strictObject({ id: z.uuid(), number: z.number().int() }));
+
 export interface ConfigRepository {
   /**
-   * Inserts the seed as version 1 only if the table holds no version at all, in one statement. Returns
+   * Inserts the seed as version 1 only if the table holds no version at all, **together with the seed checkpoint** that names it (STORY-08.06 AC-1), in one statement. Returns
    * true if it inserted, false if a version already existed. Two runs at once cannot both insert: the
-   * unique number settles it.
+   * unique number settles it, and the checkpoint is made only from a version this statement inserted, so a second run leaves one.
    */
   insertSeedVersionIfNone(input: { readonly snapshot: unknown; readonly reason: string }): Promise<boolean>;
+  /**
+   * Stores the next version, `baseNumber + 1`, **only if `baseNumber` is still the highest number**, in one statement, inside the caller's transaction (so the audit entry commits with it, STORY-08.02 AC-5).
+   * Returns the new version's ID and number, or `null` when another version was stored since the edit began (AC-9: nothing is overwritten and nothing is stored). Two saves from the same base cannot both
+   * insert: the unique number settles it, and the loser's insert does nothing.
+   */
+  insertVersionAfter(version: NewConfigVersion, tx: Transaction): Promise<ConfigVersionRef | null>;
   /** The ID and number of the version with the highest number, or null if there is none. Reads no snapshot. Pass `tx` to read inside the caller's transaction (STORY-05.09: Calculate holds a connection and must not take a second). */
   findLatestRef(tx?: Transaction): Promise<ConfigVersionRef | null>;
   /** One version with its snapshot, or null if no version has this ID. `tx` as above. */
@@ -61,14 +86,39 @@ export interface ConfigRepository {
 export function createConfigRepository(db: PrismaClient): ConfigRepository {
   return {
     insertSeedVersionIfNone({ snapshot, reason }) {
+      // One transaction: the version and its checkpoint are stored together or not at all. The checkpoint is made only from a version this call inserted, so a second run, which inserts nothing, leaves one.
+      return withDatabaseErrors(() =>
+        db.$transaction(async (transaction) => {
+          // Parameterised; the casts give each parameter a type, which `INSERT ... SELECT` cannot infer.
+          const rows = await transaction.$queryRaw`
+            INSERT INTO config_versions (number, snapshot, created_by, reason)
+            SELECT ${SEED_VERSION_NUMBER}::integer, ${JSON.stringify(snapshot)}::jsonb, NULL, ${reason}::text
+            WHERE NOT EXISTS (SELECT 1 FROM config_versions)
+            ON CONFLICT (number) DO NOTHING
+            RETURNING id::text AS "id"`;
+          const seed = SEED_ROWS.parse(rows)[0];
+          if (seed === undefined) return false;
+          // The step runs right after the migrations, so the table is there; it is asked for all the same, because a step that is run against a schema one migration behind (a restored copy not yet migrated forward,
+          // deploy/windows/tests/Restore.Tests.ps1 R3) must still store version 1, as the step of that release did.
+          const present = SEED_CHECKPOINT_TABLE.parse(await transaction.$queryRaw`SELECT to_regclass('public.config_checkpoints') IS NOT NULL AS "present"`)[0];
+          if (present?.present === true) {
+            await transaction.$executeRaw`INSERT INTO config_checkpoints (name, config_version_id, created_by) VALUES (${SEED_CHECKPOINT_NAME}::text, ${seed.id}::uuid, NULL)`;
+          }
+          return true;
+        }),
+      );
+    },
+
+    insertVersionAfter({ baseNumber, snapshot, reason, createdBy }, tx) {
       return withDatabaseErrors(async () => {
-        // Parameterised; the casts give each parameter a type, which `INSERT ... SELECT` cannot infer.
-        const inserted = await db.$executeRaw`
+        // Parameterised; the casts give each parameter a type, which `INSERT ... SELECT` cannot infer. `ON CONFLICT DO NOTHING` covers two saves that both saw the same latest number.
+        const rows = await clientFor(db, tx).$queryRaw`
           INSERT INTO config_versions (number, snapshot, created_by, reason)
-          SELECT ${SEED_VERSION_NUMBER}::integer, ${JSON.stringify(snapshot)}::jsonb, NULL, ${reason}::text
-          WHERE NOT EXISTS (SELECT 1 FROM config_versions)
-          ON CONFLICT (number) DO NOTHING`;
-        return inserted === 1;
+          SELECT ${baseNumber + 1}::integer, ${JSON.stringify(snapshot)}::jsonb, ${createdBy}::uuid, ${reason}::text
+          WHERE (SELECT max(number) FROM config_versions) = ${baseNumber}::integer
+          ON CONFLICT (number) DO NOTHING
+          RETURNING id::text AS "id", number AS "number"`;
+        return INSERTED_ROWS.parse(rows)[0] ?? null;
       });
     },
 

@@ -56,9 +56,17 @@ const REPOSITORIES = {
     'audit-repository',
     // STORY-03.05 (AC-4, NFR-002): every column of the calculation record is cost data (calculations and calculation_rows are Restricted, architecture section 5.1).
     'calculation-repository',
+    // STORY-08.06 (NFR-002): the checkpoints of the configuration, for the Admin only; no Engineer view reads or writes them.
+    'config-checkpoint-repository',
     'config-repository',
     'customer-repository',
+    // STORY-02.08 (NFR-002): the customers' rate values moved or listed when a Process Master default changes. Restricted; no Engineer view reads or writes them.
+    'default-propagation-repository',
+    // STORY-09.07 (NFR-002): the reset links (a hash of a secret token and a person), for the reset service only. Holds no cost data, but nothing an Engineer view has a use for.
+    'password-reset-repository',
     'decimal-text',
+    // STORY-09.01 (TB-4): the e-mail outbox holds names and task details in bodies, and the settings row of the mail sender. Confidential; no Engineer view reads or writes it.
+    'email-outbox-repository',
     'estimate-node-repository',
     'estimate-repository',
     // STORY-07.01: the task code and the customer's name of an estimate, for the name of its export file. Nothing an Engineer view has a use for.
@@ -73,7 +81,11 @@ const REPOSITORIES = {
     'master-constraints',
     'master-repository',
     'material-repository',
+    // STORY-09.04 and 09.05: the overdue scan's candidate read and the daily digest's read (task code, title, folder, deadline, the Engineer's ID, the assigner's ID and name, never an address) and their stores. No Engineer view imports it.
+    'overdue-repository',
     'prisma-client',
+    // STORY-09.02: the one `settings` row (the alerts switch and the sender mailbox), for the Admin's Settings page. No cost data and no credential, but nothing an Engineer's view has a use for, so it stays blocked.
+    'settings-repository',
     'task-repository',
     'throttle-repository',
     'treatment-repository',
@@ -85,6 +97,8 @@ const SERVICES = {
   allowed: ['user-service', 'auth-service'],
   blocked: [
     'account-service',
+    // STORY-01.09: the Admin hand-over holds no cost data, but it moves the top role and is the guard of an Admin-only, step-up action; called by its one route, never by a view. Blocked, as `step-up-service` is.
+    'admin-handover-service',
     // STORY-06.05 (NFR-002): the approval's guard reads the calculation basis under the estimate's lock, for the Lead and the Admin only; from STORY-06.06 it also holds the approved price.
     'approval-service',
     'audit-cursor',
@@ -95,11 +109,23 @@ const SERVICES = {
     // STORY-05.09: the masters one calculation reads (the customer's rates, every material's price and the exchange rates), in the caller's transaction. Restricted in full, like the service that reads it.
     'calculation-masters',
     'calculation-service',
+    // STORY-06.12 (NFR-002): cancel approval reads and writes the approval (its price is in the audit entry), for the Admin only; no Engineer view imports it.
+    'cancel-approval-service',
+    // STORY-08.06 (NFR-002): checkpoints and revert read whole configuration snapshots and save a version with the Admin's password. Admin only; no Engineer view imports it.
+    'config-checkpoint-service',
+    // STORY-08.02 (NFR-002): the formula editor reads formulas, rate names and a stored calculation, and saves a version with the Admin's password. Admin only; no Engineer view imports it.
+    'config-edit-service',
     'config-read-service',
     'config-service',
+    // STORY-08.03 (NFR-002): the insert wizard's options, preview and save read formulas, rate names and column labels, for the Admin only; no Engineer view imports it.
+    'config-structure-service',
     // STORY-06.03 (AC-8, NFR-002): the cost details of one row read the calculation record and answer with formulas, rate values and costs, for the Lead and the Admin only.
     'cost-details-service',
     'customer-service',
+    // STORY-02.08 (NFR-002): the changed default's reach into the customers' rates, for the Process Master's Admin routes only.
+    'default-propagation-service',
+    // STORY-06.08 and STORY-06.12: the check of a customer or a material deleted after the approval, shared by unlock and cancel approval. It reads the estimate's customer and materials, for the Lead's and the Admin's services only.
+    'deleted-masters',
     // STORY-05.03: the inputs half of the estimate service (the part form and the save of what was typed). It reads the Material Master and the field registry, so an Engineer view has no use for it.
     'estimate-inputs',
     // STORY-06.02 (AC-5, NFR-002): the review reads the calculation record and answers with every figure of an estimate, for the Lead and the Admin only.
@@ -112,16 +138,26 @@ const SERVICES = {
     'exchange-rate-service',
     'masters-service',
     'password-policy',
+    // STORY-09.07: the reset by e-mailed link (a public request and the use of a token, with the outbox row of the message). It holds no cost data and is called by its two public routes and its page, never by a view.
+    'password-reset-service',
+    // STORY-06.11 (NFR-002): the count of what changed in the rates since a calculation reads the stored snapshot and the masters now, for the unlock preview and the Lead's notice only.
+    'rate-changes',
     'rate-name-rules',
+    // STORY-06.13 (NFR-002): remove price reads the approval's price (it is in the audit entry that keeps it), for the Admin only; no Engineer view imports it.
+    'remove-price-service',
     // STORY-02.09: the Admin's Settings page (the last good backup and the server disk). It holds no cost data, but it is Admin only and no Engineer view imports it.
     'settings-service',
     // STORY-06.14: the password step-up check holds no cost data, but it is the guard of Admin-only actions (cancel an approval, remove a
     // price, edit a formula) and is called by their services and routes, never by a view. An Engineer view has no use for it, so it stays
     // blocked, as `account-service` (the other password check) is; only people, sign-in state and plain types are allowed.
     'step-up-service',
+    // STORY-09.03 (NFR-002): the assignment e-mail's outbox row (names, folder path, deadline; no cost field), written by the task service in its transaction. No Engineer view imports it.
+    'task-mail',
     'task-queue-cursor',
     'task-service',
     'treatment-service',
+    // STORY-06.08 (NFR-002): unlock reads the approved calculation's master snapshot (rates and prices) to count what changed, and writes the approval's unlock. For the Lead and the Admin only; no Engineer view imports it.
+    'unlock-service',
   ],
 } as const;
 
@@ -322,13 +358,28 @@ describe('every repository and service file is classed, and the lint agrees with
  * `backup-watch` (STORY-10.05) reads and writes `job_runs`, which holds the record of the backups and the free space of the disk: Internal data, no cost or rate. It reaches the
  * database only through a store that the worker gives it as a parameter (`takesItsStoreByInjection`), so the job file itself imports no repository, service or driver, and a test
  * can fix the clock and stub both the store and `statfs`. What the store may do is decided where it is built (`src/server/repositories/job-run-repository.ts`).
+ *
+ * `heartbeat` (STORY-10.09a) writes its one `job_runs` row a minute and calls the prune function through a store the worker gives it, the same way, and it uses the one wrapper.
+ * `run-job` (STORY-10.09a) is that wrapper: it holds no data and imports nothing at all (the worker gives it the logger, the clock and the way to write a failed row), so a job's
+ * log lines and its failed row cannot reach the data layer through it. A new file fails the list test below until someone classes it.
+ *
+ * `outbox-send` (STORY-09.01) reads and writes `email_outbox` and `settings`: Confidential, names and task details, never a cost or a rate. It takes the same route: its store, its mailer
+ * and its clock are parameters, and the only mail modules it names are types. `tests/security/mail-confidentiality.test.ts` checks its imports (and those of `src/server/mail`) against an exact list (AC-10).
  */
-const JOBS = { holdsNoData: ['log-prune'], takesItsStoreByInjection: ['backup-watch'] } as const;
+const JOBS = { holdsNoData: ['log-prune'], takesItsStoreByInjection: ['backup-watch', 'daily-digest', 'heartbeat', 'outbox-send', 'overdue-scan'] } as const;
 const ALL_JOBS = [...JOBS.holdsNoData, ...JOBS.takesItsStoreByInjection];
+/** Not a job: the wrapper every job runs through. It imports nothing. */
+const JOB_WRAPPER = 'run-job';
 
 describe('every worker job is classed and takes nothing from the data layer (NFR-002)', () => {
   it('every file in src/server/jobs is on the list; a new file fails here until someone decides', () => {
-    expect(filesIn('src/server/jobs').sort()).toEqual([...ALL_JOBS].sort());
+    expect(filesIn('src/server/jobs').sort()).toEqual([...ALL_JOBS, JOB_WRAPPER].sort());
+  });
+
+  it('the job wrapper imports nothing at all, so no job can reach the data layer through it', () => {
+    const source = readFileSync(`${ROOT}src/server/jobs/${JOB_WRAPPER}.ts`, 'utf8');
+    expect([...source.matchAll(/(?:from|import)\s*\(?\s*'([^']+)'/g)].map((match) => match[1])).toEqual([]);
+    expect(source).not.toMatch(/readFile|createReadStream|open\(/);
   });
 
   it.each(ALL_JOBS)('%s imports no repository, service, container, formula engine or database driver, and logs no file content', (job) => {
@@ -342,10 +393,11 @@ describe('every worker job is classed and takes nothing from the data layer (NFR
     expect(source).not.toMatch(/readFile|createReadStream|open\(/);
   });
 
-  it('backup-watch takes only Node, node-cron and one plain lib module, and its row holds figures of the disk and nothing about an estimate', () => {
+  it('backup-watch takes only Node, node-cron, plain lib modules and one pure template, and its row holds figures of the disk and nothing about an estimate', () => {
     const source = readFileSync(`${ROOT}src/server/jobs/backup-watch.ts`, 'utf8');
     const specifiers = [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '').sort();
-    expect(specifiers).toEqual(['../../lib/settings/backup-status', 'node-cron', 'node:fs/promises']);
+    // STORY-09.06 AC-10: the key builders and the IST date, the one "nearly full" rule (already in backup-status) and the Admin's message, a pure template of two flags.
+    expect(specifiers).toEqual(['../../lib/mail/events', '../../lib/settings/backup-status', '../../lib/time', '../mail/templates/backup-missed', './run-job', 'node-cron', 'node:fs/promises']);
     expect(source).not.toMatch(/\b(?:estimates?|customers?|rates?|costs?|prices?)\b/i);
   });
 });

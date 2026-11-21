@@ -177,7 +177,8 @@ test.describe('a Lead', () => {
     await expect(tab(page, 'Overdue')).toHaveText('Overdue2');
     await expect.poll(() => visibleCodes(page).then((codes) => codes.length)).toBe(2);
     expect([...(await visibleCodes(page))].sort()).toEqual([...seeded].sort());
-    await expect(page.getByText('Showing only the tasks you assigned.')).toBeVisible();
+    // The cut is said by the removable chip (STORY-04.06 AC-1), which replaces the note and the link of STORY-04.03.
+    await expect(page.getByRole('button', { name: 'Remove filter Assigned by me' })).toBeVisible();
     await expect(page.getByText('2 tasks are overdue')).toBeVisible();
     // A later tab change keeps the cut: Open holds this Lead's three open tasks, not the other Lead's.
     await tab(page, 'Open').click();
@@ -185,10 +186,11 @@ test.describe('a Lead', () => {
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
 
-    // "Show all tasks" goes back to the whole queue.
-    await page.getByRole('link', { name: 'Show all tasks' }).click();
-    await expect(page).toHaveURL(/\/queue$/);
-    await expect(page.getByText('Showing only the tasks you assigned.')).toHaveCount(0);
+    // Removing the chip shows the whole queue, writes that into the address, and offers the Lead the control that puts it back (STORY-04.06 AC-2).
+    await page.getByRole('button', { name: 'Remove filter Assigned by me' }).click();
+    await expect(page).toHaveURL(/assignedBy=anyone/);
+    await expect(page.getByRole('button', { name: 'Remove filter Assigned by me' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Assigned by me', exact: true })).toBeVisible();
   });
 
   test('AC-2: GET /api/v1/tasks accepts assignedBy=me and nothing else for assignedBy', async ({ page }, testInfo) => {
@@ -219,7 +221,8 @@ test.describe('an Admin', () => {
     await bell.click();
     await expect(page).toHaveURL(/\/queue\?tab=overdue$/);
     await expect(tab(page, 'Overdue')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByText('Showing only the tasks you assigned.')).toHaveCount(0);
+    // An Admin has no default filter, and the bell's address does not add the chip (STORY-04.06 AC-1).
+    await expect(page.getByRole('button', { name: 'Remove filter Assigned by me' })).toHaveCount(0);
     await expect(page.locator('[data-overdue-marker]:visible').first()).toContainText('Overdue by');
   });
 });

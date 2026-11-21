@@ -1,3 +1,4 @@
+import { blockedSentence, type FieldUse } from './fields/uses';
 import { blockedSummary, CALCULATE_BLOCKED_CODE } from './estimate/calculate-words';
 import type { PartView } from './estimate/part-view';
 import type { BlockedPart } from './estimate/calculate-check';
@@ -78,7 +79,7 @@ export class PayloadTooLargeError extends AppError {
   }
 }
 
-/** A file whose content is not one of the kinds a route accepts (STORY-05.07: a picture that is not a PNG, JPEG, GIF or WebP by its content): 415. */
+/** A file whose content is not one of the kinds a route accepts (STORY-05.07: a picture that is not a PNG, JPEG or GIF by its content, a WebP included, which the browser converts before it is sent, DL-237): 415. */
 export class UnsupportedMediaTypeError extends AppError {
   constructor(message: string, options: AppErrorOptions = {}) {
     super(options.code ?? 'UNSUPPORTED_MEDIA_TYPE', 415, message, options.cause);
@@ -95,6 +96,16 @@ export const TOO_MANY_ATTEMPTS_CODE = 'TOO_MANY_ATTEMPTS';
 export class TooManyAttemptsError extends AppError {
   constructor(message: string, options: AppErrorOptions = {}) {
     super(options.code ?? TOO_MANY_ATTEMPTS_CODE, 429, message, options.cause);
+  }
+}
+
+/**
+ * A reset link that is used, expired, unknown, or for a person who is not active (STORY-09.07 AC-7): 400. One class, one code and one message for all four, so the answer
+ * cannot tell them apart and a person holding a token learns nothing about it. The message is the caller's (SCR-02's sentence).
+ */
+export class ResetLinkInvalidError extends AppError {
+  constructor(message: string, code: string) {
+    super(code, 400, message);
   }
 }
 
@@ -120,6 +131,28 @@ export class StepUpLocked extends AppError {
     super(STEP_UP_LOCKED_CODE, 429, message);
   }
 }
+
+/** The `code` of the 409 of a configuration edit made from a version that is no longer the latest (STORY-08.02 AC-9). */
+export const CONFIG_VERSION_CHANGED_CODE = 'CONFIG_VERSION_CHANGED';
+
+/**
+ * Another save made a newer configuration version after this edit began (STORY-08.02 AC-9): nothing was stored and nothing was overwritten. `currentVersion` is the number of the version that is the latest now,
+ * so the screen can say so. It is a number, not a formula and not a rate, so it may sit in the problem body.
+ */
+export class ConfigVersionChangedError extends ConflictError {
+  constructor(
+    readonly currentVersion: number,
+    message: string,
+  ) {
+    super(message, { code: CONFIG_VERSION_CHANGED_CODE });
+  }
+}
+
+/** The `code` of the 409 of a checkpoint name that another checkpoint has, in any letter case (STORY-08.06 AC-2). The screen shows the sentence under the name field. */
+export const CHECKPOINT_NAME_TAKEN_CODE = 'CHECKPOINT_NAME_TAKEN';
+
+/** The `code` of the 409 of a revert to a version whose content is the current configuration already (STORY-08.06 AC-4): nothing would change, and no password was asked for. */
+export const NOTHING_TO_REVERT_CODE = 'NOTHING_TO_REVERT';
 
 /** A password that does not meet the rule (STORY-01.05 AC-2, FR-098): the 422 names the part that failed, under the field it belongs to. */
 export const PASSWORD_RULE_CODE = 'PASSWORD_RULE';
@@ -175,6 +208,23 @@ export class ProcessItemInUseError extends ConflictError {
     readonly usedBy: ReadonlyArray<FormulaUse>,
   ) {
     super(`${rateName} cannot be deleted while a formula uses it`, { code: PROCESS_ITEM_IN_USE_CODE });
+  }
+}
+
+/** A field was deleted that a formula, a hide-when-zero rule, a visibility rule or a stage total uses (STORY-08.04 AC-2). The code of the 409, which the dialog compares with. */
+export const FIELD_IN_USE_CODE = 'FIELD_IN_USE';
+
+/**
+ * The refusal of deleting a field that something uses: 409, with every use named so the dialog can list them and link each formula to SCR-18. The message is the SCR-20 sentence ("Cannot delete AL Cutting Cost
+ * yet. 1 formula uses this field."). **Restricted** (NFR-002): a formula use holds the formula's text in display form, so the only route that raises it is the Admin's.
+ */
+export class FieldInUseError extends ConflictError {
+  constructor(
+    letter: string,
+    label: string,
+    readonly uses: ReadonlyArray<FieldUse>,
+  ) {
+    super(blockedSentence(letter, label, uses), { code: FIELD_IN_USE_CODE });
   }
 }
 
@@ -266,4 +316,18 @@ export class ExportBusyError extends AppError {
 
 export function isAppError(value: unknown): value is AppError {
   return value instanceof AppError;
+}
+
+/** The code of a 422 for a test e-mail that cannot be sent because no usable sender is saved (STORY-09.02 AC-5). */
+export const NO_SENDER_CODE = 'NO_SENDER';
+
+/**
+ * The mail server refused or did not answer when the Settings test e-mail was sent (STORY-09.02 AC-5). The code is the class of the failure (`SENDER_NOT_ALLOWED`, `AUTH_FAILED`,
+ * `CONNECTION`, `UNKNOWN`: `src/lib/mail/codes.ts`) and nothing of the server's own words is kept, because a reply can carry an address or a host and a token request can carry a secret.
+ * `withRoute` maps it to 502 with that code and the generic title; the page chooses its words from the code.
+ */
+export class MailTestFailedError extends AppError {
+  constructor(code: string) {
+    super(code, 502, 'The test e-mail was not sent.');
+  }
 }

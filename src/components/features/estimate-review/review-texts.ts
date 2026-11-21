@@ -72,12 +72,14 @@ export const CALCULATING_LINE = 'Calculating. This takes a moment.';
 export const CALCULATE_FAILED = 'We could not calculate this estimate. Nothing was changed. Try again.';
 export const APPROVE_NOT_CALCULATED_REASON = 'Calculate first. Approving is available once the figures have been calculated.';
 export const APPROVE_CLEARED_REASON = 'Recalculate first. Approving is available once the figures have been calculated again.';
-export const APPROVE_NOT_YET_REASON = 'Approving is not available yet.';
+/** A Draft with current figures (an estimate that was unlocked, STORY-06.08): the third of the reasons Approve and lock is off, ruled in ux-spec v0.31 (SCR-06, SCR-08 and SCR-16 words, ruling 3). The way on is Recalculate. */
+export const APPROVE_DRAFT_REASON = 'Recalculate first. Approving is available once this Draft has been calculated again.';
 /** The line under the button when the dialog's code did not arrive (the shared first-open failure line; the wording follows "The parts tree did not open." of SCR-05, assumption A-4 of STORY-06.06). */
 export const APPROVE_FIRST_OPEN_FAILED = 'The approval window did not open. Check your connection and try again.';
-/** Unlock replaces Approve once an estimate is approved (STORY-06.06 AC-5); what it does is STORY-06.08's, so it is off with a reason until then (assumption A-3 of STORY-06.06). */
+/** Unlock replaces Approve once an estimate is approved (STORY-06.06 AC-5); it opens the dialog of SCR-09 (STORY-06.08). */
 export const UNLOCK_LABEL = 'Unlock';
-export const UNLOCK_NOT_YET_REASON = 'Unlocking is not available yet.';
+/** The line under the button when the dialog's code did not arrive (the shared first-open failure line, as the approval window's; assumption of STORY-06.08). */
+export const UNLOCK_FIRST_OPEN_FAILED = 'The unlock window did not open. Check your connection and try again.';
 
 /**
  * The Approved state of SCR-06 (STORY-06.06 AC-5; UX spec SCR-06 "Approved (Lead)" and the G3 screen): the notice with the approver and the time, and the two sentences the spec gives for what approval means.
@@ -96,6 +98,56 @@ export const approvedByLine = (name: string, time: string): string => `Approved 
 export const overrideLine = (direction: 'lower' | 'higher', amount: string, calculatedTotal: string): string => `${amount} ${direction} than the calculated total (${calculatedTotal}).`;
 export const reasonGivenLine = (reason: string): string => `Reason given: ${reason}`;
 export const NO_REASON_GIVEN = 'No reason given.';
-export const DOWNLOAD_NOT_CALCULATED_REASON = 'Calculate or Recalculate first. There is no file until a calculation is current.';
-export const DOWNLOAD_NOT_YET_REASON = 'The Excel download is not available yet.';
+
+/**
+ * An estimate that was unlocked (STORY-06.08 AC-3, AC-12; UX spec SCR-06 "Draft after unlock", UX-59, the SCR-09 mock-up): BO is the price approved earlier, labelled so, until a new approval replaces it. It is the approvals row's
+ * price whatever the state of the figures, so clearing them never changes it.
+ */
+export const APPROVED_EARLIER_LABEL = 'Approved earlier';
+export const APPROVED_EARLIER_STAYS = 'It stays until a new approval replaces it.';
+
+/**
+ * The notice of an unlocked Draft (STORY-06.08 AC-3; UX spec SCR-06 states "Draft after unlock" and "Unlocked and changed"): who, when and why, what the figures are, the price approved earlier, and whose queue the task is back in.
+ * `time` is written in IST (`formatIst`). The words of the figures follow the state: current (nothing changed since), or cleared (an input has changed since). The reason is the Lead's own text.
+ */
+export const unlockedNoticeTitle = (time: string, name: string): string => `Unlocked on ${time} by ${name}.`;
+export const unlockedReasonLine = (reason: string): string => `Reason: ${reason}`;
+export const UNLOCKED_FIGURES_CURRENT = 'The figures below are still the ones from the approval. As soon as you change an input every calculated figure is cleared. Recalculate to bring them up to date.';
+export const UNLOCKED_FIGURES_CLEARED = 'An input has changed since, so every calculated figure is cleared. Recalculate to bring them up to date.';
+export const UNLOCKED_PRICE_STAYS = 'The price approved earlier stays until a new approval replaces it.';
+export const unlockedQueueLine = (engineerName: string): string => `The task is back in ${engineerName}'s Open queue.`;
+/**
+ * Cancel approval (STORY-06.12; UX spec SCR-06 "Approved (Admin)", "Approval cancelled (Admin)" and "(Lead)", "Cancel approval on a Draft or Submitted estimate"). The danger button of the Admin opens the dialog of
+ * `estimate-cancel` (fetched on the first press); a Lead sees no button and the line that says who can.
+ */
+export const CANCEL_APPROVAL_LABEL = 'Cancel approval';
+export const CANCEL_FIRST_OPEN_FAILED = 'The cancel window did not open. Check your connection and try again.';
+export const ONLY_ADMIN_CANCELS = 'Only the Admin can cancel an approval.';
+/** BO's label once the approval was cancelled, in place of "Approved earlier": the price stays on screen until the Admin removes it (STORY-06.13) or a new approval replaces it. */
+export const APPROVAL_CANCELLED_LABEL = 'Approval cancelled';
+export const cancelledNoticeTitle = (time: string, name: string): string => `Approval cancelled on ${time} by ${name}.`;
+export const cancelledReasonLine = (reason: string): string => `Reason: ${reason}`;
+export const CANCELLED_PRICE_STAYS = 'The price stays on screen, marked "Approval cancelled", and is not in the Excel file.';
+export const CANCELLED_ONLY_ADMIN_REMOVES = 'Only the Admin can remove it.';
+
+/**
+ * The sentence about the estimate in the notice of a cancelled approval (ux-spec v0.31): an approved estimate that was cancelled went to Draft ("The estimate is a Draft and the task is back in ... Open queue."); a Draft or a
+ * Submitted estimate whose approval was kept through an unlock **stays** as it was ("The estimate stays a Draft and its task does not change."). The sentence is said only while it is true: after a Recalculate the
+ * first one would be false for a Submitted estimate and is left out (an assumption of STORY-06.12, listed in the pull request).
+ */
+export function cancelledStatusLine(status: 'DRAFT' | 'SUBMITTED' | 'APPROVED', wasUnlocked: boolean, engineerName: string): string | null {
+  if (status === 'DRAFT') return wasUnlocked ? 'The estimate stays a Draft and its task does not change.' : `The estimate is a Draft and the task is back in ${engineerName}'s Open queue.`;
+  if (status === 'SUBMITTED' && wasUnlocked) return 'The estimate stays Submitted and its task does not change.';
+  return null;
+}
+/**
+ * Remove price (STORY-06.13; UX spec SCR-06 "Remove price (Admin)" and "Price removed"). The danger button of the Admin, beside the cancelled BO, opens the dialog of `estimate-remove-price` (fetched on the first press);
+ * a Lead sees no button and "Only the Admin can remove it" in the cancelled notice. Once the price is removed, BO reads "Not set yet" and this notice says who removed it and when (IST), in the words of the spec.
+ */
+export const REMOVE_PRICE_LABEL = 'Remove price';
+export const REMOVE_PRICE_FIRST_OPEN_FAILED = 'The remove price window did not open. Check your connection and try again.';
+export const priceRemovedNoticeTitle = (time: string, name: string): string => `The approved price was removed on ${time} by ${name}.`;
+export const PRICE_REMOVED_AUDIT_KEEPS = 'The audit log keeps it.';
+export const PRICE_REMOVED_APPROVE_AGAIN = 'Approve again, after a Recalculate, to set a price.';
+export const DOWNLOAD_NOT_CALCULATED_REASON ='Calculate or Recalculate first. There is no file until a calculation is current.';
 export const calculatedLine = (at: string, configurationNumber: number): string => `Calculated ${at} · configuration version ${configurationNumber}`;

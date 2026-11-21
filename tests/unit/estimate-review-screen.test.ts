@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -39,10 +42,19 @@ async function costsOf(options: ReviewWorldOptions): Promise<CostsView> {
   return createReviewWorld(options).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
 }
 
-const render = (costs: CostsView, customer: { id: string; name: string } | null = { id: 'c1', name: 'Invented Customer' }, header: WorkspaceHeaderView = HEADER): string =>
-  renderToStaticMarkup(createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST' }));
+const render = (
+  costs: CostsView,
+  customer: { id: string; name: string } | null = { id: 'c1', name: 'Invented Customer' },
+  header: WorkspaceHeaderView = HEADER,
+  viewerRole: 'ADMIN' | 'LEAD' = 'LEAD',
+): string =>
+  renderToStaticMarkup(createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST', viewerRole }));
 
 const countOf = (html: string, text: string): number => html.split(text).length - 1;
+
+/** SCR-10 and the control that opens it (STORY-07.07): the link drawn as a button, or `''` while Download is the disabled button. */
+const EXPORT_HREF = '/estimates/Q-2026-0318/export';
+const downloadLink = (html: string): string => /<a[^>]*id="review-download"[^>]*>/.exec(html)?.[0] ?? '';
 
 /** The page without the paths of its icons, whose numbers (`d="M12 1.5 ..."`) are not figures. */
 const withoutIcons = (html: string): string => html.replace(/<svg[\s\S]*?<\/svg>/g, '');
@@ -290,10 +302,10 @@ describe('STORY-06.06 AC-1: Approve and lock is on only while the guard would le
     expect(html).toContain(reason);
   });
 
-  it('current figures on an estimate that is not submitted (a draft after an unlock, STORY-06.08): the button stays off, with the words it had', async () => {
+  it('current figures on an estimate that is not submitted (a draft after an unlock, STORY-06.08): the button stays off, with the words of ux-spec v0.31', async () => {
     const html = render(await current(), undefined, { ...HEADER, status: 'DRAFT' });
     expect(approveButton(html)).toContain(' disabled=""');
-    expect(html).toContain('Approving is not available yet.');
+    expect(html).toContain('Recalculate first. Approving is available once this Draft has been calculated again.');
   });
 });
 
@@ -311,14 +323,18 @@ describe('STORY-06.06 AC-5: the approved state', () => {
     expect(countOf(html, 'File cell BO2')).toBe(1);
     expect(countOf(html, 'Not set yet')).toBe(0);
     expect(html).not.toContain('id="review-approve"');
-    expect(defined(/<button[^>]*id="review-unlock"[^>]*>/.exec(html))[0]).toContain(' disabled=""');
-    expect(html).toContain('Unlocking is not available yet.');
+    // Unlock works from STORY-06.08: it is on, opens a dialog, and the page holds none of the dialog's code (NFR-009).
+    const unlock = defined(/<button[^>]*id="review-unlock"[^>]*>/.exec(html))[0];
+    expect(unlock).not.toContain(' disabled=""');
+    expect(unlock).toContain('aria-haspopup="dialog"');
+    expect(html).not.toContain('Unlocking is not available yet.');
+    expect(html).not.toContain('Reason for unlocking');
   });
 
-  it('Download is not affected by the approval: it is the same control with the same reason as before', async () => {
+  it('Download is not affected by the approval: it is the same control as before, and with current figures it is the link to SCR-10 (STORY-07.07 AC-4)', async () => {
     const html = render(await current({ approval: { price: '12600.00' } }), undefined, APPROVED_HEADER);
-    expect(html).toMatch(/<button[^>]*id="review-download"/);
-    expect(html).toContain('The Excel download is not available yet.');
+    expect(downloadLink(html)).toContain(`href="${EXPORT_HREF}"`);
+    expect(html).not.toMatch(/<button[^>]*id="review-download"/);
   });
 
   it('an approved estimate with no approvals row says only that it is approved and locked, and BO stays "Not set yet"', async () => {
@@ -413,6 +429,304 @@ describe('STORY-06.06 AC-9: BO is the approval row, never the figure state', () 
   });
 });
 
+describe('STORY-06.08 AC-11: Recalculate is shown while the status is DRAFT, whatever the state of the figures', () => {
+  const recalculate = (html: string): string => defined(/<button[^>]*id="review-calculate"[^>]*>/.exec(html))[0];
+
+  it('a Draft whose figures are current (an unlocked estimate) shows Recalculate, enabled, and Approve and lock stays off', async () => {
+    const html = render(await current(), undefined, { ...HEADER, status: 'DRAFT' });
+    expect(recalculate(html)).not.toContain(' disabled=""');
+    expect(html).toContain('>Recalculate</button>');
+    expect(html).not.toContain('>Calculate</button>');
+  });
+
+  it('a Submitted estimate with current figures shows no Recalculate button: its way on is Approve and lock', async () => {
+    const html = render(await current());
+    expect(html).not.toContain('id="review-calculate"');
+    expect(html).toContain('id="review-approve"');
+  });
+
+  it('an Approved estimate with current figures shows no Recalculate button either', async () => {
+    const html = render(await current({ approval: { price: '12600.00' } }), undefined, { ...HEADER, status: 'APPROVED' });
+    expect(html).not.toContain('id="review-calculate"');
+  });
+
+  it('a Draft that was never calculated still says Calculate, and one whose figures are cleared says Recalculate', async () => {
+    expect(render(await current({ calculated: false }), undefined, { ...HEADER, status: 'DRAFT' })).toContain('>Calculate</button>');
+    expect(render(await current({ inputsRevision: 4 }), undefined, { ...HEADER, status: 'DRAFT' })).toContain('>Recalculate</button>');
+  });
+});
+
+describe('STORY-06.08 AC-3, AC-12 (UX spec SCR-06 "Draft after unlock" and "Unlocked and changed"): the notice, and BO labelled "Approved earlier"', () => {
+  const DRAFT_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'DRAFT' };
+  const UNLOCK = { unlockedAt: new Date('2026-11-05T06:35:00.000Z'), byName: 'Invented Kiran', reason: 'The customer changed the quantity.', engineerName: 'Invented Priya' };
+  const OVERRIDE = { price: '12600.00', calculatedTotal: '12629.99', isOverride: true, reason: 'Rounded down to a whole hundred for the customer quote.', approverName: 'Invented Meera' };
+
+  it('Draft after unlock, the figures still current: the notice names who, when (IST), the reason, the figures, the price and the queue, in a live region that takes focus', async () => {
+    const html = render(await current({ approval: { price: '12600.00', approverName: 'Invented Meera', unlock: UNLOCK } }), undefined, DRAFT_HEADER);
+    expect(html).toContain('id="review-unlocked-notice"');
+    expect(html).toContain('tabindex="-1"');
+    expect(html).toContain('Unlocked on 05 Nov 2026, 12:05 IST by Invented Kiran.');
+    expect(html).toContain('Reason: The customer changed the quantity.');
+    expect(html).toContain('The figures below are still the ones from the approval. As soon as you change an input every calculated figure is cleared. Recalculate to bring them up to date.');
+    expect(html).toContain('The price approved earlier stays until a new approval replaces it.');
+    expect(html).toContain('The task is back in Invented Priya&#x27;s Open queue.');
+    expect(html).not.toContain('An input has changed since');
+  });
+
+  it('Unlocked and changed: the same notice with the sentence that an input has changed, and BL is cleared', async () => {
+    const html = render(await current({ inputsRevision: 4, approval: { price: '12600.00', unlock: UNLOCK } }), undefined, DRAFT_HEADER);
+    expect(html).toContain('Unlocked on 05 Nov 2026, 12:05 IST by Invented Kiran.');
+    expect(html).toContain('An input has changed since, so every calculated figure is cleared. Recalculate to bring them up to date.');
+    expect(html).not.toContain('The figures below are still the ones from the approval.');
+    expect(html).toContain('An input changed, so every calculated figure is cleared.');
+  });
+
+  it('a reason that was not kept draws no reason line; the reason is drawn as text, markup and all', async () => {
+    const none = render(await current({ approval: { price: '12600.00', unlock: { ...UNLOCK, reason: null } } }), undefined, DRAFT_HEADER);
+    expect(none).not.toContain('Reason:');
+    const markup = render(await current({ approval: { price: '12600.00', unlock: { ...UNLOCK, reason: '<b>bold</b>' } } }), undefined, DRAFT_HEADER);
+    expect(markup).toContain('Reason: &lt;b&gt;bold&lt;/b&gt;');
+    expect(markup).not.toContain('<b>bold</b>');
+  });
+
+  it('BO shows the price approved earlier, labelled so, with who approved it and when, and the file cell once', async () => {
+    const html = render(await current({ approval: { price: '12600.00', approverName: 'Invented Meera', unlock: UNLOCK } }), undefined, DRAFT_HEADER);
+    expect(html).toContain('₹ 12,600.00');
+    expect(countOf(html, 'Approved earlier')).toBe(1);
+    expect(html).toContain('Approved by Invented Meera, 05 Nov 2026, 11:20 IST.');
+    expect(html).toContain('It stays until a new approval replaces it.');
+    expect(countOf(html, 'File cell BO2')).toBe(1);
+    expect(html).not.toContain('Not set yet');
+  });
+
+  it('AC-12: after the unlock an input changed, so BL is cleared, and BO still shows the price approved earlier, read from the approvals row and never through the figure state', async () => {
+    const world = createReviewWorld({ rows: CE1.rows, bl: CE1.bl, inputsRevision: 4, approval: { price: '12600.00', unlock: UNLOCK } });
+    const costs = await world.service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    const html = render(costs, undefined, DRAFT_HEADER);
+    expect(costs.state).toBe('out-of-date');
+    expect(costs.totals).toBeNull();
+    expect(html).toContain('₹ 12,600.00');
+    expect(countOf(html, 'Approved earlier')).toBe(1);
+    expect(html).not.toContain('Not set yet');
+    expect(world.reads.figures.calls).toEqual([]);
+  });
+
+  it('SQR-05 of the AQP-324 review: after an unlock BO does not compare the old price with the old total, and does not repeat the old reason', async () => {
+    const before = render(await current({ approval: OVERRIDE }), undefined, { ...HEADER, status: 'APPROVED' });
+    expect(before).toContain('₹ 29.99 lower than the calculated total (₹ 12,629.99).');
+    const after = render(await current({ approval: { ...OVERRIDE, unlock: UNLOCK } }), undefined, DRAFT_HEADER);
+    expect(after).toContain('Approved earlier');
+    expect(after).not.toContain('lower than the calculated total');
+    expect(after).not.toContain('Reason given');
+    expect(after).not.toContain('No reason given.');
+    expect(after).not.toContain('12,629.99');
+  });
+
+  it('while the approval stands there is no unlock notice and no "Approved earlier"', async () => {
+    const html = render(await current({ approval: { price: '12600.00' } }), undefined, { ...HEADER, status: 'APPROVED' });
+    expect(html).not.toContain('review-unlocked-notice');
+    expect(html).not.toContain('Approved earlier');
+  });
+
+  it("a Submitted estimate whose approval was unlocked earlier keeps the label on BO but no longer says the task is in the Engineer's queue", async () => {
+    const html = render(await current({ approval: { price: '12600.00', unlock: UNLOCK } }));
+    expect(countOf(html, 'Approved earlier')).toBe(1);
+    expect(html).not.toContain('review-unlocked-notice');
+    expect(html).not.toContain('Open queue');
+  });
+
+  it('the Unlock button is gone once the estimate is a Draft, and nothing of the dialog is in the page', async () => {
+    const html = render(await current({ approval: { price: '12600.00', unlock: UNLOCK } }), undefined, DRAFT_HEADER);
+    expect(html).not.toContain('id="review-unlock"');
+    expect(html).not.toContain('Keep it locked');
+  });
+});
+
+describe('STORY-06.12 AC-1, AC-6, AC-10 (UX spec SCR-06 "Approved (Admin)", "Approval cancelled (Admin)" and "(Lead)", "Cancel approval on a Draft or Submitted estimate")', () => {
+  const APPROVED_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'APPROVED' };
+  const DRAFT_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'DRAFT' };
+  const UNLOCK = { unlockedAt: new Date('2026-11-05T06:35:00.000Z'), byName: 'Invented Kiran', reason: 'The customer changed the quantity.', engineerName: 'Invented Priya' };
+  const CANCEL = { cancelledAt: new Date('2026-11-05T07:35:00.000Z'), byName: 'Invented Meera', reason: 'The wrong customer was priced.', engineerName: 'Invented Priya' };
+  const STANDING = { price: '12600.00', approverName: 'Invented Kiran' };
+
+  it('AC-1: an approved estimate gives the Admin a danger button "Cancel approval", and a Lead no button (the notice says who can)', async () => {
+    const admin = render(await current({ approval: STANDING }), undefined, APPROVED_HEADER, 'ADMIN');
+    expect(admin).toContain('id="review-cancel"');
+    expect(admin).toContain('>Cancel approval</button>');
+    expect(admin).toContain('bg-danger');
+    // Unlock is still there, beside it.
+    expect(admin).toContain('id="review-unlock"');
+    const lead = render(await current({ approval: STANDING }), undefined, APPROVED_HEADER, 'LEAD');
+    expect(lead).not.toContain('id="review-cancel"');
+    expect(lead).not.toContain('Cancel approval');
+    expect(lead).toContain('Only the Admin can cancel an approval.');
+    // Nothing of the dialog is in the first load of the page.
+    for (const html of [admin, lead]) {
+      expect(html).not.toContain('Keep the approval');
+      expect(html).not.toContain('Your password');
+    }
+  });
+
+  it('AC-10: the Admin has the same button on a Draft or a Submitted estimate whose approval was kept through an unlock; a Lead has none and is told who can', async () => {
+    for (const header of [DRAFT_HEADER, HEADER]) {
+      const admin = render(await current({ approval: { ...STANDING, unlock: UNLOCK } }), undefined, header, 'ADMIN');
+      expect(admin).toContain('id="review-cancel"');
+      expect(countOf(admin, '>Cancel approval</button>')).toBe(1);
+      const lead = render(await current({ approval: { ...STANDING, unlock: UNLOCK } }), undefined, header, 'LEAD');
+      expect(lead).not.toContain('id="review-cancel"');
+      expect(countOf(lead, 'Only the Admin can cancel an approval.')).toBe(1);
+    }
+  });
+
+  it('no approval, no button and no line: BO is "Not set yet"', async () => {
+    for (const role of ['ADMIN', 'LEAD'] as const) {
+      const html = render(await current(), undefined, HEADER, role);
+      expect(html).not.toContain('id="review-cancel"');
+      expect(html).not.toContain('Only the Admin can cancel an approval.');
+    }
+  });
+
+  it('AC-6: a cancelled approval from an approved estimate (now a Draft): the notice names who, when (IST), the reason, the Draft and the queue, the price stays marked "Approval cancelled", and there is no button', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(html).toContain('id="review-cancelled-notice"');
+    expect(html).toContain('tabindex="-1"');
+    expect(html).toContain('Approval cancelled on 05 Nov 2026, 13:05 IST by Invented Meera.');
+    expect(html).toContain('Reason: The wrong customer was priced.');
+    expect(html).toContain('The estimate is a Draft and the task is back in Invented Priya&#x27;s Open queue.');
+    expect(html).toContain('The price stays on screen, marked &quot;Approval cancelled&quot;, and is not in the Excel file.');
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).not.toContain('Not set yet');
+    expect(html).not.toContain('id="review-cancel"');
+    // The admin's version has no "Only the Admin can remove it": the Remove price button is the story that follows.
+    expect(html).not.toContain('Only the Admin can remove it.');
+    expect(html).not.toContain('review-unlocked-notice');
+  });
+
+  it('AC-6: BO is labelled "Approval cancelled" once, with its approver, and the file cell once; "Approved earlier" is gone', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
+    // Once in the tile and once in the notice's sentence about the price (with its quotes) and its title: count the label alone, in bold.
+    expect(countOf(html, '<strong class="block text-ink">Approval cancelled</strong>')).toBe(1);
+    expect(html).toContain('Approved by Invented Kiran, 05 Nov 2026, 11:20 IST.');
+    expect(countOf(html, 'File cell BO2')).toBe(1);
+    expect(html).not.toContain('Approved earlier');
+    expect(html).not.toContain('It stays until a new approval replaces it.');
+  });
+
+  it('AC-6: a Lead sees the same, with no button and "Only the Admin can remove it."', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'LEAD');
+    expect(html).toContain('Approval cancelled on 05 Nov 2026, 13:05 IST by Invented Meera.');
+    expect(html).toContain('Only the Admin can remove it.');
+    expect(html).not.toContain('id="review-cancel"');
+    expect(html).not.toContain('Only the Admin can cancel an approval.');
+  });
+
+  it('AC-10 (ux-expert, v0.29): a cancel that did not move the estimate says it stays a Draft, or stays Submitted, and the task does not change', async () => {
+    const draft = render(await current({ approval: { ...STANDING, unlock: UNLOCK, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(draft).toContain('The estimate stays a Draft and its task does not change.');
+    expect(draft).not.toContain('Open queue');
+    const submitted = render(await current({ approval: { ...STANDING, unlock: UNLOCK, cancel: CANCEL } }), undefined, HEADER, 'ADMIN');
+    expect(submitted).toContain('The estimate stays Submitted and its task does not change.');
+    // The unlocked notice gives way to the cancelled one.
+    expect(draft).not.toContain('review-unlocked-notice');
+    expect(draft).not.toContain('Unlocked on');
+    expect(countOf(draft, 'Approval cancelled</strong>')).toBe(1);
+  });
+
+  it('a Submitted estimate whose approval was cancelled from Approved (and then recalculated) says nothing that is no longer true about its status or its queue', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, HEADER, 'ADMIN');
+    expect(html).toContain('Approval cancelled on 05 Nov 2026, 13:05 IST by Invented Meera.');
+    expect(html).not.toContain('The estimate is a Draft');
+    expect(html).not.toContain('Open queue');
+  });
+
+  it('a reason that was not kept draws no reason line; the reason is drawn as text, markup and all', async () => {
+    const none = render(await current({ approval: { ...STANDING, cancel: { ...CANCEL, reason: null } } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(none).not.toContain('Reason:');
+    const markup = render(await current({ approval: { ...STANDING, cancel: { ...CANCEL, reason: '<b>bold</b>' } } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(markup).toContain('Reason: &lt;b&gt;bold&lt;/b&gt;');
+    expect(markup).not.toContain('<b>bold</b>');
+  });
+
+  it('the cancelled price stays whatever the state of the figures: cleared figures change nothing about BO or the notice', async () => {
+    const html = render(await current({ inputsRevision: 4, approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).toContain('Approval cancelled on 05 Nov 2026, 13:05 IST by Invented Meera.');
+  });
+});
+
+describe('STORY-06.13 AC-1, AC-3, AC-6 (UX spec SCR-06 "Approval cancelled (Admin)" and "(Lead)", "Remove price (Admin)", "Price removed")', () => {
+  const DRAFT_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'DRAFT' };
+  const CANCEL = { cancelledAt: new Date('2026-11-05T07:35:00.000Z'), byName: 'Invented Meera', reason: 'The wrong customer was priced.', engineerName: 'Invented Priya' };
+  const STANDING = { price: '12600.00', approverName: 'Invented Kiran' };
+  const REMOVED = { removedAt: new Date('2026-11-05T06:50:00.000Z'), byName: 'Invented Meera' };
+
+  it('AC-1: a cancelled approval gives the Admin a danger button "Remove price" beside the BO tile; it names no dialog text in the first load', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(html).toContain('id="review-remove-price"');
+    expect(countOf(html, '>Remove price</button>')).toBe(1);
+    expect(html).toMatch(/id="review-remove-price"[^>]*class="[^"]*bg-danger|class="[^"]*bg-danger[^"]*"[^>]*id="review-remove-price"/);
+    // The price is still on screen, marked cancelled, and the cancel button is gone.
+    expect(html).toContain('₹ 12,600.00');
+    expect(html).not.toContain('id="review-cancel"');
+    // Nothing of the dialog is in the first load of the page (NFR-009).
+    expect(html).not.toContain('Remove the approved price?');
+    expect(html).not.toContain('Keep the price');
+    expect(html).not.toContain('Your password');
+  });
+
+  it('AC-1: a Lead has no button and sees "Only the Admin can remove it"', async () => {
+    const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'LEAD');
+    expect(html).not.toContain('id="review-remove-price"');
+    expect(html).not.toContain('>Remove price</button>');
+    expect(countOf(html, 'Only the Admin can remove it.')).toBe(1);
+  });
+
+  it('AC-1: it is not offered before a cancel (an approved estimate, an approval kept through an unlock), nor when there is no approval', async () => {
+    const approved = render(await current({ approval: STANDING }), undefined, { ...HEADER, status: 'APPROVED' }, 'ADMIN');
+    expect(approved).not.toContain('id="review-remove-price"');
+    const kept = render(
+      await current({ approval: { ...STANDING, unlock: { unlockedAt: new Date('2026-11-05T06:35:00.000Z'), byName: 'Invented Kiran', reason: null, engineerName: 'Invented Priya' } } }),
+      undefined,
+      DRAFT_HEADER,
+      'ADMIN',
+    );
+    expect(kept).not.toContain('id="review-remove-price"');
+    const none = render(await current(), undefined, HEADER, 'ADMIN');
+    expect(none).not.toContain('id="review-remove-price"');
+  });
+
+  it('AC-3: once the price was removed, BO reads "Not set yet", no price is on the page, and the notice says who, when (IST), that the audit log keeps it and how to set a price again', async () => {
+    for (const role of ['ADMIN', 'LEAD'] as const) {
+      const html = render(await current({ priceRemoved: REMOVED }), undefined, DRAFT_HEADER, role);
+      expect(html).toContain('id="review-price-removed-notice"');
+      expect(html).toContain('tabindex="-1"');
+      expect(html).toContain('The approved price was removed on 05 Nov 2026, 12:20 IST by Invented Meera.');
+      expect(html).toContain('The audit log keeps it.');
+      expect(html).toContain('Approve again, after a Recalculate, to set a price.');
+      expect(html).toContain('Not set yet');
+      expect(html).not.toContain('12,600');
+      expect(html).not.toContain('Approval cancelled');
+      // No button is offered: the price is gone, and nothing is left to cancel or remove.
+      expect(html).not.toContain('id="review-remove-price"');
+      expect(html).not.toContain('id="review-cancel"');
+    }
+  });
+
+  it('AC-3: the notice is not drawn while the price stands, and the same for a never-approved estimate', async () => {
+    for (const options of [{ approval: STANDING }, {}]) {
+      const html = render(await current(options), undefined, DRAFT_HEADER, 'ADMIN');
+      expect(html).not.toContain('id="review-price-removed-notice"');
+      expect(html).not.toContain('The approved price was removed');
+    }
+  });
+
+  it('AC-3: the removed state is the same whatever the state of the figures (cleared figures change nothing)', async () => {
+    const html = render(await current({ inputsRevision: 4, priceRemoved: REMOVED }), undefined, DRAFT_HEADER, 'ADMIN');
+    expect(html).toContain('The approved price was removed on 05 Nov 2026, 12:20 IST by Invented Meera.');
+    expect(html).toContain('Not set yet');
+  });
+});
+
 describe('STORY-06.10 AC-3, AC-4: the quantity warning on the calculation in view', () => {
   // CE-1 has a 0 on its item (Sl. No 1): the one warned row. The words are the UX spec's (v0.30, SCR-06 "Warning on this calculation").
   const WARNED = [{ code: 'QTY_ZERO', nodeId: nodeIdOfRow(CE1.rows, '1'), slNo: '1', label: 'Invented frame' }];
@@ -499,5 +813,62 @@ describe('the header and the customer', () => {
     expect(render(costs)).toContain('Q-2026-0318');
     expect(render(costs)).toContain('Invented Customer');
     expect(render(costs, null)).toContain('Not chosen yet');
+  });
+});
+
+describe('STORY-07.07: Download .xlsx on SCR-06 is the way to SCR-10 while the figures are current', () => {
+  const NOT_YET = 'The Excel download is not available yet.';
+  const NOT_CALCULATED = 'Calculate or Recalculate first. There is no file until a calculation is current.';
+
+  it.each([
+    ['AC-1 Lead, Submitted', 'LEAD', 'SUBMITTED'],
+    ['AC-1 Admin, Submitted', 'ADMIN', 'SUBMITTED'],
+    ['AC-1 Lead, Draft after an unlock', 'LEAD', 'DRAFT'],
+    ['AC-4 Lead, Approved', 'LEAD', 'APPROVED'],
+    ['AC-4 Admin, Approved', 'ADMIN', 'APPROVED'],
+  ] as const)('%s: a link drawn as a button to SCR-10, with no disabled state, no reason and no "not available yet"', async (_name, role, status) => {
+    const html = render(await current(), undefined, { ...HEADER, status }, role);
+    const link = downloadLink(html);
+    expect(link).toContain(`href="${EXPORT_HREF}"`);
+    expect(link).not.toContain(' disabled=');
+    expect(link).not.toContain('aria-disabled');
+    expect(link).not.toContain('aria-describedby');
+    expect(html).toMatch(/<a[^>]*id="review-download"[^>]*>Download \.xlsx<\/a>/);
+    expect(html).not.toMatch(/<button[^>]*id="review-download"/);
+    expect(html).not.toContain('id="review-download-reason"');
+    expect(html).not.toContain(NOT_YET);
+    expect(html).not.toContain(NOT_CALCULATED);
+  });
+
+  it('AC-1: the link is drawn as the other action-bar buttons (full width on a phone, automatic from 768 px) and carries no figure', async () => {
+    const link = downloadLink(render(await current()));
+    expect(link).toContain('w-full md:w-auto');
+    expect(link).not.toMatch(/\d+\.\d\d/);
+  });
+
+  it.each([
+    ['AC-2: never calculated', { calculated: false }],
+    ['AC-2: the total cleared by an input change', { inputsRevision: 4 }],
+  ] as const)('%s: Download stays a disabled button described by its reason, and no link to SCR-10 is drawn', async (_name, options) => {
+    const html = render(await current(options));
+    const button = defined(/<button[^>]*id="review-download"[^>]*>/.exec(html))[0];
+    expect(button).toContain('disabled=""');
+    expect(button).toContain('aria-describedby="review-download-reason"');
+    expect(html).toMatch(/<p[^>]*id="review-download-reason"[^>]*>Calculate or Recalculate first\. There is no file until a calculation is current\.<\/p>/);
+    expect(downloadLink(html)).toBe('');
+    expect(html).not.toContain(EXPORT_HREF);
+    expect(html).not.toContain(NOT_YET);
+  });
+
+  it('AC-7: the reason "not available yet" is gone from the product', () => {
+    const folder = fileURLToPath(new URL('../../src/components/features/estimate-review/', import.meta.url));
+    const files = readdirSync(folder);
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      const source = readFileSync(`${folder}${file}`, 'utf8');
+      expect(source, file).not.toContain(NOT_YET);
+      expect(source, file).not.toContain('DOWNLOAD_NOT_YET_REASON');
+      expect(source, file).not.toContain("STORY-07.03's");
+    }
   });
 });

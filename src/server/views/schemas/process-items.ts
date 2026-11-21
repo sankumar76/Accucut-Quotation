@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { CHOICES, PROPAGATION_MAX_CHOICES, SHOWN_VALUE_MESSAGE, SHOWN_VALUE_PATTERN } from '../../../lib/masters/default-propagation';
 import {
   DECIMAL_TEXT_MESSAGE,
   DECIMAL_TEXT_PATTERN,
@@ -37,7 +38,22 @@ export const processItemSchema = z.strictObject({
   unit: z.string().min(1),
   defaultValue: z.string().min(1),
   usedBy: z.array(formulaUse).readonly(),
+  /** How many listed customers hold a value other than the default (the column of SCR-11, STORY-02.08 AC-10). */
+  customersWithOwnValue: z.number().int().nonnegative(),
 });
+
+/** A customer that holds a value other than the new default, as the save lists it (AC-2): ID, name and current value as decimal text. Restricted. */
+const differingCustomer = z.strictObject({ customerId: z.string().min(1), name: z.string().min(1), value: z.string().min(1) });
+
+/** What a save that changed the default did to the customers (AC-1, AC-2): the old default, how many moved, and who differs. */
+export const propagationSchema = z.strictObject({
+  previousDefault: z.string().min(1),
+  moved: z.number().int().nonnegative(),
+  differing: z.array(differingCustomer).readonly(),
+});
+
+/** The answer of `PATCH /process-items/{id}`: the rate, and `propagation`, which is null when the save did not change the default. */
+export const updatedProcessItemSchema = processItemSchema.extend({ propagation: propagationSchema.nullable() });
 
 export const processItemsResponseSchema = z.strictObject({ processItems: z.array(processItemSchema).readonly() });
 
@@ -49,6 +65,30 @@ export const updateProcessItemBodySchema = z
   .strictObject({ name, unit, defaultValue })
   .partial()
   .refine((body) => Object.keys(body).length > 0, { message: NOTHING_TO_CHANGE_MESSAGE });
+
+const TOO_MANY_CHOICES_MESSAGE = `Choose for at most ${PROPAGATION_MAX_CHOICES.toLocaleString('en-US')} customers at a time.`;
+
+const choice = z.strictObject({
+  customerId: z.uuid('Not a customer ID.').transform((id) => id.toLowerCase()),
+  choice: z.enum(CHOICES, { error: 'Choose apply or keep.' }),
+  shownValue: z.string({ error: SHOWN_VALUE_MESSAGE }).regex(SHOWN_VALUE_PATTERN, SHOWN_VALUE_MESSAGE),
+});
+
+/**
+ * `POST /api/v1/process-items/{id}/propagation` (STORY-02.08 AC-3, AC-4): the default the choices were made for, and one choice per customer with the value it was shown at.
+ * Whether a customer exists, is repeated or has changed since is the service's: a schema cannot see the customers.
+ */
+export const propagationBodySchema = z.strictObject({
+  newDefault: defaultValue,
+  choices: z.array(choice).max(PROPAGATION_MAX_CHOICES, TOO_MANY_CHOICES_MESSAGE),
+});
+
+/** What Save choices answers: how many customers were changed, kept, and skipped because their value changed since they were listed. */
+export const propagationResultSchema = z.strictObject({
+  applied: z.number().int().nonnegative(),
+  kept: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+});
 
 /**
  * The path parameter of `/api/v1/process-items/{id}`: a UUID, or the request is refused as invalid before anything is looked

@@ -1,7 +1,9 @@
 import { ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
+import { readChoiceInput } from '../../lib/estimate/choice-value';
 import { buildFormSections, formFieldById, type FormFieldView, type FormSectionView } from '../../lib/estimate/form-fields';
 import { hiddenFieldIds, storedValueOf, zeroHiddenNumbers } from '../../lib/estimate/hidden-inputs';
-import { completenessOf, type Completeness } from '../../lib/estimate/part-view';
+import { createCompletenessReader } from '../../lib/estimate/part-completeness';
+import type { Completeness } from '../../lib/estimate/part-view';
 import { CHOOSE_TREATMENT_MESSAGE, decodeTreatment, encodeTreatment, isOtherTreatment, readFlagInput, readTreatmentInput, treatmentChoiceOf, type TreatmentChoice } from '../../lib/estimate/treatment-value';
 import { validateNumberInput, validateTextInput } from '../../lib/estimate/validation';
 import type { ConfigDocument } from '../../lib/fields/schema';
@@ -24,7 +26,7 @@ import type { EstimateViewer } from './estimate-service';
  * and a field no story has built yet have no place to go; and only those are read back (`visibleInputs`). **Two values are not a number or a word of the person's**
  * (STORY-05.06; architecture section 5.1 "A treatment on an estimate"): a surface treatment (Z to AG) is `"1"` or `"0"`, and Treatment / Color (G) is stored as the object `{ "id", "text" }`
  * (it travels as that object's JSON text, `treatment-value.ts`). For a listed treatment and for "Not applicable" the server writes `text` from the row's name and ignores the text the client sent; for
- * "Other" it is the typed words, trimmed. A treatment that does not exist is 422 under G, **except** the one the part already holds (it was deleted since): an unchanged G is kept as it is. There is no foreign key. **A save writes only the keys it names**: every other stored key
+ * "Other" it is the typed words, trimmed. **A choice** (STORY-08.08: an input of type `select` with the Admin's `options`) is stored as the text of its option and is 422 under the field when it is none of them. A treatment that does not exist is 422 under G, **except** the one the part already holds (it was deleted since): an unchanged G is kept as it is. There is no foreign key. **A save writes only the keys it names**: every other stored key
  * (another story's field, one the registry moved or hid) stays as it is, whatever its value, and a cleared value removes only its own key.
  *
  * **A save** (`saveInputs`) runs in one transaction, in the order of the tree routes: the estimate is locked (404 when it is not this person's), this person must still
@@ -88,8 +90,13 @@ export interface EstimateInputsDependencies {
    * name (`findTreatmentOptionById`, STORY-05.06): an ID and a name, no lock, because a part refers to a treatment by no key.
    */
   readonly materials: Pick<MasterRepository, 'lockMaterialForUse' | 'findTreatmentOptionById'>;
-  /** The field registry the form is built from (the current version, cached per version by `getCurrentVersion`). */
+  /** The field registry a save is checked against: the latest version (cached per version by `getCurrentVersion`). */
   readonly currentConfiguration: () => Promise<ConfigDocument>;
+  /**
+   * The registry the form of **this estimate** is built from and its stored values are read back with (STORY-08.05; FR-065, FR-077, SPEC section 8.4): the version of the current calculation for an APPROVED
+   * estimate, the latest one for every other. The caller has already checked that this person may open the estimate, so nothing here is asked twice.
+   */
+  readonly configurationFor: (estimateId: string) => Promise<ConfigDocument>;
   readonly transactions: TransactionRunner;
   /** The estimate's ID for a read: 404 when it is not this person's or does not exist. */
   readonly openForRead: (viewer: EstimateViewer, estimateId: string) => Promise<string>;
@@ -104,8 +111,8 @@ export interface EstimateInputs {
   getForm(viewer: EstimateViewer, estimateId: string): Promise<EstimateForm>;
   /** Saves values into a part (`PATCH /api/v1/estimates/{id}/nodes/{nodeId}/inputs`). 404, 409 (not editable, or a stale revision), 422 under each field at fault. */
   saveInputs(viewer: EstimateViewer, estimateId: string, request: SaveInputsRequest): Promise<SavedInputs>;
-  /** Of what is stored in a part, the values of fields of the form, in the registry as it is now: what may be sent back. */
-  visibleInputs(inputs: Readonly<Record<string, unknown>>): Promise<Readonly<Record<string, string>>>;
+  /** Of what is stored in a part of this estimate, the values of fields of its form, in the registry the form is built from (`configurationFor`): what may be sent back. */
+  visibleInputs(estimateId: string, inputs: Readonly<Record<string, unknown>>): Promise<Readonly<Record<string, string>>>;
 }
 
 /**
@@ -127,7 +134,7 @@ function typedValues(document: ConfigDocument, inputs: Readonly<Record<string, u
 }
 
 export function createEstimateInputs(dependencies: EstimateInputsDependencies): EstimateInputs {
-  const { nodes, materials, currentConfiguration, transactions, openForRead, lockForChange, bumpInputsRevision } = dependencies;
+  const { nodes, materials, currentConfiguration, configurationFor, transactions, openForRead, lockForChange, bumpInputsRevision } = dependencies;
 
   /**
    * Treatment / Color: the shape first (`readTreatmentInput`, the browser's own rule), then the row. "Other" keeps the typed words; a listed entry and "Not applicable" take the row's name and
@@ -159,6 +166,9 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
         // saves cannot wait on each other's material.
         return (await materials.lockMaterialForUse(id, tx)) ? { ok: true, value: id } : { ok: false, message: CHOOSE_MATERIAL_MESSAGE };
       }
+      case 'choice':
+        // The list is the registry's, read on the server (`formFieldById`): the browser's list is not trusted. A value no longer in it is kept only when it is sent back unchanged (STORY-08.08 AC-2).
+        return readChoiceInput(typed, field.rule.options, stored);
       case 'treatment':
         return readTreatment(typed, stored);
       case 'flag':
@@ -186,13 +196,14 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
   return {
     async getForm(viewer, estimateId) {
       const id = await openForRead(viewer, estimateId);
-      const [document, written] = await Promise.all([currentConfiguration(), nodes.lastWrittenAt(id)]);
+      const [document, written] = await Promise.all([configurationFor(id), nodes.lastWrittenAt(id)]);
       return { sections: buildFormSections(document), lastSavedAt: written === null ? null : written.toISOString() };
     },
 
     async saveInputs(viewer, estimateId, request) {
       // A registry version never changes, so it is read before the transaction: it holds neither a second connection nor the estimate's lock while it is read (review SQR-03).
       const document = await currentConfiguration();
+      const completenessOf = createCompletenessReader(document);
       return transactions.run(async (tx) => {
         const id = await lockForChange(viewer, estimateId, tx);
         const part = await nodes.findNode(id, request.nodeId, tx);
@@ -220,20 +231,18 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
         // A hidden number set to 0 by the rule is part of a write that a change of a shown field makes (Fasteners becoming "None" is one), so it is a real change then and raises both revisions with it.
         const changed = [...changes.keys()].some((fieldId) => !hidden.has(fieldId) && !sameValue(part.inputs[fieldId] ?? null, next[fieldId] ?? null));
         if (!changed) {
-          const unchanged = typedValues(document, part.inputs);
-          return { id: part.id, revision: part.revision, completeness: completenessOf(unchanged), inputs: unchanged };
+          return { id: part.id, revision: part.revision, completeness: completenessOf(part.inputs), inputs: typedValues(document, part.inputs) };
         }
         // The write is conditional on the revision that was read, so a writer that skipped the estimate's lock is a 409 here and not a lost update (review SQR-02).
         const saved = await nodes.saveInputs(id, part.id, part.revision, next, tx);
         if (saved === null) throw new ConflictError(PART_CHANGED_MESSAGE, { code: PART_CHANGED_CODE });
         await bumpInputsRevision(id, tx);
-        const visible = typedValues(document, saved.inputs);
-        return { id: saved.id, revision: saved.revision, completeness: completenessOf(visible), inputs: visible };
+        return { id: saved.id, revision: saved.revision, completeness: completenessOf(saved.inputs), inputs: typedValues(document, saved.inputs) };
       });
     },
 
-    async visibleInputs(inputs) {
-      return typedValues(await currentConfiguration(), inputs);
+    async visibleInputs(estimateId, inputs) {
+      return typedValues(await configurationFor(estimateId), inputs);
     },
   };
 }

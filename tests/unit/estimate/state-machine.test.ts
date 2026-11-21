@@ -29,6 +29,9 @@ const ALLOWED: ReadonlyArray<{ status: EstimateStatus; event: EstimateEvent; to:
   { status: 'APPROVED', event: 'UNLOCK', to: 'DRAFT', roles: ['LEAD', 'ADMIN'] },
   { status: 'APPROVED', event: 'CANCEL', to: 'DRAFT', roles: ['ADMIN'] },
   { status: 'APPROVED', event: 'EXPORT', to: 'APPROVED', roles: ['LEAD', 'ADMIN'] },
+  // STORY-06.12 AC-10: an approval kept through an unlock is cancelled on a Draft or a Submitted estimate, and the status stays. Admin only.
+  { status: 'DRAFT', event: 'CANCEL', to: 'DRAFT', roles: ['ADMIN'] },
+  { status: 'SUBMITTED', event: 'CANCEL', to: 'SUBMITTED', roles: ['ADMIN'] },
 ];
 
 /** The reason each refused pair names, for a role that may apply the event at all. */
@@ -36,11 +39,9 @@ const REFUSED: ReadonlyArray<{ status: EstimateStatus; event: EstimateEvent; rea
   { status: 'DRAFT', event: 'EDIT', reason: 'NOT_SUBMITTED' },
   { status: 'DRAFT', event: 'APPROVE', reason: 'NOT_SUBMITTED' },
   { status: 'DRAFT', event: 'UNLOCK', reason: 'NOT_APPROVED' },
-  { status: 'DRAFT', event: 'CANCEL', reason: 'NOT_APPROVED' },
   { status: 'DRAFT', event: 'EXPORT', reason: 'NOT_APPROVED' },
   { status: 'SUBMITTED', event: 'CALCULATE', reason: 'ALREADY_SUBMITTED' },
   { status: 'SUBMITTED', event: 'UNLOCK', reason: 'NOT_APPROVED' },
-  { status: 'SUBMITTED', event: 'CANCEL', reason: 'NOT_APPROVED' },
   { status: 'SUBMITTED', event: 'EXPORT', reason: 'NOT_APPROVED' },
   { status: 'APPROVED', event: 'CALCULATE', reason: 'APPROVED_IS_LOCKED' },
   { status: 'APPROVED', event: 'RECALCULATE', reason: 'APPROVED_IS_LOCKED' },
@@ -60,12 +61,12 @@ const EVENT_ROLES: Readonly<Record<EstimateEvent, ReadonlyArray<RoleName>>> = {
 };
 
 describe('AC-1: every (status, event) pair is decided', () => {
-  it('the table covers all 21 pairs exactly once: 8 allowed and 13 refused', () => {
+  it('the table covers all 21 pairs exactly once: 10 allowed and 11 refused', () => {
     const pairs = [...ALLOWED, ...REFUSED].map((row) => `${row.status}/${row.event}`);
     expect(new Set(pairs).size).toBe(pairs.length);
     expect(pairs).toHaveLength(ESTIMATE_STATUSES.length * ESTIMATE_EVENTS.length);
-    expect(ALLOWED).toHaveLength(8);
-    expect(REFUSED).toHaveLength(13);
+    expect(ALLOWED).toHaveLength(10);
+    expect(REFUSED).toHaveLength(11);
   });
 
   it.each(ALLOWED)('$status + $event leads to $to for $roles, and for no other role', ({ status, event, to, roles }) => {

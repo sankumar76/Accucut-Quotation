@@ -74,6 +74,10 @@ function Get-AccucutPaths {
         StateFile      = Join-Path $config 'install-state.json'
         BackupPgpass   = Join-Path $config 'backup.pgpass'
         BackupSettings = Join-Path $config 'backup-settings.json'
+        RestorePgpass  = Join-Path $config 'restore.pgpass'
+        JeaConfig      = Join-Path $config 'jea'
+        RestoreLog     = Join-Path (Join-Path $Root 'logs') 'restore.log'
+        JeaLogs        = Join-Path (Join-Path $Root 'logs') 'jea'
     }
 }
 
@@ -594,7 +598,7 @@ function Expand-AccucutTemplate {
             $unknown.Add($name)
             return $match.Value
         })
-    if ($unknown.Count -gt 0) { throw "The template uses a name that has no value: $(($unknown | Select-Object -Unique) -join ', ')." }
+    if ($unknown.Count -gt 0) { throw "The template uses a name that has no value: $(($unknown | Microsoft.PowerShell.Utility\Select-Object -Unique) -join ', ')." }
     return $result
 }
 
@@ -808,6 +812,174 @@ function Wait-AccucutHealth {
         if ((Get-Date) -ge $deadline) { return $false }
         Start-Sleep -Seconds $IntervalSeconds
     }
+}
+
+function Assert-AccucutProxyOrigin {
+    <# With a proxy in front, people reach the portal over https and the session cookie is Secure-only, so APP_ORIGIN must be the https address the proxy serves (architecture section 8 P1, #576). Throws, and nothing has been changed yet, when it is not. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Origin)
+
+    if ($Origin -notmatch '^https://[^/\s?#]+$') {
+        throw "With -WithProxy, APP_ORIGIN must be the https address the proxy serves, such as https://portal.example.test (a scheme and a host, no path); it is '$Origin'. The proxy ends TLS and the session cookie is Secure-only: over plain http nobody could sign in. Nothing was changed."
+    }
+}
+
+function Get-AccucutHttpResponse {
+    <#
+    One GET that never follows a redirect, for the proxy checks: the status (0 when nothing answered), every header (names in lower case, each with its values) and the reason when nothing answered.
+    A certificate that Windows does not trust counts as nothing answering, which is what check C1 asks for.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [hashtable]$RequestHeaders = @{},
+        [int]$TimeoutSeconds = 15
+    )
+
+    $result = @{ Status = 0; Headers = @{}; Error = '' }
+    $response = $null
+    try {
+        $request = [System.Net.HttpWebRequest]::Create($Url)
+        $request.Method = 'GET'
+        $request.Timeout = $TimeoutSeconds * 1000
+        $request.AllowAutoRedirect = $false
+        $request.UserAgent = 'AccucutInstallCheck'
+        foreach ($name in $RequestHeaders.Keys) { $request.Headers[[string]$name] = [string]$RequestHeaders[$name] }
+        $response = $request.GetResponse()
+    }
+    catch [System.Net.WebException] {
+        $response = $_.Exception.Response
+        if ($null -eq $response) {
+            $result.Error = $_.Exception.Message
+            return $result
+        }
+    }
+    try {
+        $result.Status = [int]$response.StatusCode
+        foreach ($key in $response.Headers.AllKeys) { $result.Headers[$key.ToLowerInvariant()] = @($response.Headers.GetValues($key)) }
+    }
+    finally { $response.Close() }
+    return $result
+}
+
+function Test-AccucutProxyRedirect {
+    <# Check C2 (P1): plain http goes to the https address. Returns the problems; none means it passes. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][int]$Status,
+        [AllowEmptyString()][string]$Location = '',
+        [Parameter(Mandatory)][string]$Origin
+    )
+
+    $problems = [System.Collections.Generic.List[string]]::new()
+    $expected = "$Origin/sign-in"
+    if ($Status -ne 301 -and $Status -ne 308) { $problems.Add("plain http answered $Status, not a redirect (301 or 308) to https") }
+    elseif ($Location -ne $expected) { $problems.Add("plain http was sent to '$Location', not to '$expected'") }
+    return @($problems)
+}
+
+function Test-AccucutProxyHeaders {
+    <#
+    Check C3 (P3): the headers of the sign-in page through the proxy. -Headers maps a lower-case name to its values. HSTS exactly once with the one-year value, the portal's own
+    Content-Security-Policy with frame-ancestors 'none', nosniff, a Referrer-Policy and a Permissions-Policy passed through, and no Server and no X-Powered-By.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][hashtable]$Headers)
+
+    $problems = [System.Collections.Generic.List[string]]::new()
+    $hsts = @()
+    if ($Headers.ContainsKey('strict-transport-security')) { $hsts = @($Headers['strict-transport-security']) }
+    if ($hsts.Count -ne 1 -or [string]$hsts[0] -ne 'max-age=31536000') { $problems.Add('Strict-Transport-Security must be there once, as max-age=31536000') }
+    $policy = ''
+    if ($Headers.ContainsKey('content-security-policy')) { $policy = (@($Headers['content-security-policy']) -join ',') }
+    if ($policy -notmatch "frame-ancestors 'none'") { $problems.Add("the portal's Content-Security-Policy with frame-ancestors 'none' did not come through") }
+    if (-not $Headers.ContainsKey('x-content-type-options') -or (@($Headers['x-content-type-options']) -join ',') -ne 'nosniff') { $problems.Add('X-Content-Type-Options: nosniff did not come through') }
+    if (-not $Headers.ContainsKey('referrer-policy')) { $problems.Add('Referrer-Policy did not come through') }
+    if (-not $Headers.ContainsKey('permissions-policy')) { $problems.Add('Permissions-Policy did not come through') }
+    if ($Headers.ContainsKey('server')) { $problems.Add('a Server header is still sent: the proxy must remove it') }
+    if ($Headers.ContainsKey('x-powered-by')) { $problems.Add('an X-Powered-By header is still sent: the proxy must remove it') }
+    return @($problems)
+}
+
+function Test-AccucutClientAddressSeen {
+    <# Check C5 (P2): the address the portal worked out (X-Client-Address-Seen of /api/health) must be a real address, not the one this request pretended to forward. #>
+    [CmdletBinding()]
+    param(
+        [AllowEmptyString()][string]$Seen = '',
+        [Parameter(Mandatory)][string]$Sent
+    )
+
+    $problems = [System.Collections.Generic.List[string]]::new()
+    $parsed = $null
+    if ([string]::IsNullOrEmpty($Seen)) { $problems.Add('the health page sent no X-Client-Address-Seen header') }
+    elseif ($Seen -eq 'none') { $problems.Add('the portal found no usable address: the proxy must write the connecting address as the last entry of X-Forwarded-For') }
+    elseif ($Seen -eq $Sent) { $problems.Add("the portal took the address this request pretended to forward ($Sent): the proxy passes on an address a browser sent, so the sign-in limits can be dodged") }
+    elseif ($Seen -match '^\d+\.\d+\.\d+\.\d+:\d+$' -or -not [System.Net.IPAddress]::TryParse($Seen, [ref]$parsed)) { $problems.Add("the portal worked out '$Seen', which is not an address without a port: the proxy must not add a port to X-Forwarded-For") }
+    return @($problems)
+}
+
+function Write-AccucutProxyCheckResult {
+    <# Logs one proxy check: passed, or each problem as a warning. Returns true when it passed. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Id,
+        [Parameter(Mandatory)][string]$Title,
+        [string[]]$Problems = @(),
+        [string]$LogFile
+    )
+
+    if (@($Problems).Count -eq 0) {
+        Write-AccucutLog -Message "Proxy check $Id ($Title): passed." -LogFile $LogFile
+        return $true
+    }
+    foreach ($problem in $Problems) { Write-AccucutLog -Message "Proxy check $Id ($Title): FAILED, $problem." -Level Warning -LogFile $LogFile }
+    return $false
+}
+
+function Invoke-AccucutProxyChecks {
+    <#
+    The end of an install with -WithProxy: checks C2, C3 and C5 of the install guide ("Reverse proxy") against -Origin, as the portal's own server sees it. Returns the ids of the checks that
+    did not pass (none when all passed). It never throws for a failed check: the portal is installed and running, and the proxy may not have been installed yet, so the install says what is missing and the IT person runs the
+    checklist again after installing the proxy. C1 (a trusted certificate) is in all three, since a certificate Windows does not trust answers nothing.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Origin,
+        [string]$LogFile
+    )
+
+    $failed = [System.Collections.Generic.List[string]]::new()
+    $address = [System.Uri]$Origin
+    $forged = '203.0.113.7'
+
+    if ($address.IsDefaultPort) {
+        $plain = Get-AccucutHttpResponse -Url "http://$($address.Host)/sign-in"
+        $location = ''
+        if ($plain.Headers.ContainsKey('location')) { $location = [string](@($plain.Headers['location'])[0]) }
+        $problems = @(Test-AccucutProxyRedirect -Status $plain.Status -Location $location -Origin $Origin)
+        if ($plain.Status -eq 0) { $problems = @("nothing answered on plain http at $($address.Host) ($($plain.Error))") }
+        if (-not (Write-AccucutProxyCheckResult -Id 'C2' -Title 'http goes to https' -Problems $problems -LogFile $LogFile)) { $failed.Add('C2') }
+    }
+    else {
+        Write-AccucutLog -Message "Proxy check C2 (http goes to https): skipped, because $Origin has a port. Check it by hand (README, Reverse proxy)." -Level Warning -LogFile $LogFile
+    }
+
+    $page = Get-AccucutHttpResponse -Url "$Origin/sign-in"
+    if ($page.Status -eq 0) { $problems = @("nothing answered at $Origin/sign-in ($($page.Error))") }
+    elseif ($page.Status -ne 200) { $problems = @("the sign-in page answered $($page.Status), not 200") }
+    else { $problems = @(Test-AccucutProxyHeaders -Headers $page.Headers) }
+    if (-not (Write-AccucutProxyCheckResult -Id 'C3' -Title 'the headers' -Problems $problems -LogFile $LogFile)) { $failed.Add('C3') }
+
+    $health = Get-AccucutHttpResponse -Url "$Origin/api/health" -RequestHeaders @{ 'X-Forwarded-For' = $forged }
+    if ($health.Status -eq 0) { $problems = @("nothing answered at $Origin/api/health ($($health.Error))") }
+    else {
+        $seen = ''
+        if ($health.Headers.ContainsKey('x-client-address-seen')) { $seen = [string](@($health.Headers['x-client-address-seen'])[0]) }
+        $problems = @(Test-AccucutClientAddressSeen -Seen $seen -Sent $forged)
+    }
+    if (-not (Write-AccucutProxyCheckResult -Id 'C5' -Title 'the real address, last' -Problems $problems -LogFile $LogFile)) { $failed.Add('C5') }
+
+    return @($failed)
 }
 
 function Assert-AccucutFreeSpace {
@@ -1805,7 +1977,7 @@ function Get-AccucutBackupKeepSet {
         [int]$Count = 4
     )
 
-    $newest = @($Copy | Sort-Object -Property @{ Expression = { if ($null -eq $_.CreatedUtc) { [datetime]::MinValue } else { $_.CreatedUtc } } }, Name -Descending | Select-Object -First $Count)
+    $newest = @($Copy | Sort-Object -Property @{ Expression = { if ($null -eq $_.CreatedUtc) { [datetime]::MinValue } else { $_.CreatedUtc } } }, Name -Descending | Microsoft.PowerShell.Utility\Select-Object -First $Count)
     return @($newest | ForEach-Object { $_.Name })
 }
 
@@ -1899,13 +2071,14 @@ function Invoke-AccucutBackupPipe {
         [Parameter(Mandatory)][int]$Port,
         [Parameter(Mandatory)][string]$Database,
         [Parameter(Mandatory)][string]$PassFile,
-        [Parameter(Mandatory)][string]$OutputPath
+        [Parameter(Mandatory)][string]$OutputPath,
+        [string]$DatabaseRole = $script:BackupDatabaseRole
     )
 
     if ($Recipient -cnotmatch $script:AgeRecipientPattern) { throw 'The age recipient is not a public key (age1...).' }
     $dumpInfo = New-Object System.Diagnostics.ProcessStartInfo
     $dumpInfo.FileName = $PgDumpPath
-    $dumpInfo.Arguments = ConvertTo-AccucutArgumentString -ArgumentList @('--format=custom', '--no-password', '--host', $DbHost, '--port', [string]$Port, '--username', $script:BackupDatabaseRole, '--dbname', $Database)
+    $dumpInfo.Arguments = ConvertTo-AccucutArgumentString -ArgumentList @('--format=custom', '--no-password', '--host', $DbHost, '--port', [string]$Port, '--username', $DatabaseRole, '--dbname', $Database)
     # Only the password file reaches pg_dump: a PGPASSWORD (or PGHOST, PGUSER, PGSERVICE) set on the machine or for the account must not.
     Clear-AccucutPgEnvironment -EnvironmentVariables $dumpInfo.EnvironmentVariables
     $dumpInfo.EnvironmentVariables['PGPASSFILE'] = $PassFile
@@ -2036,7 +2209,8 @@ function Add-AccucutJobRun {
         [Parameter(Mandatory)][ValidatePattern('^[a-z][a-z-]{1,31}$', Options = 'None')][string]$Job,
         [Parameter(Mandatory)][datetime]$StartedUtc,
         [Parameter(Mandatory)][datetime]$FinishedUtc,
-        [Parameter(Mandatory)][hashtable]$Result
+        [Parameter(Mandatory)][hashtable]$Result,
+        [string]$DatabaseRole = $script:BackupDatabaseRole
     )
 
     $inv = [System.Globalization.CultureInfo]::InvariantCulture
@@ -2045,7 +2219,7 @@ function Add-AccucutJobRun {
     $arguments = @(
         '-X', '-w', '-q', '-v', 'ON_ERROR_STOP=1',
         '-v', "job=$Job", '-v', "started=$($StartedUtc.ToUniversalTime().ToString('o', $inv))", '-v', "finished=$($FinishedUtc.ToUniversalTime().ToString('o', $inv))", '-v', "result=$json",
-        '--host', $DbHost, '--port', [string]$Port, '--username', $script:BackupDatabaseRole, '--dbname', $Database, '--file', '-'
+        '--host', $DbHost, '--port', [string]$Port, '--username', $DatabaseRole, '--dbname', $Database, '--file', '-'
     )
     [void](Invoke-AccucutNative -FilePath $PsqlPath -ArgumentList $arguments -Environment @{ PGPASSFILE = $PassFile; PGCONNECT_TIMEOUT = '15' } -ClearPgEnvironment -StdIn $sql)
 }
@@ -2058,10 +2232,11 @@ function Get-AccucutDatabaseInfo {
         [Parameter(Mandatory)][string]$PassFile,
         [Parameter(Mandatory)][string]$DbHost,
         [Parameter(Mandatory)][int]$Port,
-        [Parameter(Mandatory)][string]$Database
+        [Parameter(Mandatory)][string]$Database,
+        [string]$DatabaseRole = $script:BackupDatabaseRole
     )
 
-    $arguments = @('-X', '-w', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '--host', $DbHost, '--port', [string]$Port, '--username', $script:BackupDatabaseRole, '--dbname', $Database,
+    $arguments = @('-X', '-w', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '--host', $DbHost, '--port', [string]$Port, '--username', $DatabaseRole, '--dbname', $Database,
         '--command', "SELECT concat(current_setting('server_version'), '|', pg_database_size(current_database()))")
     $answer = (Invoke-AccucutNative -FilePath $PsqlPath -ArgumentList $arguments -Environment @{ PGPASSFILE = $PassFile; PGCONNECT_TIMEOUT = '15' } -ClearPgEnvironment).Output.Trim()
     if ($answer -notmatch '^([0-9][0-9A-Za-z .()_-]{0,40})\|(\d{1,18})$') { throw 'The database did not answer with its version and size.' }
@@ -2075,6 +2250,8 @@ function Invoke-AccucutBackup {
     copies past 2 calendar years (never the newest 4, never a newer copy to make room); one job_runs row. On any failure a failed row is written (when the
     database answers), the temporary file is removed and the error is thrown, so the caller exits non-zero.
     -Program holds the full paths already checked by the caller: PgDump, Psql, Age.
+    -SkipPrune makes the copy and prunes nothing. The safety copy of a restore uses it: that copy is one more among the newest, so a pruning run after it could delete
+    the very copy the Admin chose (a copy just past 2 years, pushed out of the newest 4 by the safety copy itself) before it is read. The next weekly backup prunes.
     #>
     [CmdletBinding()]
     param(
@@ -2083,7 +2260,10 @@ function Invoke-AccucutBackup {
         [Parameter(Mandatory)][hashtable]$Program,
         [Parameter(Mandatory)][ValidateSet('weekly', 'release')][string]$Reason,
         [string]$ReleaseTag = '',
-        [string]$LogFile
+        [string]$LogFile,
+        [string]$PassFile,
+        [string]$DatabaseRole = $script:BackupDatabaseRole,
+        [switch]$SkipPrune
     )
 
     $inv = [System.Globalization.CultureInfo]::InvariantCulture
@@ -2094,12 +2274,13 @@ function Invoke-AccucutBackup {
     $final = [System.IO.Path]::Combine($directory, "$base.age")
     $part = [System.IO.Path]::Combine($directory, "$base.age.part")
     $manifestPath = [System.IO.Path]::Combine($directory, "$base.manifest.json")
-    $row = @{ DbHost = $Settings.PgHost; Port = $Settings.PgPort; Database = $Settings.Database; PsqlPath = $Program.Psql; PassFile = $Paths.BackupPgpass }
+    if ([string]::IsNullOrEmpty($PassFile)) { $PassFile = $Paths.BackupPgpass }
+    $row = @{ DbHost = $Settings.PgHost; Port = $Settings.PgPort; Database = $Settings.Database; PsqlPath = $Program.Psql; PassFile = $PassFile; DatabaseRole = $DatabaseRole }
     $space = $null
     try {
-        $info = Get-AccucutDatabaseInfo -PsqlPath $Program.Psql -PassFile $Paths.BackupPgpass -DbHost $Settings.PgHost -Port $Settings.PgPort -Database $Settings.Database
+        $info = Get-AccucutDatabaseInfo -PsqlPath $Program.Psql -PassFile $PassFile -DatabaseRole $DatabaseRole -DbHost $Settings.PgHost -Port $Settings.PgPort -Database $Settings.Database
         $existing = @(Get-AccucutBackupCopy -Directory $directory)
-        $last = @($existing | Where-Object { $_.Verified } | Select-Object -Last 1)
+        $last = @($existing | Where-Object { $_.Verified } | Microsoft.PowerShell.Utility\Select-Object -Last 1)
         $lastBytes = 0
         if ($last.Count -eq 1) { $lastBytes = $last[0].SizeBytes }
         $space = Get-AccucutVolumeSpace -Path $directory
@@ -2114,7 +2295,7 @@ function Invoke-AccucutBackup {
         }
         if ([System.IO.File]::Exists($final) -or [System.IO.File]::Exists($manifestPath)) { throw "A copy named '$base' already exists (two backups started in the same second). Nothing was changed." }
 
-        $size = Invoke-AccucutBackupPipe -PgDumpPath $Program.PgDump -AgePath $Program.Age -Recipient $Settings.AgeRecipient -DbHost $Settings.PgHost -Port $Settings.PgPort -Database $Settings.Database -PassFile $Paths.BackupPgpass -OutputPath $part
+        $size = Invoke-AccucutBackupPipe -PgDumpPath $Program.PgDump -AgePath $Program.Age -Recipient $Settings.AgeRecipient -DbHost $Settings.PgHost -Port $Settings.PgPort -Database $Settings.Database -PassFile $PassFile -OutputPath $part -DatabaseRole $DatabaseRole
         $sha = Get-AccucutFileSha256 -Path $part
         $manifest = [ordered]@{
             file              = "$base.age"
@@ -2132,8 +2313,10 @@ function Invoke-AccucutBackup {
         catch { [System.IO.File]::Delete($manifestPath); throw }
 
         $pruned = @()
-        try { $pruned = @(Invoke-AccucutBackupPrune -Directory $directory) }
-        catch { Write-AccucutLog -Message "Pruning old copies stopped: $($_.Exception.Message)" -Level Warning -LogFile $LogFile }
+        if (-not $SkipPrune) {
+            try { $pruned = @(Invoke-AccucutBackupPrune -Directory $directory) }
+            catch { Write-AccucutLog -Message "Pruning old copies stopped: $($_.Exception.Message)" -Level Warning -LogFile $LogFile }
+        }
         $after = Get-AccucutVolumeSpace -Path $directory
         $ok = @{ status = 'ok'; reason = $Reason; sizeBytes = $size; freeBytes = $after.FreeBytes; totalBytes = $after.TotalBytes; pruned = $pruned.Count }
         Add-AccucutJobRun @row -Job 'backup' -StartedUtc $started -FinishedUtc ([datetime]::UtcNow) -Result $ok
@@ -2188,7 +2371,7 @@ function Invoke-AccucutBackupPrune {
     return $removed.ToArray()
 }
 
-function Clear-AccucutCopies {
+function Invoke-AccucutClearCopies {
     <#
     The Admin's guided clear (AC-6; architecture 9.5). Lists the copies oldest first with date and size, always keeps the newest 4, asks the Admin to TYPE the date
     of the newest copy to remove, removes nothing if that date is not the date of a copy that may be removed, shows how much space the removal frees, asks once more,
@@ -2291,6 +2474,1020 @@ function Clear-AccucutCopies {
 
 #endregion
 
+#region Restore (STORY-10.11; architecture sections 9.5 and 9.9; ADR-015 Amendment 3 point 4 and the forward note for 10.11)
+
+# The database role of the guided restore (deploy/db/create-restore-role.psql), the role the data belongs to, and the names of the databases a restore makes.
+# A restore makes accucut_new_<time>, fills it from the copy, then swaps names: the live database becomes accucut_old_<time> and the new one takes its name.
+$script:RestoreDatabaseRole = 'accucut_restore'
+$script:RestoreDatabasePattern = '^accucut_(new|old|failed)_\d{14}$'
+$script:RestoreStampFormat = 'yyyyMMddHHmmss'
+
+# What the Admin's key looks like (age's secret key: the text AGE, SECRET, KEY and 1 joined by dashes, then 58 upper-case letters and digits; written in two pieces so that this file never holds a key-shaped text) and what a decrypted custom-format dump starts with.
+$script:AgeSecretKeyPattern = '^AGE-SECRET-' + 'KEY-1[0-9A-Z]{58}$'
+$script:DumpMagicText = 'PGDMP'
+
+# The Windows Application event ids of the restore (source Accucut, like the backup's 1000 and 1010 to 1012): 1100 done; 1101 stopped by the Admin;
+# 1110 a check failed, nothing was done; 1111 it failed and the portal runs on the old database; 1112 it failed after the swap and was put back.
+$script:RestoreEventDone = 1100
+$script:RestoreEventCancelled = 1101
+$script:RestoreEventChecksFailed = 1110
+$script:RestoreEventFailed = 1111
+$script:RestoreEventFailedAfterSwap = 1112
+
+function New-AccucutRestoreStop {
+    <# An error that carries a code (accucutCode), so that no caller has to read the wording of a message. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Code,
+        [Parameter(Mandatory)][string]$Message
+    )
+
+    $exception = [System.InvalidOperationException]::new($Message)
+    $exception.Data['accucutCode'] = $Code
+    return $exception
+}
+
+function Read-AccucutKeyInput {
+    <# The backup key, typed or pasted without echo, as a SecureString (a function of its own so that Pester can mock it). Nothing is ever shown or written. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Prompt)
+
+    return (Read-Host -Prompt $Prompt -AsSecureString)
+}
+
+function ConvertFrom-AccucutSecureString {
+    <# A SecureString as text, for the moment it takes to check it and write it to a program's standard input. The unmanaged copy is cleared at once. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][System.Security.SecureString]$Secure)
+
+    $pointer = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secure)
+    try { return [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
+    finally { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+}
+
+function Read-AccucutPgpassPassword {
+    <# The password of -Role in a PGPASSFILE (host:port:database:user:password; a backslash escapes the next character). The caller has trust-checked the file. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Role
+    )
+
+    if (([System.IO.FileInfo]::new($Path)).Length -gt 4096) { throw "The password file '$Path' is too large." }
+    foreach ($line in [System.IO.File]::ReadAllLines($Path)) {
+        $fields = New-Object System.Collections.Generic.List[string]
+        $field = New-Object System.Text.StringBuilder
+        for ($i = 0; $i -lt $line.Length; $i++) {
+            $c = $line[$i]
+            if ($c -eq '\' -and $i + 1 -lt $line.Length) { $i++; [void]$field.Append($line[$i]); continue }
+            if ($c -eq ':' -and $fields.Count -lt 4) { $fields.Add($field.ToString()); [void]$field.Clear(); continue }
+            [void]$field.Append($c)
+        }
+        $fields.Add($field.ToString())
+        if ($fields.Count -eq 5 -and $fields[3] -eq $Role -and $fields[4].Length -gt 0) {
+            Register-AccucutSecret -Value $fields[4]
+            return $fields[4]
+        }
+    }
+    throw "The password file '$Path' holds no password for the role '$Role'."
+}
+
+function Read-AccucutInstallState {
+    <# What the install wrote to config\install-state.json that a restore needs: the port of the portal and the full path of node.exe. Nothing else is trusted from it. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (([System.IO.FileInfo]::new($Path)).Length -gt 16384) { throw 'The install state file is too large.' }
+    $state = [System.IO.File]::ReadAllText($Path) | ConvertFrom-Json
+    $names = @($state.PSObject.Properties.Name)
+    foreach ($required in 'port', 'nodeExe') { if ($names -notcontains $required) { throw "The install state file has no '$required'." } }
+    $port = 0
+    if (-not [int]::TryParse([string]$state.port, [ref]$port) -or $port -lt 1 -or $port -gt 65535) { throw "The install state file has a port that is not allowed." }
+    if ([string]$state.nodeExe -notmatch '^[A-Za-z]:\\[^"&|<>^%\r\n]{1,240}\.exe$' -or [string]$state.nodeExe -match '\.\.') { throw 'The install state file has a node.exe path that is not allowed.' }
+    return [pscustomobject]@{ Port = $port; NodeExe = [string]$state.nodeExe }
+}
+
+function Test-AccucutRestoreVersion {
+    <# The manifest's PostgreSQL version against the server's (architecture 9.5: restore into the same or a newer PostgreSQL, never an older one). Compares the major number. #>
+    [CmdletBinding()]
+    param(
+        [AllowNull()][AllowEmptyString()][string]$ManifestVersion,
+        [AllowNull()][AllowEmptyString()][string]$ServerVersion
+    )
+
+    $copy = ConvertTo-AccucutVersion -Text $ManifestVersion
+    $server = ConvertTo-AccucutVersion -Text $ServerVersion
+    if ($null -eq $copy) { return [pscustomobject]@{ Ok = $false; Message = 'The manifest of this copy does not say which PostgreSQL version made it, so it cannot be checked against this server.' } }
+    if ($null -eq $server) { return [pscustomobject]@{ Ok = $false; Message = 'The version of this server''s PostgreSQL could not be read.' } }
+    if ($copy.Major -gt $server.Major) {
+        return [pscustomobject]@{ Ok = $false; Message = "This copy was made by PostgreSQL $($copy.Major), and this server runs PostgreSQL $($server.Major). A copy can be restored only into the same or a newer PostgreSQL." }
+    }
+    return [pscustomobject]@{ Ok = $true; Message = "PostgreSQL $($copy.Major) copy, PostgreSQL $($server.Major) server." }
+}
+
+function Test-AccucutRestoreRoom {
+    <#
+    The free-space check that comes before anything is touched (AC-1). A restore needs room for the safety copy of the database as it is now (the last copy plus 10 %, as the
+    backup plans it, or the database's size when there is no copy) and for the new database (the larger of the database's size now and twice the chosen copy: a copy is
+    compressed, the database is not, so this is an estimate), and 20 % of the volume must still be free afterwards. It deletes nothing.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][int64]$FreeBytes,
+        [Parameter(Mandatory)][int64]$TotalBytes,
+        [Parameter(Mandatory)][int64]$LastCopyBytes,
+        [Parameter(Mandatory)][int64]$DatabaseBytes,
+        [Parameter(Mandatory)][int64]$CopyBytes
+    )
+
+    $basis = $LastCopyBytes
+    if ($basis -le 0) { $basis = $DatabaseBytes }
+    $safety = [int64][math]::Ceiling($basis * (1 + $script:BackupGrowthMargin))
+    $restored = [int64][math]::Max($DatabaseBytes, 2 * $CopyBytes)
+    $needed = $safety + $restored
+    $minimum = [int64][math]::Ceiling($TotalBytes * $script:BackupKeepFreeFraction)
+    $ok = ($TotalBytes -gt 0 -and ($FreeBytes - $needed) -ge $minimum)
+    $message = ''
+    if (-not $ok) {
+        $message = "There is not enough free disk space for a restore: $(Format-AccucutSize -Bytes $FreeBytes) is free, a restore needs about $(Format-AccucutSize -Bytes $needed) (a safety copy and the restored database), and 20 % of the disk ($(Format-AccucutSize -Bytes $minimum)) must stay free. Clear old copies with Clear-AccucutCopies, or ask your IT person for a bigger disk."
+    }
+    return [pscustomobject]@{ Ok = $ok; FreeBytes = $FreeBytes; TotalBytes = $TotalBytes; NeededBytes = $needed; MinimumFreeBytes = $minimum; Message = $message }
+}
+
+function Write-AccucutRestoreEvent {
+    <# One event in the Application log (source Accucut), outside the database, so that a rollback cannot erase it. Never throws: a missing source must not turn a good restore into a failure. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateSet('Information', 'Error')][string]$EntryType,
+        [Parameter(Mandatory)][int]$EventId,
+        [Parameter(Mandatory)][string]$Message
+    )
+
+    $text = (Hide-AccucutSecrets -Text $Message) -replace '[\x00-\x08\x0B-\x1F]', ' '
+    if ($text.Length -gt 1000) { $text = $text.Substring(0, 1000) }
+    try { [System.Diagnostics.EventLog]::WriteEntry($script:EventSource, $text, [System.Diagnostics.EventLogEntryType]$EntryType, $EventId) }
+    catch { Write-Host "The event could not be written to the Application log: $($_.Exception.Message)" -ForegroundColor Yellow }
+}
+
+function Set-AccucutLockedFileAcl {
+    <# A log file that only Administrators, SYSTEM and (optionally) one group may touch: protected, owner Administrators, no inherited entry. The group gets Modify. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [string]$ModifySid
+    )
+
+    $administrators = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
+    $system = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
+    $security = [System.Security.AccessControl.FileSecurity]::new()
+    $security.SetOwner($administrators)
+    $security.SetAccessRuleProtection($true, $false)
+    $allow = [System.Security.AccessControl.AccessControlType]::Allow
+    foreach ($sid in @($administrators, $system)) {
+        $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($sid, [System.Security.AccessControl.FileSystemRights]::FullControl, $allow))
+    }
+    if (-not [string]::IsNullOrEmpty($ModifySid)) {
+        $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new($ModifySid), [System.Security.AccessControl.FileSystemRights]::Modify, $allow))
+    }
+    [System.IO.File]::SetAccessControl($Path, $security)
+}
+
+function Test-AccucutRestoreLogFile {
+    <#
+    True when an existing restore.log can be appended to: a regular file (not a link), owned by Administrators or SYSTEM, with a protected list that names only Administrators, SYSTEM
+    and the endpoint's group. The two service accounts can write in the logs folder, so they could swap the file for one of their own, or for a link: such a file is never written to.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $attributes = [System.IO.File]::GetAttributes($Path)
+    if (($attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or ($attributes -band [System.IO.FileAttributes]::Directory) -ne 0) { return $false }
+    $security = [System.IO.File]::GetAccessControl($Path)
+    $owner = $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+    if (@('S-1-5-32-544', 'S-1-5-18') -notcontains $owner -or -not $security.AreAccessRulesProtected) { return $false }
+    $allowed = @('S-1-5-32-544', 'S-1-5-18')
+    $groupSid = Get-AccucutAdminGroupSid
+    if (-not [string]::IsNullOrEmpty($groupSid)) { $allowed += $groupSid }
+    foreach ($rule in $security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
+        if ($allowed -notcontains $rule.IdentityReference.Value) { return $false }
+    }
+    return $true
+}
+
+function Add-AccucutRestoreLogLine {
+    <#
+    Appends one line to C:\Accucut\logs\restore.log (AC-6): a record outside the database, so that restoring an older copy cannot erase it. The file is made once, locked
+    (Test-AccucutRestoreLogFile says what it must look like). A file that fails that check is not written to; the line goes to a new file named restore-<time>-<random>.log
+    instead, which is made the same way and never appended to by a second run.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Line
+    )
+
+    $target = $Path
+    $groupSid = Get-AccucutAdminGroupSid
+    $directory = [System.IO.Path]::GetDirectoryName($Path)
+    if (-not [System.IO.Directory]::Exists($directory)) { [void][System.IO.Directory]::CreateDirectory($directory) }
+    if ([System.IO.File]::Exists($Path) -and -not (Test-AccucutRestoreLogFile -Path $Path)) {
+        $target = [System.IO.Path]::Combine($directory, ('restore-{0}-{1}.log' -f (Get-Date).ToUniversalTime().ToString('yyyyMMdd-HHmmss'), [guid]::NewGuid().ToString('N').Substring(0, 8)))
+    }
+    if (-not [System.IO.File]::Exists($target)) {
+        $stream = [System.IO.FileStream]::new($target, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+        $stream.Dispose()
+        Set-AccucutLockedFileAcl -Path $target -ModifySid $groupSid
+    }
+    $writer = [System.IO.FileStream]::new($target, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+    try {
+        $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($Line + "`r`n")
+        $writer.Write($bytes, 0, $bytes.Length)
+    }
+    finally { $writer.Dispose() }
+}
+
+function Write-AccucutRestoreRecord {
+    <# One line to the screen and to restore.log, with every registered secret blanked. A log that cannot be written is said on the screen and never stops the restore. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][string]$Message,
+        [ValidateSet('Info', 'Warning', 'Error')][string]$Level = 'Info'
+    )
+
+    Write-AccucutLog -Message $Message -Level $Level
+    $clean = Hide-AccucutSecrets -Text $Message
+    $line = '{0}Z {1} {2}' -f (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss'), $Level.ToUpperInvariant().PadRight(7), $clean
+    try { Add-AccucutRestoreLogLine -Path $Paths.RestoreLog -Line $line }
+    catch { Write-Host "restore.log could not be written: $(Hide-AccucutSecrets -Text $_.Exception.Message)" -ForegroundColor Yellow }
+}
+
+function Invoke-AccucutRestoreSql {
+    <# SQL on standard input to psql as the restore role, with only PGPASSFILE of the PostgreSQL settings. The first line is a comment, so that nothing at the start of the input can be taken for SQL. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PsqlPath,
+        [Parameter(Mandatory)][object]$Settings,
+        [Parameter(Mandatory)][string]$PassFile,
+        [Parameter(Mandatory)][string]$Database,
+        [Parameter(Mandatory)][string]$Sql
+    )
+
+    $arguments = @('-X', '-w', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '--host', $Settings.PgHost, '--port', [string]$Settings.PgPort, '--username', $script:RestoreDatabaseRole, '--dbname', $Database, '--file', '-')
+    $result = Invoke-AccucutNative -FilePath $PsqlPath -ArgumentList $arguments -Environment @{ PGPASSFILE = $PassFile; PGCONNECT_TIMEOUT = '15' } -ClearPgEnvironment -StdIn ("-- accucut restore`n" + $Sql)
+    return $result.Output
+}
+
+function Assert-AccucutRestoreDatabaseName {
+    <# A database name that this module made (accucut_new_, accucut_old_ or accucut_failed_ and 14 digits): the only kind it ever renames to, drops or interpolates into SQL. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Name)
+
+    if ($Name -cnotmatch $script:RestoreDatabasePattern) { throw "'$Name' is not the name of a database that a restore made. Nothing was done." }
+}
+
+function New-AccucutRestoreDatabase {
+    <# The new, empty database of a restore: owned by accucut_owner, the way the install made the live one (no access for PUBLIC; connect for the owner, the app and the backup role). #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PsqlPath,
+        [Parameter(Mandatory)][object]$Settings,
+        [Parameter(Mandatory)][string]$PassFile,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    Assert-AccucutRestoreDatabaseName -Name $Name
+    $sql = "SET ROLE NONE;`nCREATE DATABASE `"$Name`" TEMPLATE template0 ENCODING 'UTF8' OWNER accucut_owner;`nREVOKE ALL ON DATABASE `"$Name`" FROM PUBLIC;`nGRANT CONNECT ON DATABASE `"$Name`" TO accucut_owner, accucut_app, accucut_backup;`n"
+    [void](Invoke-AccucutRestoreSql -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database 'postgres' -Sql $sql)
+}
+
+function Switch-AccucutRestoreDatabase {
+    <#
+    The swap: the last connections to the two databases are ended, then, in one transaction, the live database is renamed -Previous and -Replacement takes the live name. Both
+    renames happen or neither does. Used the other way round to put the old database back (live -> accucut_failed_..., accucut_old_... -> live).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PsqlPath,
+        [Parameter(Mandatory)][object]$Settings,
+        [Parameter(Mandatory)][string]$PassFile,
+        [Parameter(Mandatory)][string]$Replacement,
+        [Parameter(Mandatory)][string]$Previous
+    )
+
+    $live = [string]$Settings.Database
+    if (-not (Test-AccucutBackupSetting -Name 'database' -Value $live)) { throw 'The live database name is not allowed.' }
+    Assert-AccucutRestoreDatabaseName -Name $Replacement
+    Assert-AccucutRestoreDatabaseName -Name $Previous
+    $sql = "SET ROLE NONE;`nSELECT count(*) FROM (SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname IN ('$live', '$Replacement') AND pid <> pg_backend_pid()) AS ended;`n" +
+        "BEGIN;`nALTER DATABASE `"$live`" RENAME TO `"$Previous`";`nALTER DATABASE `"$Replacement`" RENAME TO `"$live`";`nCOMMIT;`n"
+    [void](Invoke-AccucutRestoreSql -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database 'postgres' -Sql $sql)
+}
+
+function Remove-AccucutRestoreDatabase {
+    <# Drops a database that a restore made (never the live one: the name must match the pattern). Open connections are ended first (WITH FORCE). #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PsqlPath,
+        [Parameter(Mandatory)][object]$Settings,
+        [Parameter(Mandatory)][string]$PassFile,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    Assert-AccucutRestoreDatabaseName -Name $Name
+    [void](Invoke-AccucutRestoreSql -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database 'postgres' -Sql "SET ROLE NONE;`nDROP DATABASE IF EXISTS `"$Name`" WITH (FORCE);`n")
+}
+
+function Set-AccucutConsoleInputNoPreamble {
+    <#
+    Windows PowerShell 5.1 builds the standard input of a started process as a text writer in the console's input encoding, and writes that encoding's preamble when the
+    process starts. In a UTF-8 console that is a byte order mark (EF BB BF), which would be put in front of the key and the dump. The encoding is switched to one with no
+    preamble (OEM US, code page 437) for the moment a process is started. Returns the encoding to put back, or $null when nothing was changed (no console, or no preamble).
+    #>
+    [CmdletBinding()]
+    param()
+
+    try {
+        $original = [System.Console]::InputEncoding
+        if ($original.GetPreamble().Length -gt 0) { [System.Console]::InputEncoding = [System.Text.Encoding]::GetEncoding(437); return $original }
+    }
+    catch { Write-Verbose "The console input encoding could not be read or changed: $($_.Exception.Message)" }
+    return $null
+}
+
+function Restore-AccucutConsoleInput {
+    [CmdletBinding()]
+    param([AllowNull()]$Encoding)
+
+    if ($null -eq $Encoding) { return }
+    try { [System.Console]::InputEncoding = $Encoding } catch { Write-Verbose "The console input encoding could not be put back: $($_.Exception.Message)" }
+}
+
+function Test-AccucutBackupKey {
+    <#
+    Does this key open this copy? Starts age as `age -d -i - <copy>`, gives it the key on standard input and reads the first 5 bytes it decrypts: a custom-format dump starts
+    with PGDMP. Nothing is written anywhere, and age is stopped as soon as it has answered. -KeyBytes holds the key and a line end; the caller clears it.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$AgePath,
+        [Parameter(Mandatory)][string]$CopyPath,
+        [Parameter(Mandatory)][byte[]]$KeyBytes
+    )
+
+    $info = New-Object System.Diagnostics.ProcessStartInfo
+    $info.FileName = $AgePath
+    $info.Arguments = ConvertTo-AccucutArgumentString -ArgumentList @('-d', '-i', '-', $CopyPath)
+    $info.UseShellExecute = $false
+    $info.RedirectStandardInput = $true
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    $info.CreateNoWindow = $true
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $info
+    $started = $false
+    $head = New-Object byte[] ($script:DumpMagicText.Length)
+    $got = 0
+    try {
+        $console = Set-AccucutConsoleInputNoPreamble
+        try { [void]$process.Start(); $started = $true } finally { Restore-AccucutConsoleInput -Encoding $console }
+        $errorTask = $process.StandardError.ReadToEndAsync()
+        $sink = $process.StandardInput.BaseStream
+        try { $sink.Write($KeyBytes, 0, $KeyBytes.Length); $sink.Flush() } catch { Write-Verbose "age closed its input early: $($_.Exception.Message)" }
+        try { $process.StandardInput.Close() } catch { Write-Verbose "age's input was already closed: $($_.Exception.Message)" }
+        $source = $process.StandardOutput.BaseStream
+        $deadline = (Get-Date).AddSeconds(60)
+        while ($got -lt $head.Length -and (Get-Date) -lt $deadline) {
+            $read = $source.ReadAsync($head, $got, $head.Length - $got)
+            if (-not $read.Wait(30000)) { break }
+            if ($read.Result -le 0) { break }
+            $got += $read.Result
+        }
+        if ($got -lt $head.Length -and -not $process.HasExited) { try { [void]$process.WaitForExit(5000) } catch { Write-Verbose "age did not end: $($_.Exception.Message)" } }
+        $message = ''
+        if ($process.HasExited -and $got -lt $head.Length) { $message = ConvertTo-AccucutShortMessage -Text $errorTask.Result }
+    }
+    finally {
+        if ($started -and -not $process.HasExited) { try { $process.Kill() } catch { Write-Verbose "age could not be stopped: $($_.Exception.Message)" } }
+        $process.Dispose()
+    }
+    $ok = ($got -eq $head.Length -and [System.Text.Encoding]::ASCII.GetString($head) -eq $script:DumpMagicText)
+    return [pscustomobject]@{ Ok = $ok; Message = $message }
+}
+
+function Invoke-AccucutRestorePipe {
+    <#
+    age -d -i - <copy> | pg_restore ... , as bytes (ADR-015 Amendment 3.1: no PowerShell pipeline, no cmd.exe). Both programs are started here with redirected streams: the key goes to
+    age's standard input (never on a command line, never in a file), age's standard output is copied to pg_restore's standard input, and BOTH exit codes are checked. The decrypted
+    dump is never written to disk. pg_restore runs in one transaction and stops at the first error, so a database that is not whole is never left as a result of a half-finished run.
+    The password reaches pg_restore through PGPASSFILE in that child's environment only. -KeyBytes holds the key and a line end; the caller clears it.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$AgePath,
+        [Parameter(Mandatory)][string]$PgRestorePath,
+        [Parameter(Mandatory)][string]$CopyPath,
+        [Parameter(Mandatory)][byte[]]$KeyBytes,
+        [Parameter(Mandatory)][string]$DbHost,
+        [Parameter(Mandatory)][int]$Port,
+        [Parameter(Mandatory)][string]$Database,
+        [Parameter(Mandatory)][string]$PassFile
+    )
+
+    $ageInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $ageInfo.FileName = $AgePath
+    $ageInfo.Arguments = ConvertTo-AccucutArgumentString -ArgumentList @('-d', '-i', '-', $CopyPath)
+    $restoreInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $restoreInfo.FileName = $PgRestorePath
+    $restoreInfo.Arguments = ConvertTo-AccucutArgumentString -ArgumentList @('--no-password', '--exit-on-error', '--single-transaction', '--host', $DbHost, '--port', [string]$Port, '--username', $script:RestoreDatabaseRole, '--dbname', $Database)
+    Clear-AccucutPgEnvironment -EnvironmentVariables $restoreInfo.EnvironmentVariables
+    $restoreInfo.EnvironmentVariables['PGPASSFILE'] = $PassFile
+    $restoreInfo.EnvironmentVariables['PGCONNECT_TIMEOUT'] = '15'
+    foreach ($info in $ageInfo, $restoreInfo) {
+        $info.UseShellExecute = $false
+        $info.RedirectStandardInput = $true
+        $info.RedirectStandardOutput = $true
+        $info.RedirectStandardError = $true
+        $info.CreateNoWindow = $true
+    }
+    $age = New-Object System.Diagnostics.Process
+    $age.StartInfo = $ageInfo
+    $restore = New-Object System.Diagnostics.Process
+    $restore.StartInfo = $restoreInfo
+    $ageStarted = $false
+    $restoreStarted = $false
+    $copyError = $null
+    try {
+        $console = Set-AccucutConsoleInputNoPreamble
+        try {
+            [void]$age.Start(); $ageStarted = $true
+            [void]$restore.Start(); $restoreStarted = $true
+        }
+        finally { Restore-AccucutConsoleInput -Encoding $console }
+        $ageErrorTask = $age.StandardError.ReadToEndAsync()
+        $restoreErrorTask = $restore.StandardError.ReadToEndAsync()
+        $restoreOutputTask = $restore.StandardOutput.ReadToEndAsync()
+        try {
+            $keySink = $age.StandardInput.BaseStream
+            $keySink.Write($KeyBytes, 0, $KeyBytes.Length)
+            $keySink.Flush()
+        }
+        catch { $copyError = $_.Exception.Message }
+        try { $age.StandardInput.Close() } catch { Write-Verbose "age's input was already closed: $($_.Exception.Message)" }
+        try {
+            $age.StandardOutput.BaseStream.CopyTo($restore.StandardInput.BaseStream)
+            $restore.StandardInput.BaseStream.Flush()
+        }
+        catch {
+            $copyError = $_.Exception.Message
+            try { $age.Kill() } catch { Write-Verbose "age had already ended: $($_.Exception.Message)" }
+        }
+        finally {
+            try { $restore.StandardInput.Close() } catch { Write-Verbose "pg_restore's input was already closed: $($_.Exception.Message)" }
+        }
+        $age.WaitForExit()
+        $restore.WaitForExit()
+        $restoreOutputTask.Wait()
+        $ageMessage = ConvertTo-AccucutShortMessage -Text $ageErrorTask.Result
+        $restoreMessage = ConvertTo-AccucutShortMessage -Text $restoreErrorTask.Result
+        $ageCode = $age.ExitCode
+        $restoreCode = $restore.ExitCode
+    }
+    finally {
+        if ($ageStarted -and -not $age.HasExited) { try { $age.Kill() } catch { Write-Verbose "age could not be stopped: $($_.Exception.Message)" } }
+        if ($restoreStarted -and -not $restore.HasExited) { try { $restore.Kill() } catch { Write-Verbose "pg_restore could not be stopped: $($_.Exception.Message)" } }
+        $age.Dispose()
+        $restore.Dispose()
+    }
+    if ($ageCode -ne 0) { throw (New-AccucutRestoreStop -Code 'age-failed' -Message "age could not decrypt the copy (exit code $ageCode). $ageMessage") }
+    if ($restoreCode -ne 0) { throw (New-AccucutRestoreStop -Code 'pg-restore-failed' -Message "pg_restore failed with exit code $restoreCode. $restoreMessage") }
+    if ($null -ne $copyError) { throw (New-AccucutRestoreStop -Code 'pipe-failed' -Message "The decrypted copy could not be passed to pg_restore: $copyError") }
+}
+
+function Assert-AccucutRestoreNotNewer {
+    <#
+    A copy from a NEWER release is refused (ADR-015 Amendment 3.3 R3), an older one is migrated forward. Reads the migrations that the restored database has applied (finished, not rolled back)
+    and stops with the code newer-release if any is not a folder of the installed release's prisma migrations (<release>\migrate\prisma\migrations): the installed release could not run on it.
+    Run on the NEW database, before the forward migration and before the swap, so the failure path puts the old database back in service.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PsqlPath,
+        [Parameter(Mandatory)][object]$Settings,
+        [Parameter(Mandatory)][string]$PassFile,
+        [Parameter(Mandatory)][string]$Database,
+        [Parameter(Mandatory)][string]$ReleaseDirectory
+    )
+
+    Assert-AccucutRestoreDatabaseName -Name $Database
+    $folder = [System.IO.Path]::Combine($ReleaseDirectory, 'migrate\prisma\migrations')
+    if (-not [System.IO.Directory]::Exists($folder)) { throw (New-AccucutRestoreStop -Code 'release-migrations-missing' -Message "The installed release has no migrations folder ('$folder'), so the copy cannot be compared with it.") }
+    $known = @([System.IO.Directory]::GetDirectories($folder) | ForEach-Object { [System.IO.Path]::GetFileName($_) })
+    $answer = Invoke-AccucutRestoreSql -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database $Database -Sql "SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY 1;`n"
+    $applied = @(([string]$answer -split "`r?`n") | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -gt 0 })
+    $newer = @($applied | Where-Object { $known -notcontains $_ })
+    if ($newer.Count -gt 0) {
+        throw (New-AccucutRestoreStop -Code 'newer-release' -Message 'This copy was made by a newer release of the portal than the one installed. Nothing was changed. Ask your IT person to install that release, then run the restore again.')
+    }
+}
+
+function Get-AccucutRestoreChoice {
+    <# The copies a restore offers, newest first, numbered from 1. A copy that has no matching manifest is listed but cannot be chosen. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Directory)
+
+    $copies = @(Get-AccucutBackupCopy -Directory $Directory)
+    [array]::Reverse($copies)
+    $number = 0
+    return @($copies | ForEach-Object { $number++; [pscustomobject]@{ Number = $number; Copy = $_ } })
+}
+
+function Invoke-AccucutRestore {
+    <#
+    The guided restore (AC-1 to AC-6; architecture 9.5 step table). It follows the table exactly:
+      1. Lists the copies, newest first, by date and size (no file name to type). The Admin types the number of one.
+      2. Checks before it touches anything: the SHA-256 of the file against its manifest, the manifest's PostgreSQL version against the server's, and the free space.
+      3. Says what is lost (everything entered since the copy, the audit rows too), and asks the Admin to TYPE the copy's date. Anything but an exact match stops it.
+      4. Asks for the backup key at a secure prompt, passes it to age on standard input only, and checks that it opens this copy, before anything is stopped.
+      5. Stops AccucutApp and AccucutWorker; takes a safety copy of the database as it stands (an ordinary release copy, named before-restore); makes a NEW database and
+         restores into it; runs the forward migrations on it; swaps the names only if all of that worked; starts the services and checks /api/health.
+      6. If anything after the stop fails, the swap is not made (or is made back), the services are started again on the old database, and it says "Call your IT person".
+    Every line goes to the screen and to restore.log, and one event goes to the Application log (source Accucut): outside the database, so restoring an older copy cannot erase
+    the record. Every question goes through Read-AccucutHostInput or Read-AccucutKeyInput, so that Pester can answer it. Returns what it did, or throws an error with a code.
+    -Program holds the full paths already checked by the caller: Age, Psql, PgRestore, PgDump, Node.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][object]$Settings,
+        [Parameter(Mandatory)][hashtable]$Program,
+        [Parameter(Mandatory)][string]$ReleaseDirectory,
+        [Parameter(Mandatory)][string]$HealthUrl,
+        [ValidateRange(5, 1800)][int]$HealthTimeoutSeconds = 180
+    )
+
+    $inv = [System.Globalization.CultureInfo]::InvariantCulture
+    $stage = 'checks'
+    $keyBytes = $null
+    $stoppedServices = $false
+    $newName = $null
+    $oldName = $null
+    $swapped = $false
+    $passFile = $Paths.RestorePgpass
+    $copyName = ''
+    try {
+        Write-Host ''
+        Write-Host 'Restore a backup. This replaces everything in the portal with what was in the copy you choose.'
+        $choices = @(Get-AccucutRestoreChoice -Directory $Paths.Backups)
+        if ($choices.Count -eq 0) { throw (New-AccucutRestoreStop -Code 'no-copies' -Message 'There are no backup copies on this server, so there is nothing to restore.') }
+        Write-Host 'Backup copies on this server, newest first (dates are UTC):'
+        foreach ($choice in $choices) {
+            $copy = $choice.Copy
+            $date = 'unknown date   '
+            if ($null -ne $copy.CreatedUtc) { $date = $copy.CreatedUtc.ToString('yyyy-MM-dd HH:mm', $inv) }
+            $note = ''
+            if (-not $copy.Verified) { $note = "  CANNOT BE USED ($($copy.Problem))" }
+            Write-Host ('  {0,3}  {1}  {2,-8} {3,10}{4}' -f $choice.Number, $date, $copy.Reason, (Format-AccucutSize -Bytes $copy.SizeBytes), $note)
+        }
+        $answer = Read-AccucutHostInput -Prompt 'Type the number of the copy to restore, or press Enter to stop'
+        if ([string]::IsNullOrWhiteSpace($answer)) {
+            Write-AccucutRestoreRecord -Paths $Paths -Message 'Stopped by the Admin before a copy was chosen. Nothing was changed.'
+            Write-AccucutRestoreEvent -EntryType Information -EventId $script:RestoreEventCancelled -Message 'A restore was started and stopped by the Admin before a copy was chosen. Nothing was changed.'
+            return [pscustomobject]@{ Restored = $false; Cancelled = $true; Copy = ''; SafetyCopy = '' }
+        }
+        $picked = @($choices | Where-Object { [string]$_.Number -eq $answer.Trim() })
+        if ($picked.Count -ne 1 -or -not $picked[0].Copy.Verified) {
+            throw (New-AccucutRestoreStop -Code 'bad-choice' -Message "'$($answer.Trim())' is not the number of a copy that can be used.")
+        }
+        $copy = $picked[0].Copy
+        $copyName = $copy.Name
+        $dateText = $copy.CreatedUtc.ToString('yyyy-MM-dd', $inv)
+        Write-AccucutRestoreRecord -Paths $Paths -Message "Restore started for the copy $copyName ($dateText UTC). Checking it before anything is touched."
+
+        # ---- Checks, before anything is touched (AC-1) -------------------------------------------------------------------------------------
+        $manifest = [System.IO.File]::ReadAllText($copy.ManifestPath) | ConvertFrom-Json
+        $actualSha = Get-AccucutFileSha256 -Path $copy.Path
+        if ($actualSha -ne ([string]$manifest.sha256).ToLowerInvariant()) {
+            throw (New-AccucutRestoreStop -Code 'checksum' -Message "The copy $copyName does not match the checksum in its manifest: it has been changed or damaged since it was made. It is not used.")
+        }
+        $info = Get-AccucutDatabaseInfo -PsqlPath $Program.Psql -PassFile $passFile -DatabaseRole $script:RestoreDatabaseRole -DbHost $Settings.PgHost -Port $Settings.PgPort -Database $Settings.Database
+        $manifestVersion = ''
+        if (@($manifest.PSObject.Properties.Name) -contains 'postgresVersion') { $manifestVersion = [string]$manifest.postgresVersion }
+        $version = Test-AccucutRestoreVersion -ManifestVersion $manifestVersion -ServerVersion $info.ServerVersion
+        if (-not $version.Ok) { throw (New-AccucutRestoreStop -Code 'postgres-version' -Message $version.Message) }
+        $space = Get-AccucutVolumeSpace -Path $Paths.Backups
+        $verified = @(Get-AccucutBackupCopy -Directory $Paths.Backups | Where-Object { $_.Verified } | Microsoft.PowerShell.Utility\Select-Object -Last 1)
+        $lastBytes = 0
+        if ($verified.Count -eq 1) { $lastBytes = $verified[0].SizeBytes }
+        $room = Test-AccucutRestoreRoom -FreeBytes $space.FreeBytes -TotalBytes $space.TotalBytes -LastCopyBytes $lastBytes -DatabaseBytes $info.SizeBytes -CopyBytes $copy.SizeBytes
+        if (-not $room.Ok) { throw (New-AccucutRestoreStop -Code 'low-space' -Message $room.Message) }
+        Write-Host "Checks passed: the copy matches its manifest, $($version.Message) There is enough free space."
+
+        # ---- What will be lost, and the typed date (AC-2) ----------------------------------------------------------------------------------
+        Write-Host ''
+        Write-Host "You chose the copy of $dateText UTC ($($copy.Reason), $(Format-AccucutSize -Bytes $copy.SizeBytes))."
+        Write-Host "Restoring it LOSES everything entered since then: every estimate, approval and master value, and the audit rows too. The portal will be stopped for a few minutes."
+        Write-Host 'A safety copy of the portal as it is now is made first, so that a wrong restore can be put back.'
+        $typed = Read-AccucutHostInput -Prompt "To go on, type the date of the copy exactly as shown ($dateText), or press Enter to stop"
+        if ($typed -cne $dateText) {
+            throw (New-AccucutRestoreStop -Code 'date-mismatch' -Message "What you typed is not the date of the copy ($dateText), so nothing is restored.")
+        }
+
+        # ---- The key (AC-5): a secure prompt, standard input only, checked against this copy before anything is stopped -----------------------
+        $secure = Read-AccucutKeyInput -Prompt 'Paste the backup key (the line that starts with AGE-SECRET-) and press Enter. Nothing is shown'
+        $keyText = (ConvertFrom-AccucutSecureString -Secure $secure).Trim()
+        $secure.Dispose()
+        Register-AccucutSecret -Value $keyText
+        if ($keyText -cnotmatch $script:AgeSecretKeyPattern) {
+            $keyText = $null
+            throw (New-AccucutRestoreStop -Code 'bad-key-format' -Message 'What was pasted is not a backup key (it must be the one line that starts with AGE-SECRET-).')
+        }
+        $keyBytes = [System.Text.Encoding]::ASCII.GetBytes($keyText + "`n")
+        $keyText = $null
+        $keyCheck = Test-AccucutBackupKey -AgePath $Program.Age -CopyPath $copy.Path -KeyBytes $keyBytes
+        if (-not $keyCheck.Ok) {
+            throw (New-AccucutRestoreStop -Code 'wrong-key' -Message "This key does not open the copy $copyName (age says: $($keyCheck.Message)). Check that you pasted the key that belongs to this server's backups.")
+        }
+        Write-AccucutRestoreRecord -Paths $Paths -Message 'The key opens the copy. Starting the restore: the portal is stopped from now on.'
+
+        # ---- The restore (AC-3). From here the portal is stopped, and every failure puts the old database back in service -----------------------
+        $stage = 'run'
+        $stamp = ([datetime]::UtcNow).ToString($script:RestoreStampFormat, $inv)
+        $newName = "accucut_new_$stamp"
+        $oldName = "accucut_old_$stamp"
+        $failedName = "accucut_failed_$stamp"
+        $safetyName = ''
+        try {
+            Stop-AccucutServices
+            $stoppedServices = $true
+            Write-AccucutRestoreRecord -Paths $Paths -Message 'AccucutApp and AccucutWorker are stopped. Taking a safety copy of the database as it is now.'
+            $safety = Invoke-AccucutBackup -Paths $Paths -Settings $Settings -Program @{ PgDump = $Program.PgDump; Psql = $Program.Psql; Age = $Program.Age } -Reason release -ReleaseTag 'before-restore' -PassFile $passFile -DatabaseRole $script:RestoreDatabaseRole -SkipPrune
+            $safetyName = $safety.Name
+            Write-AccucutRestoreRecord -Paths $Paths -Message "Safety copy made: $safetyName. Restoring $copyName into a new database ($newName)."
+            New-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Name $newName
+            Invoke-AccucutRestorePipe -AgePath $Program.Age -PgRestorePath $Program.PgRestore -CopyPath $copy.Path -KeyBytes $keyBytes -DbHost $Settings.PgHost -Port $Settings.PgPort -Database $newName -PassFile $passFile
+            Assert-AccucutRestoreNotNewer -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Database $newName -ReleaseDirectory $ReleaseDirectory
+            Write-AccucutRestoreRecord -Paths $Paths -Message 'The copy is restored into the new database. Running the migrations on it, so that it matches this release.'
+            $password = Read-AccucutPgpassPassword -Path $passFile -Role $script:RestoreDatabaseRole
+            $url = "postgresql://$($script:RestoreDatabaseRole):$([uri]::EscapeDataString($password))@$($Settings.PgHost):$($Settings.PgPort)/$newName"
+            [void](Invoke-AccucutMigration -ReleaseDirectory $ReleaseDirectory -NodeExe $Program.Node -MigrateDatabaseUrl $url)
+            Switch-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Replacement $newName -Previous $oldName
+            $swapped = $true
+            Write-AccucutRestoreRecord -Paths $Paths -Message "The restored database is now the live one. The database as it was is kept for the moment as $oldName. Starting the portal."
+            Start-AccucutServices
+            if (-not (Wait-AccucutHealth -Url $HealthUrl -TimeoutSeconds $HealthTimeoutSeconds)) {
+                throw (New-AccucutRestoreStop -Code 'health' -Message "The portal did not answer 200 at $HealthUrl within $HealthTimeoutSeconds seconds after the restore.")
+            }
+        }
+        catch {
+            $failure = $_.Exception
+            $code = [string]$failure.Data['accucutCode']
+            if ([string]::IsNullOrEmpty($code)) { $code = 'restore-failed' }
+            $detail = ConvertTo-AccucutShortMessage -Text $failure.Message
+            Write-AccucutRestoreRecord -Paths $Paths -Level Error -Message "The restore failed ($code): $detail"
+            $problems = New-Object System.Collections.Generic.List[string]
+            try { Stop-AccucutServices } catch { $problems.Add("the services could not be stopped for the roll back: $($_.Exception.Message)") }
+            if ($swapped) {
+                try {
+                    Switch-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Replacement $oldName -Previous $failedName
+                    $swapped = $false
+                    Write-AccucutRestoreRecord -Paths $Paths -Level Warning -Message "The old database is the live one again (the failed restore is kept as $failedName for your IT person)."
+                }
+                catch { $problems.Add("the old database could not be put back: $($_.Exception.Message)") }
+            }
+            elseif ($null -ne $newName) {
+                try { Remove-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Name $newName }
+                catch { Write-AccucutRestoreRecord -Paths $Paths -Level Warning -Message "The unfinished database $newName could not be removed: $($_.Exception.Message). Your IT person can drop it." }
+            }
+            if (-not $swapped) {
+                try { Start-AccucutServices; Write-AccucutRestoreRecord -Paths $Paths -Level Warning -Message 'The portal was started again on the old database.' }
+                catch { $problems.Add("the portal could not be started again: $($_.Exception.Message)") }
+            }
+            $summary = "The restore of $copyName failed: $detail"
+            if ($problems.Count -gt 0) { $summary += ' Also: ' + ($problems -join ' ') }
+            $eventCode = 'restore-failed'
+            if ($problems.Count -gt 0) { $eventCode = 'roll-back-failed' }
+            $state = 'The portal is running on the old database. Nothing was lost, and a safety copy of it was made.'
+            if ($problems.Count -gt 0) { $state = 'The portal may not be running: look at the services first.' }
+            throw (New-AccucutRestoreStop -Code $eventCode -Message "$summary $state Call your IT person.")
+        }
+
+        # ---- Done (AC-6) -------------------------------------------------------------------------------------------------------------------
+        $removedOld = $false
+        try { Remove-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Name $oldName; $removedOld = $true }
+        catch { Write-AccucutRestoreRecord -Paths $Paths -Level Warning -Message "The old database $oldName could not be removed: $($_.Exception.Message). It holds the data as it was before the restore; your IT person can drop it. The safety copy $safetyName is in the backups folder." }
+        $done = "Restore finished: the portal runs on the copy of $dateText UTC ($copyName). The portal as it was before is kept as the safety copy $safetyName."
+        Write-AccucutRestoreRecord -Paths $Paths -Message $done
+        Write-AccucutRestoreEvent -EntryType Information -EventId $script:RestoreEventDone -Message $done
+        Write-Host 'Open the portal and check that what you expect is there.'
+        return [pscustomobject]@{ Restored = $true; Cancelled = $false; Copy = $copyName; SafetyCopy = $safetyName; OldDatabaseRemoved = $removedOld }
+    }
+    catch {
+        $failure = $_.Exception
+        $code = [string]$failure.Data['accucutCode']
+        $eventId = $script:RestoreEventChecksFailed
+        $suffix = ' Nothing was changed, and the portal is still running on its old database. Call your IT person.'
+        if ($stage -eq 'run') {
+            $eventId = $script:RestoreEventFailed
+            $suffix = ''
+            if ($code -eq 'roll-back-failed') { $eventId = $script:RestoreEventFailedAfterSwap }
+        }
+        $message = (Hide-AccucutSecrets -Text $failure.Message)
+        if ($stage -ne 'run') { Write-AccucutRestoreRecord -Paths $Paths -Level Error -Message "The restore stopped ($code): $message$suffix" }
+        Write-AccucutRestoreEvent -EntryType Error -EventId $eventId -Message "The restore of '$copyName' stopped (code $code): $message$suffix"
+        $stop = New-AccucutRestoreStop -Code $code -Message ($message + $suffix)
+        throw $stop
+    }
+    finally {
+        if ($null -ne $keyBytes) { [array]::Clear($keyBytes, 0, $keyBytes.Length) }
+    }
+}
+
+#endregion
+
+#region The Admin's endpoint (STORY-10.11 AC-7; architecture section 9.9 "The Admin's account"; ADR-015 Amendment 3 point 4 forward note)
+
+# The local group that the endpoint's virtual account joins (and is limited to: RunAsVirtualAccountGroups), and the endpoint's name. The group has no members.
+$script:AdminGroupName = 'AccucutAdminRunAs'
+$script:AdminEndpointName = 'AccucutAdmin'
+
+# A Windows account as the Admin's name: optional DOMAIN\ (or .\), then the user name. Letters, digits, dot, dash, underscore (and a space inside a user name). It ends up in a
+# file that is read as PowerShell data, so no quote, brace or other punctuation is accepted.
+$script:AdminAccountPattern = '^(?:[A-Za-z0-9.][A-Za-z0-9._-]{0,63}\\)?[A-Za-z0-9][A-Za-z0-9._ -]{0,63}$'
+
+function Get-AccucutAdminGroupSid {
+    <# The SID of the local group that the Admin endpoint's virtual account joins, or $null when there is no such group (no endpoint was set up). #>
+    [CmdletBinding()]
+    param()
+
+    try {
+        $account = [System.Security.Principal.NTAccount]::new([string]$env:COMPUTERNAME, $script:AdminGroupName)
+        return $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
+    }
+    catch {
+        return $null
+    }
+}
+
+function Resolve-AccucutAdminAccount {
+    <# Checks the account that will use the endpoint before anything is created: its name is well formed, Windows knows it, and it is told apart from an administrator. Returns Sid and IsAdministrator. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Account)
+
+    if ($Account -cnotmatch $script:AdminAccountPattern) { throw "'$Account' is not a Windows account name that the endpoint accepts (DOMAIN\user or user: letters, digits, dot, dash and underscore)." }
+    try { $sid = ([System.Security.Principal.NTAccount]::new($Account)).Translate([System.Security.Principal.SecurityIdentifier]) }
+    catch { throw "Windows does not know the account '$Account'. Make the Admin's own Windows account first, then run the install again. Nothing was changed." }
+    $isAdministrator = $false
+    try { $isAdministrator = (@(Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction Stop | Where-Object { $_.SID.Value -eq $sid.Value }).Count -gt 0) }
+    catch { Write-Verbose "The members of Administrators could not be read: $($_.Exception.Message)" }
+    return [pscustomobject]@{ Sid = $sid.Value; IsAdministrator = $isAdministrator }
+}
+
+function Get-AccucutAdminGroupMember {
+    <# The names of the members of the endpoint group, read through ADSI (WinNT). Throws when the list cannot be read: a list that cannot be read is never taken for an empty one (R1). #>
+    [CmdletBinding()]
+    param()
+
+    try {
+        $group = [ADSI]"WinNT://$($env:COMPUTERNAME)/$($script:AdminGroupName),group"
+        $names = New-Object System.Collections.Generic.List[string]
+        foreach ($member in @($group.Invoke('Members'))) { $names.Add([string]$member.GetType().InvokeMember('Name', 'GetProperty', $null, $member, $null)) }
+        return , $names.ToArray()
+    }
+    catch {
+        throw "The members of the group $($script:AdminGroupName) could not be read ($($_.Exception.Message)). Nothing was changed."
+    }
+}
+
+function New-AccucutAdminGroup {
+    <#
+    The local group of the endpoint's virtual account, with no members. Returns its SID. An existing group of that name is reused ONLY if it has no member (ADR-015 Amendment 3.3 R1: a member
+    of the group could read the restore's database password), and an unreadable list is refused too.
+    #>
+    [CmdletBinding()]
+    param()
+
+    $existing = Get-AccucutAdminGroupSid
+    if (-not [string]::IsNullOrEmpty($existing)) {
+        $members = Get-AccucutAdminGroupMember
+        if (@($members).Count -gt 0) { throw "The group $($script:AdminGroupName) has members. It must have none: a member could read the restore's database password. Ask your IT person to remove them. Nothing was changed." }
+        return $existing
+    }
+    $group = New-LocalGroup -Name $script:AdminGroupName -Description 'Accucut Admin endpoint group (no members)'
+    return $group.SID.Value
+}
+
+function Add-AccucutFileReadAccess {
+    <# One more Read entry on a file whose list is protected (the entries it has stay as they are). #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Sid
+    )
+
+    $security = [System.IO.File]::GetAccessControl($Path)
+    $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new($Sid), [System.Security.AccessControl.FileSystemRights]::Read, [System.Security.AccessControl.AccessControlType]::Allow))
+    [System.IO.File]::SetAccessControl($Path, $security)
+}
+
+function New-AccucutAdminFolder {
+    <# A folder with a protected list made in one call: owner Administrators, Administrators and SYSTEM full control, and the group with the stated rights, all inherited by what it holds. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$GroupSid,
+        [Parameter(Mandatory)][ValidateSet('ReadAndExecute', 'Modify')][string]$GroupRights
+    )
+
+    if ([System.IO.Directory]::Exists($Path)) { return }
+    $administrators = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
+    $system = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
+    $security = [System.Security.AccessControl.DirectorySecurity]::new()
+    $security.SetOwner($administrators)
+    $security.SetAccessRuleProtection($true, $false)
+    $inherit = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+    $none = [System.Security.AccessControl.PropagationFlags]::None
+    $allow = [System.Security.AccessControl.AccessControlType]::Allow
+    foreach ($sid in @($administrators, $system)) {
+        $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($sid, [System.Security.AccessControl.FileSystemRights]::FullControl, $inherit, $none, $allow))
+    }
+    $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new($GroupSid), [System.Security.AccessControl.FileSystemRights]$GroupRights, $inherit, $none, $allow))
+    [void][System.IO.Directory]::CreateDirectory($Path, $security)
+}
+
+function Grant-AccucutServiceControl {
+    <#
+    Lets one SID query, start and stop a service (its security descriptor, through sc.exe): query configuration, query status, enumerate dependents, start, stop, interrogate, read control
+    (CCLCSWRPWPLORC; no pause or continue, no change of the service, no delete, no write of permissions). The existing entries are kept; a second call changes nothing. After sdset the
+    descriptor is read back, and it must equal the earlier one plus exactly that entry, or this throws naming the service (ADR-015 Amendment 3.3 R4). -ScPath is the full path of
+    sc.exe, checked by the caller (the install) with the trust block: a program is never looked up through PATH.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Sid,
+        [Parameter(Mandatory)][string]$ScPath
+    )
+
+    if ($Sid -notmatch '^S-1-\d+(-\d+)+$') { throw "'$Sid' is not a SID." }
+    if ($Name -notmatch '^[A-Za-z0-9_.-]{1,64}$') { throw "'$Name' is not a service name." }
+    $current = (Invoke-AccucutNative -FilePath $ScPath -ArgumentList @('sdshow', $Name)).Output.Trim()
+    if ($current -notmatch '^D:') { throw "The security descriptor of the service '$Name' could not be read." }
+    if ($current.Contains(";;;$Sid)")) { return }
+    $entry = "(A;;CCLCSWRPWPLORC;;;$Sid)"
+    $split = $current.IndexOf(')S:')
+    if ($split -ge 0) { $updated = $current.Substring(0, $split + 1) + $entry + $current.Substring($split + 1) }
+    else { $updated = $current + $entry }
+    [void](Invoke-AccucutNative -FilePath $ScPath -ArgumentList @('sdset', $Name, $updated))
+    $after = (Invoke-AccucutNative -FilePath $ScPath -ArgumentList @('sdshow', $Name)).Output.Trim()
+    $index = $after.IndexOf($entry)
+    if ($index -lt 0 -or $after.Remove($index, $entry.Length) -ne $current) {
+        throw "The security descriptor of the service '$Name' is not what was set (it should be the earlier one plus $entry). It is now: $after. Ask your IT person to check it with sc.exe sdshow $Name."
+    }
+}
+
+function Write-AccucutRestoreConfig {
+    <#
+    Writes config\restore.pgpass: the connection line of the database role accucut_restore (host:port:*:accucut_restore:password; the database field is * because a restore connects to
+    the maintenance database and to the new one). The password is invented by the install. The file is made with FileMode.CreateNew, locked to Administrators and SYSTEM while it is
+    still empty, and only then filled. The endpoint's group is added as a reader later (Grant-AccucutAdminEndpointAccess).
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][string]$RestorePassword,
+        [Parameter(Mandatory)][string]$PgHost,
+        [Parameter(Mandatory)][int]$PgPort
+    )
+
+    foreach ($pair in @(@('pgHost', $PgHost), @('pgPort', $PgPort))) {
+        if (-not (Test-AccucutBackupSetting -Name $pair[0] -Value $pair[1])) { throw "The value for '$($pair[0])' is not allowed in the restore settings." }
+    }
+    Register-AccucutSecret -Value $RestorePassword
+    $escaped = $RestorePassword.Replace('\', '\\').Replace(':', '\:')
+    $line = '{0}:{1}:*:{2}:{3}' -f $PgHost, $PgPort, $script:RestoreDatabaseRole, $escaped
+    $stream = [System.IO.FileStream]::new($Paths.RestorePgpass, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    $stream.Dispose()
+    Set-AccucutLockedFileAcl -Path $Paths.RestorePgpass
+    [System.IO.File]::WriteAllText($Paths.RestorePgpass, $line + "`n", [System.Text.UTF8Encoding]::new($false))
+}
+
+function Grant-AccucutAdminEndpointAccess {
+    <#
+    What the endpoint's virtual account (which is in the group and nothing else) needs, and nothing more (ADR-015 Amendment 3 forward note: never a local administrator):
+      - the install root: read and execute (the trust checks read the descriptor of every folder down to the script, the module and the programs);
+      - backups: Modify (the safety copy and clearing old copies). This is the one entry that 10.11 adds there;
+      - backup.pgpass and backup-settings.json: read (clear-copies.ps1 writes its job_runs row with them); restore.pgpass: read;
+      - logs\jea (the session transcripts): Modify; logs\restore.log: Modify on that one file, so the logs folder itself gets no entry;
+      - config\jea (the role capability file that the session loads): read and execute;
+      - the two services: start, stop and query, so that a restore can stop and start them.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][string]$GroupSid,
+        [Parameter(Mandatory)][string]$ScPath,
+        [string]$LogFile
+    )
+
+    Grant-AccucutFolderAccess -Path $Paths.Root -Account $GroupSid -Rights ReadAndExecute
+    Grant-AccucutFolderAccess -Path $Paths.Backups -Account $GroupSid -Rights Modify
+    foreach ($file in $Paths.BackupPgpass, $Paths.BackupSettings, $Paths.RestorePgpass) { Add-AccucutFileReadAccess -Path $file -Sid $GroupSid }
+    New-AccucutAdminFolder -Path $Paths.JeaConfig -GroupSid $GroupSid -GroupRights ReadAndExecute
+    New-AccucutAdminFolder -Path $Paths.JeaLogs -GroupSid $GroupSid -GroupRights Modify
+    if (-not [System.IO.File]::Exists($Paths.RestoreLog)) {
+        $stream = [System.IO.FileStream]::new($Paths.RestoreLog, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+        $stream.Dispose()
+        Set-AccucutLockedFileAcl -Path $Paths.RestoreLog -ModifySid $GroupSid
+    }
+    foreach ($name in (Get-AccucutServiceNames)) { Grant-AccucutServiceControl -Name $name -Sid $GroupSid -ScPath $ScPath }
+    Write-AccucutLog -Message "The Admin endpoint's group may read and execute under '$($Paths.Root)', change '$($Paths.Backups)', '$($Paths.JeaLogs)' and restore.log, read the three settings files, and start and stop the two services. Nothing else." -LogFile $LogFile
+}
+
+function New-AccucutAdminEndpointFiles {
+    <#
+    Makes the two files that the endpoint is registered from, from the templates in the release (jea\AccucutAdmin.psrc and .pssc): the role capability file, which defines the two
+    commands, and the session configuration file, which says who may connect and what it runs as. Only the tokens {{ROOT}}, {{ADMIN_ACCOUNT}}, {{ADMIN_GROUP}},
+    {{TRANSCRIPT_DIRECTORY}} and {{ROLE_FILE}} are filled in, from values that have been checked, and a template that still holds a {{ after that is refused.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$TemplateDirectory,
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)][string]$AdminAccount,
+        [Parameter(Mandatory)][string]$GroupName,
+        [Parameter(Mandatory)][string]$TranscriptDirectory,
+        [Parameter(Mandatory)][string]$OutputDirectory
+    )
+
+    if ($Root -notmatch '^[A-Za-z]:\\[A-Za-z0-9_-]{1,32}$') { throw "The install folder '$Root' is not in the form X:\Name." }
+    if ($AdminAccount -cnotmatch $script:AdminAccountPattern) { throw "'$AdminAccount' is not a Windows account name that the endpoint accepts." }
+    if ($GroupName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$') { throw "'$GroupName' is not a group name that the endpoint accepts." }
+    if ($TranscriptDirectory -notmatch '^[A-Za-z]:\\[A-Za-z0-9_\\-]{1,120}$') { throw "'$TranscriptDirectory' is not a folder path that the endpoint accepts." }
+    if (-not [System.IO.Directory]::Exists($OutputDirectory)) { throw "The folder '$OutputDirectory' does not exist." }
+    $roleFile = [System.IO.Path]::Combine($OutputDirectory, 'AccucutAdmin.psrc')
+    $sessionFile = [System.IO.Path]::Combine($OutputDirectory, 'AccucutAdmin.pssc')
+    $tokens = @{ '{{ROOT}}' = $Root; '{{ADMIN_ACCOUNT}}' = $AdminAccount; '{{ADMIN_GROUP}}' = $GroupName; '{{TRANSCRIPT_DIRECTORY}}' = $TranscriptDirectory; '{{ROLE_FILE}}' = $roleFile }
+    foreach ($pair in @(@('AccucutAdmin.psrc', $roleFile), @('AccucutAdmin.pssc', $sessionFile))) {
+        $text = [System.IO.File]::ReadAllText([System.IO.Path]::Combine($TemplateDirectory, $pair[0]))
+        foreach ($token in $tokens.Keys) { $text = $text.Replace($token, [string]$tokens[$token]) }
+        if ($text.Contains('{{')) { throw "The template '$($pair[0])' holds a token that has no value." }
+        $stream = [System.IO.FileStream]::new($pair[1], [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+        try { $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($text); $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
+    }
+    return [pscustomobject]@{ RoleFile = $roleFile; SessionFile = $sessionFile }
+}
+
+function Register-AccucutPSSessionConfiguration {
+    <# The one call that registers a JEA endpoint (a function of its own so that Pester can mock it). Windows Remote Management must be running: it is never switched on here. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$SessionFile
+    )
+
+    $winrm = Get-Service -Name WinRM -ErrorAction SilentlyContinue
+    if ($null -eq $winrm -or $winrm.Status -ne 'Running') { throw 'Windows Remote Management (the WinRM service) is not running, so the Admin endpoint cannot be set up. Run Enable-PSRemoting -Force in an administrator window, then register the endpoint again.' }
+    [void](Register-PSSessionConfiguration -Name $Name -Path $SessionFile -Force -ErrorAction Stop)
+}
+
+function Register-AccucutAdminEndpoint {
+    <#
+    The install's -AdminAccount step (AC-7): the group, the few permissions it needs, the two files from the templates and the JEA endpoint AccucutAdmin (a virtual account in that
+    group, and nothing else; transcripts in logs\jea) (the desktop shortcut is made by install.ps1). -AdminAccount is the one account that may open the endpoint. The account must not be an
+    administrator (A-35: that is the point); if it is, the endpoint is still made and a warning is logged.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][string]$AdminAccount,
+        [Parameter(Mandatory)][string]$ReleaseDirectory,
+        [Parameter(Mandatory)][string]$ScPath,
+        [string]$LogFile
+    )
+
+    $account = Resolve-AccucutAdminAccount -Account $AdminAccount
+    if ($account.IsAdministrator) { Write-AccucutLog -Message "The account '$AdminAccount' is a member of Administrators, so the endpoint does not limit it (A-35 is not met for this account)." -Level Warning -LogFile $LogFile }
+    $groupSid = New-AccucutAdminGroup
+    Grant-AccucutAdminEndpointAccess -Paths $Paths -GroupSid $groupSid -ScPath $ScPath -LogFile $LogFile
+    $files = New-AccucutAdminEndpointFiles -TemplateDirectory ([System.IO.Path]::Combine($ReleaseDirectory, 'jea')) -Root $Paths.Root -AdminAccount $AdminAccount -GroupName $script:AdminGroupName -TranscriptDirectory $Paths.JeaLogs -OutputDirectory $Paths.JeaConfig
+    Register-AccucutPSSessionConfiguration -Name $script:AdminEndpointName -SessionFile $files.SessionFile
+    Write-AccucutLog -Message "The endpoint $($script:AdminEndpointName) is registered for '$AdminAccount' (a virtual account in the group $($script:AdminGroupName); transcripts in '$($Paths.JeaLogs)')." -LogFile $LogFile
+    return [pscustomobject]@{ GroupSid = $groupSid; RoleFile = $files.RoleFile; SessionFile = $files.SessionFile }
+}
+
+function Unregister-AccucutAdminEndpoint {
+    <# Takes the endpoint away (an Admin hand-over, or the removal of a test). The group, its permissions, the files and the desktop shortcut are left for the IT person to review: this module deletes no file but a backup copy. #>
+    [CmdletBinding()]
+    param()
+
+    if ($null -ne (Get-PSSessionConfiguration -Name $script:AdminEndpointName -ErrorAction SilentlyContinue)) {
+        [void](Unregister-PSSessionConfiguration -Name $script:AdminEndpointName -Force -ErrorAction Stop)
+    }
+}
+
+#endregion
+
 Export-ModuleMember -Function @(
     'Get-AccucutPaths',
     'Get-AccucutFileSha256', 'Read-AccucutSha256File', 'Read-AccucutReleaseInfo', 'Test-AccucutAdministrator',
@@ -2301,11 +3498,18 @@ Export-ModuleMember -Function @(
     'Get-AccucutServiceSid', 'ConvertTo-AccucutIdentity', 'Set-AccucutFileAcl', 'Write-AccucutSecureFile', 'Expand-AccucutTemplate',
     'Get-AccucutCurrentRelease', 'Set-AccucutCurrentRelease', 'Remove-AccucutOldReleases', 'Remove-AccucutDirectory', 'Copy-AccucutTree', 'Remove-AccucutOldLogs',
     'Get-AccucutServiceNames', 'Get-AccucutPostgresServiceName', 'Stop-AccucutServices', 'Start-AccucutServices', 'Get-AccucutHttpStatus', 'Wait-AccucutHealth',
+    'Assert-AccucutProxyOrigin', 'Get-AccucutHttpResponse', 'Test-AccucutProxyRedirect', 'Test-AccucutProxyHeaders', 'Test-AccucutClientAddressSeen', 'Write-AccucutProxyCheckResult', 'Invoke-AccucutProxyChecks',
     'Grant-AccucutFolderAccess', 'Grant-AccucutInstallFolderAccess',
     'Assert-AccucutFreeSpace', 'Assert-AccucutServiceIdentity', 'Set-AccucutServiceIdentity', 'Initialize-AccucutServiceFiles', 'Invoke-AccucutMigration',
     'Get-AccucutBackupAccountSid', 'Get-AccucutRightHolder', 'Grant-AccucutBatchLogonRight', 'Revoke-AccucutBatchLogonRight', 'Test-AccucutBatchRightPolicy', 'Test-AccucutModuleLogging', 'Test-AccucutEventSource', 'New-AccucutEventSource', 'Register-AccucutEventSource', 'Get-AccucutRandomNumber', 'New-AccucutComplexPassword', 'Register-AccucutBackupTask', 'Remove-AccucutBackupAccount', 'Wait-AccucutBackupTask', 'Test-AccucutLogonTypeFailure',
     'Grant-AccucutBackupRootAccess', 'New-AccucutBackupFolder', 'Set-AccucutBackupFileAcl', 'Write-AccucutBackupFile', 'Test-AccucutBackupSetting', 'Read-AccucutBackupSettings', 'Write-AccucutBackupConfig',
     'Get-AccucutVolumeRoot', 'Get-AccucutVolumeSpace', 'Format-AccucutSize', 'Test-AccucutBackupRoom', 'ConvertFrom-AccucutBackupStamp', 'Get-AccucutBackupCopy', 'Get-AccucutBackupKeepSet', 'Get-AccucutBackupPruneCandidate',
     'Remove-AccucutBackupCopy', 'Remove-AccucutStaleBackupPart', 'ConvertTo-AccucutShortMessage', 'Invoke-AccucutBackupPipe', 'Add-AccucutJobRun', 'Get-AccucutDatabaseInfo', 'Write-AccucutBackupManifest', 'Invoke-AccucutBackupPrune',
-    'Invoke-AccucutBackup', 'Clear-AccucutCopies'
+    'Invoke-AccucutBackup', 'Invoke-AccucutClearCopies',
+    'New-AccucutRestoreStop', 'Read-AccucutKeyInput', 'ConvertFrom-AccucutSecureString', 'Read-AccucutPgpassPassword', 'Read-AccucutInstallState', 'Test-AccucutRestoreVersion', 'Test-AccucutRestoreRoom',
+    'Write-AccucutRestoreEvent', 'Set-AccucutLockedFileAcl', 'Test-AccucutRestoreLogFile', 'Add-AccucutRestoreLogLine', 'Write-AccucutRestoreRecord', 'Invoke-AccucutRestoreSql', 'Assert-AccucutRestoreDatabaseName',
+    'New-AccucutRestoreDatabase', 'Switch-AccucutRestoreDatabase', 'Remove-AccucutRestoreDatabase', 'Set-AccucutConsoleInputNoPreamble', 'Restore-AccucutConsoleInput', 'Test-AccucutBackupKey', 'Invoke-AccucutRestorePipe',
+    'Assert-AccucutRestoreNotNewer', 'Get-AccucutRestoreChoice', 'Invoke-AccucutRestore',
+    'Get-AccucutAdminGroupSid', 'Get-AccucutAdminGroupMember', 'Resolve-AccucutAdminAccount', 'New-AccucutAdminGroup', 'Add-AccucutFileReadAccess', 'New-AccucutAdminFolder', 'Grant-AccucutServiceControl', 'Write-AccucutRestoreConfig',
+    'Grant-AccucutAdminEndpointAccess', 'New-AccucutAdminEndpointFiles', 'Register-AccucutPSSessionConfiguration', 'Register-AccucutAdminEndpoint', 'Unregister-AccucutAdminEndpoint'
 )

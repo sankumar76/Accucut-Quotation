@@ -12,6 +12,9 @@ export const PASSWORD_HINT = `${PASSWORD_RULE_HINT} Tell the person in person or
 
 export const RESET_PASSWORD_HINT = `${PASSWORD_RULE_HINT} The old password stops working straight away. The person must change it at their next sign-in.`;
 
+/** The label of the page's button that opens the hand-over dialog (STORY-01.09 AC-1); the dialog's own words are `hand-over-texts.ts`, fetched with it. */
+export const HAND_OVER_OPEN_LABEL = 'Hand over Admin role';
+
 export const FAILED_ADD_MESSAGE = 'We could not add the user.';
 export const FAILED_EDIT_MESSAGE = 'We could not save the changes.';
 /**
@@ -40,4 +43,12 @@ export const TRY_AGAIN_BODY = 'Check your connection and try again. Nothing was 
 /** The title of the notice shown when the code of a dialog did not arrive: the Deactivate dialog is a confirmation, the others are forms (UX spec v0.14, SCR-25). */
 export function dialogFailureTitle(kind: DialogKind | null): string {
   return kind === 'deactivate' ? FAILED_CONFIRMATION_TITLE : FAILED_DIALOGS_TITLE;
+}
+
+/**
+ * What the Deactivate dialog says (UX spec SCR-14, UX-21): the person can no longer sign in, their tasks and estimates stay as they are, **they can be reassigned** (STORY-04.07 AC-9, true
+ * now that "Reassign or change deadline" exists), and the person can be activated again. The sentence about reassigning follows the one about the tasks it is about.
+ */
+export function deactivateDescription(name: string): string {
+  return `${name} can no longer sign in. Their tasks and estimates stay as they are. You can reassign their open tasks. You can activate them again later.`;
 }

@@ -1,7 +1,7 @@
 import type { NextAuthOptions } from 'next-auth';
 
-import { loadAppEnv } from '../lib/env';
-import { systemClock } from '../lib/time';
+import { loadAppEnv, loadEmailFeature, loadExportEnv, loadOriginEnv } from '../lib/env';
+import { MILLISECONDS_PER_SECOND, systemClock } from '../lib/time';
 
 import { buildAuthOptions } from './auth/options';
 import { createThreadBuilder, exportThreadFile } from './export/thread-runner';
@@ -10,12 +10,16 @@ import { createSessionCookieIssuer, type SessionCookieIssuer } from './auth/sess
 import { createApprovalRepository } from './repositories/approval-repository';
 import { createAuditRepository } from './repositories/audit-repository';
 import { createCalculationRepository } from './repositories/calculation-repository';
+import { createConfigCheckpointRepository } from './repositories/config-checkpoint-repository';
 import { createConfigRepository } from './repositories/config-repository';
 import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
 import { createExportRepository } from './repositories/export-repository';
 import { createImageRepository } from './repositories/image-repository';
-import { createJobRunRepository } from './repositories/job-run-repository';
+import { createHeartbeatRepository, createJobRunRepository, type HeartbeatRepository } from './repositories/job-run-repository';
+import { createEmailOutboxRepository } from './repositories/email-outbox-repository';
+import { createPasswordResetRepository } from './repositories/password-reset-repository';
+import { createSettingsRepository } from './repositories/settings-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
 import { createTaskRepository } from './repositories/task-repository';
@@ -23,20 +27,32 @@ import { createThrottleRepository } from './repositories/throttle-repository';
 import { createTransactionRunner } from './repositories/transaction';
 import { createUserRepository, type UserRepository } from './repositories/user-repository';
 import { type AccountService, createAccountService } from './services/account-service';
+import { type AdminHandoverService, createAdminHandoverService } from './services/admin-handover-service';
 import { type ApprovalService, createApprovalService } from './services/approval-service';
 import { type AuditService, createAuditService } from './services/audit-service';
 import { type AuthService, createAuthService } from './services/auth-service';
+import { type CancelApprovalService, createCancelApprovalService } from './services/cancel-approval-service';
 import { type CalculationService, createCalculationService } from './services/calculation-service';
+import { createConfigEditService, type ConfigEditService } from './services/config-edit-service';
 import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
+import { createConfigCheckpointService, type ConfigCheckpointService } from './services/config-checkpoint-service';
+import { createConfigStructureService, type ConfigStructureService } from './services/config-structure-service';
 import { getCurrentVersion, getVersionById } from './services/config-service';
 import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
+import { createMailService, type MailService } from './mail/mail-service';
+import { createMailer } from './mail/send';
+import { createMailTransport } from './mail/transport';
 import { createExportService, type ExportService } from './services/export-service';
 import { createMastersService, type MastersService } from './services/masters-service';
+import { createPasswordResetService, type PasswordResetService } from './services/password-reset-service';
+import { createRemovePriceService, type RemovePriceService } from './services/remove-price-service';
 import { createSettingsService, type SettingsService } from './services/settings-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
+import { createTaskMail } from './services/task-mail';
 import { createTaskService, type TaskService } from './services/task-service';
+import { createUnlockService, type UnlockService } from './services/unlock-service';
 import { createUserService, type UserService } from './services/user-service';
 
 /**
@@ -51,19 +67,29 @@ let userRepository: UserRepository | undefined;
 let authService: AuthService | undefined;
 let userService: UserService | undefined;
 let accountService: AccountService | undefined;
+let passwordResetService: PasswordResetService | undefined;
+let adminHandoverService: AdminHandoverService | undefined;
 let stepUpService: StepUpService | undefined;
+let configEditService: ConfigEditService | undefined;
 let sessionCookieIssuer: SessionCookieIssuer | undefined;
 let auditService: AuditService | undefined;
 let mastersService: MastersService | undefined;
 let taskService: TaskService | undefined;
 let estimateService: EstimateService | undefined;
 let configReadService: ConfigReadService | undefined;
+let configStructureService: ConfigStructureService | undefined;
+let configCheckpointService: ConfigCheckpointService | undefined;
 let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
 let approvalService: ApprovalService | undefined;
+let unlockService: UnlockService | undefined;
+let cancelApprovalService: CancelApprovalService | undefined;
+let removePriceService: RemovePriceService | undefined;
 let costDetailsService: CostDetailsService | undefined;
 let exportService: ExportService | undefined;
 let settingsService: SettingsService | undefined;
+let mailService: MailService | undefined;
+let heartbeatRepository: HeartbeatRepository | undefined;
 let authOptions: NextAuthOptions | undefined;
 
 function runtimeClient() {
@@ -73,6 +99,12 @@ function runtimeClient() {
 export function getUserRepository(): UserRepository {
   userRepository ??= createUserRepository(runtimeClient());
   return userRepository;
+}
+
+/** The worker's heartbeat, as `GET /api/health` reads it (STORY-10.09a AC-6). The web process only reads it: the worker writes the rows and prunes them. */
+export function getHeartbeatRepository(): HeartbeatRepository {
+  heartbeatRepository ??= createHeartbeatRepository(runtimeClient());
+  return heartbeatRepository;
 }
 
 export function getAuthService(): AuthService {
@@ -121,6 +153,26 @@ export function getAccountService(): AccountService {
     keySecret: loadAppEnv().AUTH_SECRET,
   });
   return accountService;
+}
+
+/**
+ * Reset a password by an e-mailed link (STORY-09.07): the request for a link (public, enumeration-safe, counted on keys of its own) and the use of one. The link is queued through the outbox
+ * (`getMailService().enqueue`), so a mail server that is down never blocks the request, and it is built from `APP_ORIGIN`. `FEATURE_EMAIL` is read on every request.
+ */
+export function getPasswordResetService(): PasswordResetService {
+  passwordResetService ??= createPasswordResetService({
+    resets: createPasswordResetRepository(runtimeClient()),
+    users: getUserRepository(),
+    throttles: createThrottleRepository(runtimeClient()),
+    hasher: passwordHasher,
+    transactions: createTransactionRunner(runtimeClient()),
+    mail: { enqueue: (tx, message) => getMailService().enqueue(tx, message) },
+    clock: systemClock,
+    keySecret: loadAppEnv().AUTH_SECRET,
+    appOrigin: () => loadOriginEnv().APP_ORIGIN,
+    emailEnabled: () => loadEmailFeature(),
+  });
+  return passwordResetService;
 }
 
 /**
@@ -177,6 +229,18 @@ export function getTaskService(): TaskService {
     tasks: createTaskRepository(runtimeClient()),
     transactions: createTransactionRunner(runtimeClient()),
     clock: systemClock,
+    // A reassign writes its audit entry in its own transaction (STORY-04.07).
+    audit: getAuditService(),
+    // The assignment e-mail (STORY-09.03). The mail service is reached only when a row is written (alerts ON and `FEATURE_EMAIL` on, DEF-055), so an assignment with either off never builds
+    // the mail transport; withdrawing an unsent row is a plain outbox update and does not build it either. `FEATURE_EMAIL` is read on every call, as the other writers of mail do.
+    mail: createTaskMail({
+      mail: { enqueue: (tx, message) => getMailService().enqueue(tx, message) },
+      outbox: createEmailOutboxRepository(runtimeClient()),
+      settings: createSettingsRepository(runtimeClient()),
+      appOrigin: () => loadOriginEnv().APP_ORIGIN,
+      clock: systemClock,
+      emailEnabled: () => loadEmailFeature(),
+    }),
   });
   return taskService;
 }
@@ -194,9 +258,11 @@ export function getEstimateService(): EstimateService {
       // The part pictures (STORY-05.07): stored whole in the database, added and read by the runtime role and never changed.
       images: createImageRepository(runtimeClient()),
       transactions: createTransactionRunner(runtimeClient()),
-      // The part form (STORY-05.03): a part's material is locked in the Material Master (`lockMaterialForUse`, no number is read), and the form is built from the current registry.
+      // The part form (STORY-05.03): a part's material is locked in the Material Master (`lockMaterialForUse`, no number is read), and the form is built from the current registry, except for an
+      // APPROVED estimate, whose form is built from the version it was calculated with (STORY-08.05), read by its ID and cached per version.
       materials: createMasterRepository(runtimeClient()),
       currentConfiguration: async () => (await getCurrentVersion(configurations)).document,
+      configurationById: async (versionId) => (await getVersionById(configurations, versionId)).document,
     });
   }
   return estimateService;
@@ -209,6 +275,54 @@ export function getEstimateService(): EstimateService {
 export function getConfigReadService(): ConfigReadService {
   configReadService ??= createConfigReadService({ configurations: createConfigRepository(runtimeClient()), masters: createMasterRepository(runtimeClient()) });
   return configReadService;
+}
+
+/**
+ * The formula editor (STORY-08.02): the live check, the sample rows and the save of a formula with the Admin's password. Restricted (ADR-008): the routes that call it are in the manifest for the Admin alone. It shares the
+ * runtime-role client, the step-up check (its attempts are counted on the `stepup` key) and the audit service, so the new version and its entry are one transaction.
+ */
+export function getConfigEditService(): ConfigEditService {
+  configEditService ??= createConfigEditService({
+    configurations: createConfigRepository(runtimeClient()),
+    masters: createMasterRepository(runtimeClient()),
+    calculations: createCalculationRepository(runtimeClient()),
+    stepUp: getStepUpService(),
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
+  });
+  return configEditService;
+}
+
+/**
+ * The structure of the field registry: the insert wizard (STORY-08.03: the options SCR-19 offers, the preview of the letter changes and the insert of a field or a pair, with no password step) and the delete of a field
+ * (STORY-08.04: the references read and the delete, with the password step, FR-080). Restricted (ADR-008): the routes that call it are in the manifest for the Admin alone. It shares the runtime-role client, the step-up
+ * check and the audit service, so the new version and its entry are one transaction.
+ */
+export function getConfigStructureService(): ConfigStructureService {
+  configStructureService ??= createConfigStructureService({
+    configurations: createConfigRepository(runtimeClient()),
+    masters: createMasterRepository(runtimeClient()),
+    stepUp: getStepUpService(),
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
+  });
+  return configStructureService;
+}
+
+/**
+ * Checkpoints and revert (STORY-08.06): the list and the save of a checkpoint, and the revert to an earlier version with the Admin's password (FR-078, FR-080). Restricted (ADR-008): the routes that call it are in the
+ * manifest for the Admin alone. It shares the runtime-role client, the step-up check and the audit service, so the new version and its entry are one transaction.
+ */
+export function getConfigCheckpointService(): ConfigCheckpointService {
+  configCheckpointService ??= createConfigCheckpointService({
+    configurations: createConfigRepository(runtimeClient()),
+    checkpoints: createConfigCheckpointRepository(runtimeClient()),
+    masters: createMasterRepository(runtimeClient()),
+    stepUp: getStepUpService(),
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
+  });
+  return configCheckpointService;
 }
 
 /**
@@ -250,6 +364,9 @@ export function getEstimateReviewService(): EstimateReviewService {
       // BO is read from the approvals row, never through the figure state (STORY-06.06 AC-9).
       approvals: createApprovalRepository(runtimeClient()),
       nodes: createEstimateNodeRepository(runtimeClient()),
+      // The status and the masters now, for the notice of rates that changed since the calculation (STORY-06.11): read only while the figures are current and the estimate is not approved.
+      estimates: createEstimateRepository(runtimeClient()),
+      masters: createMasterRepository(runtimeClient()),
       configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
     });
   }
@@ -273,11 +390,83 @@ export function getApprovalService(): ApprovalService {
 }
 
 /**
- * The Settings page's reading of the backups and the server disk (STORY-02.09): the last good backup and the newest free-space reading, from `job_runs`, against the system clock. The
- * routes and the page that call it are in the manifest for the Admin alone.
+ * Unlock and its preview (STORY-06.08): under the estimate's row lock in one transaction, the customer and the materials read `FOR SHARE`, the estimate's move to DRAFT (the estimate service's `transition`, in the same
+ * transaction), the unlock stored on the approval and the audit entry; and the read of what changed since the approval, as counts. Restricted (NFR-002): only the two unlock routes ask for it here, for the Lead and the Admin alone.
+ */
+export function getUnlockService(): UnlockService {
+  if (unlockService === undefined) {
+    const configurations = createConfigRepository(runtimeClient());
+    unlockService = createUnlockService({
+      estimates: createEstimateRepository(runtimeClient()),
+      approvals: createApprovalRepository(runtimeClient()),
+      calculations: createCalculationRepository(runtimeClient()),
+      masters: createMasterRepository(runtimeClient()),
+      configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
+      transactions: createTransactionRunner(runtimeClient()),
+      workflow: { transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx), audit: getAuditService() },
+    });
+  }
+  return unlockService;
+}
+
+/**
+ * Cancel approval (STORY-06.12): the password check of STORY-06.14 in the request, then under the estimate's row lock in one transaction the customer and the materials read `FOR SHARE` (the check Unlock shares), the
+ * estimate's move (the estimate service's `transition`, in the same transaction), the cancel stored on the approval and the audit entry. Restricted (NFR-002): only the one cancel route asks for it here, for the Admin alone.
+ */
+export function getCancelApprovalService(): CancelApprovalService {
+  cancelApprovalService ??= createCancelApprovalService({
+    estimates: createEstimateRepository(runtimeClient()),
+    approvals: createApprovalRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+    stepUp: getStepUpService(),
+    workflow: { transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx), audit: getAuditService() },
+  });
+  return cancelApprovalService;
+}
+
+/**
+ * The Admin hand-over (STORY-01.09): the password check of STORY-06.14 in the request, then in one transaction with both rows locked the swap of the two roles and the one audit entry. Shares the
+ * runtime-role client and the step-up check; only its one route asks for it, for the Admin alone.
+ */
+export function getAdminHandoverService(): AdminHandoverService {
+  adminHandoverService ??= createAdminHandoverService({
+    users: getUserRepository(),
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
+    stepUp: getStepUpService(),
+  });
+  return adminHandoverService;
+}
+
+/**
+ * Remove price (STORY-06.13): the password check of STORY-06.14 in the request, then under the estimate's row lock in one transaction the removal stored on the approval and the audit entry that keeps the price.
+ * Restricted (NFR-002): only the one remove-price route asks for it here, for the Admin alone.
+ */
+export function getRemovePriceService(): RemovePriceService {
+  removePriceService ??= createRemovePriceService({
+    estimates: createEstimateRepository(runtimeClient()),
+    approvals: createApprovalRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+    stepUp: getStepUpService(),
+    audit: getAuditService(),
+  });
+  return removePriceService;
+}
+
+/**
+ * The Settings page (STORY-02.09, STORY-09.02): the last good backup and the newest free-space reading, from `job_runs`, against the system clock, and the e-mail alerts of the `settings` row with
+ * the test e-mail, which goes through the mail service's `sendNow`. The routes and the page that call it are in the manifest for the Admin alone.
  */
 export function getSettingsService(): SettingsService {
-  settingsService ??= createSettingsService({ jobRuns: createJobRunRepository(runtimeClient()), clock: systemClock });
+  settingsService ??= createSettingsService({
+    jobRuns: createJobRunRepository(runtimeClient()),
+    outbox: createEmailOutboxRepository(runtimeClient()),
+    settings: createSettingsRepository(runtimeClient()),
+    users: getUserRepository(),
+    mail: getMailService(),
+    emailEnabled: () => loadEmailFeature(),
+    clock: systemClock,
+  });
   return settingsService;
 }
 
@@ -308,8 +497,12 @@ export function getExportService(): ExportService {
     exportService = createExportService({
       header: createExportRepository(runtimeClient()),
       nodes: createEstimateNodeRepository(runtimeClient()),
-      configuration: { current: () => getCurrentVersion(configurations) },
-      build: createThreadBuilder({ entry: exportThreadFile(process.cwd()) }),
+      calculations: createCalculationRepository(runtimeClient()),
+      approvals: createApprovalRepository(runtimeClient()),
+      images: createImageRepository(runtimeClient()),
+      configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
+      transactions: createTransactionRunner(runtimeClient()),
+      builder: createThreadBuilder({ entry: exportThreadFile(process.cwd()), timeoutMs: loadExportEnv().EXPORT_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND }),
       clock: systemClock,
     });
   }
@@ -332,4 +525,17 @@ export function getAuthOptions(): NextAuthOptions {
     });
   }
   return authOptions;
+}
+
+/**
+ * The mail outbox and the direct send (STORY-09.01): `enqueue(tx, message)` for the alerts and the reset link, `sendNow(message)` for the Settings test e-mail. The transport is built
+ * from `SMTP_AUTH_MODE` and its variables when first used, never at import. The worker builds its own pair in `src/worker/main.ts`; nothing else in `app` sends.
+ */
+export function getMailService(): MailService {
+  mailService ??= createMailService({
+    outbox: createEmailOutboxRepository(runtimeClient()),
+    mailer: createMailer(createMailTransport(loadAppEnv(), { clock: systemClock })),
+    clock: systemClock,
+  });
+  return mailService;
 }

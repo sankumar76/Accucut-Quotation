@@ -1,6 +1,9 @@
+import { columnLetterToIndex } from '../../src/lib/columns';
 import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest';
+import { FIELD_ID_NAMESPACE, seedId } from '../../prisma/seed/config/seed-sections-and-stages';
 
 import { CUSTOMER_DELETE_RECIPE_ID, CUSTOMER_RECIPE_ID } from './customer-canary';
+import { checkpointCall } from './checkpoint-calls';
 import { canaryEstimatePageFor } from './estimate-recipe';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_NEXT_PASSWORD, HARNESS_PASSWORD } from './harness-password';
@@ -44,11 +47,24 @@ export interface CallContext {
   readonly targetId: string;
 }
 
+/**
+ * The ID of Cutting Cost (AL), a seed field every registry holds (STORY-08.02: the formula editor's recipes name it). Made from the seed's own rule and not read from the seed registry, because the Playwright
+ * process lists these recipes too and cannot load the formula engine behind the registry; `tests/unit/config/formula-edit.test.ts` holds it equal to the registry's.
+ */
+export const CUTTING_COST_FIELD_ID = seedId(FIELD_ID_NAMESPACE, columnLetterToIndex('AL'));
+
+/** The ID of Unit Production Price (BG), a system field the Admin may never delete (STORY-08.04): the delete's valid call names it, so the call is refused 409 and stores nothing. Made from the seed's own ID rule, for the same reason. */
+const SYSTEM_FIELD_ID = seedId(FIELD_ID_NAMESPACE, columnLetterToIndex('BG'));
+
 /** The seed rate that no formula uses (`Plating-rate-per-sqin`, D-40), so a valid delete of it succeeds. */
 const PLATING_ITEM_ID = '00000000-0000-4000-8000-000400000009';
 
 /** A calculation ID that no estimate has (STORY-06.05): the approval recipe names it, so the guard refuses the call whatever the estimate holds. */
 export const UNKNOWN_CALCULATION_ID = '00000000-0000-4000-8000-00000000ca1c';
+/** An approval that is none, for the recipe of Cancel approval (STORY-06.12). */
+export const UNKNOWN_APPROVAL_ID = '00000000-0000-4000-8000-00000000a9a9';
+/** A person that does not exist, for the recipe of the Admin hand-over (STORY-01.09), which must never hand the role to anyone. */
+export const UNKNOWN_USER_ID = '00000000-0000-4000-8000-0000000000ff';
 
 /** The ID a route with no recipe gets. A route with a dynamic segment that still gets it has no real-value recipe (see `recipeProblem`). */
 export const NO_RECIPE_ID = 'invented-id';
@@ -82,6 +98,19 @@ export function validPageAddress(path: string, context: { readonly ownerId: stri
 /** The Sl. No of the canary estimate's one part (the part is first at the top, so it is 1). */
 const CANARY_PART_SL_NO = '1';
 
+/** A version number no harness reaches: a save on it is the 409 of a stale base, which stores nothing. */
+const STALE_BASE_VERSION = 9_999;
+
+/**
+ * An insert after AX (STORY-08.03), as the preview's "letters only" call and the save's stale call read it. Made from the seed's own ID rule like `CUTTING_COST_FIELD_ID`, because the Playwright process lists these
+ * recipes too and cannot load the registry. The details are empty on purpose: the letters-only preview reads the places alone, and a stale save is refused before the details are read.
+ */
+const INSERT_AFTER_AX = {
+  kind: 'input',
+  afterFieldId: seedId(FIELD_ID_NAMESPACE, columnLetterToIndex('AX')),
+  input: { label: '', dataType: 'number', defaultValue: '', sectionId: '', unit: '', hint: '', width: 12, numFmt: '0.00', watchFieldId: null },
+} as const;
+
 /** Real-value recipes for pages with a dynamic segment: path pattern to a function of the signed-in person. */
 const PAGE_RECIPES: Readonly<Record<string, (context: { readonly ownerId: string }) => string>> = {
   // SCR-12's edit page (STORY-02.02): the canary customer exists wherever the canaries are loaded.
@@ -92,6 +121,8 @@ const PAGE_RECIPES: Readonly<Record<string, (context: { readonly ownerId: string
   '/estimates/[code]/costs/[slNo]': (context) => `${canaryEstimatePageFor(context.ownerId)}/costs/${CANARY_PART_SL_NO}`,
   // SCR-10 (STORY-07.01): the canary estimate's export page. Lead and Admin only: an Engineer is refused whatever the address.
   '/estimates/[code]/export': (context) => `${canaryEstimatePageFor(context.ownerId)}/export`,
+  // SCR-18 (STORY-08.02): the editor of Cutting Cost, a field every registry holds (its ID is a seed ID). The Admin only: a Lead and an Engineer are refused whatever the address.
+  '/config/fields/[id]/formula': () => `/config/fields/${CUTTING_COST_FIELD_ID}/formula`,
 };
 
 /**
@@ -147,6 +178,9 @@ function taskCall(method: HttpMethod, path: string, context: CallContext): Valid
     // STORY-04.04: the canary task of the signed-in Engineer, whose task ID is the same as its estimate's (`estimate-recipe.ts`), so the scan opens a task that really exists.
     case 'GET /api/v1/tasks/[id]':
       return { id: context.targetId, status: 200 };
+    // STORY-04.07: the same canary task. An empty body changes nothing (no entry, no revision), so the call answers 200 at any state, however often the matrix and the scan repeat it.
+    case 'PATCH /api/v1/tasks/[id]':
+      return { id: context.targetId, body: {}, status: 200 };
     default:
       return undefined;
   }
@@ -201,6 +235,23 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // writes nothing and repeats, for the two roles that may call it. The refusals hold the words of the step and no figure, so the scan reads them. The rest of the order is `approve-route.test.ts`'s.
     case 'POST /api/v1/estimates/[id]/approve':
       return { id, body: { calculationId: UNKNOWN_CALCULATION_ID, price: '1.00' }, status: 409 };
+    // STORY-06.08: the canary estimate is never APPROVED, so a good reason is refused 409 by the state machine ("not approved") at every state it can be in, for the two roles that may call either route, and
+    // writes nothing (no unlock, no status move, no audit entry). The preview is the same refusal with no body. The refusals hold a fixed sentence and no figure, so the scan reads them. The rest of the
+    // order (the reason, a deleted customer) is `unlock-route.test.ts`'s, and the row lock and the grants are `tests/integration/approval/unlock.test.ts`.
+    case 'GET /api/v1/estimates/[id]/unlock-preview':
+      return { id, status: 409 };
+    case 'POST /api/v1/estimates/[id]/unlock':
+      return { id, body: { reason: 'Invented reason for the canary estimate.' }, status: 409 };
+    // STORY-06.12: Admin only. The canary estimate has no approval at any state it can be in, so a good reason, the person's own password (`HARNESS_PASSWORD`, the right one, so the step-up passes and clears its count) and an
+    // approval that is none are refused 409 ("no approval to cancel") under the estimate's lock, for the one role that may call it, and write nothing (no cancel, no status move, no audit entry). The refusal holds a fixed
+    // sentence and no figure, so the scan reads it. The rest of the order (the reason, the password, a deleted customer, a newer approval) is `cancel-approval-route.test.ts`'s, and the row lock is `tests/integration/approval/cancel.test.ts`.
+    case 'POST /api/v1/estimates/[id]/approval/cancel':
+      return { id, body: { approvalId: UNKNOWN_APPROVAL_ID, reason: 'Invented reason for the canary estimate.', password: HARNESS_PASSWORD }, status: 409 };
+    // STORY-06.13: Admin only. The canary estimate has no approval at any state it can be in, so the person's own password (`HARNESS_PASSWORD`, the right one, so the step-up passes and clears its count) and an approval
+    // that is none are refused 409 ("no price to remove") under the estimate's lock, for the one role that may call it, and write nothing (no removal, no audit entry). The refusal holds a fixed sentence and no figure, so the
+    // scan reads it. The rest of the order (the password, a newer approval, an approval not cancelled, a price removed already) is `remove-price-route.test.ts`'s, and the row lock is `tests/integration/approval/remove-price.test.ts`.
+    case 'POST /api/v1/estimates/[id]/approval/remove-price':
+      return { id, body: { approvalId: UNKNOWN_APPROVAL_ID, password: HARNESS_PASSWORD }, status: 409 };
     // STORY-05.07: an add or a replace would raise the canary part's revision, and every later call of the other recipes (which name revision 1) would answer 409, so the valid call
     // of the upload is a text file called a picture: it passes the role, the estimate, the state and the part, and is refused by its content, 415, which changes nothing and repeats
     // at any state. The success path (a stored picture, the revisions, the same file again) is tested against the service and against PostgreSQL. Removing a picture the part
@@ -220,12 +271,38 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // `cost-details-route.test.ts`'s, and the Calculate journey of the scan reads this route as an Engineer (403) after a press.
     case 'GET /api/v1/estimates/[id]/nodes/[nodeId]/costs':
       return { id, status: 200 };
-    // STORY-07.01: the export reads nothing that changes. The two roles that may call it get 200: the summary as JSON and the file as an attachment (a `.xlsx` header row, built in process by the harness).
-    // The canary estimate's header and parts are the harness's own. The Calculate journey of the scan reads both routes as an Engineer (403, no file) after a press.
+    // STORY-07.01, STORY-07.02: the export reads nothing that changes. The summary answers the two roles that may call it 200 as JSON. The file is refused 409 `NOT_CALCULATED` at every state the canary estimate
+    // can be in, because it has no calculation (no file is built until the figures are current, so a refusal holds a fixed sentence and no figure, and the scan reads it); the file of a calculated estimate is
+    // `export-route.test.ts`'s and `tests/integration/export`'s. The Calculate journey of the scan reads both routes as an Engineer (403, no file) after a press, and as a Lead (the file itself).
     case 'GET /api/v1/estimates/[id]/export':
-      return { id, file: true, status: 200 };
+      return { id, status: 409 };
     case 'GET /api/v1/estimates/[id]/export-summary':
       return { id, status: 200 };
+    // STORY-08.02: the formula editor. The valid call of the Admin is the check of a formula and the read of the sample rows (they store nothing), and the save of the formula Cutting Cost already has,
+    // which is the decision on "edit to its own text": 200, no new version, no audit entry and no password asked for, so the call repeats at any state of the harness. A save that really writes, the
+    // password step and the 409 are `config-edit-routes.test.ts`'s and `tests/integration/config/save-formula.test.ts`'s. The answers hold formulas and rate names: Admin only, and the scan reads the refusals.
+    case 'POST /api/v1/config/formula-check':
+      return { id, body: { fieldId: CUTTING_COST_FIELD_ID, text: 'P * Cutting-Rate-per-Sec' }, status: 200 };
+    case 'GET /api/v1/config/sample-rows':
+      return { id, status: 200 };
+    case 'PUT /api/v1/config/fields/[id]/formula':
+      return { id: CUTTING_COST_FIELD_ID, body: { text: 'P * Cutting-Rate-per-Sec', password: HARNESS_PASSWORD, baseVersion: 1 }, status: 200 };
+    // STORY-08.03: the insert wizard. Options and preview store nothing, so they answer 200 at any state. The save's valid call is the one that stores nothing too: a base version that is not the latest is 409
+    // `CONFIG_VERSION_CHANGED` for the one role that may call it, at every state of the harness. A save that really writes, the 422 and the audit rollback are `config-structure-routes.test.ts`'s and
+    // `tests/integration/config/insert-field.test.ts`'s. The answers name formulas and column labels: Admin only, and the scan reads the refusals.
+    case 'GET /api/v1/config/insert-options':
+      return { id, status: 200 };
+    case 'POST /api/v1/config/fields/preview':
+      return { id, body: { spec: INSERT_AFTER_AX, lettersOnly: true }, status: 200 };
+    case 'POST /api/v1/config/fields':
+      return { id, body: { spec: INSERT_AFTER_AX, baseVersion: STALE_BASE_VERSION }, status: 409 };
+    // STORY-08.04: the delete dialog's two routes. The references read stores nothing, so it answers 200 at any state: Cutting Cost is read by the total, so the answer lists a formula. The delete's valid call is the one that stores
+    // nothing too: BG (a system field) is refused 409 `SYSTEM_FIELD` before any password is asked for, for the one role that may call it, at every state of the harness. A delete that really writes, the password step and the
+    // 409s are `config-delete-routes.test.ts`'s and `tests/integration/config/delete-field.test.ts`'s. The answers name formulas and column labels: Admin only, and the scan reads the refusals.
+    case 'GET /api/v1/config/fields/[id]/references':
+      return { id: CUTTING_COST_FIELD_ID, status: 200 };
+    case 'DELETE /api/v1/config/fields/[id]':
+      return { id: SYSTEM_FIELD_ID, body: { password: HARNESS_PASSWORD }, status: 409 };
     default:
       return undefined;
   }
@@ -238,6 +315,13 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
     // whenever `signInAs` names it, so the call repeats as every role; the real scan makes it once for a person made for the run.
     case 'POST /api/v1/account/password':
       return { id: NO_RECIPE_ID, body: { currentPassword: HARNESS_PASSWORD, newPassword: HARNESS_NEXT_PASSWORD }, status: 204 };
+    // STORY-09.02: the Settings routes, Admin only. The valid calls change nothing and answer the same in every environment the scan runs in (the harness, a real database, a server with no mail
+    // server of its own): a PUT that turns alerts ON with no sender address is refused 422 by content, and the test e-mail is refused 422 `NO_SENDER` before the transport is touched, because no
+    // sender address is saved (the settings tests that save one put it back to none). The saves, the sends and the failures are `alerts-routes.test.ts`'s and `tests/integration/settings`'s.
+    case 'PUT /api/v1/settings':
+      return { id: NO_RECIPE_ID, body: { alertsEnabled: true, senderName: 'Invented Sender', senderAddress: '' }, status: 422 };
+    case 'POST /api/v1/settings/test-email':
+      return { id: NO_RECIPE_ID, status: 422 };
     case 'GET /api/v1/users':
       return DEFAULT_CALL;
     case 'POST /api/v1/users':
@@ -250,6 +334,11 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
       return { id: context.targetId, body: { name: 'Invented Renamed Engineer' }, status: 200 };
     case 'POST /api/v1/users/[id]/password-reset':
       return { id: context.targetId, body: { password: 'invented-temporary-password-1' }, status: 204 };
+    // STORY-01.09: Admin only. A hand-over that succeeded would change who the one Admin is, and the harness (and the real scan's database) holds that person for every other call, so the valid call names a person
+    // that does not exist: the right password (`HARNESS_PASSWORD`, so the step-up passes and clears its count) and an unknown ID are refused 404 under the locks, for the one role that may call it, and write
+    // nothing. The refusal is a fixed sentence. The rest (a swap, a person who is deactivated or the caller, the password, the order, the locks) is `admin-handover-route.test.ts`'s and `tests/integration/users/admin-handover.test.ts`.
+    case 'POST /api/v1/users/[id]/admin-handover':
+      return { id: UNKNOWN_USER_ID, body: { password: HARNESS_PASSWORD }, status: 404 };
     // STORY-02.01: the Process Master routes. The ID is a seed rate no formula uses (so the delete can answer 204) and the body is invented.
     case 'GET /api/v1/process-items':
       return DEFAULT_CALL;
@@ -259,6 +348,9 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
       return { id: PLATING_ITEM_ID, body: { defaultValue: '2.37' }, status: 200 };
     case 'DELETE /api/v1/process-items/[id]':
       return { id: PLATING_ITEM_ID, status: 204 };
+    // STORY-02.08: Save choices. No choice for a rate that exists (a real one would change customers): an unknown rate is refused 404 under the lock, writing nothing.
+    case 'POST /api/v1/process-items/[id]/propagation':
+      return { id: UNKNOWN_USER_ID, body: { newDefault: '1.37', choices: [] }, status: 404 };
     // STORY-02.03: the Material Master routes. The ID is a canary material (`material-master-canary.ts`), which every database the scan reads
     // holds; the bodies are invented. `GET /api/v1/options/materials` has no ID or body: the default call is its valid call.
     case 'GET /api/v1/materials':
@@ -280,7 +372,7 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
     case 'PUT /api/v1/exchange-rates':
       return { id: NO_RECIPE_ID, body: { usd: EXCHANGE_RATE_CANARIES.usd, eur: EXCHANGE_RATE_CANARIES.eur }, status: 200 };
     default:
-      return treatmentCall(method, path) ?? customerCall(method, path) ?? taskCall(method, path, context) ?? estimateCall(method, path, context) ?? DEFAULT_CALL;
+      return treatmentCall(method, path) ?? customerCall(method, path) ?? taskCall(method, path, context) ?? estimateCall(method, path, context) ?? checkpointCall(method, path) ?? DEFAULT_CALL;
   }
 }
 

@@ -79,6 +79,8 @@ describe('overlay imports (AQP-339 AC-6)', () => {
       'src/components/features/estimate-workspace/calculate-bar.tsx',
       // The warning on leaving holds the AlertDialog of STORY-05.08 with a plain import, so the guard must stay lazy.
       'src/components/features/estimate-workspace/leave-guard.tsx',
+      // The 30-second save (STORY-05.10) is the page's one timer, in the form's lazy part: it may not come into the first load (NFR-009).
+      'src/components/features/estimate-workspace/autosave.tsx',
       // The dialog of "Approve and lock" is fetched on the first press (STORY-06.06, ADR-016).
       'src/components/features/estimate-approve/approve-dialog.tsx',
       // The Lead's quantity warning is fetched when the server answers a Recalculate with the 409 (STORY-06.10, ADR-016).
@@ -99,7 +101,7 @@ describe('overlay imports (AQP-339 AC-6)', () => {
       expect(firstLoad, name).not.toContain(`${folder}/${name}.tsx`);
     }
     // What reads and saves a part's values goes with the fields: `use-part-form.ts` may not come back into the first load through the definition hook.
-    for (const path of [`${folder}/use-part-form.ts`, 'src/lib/estimates/form-values.ts']) {
+    for (const path of [`${folder}/use-part-form.ts`, `${folder}/use-autosave.ts`, `${folder}/use-autosave-trail.ts`, `${folder}/autosave.tsx`, 'src/lib/estimates/form-values.ts']) {
       expect(firstLoad, path).not.toContain(path);
     }
   });

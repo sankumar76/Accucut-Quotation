@@ -8,6 +8,9 @@ import {
   describeBackupWatch,
   nodeStatfs,
   performBackupWatch,
+  type BackupMissedAlert,
+  type BackupMissedMail,
+  type BackupMissedQueued,
   runBackupWatch,
   scheduleBackupWatch,
   type BackupWatchDependencies,
@@ -16,6 +19,7 @@ import {
   type BackupWatchStore,
   type StatfsFigures,
 } from '@/server/jobs/backup-watch';
+import { runJob, type FailedJobRun, type JobLogFields, type JobLogLevel } from '@/server/jobs/run-job';
 
 const cron = vi.hoisted(() => ({ schedule: vi.fn() }));
 vi.mock('node-cron', () => ({ schedule: cron.schedule }));
@@ -52,9 +56,9 @@ function harness(volumes: Record<string, StatfsFigures>, latestGoodBackup: Date 
     latestGoodBackupAt(): Promise<Date | null> {
       return this.failLookup ? Promise.reject(new Error('connection to server at "10.1.2.3" failed')) : Promise.resolve(this.latest);
     },
-    recordRun(run: BackupWatchRun): Promise<void> {
+    recordRun(run: BackupWatchRun | FailedJobRun): Promise<void> {
       if (this.failWrite) return Promise.reject(new Error('permission denied for table job_runs'));
-      recorded.push(run);
+      recorded.push(run as BackupWatchRun);
       return Promise.resolve();
     },
   };
@@ -202,49 +206,49 @@ describe('runBackupWatch: the row (AC-5, AC-9)', () => {
   });
 });
 
-describe('performBackupWatch: one scheduled run never throws, and says what matters (AC-5)', () => {
-  it('writes its own row and logs the free percentage at info when all is well', async () => {
+describe('performBackupWatch: one scheduled run says what matters to the wrapper, and throws when the database fails (AC-5; STORY-10.09a AC-3)', () => {
+  it('writes its own row and reports the free percentage at info when all is well', async () => {
     const test = harness({ 'C:/': volume(42) });
-    const lines: Array<[string, string | undefined]> = [];
-    await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies, (message, level) => lines.push([message, level]));
+    const outcome = await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
     expect(test.recorded).toHaveLength(1);
-    expect(lines).toEqual([['backup-watch: 42 % of the disk is free', 'info']]);
+    expect(outcome).toEqual({ summary: 'backup-watch: 42 % of the disk is free', level: 'info' });
   });
 
-  it('logs at error, and still writes the row, when there has been no good backup for more than 8 days', async () => {
+  it('reports at error, and still writes the row, when there has been no good backup for more than 8 days', async () => {
     const test = harness({ 'C:/': volume(42) }, new Date(NOW.getTime() - 9 * DAY));
-    const lines: Array<[string, string | undefined]> = [];
-    await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies, (message, level) => lines.push([message, level]));
-    expect(lines).toEqual([['backup-watch: 42 % of the disk is free; NO GOOD BACKUP in the last 8 days', 'error']]);
+    const outcome = await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
+    expect(outcome).toEqual({ summary: 'backup-watch: 42 % of the disk is free; NO GOOD BACKUP in the last 8 days', level: 'error' });
     expect(test.recorded[0]?.result.backupLate).toBe(true);
   });
 
-  it('logs a failed reading at error and writes the failed row', async () => {
+  it('reports a failed reading at error and writes the failed row', async () => {
     const test = harness({});
-    const lines: Array<[string, string | undefined]> = [];
-    await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies, (message, level) => lines.push([message, level]));
-    expect(lines).toEqual([['backup-watch failed: the free space of the backup volume could not be read', 'error']]);
+    const outcome = await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
+    expect(outcome).toEqual({ summary: 'backup-watch failed: the free space of the backup volume could not be read', level: 'error' });
     expect(test.recorded[0]?.result.status).toBe('failed');
   });
 
   it('says it is skipped, and writes nothing, when no volume is configured', async () => {
     const test = harness({});
-    const lines: Array<[string, string | undefined]> = [];
-    await performBackupWatch({}, test.dependencies, (message, level) => lines.push([message, level]));
-    expect(lines).toEqual([['backup-watch skipped: neither PG_DATA_VOLUME nor BACKUP_VOLUME is set', undefined]]);
+    const outcome = await performBackupWatch({}, test.dependencies);
+    expect(outcome).toEqual({ summary: 'backup-watch skipped: neither PG_DATA_VOLUME nor BACKUP_VOLUME is set' });
     expect(test.recorded).toHaveLength(0);
   });
 
-  it('does not throw, and does not repeat the database error, when the database cannot be read or written', async () => {
+  it('throws when the database cannot be read or written, and through the wrapper logs the class of the error only, never the database error', async () => {
     const readFails = harness({ 'C:/': volume(42) });
     readFails.store.failLookup = true;
     const writeFails = harness({ 'C:/': volume(42) });
     writeFails.store.failWrite = true;
     for (const test of [readFails, writeFails]) {
-      const lines: string[] = [];
-      await expect(performBackupWatch({ backupVolume: 'C:/' }, test.dependencies, (message) => lines.push(message))).resolves.toBeUndefined();
-      expect(lines.at(-1)).toBe('backup-watch could not read or write the job record');
-      expect(lines.join('\n')).not.toMatch(/10\.1\.2\.3|permission denied|job_runs/);
+      await expect(performBackupWatch({ backupVolume: 'C:/' }, test.dependencies)).rejects.toThrow();
+      const lines: Array<[string, JobLogLevel | undefined, JobLogFields | undefined]> = [];
+      const log = (message: string, level?: JobLogLevel, fields?: JobLogFields): void => void lines.push([message, level, fields]);
+      await expect(
+        runJob({ name: 'backup-watch', log, now: () => NOW, recordFailure: (run) => test.store.recordRun(run) }, () => performBackupWatch({ backupVolume: 'C:/' }, test.dependencies)),
+      ).resolves.toBeUndefined();
+      expect(lines.filter(([, level]) => level === 'error').map(([message]) => message)).toContain('backup-watch failed after 0 ms');
+      expect(JSON.stringify(lines)).not.toMatch(/10\.1\.2\.3|permission denied|job_runs/);
     }
   });
 });
@@ -281,7 +285,7 @@ describe('scheduleBackupWatch: daily at 09:00 IST, only when a volume is named (
     cron.schedule.mockReturnValue({ stop: vi.fn() });
     fsMock.statfs.mockResolvedValue({ bsize: 4096n, blocks: 1000n, bavail: 400n });
     const recorded: BackupWatchRun[] = [];
-    const recordingStore: BackupWatchStore = { latestGoodBackupAt: () => Promise.resolve(new Date(NOW.getTime() - DAY)), recordRun: (run) => Promise.resolve(void recorded.push(run)) };
+    const recordingStore: BackupWatchStore = { latestGoodBackupAt: () => Promise.resolve(new Date(NOW.getTime() - DAY)), recordRun: (run) => Promise.resolve(void recorded.push(run as BackupWatchRun)) };
     scheduleBackupWatch({ backupVolume: 'c:\\' }, recordingStore, () => undefined, () => NOW);
     const callback = cron.schedule.mock.calls[0]?.[1] as () => Promise<void>;
     await callback();
@@ -292,5 +296,115 @@ describe('scheduleBackupWatch: daily at 09:00 IST, only when a volume is named (
   it('nodeStatfs hands the three figures over as numbers', async () => {
     fsMock.statfs.mockResolvedValue({ bsize: 4096, blocks: 10, bavail: 5, bfree: 6, files: 0, ffree: 0, type: 0 });
     expect(await nodeStatfs('C:/')).toEqual({ bsize: 4096, blocks: 10, bavail: 5 });
+  });
+});
+
+/**
+ * STORY-09.06 AC-10 (decision D-a): with a way to queue (`FEATURE_EMAIL` on) the job e-mails the Admin once a day while the backup is late or the disk is nearly full. The message is built from two
+ * flags (no figure, path, drive letter or volume name), the key is `backup-missed:<IST date>`, and a problem with queueing is reported by class and never fails the run.
+ */
+describe('performBackupWatch: the e-mail to the Admin (STORY-09.06 AC-10)', () => {
+  function withAlert(volumes: Record<string, StatfsFigures>, latestGoodBackup: Date | null, answer: BackupMissedQueued | Error = 'queued') {
+    const test = harness(volumes, latestGoodBackup);
+    const queued: Array<{ mail: BackupMissedMail; now: Date }> = [];
+    const alert: BackupMissedAlert = {
+      queue: (mail, now) => {
+        queued.push({ mail, now });
+        return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
+      },
+    };
+    return { ...test, queued, dependencies: { ...test.dependencies, alert } };
+  }
+  const LATE = new Date(NOW.getTime() - 9 * DAY);
+  const GOOD = new Date(NOW.getTime() - 2 * DAY);
+
+  it('AC-10: a late backup queues one message with the key backup-missed:<IST date>, the fixed subject and the words, and the log says so at error', async () => {
+    const test = withAlert({ 'C:/': volume(60) }, LATE);
+    const outcome = await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
+    expect(test.queued).toHaveLength(1);
+    // 03:30 UTC on 16 November is 09:00 IST on 16 November.
+    expect(test.queued[0]?.mail).toMatchObject({ idempotencyKey: 'backup-missed:2026-11-16', event: 'backup-missed', subject: 'Accucut Quotation Portal: server check needed' });
+    expect(test.queued[0]?.mail.bodyText).toContain('The weekly backup is late.');
+    expect(test.queued[0]?.mail.bodyText).not.toContain('disk is nearly full');
+    expect(outcome.level).toBe('error');
+    expect(outcome.summary).toContain('; e-mail to the Admin queued');
+  });
+
+  it('AC-10: the IST date is the date in India, not in UTC: 20:00 UTC on the 15th is the 16th', async () => {
+    const late = new Date('2026-11-15T20:00:00Z');
+    const test = withAlert({ 'C:/': volume(60) }, new Date(late.getTime() - 9 * DAY));
+    await performBackupWatch({ backupVolume: 'C:/' }, { ...test.dependencies, now: () => late });
+    expect(test.queued[0]?.mail.idempotencyKey).toBe('backup-missed:2026-11-16');
+  });
+
+  it('AC-10: free space below 20 % queues the message too (and says the disk is nearly full), with the backup good', async () => {
+    const test = withAlert({ 'C:/': volume(19) }, GOOD);
+    const outcome = await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
+    expect(test.queued).toHaveLength(1);
+    expect(test.queued[0]?.mail.bodyText).toContain('The server disk is nearly full.');
+    expect(test.queued[0]?.mail.bodyText).not.toContain('backup is late');
+    expect(outcome.level).toBe('error');
+    expect(outcome.summary).toContain('; the disk is nearly full');
+  });
+
+  it('AC-10: a late backup and a nearly full disk are one message with both sentences', async () => {
+    const test = withAlert({ 'C:/': volume(5) }, LATE);
+    await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
+    expect(test.queued).toHaveLength(1);
+    expect(test.queued[0]?.mail.bodyText).toContain('The weekly backup is late. The server disk is nearly full.');
+  });
+
+  it('AC-10: exactly 20 % free is not nearly full, and a good backup with room to spare queues nothing', async () => {
+    const edge = withAlert({ 'C:/': volume(20) }, GOOD);
+    await performBackupWatch({ backupVolume: 'C:/' }, edge.dependencies);
+    const fine = withAlert({ 'C:/': volume(60) }, GOOD);
+    const outcome = await performBackupWatch({ backupVolume: 'C:/' }, fine.dependencies);
+    expect(edge.queued).toEqual([]);
+    expect(fine.queued).toEqual([]);
+    expect(outcome.level).toBe('info');
+  });
+
+  it('AC-10: a volume that could not be measured is not "nearly full" (no figures), but a late backup still queues', async () => {
+    const test = withAlert({}, LATE);
+    await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
+    expect(test.queued).toHaveLength(1);
+    expect(test.queued[0]?.mail.bodyText).not.toContain('disk');
+  });
+
+  it('AC-10: the message holds no figure, path, drive letter or volume name', async () => {
+    const test = withAlert({ 'D:/': volume(5), 'C:/': volume(60) }, LATE);
+    await performBackupWatch({ dataVolume: 'D:/', backupVolume: 'C:/' }, test.dependencies);
+    const mail = test.queued[0]?.mail;
+    for (const part of [mail?.subject ?? '', mail?.bodyText ?? '']) {
+      expect(part).not.toMatch(/[A-Za-z]:[\/]|\\|%|\bGB\b|bytes/i);
+      expect(part).not.toMatch(/\d/);
+    }
+  });
+
+  it.each([
+    ['alerts-off', '; no e-mail: alerts are OFF'],
+    ['no-admin', '; no e-mail: there is no active Admin'],
+    ['already-queued', '; e-mail to the Admin already queued today'],
+  ] as const)('AC-10: when queueing says %s the log says so and nothing else changes', async (answer, text) => {
+    const test = withAlert({ 'C:/': volume(60) }, LATE, answer);
+    const outcome = await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
+    expect(outcome.summary).toContain(text);
+    expect(outcome.level).toBe('error');
+    expect(test.recorded).toHaveLength(1);
+  });
+
+  it('AC-10: a database fault while queueing is reported by class only, never fails the run, and the run\'s own row is already written', async () => {
+    const test = withAlert({ 'C:/': volume(60) }, LATE, new Error('connection to server at "10.1.2.3" failed'));
+    const outcome = await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
+    expect(outcome.summary).toContain('; the e-mail to the Admin could not be queued');
+    expect(JSON.stringify(outcome)).not.toContain('10.1.2.3');
+    expect(test.recorded).toHaveLength(1);
+  });
+
+  it('AC-10: with no way to queue (FEATURE_EMAIL off) the job only logs, exactly as before: no e-mail text in the line', async () => {
+    const test = harness({ 'C:/': volume(60) }, LATE);
+    const outcome = await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
+    expect(outcome.summary).toBe('backup-watch: 60 % of the disk is free; NO GOOD BACKUP in the last 8 days');
+    expect(outcome.level).toBe('error');
   });
 });

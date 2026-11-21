@@ -89,9 +89,11 @@ export function ProcessScreen({ initialItems }: ProcessScreenProps) {
           target={dialogs.target}
           formItem={dialogs.formItem}
           blockedBy={dialogs.blockedBy}
+          sync={dialogs.sync}
           onClose={() => dialogs.setOpen(null)}
           onSaved={(saved) => void master.onSaved(saved)}
           onBlocked={master.onBlocked}
+          onDiffer={master.onDiffer}
           onGone={master.onGone}
           onCloseAutoFocus={master.onCloseAutoFocus}
         />

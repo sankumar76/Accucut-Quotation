@@ -7,6 +7,10 @@ import { type AccountService, createAccountService } from '../../src/server/serv
 import { type AuditService, createAuditService } from '../../src/server/services/audit-service';
 import { MILLISECONDS_PER_DAY, MILLISECONDS_PER_HOUR, systemClock } from '../../src/lib/time';
 import { createSettingsService, type SettingsService } from '../../src/server/services/settings-service';
+import { createConfigEditService, type ConfigEditService } from '../../src/server/services/config-edit-service';
+import { createConfigCheckpointService, type ConfigCheckpointService } from '../../src/server/services/config-checkpoint-service';
+import { createConfigStructureService, type ConfigStructureService } from '../../src/server/services/config-structure-service';
+import { createFakeCheckpointRepository, type FakeCheckpointRepository } from './fake-checkpoints';
 import { createConfigReadService, type ConfigReadService } from '../../src/server/services/config-read-service';
 import { createConfigVersionCache } from '../../src/server/services/config-service';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
@@ -14,6 +18,11 @@ import type { CalculationRepository } from '../../src/server/repositories/calcul
 import type { ConfigRepository } from '../../src/server/repositories/config-repository';
 import type { EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
 import { createApprovalService, type ApprovalService } from '../../src/server/services/approval-service';
+import { createUnlockService, type UnlockService } from '../../src/server/services/unlock-service';
+import { createCancelApprovalService, type CancelApprovalService } from '../../src/server/services/cancel-approval-service';
+import { createRemovePriceService, type RemovePriceService } from '../../src/server/services/remove-price-service';
+import { createStepUpService, type StepUpService } from '../../src/server/services/step-up-service';
+import { createAdminHandoverService, type AdminHandoverService } from '../../src/server/services/admin-handover-service';
 import { createCalculationService, type CalculationService } from '../../src/server/services/calculation-service';
 import { createCostDetailsService, type CostDetailsService } from '../../src/server/services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
@@ -35,6 +44,7 @@ import { fakeCustomer } from './fake-customers';
 import { inputsDependencies } from './estimate-inputs-deps';
 import { createFakeConfigRepository } from './fake-config';
 import { createFakeJobRunRepository, type FakeJobRunRepository } from './fake-job-runs';
+import { fakeSettingsDependencies, type FakeMail, type FakeSettingsRepository } from './fake-settings';
 import { createFakeCalculationWorld, type FakeCalculationWorld } from './fake-calculations';
 import { createFakeEstimateWorld, type FakeEstimateWorld } from './fake-estimates';
 import { createFakeTaskWorld, type FakeTaskWorld } from './fake-tasks';
@@ -42,6 +52,7 @@ import { createFakeMasterRepository, type FakeMasterRepository } from './fake-ma
 import { MATERIAL_CANARIES, MATERIAL_DELETE_RECIPE } from './material-master-canary';
 import { seedConfig } from './seed-config';
 import { defined } from './defined';
+import { inProcessBuilder } from './in-process-builder';
 import { CANARY_PICTURE_HASH, smallPng } from './pictures';
 import { FRESH_TREATMENTS, TREATMENT_CANARIES } from './treatment-canary';
 
@@ -105,16 +116,29 @@ export interface SessionHarness {
   readonly masters: FakeMasterRepository;
   /** The read side of the field registry over the seed registry and the 15 seed rates, for the routes and the page of STORY-08.01 (`getConfigReadService` in the composition mock). */
   readonly configReadService: ConfigReadService;
+  /** The formula editor (STORY-08.02) over the same in-memory versions, the 15 seed rates, the fake calculation store, the real step-up check over the harness's people and throttles, and the audit world (`getConfigEditService` in the composition mock). */
+  readonly configEditService: ConfigEditService;
+  /** The structure service (STORY-08.03 insert, STORY-08.04 delete) over the same in-memory versions, the 15 seed rates, the real step-up check over the harness's people and throttles, and the audit world; an insert asks for no password, a delete does (`getConfigStructureService` in the composition mock). */
+  readonly configStructureService: ConfigStructureService;
+  /** Checkpoints and revert (STORY-08.06) over the same in-memory versions, the 15 seed rates, the real step-up check and the audit world (`getConfigCheckpointService` in the composition mock). */
+  readonly configCheckpointService: ConfigCheckpointService;
+  /** The checkpoints behind it: its members are plain functions, so a test can spy on each one. */
+  readonly checkpointRepository: FakeCheckpointRepository;
   /** The in-memory configuration versions behind `configReadService`: its members are plain functions, so a test can spy on each one. */
   readonly configRepository: ConfigRepository;
   /** The Settings page's reading of the backups and the disk over the in-memory `job_runs` below, for the routes and the page of STORY-02.09 (`getSettingsService` in the composition mock). */
   readonly settingsService: SettingsService;
   /** The in-memory `job_runs` behind `settingsService`: its members are plain functions, so a test can spy on each one (the refusal-before-lookup scan does). */
   readonly jobRuns: FakeJobRunRepository;
+  /** The in-memory `settings` row and the in-memory mail transport behind `settingsService` (STORY-09.02): plain functions, so a test can spy on each one. */
+  readonly settingsRepository: FakeSettingsRepository;
+  readonly settingsMail: FakeMail;
   /** The task service over in-memory tasks and the harness's own people, for the routes that call it (`getTaskService` in the composition mock, STORY-04.01). */
   readonly taskService: TaskService;
   /** The in-memory tasks behind `taskService`. */
   readonly taskWorld: FakeTaskWorld;
+  /** The audit entries written by `taskService` (a task reassigned, STORY-04.07): what a test reads, and clears between tests with `rows.length = 0`. */
+  readonly taskAudit: AuditSink;
   /** The estimate service over in-memory estimates, the harness's own people and the Customer Master above (`getEstimateService` in the composition mock, STORY-05.01). */
   readonly estimateService: EstimateService;
   /** The Engineer's Calculate over the same in-memory estimates, masters and a fake calculation store (`getCalculationService` in the composition mock, STORY-05.09). The canary estimate has an empty part, so a valid call is refused 422 `CALCULATE_BLOCKED` and writes nothing, at any state, for every caller. */
@@ -125,10 +149,22 @@ export interface SessionHarness {
   readonly calculationWorld: FakeCalculationWorld;
   /** The approval's guard (STORY-06.05) over the same estimates and calculation records (`getApprovalService` in the composition mock). It writes nothing in any case, so a valid call of the recipe is a 409 at every state. */
   readonly approvalService: ApprovalService;
+  /** Unlock and its preview (STORY-06.08) over the same estimates and approval records (`getUnlockService` in the composition mock). The canary estimate is never APPROVED, so a valid call of the recipe is the state machine's 409 and writes nothing. */
+  readonly unlockService: UnlockService;
+  /** Cancel approval (STORY-06.12) over the same estimates and approval records, with the real step-up check over the fake people (`HARNESS_PASSWORD` is every person's password) (`getCancelApprovalService` in the composition mock). */
+  readonly cancelApprovalService: CancelApprovalService;
+  /** Remove price (STORY-06.13) over the same estimates and approval records, with the same real step-up check (`getRemovePriceService` in the composition mock). */
+  readonly removePriceService: RemovePriceService;
+  /** The real step-up check (STORY-06.14) over the fake people and throttles, for a test that counts the attempts (`throttles`, `hasher`). */
+  readonly stepUpService: StepUpService;
+  /** The Admin hand-over (STORY-01.09) over the fake people and their audit log, with the real step-up check (`getAdminHandoverService` in the composition mock). The recipe's valid call names a person that does not exist, so it writes nothing. */
+  readonly adminHandoverService: AdminHandoverService;
+  /** The hasher the step-up and the other password checks use, which counts every check it makes. */
+  readonly hasher: ReturnType<typeof createCountingHasher>;
   /** The estimate review (STORY-06.02) over the same estimates, parts and calculation records, with the seed registry as every version (`getEstimateReviewService` in the composition mock). Its reads are plain functions, so a test can spy on each. */
   readonly estimateReviewService: EstimateReviewService;
   /** The pieces `estimateReviewService` and `costDetailsService` read through, for a test that spies on what a refused caller causes to be read. */
-  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findRowWorking'> & Pick<EstimateNodeRepository, 'listNodes'>;
+  readonly reviewReads: Pick<CalculationRepository, 'findFigureBasis' | 'findReviewFigures' | 'findRowWorking' | 'findExportFigures'> & Pick<EstimateNodeRepository, 'listNodes'>;
   /** The cost details of a row (STORY-06.03) over the same pieces (`getCostDetailsService` in the composition mock). */
   readonly costDetailsService: CostDetailsService;
   /** The Excel export (STORY-07.01) over the same estimates and parts, building the file in process (`getExportService` in the composition mock). */
@@ -189,12 +225,17 @@ export function createSessionHarness(): SessionHarness {
   masters.exchange.stamp = { updatedById: idOf.ADMIN, updatedByName: 'Invented Admin', updatedAt: SESSION_NOW };
 
   const configRepository = createFakeConfigRepository();
+  const checkpointRepository = createFakeCheckpointRepository(configRepository);
   // The `job_runs` of STORY-02.09: one good backup two days before the held clock and a daily reading of 62 % free, whose `result` also holds a path and a volume name that no answer may carry.
   const jobRuns = createFakeJobRunRepository([
     { job: 'backup', finishedAt: new Date(SESSION_NOW.getTime() - 2 * MILLISECONDS_PER_DAY), result: { status: 'ok', sizeBytes: 1_000, freeBytes: 620, totalBytes: 1_000, path: JOB_RUN_CANARY_PATH } },
     { job: 'backup-watch', finishedAt: new Date(SESSION_NOW.getTime() - MILLISECONDS_PER_HOUR), result: { status: 'ok', freeBytes: 620, totalBytes: 1_000, volume: JOB_RUN_CANARY_VOLUME } },
   ]);
+  // The e-mail alerts of STORY-09.02: the settings row and the mail transport in memory. The harness Admin's address is in `users`, so the test e-mail goes there.
+  const settingsWorld = fakeSettingsDependencies({ jobRuns, clock: systemClock, users });
   const taskWorld = createFakeTaskWorld(() => users.records);
+  // The audit entries of a reassign (STORY-04.07), kept apart from `auditWorld`, whose transactions are its own.
+  const taskAudit = createAuditSink();
   // The recipe of the task route (`estimate-recipe.ts`, STORY-04.04): the harness Engineer owns a task whose ID is `targetId`, the same as the estimate's, as in the E2E database.
   taskWorld.seed({
     id: targetId,
@@ -257,12 +298,51 @@ export function createSessionHarness(): SessionHarness {
     transactions: calculationWorld.transactions,
     workflow: { transition: estimateService.transition, audit: calculationAudit.service },
   });
+  // Unlock (STORY-06.08) over the same world. The canary estimate is a Draft at every state a test leaves it in, so the recipe's valid call is refused 409 by the state machine before any master is read: the masters and
+  // the configuration here are the ones that refusal never reaches, and a call that did reach them would fail loudly.
+  const unlockService = createUnlockService({
+    estimates: calculationWorld.estimates,
+    approvals: calculationWorld.approvalRepository,
+    calculations: calculationWorld.repository,
+    masters,
+    configuration: {
+      current: () => Promise.reject(new Error('The harness does not read a configuration version for an unlock.')),
+      byId: () => Promise.reject(new Error('The harness does not read a configuration version for an unlock.')),
+    },
+    transactions: calculationWorld.transactions,
+    workflow: { transition: estimateService.transition, audit: calculationAudit.service },
+  });
+  // Cancel approval (STORY-06.12) over the same world, with the real step-up check over the fake people. The canary estimate has no approval at any state a test leaves it in, so the recipe's valid call is refused 409
+    // (no approval) after the password and the reason pass, and writes nothing.
+  const stepUpService = createStepUpService({ users, throttles, hasher, clock: { now: () => new Date() }, keySecret: THROTTLE_KEY_MATERIAL });
+  // The Admin hand-over (STORY-01.09) over the fake people and their audit log, with the same real step-up check. The recipe's valid call names a person that does not exist, so it is refused 404 after the password
+  // passes and writes nothing: the harness Admin stays the Admin for every other call.
+  const adminHandoverService = createAdminHandoverService({ users, transactions: auditWorld.transactions, audit: auditService, stepUp: stepUpService });
+  const cancelApprovalService = createCancelApprovalService({
+    estimates: calculationWorld.estimates,
+    approvals: calculationWorld.approvalRepository,
+    transactions: calculationWorld.transactions,
+    stepUp: stepUpService,
+    workflow: { transition: estimateService.transition, audit: calculationAudit.service },
+  });
+  // Remove price (STORY-06.13) over the same world and the same step-up check. The canary estimate has no approval, so the recipe's valid call is refused 409 (no price to remove) after the password passes, and writes nothing.
+  const removePriceService = createRemovePriceService({
+    estimates: calculationWorld.estimates,
+    approvals: calculationWorld.approvalRepository,
+    transactions: calculationWorld.transactions,
+    stepUp: stepUpService,
+    audit: calculationAudit.service,
+  });
   // The estimate review (STORY-06.02): the same estimates, parts and records. A plain object of functions each, so a test can spy on what a refused caller causes to be read.
   const reviewReads = {
     findFigureBasis: (estimateId: string) => calculationWorld.repository.findFigureBasis(estimateId),
     findReviewFigures: (calculationId: string) => calculationWorld.repository.findReviewFigures(calculationId),
+    findMasterSnapshot: (calculationId: string) => calculationWorld.repository.findMasterSnapshot(calculationId),
+    findEstimateAccess: (estimateId: string) => calculationWorld.estimates.findEstimateAccess(estimateId),
     findRowWorking: (calculationId: string, nodeId: string) => calculationWorld.repository.findRowWorking(calculationId, nodeId),
+    findExportFigures: (calculationId: string) => calculationWorld.repository.findExportFigures(calculationId),
     findLatestApproval: (estimateId: string) => calculationWorld.approvalRepository.findLatestApproval(estimateId),
+    findLatestRemoval: (estimateId: string) => calculationWorld.approvalRepository.findLatestRemoval(estimateId),
     listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
   };
   const reviewVersion = { id: '00000000-0000-4000-8000-0aaa00000001', number: 1, document: seedConfig, reason: 'Invented', createdBy: null, createdAt: '2026-11-01T00:00:00.000Z' };
@@ -270,6 +350,8 @@ export function createSessionHarness(): SessionHarness {
     calculations: reviewReads,
     approvals: reviewReads,
     nodes: reviewReads,
+    estimates: reviewReads,
+    masters,
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
   });
 
@@ -280,7 +362,7 @@ export function createSessionHarness(): SessionHarness {
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
   });
 
-  // The Excel export (STORY-07.01) over the same estimates and parts. The file is built in process: the thread is `thread.test.ts`'s.
+  // The Excel export (STORY-07.01, STORY-07.02) over the same estimates, parts, calculation records and pictures. The file is built in process: the thread is `thread.test.ts`'s.
   const exportReads = {
     findHeader: (estimateId: string) => {
       const estimate = estimateWorld.estimates.find((candidate) => candidate.id.toLowerCase() === estimateId.toLowerCase());
@@ -293,8 +375,12 @@ export function createSessionHarness(): SessionHarness {
   const exportService = createExportService({
     header: exportReads,
     nodes: exportReads,
-    configuration: { current: () => Promise.resolve(reviewVersion) },
-    build: buildWorkbook,
+    calculations: reviewReads,
+    approvals: reviewReads,
+    images: estimateWorld.imageRepository,
+    configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
+    transactions: calculationWorld.transactions,
+    builder: inProcessBuilder(buildWorkbook),
     clock: { now: () => new Date('2026-11-14T12:00:00.000Z') },
   });
 
@@ -316,12 +402,33 @@ export function createSessionHarness(): SessionHarness {
     calculationService,
     calculationWorld,
     approvalService,
+    unlockService,
+    cancelApprovalService,
+    removePriceService,
+    stepUpService,
+    adminHandoverService,
+    hasher,
     // The system clock is the held one while a test file holds `Date` at `SESSION_NOW` (`holdSessionClock`), so a deadline is judged against that instant.
-    taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock }),
+    taskService: createTaskService({ tasks: taskWorld.repository, transactions: taskWorld.transactions, clock: systemClock, audit: taskAudit.service }),
+    taskAudit,
     jobRuns,
-    settingsService: createSettingsService({ jobRuns, clock: systemClock }),
+    settingsRepository: settingsWorld.settings,
+    settingsMail: settingsWorld.fakeMail,
+    settingsService: createSettingsService(settingsWorld),
     configRepository,
     configReadService: createConfigReadService({ configurations: configRepository, masters, cache: createConfigVersionCache() }),
+    configEditService: createConfigEditService({
+      configurations: configRepository,
+      masters,
+      calculations: calculationWorld.repository,
+      stepUp: stepUpService,
+      transactions: auditWorld.transactions,
+      audit: auditService,
+      cache: createConfigVersionCache(),
+    }),
+    configStructureService: createConfigStructureService({ configurations: configRepository, masters, stepUp: stepUpService, transactions: auditWorld.transactions, audit: auditService, cache: createConfigVersionCache() }),
+    configCheckpointService: createConfigCheckpointService({ configurations: configRepository, checkpoints: checkpointRepository, masters, stepUp: stepUpService, transactions: auditWorld.transactions, audit: auditService, cache: createConfigVersionCache() }),
+    checkpointRepository,
     mastersService: createMastersService({
       masters,
       transactions: auditWorld.transactions,

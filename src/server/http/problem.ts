@@ -4,13 +4,16 @@ import { z } from 'zod';
 
 import { SESSION_ENDED_CODE } from '../../lib/auth/session-ended';
 import { STEP_UP_FAILED_MESSAGE, STEP_UP_LOCKED_MESSAGE } from '../../lib/auth/step-up';
+import { plainUse, type FieldUse } from '../../lib/fields/uses';
 
 import {
   ActiveAdminExistsError,
+  ConfigVersionChangedError,
   CalculateBlockedError,
   AppError,
   DatabaseBusyError,
   ExportBusyError,
+  FieldInUseError,
   FieldValidationError,
   ForbiddenError,
   MasterInUseError,
@@ -68,8 +71,12 @@ export interface Problem {
   readonly errors?: ReadonlyArray<ProblemDetail>;
   /** Extension member of a second-Admin refusal (RFC 9457): who holds the one place. Present only on that 409. */
   readonly currentAdmin?: { readonly id: string; readonly name: string };
+  /** Extension member of the 409 of a configuration edit made from an older version (STORY-08.02 AC-9): the number of the latest version. */
+  readonly currentVersion?: number;
   /** Extension member of the refusal to delete a rate a formula uses (STORY-02.01 AC-4): each formula's column letter and label. */
   readonly usedBy?: ReadonlyArray<FormulaUse>;
+  /** Extension member of the refusal to delete a field something uses (STORY-08.04 AC-2): every use, a formula with its text in display form. Admin only (NFR-002). */
+  readonly uses?: ReadonlyArray<FieldUse>;
   /** Extension member of the 409 of a parts tree that changed under the person (STORY-05.02 AC-6): the tree as it is now, the same six facts per part as `GET /tree`, and no figure. */
   readonly tree?: ReadonlyArray<PartView>;
   /** Extension member of the 422 of a Calculate that found missing inputs (STORY-05.09 AC-1): each part with its Sl. No, name and missing fields. No value and no figure. */
@@ -152,9 +159,11 @@ export function problemFromAppError(error: AppError, requestId: string): Problem
     const base = problem(error.httpStatus, error.code, error.message, requestId);
     return error.currentAdmin === null ? base : { ...base, currentAdmin: error.currentAdmin };
   }
+  if (error instanceof ConfigVersionChangedError) return { ...problem(error.httpStatus, error.code, error.message, requestId), currentVersion: error.currentVersion };
   if (error instanceof ProcessItemInUseError) {
     return { ...problem(error.httpStatus, error.code, error.message, requestId), usedBy: error.usedBy.map(({ letter, label }) => ({ letter, label })) };
   }
+  if (error instanceof FieldInUseError) return { ...problem(error.httpStatus, error.code, error.message, requestId), uses: error.uses.map(plainUse) };
   if (error instanceof CalculateBlockedError) {
     // Named field by field, so a part can never carry more than its Sl. No, name and missing fields even if the service one day hands over a richer record (NFR-002).
     const parts = error.parts.map(({ nodeId, slNo, name, fields }) => ({ nodeId, slNo, name, fields: fields.map(({ fieldId, label }) => ({ fieldId, label })) }));

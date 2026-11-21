@@ -26,12 +26,13 @@ const row = (overrides: Partial<ConfigFieldRow> = {}): ConfigFieldRow => ({
   systemRole: null,
   note: null,
   canEditFormula: true,
+  isProtected: false,
   ...overrides,
 });
 
 const ROWS: ReadonlyArray<ConfigFieldRow> = [
   row({ id: '00000000-0000-4000-8000-00000000f010', letter: 'ZA', label: 'Invented Input', place: 'Section 1: Invented Section', kind: 'input', formula: null, canEditFormula: false }),
-  row({ id: '00000000-0000-4000-8000-00000000f011', letter: 'ZB', label: 'Invented Auto', place: null, kind: 'auto', formula: null, canEditFormula: false, systemRole: 'sl-no' }),
+  row({ id: '00000000-0000-4000-8000-00000000f011', letter: 'ZB', label: 'Invented Auto', place: null, kind: 'auto', formula: null, canEditFormula: false, systemRole: 'sl-no', isProtected: true }),
   row({ id: '00000000-0000-4000-8000-00000000f012', letter: 'ZC', label: 'Invented Cost', formula: 'ZA * Invented-Rate-per-Unit' }),
   row({
     id: '00000000-0000-4000-8000-00000000f013',
@@ -39,6 +40,7 @@ const ROWS: ReadonlyArray<ConfigFieldRow> = [
     label: 'Invented Total',
     formula: 'SUM(ZC)',
     systemRole: 'total',
+    isProtected: true,
     note: "The estimate total is the sum of every row's ZC.",
   }),
 ];
@@ -89,6 +91,45 @@ describe('AC-2 and AC-3: System fields and the sentence under the total', () => 
   });
 });
 
+describe('STORY-08.04 AC-1 and AC-5: "Delete" on every row that is not protected, for the Admin only', () => {
+  const adminRows = (rows: ReadonlyArray<ConfigFieldRow> = ROWS, pressed: string | null = null): string =>
+    renderToStaticMarkup(createElement(FieldsList, { rows, canEdit: true, onDelete: () => undefined, pressedDeleteId: pressed }));
+
+  it('gives the Admin the action on every row that is not protected, a table row and a card each, and none on a protected one', () => {
+    const html = adminRows();
+    // ZA and ZC are not protected; ZB (a system role) and ZD (the total) are.
+    expect(html.match(/>Delete</g)).toHaveLength(2 * 2);
+    expect(html).toContain('Delete<span class="sr-only"> ZA Invented Input</span>');
+    expect(html).toContain('Delete<span class="sr-only"> ZC Invented Cost</span>');
+    expect(html).not.toContain('Delete<span class="sr-only"> ZB Invented Auto</span>');
+    expect(html).not.toContain('Delete<span class="sr-only"> ZD Invented Total</span>');
+  });
+
+  it('tags a field protected only by its key "System" as well, and draws no Delete on it (the lock tag is on every protected field, not only the six with a role)', () => {
+    const keyed = row({ id: '00000000-0000-4000-8000-00000000f020', letter: 'ZE', label: 'Invented Keyed Field', systemRole: null, isProtected: true });
+    const html = adminRows([keyed]);
+    expect(html.match(/>System</g)).toHaveLength(2);
+    expect(html).not.toContain('>Delete<');
+    expect(html).toContain('Insert after');
+  });
+
+  it('marks each Delete for the opener that returns focus to it: data-action, and the row\'s data-item-id', () => {
+    const html = adminRows([defined(ROWS[2])]);
+    expect(html.match(/data-action="delete"/g)).toHaveLength(2);
+    expect(html.match(/data-item-id="00000000-0000-4000-8000-00000000f012"/g)).toHaveLength(2);
+  });
+
+  it('keeps the pressed row\'s Delete busy while the dialog\'s code loads, and no other', () => {
+    const html = adminRows(ROWS, '00000000-0000-4000-8000-00000000f012');
+    expect(html.match(/aria-busy="true"/g)).toHaveLength(2);
+  });
+
+  it('draws no Delete for a Lead (the table has no actions) and none when no handler is given', () => {
+    expect(render(ROWS)).not.toContain('>Delete<');
+    expect(renderToStaticMarkup(createElement(FieldsList, { rows: ROWS, canEdit: true }))).not.toContain('>Delete<');
+  });
+});
+
 describe('AC-4: the Lead is shown the same table under a banner, and the Admin is not', () => {
   it('shows "View only. Formulas are shown so you can check the arithmetic." to a Lead', () => {
     const html = renderToStaticMarkup(createElement(FieldsScreen, { viewOnly: true }));
@@ -99,6 +140,30 @@ describe('AC-4: the Lead is shown the same table under a banner, and the Admin i
   it('shows no banner to an Admin', () => {
     const html = renderToStaticMarkup(createElement(FieldsScreen, { viewOnly: false }));
     expect(html).not.toContain('View only');
+  });
+});
+
+describe('STORY-08.03 AC-1: "Insert after" on every row, for the Admin only', () => {
+  const adminRows = (): string => renderToStaticMarkup(createElement(FieldsList, { rows: ROWS, canEdit: true }));
+
+  it('gives the Admin the action on every row, a table row and a card each, even on a System field and on a column with no formula', () => {
+    const html = adminRows();
+    expect(html.match(/>Insert after</g)).toHaveLength(ROWS.length * 2);
+    for (const row of ROWS) expect(html).toContain(`href="/config/fields/new?after=${row.id}"`);
+  });
+
+  it('names the column the action follows for a screen reader ("Insert after ZC Invented Cost")', () => {
+    const html = adminRows();
+    expect(html).toContain('Insert after<span class="sr-only"> ZC Invented Cost</span>');
+  });
+
+  it('is a link drawn as a button, so it opens the wizard with that column pre-chosen', () => {
+    expect(adminRows()).toMatch(/<a [^>]*data-slot="button"[^>]*href="\/config\/fields\/new\?after=00000000-0000-4000-8000-00000000f012"/);
+  });
+
+  it('gives a Lead, who has no action, none (view only, STORY-08.01 AC-4)', () => {
+    expect(render(ROWS)).not.toContain('Insert after');
+    expect(render(ROWS)).not.toContain('/config/fields/new');
   });
 });
 
@@ -161,6 +226,8 @@ describe('reading the server answer', () => {
     expect(toConfigFieldRow(defined(ROWS[0]))).toEqual(ROWS[0]);
     expect(toConfigFieldRow({ ...defined(ROWS[0]), kind: 'formula' })).toBeNull();
     expect(toConfigFieldRow({ ...defined(ROWS[0]), canEditFormula: 'yes' })).toBeNull();
+    expect(toConfigFieldRow({ ...defined(ROWS[0]), isProtected: 'yes' })).toBeNull();
+    expect(toConfigFieldRow({ ...defined(ROWS[0]), isProtected: undefined })).toBeNull();
     expect(toConfigFieldRow({ ...defined(ROWS[0]), note: undefined })).toBeNull();
     expect(toConfigFieldRow('ZA')).toBeNull();
   });

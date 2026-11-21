@@ -1,13 +1,18 @@
 import type { RoleName } from '../../lib/auth/roles';
-import { FieldValidationError, type FieldProblem } from '../../lib/errors';
-import { checkAssign, ENGINEER_MESSAGE, type AssignErrors, type AssignInput } from '../../lib/tasks/assign';
+import { ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
+import { isTaskClosed } from '../../lib/estimate/task-status';
+import { checkAssign, ENGINEER_MESSAGE, type AssignInput } from '../../lib/tasks/assign';
 import { folderUrlOf } from '../../lib/tasks/folder-path';
 import { QUEUE_DEFAULT_LIMIT, type QueueCounts, type QueueTab, type TaskEstimateStatus } from '../../lib/tasks/queue';
+import { DATE_ORDER_MESSAGE } from '../../lib/tasks/queue-filters';
+import { checkReassign, TASK_CLOSED_CODE, TASK_CLOSED_MESSAGE, type ReassignInput } from '../../lib/tasks/reassign';
 import { formatTaskCode } from '../../lib/tasks/task-code';
-import { istYearOf, type Clock } from '../../lib/time';
-import type { EngineerRecord, EstimateRecord, QueueRow, QueueScope, TaskRepository } from '../repositories/task-repository';
-import type { TransactionRunner } from '../repositories/transaction';
+import { istYearOf, startOfIstDay, startOfNextIstDay, type Clock } from '../../lib/time';
+import type { EngineerRecord, EstimateRecord, QueueFilter, QueueRow, QueueScope, TaskRepository } from '../repositories/task-repository';
+import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
+import type { AuditContext, AuditService } from './audit-service';
+import type { TaskMail, TaskMailTask } from './task-mail';
 import { encodeTaskQueueCursor, type TaskQueueCursor } from './task-queue-cursor';
 
 /**
@@ -22,7 +27,20 @@ import { encodeTaskQueueCursor, type TaskQueueCursor } from './task-queue-cursor
  *     code is `Q-<year>-<number>`, the year read in IST (FR-041, NFR-015), the number from the locked sequence.
  *   - **The `file:` link is built here**, from the validated UNC path (AC-4); the browser is never asked to build one.
  *
- * There is no audit entry: the audit log of architecture section 8 lists a task change (STORY-04.07), not the assignment.
+ * There is no audit entry for the assignment: the audit log of architecture section 8 lists a task change (STORY-04.07), not the first assignment.
+ *
+ * The assignment e-mail (STORY-09.03; FR-081, BR-040, architecture section 4.7): with alerts ON, the outbox row of the message is written **in the same transaction** as the task and its
+ * estimate (and, for a change of Engineer, as the reassign), so a rolled-back task has no message. With alerts OFF nothing is written and the task is made exactly as before. The service
+ * reads the Engineer and the assigner in the transaction and hands them to `TaskMail` by ID: no address is read here or taken from a request. A service built without `mail` writes none.
+ *
+ * Reassign or change the deadline (STORY-04.07; FR-040, architecture sections 4.4, 6 and 8): `reassignTask` is the one place an open task's Engineer or deadline changes.
+ *
+ *   - **One transaction under the row locks** (AC-3): the estimate's row and the task's row are locked, the status of the estimate is read once they are held, and the change, its
+ *     revision and its audit entry are written together or not at all (AC-4). An approval that was committing makes the call wait and is then seen (AC-6).
+ *   - **Only what differs is judged** (AC-3, D-3): the same rules as assigning, against the server's clock, but a deadline or an Engineer equal to the stored one is not checked, so
+ *     an overdue task can be given to another Engineer. A save that changes nothing writes no entry and leaves the revision alone.
+ *   - **The revision rises with the Engineer, not with the deadline** (AC-5, A-09): the assignment e-mail (STORY-09.03) is keyed on it, the overdue e-mail on the deadline.
+ *   - **Any Lead or Admin may change any open task** (D-f): who may call is the route's (the manifest); nothing here narrows it to the person who assigned the task.
  *
  * The queue (STORY-04.02; FR-034, architecture sections 4.4 and 6): the Open, Closed and Overdue tabs, each sorted by deadline and then by code.
  *
@@ -50,6 +68,8 @@ export interface AssignedTask {
 /** What SCR-04 chooses from. */
 export interface AssignContext {
   readonly engineers: ReadonlyArray<EngineerRecord>;
+  /** Whether e-mail alerts are on: the one fact of the settings a Lead may see, for the notice "E-mail alerts are OFF" (STORY-09.03 AC-6). */
+  readonly alertsEnabled: boolean;
 }
 
 /** A task as a row of the queue shows it. The deadline is an instant in UTC; the screen shows it in IST. */
@@ -66,6 +86,15 @@ export interface QueueTask {
   readonly deadlineAt: Date;
   readonly status: TaskEstimateStatus;
   readonly assignedByName: string;
+}
+
+/** What a reassign did, for the route (the task as the queue shows it) and for what follows a change of Engineer (STORY-09.03 calls its e-mail from here, with the new revision). */
+export interface ReassignResult {
+  readonly task: QueueTask;
+  readonly engineerChanged: boolean;
+  readonly deadlineChanged: boolean;
+  /** The assignment revision after the save: one more than before when the Engineer changed. */
+  readonly assignmentRevision: number;
 }
 
 /** One task as the task route answers it: a row of the queue and the notes typed when it was assigned (STORY-04.04). The status is the estimate's, worded by `taskStatusOf`. */
@@ -94,8 +123,17 @@ export interface QueueQuery {
   readonly tab: QueueTab;
   readonly limit?: number | undefined;
   readonly cursor?: TaskQueueCursor | undefined;
-  /** `me`: only the tasks the viewer assigned (STORY-04.03). The one value of the `assignedBy` filter that exists before STORY-04.06. */
-  readonly assignedBy?: 'me' | undefined;
+  /** `me`: only the tasks the viewer assigned (STORY-04.03); `anyone` or absent: no cut by assigner. The Lead's default `me` is applied by the page from the address (STORY-04.06 A-1), not here. */
+  readonly assignedBy?: 'me' | 'anyone' | undefined;
+  /** Task ID or title, contains, ignoring letter case (STORY-04.06 AC-3). */
+  readonly q?: string | undefined;
+  /** An Engineer's ID (a Lead and an Admin only). */
+  readonly engineer?: string | undefined;
+  /** A customer's ID (a Lead and an Admin only): a task whose estimate has no customer yet matches none. */
+  readonly customer?: string | undefined;
+  /** First and last deadline day in IST, `YYYY-MM-DD`, both inclusive (a Lead and an Admin only). */
+  readonly from?: string | undefined;
+  readonly to?: string | undefined;
 }
 
 export interface TaskService {
@@ -114,6 +152,11 @@ export interface TaskService {
    * answer has the same shape for every role and no cost.
    */
   getTask(viewer: QueueViewer, id: string): Promise<TaskDetail | null>;
+  /**
+   * Gives an open task to another Engineer, moves its deadline, or both (STORY-04.07; `PATCH /api/v1/tasks/{id}`). `audit` is who is saving and on which request, from the session
+   * and the request. 404 for an ID that is no task; 409 `TASK_CLOSED` for a task whose estimate is approved; 422 naming each field that is wrong. Nothing is stored then.
+   */
+  reassignTask(audit: AuditContext, id: string, input: ReassignInput): Promise<ReassignResult>;
   /** The bell's count for this person at the server's clock: own overdue (Engineer), overdue they assigned (Lead), all overdue (Admin). STORY-04.03 AC-2. */
   countOverdue(viewer: QueueViewer): Promise<number>;
 }
@@ -122,14 +165,21 @@ export interface TaskDependencies {
   readonly tasks: TaskRepository;
   readonly transactions: TransactionRunner;
   readonly clock: Clock;
+  /** Needed by `reassignTask` alone (its entry is written in its own transaction); a service built without it refuses to reassign. */
+  readonly audit?: AuditService | undefined;
+  /** The assignment e-mail (STORY-09.03). A service built without it writes no row and reports alerts as off. */
+  readonly mail?: TaskMail | undefined;
 }
+
+/** Every task, whoever it is assigned to or by: what a reassign reads back for its answer (the caller's right to change it was decided by the route). */
+const EVERY_TASK: QueueScope = { engineerId: null, assignedById: null };
 
 /**
  * An Engineer sees their own tasks; a Lead and an Admin see all (AC-2). `assignedBy: 'me'` narrows that to the tasks the viewer assigned (the Lead's bell, STORY-04.03
  * AC-3): it is ANDed with the role's cut, so it can only narrow, and the person it names is the session's, never the request's. A switch, so a fourth role cannot
  * compile without a decision.
  */
-function scopeOf(viewer: QueueViewer, assignedBy?: 'me'): QueueScope {
+function scopeOf(viewer: QueueViewer, assignedBy?: 'me' | 'anyone'): QueueScope {
   const assignedById = assignedBy === 'me' ? viewer.id : null;
   switch (viewer.role) {
     case 'ENGINEER':
@@ -138,6 +188,29 @@ function scopeOf(viewer: QueueViewer, assignedBy?: 'me'): QueueScope {
     case 'ADMIN':
       return { engineerId: null, assignedById };
   }
+}
+
+const ENGINEER_FILTER_MESSAGE = 'Only a Lead or an Admin can use this filter.';
+const FILTER_FIELDS = ['assignedBy', 'engineer', 'customer', 'from', 'to'] as const;
+
+/**
+ * The filter row of a query as the repository reads it (STORY-04.06 AC-3, AC-4, AC-5). An Engineer may search and nothing else: any other filter is a 422 naming it, so a
+ * hostile `engineer=` or `assignedBy=anyone` is refused and never ignored in silence. A range that ends before it begins is a 422 under To. The values are narrowing only:
+ * they are ANDed with the scope, which comes from the session.
+ */
+function filterOf(viewer: QueueViewer, query: QueueQuery): QueueFilter {
+  if (viewer.role === 'ENGINEER') {
+    const refused = FILTER_FIELDS.filter((field) => query[field] !== undefined);
+    if (refused.length > 0) throw new FieldValidationError(refused.map((field) => ({ field, message: ENGINEER_FILTER_MESSAGE })));
+  }
+  if (query.from !== undefined && query.to !== undefined && query.from > query.to) throw new FieldValidationError([{ field: 'to', message: DATE_ORDER_MESSAGE }]);
+  return {
+    text: query.q === undefined || query.q === '' ? null : query.q,
+    engineerId: query.engineer ?? null,
+    customerId: query.customer ?? null,
+    deadlineFrom: query.from === undefined ? null : startOfIstDay(query.from),
+    deadlineBefore: query.to === undefined ? null : startOfNextIstDay(query.to),
+  };
 }
 
 /** What the bell counts (FR-037, STORY-04.03 AC-2): an Engineer's own overdue tasks, the overdue tasks a Lead assigned, and every overdue task for an Admin. */
@@ -167,13 +240,27 @@ function toQueueTask(row: QueueRow): QueueTask {
   };
 }
 
-function problemsOf(errors: AssignErrors): ReadonlyArray<FieldProblem> {
-  return Object.entries(errors).map(([field, message]) => ({ field, message }));
+function problemsOf(errors: Readonly<Record<string, string | undefined>>): ReadonlyArray<FieldProblem> {
+  return Object.entries(errors).flatMap(([field, message]) => (message === undefined ? [] : [{ field, message }]));
 }
 
-export function createTaskService({ tasks, transactions, clock }: TaskDependencies): TaskService {
+export function createTaskService({ tasks, transactions, clock, audit, mail }: TaskDependencies): TaskService {
+  /**
+   * Writes the assignment e-mail's row in `tx`: the person who assigned or changed the task is read in the same transaction (their name for the message, and whether they are active now for
+   * the Cc, decision D-5). Always a Lead or an Admin: an ID that is neither is a mistake in the code, and refusing it rolls the whole change back.
+   */
+  async function enqueueAssigned(tx: Transaction, task: TaskMailTask, assignerId: string): Promise<void> {
+    if (mail === undefined) return;
+    const assigner = await tasks.findAssigner(assignerId, tx);
+    if (assigner === null) throw new Error('The person who assigned the task could not be read.');
+    await mail.enqueueTaskAssigned(tx, task, assigner);
+  }
+
   return {
-    getAssignContext: async () => ({ engineers: await tasks.listActiveEngineers() }),
+    getAssignContext: async () => {
+      const [engineers, alertsEnabled] = await Promise.all([tasks.listActiveEngineers(), mail === undefined ? Promise.resolve(false) : mail.alertsEnabled()]);
+      return { engineers, alertsEnabled };
+    },
 
     async assignTask(assignedById, input) {
       const now = clock.now();
@@ -182,6 +269,9 @@ export function createTaskService({ tasks, transactions, clock }: TaskDependenci
       const { values } = checked;
       const folderUrl = folderUrlOf(values.folderPath);
       if (folderUrl === null) throw new Error('A checked folder path has no link.');
+      // Read before the transaction opens: the row is written, or not, by the switches as they are now (the alerts setting, and `FEATURE_EMAIL`, DEF-055); a setting turned off before the worker
+      // claims the row skips it (STORY-09.01 AC-5).
+      const queueing = mail !== undefined && (await mail.queueingEnabled());
 
       return transactions.run(async (tx) => {
         const engineer = await tasks.findActiveEngineer(values.engineerId, tx);
@@ -193,6 +283,13 @@ export function createTaskService({ tasks, transactions, clock }: TaskDependenci
           tx,
         );
         const estimate = await tasks.createEstimate(task.id, tx);
+        if (queueing) {
+          await enqueueAssigned(
+            tx,
+            { id: task.id, code: task.code, title: task.title, notes: task.notes, folderPath: task.folderPath, deadlineAt: task.deadlineAt, assignmentRevision: task.assignmentRevision, engineer },
+            assignedById,
+          );
+        }
         return {
           id: task.id,
           code: task.code,
@@ -209,12 +306,13 @@ export function createTaskService({ tasks, transactions, clock }: TaskDependenci
 
     async listQueue(viewer, query) {
       const now = clock.now();
+      const filter = filterOf(viewer, query);
       const scope = scopeOf(viewer, query.assignedBy);
       const limit = query.limit ?? QUEUE_DEFAULT_LIMIT;
       // One more than the page, to know whether another page follows without a count of its own.
       const [rows, counts] = await Promise.all([
-        tasks.listQueue({ tab: query.tab, scope, now, limit: limit + 1, after: query.cursor ?? null }),
-        tasks.countQueue(scope, now),
+        tasks.listQueue({ tab: query.tab, scope, now, limit: limit + 1, after: query.cursor ?? null, filter }),
+        tasks.countQueue(scope, now, filter),
       ]);
       const page = rows.slice(0, limit);
       const last = page.at(-1);
@@ -230,6 +328,55 @@ export function createTaskService({ tasks, transactions, clock }: TaskDependenci
     async getTask(viewer, id) {
       const row = await tasks.findTask(id, scopeOf(viewer));
       return row === null ? null : { ...toQueueTask(row), notes: row.notes };
+    },
+
+    async reassignTask(context, id, input) {
+      if (audit === undefined) throw new Error('This task service was built without the audit service, so it cannot reassign.');
+      const now = clock.now();
+      const outcome = await transactions.run(async (tx) => {
+        const locked = await tasks.findTaskForUpdate(id, tx);
+        if (locked === null) throw new NotFoundError();
+        // Read under the lock: an approval that was committing has finished, and is seen here (AC-6).
+        if (isTaskClosed(locked.status)) throw new ConflictError(TASK_CLOSED_MESSAGE, { code: TASK_CLOSED_CODE });
+        const checked = checkReassign(input, { engineerId: locked.engineer.id, deadlineAt: locked.deadlineAt }, now);
+        if (!checked.ok) throw new FieldValidationError(problemsOf(checked.errors));
+        const { changes } = checked;
+        const engineer = changes.engineerId === null ? locked.engineer : await tasks.findActiveEngineer(changes.engineerId, tx);
+        if (engineer === null) throw new FieldValidationError([{ field: 'engineerId', message: ENGINEER_MESSAGE }]);
+        const engineerChanged = changes.engineerId !== null;
+        const deadlineChanged = changes.deadlineAt !== null;
+        if (!engineerChanged && !deadlineChanged) return { engineerChanged, deadlineChanged, assignmentRevision: locked.assignmentRevision };
+
+        const deadlineAt = changes.deadlineAt ?? locked.deadlineAt;
+        const assignmentRevision = locked.assignmentRevision + (engineerChanged ? 1 : 0);
+        await tasks.setAssignment(locked.id, { engineerId: engineer.id, deadlineAt, assignmentRevision }, tx);
+        // One entry for one save, whichever of the two changed (D-g). A change that cannot be recorded does not happen: the refusal rolls the transaction back.
+        await audit.record(tx, {
+          event: 'task.reassigned',
+          ...context,
+          object: { id: locked.id, label: locked.code },
+          before: { engineer: locked.engineer, deadlineAt: locked.deadlineAt.toISOString() },
+          after: { engineer, deadlineAt: deadlineAt.toISOString() },
+        });
+        // A new Engineer is told as a first assignment is, with the new revision in the key and the person who made the change copied (STORY-09.03 AC-7). A deadline-only change is not
+        // an assignment: the overdue e-mail follows the deadline (STORY-09.04). The old Engineer's unsent assignment e-mail is withdrawn first, whatever the switches say now (it may have been
+        // written while they were on), in this transaction, so a reassign that rolls back leaves it as it was (DEF-055).
+        if (engineerChanged && mail !== undefined) {
+          await mail.withdrawUnsent(tx, locked.id);
+          if (await mail.queueingEnabled()) {
+            await enqueueAssigned(
+              tx,
+              { id: locked.id, code: locked.code, title: locked.title, notes: locked.notes, folderPath: locked.folderPath, deadlineAt, assignmentRevision, engineer },
+              context.actorId,
+            );
+          }
+        }
+        return { engineerChanged, deadlineChanged, assignmentRevision };
+      });
+      // The answer is the row as the queue shows it, read once the change is committed.
+      const row = await tasks.findTask(id, EVERY_TASK);
+      if (row === null) throw new Error('A task that was just changed could not be read back.');
+      return { task: toQueueTask(row), ...outcome };
     },
 
     countOverdue: (viewer) => tasks.countOverdue(bellScopeOf(viewer), clock.now()),

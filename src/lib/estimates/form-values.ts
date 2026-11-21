@@ -1,3 +1,4 @@
+import { readChoiceInput } from '../estimate/choice-value';
 import { readFlagInput, readTreatmentInput } from '../estimate/treatment-value';
 import { textTooLongMessage, validateNumberInput, validateTextInput, type InputCheck } from '../estimate/validation';
 import { isShownByRule } from '../fields/visible-when';
@@ -22,6 +23,8 @@ export function readTyped(rule: FormRule, typed: string): InputCheck {
       return validateTextInput(typed, { multiline: rule.multiline, maxLength: rule.maxLength });
     case 'select':
       return { ok: true, value: typed.trim() === '' ? null : typed.trim().toLowerCase() };
+    case 'choice':
+      return readChoiceInput(typed, rule.options);
     case 'treatment':
       return readTreatmentInput(typed);
     case 'flag':
@@ -97,6 +100,15 @@ export function sectionProgress(section: { readonly fields: ReadonlyArray<Pick<F
   const complete = counted.filter((field) => textOf(field, texts).trim() !== '' && errors[field.id] === undefined).length;
   return { complete, total: counted.length };
 }
+
+/**
+ * The count of the whole part (STORY-05.11 AC-1): the sum of the cards' counts. Part Model is in no card's count (it is no typed field) and a field the registry hides for what is typed is in none
+ * (`shownSections`), so "n of m" is the one the cards already show, added up.
+ */
+export const sumProgress = (cards: ReadonlyArray<SectionProgress>): SectionProgress => ({
+  complete: cards.reduce((sum, card) => sum + card.complete, 0),
+  total: cards.reduce((sum, card) => sum + card.total, 0),
+});
 
 /** A card is complete when it has something to fill and all of it is filled: a card with nothing to fill is not "complete". */
 export const isSectionComplete = (progress: SectionProgress): boolean => progress.total > 0 && progress.complete === progress.total;

@@ -8,6 +8,7 @@ import { costsSchema, FIGURE_STATES } from '@/server/views/schemas/costs';
  * the state is one of three words. Every figure is invented.
  */
 
+const APPROVAL_ID = '00000000-0000-4000-8000-0000000a9901';
 const letters = { count: 'H', unitPrice: 'BG', unitPriceUsd: 'BJ', unitPriceEur: 'BK', totalPrice: 'BL', pricePerToolCost: 'BN', approvedPrice: 'BO' };
 const node = { id: 'node-1', parentId: null, slNo: '1', name: 'Invented frame', count: '2', figures: { unitPrice: '0', unitPriceUsd: '0', unitPriceEur: '0' } };
 const good = {
@@ -19,21 +20,23 @@ const good = {
   nodes: [node],
   totals: { totalPrice: '30', pricePerToolCost: null, toolCostTotal: '0' },
   approval: null,
+  priceRemoved: null,
   warning: null,
+  ratesChanged: null,
 };
 
 describe('the answer, and exactly what it may hold', () => {
   it('accepts a good answer, and an answer of a state with no figure at all', () => {
     expect(costsSchema.safeParse(good).success).toBe(true);
-    const none = { state: 'none', calculationId: null, calculatedAt: null, configurationNumber: null, letters, nodes: [{ ...node, figures: null }], totals: null, approval: null, warning: null };
+    const none = { state: 'none', calculationId: null, calculatedAt: null, configurationNumber: null, letters, nodes: [{ ...node, figures: null }], totals: null, approval: null, priceRemoved: null, warning: null, ratesChanged: null };
     expect(costsSchema.safeParse(none).success).toBe(true);
   });
 
-  it('STORY-06.06 AC-9, STORY-06.07 AC-3: BO is the approval row, which is there whatever the state of the figures (cleared figures, no calculation id), and is the price, the time, the approver, the total it was set against, whether it is an override and the reason, and nothing else', () => {
-    const approval = { price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Lead', calculatedTotal: '12629.99', isOverride: true, reason: 'Rounded down for the quote.' };
+  it('STORY-06.06 AC-9, STORY-06.07 AC-3, STORY-06.08 AC-3: BO is the approval row, which is there whatever the state of the figures (cleared figures, no calculation id), and is the price, the time, the approver, the total it was set against, whether it is an override, the reason and its unlock (null until unlocked), and nothing else', () => {
+    const approval = { id: APPROVAL_ID, price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Lead', engineerName: 'Invented Priya', calculatedTotal: '12629.99', isOverride: true, reason: 'Rounded down for the quote.', unlock: null, cancel: null };
     const cleared = { ...good, state: 'out-of-date', calculationId: null, totals: null, nodes: [{ ...node, figures: null }] };
     expect(costsSchema.safeParse({ ...cleared, approval }).success).toBe(true);
-    expect(Object.keys(costsSchema.shape.approval.unwrap().shape).sort()).toEqual(['approvedAt', 'approverName', 'calculatedTotal', 'isOverride', 'price', 'reason']);
+    expect(Object.keys(costsSchema.shape.approval.unwrap().shape).sort()).toEqual(['approvedAt', 'approverName', 'calculatedTotal', 'cancel', 'engineerName', 'id', 'isOverride', 'price', 'reason', 'unlock']);
     // An override with no reason (the reason is optional) and an approval at the calculated total are both good.
     expect(costsSchema.safeParse({ ...good, approval: { ...approval, reason: null } }).success).toBe(true);
     expect(costsSchema.safeParse({ ...good, approval: { ...approval, price: '12629.99', isOverride: false, reason: null } }).success).toBe(true);
@@ -44,14 +47,39 @@ describe('the answer, and exactly what it may hold', () => {
       { ...approval, calculatedTotal: '12629.9876' },
       { ...approval, calculatedTotal: 12629.99 },
       { ...approval, approverName: '' },
+      { ...approval, engineerName: '' },
       { ...approval, isOverride: 'yes' },
       { ...approval, reason: '' },
       { ...approval, reason: 7 },
       { ...approval, isOverride: false },
       { price: approval.price, approvedAt: approval.approvedAt, approverName: approval.approverName },
+      { ...approval, id: 'not-an-id' },
+      { ...approval, cancel: undefined },
       { ...approval, rate: '0.37' },
     ]) {
       expect(costsSchema.safeParse({ ...good, approval: planted }).success, JSON.stringify(planted)).toBe(false);
+    }
+  });
+
+  it('STORY-06.08 AC-3: the unlock of the approval is who, when, why and whose queue, as text and a time, and nothing else: no figure, no ID', () => {
+    const unlock = { at: '2026-11-05T06:35:00.000Z', byName: 'Invented Kiran', reason: 'The customer asked for a thicker plate.', engineerName: 'Invented Priya' };
+    const approval = { id: APPROVAL_ID, price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Lead', engineerName: 'Invented Priya', calculatedTotal: '12629.99', isOverride: true, reason: null, unlock, cancel: null };
+    expect(costsSchema.safeParse({ ...good, approval }).success).toBe(true);
+    expect(costsSchema.safeParse({ ...good, approval: { ...approval, unlock: { ...unlock, reason: null } } }).success).toBe(true);
+    expect(Object.keys(costsSchema.shape.approval.unwrap().shape.unlock.unwrap().shape).sort()).toEqual(['at', 'byName', 'engineerName', 'reason']);
+    for (const planted of [{ ...unlock, price: '1.00' }, { ...unlock, byName: '' }, { ...unlock, engineerName: '' }, { ...unlock, at: 'yesterday' }, { ...unlock, reason: 5 }]) {
+      expect(costsSchema.safeParse({ ...good, approval: { ...approval, unlock: planted } }).success).toBe(false);
+    }
+  });
+
+  it('STORY-06.12 AC-6: the cancel of the approval is who, when, why and whose queue, as text and a time, and nothing else: no figure, no password, no ID', () => {
+    const cancel = { at: '2026-11-05T07:35:00.000Z', byName: 'Invented Meera', reason: 'The wrong customer was priced.', engineerName: 'Invented Priya' };
+    const approval = { id: APPROVAL_ID, price: '12600.00', approvedAt: '2026-11-05T05:50:00.000Z', approverName: 'Invented Lead', engineerName: 'Invented Priya', calculatedTotal: '12600.00', isOverride: false, reason: null, unlock: null, cancel };
+    expect(costsSchema.safeParse({ ...good, approval }).success).toBe(true);
+    expect(costsSchema.safeParse({ ...good, approval: { ...approval, cancel: { ...cancel, reason: null } } }).success).toBe(true);
+    expect(Object.keys(costsSchema.shape.approval.unwrap().shape.cancel.unwrap().shape).sort()).toEqual(['at', 'byName', 'engineerName', 'reason']);
+    for (const planted of [{ ...cancel, price: '1.00' }, { ...cancel, password: 'x' }, { ...cancel, byName: '' }, { ...cancel, engineerName: '' }, { ...cancel, at: 'yesterday' }, { ...cancel, reason: 5 }]) {
+      expect(costsSchema.safeParse({ ...good, approval: { ...approval, cancel: planted } }).success).toBe(false);
     }
   });
 
@@ -84,8 +112,37 @@ describe('the answer, and exactly what it may hold', () => {
     expect(costsSchema.safeParse({ ...good, state: 'cleared' }).success).toBe(false);
   });
 
+  it('STORY-06.13 AC-3, AC-6 (NFR-002): "price removed" is who and when and nothing else: no price, no ID, and the key is always there', () => {
+    const priceRemoved = { at: '2026-11-05T06:50:00.000Z', byName: 'Invented Meera' };
+    expect(costsSchema.safeParse({ ...good, priceRemoved }).success).toBe(true);
+    expect(Object.keys(costsSchema.shape.priceRemoved.unwrap().shape).sort()).toEqual(['at', 'byName']);
+    for (const planted of [{ ...priceRemoved, price: '12600.00' }, { ...priceRemoved, id: APPROVAL_ID }, { at: priceRemoved.at }, { byName: priceRemoved.byName }, { ...priceRemoved, at: 'yesterday' }, { ...priceRemoved, byName: '' }]) {
+      expect(costsSchema.safeParse({ ...good, priceRemoved: planted }).success, JSON.stringify(planted)).toBe(false);
+    }
+    expect(costsSchema.safeParse({ ...good, priceRemoved: undefined }).success).toBe(false);
+  });
+
+  it('STORY-06.11 AC-7 (NFR-002): "rates changed" is three whole counts by kind and nothing else: no value, no ID, no empty notice, and the key is always there', () => {
+    const ratesChanged = { processRates: 1, materialPrices: 1, exchangeRates: 1 };
+    expect(costsSchema.safeParse({ ...good, ratesChanged }).success).toBe(true);
+    expect(Object.keys(costsSchema.shape.ratesChanged.unwrap().shape).sort()).toEqual(['exchangeRates', 'materialPrices', 'processRates']);
+    for (const planted of [
+      { ...ratesChanged, usd: '83.25' },
+      { ...ratesChanged, rates: [{ id: 'rate-1', value: '12.00' }] },
+      { ...ratesChanged, processRates: '1' },
+      { ...ratesChanged, processRates: 1.5 },
+      { ...ratesChanged, materialPrices: -1 },
+      { processRates: 1, materialPrices: 1 },
+      // A notice with nothing to tell is not an answer: the key is `null` then.
+      { processRates: 0, materialPrices: 0, exchangeRates: 0 },
+    ]) {
+      expect(costsSchema.safeParse({ ...good, ratesChanged: planted }).success, JSON.stringify(planted)).toBe(false);
+    }
+    expect(costsSchema.safeParse({ ...good, ratesChanged: undefined }).success).toBe(false);
+  });
+
   it('holds these keys and no others, at every level: the only sums are totalPrice (BL), pricePerToolCost (BN) and toolCostTotal', () => {
-    expect(Object.keys(costsSchema.shape).sort()).toEqual(['approval', 'calculatedAt', 'calculationId', 'configurationNumber', 'letters', 'nodes', 'state', 'totals', 'warning']);
+    expect(Object.keys(costsSchema.shape).sort()).toEqual(['approval', 'calculatedAt', 'calculationId', 'configurationNumber', 'letters', 'nodes', 'priceRemoved', 'ratesChanged', 'state', 'totals', 'warning']);
     expect(Object.keys(costsSchema.shape.letters.shape).sort()).toEqual(['approvedPrice', 'count', 'pricePerToolCost', 'totalPrice', 'unitPrice', 'unitPriceEur', 'unitPriceUsd']);
     const nodeShape = costsSchema.shape.nodes.unwrap().element.shape;
     expect(Object.keys(nodeShape).sort()).toEqual(['count', 'figures', 'id', 'name', 'parentId', 'slNo']);

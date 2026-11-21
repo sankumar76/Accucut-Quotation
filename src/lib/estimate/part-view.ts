@@ -4,16 +4,10 @@
  */
 
 /**
- * How much of a part's inputs is filled (UX spec SCR-05, the per-node icons). Until the part form (STORY-05.03) and its rules (STORY-05.11) there is no
- * "complete": a part has something typed or nothing.
+ * How much of a part's inputs is filled (UX spec SCR-05, the per-node icons): nothing typed, some typed, or every needed field showing a value. The server's rule is `part-completeness.ts`
+ * (STORY-05.11); the page only draws the word it is sent.
  */
 export type Completeness = 'EMPTY' | 'PARTIAL' | 'COMPLETE';
-
-/**
- * How complete a part is from what is stored in it: nothing typed is `EMPTY`, anything typed is `PARTIAL` (the part form stores only a value that is there: a cleared one
- * is removed). `COMPLETE` is the Calculate story's (STORY-05.11).
- */
-export const completenessOf = (inputs: Readonly<Record<string, unknown>>): Completeness => (Object.keys(inputs).length === 0 ? 'EMPTY' : 'PARTIAL');
 
 /** One stored value of a part, as it leaves the server: the field's ID and the text. A list of these and not an object, so every object of an answer has keys that are named (the strict schemas). */
 export interface InputEntry {

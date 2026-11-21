@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-client';
 import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
-import { isSectionComplete, sectionProgress, shownSections, textOf } from '@/lib/estimates/form-values';
+import { isSectionComplete, sectionProgress, shownSections, sumProgress, textOf } from '@/lib/estimates/form-values';
 import type { SaveGate } from '@/lib/estimates/save-gate';
 import { FLAG_OFF, FLAG_ON } from '@/lib/estimate/treatment-value';
 import { formatIst } from '@/lib/time';
@@ -19,6 +19,7 @@ import {
   FORM_LOCKED,
   MISSING_CHOICE_MESSAGE,
   MISSING_NUMBER_MESSAGE,
+  MISSING_OPTION_MESSAGE,
   MISSING_TEXT_MESSAGE,
   lastSavedText,
   MATERIAL_LOAD_FAILED_TITLE,
@@ -32,8 +33,9 @@ import {
 import { focusCalculate } from './calculate-button';
 import { controlIdFor, NEXT_FIELD } from './field-ids';
 import { FieldRenderer } from './field-renderer';
+import { PartProgress, PartProgressSkeleton } from './part-progress';
 import { PictureSlot } from './picture-slot';
-import { CONFLICT_BODY, CONFLICT_KEEP_MINE, CONFLICT_TITLE, CONFLICT_USE_NEWER } from './save-texts';
+import { CONFLICT_BODY, CONFLICT_KEEP_MINE, CONFLICT_TITLE, CONFLICT_USE_NEWER, saveStatusText } from './save-texts';
 import { SectionCard } from './section-card';
 import { SectionStrip } from './section-strip';
 import { TREATMENT_MISSING_MESSAGE } from './surface-texts';
@@ -67,6 +69,7 @@ const TITLE_ID = 'part-form-title';
 function missingMessageOf(field: FormField): string {
   if (field.rule.type === 'treatment') return TREATMENT_MISSING_MESSAGE;
   if (field.rule.type === 'select') return MISSING_CHOICE_MESSAGE;
+  if (field.rule.type === 'choice') return MISSING_OPTION_MESSAGE;
   return field.rule.type === 'number' && field.hint !== QTY_PER_ASSY_HINT ? MISSING_NUMBER_MESSAGE : MISSING_TEXT_MESSAGE;
 }
 
@@ -119,6 +122,7 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
   if (values.stored.status === 'loading') {
     return (
       <div role="status" aria-label={FORM_LOADING} className="flex flex-col gap-s-3">
+        <PartProgressSkeleton />
         <Skeleton className="h-(--control-h)" />
         <Skeleton className="h-(--control-h)" />
         <Skeleton className="h-(--control-h)" />
@@ -131,7 +135,9 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
   const picture = values.stored.value.picture;
   // The "n of m complete" of every card, from what is typed (STORY-05.04 AC-1, AC-6): a card of placeholders has 0 of 0, so it shows no count and no check. A field the registry hides for what is
   // typed (Fasteners Qty and Cost while Fasteners is "None" or blank) is not drawn, not counted and not marked missing, and it comes back with what was typed when it shows (STORY-05.05 AC-1, AC-2).
-  const progress = shownSections(form.sections, values.texts).map((section) => ({ section, counts: sectionProgress(section, values.texts, values.errors) }));
+  // A field whose save did not go through is not stored, so it is not counted (STORY-05.11 AC-7): the card and the part's line never claim a value the server does not hold.
+  const notCounted = { ...values.errors, ...Object.fromEntries([...values.unstored].map((fieldId) => [fieldId, ''])) };
+  const progress = shownSections(form.sections, values.texts).map((section) => ({ section, counts: sectionProgress(section, values.texts, notCounted) }));
   // A field Calculate found blank is still missing while it shows no value: typing into it takes its words away at once, and a card has none left when all its fields have one.
   const missingNeeded = (field: FormField): boolean => missing.has(field.id) && textOf(field, values.texts).trim() === '';
   const hasMissing = (section: { readonly fields: ReadonlyArray<FormField> }): boolean => section.fields.some(missingNeeded);
@@ -142,7 +148,11 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
           {partFormTitle(part.slNo)}
         </h3>
         <p className="text-label text-ink-3">{FORM_INTRO}</p>
-        <p className="text-label text-ink-3">{lastSavedAt === null ? NOT_SAVED_YET : lastSavedText(formatIst(new Date(lastSavedAt)))}</p>
+        {/* The one status line of saving (STORY-05.10 AC-4, AC-5): when something was last saved (every save that stored something moves it, `onWrote`), that the form saves on its own, and, once, that the automatic
+            save could not. A polite live region that is on the page from the first paint, so it speaks only when its words change, which is when a save stored something or failed, never on a silent tick. */}
+        <p role="status" data-last-saved="" className="text-label text-ink-3">
+          {saveStatusText(lastSavedAt === null ? NOT_SAVED_YET : lastSavedText(formatIst(new Date(lastSavedAt))), editable, values.autosaveFailedAt)}
+        </p>
       </div>
       {editable ? null : <Notice tone="info">{FORM_LOCKED}</Notice>}
       {problem?.kind !== 'conflict' ? null : (
@@ -173,6 +183,7 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
           </Button>
         </Notice>
       ) : null}
+      <PartProgress slNo={part.slNo} counts={sumProgress(progress.map(({ counts }) => counts))} />
       <SectionStrip items={progress.map(({ section, counts }) => ({ section, complete: isSectionComplete(counts), missing: hasMissing(section) }))} />
       <div data-part-grid="" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14.5rem),1fr))] gap-s-4">
         {progress.map(({ section, counts }) => (

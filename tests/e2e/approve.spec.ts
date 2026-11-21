@@ -151,8 +151,10 @@ test.describe('AC-2, AC-5: a good approval', () => {
     await expect(tiles(page)).toContainText('₹ 48,271.37');
     await expect(tiles(page)).toContainText('Approved by');
     await expect(approveButton(page)).toHaveCount(0);
-    await expect(page.locator('#review-unlock')).toBeDisabled();
-    await expect(page.locator('#review-download')).toBeDisabled();
+    // Unlock works from STORY-06.08: the button is on (its own tests are `unlock.spec.ts`).
+    await expect(page.locator('#review-unlock')).toBeEnabled();
+    // STORY-07.07: the figures are current, so Download is the link to SCR-10, approved or not.
+    await expect(page.locator('#review-download')).toHaveAttribute('href', `/estimates/${code}/export`);
     expect(await readEstimateState(owner.id)).toEqual({ status: 'APPROVED', calculations: 1 });
 
     // The Engineer, on the same address, is told it is approved and locked and sees no price (NFR-002).

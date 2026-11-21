@@ -2,14 +2,20 @@ import { z } from 'zod';
 
 import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
+import { describeDeleteAfter, describeDeleteBefore } from '../../lib/config/field-delete-audit';
+import { describeInsertAudit, describeInsertBefore } from '../../lib/config/field-insert-audit';
+import { describeRevertAfter, describeRevertBefore } from '../../lib/config/revert';
 import { MAX_REASON_LENGTH } from '../../lib/estimate/approve-price';
+import { ESTIMATE_STATUSES, type EstimateStatus } from '../../lib/estimate/state-machine';
 import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
+import { FIELD_KINDS } from '../../lib/fields/types';
 import { formatRupees } from '../../lib/money';
 import { CONTACT_FIELD_NAMES, type ContactFieldName } from '../../lib/masters/customers';
 import { EXCHANGE_RATE_FIELDS, EXCHANGE_RATE_LABELS } from '../../lib/masters/exchange-rates';
 import { RUPEE } from '../../lib/masters/master-rules';
 import { MATERIAL_FIELD_LABELS } from '../../lib/masters/materials';
 import { formatDefaultValue, PERCENT_UNIT, unitLabel } from '../../lib/masters/process-items';
+import { formatIst } from '../../lib/time';
 import { USER_ROLE_VALUES } from '../../lib/users/validation';
 import type { JsonValue } from '../repositories/audit-repository';
 
@@ -49,6 +55,11 @@ interface EventDefinition<Before extends StoredShape, After extends StoredShape>
   readonly objectType: string;
   readonly category: AuditCategoryId;
   readonly status: 'wired' | 'reserved';
+  /**
+   * The Event column's words for an entry of this event, when the category is too wide to tell the kinds apart (STORY-08.07 AC-2: "Formula edit", "Field insert", "Field delete", "Checkpoint revert"). Every event
+   * of the `config_change` category has one (`tests/unit/config-history.test.ts` fails a configuration event without it); elsewhere the column shows the category.
+   */
+  readonly kindLabel?: string;
   readonly before: Before;
   readonly after: After;
   /** `objectType` is the entry's own (`process_item`, `material`): a generic master event chooses its words by it. */
@@ -100,6 +111,8 @@ const userRole = z.enum(USER_ROLE_VALUES);
 const roleState = z.strictObject({ role: userRole });
 /** A person's name, which is not a secret and is already the entry's label; the rename event keeps the old and the new one. */
 const nameState = z.strictObject({ name: z.string().min(1) });
+/** Who holds the Admin role, as the hand-over entry keeps it on each side (STORY-01.09 AC-4): the person's ID and their name at that moment. */
+const adminState = z.strictObject({ adminId: z.uuid(), adminName: z.string().min(1) });
 
 // ---- Shape of the quantity-warning event (SCR-16 "Quantity warning"; STORY-05.12) ---------------------------------------------------
 /** A row that was warned: the code, the part, its Sl. No and its name as typed. Text only: no number from a calculation has a place here. */
@@ -133,8 +146,66 @@ const describeOverride = (before: z.output<typeof overriddenBefore>, after: z.ou
   after: `Approved ${formatRupees(after.approvedPrice)}. ${after.reason === null ? 'No reason given.' : `Reason: ${after.reason}`}`,
 });
 
+// ---- Shape of the unlock event (SCR-16 "Unlock"; STORY-06.08) --------------------------------------------------------------------
+/** What an unlock keeps before: the price the approval stood at (BO), which stays on record. */
+const unlockedBeforeState = z.strictObject({ approvedPrice: rupeesText });
+/** What an unlock keeps after: the Lead's reason, as stored (1 to 500 characters, trimmed). Who and when are the entry's own columns. */
+const unlockedAfterState = z.strictObject({ reason: z.string().min(1).max(500) });
+
+// ---- Shape of the cancel event (SCR-16 "Approval cancelled"; STORY-06.12) ---------------------------------------------------------
+/** The status of the estimate, before and after the cancel. Equal when the cancel did not move it (an approval kept through an unlock, on a Draft or a Submitted estimate: AC-10), so the entry shows that nothing moved. */
+const estimateStatus = z.enum(ESTIMATE_STATUSES);
+/** What a cancel keeps before: the price the approval stood at (BO), which stays on record, and the status the estimate was in. */
+const cancelledBeforeState = z.strictObject({ approvedPrice: rupeesText, status: estimateStatus });
+/** What a cancel keeps after: the Admin's reason, as stored (1 to 500 characters, trimmed), and the status the estimate is in now. Who cancelled and when are the entry's own columns. The password is in no shape here. */
+const cancelledAfterState = z.strictObject({ reason: reasonText, status: estimateStatus });
+
+const STATUS_WORDS: Readonly<Record<EstimateStatus, string>> = { DRAFT: 'a Draft', SUBMITTED: 'Submitted', APPROVED: 'Approved' };
+
+/**
+ * "Approved at ₹ 4,750.00 to Cancelled. Reason: …" (SCR-16, UX-64). When the cancel did not move the estimate the entry says so, before the reason: "Cancelled, the estimate stayed a Draft. Reason: …" (an assumption of
+ * STORY-06.12 AC-10: the spec gives the first form only).
+ */
+const describeCancelled = (before: z.output<typeof cancelledBeforeState>, after: z.output<typeof cancelledAfterState>): AuditChangeText => ({
+  before: `Approved at ${formatRupees(before.approvedPrice)}`,
+  after: before.status === after.status ? `Cancelled, the estimate stayed ${STATUS_WORDS[after.status]}. Reason: ${after.reason}` : `Cancelled. Reason: ${after.reason}`,
+});
+
+// ---- Shape of the remove-price event (SCR-16 "Price removed"; STORY-06.13) ---------------------------------------------------------
+/** What a removal keeps before: **the price that was removed**. The portal serves it nowhere else; this entry is the one place it can be read, and only the Admin reads the log (architecture sections 4.10 and 5.3). */
+const removedBeforeState = z.strictObject({ approvedPrice: rupeesText });
+/** The price is gone from the estimate: nothing is kept after. Who removed it and when are the entry's own columns. The password is in no shape here. */
+const removedAfterState = z.null();
+
+/** "Price ₹ 4,750.00 removed from the estimate. The audit log keeps it" (SCR-16, UX-64), split at the arrow of "Before to after". */
+const describeRemoved = (before: z.output<typeof removedBeforeState>): AuditChangeText => ({
+  before: `Price ${formatRupees(before.approvedPrice)}`,
+  after: 'Removed from the estimate. The audit log keeps it',
+});
+
 /** "1.4 Top cover": the Sl. No and the name, or the Sl. No alone for a part with no name. */
 const describeWarnedRow = (row: z.output<typeof warnedRow>): string => (row.label === '' ? row.slNo : `${row.slNo} ${row.label}`);
+
+// ---- Shape of the task-change event (SCR-16 "Task change"; STORY-04.07) -------------------------------------------------------
+/**
+ * The assignment of a task as it stood: the Engineer (ID and name at that moment) and the deadline as a UTC instant. Nothing else about the task has a key to sit in: no folder path, notes, title,
+ * customer or cost (NFR-002), and no e-mail address (data minimisation). The object of the entry is the task code.
+ */
+const assignmentState = z.strictObject({ engineer: z.strictObject({ id: z.string().min(1), name: z.string().min(1) }), deadlineAt: z.iso.datetime() });
+
+/**
+ * "Arjun Rao to Meera Nair" for an Engineer and "03 Nov 2026, 17:00 IST to 04 Nov 2026, 12:00 IST" for a deadline (SCR-16, AC-4), split at the arrow of "Before to after". A change of both gives both on each side,
+ * the Engineer first: one entry for one save (decision D-g). An entry whose two sides are equal (a save that changed nothing writes none) shows both, so the words are never empty.
+ */
+function describeReassigned(before: z.output<typeof assignmentState>, after: z.output<typeof assignmentState>): AuditChangeText {
+  const engineerChanged = before.engineer.id !== after.engineer.id;
+  const deadlineChanged = before.deadlineAt !== after.deadlineAt;
+  const neither = !engineerChanged && !deadlineChanged;
+  const sides: Array<readonly [string, string]> = [];
+  if (engineerChanged || neither) sides.push([before.engineer.name, after.engineer.name]);
+  if (deadlineChanged || neither) sides.push([formatIst(new Date(before.deadlineAt)), formatIst(new Date(after.deadlineAt))]);
+  return { before: sides.map(([old]) => old).join(', '), after: sides.map(([, current]) => current).join(', ') };
+}
 
 // ---- Shape of the Process Master events (SCR-16 "Master data edit") ------------------------------------------------------------
 /** A rate as the log keeps it: its name, unit and default value as decimal text ("0.37"). The ID and the name label the entry. */
@@ -290,19 +361,43 @@ function describeMasterChange(objectType: string, before: unknown, after: unknow
   return beforeWords === null || afterWords === null ? NO_DETAIL : { before: beforeWords, after: afterWords };
 }
 
-/** An event declared for a later story. Any JSON is accepted until that story gives the event its own shapes. */
-const reservedShape = z.json();
+// With STORY-06.13 no event of Release 1 is left declared and unwired. A story that declares one for a later story adds an entry with `status: 'reserved'`, schemas that accept any JSON (`z.json()`) and
+// `describe: () => NO_DETAIL`, and the story that wires it gives it its own shapes, words and test.
 
-function reserved(objectType: string, category: AuditCategoryId) {
-  return defineEvent({
-    objectType,
-    category,
-    status: 'reserved',
-    before: reservedShape,
-    after: reservedShape,
-    describe: () => NO_DETAIL,
-  });
-}
+/** STORY-08.03: what an insert keeps (`config.field_inserted`). Letters are the ones of the finished worksheet; `moved` is runs of OLD letters with the number of places they moved. */
+const insertedColumn = z.strictObject({
+  letter: z.string().min(1).max(10),
+  label: z.string().min(1).max(200),
+  kind: z.enum(['input', 'output']),
+  follows: z.string().min(1).max(10).nullable(),
+  // No upper bound, as `config.formula_changed` has none: the entry keeps the formula in display form, which is longer than the stored form when it names rates (review SQR-02).
+  formula: z.string().min(1).nullable(),
+});
+const insertedAfterState = z.strictObject({
+  fields: z.array(insertedColumn).min(1).max(2),
+  moved: z.array(z.strictObject({ from: z.string().min(1).max(10), to: z.string().min(1).max(10), by: z.number().int().positive() })),
+  version: z.number().int().positive(),
+  // STORY-08.08: the section an insert added and the number of choices of a choice input, `null` when none. They default to null, so an entry stored before this story still reads (the log is never rewritten).
+  section: z.strictObject({ number: z.number().int().positive(), name: z.string().min(1).max(200) }).nullable().default(null),
+  choices: z.number().int().positive().nullable().default(null),
+});
+
+/** STORY-08.04: what a delete keeps (`config.field_deleted`). Before is the column as it was; after is runs of OLD letters with the number of places they moved to the left. */
+const deletedBeforeState = z.strictObject({
+  letter: z.string().min(1).max(10),
+  label: z.string().min(1).max(200),
+  kind: z.enum(FIELD_KINDS),
+  // No upper bound, as `config.formula_changed` has none: the entry keeps the formula in display form (review SQR-02 of AQP-358).
+  formula: z.string().min(1).nullable(),
+});
+const deletedAfterState = z.strictObject({
+  moved: z.array(z.strictObject({ from: z.string().min(1).max(10), to: z.string().min(1).max(10), by: z.number().int().positive() })),
+  version: z.number().int().positive(),
+});
+
+/** STORY-08.06: what a revert keeps (`config.reverted`). Before is the version that was current; after is the version the revert made and the one it copied. Numbers only. */
+const revertedBeforeState = z.strictObject({ version: z.number().int().positive() });
+const revertedAfterState = z.strictObject({ version: z.number().int().positive(), copiedFrom: z.number().int().positive() });
 
 export const AUDIT_EVENTS = {
   // ---- Wired in this story: the six user events of the Users screen (STORY-01.04) -----------------------------------------
@@ -356,6 +451,16 @@ export const AUDIT_EVENTS = {
     before: z.strictObject({ mustChangePassword: z.boolean() }),
     after: z.strictObject({ mustChangePassword: z.literal(true) }),
     describe: () => ({ before: 'Earlier password', after: 'Temporary password set' }),
+  }),
+  // STORY-01.09: the Admin role handed to another person. One entry for the one act (decision D-h), not a `user.role_changed` for each person. The entry's actor is the old Admin and its object the new one.
+  // Each side names the Admin: their ID and their name at the time (the names are the entry's only text; no e-mail address, password, hash or token has a key to sit in).
+  'user.admin_handed_over': defineEvent({
+    objectType: 'user',
+    category: 'user_change',
+    status: 'wired',
+    before: adminState,
+    after: adminState,
+    describe: (before, after) => ({ before: `Admin was ${before.adminName}`, after: `Admin is now ${after.adminName}` }),
   }),
 
   // ---- Wired in STORY-02.01: the three events of the Process Master (AC-5) ------------------------------------------------------
@@ -417,8 +522,98 @@ export const AUDIT_EVENTS = {
     describe: describeOverride,
   }),
 
+  // ---- Wired in STORY-06.08: an approved estimate unlocked --------------------------------------------------------------------
+  // One entry, in the unlock's own transaction (under the estimate's row lock): the price the approval stood at and the reason. The price stays on record after the unlock (it is "approved earlier" until a new approval
+  // replaces it). Who unlocked and when are the entry's own columns. The words follow the "Approval cancelled" entry of SCR-16 ("Approved at ₹ 4,750.00 to Cancelled. Reason: …"; assumption of STORY-06.08).
+  'approval.unlocked': defineEvent({
+    objectType: 'estimate',
+    category: 'unlock',
+    status: 'wired',
+    before: unlockedBeforeState,
+    after: unlockedAfterState,
+    describe: (before, after) => ({ before: `Approved at ${formatRupees(before.approvedPrice)}`, after: `Unlocked. Reason: ${after.reason}` }),
+  }),
+
+  // ---- Wired in STORY-06.12: an approval cancelled by the Admin ---------------------------------------------------------------
+  // One entry, in the cancel's own transaction (under the estimate's row lock): the price the approval stood at, the Admin's reason and the status before and after (equal for an approval kept through an unlock,
+  // AC-10). The price stays on record even after the Admin removes it from the screens (STORY-06.13). The log is Admin-only (architecture section 5.3).
+  'approval.cancelled': defineEvent({
+    objectType: 'estimate',
+    category: 'approval_cancelled',
+    status: 'wired',
+    before: cancelledBeforeState,
+    after: cancelledAfterState,
+    describe: describeCancelled,
+  }),
+
+  // ---- Wired in STORY-06.13: the price of a cancelled approval removed by the Admin -------------------------------------------
+  // One entry, in the removal's own transaction (under the estimate's row lock): **the price that was removed**, which this entry alone keeps once it is off every screen and out of the file (FR-108; architecture
+  // section 4.10: erasing it here would break NFR-007). The log is Admin-only (architecture section 5.3). Who removed it and when are the entry's own columns.
+  'approval.price_removed': defineEvent({
+    objectType: 'estimate',
+    category: 'price_removed',
+    status: 'wired',
+    before: removedBeforeState,
+    after: removedAfterState,
+    describe: describeRemoved,
+  }),
+
+  // ---- Wired in STORY-08.02: a formula of the field registry changed --------------------------------------------------------------
+  // One entry, in the transaction that stores the new configuration version: the formula as the Admin read it before and after (display form, column letters and rate names) and the number of the version it made.
+  // The Object is the field ("AL Cutting Cost"). A formula is Restricted data and the audit log is read by the Admin alone (NFR-002); no figure, rate value or password has a key to sit in.
+  'config.formula_changed': defineEvent({
+    objectType: 'field',
+    category: 'config_change',
+    status: 'wired',
+    kindLabel: 'Formula edit',
+    before: z.strictObject({ formula: z.string().min(1) }),
+    after: z.strictObject({ formula: z.string().min(1), version: z.number().int().positive() }),
+    describe: (before, after) => ({ before: before.formula, after: `${after.formula} (configuration version ${String(after.version)})` }),
+  }),
+
+  // ---- Wired in STORY-08.03: a field or a pair inserted into the field registry --------------------------------------------------
+  // One entry per insert, in the transaction that stores the new configuration version: the new column or columns (letter, label, kind, the column each follows), the formula typed for an output, and which
+  // columns moved, as runs of their old letters. The Object is the first new field ("AY Notch Cost"). The log is read by the Admin alone (NFR-002); no password (an insert asks for none, FR-080), figure or rate
+  // value has a key to sit in. Before is empty: the field did not exist.
+  'config.field_inserted': defineEvent({
+    objectType: 'field',
+    category: 'config_change',
+    status: 'wired',
+    kindLabel: 'Field insert',
+    before: z.null(),
+    after: insertedAfterState,
+    describe: (_before, after) => ({ before: describeInsertBefore(after), after: describeInsertAudit(after) }),
+  }),
+
+  // ---- Wired in STORY-08.04: a field deleted from the field registry --------------------------------------------------------------
+  // One entry per delete, in the transaction that stores the new configuration version: the column as it was (letter, label, kind, and the formula of an output in display form), and which columns moved to
+  // the left, as runs of their old letters. The Object is the deleted field ("AY Cutting Cost"). The log is read by the Admin alone (NFR-002); no password (the step-up reaches `verifyStepUp` and nowhere
+  // else, NFR-004), figure or rate value has a key to sit in.
+  'config.field_deleted': defineEvent({
+    objectType: 'field',
+    category: 'config_change',
+    status: 'wired',
+    kindLabel: 'Field delete',
+    before: deletedBeforeState,
+    after: deletedAfterState,
+    describe: (before, after) => ({ before: describeDeleteBefore(before), after: describeDeleteAfter(after) }),
+  }),
+
+  // ---- Wired in STORY-08.06: the configuration reverted to an earlier version ---------------------------------------------------
+  // One entry per revert, in the transaction that stores the new version (a copy of the target's snapshot). The Object is the checkpoint the Admin reverted to ("Checkpoint "Before AY insert""), or the
+  // version when the target has no checkpoint name (an undo). Before is the version that was current and after the version it made and the one it copied (UX-19: "Version 8 to Version 9 (from version 7)").
+  // The version numbers are all it keeps: no formula, figure or password has a key to sit in (NFR-002, NFR-004). Saving a checkpoint is not an event (decision D-1 of the story): nothing changed.
+  'config.reverted': defineEvent({
+    objectType: 'config_version',
+    category: 'config_change',
+    kindLabel: 'Checkpoint revert',
+    status: 'wired',
+    before: revertedBeforeState,
+    after: revertedAfterState,
+    describe: (before, after) => ({ before: describeRevertBefore(before), after: describeRevertAfter(after) }),
+  }),
+
   // ---- Declared for later stories: each adds the call, the shapes, the words and the test --------------------------------
-  'approval.unlocked': reserved('estimate', 'unlock'),
   // ---- Wired in STORY-05.12: a Calculate that went ahead past a warning ------------------------------------------------------------
   // The Engineer pressed "Calculate anyway" for rows with a 0 in QTY per Assy. One entry per acknowledged calculation, in the calculation's own transaction, naming each row (code, part, Sl. No and
   // the part's name as typed) and holding no figure: nothing here depends on a master or on a calculated value (NFR-002, architecture sections 4.3 and 8). The actor is the person who pressed.
@@ -430,8 +625,18 @@ export const AUDIT_EVENTS = {
     after: z.strictObject({ warnings: z.array(warnedRow).min(1) }),
     describe: (_before, after) => ({ before: 'No warning', after: `Went ahead with QTY per Assy 0 on ${after.warnings.map(describeWarnedRow).join(', ')}` }),
   }),
-  'approval.cancelled': reserved('estimate', 'approval_cancelled'),
-  'approval.price_removed': reserved('estimate', 'price_removed'),
+
+  // ---- Wired in STORY-04.07: a task given to another Engineer, a new deadline, or both ----------------------------------------------
+  // One entry for one save (decision D-g), in the change's own transaction under the task's and the estimate's row locks: the Engineer (ID and name) and the deadline before and after. The actor is the Lead or
+  // the Admin who saved; the object is the task code. A save that changed nothing writes no entry.
+  'task.reassigned': defineEvent({
+    objectType: 'task',
+    category: 'task_change',
+    status: 'wired',
+    before: assignmentState,
+    after: assignmentState,
+    describe: describeReassigned,
+  }),
 } as const;
 
 export type AuditEventName = keyof typeof AUDIT_EVENTS;

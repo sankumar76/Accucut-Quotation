@@ -69,11 +69,63 @@ describe('only the Configuration routes, page and composition import the Configu
   const ALLOWED_IMPORTERS: ReadonlyArray<string> = [
     'src/app/(portal)/config/fields/error.tsx',
     'src/app/(portal)/config/fields/page.tsx',
+    // STORY-08.02: the formula editor's page, three routes, screen and service. The page and the routes are the Admin's alone (the manifest), and the service is blocked for every Engineer view.
+    'src/app/(portal)/config/fields/[id]/formula/page.tsx',
     'src/app/api/v1/config/current/route.ts',
     'src/app/api/v1/config/fields/route.ts',
+    'src/app/api/v1/config/fields/[id]/formula/route.ts',
+    'src/app/api/v1/config/formula-check/route.ts',
+    'src/app/api/v1/config/sample-rows/route.ts',
+    // STORY-08.03: the insert wizard's page, three routes (the insert is a `POST` in the file above), screen, service and schema. The page and the routes are the Admin's alone (the manifest), the service is blocked
+    // for every Engineer view, and the schemas and the audit words name column labels and formulas the Admin typed.
+    'src/app/(portal)/config/fields/new/page.tsx',
+    'src/app/api/v1/config/fields/preview/route.ts',
+    'src/app/api/v1/config/insert-options/route.ts',
+    'src/components/features/config/insert-field-controls.tsx',
+    'src/components/features/config/insert-field-input-fields.tsx',
+    'src/components/features/config/insert-field-letters.tsx',
+    'src/components/features/config/insert-field-outcome.ts',
+    'src/components/features/config/insert-field-output-fields.tsx',
+    'src/components/features/config/insert-field-screen.tsx',
+    'src/components/features/config/insert-field-steps.tsx',
+    // STORY-08.08: the wizard's words read the limits of a choice and of a new section (a file of constants, no formula, rate or figure).
+    'src/components/features/config/insert-field-texts.ts',
+    'src/components/features/config/insert-field-wizard.tsx',
+    'src/components/features/config/use-insert-wizard.ts',
+    'src/server/services/audit-events.ts',
+    'src/server/services/config-structure-service.ts',
+    'src/server/views/schemas/config-structure.ts',
+    // STORY-08.04: the delete's two routes (the dialog's own files are listed below with the screen), the pure delete and its words and audit. The routes are the Admin's alone (the manifest); the answers name formulas.
+    'src/app/api/v1/config/fields/[id]/route.ts',
+    'src/app/api/v1/config/fields/[id]/references/route.ts',
+    // The dialog's hooks (the dialog and its view import their siblings by relative path, so the scan sees only the two that import the restricted client modules).
+    'src/components/features/config/use-delete-field.ts',
+    'src/components/features/config/use-fields-delete.ts',
+    // STORY-08.06: the checkpoints page, its two routes, the screen and the hooks that import the client module, and the service. The page and the routes are the Admin's alone (the manifest), the service is blocked for
+    // every Engineer view, and the answers hold a checkpoint's name and a version number, never a snapshot or a formula.
+    'src/app/(portal)/config/checkpoints/page.tsx',
+    // STORY-10.07 AC-4: its route-level error page, which imports only the screen's title and its load-error title (words, no data), and is the Admin's alone as the page is.
+    'src/app/(portal)/config/checkpoints/error.tsx',
+    'src/app/api/v1/config/checkpoints/route.ts',
+    'src/app/api/v1/config/versions/[id]/revert/route.ts',
+    'src/components/features/config/checkpoints-screen.tsx',
+    'src/components/features/config/checkpoints-table.tsx',
+    'src/components/features/config/revert-dialog.tsx',
+    'src/components/features/config/use-checkpoint-data.ts',
+    'src/components/features/config/use-checkpoints-revert.ts',
+    'src/components/features/config/use-revert.ts',
+    'src/components/features/config/use-save-checkpoint.ts',
+    'src/server/services/config-checkpoint-service.ts',
     'src/components/features/config/fields-screen.tsx',
     'src/components/features/config/fields-table.tsx',
+    'src/components/features/config/formula-editor-screen.tsx',
+    'src/components/features/config/formula-editor.tsx',
+    'src/components/features/config/formula-preview.tsx',
+    'src/components/features/config/suggestions.tsx',
+    'src/components/features/config/use-formula-check.ts',
+    'src/components/features/config/use-save-formula.ts',
     'src/server/composition.ts',
+    'src/server/services/config-edit-service.ts',
     'src/server/services/config-read-service.ts',
     // The barrel re-exports every schema file for tests and server code; an `engineer-*` view may not import it (`engineer-import-rule.test.ts`).
     'src/server/views/schemas/index.ts',
@@ -85,7 +137,8 @@ describe('only the Configuration routes, page and composition import the Configu
   });
 
   it('lists exactly the files that are allowed to', () => {
-    expect(importers).toEqual(ALLOWED_IMPORTERS.filter((file) => importers.includes(file)));
+    // Both sides are sorted: the order `readdirSync` gives differs between Windows and Linux (a `[id]` folder comes last on one and first on the other), and the rule is about the set.
+    expect([...importers].sort()).toEqual(ALLOWED_IMPORTERS.filter((file) => importers.includes(file)).sort());
     expect(importers.filter((file) => !ALLOWED_IMPORTERS.includes(file))).toEqual([]);
   });
 

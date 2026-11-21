@@ -1,43 +1,58 @@
+import Link from 'next/link';
+
 import { ApproveButton } from '@/components/features/estimate-approve/approve-button';
+import { CancelButton } from '@/components/features/estimate-cancel/cancel-button';
+import { RemoveButton } from '@/components/features/estimate-remove-price/remove-button';
 import { RecalculateButton } from '@/components/features/estimate-recalculate/recalculate-button';
 import { CALCULATED_LINE_ID } from '@/components/features/estimate-recalculate/recalculate-ids';
+import { UnlockButton } from '@/components/features/estimate-unlock/unlock-button';
 import { Button } from '@/components/ui/button';
+import type { RoleName } from '@/lib/auth/roles';
+import { approveRatesLine } from '@/lib/estimate/rates-changed-copy';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
+import { formatRupees } from '@/lib/money';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { REVIEW_APPROVE_ID, REVIEW_CALCULATE_ID, REVIEW_DOWNLOAD_ID, REVIEW_UNLOCK_ID } from './review-ids';
+import { REVIEW_APPROVE_ID, REVIEW_CALCULATE_ID, REVIEW_CANCEL_ID, REVIEW_DOWNLOAD_ID, REVIEW_REMOVE_PRICE_ID, REVIEW_UNLOCK_ID } from './review-ids';
 import {
   ACTIONS_LABEL,
   APPROVE_CLEARED_REASON,
+  APPROVE_DRAFT_REASON,
   APPROVE_FIRST_OPEN_FAILED,
   APPROVE_LABEL,
   APPROVE_NOT_CALCULATED_REASON,
-  APPROVE_NOT_YET_REASON,
   CALCULATE_FAILED,
   CALCULATE_LABEL,
+  CANCEL_APPROVAL_LABEL,
+  CANCEL_FIRST_OPEN_FAILED,
   calculatedLine,
   CALCULATING_LINE,
   DOWNLOAD_LABEL,
   DOWNLOAD_NOT_CALCULATED_REASON,
-  DOWNLOAD_NOT_YET_REASON,
+  ONLY_ADMIN_CANCELS,
   RECALCULATE_LABEL,
+  REMOVE_PRICE_FIRST_OPEN_FAILED,
+  REMOVE_PRICE_LABEL,
+  UNLOCK_FIRST_OPEN_FAILED,
   UNLOCK_LABEL,
-  UNLOCK_NOT_YET_REASON,
 } from './review-texts';
 
 /**
  * The action bar of SCR-06 (STORY-06.02 AC-6, STORY-06.04 AC-3, AC-5, STORY-06.06 AC-1, AC-5; UX spec SCR-06 "States"): the line "Calculated <time> · configuration version <n>" (FR-031), the primary **Calculate**
- * (for an estimate that was never calculated) or **Recalculate** (while the figures are cleared), which works from STORY-06.04, **Approve and lock**, and Download .xlsx.
+ * (for an estimate that was never calculated) or **Recalculate** (while the figures are cleared, and **on a Draft whatever the state of the figures**, STORY-06.08 AC-11), which works from STORY-06.04, **Approve and lock**, and Download .xlsx.
+ *
+ * **A "Rates changed" notice brings the button with it** (STORY-06.11 AC-1, AC-10): its link is to Recalculate, so while the costs view holds that notice the bar shows Recalculate whatever the status (a Submitted
+ * estimate with current figures has none otherwise), and a link never points at a missing button.
  *
  * **Approve and lock** is on only while the guard of STORY-06.05 would let the press through (the estimate is SUBMITTED, its figures are `current` and the page holds the calculation they come from): it is then the
  * button of the one small script `ApproveButton`, which opens the dialog of SCR-08 (fetched on the first press, not in the first load). In every other state it is **off with a reason**: each disabled button names its
  * reason in visible text and is described by it (`aria-describedby`), so a screen reader hears why. The server decides all the same; the button is a convenience. For an **approved** estimate Approve and lock is gone and
- * **Unlock** takes its place (AC-5); what Unlock does is STORY-06.08's, so it is off with a reason until then. The Excel file is STORY-07.03's, so Download is off here and says so. In flow, not sticky.
+ * **Unlock** takes its place (STORY-06.06 AC-5), which opens the dialog of SCR-09 (STORY-06.08; fetched on the first press, not in the first load). **Download .xlsx** (STORY-07.07; UX spec SCR-06 "Download opens SCR-10 and is off unless the figures are current") is the link, drawn as a button, to SCR-10 while the figures are `current`, whatever the status; it is off with its reason in the cleared and never-calculated states. In flow, not sticky.
  */
 
 const APPROVE_REASON_ID = 'review-approve-reason';
-const UNLOCK_REASON_ID = 'review-unlock-reason';
 const DOWNLOAD_REASON_ID = 'review-download-reason';
+const CANCEL_REASON_ID = 'review-cancel-reason';
 
 /** What the Approve button needs to open its dialog, or `null` while approving cannot be offered. All of it comes from the server's costs view of this one render. */
 export interface ApproveOffer {
@@ -46,17 +61,42 @@ export interface ApproveOffer {
   readonly approvedLetter: string;
   /** The rows of the calculation's quantity warning, for the one line of the approval dialog (STORY-06.10 AC-5); empty when it has none. Approving is not stopped either way. */
   readonly warningRows: ReadonlyArray<{ readonly slNo: string; readonly label: string }>;
+  /** The one line of the dialog when rates changed since the calculation (STORY-06.11 AC-2), counts by kind and no value; `null` when none. Approving is not stopped either way. */
+  readonly ratesLine: string | null;
+}
+
+/**
+ * What the action bar offers of Cancel approval (STORY-06.12 AC-1, AC-10), or `null` while there is no approval to cancel (never approved, or already cancelled). The Admin gets the button, with the approval it names; a Lead
+ * gets none, and the line that says who can.
+ */
+export type CancelOffer = { readonly kind: 'admin'; readonly approvalId: string; readonly engineerName: string } | { readonly kind: 'lead' };
+
+/**
+ * What the action bar offers of Remove price (STORY-06.13 AC-1), or `null` when it is not offered: the Admin gets the button, with the cancelled approval it names and the price the dialog repeats (already written as
+ * rupees); a Lead gets none (the cancelled notice tells them "Only the Admin can remove it").
+ */
+export interface RemoveOffer {
+  readonly approvalId: string;
+  readonly priceLabel: string;
 }
 
 export interface ReviewActionsProps {
-  /** The estimate's ID, for the request of Calculate or Recalculate and of the approval. */
+  /** The estimate's ID, for the request of Calculate or Recalculate and of the approval and the unlock. */
   readonly estimateId: string;
+  /** The task's code, the title of the unlock dialog ("Unlock Q-2026-0318"). */
+  readonly code: string;
   readonly state: CostsView['state'];
   readonly status: EstimateStatus;
   /** The time of the calculation written in IST, and the configuration version it used; `null` while there is no calculation. */
   readonly calculated: { readonly at: string; readonly configurationNumber: number } | null;
   /** Present only for a SUBMITTED estimate whose figures are current (see `approveOffer`): the Approve button is then on. */
   readonly approve: ApproveOffer | null;
+  /** The Cancel approval button for the Admin, or the line for a Lead, while the latest approval has not been cancelled (see `cancelOffer`). */
+  readonly cancel: CancelOffer | null;
+  /** The Remove price button for the Admin, while the latest approval is cancelled and its price stands (see `removeOffer`). */
+  readonly remove: RemoveOffer | null;
+  /** The "Rates changed" notice is drawn (STORY-06.11): the Recalculate button its link points at is on the bar. */
+  readonly ratesChanged: boolean;
 }
 
 interface ReasonProps {
@@ -74,13 +114,47 @@ const Reason = ({ id, text }: ReasonProps) => (
  * Whether Approve and lock is on, and with what: a SUBMITTED estimate whose figures are `current`, with the calculation they come from and its total. This is the button's own convenience and mirrors the
  * server's guard (`assertApprovable`), which stays the authority: a button that is on for an estimate the server would refuse only earns the refusal's sentence.
  */
-export function approveOffer(status: EstimateStatus, costs: Pick<CostsView, 'state' | 'calculationId' | 'totals' | 'letters' | 'warning'>): ApproveOffer | null {
+export function approveOffer(status: EstimateStatus, costs: Pick<CostsView, 'state' | 'calculationId' | 'totals' | 'letters' | 'warning' | 'ratesChanged'>): ApproveOffer | null {
   const total = costs.totals?.totalPrice ?? null;
   if (status !== 'SUBMITTED' || costs.state !== 'current' || costs.calculationId === null || total === null) return null;
-  return { calculationId: costs.calculationId, calculatedTotal: total, approvedLetter: costs.letters.approvedPrice, warningRows: costs.warning?.rows ?? [] };
+  return {
+    calculationId: costs.calculationId,
+    calculatedTotal: total,
+    approvedLetter: costs.letters.approvedPrice,
+    warningRows: costs.warning?.rows ?? [],
+    ratesLine: costs.ratesChanged === null ? null : approveRatesLine(costs.ratesChanged),
+  };
 }
 
-function ApproveControl({ estimateId, state, approve }: Pick<ReviewActionsProps, 'estimateId' | 'state' | 'approve'>) {
+/**
+ * Whether Cancel approval is offered, and to whom (STORY-06.12 AC-1, AC-10): the latest approval has not been cancelled, whatever the status of the estimate (an approval kept through an unlock is the latest one too). Only the
+ * Admin gets the button (the server decides all the same); a Lead is told who can. An Engineer never reaches this page.
+ */
+export function cancelOffer(role: RoleName, approval: NonNullable<CostsView['approval']> | null): CancelOffer | null {
+  if (approval === null || approval.cancel !== null) return null;
+  return role === 'ADMIN' ? { kind: 'admin', approvalId: approval.id, engineerName: approval.engineerName } : { kind: 'lead' };
+}
+
+/**
+ * Whether Remove price is offered (STORY-06.13 AC-1): only to the Admin, and only on the latest approval (the costs view's BO is that row, so an older approval never has it) once it was cancelled and while its price
+ * stands (a removed price is no BO, so the view carries no approval then). It is not offered before a cancel. The server decides all the same. A Lead and an Engineer are never offered it.
+ */
+export function removeOffer(role: RoleName, approval: NonNullable<CostsView['approval']> | null): RemoveOffer | null {
+  if (role !== 'ADMIN' || approval === null || approval.cancel === null) return null;
+  return { approvalId: approval.id, priceLabel: formatRupees(approval.price) };
+}
+
+/**
+ * Why Approve and lock is off, by what the Lead can do about it (UX spec v0.31 SCR-06): never calculated, the figures cleared, or a Draft whose figures are current (an unlocked estimate: the way on is Recalculate).
+ * Any other state with the button off is a page the server could not offer a total on; the way on is the same, so it says the same as the cleared state.
+ */
+function approveReason(state: CostsView['state'], status: EstimateStatus): string {
+  if (state === 'none') return APPROVE_NOT_CALCULATED_REASON;
+  if (state === 'current' && status === 'DRAFT') return APPROVE_DRAFT_REASON;
+  return APPROVE_CLEARED_REASON;
+}
+
+function ApproveControl({ estimateId, state, status, approve }: Pick<ReviewActionsProps, 'estimateId' | 'state' | 'status' | 'approve'>) {
   if (approve !== null) {
     return (
       <ApproveButton
@@ -92,10 +166,11 @@ function ApproveControl({ estimateId, state, approve }: Pick<ReviewActionsProps,
         calculatedTotal={approve.calculatedTotal}
         approvedLetter={approve.approvedLetter}
         warningRows={approve.warningRows}
+        ratesLine={approve.ratesLine}
       />
     );
   }
-  const reason = state === 'none' ? APPROVE_NOT_CALCULATED_REASON : state === 'out-of-date' ? APPROVE_CLEARED_REASON : APPROVE_NOT_YET_REASON;
+  const reason = approveReason(state, status);
   return (
     <>
       <Button id={REVIEW_APPROVE_ID} variant="secondary" disabled aria-describedby={APPROVE_REASON_ID} className="w-full md:w-auto">
@@ -106,8 +181,11 @@ function ApproveControl({ estimateId, state, approve }: Pick<ReviewActionsProps,
   );
 }
 
-export function ReviewActions({ estimateId, state, status, calculated, approve }: ReviewActionsProps) {
-  const downloadReason = state === 'current' ? DOWNLOAD_NOT_YET_REASON : DOWNLOAD_NOT_CALCULATED_REASON;
+export function ReviewActions({ estimateId, code, state, status, calculated, approve, cancel, remove, ratesChanged }: ReviewActionsProps) {
+  // Recalculate is the way on whenever the figures are not current, and **on a Draft whatever the state of the figures**: an unlocked estimate keeps its current figures, and it can be calculated again, submitted
+  // and approved without anyone editing an input (AC-11). A Submitted estimate with current figures shows no button: its way on is Approve and lock, unless rates changed since the calculation: the notice's link
+  // is to Recalculate, so the button is there then (STORY-06.11).
+  const showRecalculate = state !== 'current' || status === 'DRAFT' || ratesChanged;
   return (
     <div role="group" aria-label={ACTIONS_LABEL} className="flex flex-col gap-s-3 rounded-md border border-border bg-surface px-s-4 py-s-3">
       {calculated === null ? null : (
@@ -116,7 +194,7 @@ export function ReviewActions({ estimateId, state, status, calculated, approve }
         </p>
       )}
       <div className="flex flex-col gap-s-3 md:flex-row md:flex-wrap md:items-start">
-        {state === 'current' ? null : (
+        {showRecalculate ? (
           <div className="flex flex-col gap-s-1">
             <RecalculateButton
               id={REVIEW_CALCULATE_ID}
@@ -126,25 +204,60 @@ export function ReviewActions({ estimateId, state, status, calculated, approve }
               failedLine={CALCULATE_FAILED}
             />
           </div>
-        )}
+        ) : null}
         <div className="flex flex-col gap-s-1">
-          <Button id={REVIEW_DOWNLOAD_ID} variant="secondary" disabled aria-describedby={DOWNLOAD_REASON_ID} className="w-full md:w-auto">
-            {DOWNLOAD_LABEL}
-          </Button>
-          <Reason id={DOWNLOAD_REASON_ID} text={downloadReason} />
+          {state === 'current' ? (
+            // The way to SCR-10, where the file card's own Download .xlsx builds the file; SCR-10 refuses a figure state that changed in between. The link carries no figure.
+            <Button id={REVIEW_DOWNLOAD_ID} asChild variant="secondary" className="w-full md:w-auto">
+              <Link href={`/estimates/${encodeURIComponent(code)}/export`} prefetch={false}>
+                {DOWNLOAD_LABEL}
+              </Link>
+            </Button>
+          ) : (
+            <>
+              <Button id={REVIEW_DOWNLOAD_ID} variant="secondary" disabled aria-describedby={DOWNLOAD_REASON_ID} className="w-full md:w-auto">
+                {DOWNLOAD_LABEL}
+              </Button>
+              <Reason id={DOWNLOAD_REASON_ID} text={DOWNLOAD_NOT_CALCULATED_REASON} />
+            </>
+          )}
         </div>
         <div className="flex flex-col gap-s-1">
           {status === 'APPROVED' ? (
-            <>
-              <Button id={REVIEW_UNLOCK_ID} variant="secondary" disabled aria-describedby={UNLOCK_REASON_ID} className="w-full md:w-auto">
-                {UNLOCK_LABEL}
-              </Button>
-              <Reason id={UNLOCK_REASON_ID} text={UNLOCK_NOT_YET_REASON} />
-            </>
+            <UnlockButton id={REVIEW_UNLOCK_ID} label={UNLOCK_LABEL} failedLine={UNLOCK_FIRST_OPEN_FAILED} estimateId={estimateId} code={code} />
           ) : (
-            <ApproveControl estimateId={estimateId} state={state} approve={approve} />
+            <ApproveControl estimateId={estimateId} state={state} status={status} approve={approve} />
           )}
         </div>
+        {cancel === null ? null : cancel.kind === 'admin' ? (
+          <div className="flex flex-col gap-s-1">
+            <CancelButton
+              id={REVIEW_CANCEL_ID}
+              label={CANCEL_APPROVAL_LABEL}
+              failedLine={CANCEL_FIRST_OPEN_FAILED}
+              estimateId={estimateId}
+              code={code}
+              approvalId={cancel.approvalId}
+              status={status}
+              engineerName={cancel.engineerName}
+            />
+          </div>
+        ) : status === 'APPROVED' ? null : (
+          // An approved estimate says it in its notice ("Locked. ... Only the Admin can cancel an approval."); a Draft or Submitted one whose approval was kept through an unlock says it here.
+          <Reason id={CANCEL_REASON_ID} text={ONLY_ADMIN_CANCELS} />
+        )}
+        {remove === null ? null : (
+          <div className="flex flex-col gap-s-1">
+            <RemoveButton
+              id={REVIEW_REMOVE_PRICE_ID}
+              label={REMOVE_PRICE_LABEL}
+              failedLine={REMOVE_PRICE_FIRST_OPEN_FAILED}
+              estimateId={estimateId}
+              approvalId={remove.approvalId}
+              priceLabel={remove.priceLabel}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

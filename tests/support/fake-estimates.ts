@@ -29,6 +29,8 @@ export interface FakeEstimate {
   inputsRevision: number;
   /** The calculation the estimate is linked to (STORY-03.05). Absent counts as none. */
   currentCalculationId?: string | null;
+  /** The configuration version that calculation was made with (STORY-08.05); absent counts as none. */
+  configVersionId?: string | null;
 }
 
 /** A part of an estimate's tree as the fake holds it: what the real table keeps, by estimate. */
@@ -80,6 +82,8 @@ export interface FakeEstimateWorld {
   writes(): number;
   /** How many times `setStatus` changed a status. */
   statusWrites(): number;
+  /** The materials the parts name, with whether each was deleted (STORY-06.08 `lockMaterialsInUse`); a test fills it in. Empty: no part names a material. */
+  readonly materialsInUse: Array<{ id: string; deleted: boolean }>;
 }
 
 const same = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
@@ -102,6 +106,7 @@ export function createFakeEstimateWorld(
   const estimates: FakeEstimate[] = initial.map((estimate) => ({ ...estimate }));
   const nodes: FakeNode[] = initialNodes.map((node) => ({ ...node, inputs: { ...node.inputs } }));
   const images: FakeImage[] = [...initialImages];
+  const materialsInUse: Array<{ id: string; deleted: boolean }> = [];
   let imageWrites = 0;
   let writes = 0;
   let nodeWrites = 0;
@@ -135,6 +140,10 @@ export function createFakeEstimateWorld(
       const estimate = estimates.find((candidate) => same(candidate.id, id));
       return Promise.resolve(estimate === undefined ? null : { id: estimate.id, engineerId: estimate.engineerId, status: estimate.status });
     },
+    findConfigurationBasis: (id) => {
+      const estimate = estimates.find((candidate) => same(candidate.id, id));
+      return Promise.resolve(estimate === undefined ? null : { status: estimate.status, configVersionId: estimate.currentCalculationId == null ? null : (estimate.configVersionId ?? null) });
+    },
     lockEstimate: (id) => {
       const estimate = estimates.find((candidate) => same(candidate.id, id));
       const lock: EstimateLock | null = estimate === undefined ? null : { id: estimate.id, engineerId: estimate.engineerId, status: estimate.status, customerId: estimate.customerId, inputsRevision: estimate.inputsRevision, taskCode: estimate.code };
@@ -144,6 +153,7 @@ export function createFakeEstimateWorld(
       const found = customers().find((customer) => same(customer.id, id) && !customer.deleted);
       return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name });
     },
+    lockMaterialsInUse: () => Promise.resolve([...materialsInUse].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))),
     linkCalculation: (estimateId, calculationId, status) => {
       const estimate = estimates.find((candidate) => same(candidate.id, estimateId));
       if (estimate === undefined) return Promise.reject(new Error('The estimate to link does not exist.'));
@@ -252,6 +262,14 @@ export function createFakeEstimateWorld(
       const found = images.find((candidate) => same(candidate.id, imageId));
       return Promise.resolve(found === undefined ? null : { mime: found.mime, bytes: found.bytes });
     },
+    findMimes: (estimateId, imageIds) =>
+      Promise.resolve(images.filter((candidate) => same(candidate.estimateId, estimateId) && imageIds.some((id) => same(id, candidate.id))).map((found) => ({ id: found.id, mime: found.mime }))),
+    readMany: (estimateId, imageIds) =>
+      Promise.resolve(
+        images
+          .filter((candidate) => same(candidate.estimateId, estimateId) && imageIds.some((id) => same(id, candidate.id)))
+          .map((found) => ({ id: found.id, mime: found.mime, bytes: new Uint8Array(found.bytes) })),
+      ),
   };
 
   // The row lock: one transaction at a time, in the order they were opened. A failed one releases it, as a rollback does.
@@ -288,5 +306,6 @@ export function createFakeEstimateWorld(
     writes: () => writes,
     nodeWrites: () => nodeWrites,
     statusWrites: () => statusWrites,
+    materialsInUse,
   };
 }

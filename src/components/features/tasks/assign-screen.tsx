@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ASSIGN_FIELD_NAMES, type EngineerOption } from '@/lib/tasks/assign';
 
+import { AlertsOffNotice } from './alerts-off-notice';
 import { AssignFields } from './assign-fields';
 import { ASSIGN_FIELD_IDS } from './assign-form-model';
 import {
@@ -45,6 +46,8 @@ import { useAssignForm } from './use-assign-form';
 
 export interface AssignScreenProps {
   readonly engineers: ReadonlyArray<EngineerOption>;
+  /** Whether e-mail alerts are on (STORY-09.03 AC-6): with them off, choosing an Engineer shows the notice that they will not be e-mailed. */
+  readonly alertsEnabled: boolean;
 }
 
 function Breadcrumb() {
@@ -85,7 +88,7 @@ function NextCard() {
   );
 }
 
-export function AssignScreen({ engineers }: AssignScreenProps) {
+export function AssignScreen({ engineers, alertsEnabled }: AssignScreenProps) {
   const form = useAssignForm();
   const success = useRef<HTMLDivElement>(null);
   const { assigned } = form;
@@ -94,6 +97,8 @@ export function AssignScreen({ engineers }: AssignScreenProps) {
   useEffect(() => {
     if (assigned !== null) success.current?.focus();
   }, [assigned]);
+
+  const chosenEngineer = engineers.find((engineer) => engineer.id === form.values.engineerId)?.name ?? null;
 
   const items = ASSIGN_FIELD_NAMES.flatMap((field) => {
     const message = form.errors[field];
@@ -122,6 +127,7 @@ export function AssignScreen({ engineers }: AssignScreenProps) {
           </Notice>
         </div>
       )}
+      <AlertsOffNotice alertsEnabled={alertsEnabled} engineerName={chosenEngineer} />
       <ErrorSummary title={summaryTitle(items.length)} items={items} />
       {form.failed ? (
         <Notice tone="danger" title={FAILED_ASSIGN_TITLE}>

@@ -8,6 +8,7 @@ import { focusOpener, type Opener } from './master-opener';
 import type { PageNotice } from './master-texts';
 import type { DialogKind, ProcessDialogsProps } from './process-dialogs';
 import type { RowAction } from './process-list';
+import type { SyncRequest } from './process-sync-dialog';
 import { goneNotice } from './process-texts';
 import { useDialogOpener } from './use-dialog-opener';
 import { useMasterList } from './use-master-list';
@@ -42,6 +43,8 @@ function useDialogs() {
   const [target, setTarget] = useState<ProcessItemRow | null>(null);
   const [formItem, setFormItem] = useState<ProcessItemRow | null>(null);
   const [blockedBy, setBlockedBy] = useState<ReadonlyArray<FormulaUseRow>>([]);
+  // What "Customers differ" is about stays set after it closes, like the rate the other dialogs are about.
+  const [sync, setSync] = useState<SyncRequest | null>(null);
   const { loader, pressed, opener, press } = useDialogOpener<ProcessDialogsProps>({ id: 'process-dialogs', load: loadDialogs });
 
   function openDialog(kind: DialogKind, item: ProcessItemRow | null, from: Opener, byKeyboard: boolean): boolean {
@@ -53,7 +56,7 @@ function useDialogs() {
     });
   }
 
-  return { open, setOpen, target, formItem, blockedBy, setBlockedBy, pressed, opener, loader, openDialog };
+  return { open, setOpen, target, formItem, blockedBy, setBlockedBy, sync, setSync, pressed, opener, loader, openDialog };
 }
 
 type List = ReturnType<typeof useItemsList>;
@@ -75,6 +78,8 @@ function openersFor(dialogs: Dialogs, list: List, setNotice: SetNotice) {
   /** Radix returns focus only to a trigger, and these dialogs have none: the opener is remembered here. */
   function onCloseAutoFocus(event: Event): void {
     event.preventDefault();
+    // The form closes into "Customers differ" (a saved default with customers to ask about): focus belongs to that window, not to the button behind it.
+    if (dialogs.open === 'sync') return;
     focusOpener(dialogs.opener.current, list.status === 'error');
   }
 
@@ -88,6 +93,13 @@ function outcomesFor(dialogs: Dialogs, setNotice: SetNotice, readAgain: (returnF
     dialogs.setOpen(null);
     setNotice(saved);
     await readAgain(true);
+  }
+
+  /** A save changed the default and some customers hold another value: ask about them (STORY-02.08). The list is read again once they are answered. */
+  function onDiffer(request: SyncRequest): void {
+    dialogs.setSync(request);
+    dialogs.setOpen('sync');
+    setNotice(null);
   }
 
   /** The rate was deleted elsewhere (404): close, say so, read the list again, and put focus on the heading (QLT-06). */
@@ -105,7 +117,7 @@ function outcomesFor(dialogs: Dialogs, setNotice: SetNotice, readAgain: (returnF
     void readAgain(false);
   }
 
-  return { onSaved, onGone, onBlocked };
+  return { onSaved, onDiffer, onGone, onBlocked };
 }
 
 /** The whole of SCR-11's behaviour. The notice is replaced by the next one and cleared by the next press of a button. */

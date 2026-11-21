@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { Prisma } from '../../generated/prisma/client';
+import { escapeLike } from '../../lib/escape-like';
 import type { QueueCounts, QueueTab } from '../../lib/tasks/queue';
 
 import { withDatabaseErrors } from './database-errors';
@@ -9,7 +10,7 @@ import { clientFor, type Transaction } from './transaction';
 
 /**
  * Storage of tasks and their estimates (STORY-04.01; architecture sections 4.1, 5.1 and 6). Three tables: `tasks`, `estimates` and `task_sequences`.
- * STORY-04.01 added the writes of "Assign task" and the list of Engineers it chooses from; STORY-04.02 adds the reads of the queue (`listQueue`, `countQueue`).
+ * STORY-04.01 added the writes of "Assign task" and the list of Engineers it chooses from; STORY-04.02 the reads of the queue (`listQueue`, `countQueue`), STORY-04.06 their filters.
  *
  * **One transaction.** A task, its empty estimate and the number that names it are written with the caller's `Transaction`, so a failure of any
  * insert leaves none of them (AC-1). Every write method takes `tx` as required: none can run alone.
@@ -19,6 +20,10 @@ import { clientFor, type Transaction } from './transaction';
  *
  * **The Engineer** is read with `FOR SHARE` in the same transaction: a person who is deactivated, or whose role is changed, while the task is being
  * written makes that update wait for the task, and one who is already deactivated is not found (AC-3).
+ *
+ * **A reassign** (STORY-04.07) reads the task with `findTaskForUpdate`, which takes the estimate's row and then the task's row `FOR UPDATE`, the order of the estimate
+ * workflow (`lockEstimate` takes the estimate `FOR UPDATE` and the task `FOR SHARE`), so the two cannot wait for each other. An approval that is being committed makes
+ * the reassign wait, and the status it reads once the lock is granted is the one that decides whether the task is still open (AC-6).
  */
 
 export type EstimateStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED';
@@ -86,9 +91,50 @@ export interface TaskDetailRow extends QueueRow {
   readonly notes: string | null;
 }
 
+/** A task as a reassign reads it, under the task's and the estimate's row locks: what it holds now and the status of its estimate. */
+export interface LockedTask {
+  readonly id: string;
+  readonly code: string;
+  readonly engineer: EngineerRecord;
+  readonly deadlineAt: Date;
+  readonly assignmentRevision: number;
+  readonly status: EstimateStatus;
+  /** What the assignment e-mail of a change of Engineer shows (STORY-09.03 AC-7): plain fields of the task, read under the same lock. */
+  readonly folderPath: string;
+  readonly title: string | null;
+  readonly notes: string | null;
+}
+
+/** The person who assigned a task, or who changed its Engineer, as the assignment e-mail needs them (STORY-09.03): the name, and whether they are active now. */
+export interface AssignerRecord {
+  readonly id: string;
+  readonly name: string;
+  readonly isActive: boolean;
+}
+
+/** What a reassign writes: the whole assignment, so the service decides every value and the repository stores what it is given. */
+export interface AssignmentState {
+  readonly engineerId: string;
+  readonly deadlineAt: Date;
+  readonly assignmentRevision: number;
+}
+
+/** What the filter row narrows a read to (STORY-04.06 AC-3), ANDed with the scope and the tab so it can only narrow. Null is "not set"; the service has judged every value. */
+export interface QueueFilter {
+  /** Task ID or title, contains, ignoring letter case, with no wildcard of its own. */
+  readonly text: string | null;
+  readonly engineerId: string | null;
+  /** The customer on the task's estimate; a task whose estimate has none matches no customer. */
+  readonly customerId: string | null;
+  /** A deadline at or after this instant (00:00 IST of the From day) and before that one (00:00 IST of the day after the To day, so the To day is inclusive). */
+  readonly deadlineFrom: Date | null;
+  readonly deadlineBefore: Date | null;
+}
+
 export interface QueueRequest {
   readonly tab: QueueTab;
   readonly scope: QueueScope;
+  readonly filter: QueueFilter;
   /** The instant "overdue" is judged at: a task is overdue when its deadline is before it and it is not closed. */
   readonly now: Date;
   readonly limit: number;
@@ -100,6 +146,11 @@ export interface TaskRepository {
   listActiveEngineers(): Promise<ReadonlyArray<EngineerRecord>>;
   /** The active Engineer with this ID, **locked for share until the transaction ends**; null for an unknown ID, an inactive person or another role. */
   findActiveEngineer(id: string, tx: Transaction): Promise<EngineerRecord | null>;
+  /**
+   * The Lead or Admin with this ID, in the caller's transaction, with whether they are active now (STORY-09.03 AC-5: the Cc of the assignment e-mail is judged when its row is written).
+   * Null for an unknown ID, an ID that is not a UUID and an Engineer: only the two roles that assign are found.
+   */
+  findAssigner(id: string, tx: Transaction): Promise<AssignerRecord | null>;
   /** The next running number of the year (1 for the first), taking the year's lock until the transaction ends. */
   takeNextNumber(year: number, tx: Transaction): Promise<number>;
   createTask(task: NewTask, tx: Transaction): Promise<TaskRecord>;
@@ -110,15 +161,37 @@ export interface TaskRepository {
    * the same null, so nothing tells a task that exists from one that does not (STORY-04.04 AC-4). The scope is cut in the query, so another Engineer's row is never read.
    */
   findTask(id: string, scope: QueueScope): Promise<TaskDetailRow | null>;
+  /**
+   * The task with this ID and the status of its estimate, **with the estimate's row and the task's row locked until the transaction ends**; null for an ID that is not a
+   * UUID and for an unknown one (STORY-04.07 AC-3, AC-6). The status is read once the locks are granted, so an approval that was committing is already seen.
+   */
+  findTaskForUpdate(id: string, tx: Transaction): Promise<LockedTask | null>;
+  /** Stores the Engineer, the deadline and the assignment revision of a task whose row this transaction holds locked (STORY-04.07 AC-3, AC-5). */
+  setAssignment(id: string, state: AssignmentState, tx: Transaction): Promise<void>;
   /** Up to `limit` tasks of the tab, earliest deadline first and then by code, after `after` when it is given (STORY-04.02 AC-1, AC-2). */
   listQueue(request: QueueRequest): Promise<ReadonlyArray<QueueRow>>;
-  /** How many tasks each tab holds in this scope at `now` (STORY-04.02 AC-1). An overdue task is counted in Open as well. */
-  countQueue(scope: QueueScope, now: Date): Promise<QueueCounts>;
+  /** How many tasks each tab holds in this scope, under this filter, at `now` (STORY-04.02 AC-1, STORY-04.06 AC-3). An overdue task is counted in Open as well. */
+  countQueue(scope: QueueScope, now: Date, filter: QueueFilter): Promise<QueueCounts>;
   /** How many tasks in this scope are overdue at `now`: the bell's count (STORY-04.03 AC-2), by the same rule as the Overdue tab and as one count, not three. */
   countOverdue(scope: QueueScope, now: Date): Promise<number>;
 }
 
 const ENGINEER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string() }));
+const LOCKED_ROWS = z.array(
+  z.strictObject({
+    id: z.string(),
+    code: z.string(),
+    engineerId: z.string(),
+    engineerName: z.string(),
+    deadlineAt: z.date(),
+    assignmentRevision: z.number().int().positive(),
+    status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']),
+    folderPath: z.string(),
+    title: z.string().nullable(),
+    notes: z.string().nullable(),
+  }),
+);
+const ASSIGNER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string(), isActive: z.boolean() }));
 const NUMBER_ROWS = z.array(z.strictObject({ lastValue: z.number().int().positive() }));
 
 const QUEUE_SELECT = {
@@ -174,6 +247,20 @@ const scopeFilter = (scope: QueueScope): Prisma.TaskWhereInput => ({
   ...(scope.assignedById === null ? {} : { assignedById: scope.assignedById }),
 });
 
+/** The filter row as a `where` (STORY-04.06 AC-3): every part ANDed, a case-insensitive `contains` on the code and the title; an empty filter is an empty AND. */
+function filterWhere(filter: QueueFilter): Prisma.TaskWhereInput {
+  const conditions: Prisma.TaskWhereInput[] = [];
+  if (filter.text !== null) {
+    const contains = { contains: escapeLike(filter.text), mode: 'insensitive' as const };
+    conditions.push({ OR: [{ code: contains }, { title: contains }] });
+  }
+  if (filter.engineerId !== null) conditions.push({ engineerId: filter.engineerId });
+  if (filter.customerId !== null) conditions.push({ estimate: { is: { customerId: filter.customerId } } });
+  if (filter.deadlineFrom !== null) conditions.push({ deadlineAt: { gte: filter.deadlineFrom } });
+  if (filter.deadlineBefore !== null) conditions.push({ deadlineAt: { lt: filter.deadlineBefore } });
+  return { AND: conditions };
+}
+
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
 
 /** An ID that is not a UUID would make PostgreSQL refuse the statement; the session's ID always is one, but nothing here trusts that. Such a scope holds no task. */
@@ -197,6 +284,14 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         const rows = await clientFor(db, tx).$queryRaw`
           SELECT id::text AS "id", name FROM users WHERE id = ${id}::uuid AND role = 'ENGINEER' AND is_active FOR SHARE`;
         return ENGINEER_ROWS.parse(rows)[0] ?? null;
+      }),
+
+    findAssigner: (id, tx) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(id)) return null;
+        const rows = await clientFor(db, tx).$queryRaw`
+          SELECT id::text AS "id", name, is_active AS "isActive" FROM users WHERE id = ${id}::uuid AND role IN ('LEAD', 'ADMIN')`;
+        return ASSIGNER_ROWS.parse(rows)[0] ?? null;
       }),
 
     takeNextNumber: (year, tx) =>
@@ -232,6 +327,35 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         clientFor(db, tx).estimate.create({ data: { taskId }, select: { id: true, taskId: true, customerId: true, status: true } }),
       ),
 
+    findTaskForUpdate: (id, tx) =>
+      withDatabaseErrors(async () => {
+        // PostgreSQL would refuse a text that is not a UUID with an error; a task asked for by one is not found.
+        if (!isUuid(id)) return null;
+        // Prisma has no row lock, so the read is a raw statement: the ID is a bound parameter. The estimate's row first and then the task's, as `lockEstimate` does. The
+        // Engineer's name is a sub-select and not a join: a save that waited for the lock re-checks the joined rows against the task as the save before it left it, and a join on
+        // `engineer_id` would then drop the row when that save had changed the Engineer (the second of two saves at once would find no task).
+        const rows = await clientFor(db, tx).$queryRaw`
+          SELECT t.id::text AS "id", t.code AS "code", t.engineer_id::text AS "engineerId", (SELECT u.name FROM users u WHERE u.id = t.engineer_id) AS "engineerName",
+                 t.deadline_at AS "deadlineAt", t.assignment_revision::int AS "assignmentRevision", e.status::text AS "status",
+                 t.folder_path AS "folderPath", t.title AS "title", t.notes AS "notes"
+          FROM estimates e JOIN tasks t ON t.id = e.task_id
+          WHERE t.id = ${id}::uuid
+          FOR UPDATE OF e, t`;
+        const [row] = LOCKED_ROWS.parse(rows);
+        if (row === undefined) return null;
+        const { engineerId, engineerName, ...rest } = row;
+        return { ...rest, engineer: { id: engineerId, name: engineerName } };
+      }),
+
+    setAssignment: (id, state, tx) =>
+      withDatabaseErrors(async () => {
+        await clientFor(db, tx).task.update({
+          where: { id },
+          data: { engineerId: state.engineerId, deadlineAt: state.deadlineAt, assignmentRevision: state.assignmentRevision },
+          select: { id: true },
+        });
+      }),
+
     findTask: (id, scope) =>
       withDatabaseErrors(async () => {
         // PostgreSQL would refuse a text that is not a UUID with an error; a task asked for by one is not found.
@@ -241,11 +365,11 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         return row === null || mapped === null ? null : { ...mapped, notes: row.notes };
       }),
 
-    listQueue: ({ tab, scope, now, limit, after }) =>
+    listQueue: ({ tab, scope, now, limit, after, filter }) =>
       withDatabaseErrors(async () => {
         if (!isReadable(scope)) return [];
         const rows = await db.task.findMany({
-          where: { AND: [scopeFilter(scope), tabFilter(tab, now), afterFilter(after)] },
+          where: { AND: [scopeFilter(scope), tabFilter(tab, now), afterFilter(after), filterWhere(filter)] },
           orderBy: [{ deadlineAt: 'asc' }, { code: 'asc' }],
           take: limit,
           select: QUEUE_SELECT,
@@ -257,10 +381,11 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         });
       }),
 
-    countQueue: (scope, now) =>
+    countQueue: (scope, now, filter) =>
       withDatabaseErrors(async () => {
         if (!isReadable(scope)) return { open: 0, closed: 0, overdue: 0 };
-        const count = (tab: QueueTab): Promise<number> => db.task.count({ where: { AND: [scopeFilter(scope), tabFilter(tab, now)] } });
+        const narrowed = filterWhere(filter);
+        const count = (tab: QueueTab): Promise<number> => db.task.count({ where: { AND: [scopeFilter(scope), tabFilter(tab, now), narrowed] } });
         const [open, closed, overdue] = await Promise.all([count('open'), count('closed'), count('overdue')]);
         return { open, closed, overdue };
       }),

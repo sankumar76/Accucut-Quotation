@@ -11,6 +11,7 @@ import type { CustomerView } from '@/lib/estimates/estimates-client';
 import { askToLeave } from '@/lib/estimates/leave-registry';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
+import type { AutosaveProps } from './autosave';
 import type { CalculateBarProps } from './calculate-bar';
 import type { CalculateSummaryProps } from './calculate-summary';
 import type { ChangeCustomerDialogProps } from './change-customer-dialog';
@@ -43,7 +44,21 @@ const loadSummary = () => import('./calculate-summary').then((module) => module.
 const loadChangeDialog = () => import('./change-customer-dialog').then((module) => module.ChangeCustomerDialog);
 /** The warning on leaving (STORY-05.08): typing is possible only once the form's code is here, and this is asked for on mount beside it. Its dialog is an overlay, so it is never imported with a plain import. */
 const loadGuard = () => import('./leave-guard').then((module) => module.LeaveGuard);
+/** The 30-second save (STORY-05.10): the one timer of the page, in the form's lazy part, asked for on mount beside the form's own code. */
+const loadAutosave = () => import('./autosave').then((module) => module.Autosave);
 const stay = (): void => undefined;
+
+/**
+ * The reserved drawing region (STORY-10.06, FR-087, NFR-023, UD-4): the third track of the form area, after the tree and the form, for a drawing viewer that a later release docks here (FR-093 is
+ * "Won't" now, so it is empty, hidden from assistive technology, not a landmark and not focusable). Its width is the one token `--drawing-region-width` (0px now, 340px when a viewer exists); the
+ * browser test sets it and no component or setting does. Below 1024 px it is `hidden`: no box, no accessibility tree.
+ * Two traps are handled here and nowhere else, so the form and the tree stay as they were:
+ * 1. A zero-width flex item still takes the row's gap, so the margin `min(0, width - gap)` gives the gap back while the region is narrower than one gap and is 0 from one gap of width.
+ * 2. The token never squeezes the form below one section card (14.5rem, the minimum of the card grid in `part-fields.tsx`): the region is held to what is left after the tree, one card and the
+ *    two gaps. At 1024 px a 340px region therefore shows as less, and the cards stay 232 px wide; from 1280 px it has its whole width.
+ * The Tailwind spacing scale is replaced (`globals.css`), so the sums are written with the tokens as arbitrary values (`_` is a space).
+ */
+const DRAWING_REGION = 'hidden lg:block lg:shrink-0 lg:w-(--drawing-region-width) lg:ml-[min(0px,calc(var(--drawing-region-width)_-_var(--s-4)))] lg:max-w-[calc(100%_-_var(--tree-w)_-_14.5rem_-_2*var(--s-4))]';
 
 export interface EstimateWorkspaceProps {
   readonly header: WorkspaceHeaderView;
@@ -72,6 +87,8 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
   const ChangeDialog = changeDialog.Component;
   const guard = useLazyComponent<LeaveGuardProps>(loadGuard, true);
   const Guard = guard.Component;
+  const autosave = useLazyComponent<AutosaveProps>(loadAutosave, false);
+  const Autosave = autosave.Component;
   /**
    * Another part, or a new one, takes the form that shows the part now away, with whatever was typed into it and is not saved (STORY-05.08 AC-4, AC-5). So while anything is unsaved the person is asked
    * first, once the saves in flight have finished; with nothing unsaved the choice goes through at once, as before.
@@ -102,6 +119,7 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
   return (
     <>
       <WorkspaceHeader view={{ ...header, status }} />
+      {Autosave === null ? null : <Autosave gate={saves} enabled={editable} calculating={calculation.busy} />}
       {Guard !== null ? (
         <Guard gate={saves} />
       ) : guard.failed ? (
@@ -162,6 +180,7 @@ export function EstimateWorkspace({ header, estimateId, customer }: EstimateWork
           ) : (
             <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_AREA_LOCKED}</p>
           )}
+          <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />
         </CardContent>
       </Card>
       {status === 'APPROVED' ? null : Bar !== null ? (

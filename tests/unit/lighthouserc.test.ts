@@ -107,12 +107,21 @@ describe('the Slow 4G profile (report only)', () => {
 });
 
 describe('the pages and the assertions', () => {
-  it('lists no key screen when the story merges, and reports "/" without an assertion', () => {
+  it('lists the five key screens (G8-C-NFR9), each asserted, and reports "/" without an assertion', () => {
     const loaded = load({ LHCI_BASE_URL: 'http://localhost:3999/' });
-    expect(loaded.KEY_SCREENS).toEqual([]);
+    expect(loaded.KEY_SCREENS.map((screen) => screen.path)).toEqual([
+      '/queue',
+      '/assign',
+      '/masters/customers',
+      '/estimates/Q-2099-0001',
+      '/estimates/Q-2099-0002/costs/1',
+    ]);
     expect(loaded.REPORTED_PAGES).toEqual([{ path: '/', role: 'ADMIN' }]);
-    expect(loaded.ci.collect.url).toEqual(['http://localhost:3999/']);
-    expect(loaded.ci.assert).toBeUndefined();
+    expect(loaded.ci.collect.url).toEqual([...loaded.KEY_SCREENS, ...loaded.REPORTED_PAGES].map((screen) => `http://localhost:3999${screen.path}`));
+    expect(loaded.ci.assert?.assertMatrix).toHaveLength(5);
+    const patterns = (loaded.ci.assert?.assertMatrix ?? []).map((entry) => new RegExp(entry.matchingUrlPattern));
+    expect(patterns.some((pattern) => pattern.test('http://localhost:3999/'))).toBe(false);
+    for (const screen of loaded.KEY_SCREENS) expect(patterns.some((pattern) => pattern.test(`http://localhost:3999${screen.path}`)), screen.path).toBe(true);
   });
 
   it('asserts LCP at most 2,000 ms and TBT at most 200 ms, each as the median, on every key screen and on no other page', () => {
@@ -163,14 +172,14 @@ describe('the dependency', () => {
   const manifest = z.object({ devDependencies: z.record(z.string(), z.string()), dependencies: z.record(z.string(), z.string()) }).parse(JSON.parse(readFileSync(`${ROOT}package.json`, 'utf8')));
   const lock = z.object({ packages: z.record(z.string(), z.object({ version: z.string().optional(), hasInstallScript: z.boolean().optional() })) }).parse(JSON.parse(readFileSync(`${ROOT}package-lock.json`, 'utf8')));
 
-  it('is @lhci/cli 0.15.1, exact, and a development dependency only', () => {
-    expect(manifest.devDependencies['@lhci/cli']).toBe('0.15.1');
+  it('is @lhci/cli 0.16.1, exact, and a development dependency only', () => {
+    expect(manifest.devDependencies['@lhci/cli']).toBe('0.16.1');
     expect(manifest.dependencies['@lhci/cli']).toBeUndefined();
-    expect(lock.packages['node_modules/@lhci/cli']?.version).toBe('0.15.1');
+    expect(lock.packages['node_modules/@lhci/cli']?.version).toBe('0.16.1');
   });
 
-  it('runs Lighthouse 12.6.1', () => {
-    expect(lock.packages['node_modules/lighthouse']?.version).toBe('12.6.1');
+  it('runs Lighthouse 13.6.0', () => {
+    expect(lock.packages['node_modules/lighthouse']?.version).toBe('13.6.0');
   });
 
   it('brings no install script, so the allowScripts list stays as it is', () => {

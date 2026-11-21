@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { detectImageType, holdsScriptMarker, isImageMime } from '@/lib/images/signature';
 import { checkPicture, MAX_PICTURE_BYTES } from '@/lib/images/picture-rules';
 
-import { jpegOfSize, PLAIN_TEXT, pngOfSize, SCRIPT_TAIL, smallGif, smallJpeg, smallPng, smallWebp, SVG_TEXT } from '../../support/pictures';
+import { jpegOfSize, PLAIN_TEXT, pngOfSize, SCRIPT_TAIL, smallGif, smallJpeg, smallPng, smallWebp, SVG_TEXT, webpOfSize } from '../../support/pictures';
 
 /**
  * STORY-05.07 T1 (AC-2, NFR-005, ADR-013): the type of a picture is decided by its content. The magic-byte table for the four kinds, the files that must be refused (a text
@@ -135,6 +135,17 @@ describe('the size limit is strictly under 200 x 1024 bytes (AC-2, NFR-005, A-06
     for (const bytes of [PLAIN_TEXT, SVG_TEXT, Buffer.alloc(0)]) {
       expect(checkPicture('x.png', bytes)).toEqual({ ok: false, status: 415, code: 'PICTURE_TYPE_REFUSED', message: 'Only PNG, JPG, GIF or WebP pictures are accepted.' });
     }
+  });
+
+  it('refuses a WebP as the wrong type, in the existing words (DL-237, OQ-PM-10): the browser converts it before it is sent, and the server never stores one; the kind is still found', () => {
+    expect(detectImageType(smallWebp())).toBe('image/webp');
+    expect(checkPicture('front.webp', smallWebp())).toEqual({ ok: false, status: 415, code: 'PICTURE_TYPE_REFUSED', message: 'Only PNG, JPG, GIF or WebP pictures are accepted.' });
+    expect(checkPicture('front.png', webpOfSize(100 * KB))).toMatchObject({ ok: false, status: 415, code: 'PICTURE_TYPE_REFUSED' });
+  });
+
+  it('judges the size of a WebP first: one of 204,800 bytes is "too large" (413) and one of 204,798 is the wrong type (415)', () => {
+    expect(checkPicture('front.webp', webpOfSize(204_800))).toMatchObject({ ok: false, status: 413, code: 'PICTURE_TOO_LARGE' });
+    expect(checkPicture('front.webp', webpOfSize(204_798))).toMatchObject({ ok: false, status: 415, code: 'PICTURE_TYPE_REFUSED' });
   });
 
   it('judges the size before the content: a large text file is "too large"', () => {

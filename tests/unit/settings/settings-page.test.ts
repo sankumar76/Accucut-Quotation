@@ -87,6 +87,11 @@ describe('GET /api/v1/settings (AC-1, AC-4, AC-5, AC-6)', () => {
       backupLate: false,
       diskReading: { freePercent: 62, readAt: '2026-11-05T08:00:00.000Z', ageSeconds: 3600, stale: false },
       diskNearlyFull: false,
+      alertsEnabled: false,
+      senderName: '',
+      senderAddress: '',
+      emailEnabled: false,
+      mailFailures: null,
     });
     expect(text).not.toContain(JOB_RUN_CANARY_PATH.replaceAll('\\', '\\\\'));
     expect(text).not.toContain(JOB_RUN_CANARY_VOLUME);

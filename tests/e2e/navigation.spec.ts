@@ -34,7 +34,8 @@ const LEAD_HOME_ACTION = 'Go to the task queue';
 const ENGINEER_HOME_ACTION = 'Go to my tasks';
 
 const ADMIN_AND_LEAD_ITEMS = ['Assign task', 'Process master', 'Customers', 'Materials and lists', 'Fields and formulas', 'Checkpoints', 'Users', 'Settings', 'Audit log'];
-const IMPLEMENTED_MENU = ['Home', 'Design system'];
+// About (STORY-01.08) is every role's, in Help, after Home and before the Review group.
+const IMPLEMENTED_MENU = ['Home', 'About', 'Design system'];
 
 const meSchema = z.strictObject({
   name: z.string(),
@@ -80,7 +81,7 @@ test.describe('the Lead (saved browser state)', () => {
     const menu = await openMenu(page, testInfo);
     // "Assign task" (STORY-04.01) is the Lead's and the Admin's first working page, so it is in the Lead's menu now, under Work, after the queue.
     // STORY-08.01: Fields and formulas is the Lead's too, under Configuration, and its label says the page is view only (AC-4).
-    expect(await menuLabels(menu)).toEqual(['Task queue', 'Assign task', 'Home', 'Fields and formulas (view only)', 'Design system']);
+    expect(await menuLabels(menu)).toEqual(['Task queue', 'Assign task', 'Home', 'Fields and formulas (view only)', 'About', 'Design system']);
     await expect(menu.getByText('Work', { exact: true })).toBeVisible();
     await expect(menu.getByText('Review', { exact: true })).toBeVisible();
     for (const hidden of ADMIN_AND_LEAD_ITEMS.filter((item) => item !== 'Assign task' && item !== 'Fields and formulas')) await expect(menu.getByRole('link', { name: hidden })).toHaveCount(0);
@@ -234,7 +235,8 @@ test.describe('the Engineer (signs in through the page)', () => {
       await expect(page.getByRole('heading', { level: 1, name: NOT_FOUND_TITLE })).toBeVisible();
       return page.getByRole('main').innerText();
     };
-    expect(await textOf('/there-is-no-such-page')).toBe(await textOf('/config/checkpoints'));
+    // Two addresses that are no page. (The second was `/config/checkpoints` while that screen was planned; now it exists, and an Engineer is told "no access" for it, as for every Admin screen.)
+    expect(await textOf('/there-is-no-such-page')).toBe(await textOf('/there-is-also-no-such-page'));
   });
 });
 

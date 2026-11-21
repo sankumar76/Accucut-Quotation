@@ -175,6 +175,45 @@ test.describe('the list (AC-6, AC-9)', () => {
   });
 });
 
+test.describe('configuration entries (STORY-08.07 AC-2, AC-4, AC-8)', () => {
+  test('AC-2, AC-4, AC-8: the Configuration change filter lists every kind with its kind in the Event column, and a 2,000-character formula wraps with no sideways scroll and no axe violations', async ({ page }, testInfo) => {
+    // A formula of the registry's maximum length, with no space in it to break at but the ones between names.
+    const longFormula = `P * ${'Invented-Rate '.repeat(150)}`.trim().slice(0, 2_000);
+    const configEntry = (id: string, createdAt: string, kindLabel: string, event: string, objectLabel: string, change: { before: string; after: string }) => ({
+      id: `10000000-0000-4000-8000-${id}`,
+      createdAt,
+      who: 'Invented Admin',
+      event,
+      category: { id: 'config_change', label: 'Configuration change' },
+      kindLabel,
+      objectLabel,
+      change,
+    });
+    const entries = [
+      configEntry('000000000004', '2026-11-05T09:30:00.000Z', 'Checkpoint revert', 'config.reverted', 'Checkpoint "Before AY insert"', { before: 'Version 8', after: 'Version 9 (from version 7)' }),
+      configEntry('000000000003', '2026-11-05T09:20:00.000Z', 'Field delete', 'config.field_deleted', 'AY Invented Notch Cost', { before: 'Column AY, Invented Notch Cost, formula AX * 2', after: 'Deleted. Columns AZ to BP moved one to the left (configuration version 11)' }),
+      configEntry('000000000002', '2026-11-05T09:10:00.000Z', 'Field insert', 'config.field_inserted', 'AY Invented Notch Count', { before: 'Not in the worksheet', after: 'Added as AY after AX. Columns AY to BO moved one to the right (configuration version 10)' }),
+      configEntry('000000000001', '2026-11-05T09:00:00.000Z', 'Formula edit', 'config.formula_changed', 'AL Cutting Cost', { before: longFormula, after: `${longFormula} * 2 (configuration version 9)` }),
+    ];
+    await openAudit(page);
+    await page.route('**/api/v1/audit*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ entries, total: entries.length, nextCursor: null }) }));
+    await page.getByLabel('Event', { exact: true }).selectOption({ label: 'Configuration change' });
+    await expect(page.locator('[data-entry-id]:visible')).toHaveCount(4);
+
+    // The Event column shows the kind, not the category the four entries share.
+    for (const kind of ['Formula edit', 'Field insert', 'Field delete', 'Checkpoint revert']) await expect(page.locator('[data-entry-id]:visible', { hasText: kind })).toHaveCount(1);
+    const revert = page.locator('[data-entry-id]:visible', { hasText: 'Checkpoint "Before AY insert"' });
+    await expect(revert).toContainText('Version 8');
+    await expect(revert).toContainText('Version 9 (from version 7)');
+    await expect(page.locator('[data-entry-id]:visible', { hasText: longFormula })).toHaveCount(1);
+
+    // Nothing sideways: the page does not scroll, and the table scrolls only inside its own named, focusable region.
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    if (testInfo.project.name !== 'mobile') await expect(page.getByRole('region', { name: 'Audit log, newest first, scrollable' })).toBeVisible();
+    await expectNoAxeViolations(page);
+  });
+});
+
 test.describe('the filters (AC-6)', () => {
   test('filters by who and by event; the list, the cards and the total follow', async ({ page }) => {
     const person = await addPerson(page, 'filtered');
@@ -192,15 +231,18 @@ test.describe('the filters (AC-6)', () => {
     await expect(page.locator('[data-entry-id]:visible')).toHaveCount(0);
   });
 
-  test('a kind of entry no story has raised yet shows "No entries match", with the way back, and clearing the filters brings the list back', { tag: '@one-width' }, async ({ page }) => {
+  test('a date window before any entry shows "No entries match", with the way back, and clearing the filters brings the list back', { tag: '@one-width' }, async ({ page }) => {
     const person = await addPerson(page, 'empty');
     await openAudit(page);
+    // Who and Event are on a kind the Admin of these tests writes (every person added is a "User change" entry of E2E Admin), so the list is not empty by them: it is empty because the window ends years before the first
+    // entry the portal could have made. That holds whichever stories write which events, now and later (GitHub #491, SQR-01 of the AQP-329 review).
     await page.getByLabel('Who', { exact: true }).selectOption({ label: E2E_ADMIN.name });
+    await page.getByLabel('Event', { exact: true }).selectOption({ label: 'User change' });
+    await expect(entryOf(page, person.name)).toHaveCount(1);
     await page.getByLabel('From', { exact: true }).fill('2020-01-01');
-    await page.getByLabel('To', { exact: true }).fill('2036-01-01');
-    // "Unlock", not "Approval": the approval is raised since STORY-06.06, and the unlock is STORY-06.08's.
-    await page.getByLabel('Event', { exact: true }).selectOption({ label: 'Unlock' });
+    await page.getByLabel('To', { exact: true }).fill('2020-01-02');
     await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
+    await expect(entryOf(page, person.name)).toHaveCount(0);
     await expect(page.getByText(EMPTY_TEXT)).toBeVisible();
     // Neither empty state shows the count line (ux-spec v0.16).
     await expect(page.getByText(/Showing \d+ of \d+ entr/)).toHaveCount(0);
@@ -342,20 +384,42 @@ test.describe('by keyboard (AC-9)', () => {
     await openAudit(page);
     const event = page.getByLabel('Event', { exact: true });
     await event.focus();
-    // An arrow key on a closed list moves to the next choice and applies it, as a person without a pointer does. ("All events" is
-    // first, "Approval" second and "Unlock" third; typing the letters instead depends on the pause between keys, which a busy machine stretches.
-    // "Approval" holds entries since STORY-06.06 (the approval tests of the same run write them), so the empty result is the one of "Unlock", whose event is declared and not yet written: STORY-06.08.)
+    // An arrow key on a closed list moves to the next choice and applies it, as a person without a pointer does. ("All events" is first, then Approval, Unlock, Price override, Approval cancelled, Price removed, Quantity
+    // warning, Master data edit, User change, Task change and Configuration change; typing the letters instead depends on the pause between keys, which a busy machine stretches.) The result must follow the choice, and it must not depend on which of
+    // these kinds the other tests of the run have written (GitHub #491: no kind is left that no story writes): the person this test added is a "User change" entry, so it is on the list under "All events" and under
+    // "User change" and under none of the others.
+    await expect(entryOf(page, person.name)).toHaveCount(1);
+    for (const value of ['approval', 'unlock', 'price_override', 'approval_cancelled', 'price_removed', 'quantity_warning', 'master_data']) {
+      await page.keyboard.press('ArrowDown');
+      await expect(event).toHaveValue(value);
+      // The list has answered when it no longer shows this person: either another kind's entries or the empty state.
+      await expect(entryOf(page, person.name)).toHaveCount(0);
+    }
     await page.keyboard.press('ArrowDown');
-    await expect(event).toHaveValue('approval');
+    await expect(event).toHaveValue('user_change');
+    await expect(entryOf(page, person.name)).toHaveCount(1);
+    // "Task change" (STORY-04.07) and "Configuration change" (STORY-08.02) are the last kinds: this person's entry is neither, so the list answers with none for each, and two ArrowUp come back to "User change".
     await page.keyboard.press('ArrowDown');
-    await expect(event).toHaveValue('unlock');
-    await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
+    await expect(event).toHaveValue('task_change');
+    await expect(entryOf(page, person.name)).toHaveCount(0);
+    await page.keyboard.press('ArrowDown');
+    await expect(event).toHaveValue('config_change');
+    await expect(entryOf(page, person.name)).toHaveCount(0);
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowUp');
+    await expect(event).toHaveValue('user_change');
+    await expect(entryOf(page, person.name)).toHaveCount(1);
 
+    // The way back by keyboard: a date field typed to a window before any entry reaches the empty state, and Clear filters brings the list back.
+    const to = page.getByLabel('To', { exact: true });
+    await to.fill('2020-01-02');
+    await expect(page.getByRole('heading', { level: 2, name: EMPTY_TITLE })).toBeVisible();
     const clear = page.getByRole('button', { name: 'Clear filters' });
     await clear.focus();
     await clear.press('Enter');
     await expect(entryOf(page, person.name)).toHaveCount(1);
     await expect(event).toHaveValue('');
+    await expect(to).toHaveValue('');
   });
 
   test('Tab runs from Who to Event to From; a date field is three parts (day, month, year) to the keyboard, then comes To', async ({ page }) => {

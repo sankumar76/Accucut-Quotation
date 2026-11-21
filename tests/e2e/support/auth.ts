@@ -62,11 +62,13 @@ export const E2E_CANARY: Pick<E2eUser, 'name' | 'email'> = { name: 'E2E Canary P
  *            for it, so the count it reads is its own whatever other specs seed in the shared database;
  *   password changes their own password on the account page (STORY-01.05), which raises `session_version` and counts wrong current passwords
  *            on a key of its own; nobody else's sessions or counts are touched.
+ *   long-name signs in under the name the test gives it (up to the 120 characters the Users form accepts) and only looks at the top bar and the
+ *            account menu (DEF-034, AQP-288), so the shared Lead's name is never changed.
  * Each run of each test gets a person of its own, made when the test starts, so the spec can be repeated
  * (`--repeat-each`), retried and run at three widths at the same time without one run's failures, block or sign-out
  * reaching another's. Nobody else is ever signed out or blocked.
  */
-export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan' | 'expiry' | 'password' | 'queue' | 'bell';
+export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan' | 'expiry' | 'password' | 'queue' | 'bell' | 'long-name';
 
 const UPSERT_USER = `
   INSERT INTO users (name, email, password_hash, role, is_active, must_change_password)
@@ -193,12 +195,18 @@ async function insertCanaryEstimate(client: Client, ownerId: string): Promise<vo
 /**
  * Makes a person for one run of one test, with the shared invented password, and returns them. The e-mail names the
  * kind, the screen size, the repeat and the retry, plus a random part, so no two runs ever share it. The rows stay in
- * the throwaway database (the runtime role cannot delete users); they are all `e2e.*@example.test`.
+ * the throwaway database (the runtime role cannot delete users); they are all `e2e.*@example.test`. `name` replaces the generated name;
+ * the e-mail still names the kind and the run, so it stays unique.
  */
-export async function createDisposableUser(kind: DisposableKind, testInfo: TestInfo, role: E2eUser['role'] = 'ENGINEER'): Promise<E2eUser & { readonly id: string }> {
+export async function createDisposableUser(
+  kind: DisposableKind,
+  testInfo: TestInfo,
+  role: E2eUser['role'] = 'ENGINEER',
+  name?: string,
+): Promise<E2eUser & { readonly id: string }> {
   const part = randomBytes(3).toString('hex');
   const label = `${kind}.${testInfo.project.name}.r${testInfo.repeatEachIndex}.t${testInfo.retry}.${part}`;
-  const user: E2eUser = { name: `E2E ${label}`, email: `e2e.${label}@example.test`, role };
+  const user: E2eUser = { name: name ?? `E2E ${label}`, email: `e2e.${label}@example.test`, role };
   const hash = await createTestHasher().hash(E2E_PASSWORD);
   const client = await connectToTestDatabase();
   try {
@@ -569,7 +577,38 @@ export async function signInThroughThePage(page: Page, email: string, password: 
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
+/**
+ * Signs in with the two calls the sign-in page itself makes (`src/lib/auth/auth-client.ts`: the CSRF token, then the credentials), and leaves the session cookie in the
+ * browser context, without loading SCR-01 or the queue behind it. For a test whose subject is not the sign-in: each of those two page loads costs the development server
+ * 1 to 3.7 s on a loaded runner (traces of AQP-340), a quarter of the 30 s a journey test has. The sign-in screen itself is judged by `sign-in.spec.ts` and the others that go through the page.
+ * Fails with the server's own code when the sign-in is refused, so a wrong password is not a later timeout.
+ */
+export async function signInWithoutThePage(page: Page, email: string, password: string): Promise<void> {
+  // Made once, no repeat (DL-229, DL-231): a connection reset here is DEF-036's signature, and the E2E server's longer keep-alive (`server-keep-alive.cjs`) is what prevents it.
+  // A refused sign-in fails below with the server's code.
+  const token = await page.request.get('/api/auth/csrf');
+  expect(token.ok(), 'the CSRF token of the sign-in').toBe(true);
+  const { csrfToken } = (await token.json()) as { readonly csrfToken: string };
+  const answer = await page.request.post('/api/auth/callback/credentials', { form: { csrfToken, email, password, json: 'true' } });
+  expect(answer.ok(), 'the credentials post of the sign-in').toBe(true);
+  const { url } = (await answer.json()) as { readonly url: string };
+  expect(new URL(url, 'http://sign-in.invalid').searchParams.get('error'), 'the error the server names, if it refused').toBeNull();
+}
+
 export async function expectOnQueue(page: Page, title: string): Promise<void> {
   await expect(page).toHaveURL(/\/queue$/);
   await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+}
+
+/**
+ * Gives the one part of the canary estimate of a person made by `createDisposableUser('scan', ...)` its picture (STORY-07.02 AC-4): the estimate's own invented picture, which `insertCanaryEstimate` stores
+ * with the same ID (a 1 x 1 PNG). Do it before Calculate, which records the part's picture in its own row; the picture a part gets afterwards is not in a file of that calculation (ADR-013). Repeatable.
+ */
+export async function putPictureOnCanaryPart(ownerId: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    await client.query('UPDATE estimate_nodes SET image_id = $1::uuid WHERE id = $1::uuid', [ownerId]);
+  } finally {
+    await client.end();
+  }
 }

@@ -78,10 +78,15 @@ export type PictureCheck =
 /**
  * Judges a file by its size, then by its content. The size comes first and costs nothing: a file at or over the limit is "too large" whatever it holds. An empty file, a file that is
  * not one of the four kinds and one that is cut short or has something appended are all "wrong type".
+ *
+ * **A WebP is refused as the wrong type too** (DL-237, OQ-PM-10, architecture section 8): the browser converts a WebP to a PNG or a JPEG before it is sent, so the Excel file can hold the picture, and the
+ * server makes sure no WebP is ever stored. The kind is still **found** (`detectImageType` says `image/webp`, so the screen can tell a WebP and the picker can offer one); it is only not accepted here. The
+ * size check stays first, so a WebP of 200 KB or more is "too large", and the words are the existing ones.
  */
 export function checkPicture(fileName: string, bytes: Uint8Array): PictureCheck {
   if (bytes.length >= MAX_PICTURE_BYTES) return { ok: false, status: 413, code: PICTURE_TOO_LARGE_CODE, message: pictureTooLargeMessage(fileName, bytes.length) };
   const mime = detectImageType(bytes);
-  if (mime === null) return { ok: false, status: 415, code: PICTURE_TYPE_CODE, message: PICTURE_TYPE_MESSAGE };
+  // DL-237 / OQ-PM-10: a WebP is converted in the browser; one that arrives unconverted is never stored.
+  if (mime === null || mime === 'image/webp') return { ok: false, status: 415, code: PICTURE_TYPE_CODE, message: PICTURE_TYPE_MESSAGE };
   return { ok: true, mime };
 }

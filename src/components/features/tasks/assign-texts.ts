@@ -43,6 +43,12 @@ export function summaryTitle(count: number): string {
   return count === 1 ? '1 thing needs fixing before this task can be assigned.' : `${count} things need fixing before this task can be assigned.`;
 }
 
+/** The notice of the page with e-mail alerts OFF and an Engineer chosen (STORY-09.03 AC-6; ux-spec SCR-04 "Alerts OFF notice"): the title, and the body naming the Engineer. */
+export const ALERTS_OFF_TITLE = 'E-mail alerts are OFF.';
+export function alertsOffBody(engineerName: string): string {
+  return `${engineerName} will not be e-mailed about this task. It still appears in their queue.`;
+}
+
 /** "Task Q-2026-0324 assigned to Arjun Rao." (the success notice, STORY-04.01 AC-1). */
 export function assignedTitle(code: string, engineerName: string): string {
   return `Task ${code} assigned to ${engineerName}.`;
@@ -59,3 +65,6 @@ export const NEXT_STEPS: ReadonlyArray<string> = [
 ];
 export const FOLDER_HELP_LABEL = 'How the folder link works';
 export const FOLDER_HELP_BODY = 'Everyone sees the path as a link plus a Copy path button. Browsers often block links to network folders; the button always works.';
+
+/** The title of the load-error page of SCR-04 (STORY-10.07 AC-4): the Engineers, or the task being changed, could not be read. */
+export const ASSIGN_LOAD_ERROR_TITLE = 'We could not load the assign form';
