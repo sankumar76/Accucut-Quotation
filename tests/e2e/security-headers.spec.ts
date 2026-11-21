@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { z } from 'zod';
 
 import { E2E_LEAD, E2E_PASSWORD, signInThroughThePage, useFreshAddress } from './support/auth';
-import { waitUntilAccountMenuIsLive, waitUntilHydrated } from './support/design-system';
+import { isDesktopProject, openDrawer, waitUntilAccountMenuIsLive, waitUntilHydrated } from './support/design-system';
 import { PRODUCTION_URL } from './support/servers';
 
 /**
@@ -128,13 +128,21 @@ for (const [path, referrerPolicy] of [
 test('DEF-054 (control): the recorder sees a violation, so an empty list means the policy is on and nothing broke', async ({ page }) => {
   const violations = await recordViolations(page);
   await page.goto('/forgot-password');
+  // Two things the policy must stop. (A script added from code is not one of them: `'strict-dynamic'` trusts what a trusted script adds, by design.)
   await page.evaluate(() => {
-    const script = document.createElement('script');
-    script.textContent = 'window.__injected = true;';
-    document.head.append(script);
+    const style = document.createElement('style');
+    style.textContent = 'body { outline: 5px solid red; }';
+    document.head.append(style);
+    const image = document.createElement('img');
+    image.setAttribute('onerror', 'window.__injected = true');
+    image.src = 'blob:control-that-does-not-exist';
+    document.body.append(image);
   });
+  await expect.poll(async () => (await violations()).length).toBeGreaterThanOrEqual(2);
+  const seen = await violations();
+  expect(seen.some((entry) => entry.startsWith('style-src-elem'))).toBe(true);
+  expect(seen.some((entry) => entry.startsWith('script-src-attr'))).toBe(true);
   expect(await page.evaluate(() => Reflect.get(window, '__injected'))).toBeUndefined();
-  expect((await violations()).some((entry) => entry.startsWith('script-src'))).toBe(true);
 });
 
 test('DEF-054: a redirect, a JSON answer and a static file carry the headers', async ({ page, request }) => {
@@ -156,7 +164,7 @@ test('DEF-054: a redirect, a JSON answer and a static file carry the headers', a
   expect(file.headers()['x-frame-options']).toBe('DENY');
 });
 
-test('DEF-054: a signed-in Lead gets the same headers on the queue, opens the account menu (the scroll lock adds a style element) and sees no violation', async ({ page, context }) => {
+test('DEF-054: a signed-in Lead gets the same headers on the queue, opens the menu drawer and the account menu (the scroll lock adds a style element) and sees no violation', async ({ page, context }, testInfo) => {
   await useFreshAddress(context);
   const violations = await recordViolations(page);
   await page.goto('/sign-in');
@@ -168,10 +176,16 @@ test('DEF-054: a signed-in Lead gets the same headers on the queue, opens the ac
   expect(queue?.headers()['cache-control']).toBe('private, no-store');
   await expectScriptsCarryNonce(page, nonce);
 
+  // Below 1024 px the menu is a drawer, a modal dialog: opening it makes the scroll lock add a style element, which needs the nonce (`__webpack_nonce__`).
+  if (!isDesktopProject(testInfo.project.name)) {
+    await openDrawer(page);
+    expect(await page.evaluate(() => document.querySelectorAll('style').length), 'the scroll lock added its style element').toBeGreaterThan(0);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Menu' })).toHaveCount(0);
+  }
   await waitUntilAccountMenuIsLive(page);
   await page.getByRole('button', { name: /^Account menu/ }).click();
   await expect(page.getByRole('menu')).toBeVisible();
-  expect(await page.evaluate(() => document.querySelectorAll('style').length), 'the scroll lock added its style element').toBeGreaterThan(0);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menu')).toHaveCount(0);
 
