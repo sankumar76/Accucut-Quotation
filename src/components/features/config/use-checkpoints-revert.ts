@@ -120,7 +120,6 @@ export function useCheckpointsRevert({ readAgain, listFailed, currentNumber }: C
     onReverted,
     onStale,
     onCloseAutoFocus,
-    dismissNotice: () => setNotice(null),
   };
 }
 

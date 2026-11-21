@@ -23,8 +23,6 @@ export interface SaveCheckpoint {
   readonly saving: boolean;
   readonly inputRef: RefObject<HTMLInputElement | null>;
   readonly submit: () => Promise<void>;
-  /** Clears the notice (another notice took its place). */
-  readonly clearNotice: () => void;
 }
 
 export function useSaveCheckpoint({ onChanged }: { readonly onChanged: () => void }): SaveCheckpoint {
@@ -76,6 +74,5 @@ export function useSaveCheckpoint({ onChanged }: { readonly onChanged: () => voi
     saving,
     inputRef,
     submit,
-    clearNotice: () => setNotice(null),
   };
 }
