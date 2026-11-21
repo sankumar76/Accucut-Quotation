@@ -119,7 +119,9 @@ export interface EmailOutboxRepository {
   enqueue(tx: Transaction, message: OutboxMessage, now: Date): Promise<EnqueueResult>;
   /**
    * Gives the **unsent** rows of one event whose key starts with `keyPrefix` a `send_before` of `now` (never a later one than they have), in the caller's transaction, so the claim skips them as
-   * `EXPIRED` with the one mechanism every expiry uses (DEF-055). A row that is sending, sent, failed or skipped is not touched. Answers how many rows it expired.
+   * `EXPIRED` with the one mechanism every expiry uses (DEF-055). Unsent is `pending` **or `sending`** (SQR-02): a row the worker has claimed but not yet sent is stopped at its `beginSend`
+   * (`expired`), and one whose attempt fails and goes back to `pending` is skipped at the next claim. The worker's marks check only `status` and `attempts`, never `send_before`, so a row that
+   * was sent a moment earlier is still recorded as sent. A row that is sent, failed or skipped is not touched. Answers how many rows it expired.
    */
   expireUnsent(tx: Transaction, event: MailEvent, keyPrefix: string, now: Date): Promise<number>;
   claimDue(now: Date, limit: number, lockedUntil: Date): Promise<ClaimResult>;
@@ -210,7 +212,7 @@ export function createEmailOutboxRepository(db: PrismaClient): EmailOutboxReposi
         // `starts_with` compares text, so a `%` or `_` in the prefix is only itself. The prefix is a bound parameter like every other value.
         clientFor(db, tx).$executeRaw`
           UPDATE email_outbox SET send_before = ${now}::timestamptz
-          WHERE status = 'pending' AND event = ${event} AND starts_with(idempotency_key, ${keyPrefix})
+          WHERE status IN ('pending', 'sending') AND event = ${event} AND starts_with(idempotency_key, ${keyPrefix})
             AND (send_before IS NULL OR send_before > ${now}::timestamptz)`,
       ),
 

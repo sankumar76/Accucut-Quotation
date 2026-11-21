@@ -365,7 +365,7 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
           await mail.withdrawUnsent(tx, locked.id);
           if (await mail.queueingEnabled()) {
             await enqueueAssigned(
-            tx,
+              tx,
               { id: locked.id, code: locked.code, title: locked.title, notes: locked.notes, folderPath: locked.folderPath, deadlineAt, assignmentRevision, engineer },
               context.actorId,
             );

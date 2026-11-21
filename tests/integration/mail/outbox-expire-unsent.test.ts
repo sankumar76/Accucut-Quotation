@@ -8,8 +8,8 @@ import { createTransactionRunner, type TransactionRunner } from '@/server/reposi
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 
 /**
- * DEF-055 (AQP-385): `expireUnsent` against real PostgreSQL, as the runtime role. It gives the unsent rows of one event whose key starts with a prefix a `send_before` of now, so the claim
- * skips them as `EXPIRED` with the mechanism every other expiry uses. It never touches a row that is sent, sending, failed or skipped, a row of another task or event, or a `send_before`
+ * DEF-055 (AQP-385): `expireUnsent` against real PostgreSQL, as the runtime role. It gives the unsent rows (pending, or sending: SQR-02) of one event whose key starts with a prefix a `send_before`
+ * of now, so the claim skips them as `EXPIRED` with the mechanism every other expiry uses. It never touches a row that is sent, failed or skipped, a row of another task or event, or a `send_before`
  * that is already earlier; the prefix is compared as text, not as a pattern; and it is undone with the caller's transaction. Every name and address is invented.
  */
 
@@ -71,23 +71,28 @@ describe('expireUnsent', () => {
     expect(await rowOf(first)).toMatchObject({ status: 'skipped', last_error: 'EXPIRED' });
   });
 
-  it('leaves alone a row of another task, a row of another event, and a row that is sent, sending, failed or skipped', async () => {
+  it('leaves alone a row of another task, a row of another event, and a row that is sent, failed or skipped', async () => {
     const other = await assigned(OTHER_TASK, 1);
     const otherEvent = await assigned(TASK, 7, IN_A_DAY, 'backup-missed');
     const sent = await assigned(TASK, 3);
-    const sending = await assigned(TASK, 4);
     const failed = await assigned(TASK, 5);
     const skipped = await assigned(TASK, 6);
     for (const [key, status] of [
       [sent, 'sent'],
-      [sending, 'sending'],
       [failed, 'failed'],
       [skipped, 'skipped'],
     ] as const) {
       await db.owner.query('UPDATE email_outbox SET status = $2 WHERE idempotency_key = $1', [key, status]);
     }
     expect(await expireTask(TASK)).toBe(0);
-    for (const key of [other, otherEvent, sent, sending, failed, skipped]) expect((await rowOf(key))?.send_before).toEqual(IN_A_DAY);
+    for (const key of [other, otherEvent, sent, failed, skipped]) expect((await rowOf(key))?.send_before).toEqual(IN_A_DAY);
+  });
+
+  it('SQR-02: a row the worker has claimed and not yet sent (sending) is expired too, and keeps its status for the worker\'s own marks', async () => {
+    const sending = await assigned(TASK, 4);
+    await db.owner.query("UPDATE email_outbox SET status = 'sending', attempts = 1, locked_until = $2 WHERE idempotency_key = $1", [sending, LOCK]);
+    expect(await expireTask(TASK)).toBe(1);
+    expect(await rowOf(sending)).toMatchObject({ status: 'sending', send_before: NOW });
   });
 
   it('does not move an earlier send_before later', async () => {

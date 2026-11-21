@@ -393,6 +393,28 @@ describe('DEF-055 (AQP-385): an assignment e-mail expires, is not queued where i
     expect(mails.map((mail) => mail.to)).toEqual([[addressOf[arjunId]]]);
   });
 
+  it('SQR-02: a row the worker has claimed but not yet sent when the task is reassigned is stopped at beginSend, and the old Engineer is not mailed; the new Engineer still is', async () => {
+    const assigned = await service.assignTask(leadId, input());
+    const claim = await outbox.claimDue(NOW, 25, hours(1));
+    const claimed = defined(claim.claimed[0]);
+    await service.reassignTask(by(otherLeadId, 'Invented Mail Other Lead'), assigned.id, { engineerId: meeraId });
+    expect(await outbox.beginSend({ id: claimed.id, attempts: claimed.attempts }, NOW, hours(1))).toBe('expired');
+    expect(await messagesFor(assigned.code)).toEqual([]);
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 1 });
+    expect((await messagesFor(assigned.code)).map((mail) => mail.to)).toEqual([[addressOf[meeraId]]]);
+  });
+
+  it('SQR-02: a claimed row whose attempt fails and goes back to pending after a reassign is skipped as EXPIRED at the next claim, not mailed to the old Engineer', async () => {
+    const assigned = await service.assignTask(leadId, input());
+    const claimed = defined((await outbox.claimDue(NOW, 25, hours(1))).claimed[0]);
+    await service.reassignTask(by(leadId, 'Invented Mail Lead'), assigned.id, { engineerId: meeraId });
+    expect(await outbox.markRetry({ id: claimed.id, attempts: claimed.attempts }, 'CONNECTION', new Date(NOW.getTime() + 60_000))).toBe(true);
+    clock.set(new Date(NOW.getTime() + 120_000));
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 1, skipped: 1 });
+    expect((await outboxRows()).find((row) => row.idempotency_key.endsWith(':1'))).toMatchObject({ status: 'skipped', last_error: 'EXPIRED' });
+    expect((await messagesFor(assigned.code)).map((mail) => mail.to)).toEqual([[addressOf[meeraId]]]);
+  });
+
   it('a row that was already sent is not touched by a later reassign', async () => {
     const assigned = await service.assignTask(leadId, input());
     expect(await runOutboxSend(sendDependencies)).toMatchObject({ sent: 1 });

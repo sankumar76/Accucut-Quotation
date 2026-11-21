@@ -55,7 +55,7 @@ export interface TaskMail {
   queueingEnabled(): Promise<boolean>;
   /** Writes the assignment e-mail's outbox row in `tx`, to expire 24 hours after the clock's now. Call it only when `queueingEnabled()` says so. */
   enqueueTaskAssigned(tx: Transaction, task: TaskMailTask, assigner: TaskMailAssigner): Promise<EnqueueResult>;
-  /** Expires, in `tx`, every assignment e-mail of this task that is not sent yet (the Engineer changed). Done whatever the switches say: the row may date from when they were on. */
+  /** Expires, in `tx`, every assignment e-mail of this task that is not sent yet, a row the worker has claimed but not sent included (the Engineer changed). Done whatever the switches say: the row may date from when they were on. */
   withdrawUnsent(tx: Transaction, taskId: string): Promise<void>;
 }
 

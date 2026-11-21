@@ -30,13 +30,15 @@ interface Planted {
   readonly event: string;
   readonly status: string;
   readonly sendBefore: Date | null;
+  /** When the row was written; the default is a few weeks before the migration. */
+  readonly createdAt?: Date;
 }
 
-async function plant({ key, event, status, sendBefore }: Planted): Promise<void> {
+async function plant({ key, event, status, sendBefore, createdAt = PLANTED_AT }: Planted): Promise<void> {
   await db.owner.query(
     `INSERT INTO email_outbox (idempotency_key, event, to_user_id, subject, body_html, body_text, status, send_before, next_attempt_at, created_at)
      VALUES ($1, $2, $3::uuid, 'Subject', '<p>Body</p>', 'Body', $4, $5, $6, $6)`,
-    [key, event, engineerId, status, sendBefore, PLANTED_AT],
+    [key, event, engineerId, status, sendBefore, createdAt],
   );
 }
 
@@ -127,6 +129,16 @@ describe('the migration that expires the assignment e-mails queued before the fi
     await db.owner.query(migration);
     expect(await everyRow()).toEqual(once);
     expect(once['task-assigned:fresh:1']?.send_before).toEqual(fresh);
+  });
+
+  it('reviewer\'s case (SQR-01): a row written 25 hours ago and one written 1 hour ago, both with no send_before, are both skipped as EXPIRED by the next claim (the ruling is send_before = now())', async () => {
+    const now = Date.now();
+    await plant({ key: 'task-assigned:old:1', event: 'task-assigned', status: 'pending', sendBefore: null, createdAt: new Date(now - 25 * MILLISECONDS_PER_HOUR) });
+    await plant({ key: 'task-assigned:recent:1', event: 'task-assigned', status: 'pending', sendBefore: null, createdAt: new Date(now - MILLISECONDS_PER_HOUR) });
+    await db.owner.query(migration);
+    const claim = await repository.claimDue(new Date(Date.now() + 60_000), 25, new Date(Date.now() + 5 * 60_000));
+    expect(claim.claimed).toEqual([]);
+    expect(claim.skipped.map((skipped) => skipped.code)).toEqual(['EXPIRED', 'EXPIRED']);
   });
 
   it('runs over an empty outbox (a new install) and changes nothing', async () => {
