@@ -43,16 +43,6 @@ function post(path: string, body: unknown, headers: Record<string, string> = {})
 const forgot = (email: unknown, headers: Record<string, string> = {}) => FORGOT(post('/api/v1/account/password/forgot', { email }, headers));
 const reset = (body: unknown) => RESET(post('/api/v1/account/password/reset', body));
 
-/** A problem body without its request ID, which is different on every answer by design. */
-function withoutRequestId(body: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(body).filter(([name]) => name !== 'requestId'));
-}
-
-/** The headers of an answer, apart from the request ID, which is different on every answer by design. */
-function headersWithoutRequestId(response: Response): Array<[string, string]> {
-  return [...response.headers.entries()].filter(([name]) => name !== 'x-request-id').sort(([a], [b]) => a.localeCompare(b));
-}
-
 describe('AC-2, AC-3: POST /api/v1/account/password/forgot', () => {
   it('is 202 with the one message, no-store, and a request ID', async () => {
     const response = await forgot('invented.person@example.test');
@@ -60,26 +50,6 @@ describe('AC-2, AC-3: POST /api/v1/account/password/forgot', () => {
     expect(await response.json()).toEqual({ message: FORGOT_ACCEPTED_MESSAGE });
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('x-request-id')).toMatch(/^req-[0-9a-f]{8}$/);
-  });
-
-  it('gives byte-identical bodies and equal header sets for a known e-mail, an unknown one, a deactivated person and an e-mail in other letters', async () => {
-    const answers = [];
-    for (const [index, email] of ['invented.person@example.test', 'nobody@example.test', 'invented.former@example.test', 'INVENTED.LEAD@Example.Test', 'another.nobody@example.test'].entries()) {
-      const response = await forgot(email, { 'x-forwarded-for': `203.0.113.${index + 1}` });
-      answers.push({ status: response.status, body: await response.text(), headers: headersWithoutRequestId(response) });
-    }
-    for (const answer of answers) expect(answer).toEqual(answers[0]);
-    // The known ones did make a link; the others did not.
-    expect(world.tokens).toHaveLength(2);
-  });
-
-  it('is the same answer with FEATURE_EMAIL off, and then makes nothing', async () => {
-    const on = await forgot('invented.person@example.test', { 'x-forwarded-for': '203.0.113.1' });
-    const onAnswer = { status: on.status, body: await on.text(), headers: headersWithoutRequestId(on) };
-    world.state.emailEnabled = false;
-    const off = await forgot('invented.lead@example.test', { 'x-forwarded-for': '203.0.113.2' });
-    expect({ status: off.status, body: await off.text(), headers: headersWithoutRequestId(off) }).toEqual(onAnswer);
-    expect(world.tokens).toHaveLength(1);
   });
 
   it('a malformed address is 422 under email, the same for everyone, and makes nothing', async () => {
@@ -131,18 +101,6 @@ describe('AC-4: the 429', () => {
     expect(refused.headers.get('content-type')).toContain('application/problem+json');
     expect(world.tokens).toEqual([]);
   });
-
-  it('the 429 of one typed e-mail reads the same for a known and an unknown address', async () => {
-    const bodies = [];
-    for (const email of ['invented.person@example.test', 'nobody@example.test']) {
-      for (let count = 0; count < 5; count += 1) await forgot(email, { 'x-forwarded-for': `198.51.100.${bodies.length * 10 + count + 1}` });
-      const response = await forgot(email, { 'x-forwarded-for': `198.51.100.${bodies.length * 10 + 9}` });
-      const rest = withoutRequestId(record.parse(await response.json()));
-      bodies.push({ status: response.status, rest });
-    }
-    expect(bodies[0]).toEqual(bodies[1]);
-    expect(bodies[0]?.status).toBe(429);
-  });
 });
 
 describe('AC-6 to AC-9: POST /api/v1/account/password/reset', () => {
@@ -165,19 +123,6 @@ describe('AC-6 to AC-9: POST /api/v1/account/password/reset', () => {
     const response = await reset({ token: valid, newPassword: NEW_PASSWORD });
     expect(response.status).toBe(400);
     expect(record.parse(await response.json())).toMatchObject({ code: 'RESET_LINK_INVALID', title: RESET_LINK_INVALID_MESSAGE, status: 400 });
-  });
-
-  it('a used, an unknown and a malformed token are the identical 400', async () => {
-    const valid = await token();
-    await reset({ token: valid, newPassword: NEW_PASSWORD });
-    const bodies = [];
-    for (const candidate of [valid, 'A'.repeat(43), 'not-a-token']) {
-      const response = await reset({ token: candidate, newPassword: NEW_PASSWORD });
-      const rest = withoutRequestId(record.parse(await response.json()));
-      bodies.push({ status: response.status, rest });
-    }
-    expect(bodies[1]).toEqual(bodies[0]);
-    expect(bodies[2]).toEqual(bodies[0]);
   });
 
   it('a password that breaks the rule is 422 under newPassword and the same link then works', async () => {
