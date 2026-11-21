@@ -1,8 +1,10 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { E2E_LEAD, E2E_PASSWORD, signInThroughThePage, useFreshAddress } from './support/auth';
-import { TABLET_MIN_WIDTH, waitForAnimationsToFinish, widthOf } from './support/design-system';
+import { initialsOf } from '../../src/lib/initials';
+
+import { createDisposableUser, E2E_LEAD, E2E_PASSWORD, signInThroughThePage, useFreshAddress } from './support/auth';
+import { horizontalOverflow, TABLET_MIN_WIDTH, waitForAnimationsToFinish, widthOf } from './support/design-system';
 import { openRouteAndSettle, ScriptGate, SLOW_OPEN_WAIT_MILLISECONDS } from './support/lazy-load';
 import { PRODUCTION_URL } from './support/servers';
 
@@ -16,12 +18,12 @@ import { PRODUCTION_URL } from './support/servers';
 
 test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } });
 
-test.beforeEach(async ({ page, context }) => {
-  await useFreshAddress(context);
+/** The sign-in page, then the queue: the start of every test, as the person with this e-mail (after `useFreshAddress`, which a test calls in its own callback). */
+async function signInAs(page: Page, email: string): Promise<void> {
   await page.goto('/sign-in');
-  await signInThroughThePage(page, E2E_LEAD.email, E2E_PASSWORD);
+  await signInThroughThePage(page, email, E2E_PASSWORD);
   await expect(page).toHaveURL(/\/queue$/);
-});
+}
 
 const TRIGGER = 'button[aria-label^="Account menu"]';
 const EXPECTED_NAME = 'Account menu, EL, E2E Lead, Lead';
@@ -63,6 +65,11 @@ async function expectAxeLabelInNamePasses(trigger: Locator): Promise<void> {
 }
 
 test.describe('DEF-014: the account trigger name contains its visible text', () => {
+  test.beforeEach(async ({ page, context }) => {
+    await useFreshAddress(context);
+    await signInAs(page, E2E_LEAD.email);
+  });
+
   test('closed: the name matches the pattern, contains the visible text, and axe label-content-name-mismatch passes', async ({ page }) => {
     await openRouteAndSettle(page, '/queue');
     const trigger = page.locator(TRIGGER);
@@ -110,4 +117,101 @@ test.describe('DEF-014: the account trigger name contains its visible text', () 
     await expectLabelInName(trigger, await widthOf(page));
     await expectAxeLabelInNamePasses(trigger);
   });
+});
+
+/**
+ * DEF-034 (AQP-288, NFR-016, ux-spec SCR-25 and 6.0): the longest name the Users form accepts is 120 characters. The top bar cuts it with an
+ * ellipsis from 768 px, the full name stays in the accessible name, and the page does not scroll sideways, whatever the name is made of. Each
+ * test makes its own person (`long-name`) and signs in as that person, so the shared Lead is never renamed. Capitals M and W are among the widest
+ * letters, so 120 of them are wider than the top bar at every width of the suite (1366 px included): the name is cut at every width from 768 px.
+ */
+const LONGEST_NAME_LENGTH = 120;
+const LONG_NAMES: Readonly<Record<string, string>> = {
+  'with no space': 'MWMWMWMWMW'.repeat(12),
+  'with spaces': `${'MWMWMWMWM '.repeat(11)}MWMWMWMWMW`,
+};
+
+/** What one measurement of the trigger reads from the page. */
+interface TriggerFit {
+  readonly pageOverflow: number;
+  readonly triggerRight: number;
+  readonly barRight: number | null;
+  readonly nameShown: boolean;
+  readonly nameCut: boolean;
+  readonly textOverflow: string;
+}
+
+/**
+ * The page does not scroll sideways and the trigger ends inside the top bar. From 768 px the name is on screen and is cut with an ellipsis (its text is
+ * wider than its box and the box asks for an ellipsis); below 768 px only the initials show, so there is no name to cut.
+ */
+async function expectTriggerFits(trigger: Locator, name: string, width: number, state: string): Promise<void> {
+  const fit: TriggerFit = await trigger.evaluate((element, fullName) => {
+    const bar = element.closest('header');
+    const nameBox = Array.from(element.querySelectorAll('span')).find((span) => span.textContent === fullName);
+    return {
+      pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      triggerRight: Math.round(element.getBoundingClientRect().right),
+      barRight: bar === null ? null : Math.round(bar.getBoundingClientRect().right),
+      nameShown: nameBox !== undefined && nameBox.offsetWidth > 0,
+      nameCut: nameBox !== undefined && nameBox.scrollWidth > nameBox.clientWidth,
+      textOverflow: nameBox === undefined ? '' : getComputedStyle(nameBox).textOverflow,
+    };
+  }, name);
+  expect(fit.pageOverflow, `${state}: the page scrolls ${fit.pageOverflow} px sideways (the trigger ends at ${fit.triggerRight} px)`).toBeLessThanOrEqual(0);
+  expect(fit.barRight, `${state}: the trigger is inside the top bar`).not.toBeNull();
+  expect(fit.triggerRight, `${state}: the trigger ends inside the top bar`).toBeLessThanOrEqual(fit.barRight ?? 0);
+  if (width < TABLET_MIN_WIDTH) {
+    expect(fit.nameShown, `${state}: below 768 px only the initials show`).toBe(false);
+    return;
+  }
+  expect(fit.nameShown, `${state}: the name shows from 768 px`).toBe(true);
+  expect(fit.nameCut, `${state}: the name is cut`).toBe(true);
+  expect(fit.textOverflow, `${state}: the cut ends in an ellipsis`).toBe('ellipsis');
+}
+
+/** The open panel: inside the window, and every line of the label (name, e-mail, role) fits its box, so a long name wraps and does not run out of the panel. */
+async function expectMenuLabelFits(menu: Locator, name: string): Promise<void> {
+  const label = await menu.evaluate((element, fullName) => {
+    const box = element.getBoundingClientRect();
+    const lines = Array.from(element.querySelectorAll('[data-slot="dropdown-menu-label"] span'));
+    return {
+      insideWindow: box.left >= 0 && box.right <= window.innerWidth,
+      lines: lines.length,
+      namePrinted: lines.some((line) => line.textContent === fullName),
+      runOut: lines.filter((line) => line.scrollWidth > line.clientWidth).map((line) => (line.textContent ?? '').slice(0, 20)),
+    };
+  }, name);
+  expect(label.insideWindow, 'the open panel is inside the window').toBe(true);
+  expect(label.lines, 'the label has name, e-mail and role').toBe(3);
+  expect(label.namePrinted, 'the label prints the whole name').toBe(true);
+  expect(label.runOut, 'no line of the label runs out of the panel').toEqual([]);
+}
+
+test.describe('DEF-034: a 120-character name stays inside the top bar (2 tests)', () => {
+  for (const [kind, name] of Object.entries(LONG_NAMES)) {
+    test(`a 120-character name ${kind}: closed, open and after the first open the page does not scroll sideways, and the name keeps its full accessible name`, async ({ page, context }, testInfo) => {
+      expect(name.length, 'the longest name the Users form accepts').toBe(LONGEST_NAME_LENGTH);
+      const person = await createDisposableUser('long-name', testInfo, 'LEAD', name);
+      await useFreshAddress(context);
+      await signInAs(page, person.email);
+      await openRouteAndSettle(page, '/queue');
+      const trigger = page.locator(TRIGGER);
+      const width = await widthOf(page);
+      await expect(trigger).toHaveAccessibleName(`Account menu, ${initialsOf(name)}, ${name}, Lead`);
+
+      await expectTriggerFits(trigger, name, width, 'closed');
+
+      await trigger.click();
+      const menu = page.getByRole('menu');
+      await expect(menu).toBeVisible();
+      expect(await horizontalOverflow(page), 'open: the page scrolls sideways').toBeLessThanOrEqual(0);
+      await expectMenuLabelFits(menu, name);
+
+      await page.keyboard.press('Escape');
+      await expect(menu).toBeHidden();
+      await expectTriggerFits(trigger, name, width, 'after the first open (the Radix trigger)');
+      await expect(trigger).toHaveAccessibleName(`Account menu, ${initialsOf(name)}, ${name}, Lead`);
+    });
+  }
 });
