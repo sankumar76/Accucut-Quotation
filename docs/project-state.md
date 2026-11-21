@@ -16,6 +16,22 @@
 | Last updated       | 2026-11-20 by orchestrator (daily update) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
+## Daily update (2026-11-21, orchestrator)
+
+> This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.**
+
+**`master` = 0a336aa.** Merged since the 20 Nov later block (5; **16 in this run**): #551 **AQP-360** 08.05 (7be9f1a); #546 **AQP-380** DEF-050 fix (266db7a); #552 **AQP-352** 09.05 (7c4867f); #554 **AQP-353** 09.06 (dfd294c); #553 **AQP-361** 08.06 [c] (0a336aa; combined review APPROVE WITH COMMENTS, Major SQR-01 fixed before merge, agent-memory files untracked before merge; follow-ups #559 and #524). Jira Done for all; AQP-380 closed by QA.
+
+**`master` push runs:** 266db7a (44850302908) fully green, 0 flaky: the run that closed DEF-050 and RISK-031. DEF-052 file normal on every push since (3.3 s, 3.2 s).
+
+**Rulings:** DL-267 (DEF-051 narrowed to `lead-warning` :229; Bug-or-watch line; R8 re-pointed), DL-268 (**RISK-031 closed**, with four reopen triggers checked daily: a `master` push red from time-outs; two first-attempt time-outs outside a ruled wave on `master` pushes the same day; a red W1 or R9 re-run; a second DEF-052 occurrence; **none fired**), DL-269 (`lead-warning` :253 rejoins DEF-051 after the first-minute cluster on #553's run, 1.28x, not a W1 wave; :280 on the watch list). **Rules in force: R9 (DEF-051: :229 and :253), W1 (to G8).** R8 ended with DEF-050.
+
+**Lanes (3):** 09.07 **AQP-354** [c] (#557, draft); 08.07 **AQP-362** (#556, draft; waiting for #553, now merged); DEF-051 **AQP-381** (#555, fix run). **Queue:** 08.08 [c] (after 08.07), 07.05, 02.08 [c], 04.06, 10.07; 09.08 is a human step. Slip watch: 7 stories not merged yet (3 in flight, 4 not started plus 08.08); last merge by 26 Nov at risk with 3 lanes; a 4th lane is with the delivery lead.
+
+**Disk:** C: dipped to **335 MB free** for a few minutes on 20 Nov during parallel installs; it is 11 to 12 GB now. Developers run installs in the background and keep local runs small.
+
+**For the delivery lead:** (1) the 08.07 developer accidentally created two untracked files in the **main checkout** (`aqp362-change-history.md`, `MEMORY.md`, both at the repo root, 00:36 on 21 Nov); its delete was denied and nobody else touches them. (2) Branch `diag/AQP-376-axe-phases` to delete. (3) Master's earlier memory note in the main checkout's `.claude/agent-memory/master/`.
+
 ## Daily update (2026-11-20, later, orchestrator)
 
 > This block wins over the morning block below it where they differ.
