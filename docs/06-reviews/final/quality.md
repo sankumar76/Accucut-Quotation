@@ -148,3 +148,39 @@ The other findings are Minor. They cover:
 - Open questions: QLT-F-05 changes AC-7 of STORY-05.10 (product-owner to rule)
 - Risks raised: none new (QLT-F-01 tracked as #578)
 - Recommended next agent: developer, to fix #578 in the hardening window before STORY-09.08's real send. Then master, for the G8 inputs.
+
+---
+
+## #382 re-grade (2026-11-21, reviewer-quality, DL-276)
+
+**Finding:** GitHub #382, AQP-293 SQR-01 (Major). While `store` held the estimate lock, it read the customer, the exchange rates and each material on the plain client, one more pooled connection per read. Ten Calculates at once could exhaust the app pool of 10.
+
+**Result: FIXED on master. SQR-01 is closed with no severity left.** It was fixed in AQP-317 / STORY-05.09 (PR #406, merged 2026-11-15, every required check green). I checked it again at `origin/master` `0f69aa20` by reading code only. No suites were run, per the brief, because the disk is tight.
+
+| Step on the Calculate path | Evidence at master | One connection? |
+|---|---|---|
+| One transaction for the whole press | `src/server/services/calculation-service.ts:448` (`storage.transactions.run`), runner `src/server/repositories/transaction.ts:62-85` | yes |
+| State machine | `calculation-service.ts:422` → `src/server/services/estimate-service.ts:421-423` (joins the given `tx`) | yes |
+| Estimate lock | `calculation-service.ts:326` and `:423` (`lockEstimate(id, tx)`) | yes |
+| Registry version | `calculation-service.ts:173`, `:335`, `:425`; `src/server/composition.ts:335-338` → `src/server/services/config-service.ts:91-95, 101-105` → `src/server/repositories/config-repository.ts:125-139` (`clientFor(db, tx)`) | yes (and cached after the first read) |
+| Master reads | `calculation-service.ts:305` passes `tx` to `src/server/services/calculation-masters.ts:74-87`. The reads are **sequential awaits, with no `Promise.all`**: customer `:82` → `src/server/repositories/customer-repository.ts:176-182` (rates through `detailOf(…, tx)` `:161-162`); materials `:54`/`:86` → `src/server/repositories/material-repository.ts:196-203`, **one `findMany` with `id IN (…)`**; exchange rates `:87` → `src/server/repositories/exchange-rate-repository.ts:93-94` | yes |
+| Parts, record, link, audit | `calculation-service.ts:381` (`listNodes(…, tx)`), `:369-372`, `:435` | yes |
+| `clientFor` fails closed | `src/server/repositories/transaction.ts:56-61`: an unknown handle throws and never falls back to the pool | — |
+
+**Regression tests on master:**
+- `tests/integration/calc/calculate.test.ts:211-219`: 12 Calculates at once on 12 estimates, all fulfilled, each storing one record. They run on the ruled `app` pool (`tests/support/auth-database.ts:27`, `createPrismaClient('app', …)`, `max: 10` at `src/server/repositories/prisma-client.ts:42-49`). With the old code this test stalls and fails.
+- `tests/unit/calculation-record.test.ts:258-296`: every master read and the configuration read receive the caller's `tx`. The materials are read in one call, and the configuration once (this also covers SQR-08).
+- `tests/integration/calc/row-outputs.test.ts:106`: `findMaterialsForCalculation` reads every material in one statement, inside the caller's transaction.
+
+**Other callers of `readMasters` that pass no `tx`:** `src/server/services/rate-changes.ts:32-39`, called from the unlock preview (`src/server/services/unlock-service.ts:155-168`) and the Lead's review (`src/server/services/estimate-review-service.ts:173`). Neither runs inside a transaction or holds a lock, and their reads are sequential. Each request uses one connection at a time, so these callers cannot exhaust the pool this way. The sibling lock path, Approve (`src/server/services/approval-service.ts:152-194`), also passes `tx` on every read.
+
+**Risk left at the planning volume (25 to 50 users):** each Calculate holds exactly one connection for its own short transaction. A burst of more than 10 at once queues for up to `maxWait` 5 s (`transaction.ts:49`) and does not deadlock. This is ordinary pool sizing, already covered by the performance review and NFR-008, so I raise no new finding.
+
+**What is left on #382 (not SQR-01, all at their original lower grades, still open at master):**
+- SQR-03 (Minor): `nodes` has no `.min(1)` (`calculation-service.ts:236`).
+- SQR-04 (Minor): no composite foreign key, so no new migration yet.
+- SQR-06 (Minor): only duplicate node IDs are refused (`calculation-service.ts:256-267`).
+- SQR-07 (Info): the assertion for the plain TRUNCATE still accepts any error.
+- The flaky `account-password` "two changes at once" test.
+
+The only caller, Calculate, builds the nodes from the stored tree (`checkedPartsOf`, `calculation-service.ts:380-381`). So SQR-03 and SQR-06 can be reached only through a caller bug, and Minor stays right for both. **#382 no longer holds a Major.** Retitle it so that DL-276 no longer counts it among the Majors before G8.
