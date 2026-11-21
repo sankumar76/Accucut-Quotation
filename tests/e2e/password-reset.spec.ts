@@ -1,3 +1,5 @@
+import { randomInt } from 'node:crypto';
+
 import { expect, test, type Page } from '@playwright/test';
 
 import { createDisposableUser, expectOnQueue, signInThroughThePage, unknownEmail, useFreshAddress } from './support/auth';
@@ -17,7 +19,14 @@ test.use({ baseURL: PRODUCTION_URL, storageState: { cookies: [], origins: [] } }
 const NEW_PASSWORD = 'Pr9$kWd3!Rx-fresh';
 const INVALID_LINK = 'This link has already been used or has expired. Ask for a new link.';
 const ACCEPTED = 'Check your e-mail. If that address is registered, a reset link is on its way. It can be used once.';
-const JSON_HEADERS = { origin: PRODUCTION_URL, 'content-type': 'application/json' } as const;
+
+/**
+ * The headers of a call made straight to a route: the portal's own origin (the CSRF check) and a client address of its own, as the proxy would send it, so the limit of 5 requests per address
+ * never counts against another test (a call with no address shares one counter with every other call that has none).
+ */
+function jsonHeaders(): Record<string, string> {
+  return { origin: PRODUCTION_URL, 'content-type': 'application/json', 'x-forwarded-for': `198.51.${randomInt(0, 256)}.${randomInt(1, 255)}` };
+}
 
 /** The live regions of a notice. Next.js has a live region of its own with the same role, so the role alone is ambiguous. */
 const noticeOf = (page: Page) => page.locator('[data-slot="alert"]');
@@ -65,7 +74,7 @@ test.describe('SCR-02 the request page (AC-1 to AC-4, AC-10)', () => {
     expect(await countResetTokens(person.id)).toBe(0);
 
     // The answer for an address nobody has is the same message (FR-001), read from the route.
-    const unknown = await page.request.post('/api/v1/account/password/forgot', { headers: JSON_HEADERS, data: { email: unknownEmail(testInfo) } });
+    const unknown = await page.request.post('/api/v1/account/password/forgot', { headers: jsonHeaders(), data: { email: unknownEmail(testInfo) } });
     expect(unknown.status()).toBe(202);
     expect(await unknown.json()).toEqual({ message: ACCEPTED });
   });
@@ -74,7 +83,7 @@ test.describe('SCR-02 the request page (AC-1 to AC-4, AC-10)', () => {
     const typed = unknownEmail(testInfo);
     await openRequest(page);
     for (let count = 0; count < 5; count += 1) {
-      const answer = await page.request.post('/api/v1/account/password/forgot', { headers: JSON_HEADERS, data: { email: typed } });
+      const answer = await page.request.post('/api/v1/account/password/forgot', { headers: jsonHeaders(), data: { email: typed } });
       expect(answer.status(), `request ${count + 1}`).toBe(202);
     }
     await page.getByLabel('E-mail').fill(typed);
@@ -159,7 +168,7 @@ test.describe('SCR-02 the reset page (AC-5 to AC-9, AC-10)', () => {
     await expect(page.getByLabel('New password', { exact: true })).toHaveCount(0);
 
     // The same link a second time: 400, and nothing changes (AC-7).
-    const again = await page.request.post('/api/v1/account/password/reset', { headers: JSON_HEADERS, data: { token, newPassword: 'Another9#password' } });
+    const again = await page.request.post('/api/v1/account/password/reset', { headers: jsonHeaders(), data: { token, newPassword: 'Another9#password' } });
     expect(again.status()).toBe(400);
     expect(((await again.json()) as { code: string }).code).toBe('RESET_LINK_INVALID');
 
