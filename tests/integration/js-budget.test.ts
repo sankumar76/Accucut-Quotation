@@ -243,14 +243,14 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(passing.summary).toContain('### JS budget (NFR-009)');
     expect(passing.summary).toContain('| Route | Result | Viewer | Files | Raw bytes | Gzip bytes | Limit | Headroom | Note |');
     for (const route of ['/', '/about', '/account', '/assign', '/audit', '/config/checkpoints', '/config/fields', '/config/fields/[id]/formula', '/config/fields/new', '/design-system', '/estimates/[code]', '/estimates/[code]/costs/[slNo]', '/estimates/[code]/export', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/settings', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
-    expect(passing.summary).toContain('all 21 rows are within their limit');
+    expect(passing.summary).toContain('all 22 rows are within their limit');
   });
 
   it('exits 1 for a planted overrun, and the summary and the log name the route', () => {
     expect(overrun.code).toBe(1);
     expect(overrun.summary).toMatch(/\| \/queue \| FAIL \|/);
     expect(overrun.output).toContain('FAIL  /queue');
-    expect(overrun.output).toContain('1 of 21 rows failed');
+    expect(overrun.output).toContain('1 of 22 rows failed');
   });
 
   it('fails the routes that need sign-in, and says why, when no credentials were provided; it never prints a credential', () => {
@@ -275,6 +275,6 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(noRecords.output).toContain('/estimates/[code]/export');
     expect(noRecords.output).toContain('/config/fields/[id]/formula');
     expect(noRecords.output).toContain('a dynamic segment needs a record made from invented data, and none could be made');
-    expect(noRecords.output).toContain('5 of 21 rows failed');
+    expect(noRecords.output).toContain('5 of 22 rows failed');
   });
 });
