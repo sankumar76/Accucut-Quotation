@@ -232,3 +232,8 @@ QA did not change the GitHub issue states or the defect files above in this run 
 - Open questions: none new (D1 to D4 of DL-275 stay open)
 - Risks raised: RISK-031 reopen triggers 1 and 2 met (master to rule); nightly permanently red; NFR-019, NFR-010, NFR-011 and NFR-009 key-screen figures unevidenced
 - Recommended next agent: orchestrator, to route DEF-054, DEF-055, DEF-034 and DEF-038 into the developer lanes and DEF-053 first in lane 3; then master for the RISK-031 ruling
+
+## Addendum, 2026-11-21 (later the same day; rulings after this report)
+- **#382** (AQP-293 SQR-01) is off the list of G8-blocking Majors (DL-284 (3)); its remaining items are Minor. Section 1's table of blockers is read without it.
+- **DEF-038** was re-graded to Sev-3, type Test (DL-277), and **DEF-034** is closed (fix #579); the Sev-2 count in section 1 is therefore DEF-054 and DEF-055 only. **DEF-053** is closed (fix #571) with a watch of 1 of 2 (DL-284). **DEF-056** (AQP-386) is a Test defect (DL-283); **DEF-057** (AQP-387) is open. **RISK-031** was reopened by DL-276.
+- This report is not edited above this line; the current state is in `docs/07-qa/test-plan.md` section 7 and the defect files.
