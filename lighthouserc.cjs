@@ -8,9 +8,8 @@
  *           the median of 5 runs, on the key screens listed in KEY_SCREENS.
  *   slow4g  the same settings on a slow mobile network, with no assertions: report only.
  *
- * KEY_SCREENS is empty until a key screen exists. Add one row (path and the role it is for) in the story that builds it:
- * masters, assign, queue, workspace, cost view. Pages in REPORTED_PAGES are measured and reported, never asserted;
- * the shell page "/" is the first (AC-9 baseline). Every page loads signed in as its role, through the puppeteer script.
+ * KEY_SCREENS holds the five key screens, each with the role it is for (G8-C-NFR9). Pages in REPORTED_PAGES are measured and reported,
+ * never asserted; the shell page "/" is the first (AC-9 baseline). Every page loads signed in as its role, through the puppeteer script.
  *
  * The browser is the Chromium that Playwright installs (`npx playwright install chromium`), so it changes only when
  * Playwright is upgraded. LHCI_BASE_URL is where the production server listens. Nothing is uploaded to a public server:
@@ -28,8 +27,18 @@ const MAX_TBT_MS = 200;
 const DEFAULT_BASE_URL = 'http://localhost:3000';
 const SIGN_IN_SCRIPT = './scripts/lighthouse-sign-in.cjs';
 
-/** The five key screens, as each comes into being: `{ path: '/queue', role: 'ADMIN' }`. */
-const KEY_SCREENS = [];
+/**
+ * The five key screens (PRD NFR-009; test strategy 10.2): the task queue, assign, the customers master, the estimate workspace and the cost details of one part. Each is measured as the role that uses it, on the
+ * planning volume that `scripts/seed-lighthouse-data.ts` makes (500 customers, 300 tasks, two estimates of 500 parts; PRD NFR-011). The two codes are the tasks of that script (`scripts/lib/lighthouse-data.ts`;
+ * `tests/unit/lighthouse-data.test.ts` holds them together). The workspace is the Engineer's own (SCR-05); a Lead or Admin who opens the same address gets the review.
+ */
+const KEY_SCREENS = [
+  { path: '/queue', role: 'ADMIN' },
+  { path: '/assign', role: 'ADMIN' },
+  { path: '/masters/customers', role: 'ADMIN' },
+  { path: '/estimates/Q-2099-0001', role: 'ENGINEER' },
+  { path: '/estimates/Q-2099-0002/costs/1', role: 'ADMIN' },
+];
 
 /** Measured and reported, not asserted. */
 const REPORTED_PAGES = [{ path: '/', role: 'ADMIN' }];
