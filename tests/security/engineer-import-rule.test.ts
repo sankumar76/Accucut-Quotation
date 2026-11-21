@@ -75,6 +75,8 @@ const REPOSITORIES = {
     'master-constraints',
     'master-repository',
     'material-repository',
+    // STORY-09.04: the overdue scan's candidate read (task code, title, folder, deadline, the Engineer's ID, the assigner's ID and name, never an address) and its store. No Engineer view imports it.
+    'overdue-repository',
     'prisma-client',
     // STORY-09.02: the one `settings` row (the alerts switch and the sender mailbox), for the Admin's Settings page. No cost data and no credential, but nothing an Engineer's view has a use for, so it stays blocked.
     'settings-repository',
@@ -137,6 +139,8 @@ const SERVICES = {
     // price, edit a formula) and is called by their services and routes, never by a view. An Engineer view has no use for it, so it stays
     // blocked, as `account-service` (the other password check) is; only people, sign-in state and plain types are allowed.
     'step-up-service',
+    // STORY-09.03 (NFR-002): the assignment e-mail's outbox row (names, folder path, deadline; no cost field), written by the task service in its transaction. No Engineer view imports it.
+    'task-mail',
     'task-queue-cursor',
     'task-service',
     'treatment-service',
@@ -350,7 +354,7 @@ describe('every repository and service file is classed, and the lint agrees with
  * `outbox-send` (STORY-09.01) reads and writes `email_outbox` and `settings`: Confidential, names and task details, never a cost or a rate. It takes the same route: its store, its mailer
  * and its clock are parameters, and the only mail modules it names are types. `tests/security/mail-confidentiality.test.ts` checks its imports (and those of `src/server/mail`) against an exact list (AC-10).
  */
-const JOBS = { holdsNoData: ['log-prune'], takesItsStoreByInjection: ['backup-watch', 'heartbeat', 'outbox-send'] } as const;
+const JOBS = { holdsNoData: ['log-prune'], takesItsStoreByInjection: ['backup-watch', 'heartbeat', 'outbox-send', 'overdue-scan'] } as const;
 const ALL_JOBS = [...JOBS.holdsNoData, ...JOBS.takesItsStoreByInjection];
 /** Not a job: the wrapper every job runs through. It imports nothing. */
 const JOB_WRAPPER = 'run-job';
