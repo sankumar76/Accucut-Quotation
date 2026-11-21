@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (qa-engineer, on master's DL-274): a Test-type defect, fails closed (a red required check if both attempts fail), workaround is the retry or a re-run under R10, no product behaviour affected as far as the evidence shows. Same grade family as DEF-045 to DEF-052 |
 | Priority | P3 on its own. **Lane (DL-274 (2)): the hardening window (all stories are built), first among the test-only Bugs** |
 | Type | **Test** (E2E, Playwright, `desktop` project; duration-tail class). No product defect found |
-| Status | New (logged 2026-11-21). Not fixed by QA (measurement and fix: developer) |
+| Status | **Closed 2026-11-21 (qa-engineer), on master's DL-275 (I).** Fixed by PR #571 (squash `efeed217`): `expectNoAxeViolations` now scans with `.options({ resultTypes: ['violations'] }).withTags(AXE_TAGS)`. Proof P1, P2, P3 met (see "Closure"). Jira AQP-383 Done, GitHub #569 closed. Rule R10 ends with this close-out; the live rule is W1 only. **Near-line reading kept on watch:** 24.3 s [desktop] on the first `master` push run after the merge (test plan section 7) |
 | Jira / GitHub | [AQP-383](https://sankumar76.atlassian.net/browse/AQP-383) / [#569](https://github.com/sankumar76/Accucut-Quotation/issues/569). Jira "relates to" AQP-65 (STORY-01.04) and AQP-376 (DEF-047, history). RISK-031 in the register |
 | Risk / rule | RISK-031 (master's). Rule **R10** (DL-274 (2)) governs re-runs until this Bug is closed; live rules with it: W1 |
 | Found by / date | CI. First seen as a watch entry on PR #555's run of record 44870213022 (DL-273 (4)); turned into a Bug by master on the full census (DL-274); logged by qa-engineer, 2026-11-21 |
@@ -87,3 +87,14 @@ R8's clauses (a), (c), (e) and the multi-rule sentence, as written in DL-261 (3)
 
 ## Severity history and routing
 - qa-engineer graded Sev-3, type Test, 2026-11-21, on master's DL-274. It holds no story gate (AQP-65 is Done). It changes to a Product defect only if hypothesis 5 shows `/users` itself slow; master is told at once and QA re-grades.
+
+## Closure (qa-engineer, 2026-11-21; proof of DL-275 (I) and DL-257 (A), read from the job logs)
+| Proof | Result | Evidence |
+|---|---|---|
+| P1: first attempt at all three widths | **Met** | PR run of record 44902999104 (head `a11abdf1`, before the merge of `master` into the branch): `users.spec.ts:58` mobile 10.0 s, tablet 15.9 s, desktop 14.7 s, no retry. `master` push run 44907312557 on `efeed217`: mobile 8.3 s, tablet 9.9 s, desktop **24.3 s**, no retry |
+| P2: each under 25 s | **Met, with the desktop reading 0.7 s under the line** | worst PR reading 15.9 s; `master` worst 24.3 s [desktop] (test no. 514 of shard 4, 16.7 minutes into the shard, the late position where the list is longest). Say it plainly: 24.3 s passes the 25 s line by 0.7 s, so the case is on the watch list with a trigger |
+| P3: one page open, at most one scan per case | **Met** | the diff of PR #571 changes one line of `tests/e2e/support/design-system.ts` (the scan call); the case still opens `/users` once and the helper scans once per call. Negative control (DL-275 (I)(a)): never-merged diagnostic head `7b5ad499` (draft PR #572), run 44903060313: a planted violation was reported at all three widths (`AQP383PLANT`; per the PR body, not re-read by QA) |
+| 15 s reported | desktop 24.3 s and PR 14.7 s on the `master` and PR runs | |
+| Whole run | `master` push run 44907312557 (`efeed217`): CI success, Windows package run 44907312607 success; E2E 522 / 524 / 528 / 508 passed, **0 flaky and 0 failed in all four shards** | job logs read by qa-engineer |
+
+Other readings of the same run (the DEF-047 axe cases of `masters-table-actions.spec.ts` at 768 / 1024 / 1366 px, desktop): 21.7 / 19.4 / 18.3 s, against 28.7 / 28.4 s on `242c21f7`: the helper change cut them as the ruling expected. The `[AQP-341 stored-values diagnostic]` line appears in no job of run 44907312557 (0 lines; PR #580 not merged yet).
