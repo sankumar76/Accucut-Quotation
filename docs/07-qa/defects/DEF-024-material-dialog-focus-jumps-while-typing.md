@@ -6,7 +6,7 @@
 | Severity | Sev-2 Major |
 | Priority | P2 |
 | Type | Product |
-| Status | Verified by QA in CI on PR #167 (closes with the merge and master's G7) |
+| Status | **Closed** 2026-11-10. Fixed by PR #167, squash `41848ebb` (AQP-269, DEF-024 to DEF-026 together); verified by QA in CI and with the F-a and F-b probes in all 18 cases (3 dialogs x 2 sequences x 3 widths), ACCEPT in `docs/07-qa/AQP-269-test-report.md`; Jira AQP-269 Done; GitHub #161 closed as completed 2026-11-10 |
 | Found by / date | qa-engineer, 2026-11-10 (G7 of AQP-123, condition F of DL-129 (8) and DL-131 (3)) |
 | Build / commit | `e72e8f2` (PR #151 head). `src/components/features/masters/material-form-dialog.tsx` is byte-identical to `origin/master` (ce9c02c), so the fault is on `master` |
 | Environment | Windows 11, Node v24.19.0, Chromium (Playwright 1.64.1) at 360, 768 and 1366 px, development server, throwaway PostgreSQL 17 on port 55523. Probe: `docs/07-qa/AQP-123-evidence/aqp-123-focus-jump.spec.ts.txt` |
