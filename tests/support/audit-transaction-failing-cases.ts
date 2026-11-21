@@ -302,6 +302,28 @@ export const FAILING: readonly Case[] = [
     findings: [NO_REPOSITORY_CALL],
   },
   {
+    name: 'a recordMany given a handle that is not the callback parameter (ADR-018)',
+    code: `export async function otherBatch() {
+      await transactions.run(async (tx) => {
+        await things.add('a', tx);
+        await audit.recordMany(stray, entries);
+      });
+    }`,
+    records: 1,
+    findings: [NOT_A_PARAMETER],
+  },
+  {
+    name: 'a recordMany with a forgotten await (ADR-018)',
+    code: `export async function forgottenBatch() {
+      await transactions.run(async (tx) => {
+        await things.add('a', tx);
+        audit.recordMany(tx, entries);
+      });
+    }`,
+    records: 1,
+    findings: [NOT_AWAITED],
+  },
+  {
     name: 'a record call with no transaction argument',
     code: `export async function bare() {
       await transactions.run(async (tx) => {

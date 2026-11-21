@@ -96,7 +96,7 @@ describe('AC-2: the entry and the change are one transaction', () => {
       throttles: db.throttles,
       hasher: createTestHasher(),
       transactions: db.transactions,
-      audit: { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), list: db.audit.list },
+      audit: { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list },
       keySecret: 'invented-throttle-key-material',
     });
     await expect(failing.update(by(), person.id, { role: 'ENGINEER' })).rejects.toBeInstanceOf(AuditEntryRefusedError);
@@ -110,7 +110,7 @@ describe('AC-2: the entry and the change are one transaction', () => {
       throttles: db.throttles,
       hasher: createTestHasher(),
       transactions: db.transactions,
-      audit: { record: () => Promise.reject(new AuditEntryRefusedError('secret', 'after.x')), list: db.audit.list },
+      audit: { record: () => Promise.reject(new AuditEntryRefusedError('secret', 'after.x')), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list },
       keySecret: 'invented-throttle-key-material',
     });
     await expect(failing.create(by(), newPerson('never.added'))).rejects.toBeInstanceOf(AuditEntryRefusedError);
@@ -130,7 +130,7 @@ describe('AC-2: the entry and the change are one transaction', () => {
       throttles: db.throttles,
       hasher: createTestHasher(),
       transactions: db.transactions,
-      audit: { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'before')), list: db.audit.list },
+      audit: { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'before')), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list },
       keySecret: 'invented-throttle-key-material',
     });
     await expect(failing.resetPassword(by(), person.id, 'invented-temporary-password-2')).rejects.toBeInstanceOf(AuditEntryRefusedError);
@@ -311,7 +311,7 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
       throttles: db.throttles,
       hasher: createTestHasher(),
       transactions: db.transactions,
-      audit: { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), list: db.audit.list },
+      audit: { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list },
       keySecret: 'invented-throttle-key-material',
     });
     await expect(failing.update(by(), person.id, { name: 'Invented Never Saved' })).rejects.toBeInstanceOf(AuditEntryRefusedError);

@@ -6,10 +6,10 @@ import ts from 'typescript';
 /**
  * The check behind `tests/unit/audit-transaction-architecture.test.ts` (STORY-10.18, GitHub #104; architecture section 6, "An audit
  * entry commits with its change, or not at all"). It reads the services with the TypeScript type checker and refuses every use of
- * `AuditService.record` that does not run in the transaction of the change it records.
+ * `AuditService.record` or `AuditService.recordMany` that does not run in the transaction of the change it records.
  *
  * The rule (architecture section 6 "The two checks as built", AQP-237 comment 11263, and DL-156):
- *  - Which calls: a use of the member `record` whose receiver the checker types as `AuditService` (`src/server/services/audit-service.ts`).
+ *  - Which calls: a use of the member `record` or `recordMany` whose receiver the checker types as `AuditService` (`src/server/services/audit-service.ts`).
  *    `z.record(...)` is not one. A receiver typed `any` fails, because it cannot be told from one. A use that is not the callee of a
  *    direct call (`audit.record.call(...)`, `.bind`, `const write = audit.record`) fails: the check cannot follow it.
  *  - (a) The function F that LEXICALLY holds the call (the nearest function around it, not any function further out) has the call's `tx`
@@ -49,7 +49,8 @@ const NOT_ANOTHER_REPOSITORY = new Set(['transaction.ts', 'audit-repository.ts']
 const REPOSITORIES_DIRECTORY = 'src/server/repositories/';
 const AUDIT_SERVICE_FILE = '/src/server/services/audit-service.ts';
 const AUDIT_SERVICE_TYPE = 'AuditService';
-const AUDIT_RECORD_METHOD = 'record';
+/** The two methods that write an entry in the caller's transaction: one, and a batch (ADR-018). The same rules hold for both. */
+const AUDIT_WRITE_METHODS: ReadonlySet<string> = new Set(['record', 'recordMany']);
 const RUNNER_RUN_METHOD = 'run';
 const TRANSACTION_RUNNER = 'TransactionRunner';
 
@@ -61,7 +62,7 @@ export interface Finding {
 }
 
 export interface AuditTransactionReport {
-  /** How many uses of `AuditService.record` were visited. A check that visits none proves nothing, so the test states and pins this number. */
+  /** How many uses of `AuditService.record` and `AuditService.recordMany` were visited. A check that visits none proves nothing, so the test states and pins this number. */
   readonly checked: number;
   readonly findings: readonly Finding[];
 }
@@ -316,9 +317,9 @@ function problemWithRecord(context: Context, call: ts.CallExpression): string | 
   return problemWithPlacement(context, call, parameter, 'the record call') ?? chainProblem(context, parameter, { steps: 0, path: [], repositoryCallSeen: false });
 }
 
-/** `AuditService.record`, the member of the interface in `audit-service.ts`. */
-function isAuditServiceRecord(receiver: ts.Type): boolean {
-  return (receiver.getProperty(AUDIT_RECORD_METHOD)?.declarations ?? []).some(
+/** `AuditService.record` or `AuditService.recordMany` (the named method), the member of the interface in `audit-service.ts`. */
+function isAuditServiceWrite(receiver: ts.Type, method: string): boolean {
+  return (receiver.getProperty(method)?.declarations ?? []).some(
     (declaration) =>
       ts.isInterfaceDeclaration(declaration.parent) &&
       declaration.parent.name.text === AUDIT_SERVICE_TYPE &&
@@ -329,11 +330,11 @@ function isAuditServiceRecord(receiver: ts.Type): boolean {
 /** Whether a node is a use of `AuditService.record`, and if so why it fails. */
 function verdictOn(context: Context, node: ts.Node): Verdict {
   const access = memberAccess(node);
-  if (access === undefined || access.name !== AUDIT_RECORD_METHOD) return undefined;
+  if (access === undefined || !AUDIT_WRITE_METHODS.has(access.name)) return undefined;
   // `audit?.record(...)` has a receiver typed `AuditService | undefined`: ask about the part that has the member.
   const receiver = context.checker.getNonNullableType(context.checker.getTypeAtLocation(access.target));
   if ((receiver.flags & ts.TypeFlags.Any) !== 0) return { problem: 'the receiver of record is typed any, so the call cannot be told from another record' };
-  if (!isAuditServiceRecord(receiver)) return undefined;
+  if (!isAuditServiceWrite(receiver, access.name)) return undefined;
   const call = node.parent;
   if (!ts.isCallExpression(call) || call.expression !== node) {
     return { problem: 'AuditService.record is used other than as the callee of a direct call (.call, .bind or an alias), which the check cannot follow' };
