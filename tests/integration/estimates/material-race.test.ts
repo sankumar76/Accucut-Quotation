@@ -43,6 +43,7 @@ const serviceOver = (transactions: ReturnType<typeof createHoldingRunner>): Esti
     transactions,
     materials: db.masterRepository,
     currentConfiguration: () => Promise.resolve(seedConfig),
+    configurationById: () => Promise.resolve(seedConfig),
   });
 
 beforeAll(async () => {

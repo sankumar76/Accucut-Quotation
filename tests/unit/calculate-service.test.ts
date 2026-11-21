@@ -109,6 +109,7 @@ function fixture(options: { status?: FakeEstimate['status']; customer?: boolean;
     transactions: runner,
     materials: masters,
     currentConfiguration: () => Promise.resolve(seedConfig),
+    configurationById: () => Promise.resolve(seedConfig),
   });
   const configurationReads: Array<Transaction | undefined> = [];
   const audit = createAuditSink();
