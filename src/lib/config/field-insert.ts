@@ -1,5 +1,5 @@
 import { assertNever } from '../assert-never';
-import type { InputFieldDefinition, OutputFieldDefinition } from '../fields/field-schema';
+import type { InputFieldDefinition, OutputFieldDefinition, SectionDefinition } from '../fields/field-schema';
 import { fieldLetter, referenceContext } from '../fields/registry';
 import { ConfigDocumentError, parseConfigDocument, type ConfigDocument } from '../fields/schema';
 import { toDisplayForm, type RateReference } from '../formula';
@@ -7,7 +7,20 @@ import { validateNumberInput, validateTextInput } from '../estimate/validation';
 
 import { describeLetterChanges, orderAfterInsert, type LetterChanges, type NewColumnSummary, type Slot } from './field-insert-changes';
 import { AFTER_REQUIRED_MESSAGE, DOCUMENT_REFUSED_MESSAGE } from './field-insert-words';
-import { afterIssue, hideFieldIssues, inputIssues, outputIssues, pairHideIssues, MAX_FIELD_TEXT_LENGTH, type InsertIssue, type NewInput, type NewOutput } from './field-insert-check';
+import {
+  afterIssue,
+  hideFieldIssues,
+  inputIssues,
+  nextSectionNumber,
+  outputIssues,
+  pairHideIssues,
+  parseChoices,
+  MAX_FIELD_TEXT_LENGTH,
+  type InsertIssue,
+  type NewInput,
+  type NewOutput,
+  type NewSection,
+} from './field-insert-check';
 import { checkFormulaEdit } from './formula-edit';
 
 /**
@@ -23,9 +36,13 @@ import { checkFormulaEdit } from './formula-edit';
  *
  * **Defaults (BR-038, AC-6):** a new input is mandatory, visible to the Engineer and drawn in its section after the section's last field (the next free `formOrder`); a new output is hidden from every Engineer
  * and is added to no stage total and no other formula, so it joins a total only when that total's formula is edited.
+ *
+ * **A choice input and a new section (STORY-08.08 AC-6, AC-7):** an input of type `select` stores the choices the Admin typed as its `options`, in the order typed; an input may name **a new section** instead of an
+ * existing one, which is added to the same document with the next number after the highest (A-2) and `cards` as its display mode. The section and the field are one document and so one new version (FR-077); a new
+ * section moves no column, so the letters of the preview are the letters of the save.
  */
 
-export type { InsertIssue, NewInput, NewOutput } from './field-insert-check';
+export type { InsertIssue, NewInput, NewOutput, NewSection } from './field-insert-check';
 export type { LetterChanges } from './field-insert-changes';
 
 /** The cost column of the pair: an output, and where it goes. */
@@ -64,6 +81,13 @@ export interface InsertedField {
   readonly kind: 'input' | 'output';
 }
 
+/** The section an insert added: what the audit entry and the confirmation name. */
+export interface InsertedSection {
+  readonly id: string;
+  readonly number: number;
+  readonly name: string;
+}
+
 /** A new output's formula as the Admin reads it, with the letters of the finished worksheet. */
 export interface NewFormulaView {
   readonly letter: string;
@@ -78,6 +102,10 @@ export type InsertResult =
       /** The next document, already through the registry's own schema and rules (`parseConfigDocument`, the last gate). */
       readonly document: ConfigDocument;
       readonly inserted: ReadonlyArray<InsertedField>;
+      /** The section the insert added, or `null` when the input went into an existing one (or the insert has no input). */
+      readonly section: InsertedSection | null;
+      /** The number of choices of a choice input, or `null` for any other insert. */
+      readonly choices: number | null;
       readonly changes: LetterChanges;
       readonly formulas: ReadonlyArray<NewFormulaView>;
     };
@@ -112,6 +140,18 @@ function typedOrNull(value: string): string | null {
   return checked.ok ? checked.value : null;
 }
 
+/** The input of a spec, or `undefined` for a single output. */
+function inputOf(spec: InsertSpec): NewInput | undefined {
+  return spec.kind === 'output' ? undefined : spec.input;
+}
+
+/** The new section of the spec, as a section of the registry: the next number, the typed names trimmed, `cards`. `null` when the input goes into an existing section. */
+function newSectionOf(document: ConfigDocument, spec: InsertSpec, newId: NewIdSource): SectionDefinition | null {
+  const added: NewSection | null | undefined = inputOf(spec)?.newSection;
+  if (added === null || added === undefined) return null;
+  return { id: newId(), number: nextSectionNumber(document), name: added.name.trim(), shortName: added.shortName.trim(), displayMode: 'cards' };
+}
+
 function defaultOf(input: NewInput): string | null {
   const checked = input.dataType === 'number' ? validateNumberInput(input.defaultValue) : validateTextInput(input.defaultValue, { multiline: false, maxLength: MAX_FIELD_TEXT_LENGTH });
   return checked.ok ? checked.value : null;
@@ -121,13 +161,13 @@ function nextFormOrder(document: ConfigDocument): number {
   return document.fields.reduce((highest, field) => Math.max(highest, field.formOrder ?? 0), 0) + 1;
 }
 
-function newInputField(document: ConfigDocument, input: NewInput, id: string, key: string): InputFieldDefinition {
+function newInputField(document: ConfigDocument, input: NewInput, id: string, key: string, sectionId: string): InputFieldDefinition {
   return {
     id,
     key,
     label: input.label.trim(),
     position: 1,
-    sectionId: input.sectionId,
+    sectionId,
     width: input.width,
     numFmt: input.numFmt,
     rowScope: 'row',
@@ -144,7 +184,7 @@ function newInputField(document: ConfigDocument, input: NewInput, id: string, ke
     dataType: input.dataType,
     defaultValue: defaultOf(input),
     visibleWhen: input.watchFieldId === null ? null : { fieldId: input.watchFieldId, operator: 'not-in', values: [''] },
-    options: null,
+    options: input.dataType === 'select' ? parseChoices(input.choices) : null,
   };
 }
 
@@ -230,26 +270,26 @@ export function previewLetters(document: ConfigDocument, spec: InsertSpec): Lett
   return describeLetterChanges(document, after, summaries);
 }
 
-function renumbered(document: ConfigDocument, order: ReadonlyArray<string>, added: ReadonlyArray<InputFieldDefinition | OutputFieldDefinition>): ConfigDocument {
+function renumbered(document: ConfigDocument, order: ReadonlyArray<string>, added: ReadonlyArray<InputFieldDefinition | OutputFieldDefinition>, section: SectionDefinition | null): ConfigDocument {
   const byId = new Map([...document.fields, ...added].map((field) => [field.id, field]));
   const fields = order.flatMap((id, index) => {
     const field = byId.get(id);
     return field === undefined ? [] : [{ ...field, position: index + 1 }];
   });
-  return { ...document, fields };
+  return { ...document, sections: section === null ? document.sections : [...document.sections, section], fields };
 }
 
-/** Builds the new fields of a spec in the order of its slots. The IDs and keys are chosen here. */
-function buildFields(document: ConfigDocument, spec: InsertSpec, ids: ReadonlyArray<string>): Array<InputFieldDefinition | OutputFieldDefinition> {
+/** Builds the new fields of a spec in the order of its slots. The IDs and keys are chosen here; `section` is the section the input goes in when the spec added one. */
+function buildFields(document: ConfigDocument, spec: InsertSpec, ids: ReadonlyArray<string>, section: SectionDefinition | null): Array<InputFieldDefinition | OutputFieldDefinition> {
   const [firstId = '', secondId = ''] = ids;
   const taken = new Set(document.fields.map((field) => field.key));
   switch (spec.kind) {
     case 'input':
-      return [newInputField(document, spec.input, firstId, keyFor(spec.input.label, taken))];
+      return [newInputField(document, spec.input, firstId, keyFor(spec.input.label, taken), section?.id ?? spec.input.sectionId)];
     case 'output':
       return [newOutputField(spec.output, firstId, keyFor(spec.output.label, taken), spec.output.hideWhenZeroFieldId)];
     case 'pair': {
-      const input = newInputField(document, spec.input, firstId, keyFor(spec.input.label, taken));
+      const input = newInputField(document, spec.input, firstId, keyFor(spec.input.label, taken), section?.id ?? spec.input.sectionId);
       taken.add(input.key);
       return [input, newOutputField(spec.cost, secondId, keyFor(spec.cost.label, taken), spec.cost.hideWhenInputIsZero ? firstId : null)];
     }
@@ -314,12 +354,23 @@ export function insertFields({ document, rates, spec, newId = randomId }: Insert
   );
   if (order === null || issues.length > 0) return { ok: false, issues: issues.length > 0 ? issues : [{ field: 'afterFieldId', message: AFTER_REQUIRED_MESSAGE }] };
 
-  const added = buildFields(document, spec, ids);
-  const checked = readTypedFormula(renumbered(document, order, added), rates, spec, added);
+  // The new section's ID is drawn after the fields' own, so a caller with a fixed list of IDs gets the same field IDs as before.
+  const section = newSectionOf(document, spec, newId);
+  const added = buildFields(document, spec, ids, section);
+  const checked = readTypedFormula(renumbered(document, order, added, section), rates, spec, added);
   if (!checked.ok) return checked;
   const changes = describeLetterChanges(document, order, summariesOf(spec, ids));
   const formulas = newFormulasOf(checked.document, rates, new Set(ids));
-  return { ok: true, document: checked.document, inserted: added.map(({ id, kind }) => ({ id, kind })), changes, formulas };
+  const input = inputOf(spec);
+  return {
+    ok: true,
+    document: checked.document,
+    inserted: added.map(({ id, kind }) => ({ id, kind })),
+    section: section === null ? null : { id: section.id, number: section.number, name: section.name },
+    choices: input?.dataType === 'select' ? parseChoices(input.choices).length : null,
+    changes,
+    formulas,
+  };
 }
 
 /** The preview: the letters and formulas of `insertFields`, without the document. The same call as the save, so the two cannot differ (AC-3). */

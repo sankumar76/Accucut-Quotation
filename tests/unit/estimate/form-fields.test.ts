@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { fieldLetter } from '@/lib/fields/registry';
 import type { FieldDefinition } from '@/lib/fields/field-schema';
 import { MATERIAL_CONSIDERED_KEY, MATERIAL_IN_DRAWING_KEY, MATERIAL_RATE_KEY } from '@/lib/fields/types';
-import { buildFormSections, FORM_SECTION_NUMBERS, formFieldById, PICTURE_HINT, QTY_PER_ASSY_HINT } from '@/lib/estimate/form-fields';
+import { buildFormSections, formFieldById, PICTURE_HINT, QTY_PER_ASSY_HINT } from '@/lib/estimate/form-fields';
 import { MAX_LONG_TEXT_LENGTH, MAX_PART_TEXT_LENGTH } from '@/lib/estimate/validation';
 
 import { cloneSeedConfig, seedConfig, seedFieldAt } from '../../support/seed-config';
@@ -28,7 +28,7 @@ const withoutTypedCostLabels = (text: string): string => TYPED_COST_WORDS.reduce
 
 describe('AC-1 (STORY-05.04): all eight sections, from the registry', () => {
   it('has the eight sections of SPEC 7.1, in order, with their number, name and the column range of the fields shown', () => {
-    expect(FORM_SECTION_NUMBERS).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(sections.map(({ number }) => number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(sections.map(({ number, name, shortName, columnRange }) => ({ number, name, shortName, columnRange }))).toEqual([
       { number: 1, name: 'Part Details', shortName: 'Part details', columnRange: 'A–D, G, H' },
       { number: 2, name: 'Material and Dimensions', shortName: 'Material', columnRange: 'E, F, J–L, N' },

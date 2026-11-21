@@ -19,6 +19,7 @@ import {
   FORM_LOCKED,
   MISSING_CHOICE_MESSAGE,
   MISSING_NUMBER_MESSAGE,
+  MISSING_OPTION_MESSAGE,
   MISSING_TEXT_MESSAGE,
   lastSavedText,
   MATERIAL_LOAD_FAILED_TITLE,
@@ -68,6 +69,7 @@ const TITLE_ID = 'part-form-title';
 function missingMessageOf(field: FormField): string {
   if (field.rule.type === 'treatment') return TREATMENT_MISSING_MESSAGE;
   if (field.rule.type === 'select') return MISSING_CHOICE_MESSAGE;
+  if (field.rule.type === 'choice') return MISSING_OPTION_MESSAGE;
   return field.rule.type === 'number' && field.hint !== QTY_PER_ASSY_HINT ? MISSING_NUMBER_MESSAGE : MISSING_TEXT_MESSAGE;
 }
 

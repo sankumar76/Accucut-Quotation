@@ -130,6 +130,42 @@ test.describe('the Admin', () => {
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 
+  test('AC-6 (STORY-08.08): "Choice from a list" shows "Choices, one per line" and "A new section" its two names; Preview refuses them empty in the sentences of the story, linked and under their controls, then previews the valid ones unchanged; axe 0', async ({ page }) => {
+    await toDetails(page, 'Input');
+    await expect(page.getByLabel('Choices, one per line')).toHaveCount(0);
+    await control(page, 'input-label').fill('Invented Finish Grade');
+    await control(page, 'input-dataType').selectOption('select');
+    await expect(page.getByLabel('Choices, one per line', { exact: true })).toBeVisible();
+    await control(page, 'input-sectionId').selectOption({ label: 'A new section' });
+    await expect(page.getByLabel('Name of the new section', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Short name on the section strip', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Preview' }).click();
+    const summary = page.getByRole('alert').filter({ hasText: 'things need fixing.' });
+    await expect(summary).toContainText('3 things need fixing.');
+    await expect(summary.getByRole('link', { name: 'Enter at least one choice.' })).toBeVisible();
+    await expect(summary.getByRole('link', { name: 'Enter a section name.' })).toBeVisible();
+    await expect(control(page, 'input-choices')).toBeFocused();
+    await expect(page.locator('#insert-input-choices-error')).toHaveText('Enter at least one choice.');
+    await expect(page.locator('#insert-input-newSectionName-error')).toHaveText('Enter a section name.');
+    await expect(page.locator('#insert-input-newSectionShortName-error')).toHaveText('Enter a short name for the section strip.');
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expectNoAxeViolations(page);
+
+    await control(page, 'input-choices').fill('Fine\nfine');
+    await control(page, 'input-newSectionName').fill('Invented Finishing');
+    await control(page, 'input-newSectionShortName').fill('Finishing');
+    await page.getByRole('button', { name: 'Preview' }).click();
+    await expect(page.locator('#insert-input-choices-error')).toHaveText('Each choice must be different.');
+
+    // A valid list: the real preview answers (it stores nothing), and a new section moves no column, so the letters are those of any input after AX.
+    await control(page, 'input-choices').fill('Coarse\nFine\nMirror');
+    await page.getByRole('button', { name: 'Preview' }).click();
+    await expect(step(page, '3 · Preview the letter changes')).toBeFocused();
+    await expect(page.getByText('New fields: AY Invented Finish Grade.')).toBeVisible();
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+
   test('AC-3, AC-10: the preview names the new field, lists the letters that change with the product cells (SPEC 14.6), in a named, focusable region; Back keeps what was typed', async ({ page }) => {
     await toDetails(page, 'Input');
     await fillInput(page);

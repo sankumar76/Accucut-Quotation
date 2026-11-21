@@ -1,4 +1,5 @@
 import { ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
+import { readChoiceInput } from '../../lib/estimate/choice-value';
 import { buildFormSections, formFieldById, type FormFieldView, type FormSectionView } from '../../lib/estimate/form-fields';
 import { hiddenFieldIds, storedValueOf, zeroHiddenNumbers } from '../../lib/estimate/hidden-inputs';
 import { createCompletenessReader } from '../../lib/estimate/part-completeness';
@@ -25,7 +26,7 @@ import type { EstimateViewer } from './estimate-service';
  * and a field no story has built yet have no place to go; and only those are read back (`visibleInputs`). **Two values are not a number or a word of the person's**
  * (STORY-05.06; architecture section 5.1 "A treatment on an estimate"): a surface treatment (Z to AG) is `"1"` or `"0"`, and Treatment / Color (G) is stored as the object `{ "id", "text" }`
  * (it travels as that object's JSON text, `treatment-value.ts`). For a listed treatment and for "Not applicable" the server writes `text` from the row's name and ignores the text the client sent; for
- * "Other" it is the typed words, trimmed. A treatment that does not exist is 422 under G, **except** the one the part already holds (it was deleted since): an unchanged G is kept as it is. There is no foreign key. **A save writes only the keys it names**: every other stored key
+ * "Other" it is the typed words, trimmed. **A choice** (STORY-08.08: an input of type `select` with the Admin's `options`) is stored as the text of its option and is 422 under the field when it is none of them. A treatment that does not exist is 422 under G, **except** the one the part already holds (it was deleted since): an unchanged G is kept as it is. There is no foreign key. **A save writes only the keys it names**: every other stored key
  * (another story's field, one the registry moved or hid) stays as it is, whatever its value, and a cleared value removes only its own key.
  *
  * **A save** (`saveInputs`) runs in one transaction, in the order of the tree routes: the estimate is locked (404 when it is not this person's), this person must still
@@ -165,6 +166,9 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
         // saves cannot wait on each other's material.
         return (await materials.lockMaterialForUse(id, tx)) ? { ok: true, value: id } : { ok: false, message: CHOOSE_MATERIAL_MESSAGE };
       }
+      case 'choice':
+        // The list is the registry's, read on the server (`formFieldById`): the browser's list is not trusted. A value no longer in it is kept only when it is sent back unchanged (STORY-08.08 AC-2).
+        return readChoiceInput(typed, field.rule.options, stored);
       case 'treatment':
         return readTreatment(typed, stored);
       case 'flag':

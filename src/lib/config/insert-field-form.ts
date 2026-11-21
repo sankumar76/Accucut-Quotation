@@ -9,13 +9,22 @@ import type { InsertColumnOption, InsertOptions, InsertPreviewView, MovedView } 
 export type InsertKind = 'input' | 'output' | 'pair';
 export type CostPosition = 'after-input' | 'other';
 export type VisibilityChoice = 'always' | 'when';
-export type ValueType = 'number' | 'text';
+export type ValueType = 'number' | 'text' | 'select';
+
+/** The value of the section list that means "A new section" (STORY-08.08 AC-6): no section has this ID, so it can never be mistaken for one. */
+export const NEW_SECTION_VALUE = 'new-section';
 
 export interface InputDetails {
   readonly label: string;
   readonly dataType: ValueType;
   readonly defaultValue: string;
+  /** The choices of a "Choice from a list" input, one per line, as typed. */
+  readonly choices: string;
+  /** The ID of an existing section, `NEW_SECTION_VALUE` for a new one, `''` until one is chosen. */
   readonly sectionId: string;
+  /** The name and the short name of a new section, as typed; read only while `sectionId` is `NEW_SECTION_VALUE`. */
+  readonly newSectionName: string;
+  readonly newSectionShortName: string;
   readonly unit: string;
   readonly hint: string;
   /** Typed text: a number is read from it when the request is built. */
@@ -70,7 +79,10 @@ interface InputBody {
   readonly label: string;
   readonly dataType: ValueType;
   readonly defaultValue: string;
+  readonly choices: string;
+  /** `''` when the input goes in a new section. */
   readonly sectionId: string;
+  readonly newSection: { readonly name: string; readonly shortName: string } | null;
   readonly unit: string;
   readonly hint: string;
   readonly width: number;
@@ -103,20 +115,35 @@ export function initialForm(options: InsertOptions, afterId: string | null): Ins
   return {
     kind: 'input',
     afterFieldId: known ? afterId : '',
-    input: { label: '', dataType: 'number', defaultValue: '', sectionId: '', unit: '', hint: '', width: DEFAULT_INPUT_WIDTH, numFmt: pickFormat(options, NUMBER_FORMAT), visibility: 'always', watchFieldId: '' },
+    input: {
+      label: '',
+      dataType: 'number',
+      defaultValue: '',
+      choices: '',
+      sectionId: '',
+      newSectionName: '',
+      newSectionShortName: '',
+      unit: '',
+      hint: '',
+      width: DEFAULT_INPUT_WIDTH,
+      numFmt: pickFormat(options, NUMBER_FORMAT),
+      visibility: 'always',
+      watchFieldId: '',
+    },
     output: { label: '', formula: '', stageId: '', group: '', width: DEFAULT_OUTPUT_WIDTH, numFmt: pickFormat(options, MONEY_FORMAT), hideWhenZeroFieldId: '' },
     cost: { label: '', formula: '', stageId: '', group: '', width: DEFAULT_OUTPUT_WIDTH, numFmt: pickFormat(options, MONEY_FORMAT), position: 'after-input', afterFieldId: '', hideWhenInputIsZero: true },
   };
 }
 
-/** The format a type of value starts with when it is chosen: text is drawn as text, a number as a number (the Admin can still change it). */
+/** The format a type of value starts with when it is chosen: text and a choice (whose value is the text of an option) are drawn as text, a number as a number (the Admin can still change it). */
 export function formatFor(options: InsertOptions, dataType: ValueType): string {
-  return pickFormat(options, dataType === 'text' ? TEXT_FORMAT : NUMBER_FORMAT);
+  return pickFormat(options, dataType === 'number' ? NUMBER_FORMAT : TEXT_FORMAT);
 }
 
 /**
  * The form after a change to the new input. A text input is drawn as text and a number as a number (the Admin can still change the format after choosing the type). A Text input holds no number, so it can never be
- * 0 and "hide the line when this input is 0" is turned off for it (the cost view would read the text as 0 and hide the line for good, review SQR-01); choosing Number again turns it back on, as the form opens.
+ * 0 and "hide the line when this input is 0" is turned off for it (the cost view would read the text as 0 and hide the line for good, review SQR-01), and so is a choice, whose value is an option's text; choosing Number
+ * again turns it back on, as the form opens.
  */
 export function applyInputPatch(form: InsertForm, patch: Partial<InputDetails>, options: InsertOptions): InsertForm {
   const withFormat = patch.dataType !== undefined && patch.numFmt === undefined ? { ...patch, numFmt: formatFor(options, patch.dataType) } : patch;
@@ -139,11 +166,15 @@ export function parseWidth(text: string): number {
 const orNull = (text: string): string | null => (text === '' ? null : text);
 
 function inputBody(input: InputDetails): InputBody {
+  const inNewSection = input.sectionId === NEW_SECTION_VALUE;
   return {
     label: input.label,
     dataType: input.dataType,
     defaultValue: input.defaultValue,
-    sectionId: input.sectionId,
+    // The choices go only for a choice input, so a list typed and then abandoned for Number is not sent.
+    choices: input.dataType === 'select' ? input.choices : '',
+    sectionId: inNewSection ? '' : input.sectionId,
+    newSection: inNewSection ? { name: input.newSectionName, shortName: input.newSectionShortName } : null,
     unit: input.unit,
     hint: input.hint,
     width: parseWidth(input.width),
@@ -185,7 +216,21 @@ export function controlId(field: string): string {
 }
 
 /** The controls of step 2 in the order they are drawn, for each kind: the summary lists a refusal in this order and focus goes to the first. */
-const INPUT_ORDER = ['input.label', 'input.dataType', 'input.defaultValue', 'afterFieldId', 'input.sectionId', 'input.unit', 'input.hint', 'input.width', 'input.numFmt', 'input.watchFieldId'] as const;
+const INPUT_ORDER = [
+  'input.label',
+  'input.dataType',
+  'input.choices',
+  'input.defaultValue',
+  'afterFieldId',
+  'input.sectionId',
+  'input.newSectionName',
+  'input.newSectionShortName',
+  'input.unit',
+  'input.hint',
+  'input.width',
+  'input.numFmt',
+  'input.watchFieldId',
+] as const;
 const OUTPUT_ORDER = ['output.label', 'afterFieldId', 'output.stageId', 'output.group', 'output.hideWhenZeroFieldId', 'output.width', 'output.numFmt', 'output.formula'] as const;
 const COST_ORDER = ['cost.label', 'cost.afterFieldId', 'cost.stageId', 'cost.group', 'cost.hideWhenInputIsZero', 'cost.width', 'cost.numFmt', 'cost.formula'] as const;
 
