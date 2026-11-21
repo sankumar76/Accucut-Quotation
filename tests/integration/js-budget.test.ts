@@ -57,6 +57,8 @@ const healthyPages = (): Record<string, StubPage> => ({
   [FORMULA_PAGE_PATH]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
   // STORY-08.03: the insert wizard has no dynamic segment, so it is measured at its own address and needs no record.
   '/config/fields/new': { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  // STORY-08.06: SCR-21 has no dynamic segment either, so it is measured at its own address and needs no record.
+  '/config/checkpoints': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/customers': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   [`/masters/customers/${STUB_CUSTOMER_ID}`]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/materials': { signedIn: { status: 200, html: pageNaming('shell.js') } },
@@ -240,7 +242,7 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(passing.code).toBe(0);
     expect(passing.summary).toContain('### JS budget (NFR-009)');
     expect(passing.summary).toContain('| Route | Result | Viewer | Files | Raw bytes | Gzip bytes | Limit | Headroom | Note |');
-    for (const route of ['/', '/about', '/account', '/assign', '/audit', '/config/fields', '/config/fields/[id]/formula', '/config/fields/new', '/design-system', '/estimates/[code]', '/estimates/[code]/costs/[slNo]', '/estimates/[code]/export', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/settings', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
+    for (const route of ['/', '/about', '/account', '/assign', '/audit', '/config/checkpoints', '/config/fields', '/config/fields/[id]/formula', '/config/fields/new', '/design-system', '/estimates/[code]', '/estimates/[code]/costs/[slNo]', '/estimates/[code]/export', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/settings', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
     expect(passing.summary).toContain('all 21 rows are within their limit');
   });
 

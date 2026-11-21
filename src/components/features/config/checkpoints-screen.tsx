@@ -103,7 +103,6 @@ function SaveForm({ save }: { readonly save: SaveCheckpoint }) {
             placeholder={SAVE_PLACEHOLDER}
             maxLength={CHECKPOINT_NAME_MAX_LENGTH * 2}
             value={save.name}
-            disabled={save.saving}
             onChange={(event) => save.setName(event.target.value)}
           />
         )}

@@ -103,6 +103,7 @@ describe('pageRoutesFromManifest (the route manifest of STORY-01.02)', () => {
       { pattern: '/account', roles: ['ADMIN'] },
       { pattern: '/assign', roles: ['ADMIN'] },
       { pattern: '/audit', roles: ['ADMIN'] },
+      { pattern: '/config/checkpoints', roles: ['ADMIN'] },
       { pattern: '/config/fields', roles: ['ADMIN'] },
       { pattern: '/config/fields/[id]/formula', roles: ['ADMIN'] },
       { pattern: '/config/fields/new', roles: ['ADMIN'] },
