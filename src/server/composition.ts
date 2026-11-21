@@ -231,11 +231,15 @@ export function getTaskService(): TaskService {
     clock: systemClock,
     // A reassign writes its audit entry in its own transaction (STORY-04.07).
     audit: getAuditService(),
-    // The assignment e-mail (STORY-09.03). The mail service is reached only when alerts are ON, so an assignment with alerts OFF never builds the mail transport.
+    // The assignment e-mail (STORY-09.03). The mail service is reached only when a row is written (alerts ON and `FEATURE_EMAIL` on, DEF-055), so an assignment with either off never builds
+    // the mail transport; withdrawing an unsent row is a plain outbox update and does not build it either. `FEATURE_EMAIL` is read on every call, as the other writers of mail do.
     mail: createTaskMail({
       mail: { enqueue: (tx, message) => getMailService().enqueue(tx, message) },
+      outbox: createEmailOutboxRepository(runtimeClient()),
       settings: createSettingsRepository(runtimeClient()),
       appOrigin: () => loadOriginEnv().APP_ORIGIN,
+      clock: systemClock,
+      emailEnabled: () => loadEmailFeature(),
     }),
   });
   return taskService;

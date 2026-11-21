@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { createTaskMail, type TaskMailTask } from '@/server/services/task-mail';
+import { createFixedClock } from '@/lib/time';
+import { ASSIGNMENT_MAIL_WINDOW_MS, createTaskMail, type TaskMailTask } from '@/server/services/task-mail';
 import { createTransactionHandle } from '@/server/repositories/transaction';
 import type { OutboxMessage } from '@/server/repositories/email-outbox-repository';
 
@@ -15,6 +16,8 @@ import { createFakeSettingsRepository } from '../../support/fake-settings';
 const ENGINEER = { id: '00000000-0000-4000-8000-0000000000e1', name: 'Invented Arjun' };
 const BOSS = { id: '00000000-0000-4000-8000-0000000000b1', name: 'Invented Boss', isActive: true };
 const ORIGIN = 'https://portal.example.com';
+const NOW = new Date('2026-11-09T04:00:00.000Z');
+const TASK_ID = '00000000-0000-4000-8000-0000000000f1';
 
 const task = (overrides: Partial<TaskMailTask> = {}): TaskMailTask => ({
   id: '00000000-0000-4000-8000-0000000000f1',
@@ -28,8 +31,10 @@ const task = (overrides: Partial<TaskMailTask> = {}): TaskMailTask => ({
   ...overrides,
 });
 
-function setUp(alertsEnabled = true) {
+function setUp(alertsEnabled = true, emailEnabled = true) {
   const queued: Array<{ readonly tx: unknown; readonly message: OutboxMessage }> = [];
+  const expired: Array<{ readonly tx: unknown; readonly event: string; readonly keyPrefix: string; readonly now: Date }> = [];
+  const clock = createFixedClock(NOW);
   const mail = createTaskMail({
     mail: {
       enqueue: (tx, message) => {
@@ -37,10 +42,18 @@ function setUp(alertsEnabled = true) {
         return Promise.resolve('queued' as const);
       },
     },
+    outbox: {
+      expireUnsent: (tx, event, keyPrefix, now) => {
+        expired.push({ tx, event, keyPrefix, now });
+        return Promise.resolve(1);
+      },
+    },
     settings: createFakeSettingsRepository({ alertsEnabled, senderName: 'Invented Portal', senderAddress: 'portal@example.com' }),
     appOrigin: () => ORIGIN,
+    clock,
+    emailEnabled: () => emailEnabled,
   });
-  return { mail, queued };
+  return { mail, queued, expired, clock };
 }
 
 describe('AC-1: one row for the Engineer, the assigner copied, keyed by task and revision', () => {
@@ -81,14 +94,17 @@ describe('AC-1: one row for the Engineer, the assigner copied, keyed by task and
   it('adds nothing to the row but the fixed fields of the outbox message', async () => {
     const { mail, queued } = setUp();
     await mail.enqueueTaskAssigned(createTransactionHandle(), task(), BOSS);
-    expect(Object.keys(queued[0]?.message ?? {}).sort()).toEqual(['bodyHtml', 'bodyText', 'ccUserIds', 'event', 'idempotencyKey', 'subject', 'toUserId']);
+    expect(Object.keys(queued[0]?.message ?? {}).sort()).toEqual(['bodyHtml', 'bodyText', 'ccUserIds', 'event', 'idempotencyKey', 'sendBefore', 'subject', 'toUserId']);
   });
 
   it('answers what the outbox answered, so the same key twice is one row ("already-queued")', async () => {
     const mail = createTaskMail({
       mail: { enqueue: () => Promise.resolve('already-queued' as const) },
+      outbox: { expireUnsent: () => Promise.resolve(0) },
       settings: createFakeSettingsRepository({ alertsEnabled: true, senderName: '', senderAddress: '' }),
       appOrigin: () => ORIGIN,
+      clock: createFixedClock(NOW),
+      emailEnabled: () => true,
     });
     await expect(mail.enqueueTaskAssigned(createTransactionHandle(), task(), BOSS)).resolves.toBe('already-queued');
   });
@@ -129,9 +145,42 @@ describe('AC-7: a reassign is the same message with the new revision', () => {
 describe('AC-4 (BR-040): the alerts switch', () => {
   it('says whether alerts are on, from the settings row at the moment it is asked', async () => {
     const settings = createFakeSettingsRepository({ alertsEnabled: false, senderName: '', senderAddress: '' });
-    const mail = createTaskMail({ mail: { enqueue: () => Promise.resolve('queued' as const) }, settings, appOrigin: () => ORIGIN });
+    const mail = createTaskMail({
+      mail: { enqueue: () => Promise.resolve('queued' as const) },
+      outbox: { expireUnsent: () => Promise.resolve(0) },
+      settings,
+      appOrigin: () => ORIGIN,
+      clock: createFixedClock(NOW),
+      emailEnabled: () => true,
+    });
     await expect(mail.alertsEnabled()).resolves.toBe(false);
     settings.current = { ...settings.current, alertsEnabled: true };
     await expect(mail.alertsEnabled()).resolves.toBe(true);
+  });
+});
+
+describe('DEF-055 (AQP-385): an assignment row expires, and is queued only where it can be sent', () => {
+  it('every row carries send_before: 24 hours after it is written, by the clock', async () => {
+    const { mail, queued, clock } = setUp();
+    await mail.enqueueTaskAssigned(createTransactionHandle(), task(), BOSS);
+    expect(ASSIGNMENT_MAIL_WINDOW_MS).toBe(24 * 60 * 60 * 1000);
+    expect(queued[0]?.message.sendBefore).toEqual(new Date('2026-11-10T04:00:00.000Z'));
+    clock.set(new Date('2026-11-09T09:30:00.000Z'));
+    await mail.enqueueTaskAssigned(createTransactionHandle(), task({ assignmentRevision: 2 }), BOSS);
+    expect(queued[1]?.message.sendBefore).toEqual(new Date('2026-11-10T09:30:00.000Z'));
+  });
+
+  it('queueingEnabled is true only with the alerts switch ON and FEATURE_EMAIL on; the alerts boolean for the assign screen is unchanged by FEATURE_EMAIL', async () => {
+    await expect(setUp(true, true).mail.queueingEnabled()).resolves.toBe(true);
+    await expect(setUp(false, true).mail.queueingEnabled()).resolves.toBe(false);
+    await expect(setUp(true, false).mail.queueingEnabled()).resolves.toBe(false);
+    await expect(setUp(true, false).mail.alertsEnabled()).resolves.toBe(true);
+  });
+
+  it('withdrawUnsent expires the unsent task-assigned rows of the task, by key prefix, as of now, in the caller\'s transaction', async () => {
+    const { mail, expired } = setUp();
+    const tx = createTransactionHandle();
+    await mail.withdrawUnsent(tx, TASK_ID);
+    expect(expired).toEqual([{ tx, event: 'task-assigned', keyPrefix: `task-assigned:${TASK_ID}:`, now: NOW }]);
   });
 });
