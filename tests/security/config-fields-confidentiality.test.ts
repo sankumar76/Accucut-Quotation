@@ -88,6 +88,8 @@ describe('only the Configuration routes, page and composition import the Configu
     'src/components/features/config/insert-field-output-fields.tsx',
     'src/components/features/config/insert-field-screen.tsx',
     'src/components/features/config/insert-field-steps.tsx',
+    // STORY-08.08: the wizard's words read the limits of a choice and of a new section (a file of constants, no formula, rate or figure).
+    'src/components/features/config/insert-field-texts.ts',
     'src/components/features/config/insert-field-wizard.tsx',
     'src/components/features/config/use-insert-wizard.ts',
     'src/server/services/audit-events.ts',

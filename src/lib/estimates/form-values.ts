@@ -1,3 +1,4 @@
+import { readChoiceInput } from '../estimate/choice-value';
 import { readFlagInput, readTreatmentInput } from '../estimate/treatment-value';
 import { textTooLongMessage, validateNumberInput, validateTextInput, type InputCheck } from '../estimate/validation';
 import { isShownByRule } from '../fields/visible-when';
@@ -22,6 +23,8 @@ export function readTyped(rule: FormRule, typed: string): InputCheck {
       return validateTextInput(typed, { multiline: rule.multiline, maxLength: rule.maxLength });
     case 'select':
       return { ok: true, value: typed.trim() === '' ? null : typed.trim().toLowerCase() };
+    case 'choice':
+      return readChoiceInput(typed, rule.options);
     case 'treatment':
       return readTreatmentInput(typed);
     case 'flag':

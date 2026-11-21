@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { FormField as FormFieldView, MaterialChoice } from '@/lib/estimates/form-client';
 import { lengthProblem } from '@/lib/estimates/form-values';
 
-import { MATERIAL_LOADING, MATERIAL_PLACEHOLDER } from './estimate-texts';
+import { MATERIAL_LOADING, MATERIAL_PLACEHOLDER, OPTION_PLACEHOLDER } from './estimate-texts';
 import { controlIdFor, FIELD_MARK } from './field-ids';
 import { TreatmentSelect } from './treatment-select';
 import type { Loaded } from './use-form-definition';
@@ -75,6 +75,39 @@ export function FieldRenderer({ field, missing, text, error, editable, materials
                 </option>
               ))}
             </NativeSelect>
+          );
+        }
+        if (rule.type === 'choice') {
+          // A list the Admin gave (STORY-08.08): the browser's own select, as Material in Drawing, with the options in their stored order and none the Admin did not give. A value held that is no longer listed is
+          // shown and kept, so nothing the person entered is hidden. The unit, when there is one, stands beside the list.
+          const unlisted = text !== '' && !rule.options.includes(text);
+          const select = (
+            <NativeSelect
+              {...control}
+              {...common}
+              disabled={readOnly}
+              value={text}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+                onChange(event.target.value);
+                onCommit(event.target.value);
+              }}
+            >
+              <option value="">{OPTION_PLACEHOLDER}</option>
+              {unlisted ? <option value={text}>{text}</option> : null}
+              {rule.options.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </NativeSelect>
+          );
+          return field.unit === null ? (
+            select
+          ) : (
+            <div className="flex items-center gap-s-2">
+              {select}
+              <span className="text-label whitespace-nowrap text-ink-2">{field.unit}</span>
+            </div>
           );
         }
         if (rule.type === 'treatment') {
