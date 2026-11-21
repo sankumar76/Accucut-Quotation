@@ -31,6 +31,11 @@ export interface CustomerWithOwnValue extends ChangedCustomer {
   readonly value: string;
 }
 
+/** A customer moved by Save choices, with the value it held, as the database read it (the `shown` it was matched on: the statement changes a row only while its value equals that). Decimal text, not yet trimmed. */
+export interface ChangedFromValue extends ChangedCustomer {
+  readonly previous: string;
+}
+
 /** What the Admin was shown for one customer: its value as listed. The change applies only while the customer still holds it. */
 export interface ShownRate {
   readonly customerId: string;
@@ -47,10 +52,11 @@ export interface PropagationMethods {
   /** Of these customer IDs, those that exist at all (a deleted customer exists). Lower case. */
   findExistingCustomerIds(ids: ReadonlyArray<string>, tx: Transaction): Promise<ReadonlySet<string>>;
   /** Sets `next` for each listed customer whose value still equals the `shownValue` it was given with and is not `next` already; returns those customers, in order. One statement. */
-  applyDefaultToCustomers(processItemId: string, next: string, shown: ReadonlyArray<ShownRate>, tx: Transaction): Promise<ReadonlyArray<ChangedCustomer>>;
+  applyDefaultToCustomers(processItemId: string, next: string, shown: ReadonlyArray<ShownRate>, tx: Transaction): Promise<ReadonlyArray<ChangedFromValue>>;
 }
 
 const CHANGED_ROWS = z.array(z.strictObject({ customerId: z.string(), name: z.string() }));
+const CHANGED_FROM_ROWS = z.array(z.strictObject({ customerId: z.string(), name: z.string(), previous: z.string() }));
 const OWN_VALUE_ROWS = z.array(z.strictObject({ customerId: z.string(), name: z.string(), value: z.string() }));
 const COUNT_ROWS = z.array(z.strictObject({ processItemId: z.string(), count: z.number().int().nonnegative() }));
 const ID_ROWS = z.array(z.strictObject({ id: z.string() }));
@@ -120,11 +126,11 @@ export function createPropagationMethods(db: PrismaClient): PropagationMethods {
             FROM unnest(${customerIds}::uuid[], ${shownValues}::numeric[]) AS u(customer_id, shown), customers c
             WHERE c.id = cr.customer_id AND c.deleted_at IS NULL AND cr.customer_id = u.customer_id
               AND cr.process_item_id = ${processItemId}::uuid AND cr.value = u.shown AND cr.value <> ${next}::numeric
-            RETURNING cr.customer_id
+            RETURNING cr.customer_id, u.shown::text AS previous
           )
-          SELECT c.id::text AS "customerId", c.name FROM moved m JOIN customers c ON c.id = m.customer_id
+          SELECT c.id::text AS "customerId", c.name, m.previous FROM moved m JOIN customers c ON c.id = m.customer_id
           ORDER BY lower(c.name), c.name, c.id`;
-        return CHANGED_ROWS.parse(rows);
+        return CHANGED_FROM_ROWS.parse(rows);
       }),
   };
 }

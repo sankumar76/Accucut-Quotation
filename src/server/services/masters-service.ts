@@ -341,7 +341,7 @@ export function createMastersService({ masters, transactions, audit, currentConf
     if (next.defaultValue === undefined) return { record: after, propagation: null };
     const saved = await propagateChangedDefault(masters, tx, context, before, after);
     // One entry per customer that moved, after the rate's own, in this transaction (STORY-02.08 AC-9).
-    for (const entry of customerRateEntries(context, after, saved.changes)) await audit.record(tx, entry);
+    await audit.recordMany(tx, customerRateEntries(context, after, saved.changes));
     return { record: after, propagation: saved.propagation };
   }
 
