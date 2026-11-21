@@ -224,6 +224,8 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     'config.field_inserted': 'tests/integration/config/insert-field.test.ts',
     // STORY-08.04: a field deleted; the one test is the delete's own, against the real configuration table.
     'config.field_deleted': 'tests/integration/config/delete-field.test.ts',
+    // STORY-08.06: a revert; the one test is the revert's own, against the real configuration table.
+    'config.reverted': 'tests/integration/config/checkpoints-revert.test.ts',
   };
 
   it('has a scenario for every event the registry wires, and for no other', () => {

@@ -99,6 +99,16 @@ export class TooManyAttemptsError extends AppError {
   }
 }
 
+/**
+ * A reset link that is used, expired, unknown, or for a person who is not active (STORY-09.07 AC-7): 400. One class, one code and one message for all four, so the answer
+ * cannot tell them apart and a person holding a token learns nothing about it. The message is the caller's (SCR-02's sentence).
+ */
+export class ResetLinkInvalidError extends AppError {
+  constructor(message: string, code: string) {
+    super(code, 400, message);
+  }
+}
+
 /** The `code` of the 422 of a wrong password given for a protected action (STORY-06.14 AC-2, ADR-009). The browser compares with it to show SCR-18's message. */
 export const STEP_UP_FAILED_CODE = 'STEP_UP_FAILED';
 
@@ -137,6 +147,12 @@ export class ConfigVersionChangedError extends ConflictError {
     super(message, { code: CONFIG_VERSION_CHANGED_CODE });
   }
 }
+
+/** The `code` of the 409 of a checkpoint name that another checkpoint has, in any letter case (STORY-08.06 AC-2). The screen shows the sentence under the name field. */
+export const CHECKPOINT_NAME_TAKEN_CODE = 'CHECKPOINT_NAME_TAKEN';
+
+/** The `code` of the 409 of a revert to a version whose content is the current configuration already (STORY-08.06 AC-4): nothing would change, and no password was asked for. */
+export const NOTHING_TO_REVERT_CODE = 'NOTHING_TO_REVERT';
 
 /** A password that does not meet the rule (STORY-01.05 AC-2, FR-098): the 422 names the part that failed, under the field it belongs to. */
 export const PASSWORD_RULE_CODE = 'PASSWORD_RULE';

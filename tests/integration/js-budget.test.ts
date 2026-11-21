@@ -57,12 +57,17 @@ const healthyPages = (): Record<string, StubPage> => ({
   [FORMULA_PAGE_PATH]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
   // STORY-08.03: the insert wizard has no dynamic segment, so it is measured at its own address and needs no record.
   '/config/fields/new': { signedIn: { status: 200, html: pageNaming('shell.js') } },
+  // STORY-08.06: SCR-21 has no dynamic segment either, so it is measured at its own address and needs no record.
+  '/config/checkpoints': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/customers': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   [`/masters/customers/${STUB_CUSTOMER_ID}`]: { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/materials': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/masters/process': { signedIn: { status: 200, html: pageNaming('shell.js') } },
   '/design-system': { signedIn: { status: 404, html: NOT_FOUND } },
   '/sign-in': { anonymous: { status: 200, html: pageNaming('shell.js') }, signedIn: { status: 307 } },
+  // STORY-09.07: the two public pages of the reset by e-mailed link answer a signed-out visitor with the page itself, as the sign-in page does.
+  '/forgot-password': { anonymous: { status: 200, html: pageNaming('shell.js') }, signedIn: { status: 200, html: pageNaming('shell.js') } },
+  '/reset-password': { anonymous: { status: 200, html: pageNaming('shell.js') }, signedIn: { status: 200, html: pageNaming('shell.js') } },
 });
 
 const credentialsFor = (role: string) => (role === 'ADMIN' ? { email: STUB_EMAIL, password: STUB_PASSWORD } : undefined);
@@ -240,15 +245,15 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(passing.code).toBe(0);
     expect(passing.summary).toContain('### JS budget (NFR-009)');
     expect(passing.summary).toContain('| Route | Result | Viewer | Files | Raw bytes | Gzip bytes | Limit | Headroom | Note |');
-    for (const route of ['/', '/about', '/account', '/assign', '/audit', '/config/fields', '/config/fields/[id]/formula', '/config/fields/new', '/design-system', '/estimates/[code]', '/estimates/[code]/costs/[slNo]', '/estimates/[code]/export', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/settings', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
-    expect(passing.summary).toContain('all 21 rows are within their limit');
+    for (const route of ['/', '/about', '/account', '/assign', '/audit', '/config/checkpoints', '/config/fields', '/config/fields/[id]/formula', '/config/fields/new', '/design-system', '/estimates/[code]', '/estimates/[code]/costs/[slNo]', '/estimates/[code]/export', '/forgot-password', '/masters/customers', '/masters/customers/[id]', '/masters/materials', '/masters/process', '/queue', '/reset-password', '/settings', '/sign-in', '/users', 'not-found']) expect(passing.summary).toContain(`| ${route} | pass |`);
+    expect(passing.summary).toContain('all 24 rows are within their limit');
   });
 
   it('exits 1 for a planted overrun, and the summary and the log name the route', () => {
     expect(overrun.code).toBe(1);
     expect(overrun.summary).toMatch(/\| \/queue \| FAIL \|/);
     expect(overrun.output).toContain('FAIL  /queue');
-    expect(overrun.output).toContain('1 of 21 rows failed');
+    expect(overrun.output).toContain('1 of 24 rows failed');
   });
 
   it('fails the routes that need sign-in, and says why, when no credentials were provided; it never prints a credential', () => {
@@ -273,6 +278,6 @@ describe('the entry point scripts/check-js-budget.ts', () => {
     expect(noRecords.output).toContain('/estimates/[code]/export');
     expect(noRecords.output).toContain('/config/fields/[id]/formula');
     expect(noRecords.output).toContain('a dynamic segment needs a record made from invented data, and none could be made');
-    expect(noRecords.output).toContain('5 of 21 rows failed');
+    expect(noRecords.output).toContain('5 of 24 rows failed');
   });
 });

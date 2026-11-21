@@ -8,7 +8,9 @@ import { type AuditService, createAuditService } from '../../src/server/services
 import { MILLISECONDS_PER_DAY, MILLISECONDS_PER_HOUR, systemClock } from '../../src/lib/time';
 import { createSettingsService, type SettingsService } from '../../src/server/services/settings-service';
 import { createConfigEditService, type ConfigEditService } from '../../src/server/services/config-edit-service';
+import { createConfigCheckpointService, type ConfigCheckpointService } from '../../src/server/services/config-checkpoint-service';
 import { createConfigStructureService, type ConfigStructureService } from '../../src/server/services/config-structure-service';
+import { createFakeCheckpointRepository, type FakeCheckpointRepository } from './fake-checkpoints';
 import { createConfigReadService, type ConfigReadService } from '../../src/server/services/config-read-service';
 import { createConfigVersionCache } from '../../src/server/services/config-service';
 import { createMastersService, type MastersService } from '../../src/server/services/masters-service';
@@ -118,6 +120,10 @@ export interface SessionHarness {
   readonly configEditService: ConfigEditService;
   /** The structure service (STORY-08.03 insert, STORY-08.04 delete) over the same in-memory versions, the 15 seed rates, the real step-up check over the harness's people and throttles, and the audit world; an insert asks for no password, a delete does (`getConfigStructureService` in the composition mock). */
   readonly configStructureService: ConfigStructureService;
+  /** Checkpoints and revert (STORY-08.06) over the same in-memory versions, the 15 seed rates, the real step-up check and the audit world (`getConfigCheckpointService` in the composition mock). */
+  readonly configCheckpointService: ConfigCheckpointService;
+  /** The checkpoints behind it: its members are plain functions, so a test can spy on each one. */
+  readonly checkpointRepository: FakeCheckpointRepository;
   /** The in-memory configuration versions behind `configReadService`: its members are plain functions, so a test can spy on each one. */
   readonly configRepository: ConfigRepository;
   /** The Settings page's reading of the backups and the disk over the in-memory `job_runs` below, for the routes and the page of STORY-02.09 (`getSettingsService` in the composition mock). */
@@ -219,6 +225,7 @@ export function createSessionHarness(): SessionHarness {
   masters.exchange.stamp = { updatedById: idOf.ADMIN, updatedByName: 'Invented Admin', updatedAt: SESSION_NOW };
 
   const configRepository = createFakeConfigRepository();
+  const checkpointRepository = createFakeCheckpointRepository(configRepository);
   // The `job_runs` of STORY-02.09: one good backup two days before the held clock and a daily reading of 62 % free, whose `result` also holds a path and a volume name that no answer may carry.
   const jobRuns = createFakeJobRunRepository([
     { job: 'backup', finishedAt: new Date(SESSION_NOW.getTime() - 2 * MILLISECONDS_PER_DAY), result: { status: 'ok', sizeBytes: 1_000, freeBytes: 620, totalBytes: 1_000, path: JOB_RUN_CANARY_PATH } },
@@ -420,6 +427,8 @@ export function createSessionHarness(): SessionHarness {
       cache: createConfigVersionCache(),
     }),
     configStructureService: createConfigStructureService({ configurations: configRepository, masters, stepUp: stepUpService, transactions: auditWorld.transactions, audit: auditService, cache: createConfigVersionCache() }),
+    configCheckpointService: createConfigCheckpointService({ configurations: configRepository, checkpoints: checkpointRepository, masters, stepUp: stepUpService, transactions: auditWorld.transactions, audit: auditService, cache: createConfigVersionCache() }),
+    checkpointRepository,
     mastersService: createMastersService({
       masters,
       transactions: auditWorld.transactions,

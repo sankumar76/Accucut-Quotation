@@ -4,6 +4,7 @@ import type { AuditCategoryId } from '../../lib/audit/categories';
 import { roleLabel } from '../../lib/auth/roles';
 import { describeDeleteAfter, describeDeleteBefore } from '../../lib/config/field-delete-audit';
 import { describeInsertAudit, NOT_IN_THE_WORKSHEET } from '../../lib/config/field-insert-audit';
+import { describeRevertAfter, describeRevertBefore } from '../../lib/config/revert';
 import { MAX_REASON_LENGTH } from '../../lib/estimate/approve-price';
 import { ESTIMATE_STATUSES, type EstimateStatus } from '../../lib/estimate/state-machine';
 import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
@@ -54,6 +55,11 @@ interface EventDefinition<Before extends StoredShape, After extends StoredShape>
   readonly objectType: string;
   readonly category: AuditCategoryId;
   readonly status: 'wired' | 'reserved';
+  /**
+   * The Event column's words for an entry of this event, when the category is too wide to tell the kinds apart (STORY-08.07 AC-2: "Formula edit", "Field insert", "Field delete", "Checkpoint revert"). Every event
+   * of the `config_change` category has one (`tests/unit/config-history.test.ts` fails a configuration event without it); elsewhere the column shows the category.
+   */
+  readonly kindLabel?: string;
   readonly before: Before;
   readonly after: After;
   /** `objectType` is the entry's own (`process_item`, `material`): a generic master event chooses its words by it. */
@@ -386,6 +392,10 @@ const deletedAfterState = z.strictObject({
   version: z.number().int().positive(),
 });
 
+/** STORY-08.06: what a revert keeps (`config.reverted`). Before is the version that was current; after is the version the revert made and the one it copied. Numbers only. */
+const revertedBeforeState = z.strictObject({ version: z.number().int().positive() });
+const revertedAfterState = z.strictObject({ version: z.number().int().positive(), copiedFrom: z.number().int().positive() });
+
 export const AUDIT_EVENTS = {
   // ---- Wired in this story: the six user events of the Users screen (STORY-01.04) -----------------------------------------
   'user.created': defineEvent({
@@ -552,6 +562,7 @@ export const AUDIT_EVENTS = {
     objectType: 'field',
     category: 'config_change',
     status: 'wired',
+    kindLabel: 'Formula edit',
     before: z.strictObject({ formula: z.string().min(1) }),
     after: z.strictObject({ formula: z.string().min(1), version: z.number().int().positive() }),
     describe: (before, after) => ({ before: before.formula, after: `${after.formula} (configuration version ${String(after.version)})` }),
@@ -565,6 +576,7 @@ export const AUDIT_EVENTS = {
     objectType: 'field',
     category: 'config_change',
     status: 'wired',
+    kindLabel: 'Field insert',
     before: z.null(),
     after: insertedAfterState,
     describe: (_before, after) => ({ before: NOT_IN_THE_WORKSHEET, after: describeInsertAudit(after) }),
@@ -578,9 +590,24 @@ export const AUDIT_EVENTS = {
     objectType: 'field',
     category: 'config_change',
     status: 'wired',
+    kindLabel: 'Field delete',
     before: deletedBeforeState,
     after: deletedAfterState,
     describe: (before, after) => ({ before: describeDeleteBefore(before), after: describeDeleteAfter(after) }),
+  }),
+
+  // ---- Wired in STORY-08.06: the configuration reverted to an earlier version ---------------------------------------------------
+  // One entry per revert, in the transaction that stores the new version (a copy of the target's snapshot). The Object is the checkpoint the Admin reverted to ("Checkpoint "Before AY insert""), or the
+  // version when the target has no checkpoint name (an undo). Before is the version that was current and after the version it made and the one it copied (UX-19: "Version 8 to Version 9 (from version 7)").
+  // The version numbers are all it keeps: no formula, figure or password has a key to sit in (NFR-002, NFR-004). Saving a checkpoint is not an event (decision D-1 of the story): nothing changed.
+  'config.reverted': defineEvent({
+    objectType: 'config_version',
+    category: 'config_change',
+    kindLabel: 'Checkpoint revert',
+    status: 'wired',
+    before: revertedBeforeState,
+    after: revertedAfterState,
+    describe: (before, after) => ({ before: describeRevertBefore(before), after: describeRevertAfter(after) }),
   }),
 
   // ---- Declared for later stories: each adds the call, the shapes, the words and the test --------------------------------

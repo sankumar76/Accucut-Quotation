@@ -49,6 +49,7 @@ vi.mock('@/server/composition', async () => {
     getConfigReadService: () => shared.configReadService,
     getConfigEditService: () => shared.configEditService,
     getConfigStructureService: () => shared.configStructureService,
+    getConfigCheckpointService: () => shared.configCheckpointService,
     getSettingsService: () => shared.settingsService,
     getCalculationService: () => shared.calculationService,
     getEstimateReviewService: () => shared.estimateReviewService,
@@ -73,7 +74,7 @@ const SIGNED_IN_ROUTES: ReadonlyArray<string> = ['/', '/design-system', '/api/v1
  * Routes that need no session (SPEC section 9, "Login"; next-auth's own endpoints), and the one test-only route (STORY-01.03 AC-4:
  * the negative control of the confidentiality scan, which answers 404 everywhere except under NODE_ENV=test and is in no role's list).
  */
-const PUBLIC_ROUTES: ReadonlyArray<string> = ['/sign-in', '/api/auth/[...nextauth]', '/api/health', '/api/test-only/leak'];
+const PUBLIC_ROUTES: ReadonlyArray<string> = ['/sign-in', '/forgot-password', '/reset-password', '/api/v1/account/password/forgot', '/api/v1/account/password/reset', '/api/auth/[...nextauth]', '/api/health', '/api/test-only/leak'];
 
 const expectedRoles = (path: string, method: HttpMethod = 'GET'): ReadonlyArray<RoleName> => SPEC_ACCESS[`${method} ${path}`] ?? SPEC_ACCESS[path] ?? ROLES;
 
@@ -111,6 +112,7 @@ const RETURN_AFTER_STALE_SESSION: Readonly<Record<string, string>> = {
   '/about': 'redirect:/sign-in?callbackUrl=%2Fabout',
   '/config/fields/[id]/formula': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Ffields%2F%5Bid%5D%2Fformula',
   '/config/fields/new': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Ffields%2Fnew',
+  '/config/checkpoints': 'redirect:/sign-in?callbackUrl=%2Fconfig%2Fcheckpoints',
   '/account': 'redirect:/sign-in?callbackUrl=%2Faccount',
   '/masters/process': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fprocess',
   '/masters/materials': 'redirect:/sign-in?callbackUrl=%2Fmasters%2Fmaterials',
@@ -212,7 +214,7 @@ describe('AC-2: the manifest says what SPEC sections 3 and 9 say', () => {
     expect(differences).toEqual([]);
   });
 
-  it('keeps the public routes to sign-in, next-auth, the health check and the test-only negative control, and nothing else', () => {
+  it('keeps the public routes to sign-in, the reset by link (STORY-09.07), next-auth, the health check and the test-only negative control, and nothing else', () => {
     expect(ROUTE_MANIFEST.filter((row) => row.roles === 'public').map((row) => row.path).sort()).toEqual([...PUBLIC_ROUTES].sort());
   });
 
@@ -426,7 +428,8 @@ describe('AC-2 and AC-4: the page guard on every page row, planned ones included
 describe('planned routes are not reachable', () => {
   it('has no loader and no route file for a planned row, so a request finds nothing to answer it', () => {
     const planned = ROUTE_MANIFEST.filter((row) => row.status === 'planned');
-    expect(planned.length).toBeGreaterThan(0);
+    // STORY-08.06 built the last planned screen, so the manifest may hold none; the rule still holds for any row a later story plans. The lookup below is shown to find an implemented route's loader, so it is not blind.
+    expect(API_LOADERS['/api/v1/config/checkpoints'] ?? PAGE_LOADERS['/config/checkpoints']).toBeDefined();
     for (const row of planned) {
       expect(API_LOADERS[row.path] ?? PAGE_LOADERS[row.path], row.path).toBeUndefined();
     }

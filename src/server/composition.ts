@@ -10,6 +10,7 @@ import { createSessionCookieIssuer, type SessionCookieIssuer } from './auth/sess
 import { createApprovalRepository } from './repositories/approval-repository';
 import { createAuditRepository } from './repositories/audit-repository';
 import { createCalculationRepository } from './repositories/calculation-repository';
+import { createConfigCheckpointRepository } from './repositories/config-checkpoint-repository';
 import { createConfigRepository } from './repositories/config-repository';
 import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
@@ -17,6 +18,7 @@ import { createExportRepository } from './repositories/export-repository';
 import { createImageRepository } from './repositories/image-repository';
 import { createHeartbeatRepository, createJobRunRepository, type HeartbeatRepository } from './repositories/job-run-repository';
 import { createEmailOutboxRepository } from './repositories/email-outbox-repository';
+import { createPasswordResetRepository } from './repositories/password-reset-repository';
 import { createSettingsRepository } from './repositories/settings-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
@@ -33,6 +35,7 @@ import { type CancelApprovalService, createCancelApprovalService } from './servi
 import { type CalculationService, createCalculationService } from './services/calculation-service';
 import { createConfigEditService, type ConfigEditService } from './services/config-edit-service';
 import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
+import { createConfigCheckpointService, type ConfigCheckpointService } from './services/config-checkpoint-service';
 import { createConfigStructureService, type ConfigStructureService } from './services/config-structure-service';
 import { getCurrentVersion, getVersionById } from './services/config-service';
 import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
@@ -43,6 +46,7 @@ import { createMailer } from './mail/send';
 import { createMailTransport } from './mail/transport';
 import { createExportService, type ExportService } from './services/export-service';
 import { createMastersService, type MastersService } from './services/masters-service';
+import { createPasswordResetService, type PasswordResetService } from './services/password-reset-service';
 import { createRemovePriceService, type RemovePriceService } from './services/remove-price-service';
 import { createSettingsService, type SettingsService } from './services/settings-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
@@ -63,6 +67,7 @@ let userRepository: UserRepository | undefined;
 let authService: AuthService | undefined;
 let userService: UserService | undefined;
 let accountService: AccountService | undefined;
+let passwordResetService: PasswordResetService | undefined;
 let adminHandoverService: AdminHandoverService | undefined;
 let stepUpService: StepUpService | undefined;
 let configEditService: ConfigEditService | undefined;
@@ -73,6 +78,7 @@ let taskService: TaskService | undefined;
 let estimateService: EstimateService | undefined;
 let configReadService: ConfigReadService | undefined;
 let configStructureService: ConfigStructureService | undefined;
+let configCheckpointService: ConfigCheckpointService | undefined;
 let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
 let approvalService: ApprovalService | undefined;
@@ -147,6 +153,26 @@ export function getAccountService(): AccountService {
     keySecret: loadAppEnv().AUTH_SECRET,
   });
   return accountService;
+}
+
+/**
+ * Reset a password by an e-mailed link (STORY-09.07): the request for a link (public, enumeration-safe, counted on keys of its own) and the use of one. The link is queued through the outbox
+ * (`getMailService().enqueue`), so a mail server that is down never blocks the request, and it is built from `APP_ORIGIN`. `FEATURE_EMAIL` is read on every request.
+ */
+export function getPasswordResetService(): PasswordResetService {
+  passwordResetService ??= createPasswordResetService({
+    resets: createPasswordResetRepository(runtimeClient()),
+    users: getUserRepository(),
+    throttles: createThrottleRepository(runtimeClient()),
+    hasher: passwordHasher,
+    transactions: createTransactionRunner(runtimeClient()),
+    mail: { enqueue: (tx, message) => getMailService().enqueue(tx, message) },
+    clock: systemClock,
+    keySecret: loadAppEnv().AUTH_SECRET,
+    appOrigin: () => loadOriginEnv().APP_ORIGIN,
+    emailEnabled: () => loadEmailFeature(),
+  });
+  return passwordResetService;
 }
 
 /**
@@ -277,6 +303,22 @@ export function getConfigStructureService(): ConfigStructureService {
     audit: getAuditService(),
   });
   return configStructureService;
+}
+
+/**
+ * Checkpoints and revert (STORY-08.06): the list and the save of a checkpoint, and the revert to an earlier version with the Admin's password (FR-078, FR-080). Restricted (ADR-008): the routes that call it are in the
+ * manifest for the Admin alone. It shares the runtime-role client, the step-up check and the audit service, so the new version and its entry are one transaction.
+ */
+export function getConfigCheckpointService(): ConfigCheckpointService {
+  configCheckpointService ??= createConfigCheckpointService({
+    configurations: createConfigRepository(runtimeClient()),
+    checkpoints: createConfigCheckpointRepository(runtimeClient()),
+    masters: createMasterRepository(runtimeClient()),
+    stepUp: getStepUpService(),
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
+  });
+  return configCheckpointService;
 }
 
 /**

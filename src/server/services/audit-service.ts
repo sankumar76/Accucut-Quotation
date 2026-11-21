@@ -81,6 +81,8 @@ export interface AuditEntryView {
   readonly event: string;
   /** The Event column: null for an event this release does not know (a newer release wrote it). */
   readonly category: { readonly id: string; readonly label: string } | null;
+  /** The Event column for an entry whose event names its kind (a configuration change: "Formula edit"); absent for every other entry, which shows its category (STORY-08.07 AC-2). */
+  readonly kindLabel?: string;
   readonly objectLabel: string;
   readonly change: AuditChangeText;
 }
@@ -178,6 +180,7 @@ export function createAuditService({ audit }: AuditServiceDependencies): AuditSe
           who: row.actorLabel,
           event: row.event,
           category: definition === undefined ? null : { id: definition.category, label: auditCategoryLabel(definition.category) ?? definition.category },
+          ...(definition?.kindLabel === undefined ? {} : { kindLabel: definition.kindLabel }),
           objectLabel: row.objectLabel,
           change: definition?.describeStored(row.before, row.after, row.objectType) ?? NO_DETAIL,
         };

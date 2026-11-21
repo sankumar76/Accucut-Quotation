@@ -8,6 +8,12 @@ const PRIVATE_172_ORIGINS = Array.from(
   (_, index) => `172.${PRIVATE_172_RANGE.first + index}.*.*`,
 );
 
+/** The headers of the two reset pages: never stored, and no Referer header leaves them (the reset page's address holds the token). */
+const RESET_PAGE_HEADERS = [
+  { key: 'Cache-Control', value: 'private, no-store' },
+  { key: 'Referrer-Policy', value: 'no-referrer' },
+];
+
 /** A day, then a stale copy may serve for a week while it is refreshed: the logo URL carries no version, so not `immutable`. */
 const LOGO_CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800';
 
@@ -40,7 +46,12 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ['192.168.*.*', '10.*.*.*', ...PRIVATE_172_ORIGINS],
   agentRules: false,
   experimental: { authInterrupts: true },
-  headers: () => [{ source: '/accucut-logo.jpg', headers: [{ key: 'Cache-Control', value: LOGO_CACHE_CONTROL }] }],
+  headers: () => [
+    { source: '/accucut-logo.jpg', headers: [{ key: 'Cache-Control', value: LOGO_CACHE_CONTROL }] },
+    // The reset pages (STORY-09.07 AC-9): the address of one carries a secret token, so neither page is cached and the reset page sends no Referer to anything it links or loads.
+    { source: '/forgot-password', headers: RESET_PAGE_HEADERS },
+    { source: '/reset-password', headers: RESET_PAGE_HEADERS },
+  ],
 };
 
 export default nextConfig;

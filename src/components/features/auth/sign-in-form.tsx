@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { signInWithPassword, type SignInOutcome } from '@/lib/auth/auth-client';
+import { FORGOT_PASSWORD_PATH } from '@/lib/auth/password-reset';
 import { safeReturnPath } from '@/lib/auth/return-path';
 import { emailProblem, passwordProblem } from '@/lib/auth/sign-in-validation';
 
@@ -25,6 +27,9 @@ import { emailProblem, passwordProblem } from '@/lib/auth/sign-in-validation';
 
 const ERROR_TITLE = 'E-mail or password is not correct.';
 const ERROR_BODY = 'Check both and try again.';
+/** The Release 1 text, shown while e-mail is off (STORY-09.07 AC-1): a link to a mail that can never be sent would lead nowhere. */
+const FORGOT_ASK_ADMIN_TEXT = 'Forgot your password? Ask the Admin to reset it.';
+const FORGOT_LINK_TEXT = 'Forgot your password?';
 const LOCKED_BODY = 'Too many attempts. Try again in 15 minutes, or ask the Admin to reset your password.';
 const UNAVAILABLE_TITLE = 'We could not sign you in.';
 const UNAVAILABLE_BODY = 'Check your connection and try again. Nothing was changed.';
@@ -38,6 +43,8 @@ type Failure = 'invalid' | 'locked' | 'unavailable';
 export interface SignInFormProps {
   /** Where to go afterwards: already checked on the server, and checked again here before it is used. */
   readonly returnTo: string;
+  /** `FEATURE_EMAIL` is on: the link to the request page (SCR-02) replaces the Release 1 text. Decided on the server, never by the browser. */
+  readonly resetByEmail?: boolean;
 }
 
 function failureFor(outcome: Exclude<SignInOutcome, { status: 'signed-in' }>): Failure {
@@ -57,7 +64,7 @@ function FailureNotice({ failure }: { readonly failure: Failure }) {
   );
 }
 
-export function SignInForm({ returnTo }: SignInFormProps) {
+export function SignInForm({ returnTo, resetByEmail = false }: SignInFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -138,7 +145,15 @@ export function SignInForm({ returnTo }: SignInFormProps) {
             <Button type="submit" loading={submitting} className="w-full">
               {submitting ? 'Signing in' : 'Sign in'}
             </Button>
-            <p className="text-ink-2">Forgot your password? Ask the Admin to reset it.</p>
+            {resetByEmail ? (
+              <p>
+                <Link href={FORGOT_PASSWORD_PATH} className="font-semibold text-primary-ink underline underline-offset-2">
+                  {FORGOT_LINK_TEXT}
+                </Link>
+              </p>
+            ) : (
+              <p className="text-ink-2">{FORGOT_ASK_ADMIN_TEXT}</p>
+            )}
           </form>
         </CardContent>
       </Card>

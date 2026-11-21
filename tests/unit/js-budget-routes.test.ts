@@ -103,6 +103,7 @@ describe('pageRoutesFromManifest (the route manifest of STORY-01.02)', () => {
       { pattern: '/account', roles: ['ADMIN'] },
       { pattern: '/assign', roles: ['ADMIN'] },
       { pattern: '/audit', roles: ['ADMIN'] },
+      { pattern: '/config/checkpoints', roles: ['ADMIN'] },
       { pattern: '/config/fields', roles: ['ADMIN'] },
       { pattern: '/config/fields/[id]/formula', roles: ['ADMIN'] },
       { pattern: '/config/fields/new', roles: ['ADMIN'] },
@@ -110,11 +111,13 @@ describe('pageRoutesFromManifest (the route manifest of STORY-01.02)', () => {
       { pattern: '/estimates/[code]', roles: ['ADMIN'] },
       { pattern: '/estimates/[code]/costs/[slNo]', roles: ['ADMIN'] },
       { pattern: '/estimates/[code]/export', roles: ['ADMIN'] },
+      { pattern: '/forgot-password', roles: [] },
       { pattern: '/masters/customers', roles: ['ADMIN'] },
       { pattern: '/masters/customers/[id]', roles: ['ADMIN'] },
       { pattern: '/masters/materials', roles: ['ADMIN'] },
       { pattern: '/masters/process', roles: ['ADMIN'] },
       { pattern: '/queue', roles: ['ADMIN'] },
+      { pattern: '/reset-password', roles: [] },
       { pattern: '/settings', roles: ['ADMIN'] },
       { pattern: '/sign-in', roles: [] },
       { pattern: '/users', roles: ['ADMIN'] },
@@ -123,8 +126,9 @@ describe('pageRoutesFromManifest (the route manifest of STORY-01.02)', () => {
 
   it('with the real manifest and no sign-in at all, every signed-in page is a problem and none is dropped', () => {
     const { routes, problems } = pageRoutesFromManifest(ROUTE_MANIFEST, () => false);
-    expect(routes.map((route) => route.pattern)).toEqual(['/sign-in']);
-    expect(problems).toHaveLength(19);
+    // The public pages need no sign-in: the sign-in page and, from STORY-09.07, the two pages of the reset by link.
+    expect(routes.map((route) => route.pattern)).toEqual(['/forgot-password', '/reset-password', '/sign-in']);
+    expect(problems).toHaveLength(20);
   });
 });
 

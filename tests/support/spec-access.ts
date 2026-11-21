@@ -50,6 +50,9 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   // The delete dialog's two routes (STORY-08.04 AC-1; architecture section 6 row "Delete field": A, with the password; the references read is the dialog's own): the Admin alone.
   '/api/v1/config/fields/[id]': ['ADMIN'],
   '/api/v1/config/fields/[id]/references': ['ADMIN'],
+  // The checkpoint and revert routes (STORY-08.06 AC-9; architecture section 6 rows "Checkpoints" and "Revert": A, the revert with the password): the Admin alone.
+  '/api/v1/config/checkpoints': ['ADMIN'],
+  '/api/v1/config/versions/[id]/revert': ['ADMIN'],
   // The API behind the Process master screen (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Process items", CR-33).
   '/api/v1/process-items': ['ADMIN'],
   '/api/v1/process-items/[id]': ['ADMIN'],

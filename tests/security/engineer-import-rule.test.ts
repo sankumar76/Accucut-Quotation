@@ -56,8 +56,12 @@ const REPOSITORIES = {
     'audit-repository',
     // STORY-03.05 (AC-4, NFR-002): every column of the calculation record is cost data (calculations and calculation_rows are Restricted, architecture section 5.1).
     'calculation-repository',
+    // STORY-08.06 (NFR-002): the checkpoints of the configuration, for the Admin only; no Engineer view reads or writes them.
+    'config-checkpoint-repository',
     'config-repository',
     'customer-repository',
+    // STORY-09.07 (NFR-002): the reset links (a hash of a secret token and a person), for the reset service only. Holds no cost data, but nothing an Engineer view has a use for.
+    'password-reset-repository',
     'decimal-text',
     // STORY-09.01 (TB-4): the e-mail outbox holds names and task details in bodies, and the settings row of the mail sender. Confidential; no Engineer view reads or writes it.
     'email-outbox-repository',
@@ -105,6 +109,8 @@ const SERVICES = {
     'calculation-service',
     // STORY-06.12 (NFR-002): cancel approval reads and writes the approval (its price is in the audit entry), for the Admin only; no Engineer view imports it.
     'cancel-approval-service',
+    // STORY-08.06 (NFR-002): checkpoints and revert read whole configuration snapshots and save a version with the Admin's password. Admin only; no Engineer view imports it.
+    'config-checkpoint-service',
     // STORY-08.02 (NFR-002): the formula editor reads formulas, rate names and a stored calculation, and saves a version with the Admin's password. Admin only; no Engineer view imports it.
     'config-edit-service',
     'config-read-service',
@@ -128,6 +134,8 @@ const SERVICES = {
     'exchange-rate-service',
     'masters-service',
     'password-policy',
+    // STORY-09.07: the reset by e-mailed link (a public request and the use of a token, with the outbox row of the message). It holds no cost data and is called by its two public routes and its page, never by a view.
+    'password-reset-service',
     // STORY-06.11 (NFR-002): the count of what changed in the rates since a calculation reads the stored snapshot and the masters now, for the unlock preview and the Lead's notice only.
     'rate-changes',
     'rate-name-rules',

@@ -63,6 +63,8 @@ const entrySchema = z.strictObject({
   who: z.string().min(1),
   event: z.string().min(1),
   category: z.strictObject({ id: z.string().min(1), label: z.string().min(1) }).nullable(),
+  // The kind of a configuration entry ("Formula edit"): words from the registry, never stored data (STORY-08.07 AC-2).
+  kindLabel: z.string().min(1).optional(),
   objectLabel: z.string().min(1),
   change: z.strictObject({ before: z.string(), after: z.string() }),
 });

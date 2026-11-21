@@ -7,6 +7,15 @@
 
 export type Loader = () => Promise<unknown>;
 
+/**
+ * The public API routes that change state and are declared with `withPublicRoute` (STORY-09.07). They are in no role's list, so the role matrix never calls them; `csrf.test.ts` loads each of these
+ * to hold it to the same origin check as every other state-changing route, and fails for a public state-changing route that is neither here nor in `OWN_PROTECTION`.
+ */
+export const PUBLIC_API_LOADERS: Readonly<Record<string, Loader>> = {
+  '/api/v1/account/password/forgot': () => import('@/app/api/v1/account/password/forgot/route'),
+  '/api/v1/account/password/reset': () => import('@/app/api/v1/account/password/reset/route'),
+};
+
 export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/me': () => import('@/app/api/v1/me/route'),
   '/api/v1/account/password': () => import('@/app/api/v1/account/password/route'),
@@ -20,6 +29,8 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/config/fields/[id]': () => import('@/app/api/v1/config/fields/[id]/route'),
   '/api/v1/config/fields/[id]/references': () => import('@/app/api/v1/config/fields/[id]/references/route'),
   '/api/v1/config/insert-options': () => import('@/app/api/v1/config/insert-options/route'),
+  '/api/v1/config/checkpoints': () => import('@/app/api/v1/config/checkpoints/route'),
+  '/api/v1/config/versions/[id]/revert': () => import('@/app/api/v1/config/versions/[id]/revert/route'),
   '/api/v1/settings': () => import('@/app/api/v1/settings/route'),
   '/api/v1/settings/test-email': () => import('@/app/api/v1/settings/test-email/route'),
   '/api/v1/users': () => import('@/app/api/v1/users/route'),
@@ -80,6 +91,7 @@ export const PAGE_LOADERS: Readonly<Record<string, Loader>> = {
   '/config/fields': () => import('@/app/(portal)/config/fields/page'),
   '/config/fields/[id]/formula': () => import('@/app/(portal)/config/fields/[id]/formula/page'),
   '/config/fields/new': () => import('@/app/(portal)/config/fields/new/page'),
+  '/config/checkpoints': () => import('@/app/(portal)/config/checkpoints/page'),
   '/masters/process': () => import('@/app/(portal)/masters/process/page'),
   '/masters/materials': () => import('@/app/(portal)/masters/materials/page'),
   '/masters/customers': () => import('@/app/(portal)/masters/customers/page'),
