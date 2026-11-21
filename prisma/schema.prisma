@@ -37,18 +37,19 @@ model User {
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  configVersions ConfigVersion[]
-  auditEntries   AuditLog[]
-  exchangeRates  ExchangeRate[]
-  tasksToDo      Task[]          @relation("TaskEngineer")
-  tasksAssigned  Task[]          @relation("TaskAssigner")
-  calculations   Calculation[]
-  emailOutbox    EmailOutbox[]   @relation("OutboxRecipient")
-  resetTokens    PasswordResetToken[]
-  approvals      Approval[]      @relation("ApprovalApprover")
-  unlocks        Approval[]      @relation("ApprovalUnlocker")
-  cancellations  Approval[]      @relation("ApprovalCanceller")
-  removals       Approval[]      @relation("ApprovalRemover")
+  configVersions    ConfigVersion[]
+  configCheckpoints ConfigCheckpoint[]
+  auditEntries      AuditLog[]
+  exchangeRates     ExchangeRate[]
+  tasksToDo         Task[]             @relation("TaskEngineer")
+  tasksAssigned     Task[]             @relation("TaskAssigner")
+  calculations      Calculation[]
+  emailOutbox       EmailOutbox[]      @relation("OutboxRecipient")
+  resetTokens       PasswordResetToken[]
+  approvals         Approval[]         @relation("ApprovalApprover")
+  unlocks           Approval[]         @relation("ApprovalUnlocker")
+  cancellations     Approval[]         @relation("ApprovalCanceller")
+  removals          Approval[]         @relation("ApprovalRemover")
 
   @@unique([email], map: "uq_users_email")
   @@map("users")
@@ -85,11 +86,30 @@ model ConfigVersion {
   reason    String
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  creator      User?         @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_config_versions_created_by")
+  creator      User?              @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_config_versions_created_by")
   calculations Calculation[]
+  checkpoints  ConfigCheckpoint[]
 
   @@unique([number], map: "uq_config_versions_number")
   @@map("config_versions")
+}
+
+/// A named checkpoint of the configuration (STORY-08.06; SPEC section 8.3, FR-078; architecture sections 5.1 and 5.6): a name for one configuration version, so the Admin can go back to it.
+/// Immutable like `config_versions`: a trigger refuses UPDATE, DELETE and TRUNCATE for every role and the runtime role holds no such grant, so a checkpoint is never renamed or removed. `created_at` only.
+/// `created_by` is null for the seed checkpoint ("Original configuration", on version 1). The name is unique ignoring letter case (a unique index on `lower(name)`) and 1 to 100 characters (a CHECK); both are
+/// hand-written in the migration, because Prisma cannot declare them. Class Restricted (ADR-008): the Admin alone reads it.
+model ConfigCheckpoint {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String
+  configVersionId String   @map("config_version_id") @db.Uuid
+  createdBy       String?  @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  version ConfigVersion @relation(fields: [configVersionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_config_checkpoints_config_version_id")
+  creator User?         @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_config_checkpoints_created_by")
+
+  @@index([configVersionId], map: "idx_config_checkpoints_config_version_id")
+  @@map("config_checkpoints")
 }
 
 /// One record of who changed what and when (STORY-01.07, FR-011, NFR-007; architecture sections 5.1 and 8).

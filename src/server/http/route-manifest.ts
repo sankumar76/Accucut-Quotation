@@ -353,18 +353,22 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/estimates/[id]/export-summary', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   { path: '/estimates/[code]/export', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1', screen: 'SCR-10' },
 
-  // ---- Planned: Masters (Admin) ------------------------------------------------------------------------------------
-  // ---- Planned: Configuration (Admin edits; a Lead may view the fields and formulas) ----------------------------------
+  // STORY-08.06 (SCR-21, Checkpoints and versions; architecture section 6 rows "Checkpoints" and "Revert": A, and the revert with the Admin's password, FR-078, FR-080). The Admin alone (NFR-001): a Lead and an Engineer are
+  // refused 403 and a signed-out caller 401, before anything is looked up (the page: SCR-26 with HTTP 403). The answers hold a checkpoint's name, a version number and a person's name, never a snapshot or a formula, and
+  // none of the three routes is in any Engineer's list, so the cost scan calls all of them as routes an Engineer is refused (NFR-002). The page is a menu entry of the Configuration group.
+  { path: '/api/v1/config/checkpoints', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
+  { path: '/api/v1/config/versions/[id]/revert', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R2' },
   {
     path: '/config/checkpoints',
     kind: 'page',
     methods: ['GET'],
     roles: ADMIN_ONLY,
-    status: 'planned',
+    status: 'implemented',
     stage: 'R2',
     screen: 'SCR-21',
     nav: { group: 'Configuration', label: 'Checkpoints', order: 20, icon: 'flag' },
   },
+  // ---- Planned: Masters (Admin) ------------------------------------------------------------------------------------
 
   // ---- Help (every role) ---------------------------------------------------------------------------------------------
   // STORY-01.08 (SCR-24). Every role, Engineer included: the page holds fixed words and no data (NFR-002).

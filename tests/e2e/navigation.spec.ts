@@ -235,7 +235,8 @@ test.describe('the Engineer (signs in through the page)', () => {
       await expect(page.getByRole('heading', { level: 1, name: NOT_FOUND_TITLE })).toBeVisible();
       return page.getByRole('main').innerText();
     };
-    expect(await textOf('/there-is-no-such-page')).toBe(await textOf('/config/checkpoints'));
+    // Two addresses that are no page. (The second was `/config/checkpoints` while that screen was planned; now it exists, and an Engineer is told "no access" for it, as for every Admin screen.)
+    expect(await textOf('/there-is-no-such-page')).toBe(await textOf('/there-is-also-no-such-page'));
   });
 });
 

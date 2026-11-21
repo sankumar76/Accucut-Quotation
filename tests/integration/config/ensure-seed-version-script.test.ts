@@ -56,11 +56,23 @@ describe('scripts/ensure-seed-version.ts (AC-6)', { timeout: 120_000 }, () => {
     }
   }
 
+  async function seedCheckpoints(): Promise<Array<{ name: string; number: number; created_by: string | null }>> {
+    const client = new Client({ connectionString: database.ownerUrl });
+    await client.connect();
+    try {
+      return (await client.query('SELECT c.name, v.number, c.created_by FROM config_checkpoints c JOIN config_versions v ON v.id = c.config_version_id')).rows;
+    } finally {
+      await client.end();
+    }
+  }
+
   it('AC-6: creates version 1 on an empty database and exits 0', async () => {
     const { status, stdout } = runStep({ MIGRATE_DATABASE_URL: database.ownerUrl });
     expect(status).toBe(0);
     expect(stdout).toContain('configuration version 1 created');
     expect(await versions()).toEqual([{ number: 1, created_by: null }]);
+    // STORY-08.06 AC-1: version 1 and the seed checkpoint are stored together, the checkpoint with no person.
+    expect(await seedCheckpoints()).toEqual([{ name: 'Original configuration', number: 1, created_by: null }]);
   });
 
   it('AC-6: run again, it changes nothing and exits 0', async () => {
@@ -68,6 +80,8 @@ describe('scripts/ensure-seed-version.ts (AC-6)', { timeout: 120_000 }, () => {
     expect(status).toBe(0);
     expect(stdout).toContain('already exists; nothing changed');
     expect(await versions()).toEqual([{ number: 1, created_by: null }]);
+    // Run twice, one seed checkpoint (STORY-08.06 AC-1).
+    expect(await seedCheckpoints()).toEqual([{ name: 'Original configuration', number: 1, created_by: null }]);
   });
 
   it('AC-6: without MIGRATE_DATABASE_URL it fails, names the variable and prints no value', () => {

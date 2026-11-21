@@ -103,6 +103,7 @@ describe('pageRoutesFromManifest (the route manifest of STORY-01.02)', () => {
       { pattern: '/account', roles: ['ADMIN'] },
       { pattern: '/assign', roles: ['ADMIN'] },
       { pattern: '/audit', roles: ['ADMIN'] },
+      { pattern: '/config/checkpoints', roles: ['ADMIN'] },
       { pattern: '/config/fields', roles: ['ADMIN'] },
       { pattern: '/config/fields/[id]/formula', roles: ['ADMIN'] },
       { pattern: '/config/fields/new', roles: ['ADMIN'] },
@@ -127,7 +128,7 @@ describe('pageRoutesFromManifest (the route manifest of STORY-01.02)', () => {
     const { routes, problems } = pageRoutesFromManifest(ROUTE_MANIFEST, () => false);
     // The public pages need no sign-in: the sign-in page and, from STORY-09.07, the two pages of the reset by link.
     expect(routes.map((route) => route.pattern)).toEqual(['/forgot-password', '/reset-password', '/sign-in']);
-    expect(problems).toHaveLength(19);
+    expect(problems).toHaveLength(20);
   });
 });
 
