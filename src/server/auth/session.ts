@@ -34,8 +34,8 @@ const ENDED: SessionState = { status: 'ended' };
 const SIGNED_OUT: SessionState = { status: 'signed-out' };
 
 /**
- * Did the browser send a session cookie? `proxy.ts` says so in a header it always sets itself. The header is trusted only on a path
- * inside the proxy matcher (not `/sign-in`, `/api/auth/*` or the static paths, where the browser's own header passes through).
+ * Did the browser send a session cookie? `proxy.ts` says so in a header it always sets itself (and deletes on the public paths, `/sign-in`, the two reset pages and `/api/auth/*`, where no one
+ * asks). The header is trusted only on a path inside the proxy matcher, which is every path but the build output, `/_next/image` and the logo.
  */
 async function browserSentSessionCookie(): Promise<boolean> {
   return (await headers()).get(SESSION_COOKIE_HEADER) === SESSION_COOKIE_PRESENT;
