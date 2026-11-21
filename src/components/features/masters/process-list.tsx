@@ -13,7 +13,7 @@ import type { ProcessItemRow } from '@/lib/masters/process-items-client';
 
 import { isOpener, type Opener } from './master-opener';
 import { BREAK_LONG_NAMES } from './master-texts';
-import { NOT_USED } from './process-texts';
+import { NOT_USED, OWN_VALUE_COLUMN } from './process-texts';
 
 /**
  * The rates of SCR-11 (STORY-02.01 AC-1, AC-7): a table from 768 px, where it scrolls inside its own container only, and a card for
@@ -22,7 +22,8 @@ import { NOT_USED } from './process-texts';
  * was pressed, with the button, so focus can return to it.
  *
  * "Used in" shows the column letters of the formulas that use the rate, which the server derived from the current configuration.
- * The column "Customers with own value" of the mock-up arrives with the customers (story 02.02).
+ * "Customers with own value" is how many listed customers hold a value other than the rate's default, 0 shown as 0 (STORY-02.08 AC-10, A-4); the same count that
+ * the window "Customers differ" lists. The cards below 768 px do not carry it (ux-spec: the columns, the words and the cards do not change at that width).
  */
 
 export type RowAction = 'edit' | 'delete';
@@ -82,6 +83,7 @@ function ProcessTable(props: ProcessListProps) {
           <TableHead>Unit</TableHead>
           <TableHead className="text-right">Default value</TableHead>
           <TableHead>Used in</TableHead>
+          <TableHead className="text-right">{OWN_VALUE_COLUMN}</TableHead>
           <TableActionsHead />
         </TableRow>
       </TableHeader>
@@ -94,6 +96,7 @@ function ProcessTable(props: ProcessListProps) {
             <TableCell>
               <UsedIn item={item} />
             </TableCell>
+            <TableCell className="text-right tabular-nums">{item.customersWithOwnValue}</TableCell>
             <TableActionsCell>
               <RowActions {...props} item={item} compact />
             </TableActionsCell>

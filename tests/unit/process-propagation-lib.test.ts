@@ -4,6 +4,7 @@ import {
   applyAllLabel,
   applyLabel,
   choicesNotice,
+  savedTitle,
   customers,
   differBody,
   differTitle,
@@ -73,21 +74,24 @@ describe('AC-2: the dialog "Customers differ"', () => {
 
 describe('AC-3: the notice after Save choices', () => {
   it('says the counts that are not zero, and that the audit log has the change when a customer changed', () => {
-    expect(choicesNotice('Cutting-Rate-per-Sec', { applied: 2, kept: 1, skipped: 0 }, 'per second', '0.52')).toBe(
-      'Cutting-Rate-per-Sec: choices saved. 2 customers now have 0.52. 1 customer kept its own value. The changes are in the audit log.',
+    expect(choicesNotice({ applied: 2, kept: 1, skipped: 0 }, 'per second', '0.52')).toBe(
+      '2 customers now have 0.52. 1 customer kept its own value. The changes are in the audit log.',
     );
   });
 
   it('counts a customer changed since it was listed apart (AC-4) and uses the singular', () => {
-    expect(choicesNotice('Cutting-Rate-per-Sec', { applied: 1, kept: 0, skipped: 1 }, 'per second', '0.52')).toBe(
-      'Cutting-Rate-per-Sec: choices saved. 1 customer now has 0.52. 1 customer changed since you looked, so it was left alone. The changes are in the audit log.',
+    expect(choicesNotice({ applied: 1, kept: 0, skipped: 1 }, 'per second', '0.52')).toBe(
+      '1 customer now has 0.52. 1 customer changed since you looked, so it was left alone. The changes are in the audit log.',
     );
   });
 
   it('does not mention the audit log when nobody changed (a kept or skipped customer writes no entry)', () => {
-    expect(choicesNotice('Cutting-Rate-per-Sec', { applied: 0, kept: 3, skipped: 0 }, 'per second', '0.52')).toBe(
-      'Cutting-Rate-per-Sec: choices saved. 3 customers kept their own value.',
-    );
+    expect(choicesNotice({ applied: 0, kept: 3, skipped: 0 }, 'per second', '0.52')).toBe('3 customers kept their own value.');
+  });
+
+  it('opens the notice with the save and how many customers moved by themselves', () => {
+    expect(savedTitle('Cutting-Rate-per-Sec', 17, 'per second', '0.47', '0.52')).toBe('Cutting-Rate-per-Sec saved. 17 customers had 0.47 and now have 0.52.');
+    expect(savedTitle('Cutting-Rate-per-Sec', 0, 'per second', '0.47', '0.52')).toBe('Cutting-Rate-per-Sec saved.');
   });
 });
 

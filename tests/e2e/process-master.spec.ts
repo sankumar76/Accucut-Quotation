@@ -212,7 +212,8 @@ test.describe('edit a rate (AC-3, AC-5)', () => {
     await dialog.getByLabel('Default value').fill('2.37');
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByRole('status').filter({ hasText: `${renamed} saved. The change is in the audit log.` })).toBeVisible();
+    // A new default also moves every customer on the old one (STORY-02.08 AC-1), and the notice says how many: other specs' customers hold this new rate at its default too.
+    await expect(page.getByRole('status').filter({ hasText: new RegExp(`${renamed} saved\\.(?: \\d+ customers? ha(?:d|s|ve) 1\\.37 and now ha(?:s|ve) 2\\.37\\.)? The change is in the audit log\\.`) })).toBeVisible();
     await expect(rowOf(page, renamed)).toContainText('2.37');
 
     let requests = 0;

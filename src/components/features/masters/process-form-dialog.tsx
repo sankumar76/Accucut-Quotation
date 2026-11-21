@@ -22,7 +22,7 @@ import {
   type FormValues,
 } from '@/lib/masters/process-form';
 import { NAME_HINT, PROCESS_UNITS, unitLabel, valueSymbol } from '@/lib/masters/process-items';
-import { createProcessItem, updateProcessItem, type ProcessItemRow } from '@/lib/masters/process-items-client';
+import { createProcessItem, updateProcessItem, type ProcessItemRow, type ProcessItemSavedRow } from '@/lib/masters/process-items-client';
 
 import { BREAK_LONG_NAMES, TRY_AGAIN_BODY } from './master-texts';
 import { ADD_RATE, FAILED_ADD_MESSAGE, FAILED_EDIT_MESSAGE } from './process-texts';
@@ -41,8 +41,8 @@ export interface ProcessFormDialogProps {
   /** `null` adds a rate; a rate edits it. */
   readonly item: ProcessItemRow | null;
   readonly onClose: () => void;
-  /** Called with the saved rate after the server accepted the change. */
-  readonly onSaved: (saved: ProcessItemRow, kind: 'added' | 'edited') => void;
+  /** Called with the saved rate after the server accepted the change; `propagation` is what a new default did to the customers (null for an add, and for a save that did not change the default). */
+  readonly onSaved: (saved: ProcessItemSavedRow, kind: 'added' | 'edited') => void;
   /** Called when the server said the rate being edited no longer exists. */
   readonly onGone: (item: ProcessItemRow) => void;
   readonly onCloseAutoFocus: (event: Event) => void;
@@ -51,9 +51,15 @@ export interface ProcessFormDialogProps {
 type FormProps = Pick<ProcessFormDialogProps, 'item' | 'onClose' | 'onSaved' | 'onGone'>;
 type SaveOutcome = Awaited<ReturnType<typeof updateProcessItem>>;
 
+/** An added rate has no customer to move: its `propagation` is null. */
+async function addRequest(values: FormValues): Promise<SaveOutcome> {
+  const outcome = await createProcessItem(newRateBody(values));
+  return outcome.status === 'ok' ? { status: 'ok', value: { ...outcome.value, propagation: null } } : outcome;
+}
+
 /** The request for what was typed, or null for an edit that changes nothing. */
 function requestFor(item: ProcessItemRow | null, values: FormValues): (() => Promise<SaveOutcome>) | null {
-  if (item === null) return () => createProcessItem(newRateBody(values));
+  if (item === null) return () => addRequest(values);
   const changes = editChanges(item, values);
   return Object.keys(changes).length === 0 ? null : () => updateProcessItem(item.id, changes);
 }

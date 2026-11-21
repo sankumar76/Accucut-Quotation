@@ -57,7 +57,7 @@ export const applyAllLabel = (count: number): string => (count === 1 ? 'Apply to
 export const SAVE_CHOICES = 'Save choices';
 export const SAVING_CHOICES = 'Saving';
 export const FAILED_CHOICES_TITLE = 'We could not save your choices.';
-export const DIFFER_TABLE_LABEL = 'Customers whose value differs from the old default';
+export const DIFFER_LIST_LABEL = 'Customers whose value differs from the old default';
 
 /** The radio labels of one customer: "Apply 0.52" and "Keep 0.50". */
 export const applyLabel = (unit: string, next: string): string => `Apply ${formatDefaultValue(next, unit)}`;
@@ -68,6 +68,10 @@ export function movedNotice(name: string, moved: number, unit: string, previous:
   const base = `${name} saved.`;
   return moved === 0 ? `${base} The change is in the audit log.` : `${base} ${hadAndNowHave(moved, unit, previous, next)} The change is in the audit log.`;
 }
+
+/** The bold line of the notice once the dialog has been answered: the save, and how many customers moved by themselves. */
+export const savedTitle = (name: string, moved: number, unit: string, previous: string, next: string): string =>
+  moved === 0 ? `${name} saved.` : `${name} saved. ${hadAndNowHave(moved, unit, previous, next)}`;
 
 /** The notice when the dialog is closed without Save choices (AC-5): the same as Keep all, and nothing is stored. */
 export const dismissedNotice = (count: number): string =>
@@ -83,10 +87,10 @@ export interface PropagationCounts {
 }
 
 /**
- * The notice after Save choices: the counts that are not zero, and the audit log only when a customer's rate really changed (a kept or skipped
+ * The sentence of the notice after Save choices: the counts that are not zero, and the audit log only when a customer's rate really changed (a kept or skipped
  * customer writes no entry). A customer whose value changed since the list was shown is left alone and counted apart (AC-4).
  */
-export function choicesNotice(name: string, counts: PropagationCounts, unit: string, next: string): string {
+export function choicesNotice(counts: PropagationCounts, unit: string, next: string): string {
   const parts = [
     ...(counts.applied > 0 ? [`${customers(counts.applied)} now ${counts.applied === 1 ? 'has' : 'have'} ${formatDefaultValue(next, unit)}.`] : []),
     ...(counts.kept > 0 ? [`${customers(counts.kept)} kept ${counts.kept === 1 ? 'its' : 'their'} own value.`] : []),
@@ -95,5 +99,5 @@ export function choicesNotice(name: string, counts: PropagationCounts, unit: str
       : []),
     ...(counts.applied > 0 ? ['The changes are in the audit log.'] : []),
   ];
-  return [`${name}: choices saved.`, ...parts].join(' ');
+  return parts.join(' ');
 }
