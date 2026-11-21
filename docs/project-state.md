@@ -16,6 +16,22 @@
 | Last updated       | 2026-11-20 by orchestrator (daily update) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
+## Daily update (2026-11-20, later, orchestrator)
+
+> This block wins over the morning block below it where they differ.
+
+**`master` = 13d58e6.** Merged since the morning block (6 more; **11 today**): #540 **AQP-378** DEF-049 fix (f652c22); #543 **AQP-359** 08.04 [c] (967a8ad, combined review APPROVE WITH COMMENTS, follow-ups #547); #541 **AQP-367** 05.10 (251636c); #538 **AQP-350** 09.03 (a514ad3, on a W1 re-run, DL-265); #549 **AQP-351** 09.04 (831f274); #548 **AQP-364** 07.07 (13d58e6). Jira Done for all six stories. `master` push runs: f652c22 green with **0 flaky** (first time); 251636c **red** at Stages 1 to 11b (DEF-052, not re-run, DL-266); a514ad3 green again (DEF-052 file 3.3 s, no `afterAll` error).
+
+**Rulings:** DL-263 (DEF-047 closes on the amended proof; R5 ends), DL-264 (DEF-047 axe cases get an immediate Bug trigger; RISK-031 stays at 9; **DEF-051** AQP-381 for `lead-warning` :229 and :253 with rule **R9**; watch triggers for `estimate-form-sections` :145 and `estimate-treatments` :87), DL-265 (#538 shard-2 wave = slow machine; standing rule **W1** for slow-shard waves on PR heads; **DEF-052** logged), DL-266 (DEF-052: no re-run rule for `master` pushes, the 5 s bar holds, the `afterAll` 42501 error is in scope, a lane only on a second occurrence). **Rules in force: R8, R9, W1.** RISK-031 re-run list: #538 (W1, run 44780475691).
+
+**Defects:** DEF-047 (AQP-376) and DEF-049 (AQP-378) **closed** by QA; the watch list now lives in `docs/07-qa/test-plan.md` §7. DEF-050 (AQP-380): fix #546 green (P1, P2, P3 met, worst 14.0 s), syncing for merge; the `master` half follows. DEF-051 (AQP-381) follows DEF-050 in its lane. DEF-052 (AQP-382, GitHub #550): no second occurrence on a514ad3. Architecture issue **#545** (post-G8 E2E floor) logged by the solution-architect.
+
+**New CI guard behaviour:** `tests/unit/e2e-shards.test.ts` needs the four shards within one test of each other; each PR that adds E2E cases must re-check it after every merge to `master`. Developers now merge `master` locally and run the guard before pushing. CI tooling is frozen until G8 (§9 item 4), so this is recorded, not changed.
+
+**Lanes (3):** 08.05 **AQP-360** (started on 831f274); 09.05 **AQP-352** (started on 13d58e6); DEF-050 #546 (sync and merge), then DEF-051. **Queue:** 09.06, 09.07 [c], 08.06 [c], 08.07, 08.08 [c], 07.05, 02.08 [c], 04.06, 10.07. **Slip watch (DL-248):** 11 stories not yet started with 3 lanes; the last merge by 26 Nov is at risk; a 4th lane is with the delivery lead.
+
+**Worktrees (4 + main):** records-t, aqp-352, aqp-360, aqp-380. Removed this afternoon: aqp-378, aqp-376, aqp-359, aqp-367, aqp-350, aqp-351, aqp-364 (memory archived under `_archive-2026-11-20/`). Containers removed: aqp359-db, aqp350-db, aqp351-db, aqp351-mail. **C: 14 GB free.**
+
 ## Daily update (2026-11-20, orchestrator)
 
 > This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.**
