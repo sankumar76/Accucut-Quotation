@@ -194,6 +194,17 @@ describe('AC-2: a request for an active person', () => {
     expect((await capture.list()).filter((mail) => mail.to.includes(email))).toEqual([]);
   });
 
+  it('a row whose 4th send fails (the mail server cannot be reached) is failed for good, with a class code and no body: the link does not outlive its chance to be sent', async () => {
+    const { id, email } = await person('fails-for-good');
+    await ask(email);
+    await db.owner.query("UPDATE email_outbox SET attempts = 3 WHERE to_user_id = $1::uuid AND event = 'password-reset'", [id]);
+    const unreachable = { sendMail: () => Promise.reject(Object.assign(new Error(`connect ECONNREFUSED 10.9.8.7:587 ${email}`), { code: 'ECONNREFUSED' })) };
+    expect(await runOutboxSend({ store: createEmailOutboxRepository(db.prisma), mailer: createMailer(unreachable), clock, log: () => undefined, jobRuns: { recordRun: () => Promise.resolve() } })).toMatchObject({ failed: 1, sent: 0 });
+    const [row] = await outboxRows(id);
+    expect(defined(row)).toMatchObject({ status: 'failed', last_error: 'CONNECTION', body_html: '', body_text: '' });
+    expect(JSON.stringify(row)).not.toContain(email);
+  });
+
   it('a row that waits past the link\'s 60 minutes is skipped EXPIRED, never mailed, and its body is emptied', async () => {
     const { id, email } = await person('late-worker');
     await ask(email);

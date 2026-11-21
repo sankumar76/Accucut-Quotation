@@ -64,8 +64,8 @@ const healthyPages = (): Record<string, StubPage> => ({
   '/design-system': { signedIn: { status: 404, html: NOT_FOUND } },
   '/sign-in': { anonymous: { status: 200, html: pageNaming('shell.js') }, signedIn: { status: 307 } },
   // STORY-09.07: the two public pages of the reset by e-mailed link answer a signed-out visitor with the page itself, as the sign-in page does.
-  '/forgot-password': { anonymous: { status: 200, html: pageNaming('shell.js') } },
-  '/reset-password': { anonymous: { status: 200, html: pageNaming('shell.js') } },
+  '/forgot-password': { anonymous: { status: 200, html: pageNaming('shell.js') }, signedIn: { status: 200, html: pageNaming('shell.js') } },
+  '/reset-password': { anonymous: { status: 200, html: pageNaming('shell.js') }, signedIn: { status: 200, html: pageNaming('shell.js') } },
 });
 
 const credentialsFor = (role: string) => (role === 'ADMIN' ? { email: STUB_EMAIL, password: STUB_PASSWORD } : undefined);
