@@ -1,8 +1,11 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { z } from 'zod';
 
-import { readApproval, readEstimateState, useFreshAddress } from './support/auth';
-import { calculateAsEngineer, engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
+import { createDisposableUser, readApproval, readEstimateState, useFreshAddress, useFreshAddress as setFreshAddress } from './support/auth';
+import { APPROVED_PRICE } from './support/approved-estimate';
+import { calculateAsEngineer, calculateWithoutThePage, engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
+import { DEVELOPMENT_URL } from './support/servers';
 
 /**
  * STORY-06.07 (AC-1 to AC-8; FR-103, FR-011, FR-062, D-18; NFR-002, NFR-016 to NFR-018): a price that differs from the calculated total, with an optional reason, in SCR-08 and SCR-06, for a Lead at
@@ -42,6 +45,8 @@ const TOO_LONG_MESSAGE = 'Use 500 characters or fewer.';
 const HIDDEN_CHARACTER_MESSAGE = 'Use letters, numbers and punctuation only.';
 const PRICE_MESSAGE = 'Enter a price in rupees, 0 or more, with up to 2 decimals.';
 const NO_REASON_GIVEN = 'No reason given.';
+const JSON_HEADERS = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
+const costsShape = z.object({ calculationId: z.string().min(1) });
 const REASON = 'Rounded down to a whole hundred for the customer quote.';
 const ZERO_WIDTH_JOINER = '‍';
 
@@ -52,10 +57,14 @@ const priceField = (page: Page) => dialogOf(page).locator(PRICE_FIELD_ID);
 const reasonField = (page: Page) => dialogOf(page).locator(REASON_FIELD_ID);
 const submitOf = (page: Page) => dialogOf(page).getByRole('button', { name: /^(Approve and lock|Approving)$/ });
 
-/** A calculated estimate opened as a Lead, with the figures current and Approve and lock on. */
-async function openedAsLead(page: Page, testInfo: Parameters<typeof signInAsLead>[1]) {
+/**
+ * A calculated estimate opened as a Lead, with the figures current and Approve and lock on. The Engineer calculates on their own page, unless `throughTheApi` is set: a case whose subject is what the Lead
+ * does has the Engineer's Calculate sent without loading a page, so it opens one page (DEF-050).
+ */
+async function openedAsLead(page: Page, testInfo: Parameters<typeof signInAsLead>[1], throughTheApi = false) {
   const { owner, code } = await engineerWithEstimate(testInfo);
-  await calculateAsEngineer(page, owner, code);
+  if (throughTheApi) await calculateWithoutThePage(page, owner);
+  else await calculateAsEngineer(page, owner, code);
   await signInAsLead(page, testInfo);
   const response = await page.goto(`/estimates/${code}`);
   expect(response?.status()).toBe(200);
@@ -83,6 +92,26 @@ async function openDialog(page: Page): Promise<Locator> {
   await expect(dialog).toBeVisible();
   await expect(priceField(page)).toBeFocused();
   return dialog;
+}
+
+/**
+ * A Lead of the test's own approves the Engineer's calculated estimate at `APPROVED_PRICE` with a reason (with spaces round it, as the first two cases type it), through the API and in a browser context of its
+ * own, so the Engineer stays signed in on the test's page: the Engineer signs in once in the case (DEF-050). The context is closed afterwards.
+ */
+async function approvedWithAReasonBesideThePage(browser: Browser, testInfo: TestInfo, ownerId: string): Promise<void> {
+  const context = await browser.newContext({ baseURL: DEVELOPMENT_URL, storageState: { cookies: [], origins: [] } });
+  try {
+    await setFreshAddress(context);
+    const beside = await context.newPage();
+    await signInAs(beside, await createDisposableUser('axe', testInfo, 'LEAD'));
+    const costs = await beside.request.get(`/api/v1/estimates/${ownerId}/costs`);
+    expect(costs.status(), "the Lead's read of the costs").toBe(200);
+    const { calculationId } = costsShape.parse(await costs.json());
+    const approved = await beside.request.post(`/api/v1/estimates/${ownerId}/approve`, { headers: JSON_HEADERS, data: { calculationId, price: APPROVED_PRICE, reason: `  ${REASON}  ` } });
+    expect(approved.status(), 'the approval with a reason').toBe(200);
+  } finally {
+    await context.close();
+  }
 }
 
 /** Presses Approve and lock and waits for the server's answer to it. */
@@ -152,8 +181,8 @@ test.describe('AC-2: an override with no reason', () => {
 });
 
 test.describe('AC-3, AC-7: an override with a reason', () => {
-  test('the reason is kept trimmed, in the audit entry too, and shown next to BO; the Engineer sees neither it nor the difference', async ({ page }, testInfo) => {
-    const { owner, code } = await openedAsLead(page, testInfo);
+  test('the reason is kept trimmed, in the row and in the audit entry', async ({ page }, testInfo) => {
+    const { owner } = await openedAsLead(page, testInfo, true);
     const shown = await totalAsShown(page);
     const higher = moved(plain(shown), ONE_PAISA);
     await openDialog(page);
@@ -163,13 +192,30 @@ test.describe('AC-3, AC-7: an override with a reason', () => {
     expect(response.status()).toBe(200);
 
     await expect(dialogOf(page)).toHaveCount(0);
+    expect(await readApproval(owner.id)).toEqual({ approvedPrice: higher, calculatedBl: plain(shown), isOverride: true, overrideReason: REASON, entryReason: REASON });
+  });
+
+  test('the reason is shown next to BO, with the difference', async ({ page }, testInfo) => {
+    const { owner } = await openedAsLead(page, testInfo, true);
+    const shown = await totalAsShown(page);
+    const higher = moved(plain(shown), ONE_PAISA);
+    await openDialog(page);
+    await priceField(page).fill(higher);
+    await reasonField(page).fill(`  ${REASON}  `);
+    await approveAndWait(page, owner.id);
+
     await expect(tiles(page)).toContainText(`₹ 0.01 higher than the calculated total (${shown}).`);
     await expect(tiles(page)).toContainText(`Reason given: ${REASON}`);
     await expect(tiles(page)).not.toContainText(NO_REASON_GIVEN);
-    expect(await readApproval(owner.id)).toEqual({ approvedPrice: higher, calculatedBl: plain(shown), isOverride: true, overrideReason: REASON, entryReason: REASON });
+  });
+
+  test('the Engineer sees neither the reason nor the difference, and the costs are refused', async ({ page, browser }, testInfo) => {
+    // The override and its reason are made through the API (the first two cases judge the dialog and the approval); the Engineer signs in once, calculates without a page, and opens the page once.
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    await calculateWithoutThePage(page, owner);
+    await approvedWithAReasonBesideThePage(browser, testInfo, owner.id);
 
     // The Engineer, on the same address, is told it is approved and locked and sees no price, no difference and no reason (FR-011, NFR-002); `/costs` is refused.
-    await signInAs(page, owner);
     const own = await page.goto(`/estimates/${code}`);
     expect(own?.status()).toBe(200);
     await expect(page.getByText('Approved and locked.', { exact: true })).toBeVisible();

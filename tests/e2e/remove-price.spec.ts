@@ -1,7 +1,8 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { z } from 'zod';
 
-import { E2E_PASSWORD, readEstimateState, useFreshAddress } from './support/auth';
-import { signInAs } from './support/calculated-estimate';
+import { createDisposableUser, E2E_PASSWORD, readEstimateState, useFreshAddress, useFreshAddress as setFreshAddress } from './support/auth';
+import { calculateWithoutThePage, engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { APPROVED_PRICE, approvedEstimate, cancelThroughTheApi, latestApprovalIdOf, readRemoval, removePriceThroughTheApi, signInAsTheAdmin } from './support/approved-estimate';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
 import { DEVELOPMENT_URL } from './support/servers';
@@ -23,6 +24,8 @@ test.beforeEach(async ({ context }) => {
   await useFreshAddress(context);
 });
 
+const JSON_HEADERS = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
+const costsShape = z.object({ calculationId: z.string().min(1) });
 const SLOW_MILLISECONDS = 800;
 const REMOVE_ROUTE = '**/api/v1/estimates/*/approval/remove-price';
 const WRONG_PASSWORD = 'Invented-Wrong-E2E-Password-1!';
@@ -59,6 +62,29 @@ async function openedAsAdmin(page: Page, testInfo: Parameters<typeof approvedEst
   await expect(removeButton(page)).toBeEnabled();
   await waitUntilHydrated(page, '#review-remove-price');
   return made;
+}
+
+/**
+ * What `approvedEstimate` and `cancelled` do, for an Engineer who is already signed in and has calculated on the test's own page: a Lead of the test's own approves and the Admin cancels and removes the price,
+ * all through the API and in a browser context of its own, so the Engineer's session on the test's page stays and the Engineer signs in once in the case (DEF-050). The context is closed afterwards.
+ */
+async function removedBesideThePage(browser: Browser, testInfo: TestInfo, ownerId: string): Promise<void> {
+  const context = await browser.newContext({ baseURL: DEVELOPMENT_URL, storageState: { cookies: [], origins: [] } });
+  try {
+    await setFreshAddress(context);
+    const beside = await context.newPage();
+    await signInAs(beside, await createDisposableUser('axe', testInfo, 'LEAD'));
+    const costs = await beside.request.get(`/api/v1/estimates/${ownerId}/costs`);
+    expect(costs.status(), "the Lead's read of the costs").toBe(200);
+    const { calculationId } = costsShape.parse(await costs.json());
+    const approved = await beside.request.post(`/api/v1/estimates/${ownerId}/approve`, { headers: JSON_HEADERS, data: { calculationId, price: APPROVED_PRICE } });
+    expect(approved.status(), 'the approval').toBe(200);
+    await signInAsTheAdmin(beside);
+    expect(await cancelThroughTheApi(beside, ownerId, 'The wrong customer was priced.'), "the Admin's cancel").toBe(200);
+    expect(await removePriceThroughTheApi(beside, ownerId), "the Admin's removal").toBe(200);
+  } finally {
+    await context.close();
+  }
 }
 
 async function openDialog(page: Page): Promise<Locator> {
@@ -133,10 +159,8 @@ test.describe('AC-1, AC-2, AC-8: the button and the dialog', () => {
 });
 
 test.describe('AC-3, AC-6, AC-7: a good removal', () => {
-  test('shows "Removing" while it is under way, then the notice, BO "Not set yet" and no price anywhere on the page or in the costs; the row and the audit entry keep the price; a Lead sees the same with no button; the Engineer sees nothing of it; the password is in no audit row', async ({
-    page,
-  }, testInfo) => {
-    const { code, owner, lead, admin } = await openedAsAdmin(page, testInfo);
+  test('shows "Removing" while it is under way, then the notice; the row and the audit entry keep the price; the password is in no audit row', async ({ page }, testInfo) => {
+    const { owner, admin } = await openedAsAdmin(page, testInfo);
     await page.route(REMOVE_ROUTE, async (route) => {
       await new Promise<void>((resolve) => {
         setTimeout(resolve, SLOW_MILLISECONDS);
@@ -167,6 +191,18 @@ test.describe('AC-3, AC-6, AC-7: a good removal', () => {
     await expect(notice).toContainText('The audit log keeps it.');
     await expect(notice).toContainText('Approve again, after a Recalculate, to set a price.');
     await expect(notice).toBeFocused();
+    // The row keeps the price, the removal is stored, and the audit entry keeps what was removed, once (AC-6).
+    expect(await readRemoval(owner.id)).toEqual({ approvedPrice: APPROVED_PRICE, cancelled: true, removedBy: admin.id, entries: 1, entryKeeps: APPROVED_PRICE, passwordInAudit: false });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 1 });
+  });
+
+  test('BO reads "Not set yet" and the price is nowhere on the page or in the costs', async ({ page }, testInfo) => {
+    // The removal is made through the API (the first case judges the dialog and the removal); the Admin opens the page once.
+    const made = await cancelled(page, testInfo);
+    expect(await removePriceThroughTheApi(page, made.owner.id), "the Admin's removal").toBe(200);
+    const response = await page.goto(`/estimates/${made.code}`);
+    expect(response?.status()).toBe(200);
+    await expect(noticeOf(page)).toBeVisible();
     // BO reads "Not set yet" and the price is nowhere on the page (AC-3, AC-6); there is nothing left to cancel or remove.
     await expect(tiles(page)).toContainText('Not set yet');
     await expect(page.getByText('48,271.37')).toHaveCount(0);
@@ -174,24 +210,40 @@ test.describe('AC-3, AC-6, AC-7: a good removal', () => {
     await expect(removeButton(page)).toHaveCount(0);
     await expect(page.locator('#review-cancel')).toHaveCount(0);
     // No route serves the price to a screen: the costs the page is drawn from hold no price either.
-    const costs = await page.request.get(`/api/v1/estimates/${owner.id}/costs`);
+    const costs = await page.request.get(`/api/v1/estimates/${made.owner.id}/costs`);
     expect(costs.status()).toBe(200);
     expect(await costs.text()).not.toContain('48271');
-    // The row keeps the price, the removal is stored, and the audit entry keeps what was removed, once (AC-6).
-    expect(await readRemoval(owner.id)).toEqual({ approvedPrice: APPROVED_PRICE, cancelled: true, removedBy: admin.id, entries: 1, entryKeeps: APPROVED_PRICE, passwordInAudit: false });
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 1 });
-    await expectNoAxeViolations(page);
+  });
 
-    // A Lead sees the same notice and "Not set yet", with no button.
-    await signInAs(page, lead);
-    await page.goto(`/estimates/${code}`);
-    await expect(noticeOf(page)).toContainText(`by ${admin.name}.`);
+  test('with the price removed, the page has no axe violation', async ({ page }, testInfo) => {
+    // The removal is made through the API; this case opens the page once and scans it once.
+    const made = await cancelled(page, testInfo);
+    expect(await removePriceThroughTheApi(page, made.owner.id), "the Admin's removal").toBe(200);
+    const response = await page.goto(`/estimates/${made.code}`);
+    expect(response?.status()).toBe(200);
+    await expect(noticeOf(page)).toBeVisible();
+    await expectNoAxeViolations(page);
+  });
+
+  test('a Lead sees the same notice and "Not set yet", with no button', async ({ page }, testInfo) => {
+    const made = await cancelled(page, testInfo);
+    expect(await removePriceThroughTheApi(page, made.owner.id), "the Admin's removal").toBe(200);
+    await signInAs(page, made.lead);
+    const response = await page.goto(`/estimates/${made.code}`);
+    expect(response?.status()).toBe(200);
+    await expect(noticeOf(page)).toContainText(`by ${made.admin.name}.`);
     await expect(tiles(page)).toContainText('Not set yet');
     await expect(page.getByText('48,271.37')).toHaveCount(0);
     await expect(removeButton(page)).toHaveCount(0);
+  });
+
+  test('the Engineer sees no price and nothing of the removal', async ({ page, browser }, testInfo) => {
+    // The Engineer signs in once, calculates without a page and opens the page once; the rest of the set-up is made beside the page.
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    await calculateWithoutThePage(page, owner);
+    await removedBesideThePage(browser, testInfo, owner.id);
 
     // The Engineer, on the same address, sees no price and nothing of the removal (NFR-002).
-    await signInAs(page, owner);
     const own = await page.goto(`/estimates/${code}`);
     expect(own?.status()).toBe(200);
     await expect(page.getByText('48,271.37')).toHaveCount(0);
