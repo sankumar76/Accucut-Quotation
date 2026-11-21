@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Response } from '@playwright/test';
+import { expect, test, type Page, type Response, type TestInfo } from '@playwright/test';
 
 import { createDisposableUser, E2E_ADMIN, readEstimateState, readWarningRecord, saveCanaryQuantity, setCanaryQuantity, useFreshAddress, type E2eUser } from './support/auth';
 import { engineerWithEstimate, signInAs } from './support/calculated-estimate';
@@ -30,6 +30,24 @@ const NOTICE_TITLE = 'Quantity warning on this calculation.';
 const NOTICE_MEANING = 'This row costs 0 in this estimate. Approving is not stopped. Check that the zeros are meant.';
 const APPROVE_LINE = 'This calculation has a quantity warning. 1 Invented text costs 0 in this estimate. Approving is not stopped, and there is no box to tick.';
 const WENT_AHEAD = /went ahead on \d{2} [A-Z][a-z]{2} \d{4}, \d{2}:\d{2} IST with 0 in QTY per Assy on 1 row: 1 Invented text\./;
+
+/**
+ * DIAGNOSTIC ONLY (AQP-381, DEF-051); this commit is never the final head. Phase marks in ms since the case's first line, printed as one line:
+ * `AQP381 w=<project> <phase>=<ms>... end=<ms>`.
+ */
+function startPhases(testInfo: TestInfo): { readonly mark: (name: string) => void; readonly print: () => void } {
+  const startedAt = Date.now();
+  const marks: string[] = [];
+  return {
+    mark: (name) => {
+      marks.push(`${name}=${Date.now() - startedAt}`);
+    },
+    print: () => {
+      // eslint-disable-next-line no-console -- diagnostic output, read from the CI log
+      console.log(`AQP381 w=${testInfo.project.name} ${marks.join(' ')} end=${Date.now() - startedAt}`);
+    },
+  };
+}
 
 const recalculateButton = (page: Page) => page.locator('#review-calculate');
 const dialog = (page: Page) => page.getByRole('alertdialog');
@@ -227,25 +245,55 @@ test.describe('AC-2, AC-3: "Recalculate anyway" makes the Lead\'s own calculatio
 
 test.describe('AC-5: the approval dialog says so, and Approve is not stopped', () => {
   test('AC-5: one line names the row, there is no box to tick, and Approve and lock approves the calculation that carries the warning', async ({ page }, testInfo) => {
-    const { owner, code } = await warnedEstimate(testInfo);
-    await engineerWentAhead(page, owner, code);
-    const lead = await createDisposableUser('axe', testInfo, 'LEAD');
-    await openAs(page, lead, code);
-    await expect(page.locator('#review-approve')).toBeEnabled();
-    await waitUntilHydrated(page, '#review-approve');
-    await page.locator('#review-approve').click();
+    const phases = startPhases(testInfo);
+    try {
+      const { owner, code } = await warnedEstimate(testInfo);
+      phases.mark('made');
+      await signInAs(page, owner);
+      phases.mark('engineerSignedIn');
+      await page.goto(`/estimates/${code}`);
+      phases.mark('engineerGoto');
+      const statuses = await page.evaluate(async (id) => {
+        const url = `/api/v1/estimates/${id}/calculate`;
+        const asked = await fetch(url, { method: 'POST' });
+        const { inputsRevision } = (await asked.json()) as { inputsRevision: number };
+        const went = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acknowledge: { inputsRevision } }) });
+        return { asked: asked.status, went: went.status };
+      }, owner.id);
+      expect(statuses).toEqual({ asked: 409, went: 200 });
+      expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+      phases.mark('wentAhead');
+      const lead = await createDisposableUser('axe', testInfo, 'LEAD');
+      phases.mark('leadMade');
+      await signInAs(page, lead);
+      phases.mark('leadSignedIn');
+      const response = await page.goto(`/estimates/${code}`);
+      expect(response?.status()).toBe(200);
+      phases.mark('leadGoto');
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+      await expect(page.locator('#review-approve')).toBeEnabled();
+      await waitUntilHydrated(page, '#review-approve');
+      phases.mark('leadHydrated');
+      await page.locator('#review-approve').click();
 
-    const approve = page.getByRole('dialog', { name: 'Approve and lock' });
-    await expect(approve).toBeVisible();
-    await expect(approve).toContainText(APPROVE_LINE);
-    await expect(approve.getByRole('checkbox')).toHaveCount(0);
-    const submit = approve.getByRole('button', { name: 'Approve and lock', exact: true });
-    await expect(submit).toBeEnabled();
-    await submit.click();
-    await expect(page.locator('#review-approved-notice')).toBeVisible();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'APPROVED', calculations: 1 });
-    // Approved: the notice and the mark stay with what was approved.
-    await expect(notice(page)).toContainText(`${owner.name} went ahead on`);
+      const approve = page.getByRole('dialog', { name: 'Approve and lock' });
+      await expect(approve).toBeVisible();
+      phases.mark('dialogOpen');
+      await expect(approve).toContainText(APPROVE_LINE);
+      await expect(approve.getByRole('checkbox')).toHaveCount(0);
+      const submit = approve.getByRole('button', { name: 'Approve and lock', exact: true });
+      await expect(submit).toBeEnabled();
+      phases.mark('dialogAsserted');
+      await submit.click();
+      await expect(page.locator('#review-approved-notice')).toBeVisible();
+      phases.mark('approvedNotice');
+      expect(await readEstimateState(owner.id)).toEqual({ status: 'APPROVED', calculations: 1 });
+      // Approved: the notice and the mark stay with what was approved.
+      await expect(notice(page)).toContainText(`${owner.name} went ahead on`);
+      phases.mark('noticeKept');
+    } finally {
+      phases.print();
+    }
   });
 });
 
