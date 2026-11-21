@@ -1,11 +1,13 @@
 import { ArrowRight } from 'lucide-react';
 import type { Ref } from 'react';
 
+import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { Icon } from '@/components/shared/icon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { AuditEntryRow } from '@/lib/audit/audit-client';
+import { cn } from '@/lib/cn';
 import { formatIst } from '@/lib/time';
 
 import {
@@ -51,9 +53,9 @@ function ChangeText({ change }: { readonly change: AuditEntryRow['change'] }) {
   );
 }
 
-/** The Event column: the category the entry appears under, or the stored event name for one this release does not know. */
+/** The Event column: the kind of a configuration entry ("Formula edit"), else the category the entry appears under, or the stored event name for one this release does not know. */
 function eventLabelOf(entry: AuditEntryRow): string {
-  return entry.category?.label ?? entry.event;
+  return entry.kindLabel ?? entry.category?.label ?? entry.event;
 }
 
 export function AuditList({ entries, total, hasMore, loadingMore, onShowMore, footerRef }: AuditListProps) {
@@ -84,7 +86,7 @@ export function AuditList({ entries, total, hasMore, loadingMore, onShowMore, fo
                   </Badge>
                 </TableCell>
                 <TableCell className="break-words text-ink">{entry.objectLabel}</TableCell>
-                <TableCell className="text-ink-2">
+                <TableCell className={cn('text-ink-2', BREAK_LONG_NAMES)}>
                   <ChangeText change={entry.change} />
                 </TableCell>
               </TableRow>
@@ -102,7 +104,7 @@ export function AuditList({ entries, total, hasMore, loadingMore, onShowMore, fo
               <span className="text-label text-ink-2 tabular-nums">{formatIst(new Date(entry.createdAt))}</span>
             </div>
             <div className="break-words text-ink">{entry.objectLabel}</div>
-            <div className="break-words text-ink-2">
+            <div className={cn('text-ink-2', BREAK_LONG_NAMES)}>
               <ChangeText change={entry.change} />
             </div>
             <div className="text-label text-ink-2">{entry.who}</div>

@@ -54,6 +54,11 @@ interface EventDefinition<Before extends StoredShape, After extends StoredShape>
   readonly objectType: string;
   readonly category: AuditCategoryId;
   readonly status: 'wired' | 'reserved';
+  /**
+   * The Event column's words for an entry of this event, when the category is too wide to tell the kinds apart (STORY-08.07 AC-2: "Formula edit", "Field insert", "Field delete", "Checkpoint revert"). Every event
+   * of the `config_change` category has one (`tests/unit/config-history.test.ts` fails a configuration event without it); elsewhere the column shows the category.
+   */
+  readonly kindLabel?: string;
   readonly before: Before;
   readonly after: After;
   /** `objectType` is the entry's own (`process_item`, `material`): a generic master event chooses its words by it. */
@@ -552,6 +557,7 @@ export const AUDIT_EVENTS = {
     objectType: 'field',
     category: 'config_change',
     status: 'wired',
+    kindLabel: 'Formula edit',
     before: z.strictObject({ formula: z.string().min(1) }),
     after: z.strictObject({ formula: z.string().min(1), version: z.number().int().positive() }),
     describe: (before, after) => ({ before: before.formula, after: `${after.formula} (configuration version ${String(after.version)})` }),
@@ -565,6 +571,7 @@ export const AUDIT_EVENTS = {
     objectType: 'field',
     category: 'config_change',
     status: 'wired',
+    kindLabel: 'Field insert',
     before: z.null(),
     after: insertedAfterState,
     describe: (_before, after) => ({ before: NOT_IN_THE_WORKSHEET, after: describeInsertAudit(after) }),
@@ -578,6 +585,7 @@ export const AUDIT_EVENTS = {
     objectType: 'field',
     category: 'config_change',
     status: 'wired',
+    kindLabel: 'Field delete',
     before: deletedBeforeState,
     after: deletedAfterState,
     describe: (before, after) => ({ before: describeDeleteBefore(before), after: describeDeleteAfter(after) }),
