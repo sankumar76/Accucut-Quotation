@@ -66,7 +66,9 @@ async function answerChoiceSave(page: Page): Promise<{ readonly sent: Array<Reco
     if (!(FIELD_ID in values)) return route.continue();
     sent.push(values);
     const part = new URL(request.url()).pathname.split('/')[6] ?? '';
-    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: part, revision: 2, completeness: 'PARTIAL', inputs: values }) });
+    // The answer lists the part's values as the server does: one `{ fieldId, value }` for each (a body the page cannot read is a failed save, and the card would not count the choice).
+    const inputs = Object.entries(values).map(([fieldId, value]) => ({ fieldId, value }));
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: part, revision: 2, completeness: 'PARTIAL', inputs }) });
   });
   return { sent };
 }
