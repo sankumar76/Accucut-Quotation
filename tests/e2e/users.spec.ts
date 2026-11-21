@@ -87,7 +87,10 @@ test.describe('the list', () => {
       text.id = 'aqp383-plant-contrast';
       text.textContent = 'Planted low contrast text';
       text.style.cssText = 'color:#cccccc;background:#ffffff';
-      main.append(button, image, text);
+      const heading = document.createElement('h5');
+      heading.id = 'aqp383-plant-besteffort';
+      heading.textContent = 'Planted skipped heading level (a best-practice rule, outside the suite tags)';
+      main.append(button, image, text, heading);
     });
     const outcome = await expectNoAxeViolations(page).then(
       () => 'NOT REPORTED',
@@ -101,6 +104,10 @@ test.describe('the list', () => {
     expect(outcome).toContain('button-name');
     expect(outcome).toContain('image-alt');
     expect(outcome).toContain('color-contrast');
+    // The tags are kept: a best-practice-only rule (heading-order) is NOT reported, as before the change.
+    // eslint-disable-next-line no-console -- diagnostic output
+    console.log(`AQP383PLANT ${testInfo.project.name} r${testInfo.retry} bestPracticeReported=${outcome.includes('heading-order')} planted=${outcome.includes('aqp383-plant-besteffort')}`);
+    expect(outcome).not.toContain('heading-order');
   });
 
   test('AC-7: controls are at least 44 px, and the icon buttons of a table row at least 36 px', async ({ page }, testInfo) => {
