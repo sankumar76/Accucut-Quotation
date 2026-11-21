@@ -99,6 +99,19 @@ describe('only the Configuration routes, page and composition import the Configu
     // The dialog's hooks (the dialog and its view import their siblings by relative path, so the scan sees only the two that import the restricted client modules).
     'src/components/features/config/use-delete-field.ts',
     'src/components/features/config/use-fields-delete.ts',
+    // STORY-08.06: the checkpoints page, its two routes, the screen and the hooks that import the client module, and the service. The page and the routes are the Admin's alone (the manifest), the service is blocked for
+    // every Engineer view, and the answers hold a checkpoint's name and a version number, never a snapshot or a formula.
+    'src/app/(portal)/config/checkpoints/page.tsx',
+    'src/app/api/v1/config/checkpoints/route.ts',
+    'src/app/api/v1/config/versions/[id]/revert/route.ts',
+    'src/components/features/config/checkpoints-screen.tsx',
+    'src/components/features/config/checkpoints-table.tsx',
+    'src/components/features/config/revert-dialog.tsx',
+    'src/components/features/config/use-checkpoint-data.ts',
+    'src/components/features/config/use-checkpoints-revert.ts',
+    'src/components/features/config/use-revert.ts',
+    'src/components/features/config/use-save-checkpoint.ts',
+    'src/server/services/config-checkpoint-service.ts',
     'src/components/features/config/fields-screen.tsx',
     'src/components/features/config/fields-table.tsx',
     'src/components/features/config/formula-editor-screen.tsx',

@@ -10,6 +10,7 @@ import { createSessionCookieIssuer, type SessionCookieIssuer } from './auth/sess
 import { createApprovalRepository } from './repositories/approval-repository';
 import { createAuditRepository } from './repositories/audit-repository';
 import { createCalculationRepository } from './repositories/calculation-repository';
+import { createConfigCheckpointRepository } from './repositories/config-checkpoint-repository';
 import { createConfigRepository } from './repositories/config-repository';
 import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
@@ -33,6 +34,7 @@ import { type CancelApprovalService, createCancelApprovalService } from './servi
 import { type CalculationService, createCalculationService } from './services/calculation-service';
 import { createConfigEditService, type ConfigEditService } from './services/config-edit-service';
 import { createConfigReadService, type ConfigReadService } from './services/config-read-service';
+import { createConfigCheckpointService, type ConfigCheckpointService } from './services/config-checkpoint-service';
 import { createConfigStructureService, type ConfigStructureService } from './services/config-structure-service';
 import { getCurrentVersion, getVersionById } from './services/config-service';
 import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
@@ -73,6 +75,7 @@ let taskService: TaskService | undefined;
 let estimateService: EstimateService | undefined;
 let configReadService: ConfigReadService | undefined;
 let configStructureService: ConfigStructureService | undefined;
+let configCheckpointService: ConfigCheckpointService | undefined;
 let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
 let approvalService: ApprovalService | undefined;
@@ -277,6 +280,22 @@ export function getConfigStructureService(): ConfigStructureService {
     audit: getAuditService(),
   });
   return configStructureService;
+}
+
+/**
+ * Checkpoints and revert (STORY-08.06): the list and the save of a checkpoint, and the revert to an earlier version with the Admin's password (FR-078, FR-080). Restricted (ADR-008): the routes that call it are in the
+ * manifest for the Admin alone. It shares the runtime-role client, the step-up check and the audit service, so the new version and its entry are one transaction.
+ */
+export function getConfigCheckpointService(): ConfigCheckpointService {
+  configCheckpointService ??= createConfigCheckpointService({
+    configurations: createConfigRepository(runtimeClient()),
+    checkpoints: createConfigCheckpointRepository(runtimeClient()),
+    masters: createMasterRepository(runtimeClient()),
+    stepUp: getStepUpService(),
+    transactions: createTransactionRunner(runtimeClient()),
+    audit: getAuditService(),
+  });
+  return configCheckpointService;
 }
 
 /**

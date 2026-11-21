@@ -17,6 +17,9 @@ import { clientFor, type Transaction } from './transaction';
 /** Version numbers start at 1; the seed is version 1. */
 export const SEED_VERSION_NUMBER = 1;
 
+/** The name of the checkpoint the seed gets (STORY-08.06 AC-1, assumption A-1: proposed words, for the ux-expert). The migration inserts the same name for an install that already holds version 1. */
+export const SEED_CHECKPOINT_NAME = 'Original configuration';
+
 /** Which version is the latest, without its ~35 KB snapshot (architecture ruling R5). */
 export interface ConfigVersionRef {
   readonly id: string;
@@ -50,13 +53,15 @@ export interface NewConfigVersion {
   readonly createdBy: string;
 }
 
+const SEED_ROWS = z.array(z.strictObject({ id: z.uuid() }));
+const SEED_CHECKPOINT_TABLE = z.array(z.strictObject({ present: z.boolean() }));
 const INSERTED_ROWS = z.array(z.strictObject({ id: z.uuid(), number: z.number().int() }));
 
 export interface ConfigRepository {
   /**
-   * Inserts the seed as version 1 only if the table holds no version at all, in one statement. Returns
+   * Inserts the seed as version 1 only if the table holds no version at all, **together with the seed checkpoint** that names it (STORY-08.06 AC-1), in one statement. Returns
    * true if it inserted, false if a version already existed. Two runs at once cannot both insert: the
-   * unique number settles it.
+   * unique number settles it, and the checkpoint is made only from a version this statement inserted, so a second run leaves one.
    */
   insertSeedVersionIfNone(input: { readonly snapshot: unknown; readonly reason: string }): Promise<boolean>;
   /**
@@ -81,15 +86,27 @@ export interface ConfigRepository {
 export function createConfigRepository(db: PrismaClient): ConfigRepository {
   return {
     insertSeedVersionIfNone({ snapshot, reason }) {
-      return withDatabaseErrors(async () => {
-        // Parameterised; the casts give each parameter a type, which `INSERT ... SELECT` cannot infer.
-        const inserted = await db.$executeRaw`
-          INSERT INTO config_versions (number, snapshot, created_by, reason)
-          SELECT ${SEED_VERSION_NUMBER}::integer, ${JSON.stringify(snapshot)}::jsonb, NULL, ${reason}::text
-          WHERE NOT EXISTS (SELECT 1 FROM config_versions)
-          ON CONFLICT (number) DO NOTHING`;
-        return inserted === 1;
-      });
+      // One transaction: the version and its checkpoint are stored together or not at all. The checkpoint is made only from a version this call inserted, so a second run, which inserts nothing, leaves one.
+      return withDatabaseErrors(() =>
+        db.$transaction(async (transaction) => {
+          // Parameterised; the casts give each parameter a type, which `INSERT ... SELECT` cannot infer.
+          const rows = await transaction.$queryRaw`
+            INSERT INTO config_versions (number, snapshot, created_by, reason)
+            SELECT ${SEED_VERSION_NUMBER}::integer, ${JSON.stringify(snapshot)}::jsonb, NULL, ${reason}::text
+            WHERE NOT EXISTS (SELECT 1 FROM config_versions)
+            ON CONFLICT (number) DO NOTHING
+            RETURNING id::text AS "id"`;
+          const seed = SEED_ROWS.parse(rows)[0];
+          if (seed === undefined) return false;
+          // The step runs right after the migrations, so the table is there; it is asked for all the same, because a step that is run against a schema one migration behind (a restored copy not yet migrated forward,
+          // deploy/windows/tests/Restore.Tests.ps1 R3) must still store version 1, as the step of that release did.
+          const present = SEED_CHECKPOINT_TABLE.parse(await transaction.$queryRaw`SELECT to_regclass('public.config_checkpoints') IS NOT NULL AS "present"`)[0];
+          if (present?.present === true) {
+            await transaction.$executeRaw`INSERT INTO config_checkpoints (name, config_version_id, created_by) VALUES (${SEED_CHECKPOINT_NAME}::text, ${seed.id}::uuid, NULL)`;
+          }
+          return true;
+        }),
+      );
     },
 
     insertVersionAfter({ baseNumber, snapshot, reason, createdBy }, tx) {
