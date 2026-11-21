@@ -163,7 +163,7 @@ const ROWS: ReadonlyArray<RouteRow> = [
     nav: { group: 'Administration', label: 'Audit log', order: 30, icon: 'scroll-text' },
   },
   { path: '/api/v1/audit', kind: 'api', methods: ['GET'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
-  // STORY-02.01 (SCR-11). The Admin only (BR-004). The default-change routes (`/process-items/{id}/default-change`) are story 02.08's.
+  // STORY-02.01 (SCR-11). The Admin only (BR-004). Story 02.08 adds `/process-items/{id}/propagation`, below.
   {
     path: '/masters/process',
     kind: 'page',
@@ -176,6 +176,8 @@ const ROWS: ReadonlyArray<RouteRow> = [
   },
   { path: '/api/v1/process-items', kind: 'api', methods: ['GET', 'POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/process-items/[id]', kind: 'api', methods: ['PATCH', 'DELETE'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
+  // STORY-02.08 (SCR-11 "Customers differ"): Save choices after a changed default. The Admin only, like the rest of the Process Master.
+  { path: '/api/v1/process-items/[id]/propagation', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },
   // STORY-02.03 (SCR-13, the Materials tab). The page and the two Admin routes are the Admin's (BR-004); `DELETE /materials/{id}` is the Admin's too (STORY-02.07
   // AC-6, the delete of a material no open estimate uses). `/api/v1/options/materials` is the one route of the story that every role may call (AC-4): IDs, names and Material
   // Considered, and no rate of any kind, so the cost scan covers it as an Engineer route. The nav entry is the page's, from the planned row.

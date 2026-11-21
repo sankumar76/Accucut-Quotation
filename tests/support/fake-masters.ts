@@ -21,6 +21,7 @@ import { ESTIMATE_USE_LIMIT, type EstimateUses } from '../../src/server/reposito
 import { NOT_APPLICABLE_MATERIAL_ID, NOT_APPLICABLE_NAME, NOT_APPLICABLE_TREATMENT_ID } from '../../src/lib/masters/system-entries';
 
 import { createFakeCustomerMethods, type FakeCustomer } from './fake-customers';
+import { createFakePropagationMethods } from './fake-propagation';
 import { SEED_PROCESS_ITEMS } from './seed-config';
 import { FRESH_TREATMENTS } from './treatment-canary';
 
@@ -277,6 +278,7 @@ export function createFakeMasterRepository(
     treatmentLockCount: () => treatmentLocks,
     exchangeLockCount: () => exchangeLocks,
     ...createFakeCustomerMethods(records, customers),
+    ...createFakePropagationMethods(records, customers),
     ...createFakeTreatmentMethods(treatments, () => {
       treatmentLocks += 1;
     }),

@@ -58,7 +58,7 @@ describe('AC-2: adding a rate', () => {
   it('adds the rate with its unit and default, normalised to two decimals, and records one master.created entry (AC-5)', async () => {
     const { service, world } = build();
     const created = await service.createProcessItem(CONTEXT, { name: 'Buffing-rate-per-sqin', unit: 'per sq in', defaultValue: '1.5' });
-    expect(created).toEqual({ id: expect.any(String), name: 'Buffing-rate-per-sqin', unit: 'per sq in', defaultValue: '1.50', usedBy: [] });
+    expect(created).toEqual({ id: expect.any(String), name: 'Buffing-rate-per-sqin', unit: 'per sq in', defaultValue: '1.50', usedBy: [], customersWithOwnValue: 0 });
     expect(world.audit.appended).toHaveLength(1);
     expect(world.audit.appended[0]).toMatchObject({
       event: 'master.created',

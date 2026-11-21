@@ -36,6 +36,7 @@ import type { Transaction, TransactionRunner } from '../repositories/transaction
 
 import type { AuditContext, AuditService } from './audit-service';
 import { createCustomerOperations, type CustomerOperations } from './customer-service';
+import { createPropagationOperations, customerRateEntries, propagateChangedDefault, type DefaultPropagation, type PropagationOperations } from './default-propagation-service';
 import { createExchangeRateOperations, type ExchangeRateOperations } from './exchange-rate-service';
 import { assertNameUsable } from './rate-name-rules';
 import { createTreatmentOperations, type TreatmentOperations } from './treatment-service';
@@ -75,7 +76,8 @@ import { createTreatmentOperations, type TreatmentOperations } from './treatment
  *
  * **The Customer Master** (STORY-02.02; FR-013) is `customer-service.ts`. What this file adds for it is the synchronisation of SPEC section 4.2 rules 3 and 5
  * (AC-4): a rate added gets a row for every customer at its default, and a rate deleted loses its row on every customer, each in the **same transaction** as the
- * change to the rate and writing no entry of its own (the rate's entry stands for it).
+ * change to the rate and writing no entry of its own (the rate's entry stands for it). A **changed default** (STORY-02.08) reaches the customers that held the old one in the
+ * same transaction, one `master.edited` per customer after the rate's own, and asks about the others (`default-propagation-service.ts`).
  */
 
 const NOT_FOUND_MESSAGE = 'Rate not found.';
@@ -86,6 +88,13 @@ const MATERIAL_OBJECT_TYPE = 'material';
 /** A rate as SCR-11 shows it: its values, and the formulas that use it (empty when none does). */
 export interface ProcessItemView extends ProcessItemRecord {
   readonly usedBy: ReadonlyArray<FormulaUse>;
+  /** How many listed customers hold a value other than this default (the column of SCR-11; 0 when none does). */
+  readonly customersWithOwnValue: number;
+}
+
+/** A saved rate, and what its new default did to the customers (null when the save did not change the default). */
+export interface ProcessItemUpdate extends ProcessItemView {
+  readonly propagation: DefaultPropagation | null;
 }
 
 export interface MastersServiceDependencies {
@@ -103,11 +112,14 @@ export interface MastersServiceDependencies {
  * Every change takes the `AuditContext` first: `actorId` is the Admin making the change and `requestId` the request it came in
  * on. Both go into the audit entry.
  */
-export interface MastersService extends CustomerOperations, ExchangeRateOperations, TreatmentOperations {
+export interface MastersService extends CustomerOperations, ExchangeRateOperations, PropagationOperations, TreatmentOperations {
   listProcessItems(): Promise<ReadonlyArray<ProcessItemView>>;
   createProcessItem(context: AuditContext, input: NewProcessItem): Promise<ProcessItemView>;
-  /** `changes` has at least one field (the route's schema sees to that). A save that changes nothing writes no entry. */
-  updateProcessItem(context: AuditContext, id: string, changes: ProcessItemChanges): Promise<ProcessItemView>;
+  /**
+   * `changes` has at least one field (the route's schema sees to that). A save that changes nothing writes no entry. A new default moves the customers that held the old
+   * one and lists those that hold another value (`propagation`, STORY-02.08), in the same transaction.
+   */
+  updateProcessItem(context: AuditContext, id: string, changes: ProcessItemChanges): Promise<ProcessItemUpdate>;
   /** Refused with `ProcessItemInUseError` (409, naming the formulas) while a formula of the current configuration uses the rate. */
   deleteProcessItem(context: AuditContext, id: string): Promise<void>;
 
@@ -279,9 +291,10 @@ function createMaterialOperations(dependencies: MaterialDependencies): MaterialO
 
 // Over 40 lines on purpose (coding standards section 1): a factory whose parts are small named functions of 10 to 15 lines each.
 export function createMastersService({ masters, transactions, audit, currentConfiguration, clock }: MastersServiceDependencies): MastersService {
-  const withUses = (item: ProcessItemRecord, uses: ReadonlyMap<string, ReadonlyArray<FormulaUse>>): ProcessItemView => ({
+  const withUses = (item: ProcessItemRecord, uses: ReadonlyMap<string, ReadonlyArray<FormulaUse>>, own: ReadonlyMap<string, number>): ProcessItemView => ({
     ...item,
     usedBy: uses.get(item.id.toLowerCase()) ?? [],
+    customersWithOwnValue: own.get(item.id.toLowerCase()) ?? 0,
   });
 
   /** The other rates (their IDs and names), read in the transaction after the table lock. */
@@ -315,17 +328,21 @@ export function createMastersService({ masters, transactions, audit, currentConf
     id: string,
     wanted: ProcessItemChanges,
     document: ConfigDocument,
-  ): Promise<ProcessItemRecord> {
+  ): Promise<{ readonly record: ProcessItemRecord; readonly propagation: DefaultPropagation | null }> {
     await masters.lockProcessItems(tx);
     const before = await masters.findProcessItemForUpdate(id, tx);
     if (before === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
     const next = changesFrom(before, wanted);
-    if (Object.keys(next).length === 0) return before;
+    if (Object.keys(next).length === 0) return { record: before, propagation: null };
     if (next.name !== undefined) assertNameUsable({ name: next.name, others: await ratesOtherThan(before.id, tx), renamed: before, document });
     const after = await masters.updateProcessItem(before.id, next, tx);
     if (after === null) throw new NotFoundError(NOT_FOUND_MESSAGE);
     await audit.record(tx, { event: 'master.edited', ...entryFor(context, after), before: auditState(before), after: auditState(after) });
-    return after;
+    if (next.defaultValue === undefined) return { record: after, propagation: null };
+    const saved = await propagateChangedDefault(masters, tx, context, before, after);
+    // One entry per customer that moved, after the rate's own, in this transaction (STORY-02.08 AC-9).
+    for (const entry of customerRateEntries(context, after, saved.changes)) await audit.record(tx, entry);
+    return { record: after, propagation: saved.propagation };
   }
 
   async function removeInTransaction(tx: Transaction, context: AuditContext, id: string, document: ConfigDocument): Promise<void> {
@@ -344,24 +361,25 @@ export function createMastersService({ masters, transactions, audit, currentConf
     ...createExchangeRateOperations({ masters, transactions, audit, currentConfiguration, clock }),
     ...createTreatmentOperations({ masters, transactions, audit }),
     ...createCustomerOperations({ masters, transactions, audit }),
+    ...createPropagationOperations({ masters, transactions, audit }),
 
     async listProcessItems() {
-      const [items, document] = await Promise.all([masters.listProcessItems(), currentConfiguration()]);
+      const [items, document, own] = await Promise.all([masters.listProcessItems(), currentConfiguration(), masters.countCustomersWithOwnValue()]);
       const uses = rateUsesOf(document);
-      return items.map((item) => withUses(item, uses));
+      return items.map((item) => withUses(item, uses, own));
     },
 
     async createProcessItem(context, input) {
       const item: NewProcessItem = { name: input.name, unit: input.unit, defaultValue: normaliseDecimalText(input.defaultValue) };
       const document = await currentConfiguration();
       const created = await withNameRule(() => transactions.run((tx) => addInTransaction(tx, context, item, document)));
-      return withUses(created, rateUsesOf(document));
+      return withUses(created, rateUsesOf(document), await masters.countCustomersWithOwnValue());
     },
 
     async updateProcessItem(context, id, changes) {
       const document = await currentConfiguration();
-      const updated = await withNameRule(() => transactions.run((tx) => changeInTransaction(tx, context, id, changes, document)));
-      return withUses(updated, rateUsesOf(document));
+      const { record, propagation } = await withNameRule(() => transactions.run((tx) => changeInTransaction(tx, context, id, changes, document)));
+      return { ...withUses(record, rateUsesOf(document), await masters.countCustomersWithOwnValue()), propagation };
     },
 
     async deleteProcessItem(context, id) {

@@ -56,6 +56,7 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   // The API behind the Process master screen (SPEC section 9: masters are the Admin's, BR-004; architecture section 6 row "Process items", CR-33).
   '/api/v1/process-items': ['ADMIN'],
   '/api/v1/process-items/[id]': ['ADMIN'],
+  '/api/v1/process-items/[id]/propagation': ['ADMIN'], // Save choices of a changed default (STORY-02.08): the Admin's alone, like the rest of the Process master
   '/api/v1/materials': ['ADMIN'], // the Materials tab of SCR-13: masters are the Admin's (BR-004), CR-33
   '/api/v1/materials/[id]': ['ADMIN'],
   '/api/v1/exchange-rates': ['ADMIN'], // the Exchange rates tab (STORY-02.04): the Admin's alone; an Engineer never receives a rate (BR-003)

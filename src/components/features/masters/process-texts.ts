@@ -10,6 +10,9 @@ export const PROCESS_TITLE = 'Process master';
 export const PROCESS_DESCRIPTION = 'Default rates. Every customer starts with these values and can have its own.';
 export const ADD_RATE = 'Add rate';
 
+/** The column of the table that says how many customers hold their own value for the rate (STORY-02.08 AC-10). */
+export const OWN_VALUE_COLUMN = 'Customers with own value';
+
 export const SEARCH_LABEL = 'Search';
 export const SEARCH_PLACEHOLDER = 'Rate name';
 
