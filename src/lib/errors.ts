@@ -99,6 +99,16 @@ export class TooManyAttemptsError extends AppError {
   }
 }
 
+/**
+ * A reset link that is used, expired, unknown, or for a person who is not active (STORY-09.07 AC-7): 400. One class, one code and one message for all four, so the answer
+ * cannot tell them apart and a person holding a token learns nothing about it. The message is the caller's (SCR-02's sentence).
+ */
+export class ResetLinkInvalidError extends AppError {
+  constructor(message: string, code: string) {
+    super(code, 400, message);
+  }
+}
+
 /** The `code` of the 422 of a wrong password given for a protected action (STORY-06.14 AC-2, ADR-009). The browser compares with it to show SCR-18's message. */
 export const STEP_UP_FAILED_CODE = 'STEP_UP_FAILED';
 

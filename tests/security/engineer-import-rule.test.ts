@@ -58,6 +58,8 @@ const REPOSITORIES = {
     'calculation-repository',
     'config-repository',
     'customer-repository',
+    // STORY-09.07 (NFR-002): the reset links (a hash of a secret token and a person), for the reset service only. Holds no cost data, but nothing an Engineer view has a use for.
+    'password-reset-repository',
     'decimal-text',
     // STORY-09.01 (TB-4): the e-mail outbox holds names and task details in bodies, and the settings row of the mail sender. Confidential; no Engineer view reads or writes it.
     'email-outbox-repository',
@@ -128,6 +130,8 @@ const SERVICES = {
     'exchange-rate-service',
     'masters-service',
     'password-policy',
+    // STORY-09.07: the reset by e-mailed link (a public request and the use of a token, with the outbox row of the message). It holds no cost data and is called by its two public routes and its page, never by a view.
+    'password-reset-service',
     // STORY-06.11 (NFR-002): the count of what changed in the rates since a calculation reads the stored snapshot and the masters now, for the unlock preview and the Lead's notice only.
     'rate-changes',
     'rate-name-rules',

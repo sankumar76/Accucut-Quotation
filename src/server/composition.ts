@@ -17,6 +17,7 @@ import { createExportRepository } from './repositories/export-repository';
 import { createImageRepository } from './repositories/image-repository';
 import { createHeartbeatRepository, createJobRunRepository, type HeartbeatRepository } from './repositories/job-run-repository';
 import { createEmailOutboxRepository } from './repositories/email-outbox-repository';
+import { createPasswordResetRepository } from './repositories/password-reset-repository';
 import { createSettingsRepository } from './repositories/settings-repository';
 import { createMasterRepository } from './repositories/master-repository';
 import { getPrismaClient } from './repositories/prisma-client';
@@ -43,6 +44,7 @@ import { createMailer } from './mail/send';
 import { createMailTransport } from './mail/transport';
 import { createExportService, type ExportService } from './services/export-service';
 import { createMastersService, type MastersService } from './services/masters-service';
+import { createPasswordResetService, type PasswordResetService } from './services/password-reset-service';
 import { createRemovePriceService, type RemovePriceService } from './services/remove-price-service';
 import { createSettingsService, type SettingsService } from './services/settings-service';
 import { createStepUpService, type StepUpService } from './services/step-up-service';
@@ -63,6 +65,7 @@ let userRepository: UserRepository | undefined;
 let authService: AuthService | undefined;
 let userService: UserService | undefined;
 let accountService: AccountService | undefined;
+let passwordResetService: PasswordResetService | undefined;
 let adminHandoverService: AdminHandoverService | undefined;
 let stepUpService: StepUpService | undefined;
 let configEditService: ConfigEditService | undefined;
@@ -147,6 +150,26 @@ export function getAccountService(): AccountService {
     keySecret: loadAppEnv().AUTH_SECRET,
   });
   return accountService;
+}
+
+/**
+ * Reset a password by an e-mailed link (STORY-09.07): the request for a link (public, enumeration-safe, counted on keys of its own) and the use of one. The link is queued through the outbox
+ * (`getMailService().enqueue`), so a mail server that is down never blocks the request, and it is built from `APP_ORIGIN`. `FEATURE_EMAIL` is read on every request.
+ */
+export function getPasswordResetService(): PasswordResetService {
+  passwordResetService ??= createPasswordResetService({
+    resets: createPasswordResetRepository(runtimeClient()),
+    users: getUserRepository(),
+    throttles: createThrottleRepository(runtimeClient()),
+    hasher: passwordHasher,
+    transactions: createTransactionRunner(runtimeClient()),
+    mail: { enqueue: (tx, message) => getMailService().enqueue(tx, message) },
+    clock: systemClock,
+    keySecret: loadAppEnv().AUTH_SECRET,
+    appOrigin: () => loadOriginEnv().APP_ORIGIN,
+    emailEnabled: () => loadEmailFeature(),
+  });
+  return passwordResetService;
 }
 
 /**
