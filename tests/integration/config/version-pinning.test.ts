@@ -50,7 +50,8 @@ const made: { approved: string; unlocked: string; cancelled: string; submitted: 
 let before: Awaited<ReturnType<typeof approvedValuesOf>>;
 let formBefore: Awaited<ReturnType<EstimateService['getForm']>>;
 let partOfApproved: string;
-let unlockedBefore: { costs: unknown; nodeCosts: unknown };
+let unlockedBefore: { costs: unknown; nodeCosts: unknown; summary: unknown };
+let summaryBefore: unknown;
 let firstVersionId: string;
 
 const engineer = (): EstimateViewer => engineerOf(world.db);
@@ -121,10 +122,15 @@ beforeAll(async () => {
   made.submitted = (await calculatedEstimateOf(world)).estimateId;
   made.fresh = await db.addEstimate({ engineer: true });
   before = await approvedValuesOf(world, made.approved);
+  summaryBefore = await world.exporter.getSummary(world.lead, made.approved);
   formBefore = await estimates.getForm(lead(), made.approved);
   await unlock(made.unlocked);
   await cancelApproval(made.cancelled);
-  unlockedBefore = { costs: await world.review.getCosts(world.lead, made.unlocked), nodeCosts: await world.details.getNodeCosts(world.lead, made.unlocked, defined((await db.nodes.listNodes(made.unlocked))[0]).id) };
+  unlockedBefore = {
+    costs: await world.review.getCosts(world.lead, made.unlocked),
+    nodeCosts: await world.details.getNodeCosts(world.lead, made.unlocked, defined((await db.nodes.listNodes(made.unlocked))[0]).id),
+    summary: await world.exporter.getSummary(world.lead, made.unlocked),
+  };
 
   // Versions 2, 3 and 4, made by the Admin's services: a formula saved, an input inserted before BL, a field deleted.
   await edit.saveFormula(admin, AL.id, { text: 'P * Cutting-Rate-per-Sec * 2', password: RIGHT, baseVersion: await latestNumber() });
@@ -187,6 +193,8 @@ describe('AC-4 (FR-077, SPEC section 14 item 8): an approved estimate does not c
     const after = await approvedValuesOf(world, made.approved);
     expect(after.costs.configurationNumber).toBe(1);
     expect(after).toEqual(before);
+    // SCR-10: the summary (the columns and the cell addresses it names) is the one of version 1 too.
+    expect(await world.exporter.getSummary(world.lead, made.approved)).toEqual(summaryBefore);
     // The file is not empty and is the one of version 1: header, two parts, an empty row and the footer, BL2 and BO2 in version 1's columns.
     expect((await exportCellsOf(world, made.approved)).rows).toHaveLength(5);
   });
@@ -247,6 +255,7 @@ describe('AC-6 (SPEC section 8.4): a new or unlocked estimate uses the latest ve
     expect(costsBefore.configurationNumber).toBe(1);
     expect(costsBefore.state).toBe('current');
     expect(costsBefore).toEqual(unlockedBefore.costs);
+    expect(await world.exporter.getSummary(world.lead, made.unlocked)).toEqual(unlockedBefore.summary);
     expect(await world.details.getNodeCosts(world.lead, made.unlocked, defined((await db.nodes.listNodes(made.unlocked))[0]).id)).toEqual(unlockedBefore.nodeCosts);
 
     const inUseBefore = (await configurations().readVersionUse(firstVersionId)).estimatesInUse;
