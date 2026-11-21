@@ -36,7 +36,8 @@ const labels = (page: { readonly entries: ReadonlyArray<{ readonly objectLabel: 
 beforeAll(async () => {
   db = await openAuditDatabase();
   adminOne = await insertPersonAsOwner(db, 'Admin One', 'ADMIN');
-  adminTwo = await insertPersonAsOwner(db, 'Admin Two', 'ADMIN');
+  // Only one Admin is active at a time (the hand-over): the second is the earlier Admin, deactivated.
+  adminTwo = await insertPersonAsOwner(db, 'Admin Two', 'ADMIN', false);
   await db.users.list();
 });
 
