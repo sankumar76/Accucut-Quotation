@@ -269,8 +269,9 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
       const { values } = checked;
       const folderUrl = folderUrlOf(values.folderPath);
       if (folderUrl === null) throw new Error('A checked folder path has no link.');
-      // Read before the transaction opens: the row is written, or not, by the switch as it is now; a switch turned off before the worker claims the row skips it (STORY-09.01 AC-5).
-      const alertsOn = mail !== undefined && (await mail.alertsEnabled());
+      // Read before the transaction opens: the row is written, or not, by the switches as they are now (the alerts setting, and `FEATURE_EMAIL`, DEF-055); a setting turned off before the worker
+      // claims the row skips it (STORY-09.01 AC-5).
+      const queueing = mail !== undefined && (await mail.queueingEnabled());
 
       return transactions.run(async (tx) => {
         const engineer = await tasks.findActiveEngineer(values.engineerId, tx);
@@ -282,7 +283,7 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
           tx,
         );
         const estimate = await tasks.createEstimate(task.id, tx);
-        if (alertsOn) {
+        if (queueing) {
           await enqueueAssigned(
             tx,
             { id: task.id, code: task.code, title: task.title, notes: task.notes, folderPath: task.folderPath, deadlineAt: task.deadlineAt, assignmentRevision: task.assignmentRevision, engineer },
@@ -358,13 +359,17 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
           after: { engineer, deadlineAt: deadlineAt.toISOString() },
         });
         // A new Engineer is told as a first assignment is, with the new revision in the key and the person who made the change copied (STORY-09.03 AC-7). A deadline-only change is not
-        // an assignment: the overdue e-mail follows the deadline (STORY-09.04).
-        if (engineerChanged && mail !== undefined && (await mail.alertsEnabled())) {
-          await enqueueAssigned(
+        // an assignment: the overdue e-mail follows the deadline (STORY-09.04). The old Engineer's unsent assignment e-mail is withdrawn first, whatever the switches say now (it may have been
+        // written while they were on), in this transaction, so a reassign that rolls back leaves it as it was (DEF-055).
+        if (engineerChanged && mail !== undefined) {
+          await mail.withdrawUnsent(tx, locked.id);
+          if (await mail.queueingEnabled()) {
+            await enqueueAssigned(
             tx,
-            { id: locked.id, code: locked.code, title: locked.title, notes: locked.notes, folderPath: locked.folderPath, deadlineAt, assignmentRevision, engineer },
-            context.actorId,
-          );
+              { id: locked.id, code: locked.code, title: locked.title, notes: locked.notes, folderPath: locked.folderPath, deadlineAt, assignmentRevision, engineer },
+              context.actorId,
+            );
+          }
         }
         return { engineerChanged, deadlineChanged, assignmentRevision };
       });

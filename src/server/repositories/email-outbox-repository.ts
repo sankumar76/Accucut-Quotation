@@ -117,6 +117,11 @@ export interface ResolvedRecipients {
 
 export interface EmailOutboxRepository {
   enqueue(tx: Transaction, message: OutboxMessage, now: Date): Promise<EnqueueResult>;
+  /**
+   * Gives the **unsent** rows of one event whose key starts with `keyPrefix` a `send_before` of `now` (never a later one than they have), in the caller's transaction, so the claim skips them as
+   * `EXPIRED` with the one mechanism every expiry uses (DEF-055). A row that is sending, sent, failed or skipped is not touched. Answers how many rows it expired.
+   */
+  expireUnsent(tx: Transaction, event: MailEvent, keyPrefix: string, now: Date): Promise<number>;
   claimDue(now: Date, limit: number, lockedUntil: Date): Promise<ClaimResult>;
   beginSend(row: OutboxRowRef, now: Date, lockedUntil: Date): Promise<SendLease>;
   markSent(row: OutboxRowRef, now: Date): Promise<boolean>;
@@ -199,6 +204,15 @@ export function createEmailOutboxRepository(db: PrismaClient): EmailOutboxReposi
           ON CONFLICT (idempotency_key) DO NOTHING`;
         return written === 1 ? 'queued' : 'already-queued';
       }),
+
+    expireUnsent: (tx, event, keyPrefix, now) =>
+      withDatabaseErrors(() =>
+        // `starts_with` compares text, so a `%` or `_` in the prefix is only itself. The prefix is a bound parameter like every other value.
+        clientFor(db, tx).$executeRaw`
+          UPDATE email_outbox SET send_before = ${now}::timestamptz
+          WHERE status = 'pending' AND event = ${event} AND starts_with(idempotency_key, ${keyPrefix})
+            AND (send_before IS NULL OR send_before > ${now}::timestamptz)`,
+      ),
 
     claimDue: (now, limit, lockedUntil) =>
       withDatabaseErrors(async () => {
