@@ -140,7 +140,7 @@ describe('AC-2: the approval is written in one piece', () => {
       calculations: db.calculations,
       approvals: db.approvals,
       transactions: db.transactions,
-      workflow: { transition: db.estimateService.transition, audit: { record: () => Promise.reject(new Error('Invented audit failure.')), list: db.audit.list } },
+      workflow: { transition: db.estimateService.transition, audit: { record: () => Promise.reject(new Error('Invented audit failure.')), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list } },
     });
     const before = await storedOf(db, estimateId);
     await expect(failing.approve(lead(), estimateId, request(calculationId))).rejects.toThrow('Invented audit failure.');

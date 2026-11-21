@@ -167,6 +167,7 @@ describe('AC-5 atomicity through the API: the change and its entry commit togeth
       transactions: db.transactions,
       audit: {
         record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')),
+        recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')),
         list: db.audit.list,
       },
       currentConfiguration: async () => (await getCurrentVersion(configurations)).document,

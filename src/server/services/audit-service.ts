@@ -1,6 +1,6 @@
 import { auditCategoryLabel, type AuditCategoryId } from '../../lib/audit/categories';
 import { startOfIstDay, startOfNextIstDay } from '../../lib/time';
-import type { AuditRepository, AuditRowFilter } from '../repositories/audit-repository';
+import type { AuditRepository, AuditRowFilter, NewAuditRow } from '../repositories/audit-repository';
 import type { Transaction } from '../repositories/transaction';
 
 import { type AuditCursor, encodeAuditCursor } from './audit-cursor';
@@ -18,7 +18,7 @@ import { AuditEntryRefusedError, findSecretPath } from './audit-secrets';
 /**
  * The audit service (STORY-01.07; FR-011, NFR-007; architecture sections 4.1, 6 and 8). Two jobs:
  *
- *   - `record` appends one entry **in the caller's transaction** (AC-2). The caller opens the transaction
+ *   - `record` appends one entry, and `recordMany` a batch of them, **in the caller's transaction** (AC-2). The caller opens the transaction
  *     (`TransactionRunner.run`), makes its change and calls `record` with the same `Transaction`; both are committed or both are
  *     rolled back, so an entry exists exactly when its change does. The service opens no transaction of its own, and the
  *     repository's `append` cannot run without one.
@@ -56,6 +56,9 @@ export interface AuditEntryInput<E extends AuditEventName> extends AuditEventPay
    */
   readonly objectType?: string | undefined;
 }
+
+/** An entry of any one event: the union over the events, so each member pairs its event with that event's own `before` and `after` (`AuditEntryInput<AuditEventName>` would mix them). */
+export type AnyAuditEntryInput = { [E in AuditEventName]: AuditEntryInput<E> }[AuditEventName];
 
 export interface AuditListQuery {
   /** The ID of the person who made the change. */
@@ -97,6 +100,12 @@ export interface AuditPage {
 
 export interface AuditService {
   record<E extends AuditEventName>(tx: Transaction, entry: AuditEntryInput<E>): Promise<void>;
+  /**
+   * Appends many entries in the caller's transaction with one multi-row statement per 1,000 (ADR-018; GitHub issue 568: one round trip per customer made a propagation to 500
+   * customers take seconds). Each entry passes exactly the checks `record` applies; **all are checked before any is written**, and one refusal throws
+   * `AuditEntryRefusedError` with nothing appended. An empty list sends no query. Entries of one call may share a `created_at` millisecond.
+   */
+  recordMany(tx: Transaction, entries: ReadonlyArray<AnyAuditEntryInput>): Promise<void>;
   list(query: AuditListQuery): Promise<AuditPage>;
 }
 
@@ -132,38 +141,49 @@ function filterOf(query: AuditListQuery): AuditRowFilter {
   };
 }
 
+/**
+ * Every check an entry must pass, and the row it is stored as (AC-4). The one place the checks live: `record` and `recordMany` both come through it, so a batch is
+ * judged exactly as the same entries written one by one would be (ADR-018). Throws `AuditEntryRefusedError`; writes nothing.
+ */
+function checkedRow<E extends AuditEventName>(entry: AuditEntryInput<E>): NewAuditRow {
+  const definition = AUDIT_EVENTS[entry.event];
+  const objectType = objectTypeOf(definition.objectType, entry.objectType);
+  const label = entry.object.label;
+  if (label.length === 0 || label.length > OBJECT_LABEL_MAX_LENGTH) throw new AuditEntryRefusedError('shape', 'object.label');
+  if (entry.actorLabel.length === 0 || entry.actorLabel.length > OBJECT_LABEL_MAX_LENGTH) throw new AuditEntryRefusedError('shape', 'actorLabel');
+  // A generic master event is checked against the shape of the entry's own object type, not against every master's (QLT-11).
+  const schemas = definition.schemasFor(objectType);
+  if (schemas === null) throw new AuditEntryRefusedError('shape', 'objectType');
+  const before = schemas.before.safeParse(entry.before);
+  if (!before.success) throw new AuditEntryRefusedError('shape', 'before');
+  const after = schemas.after.safeParse(entry.after);
+  if (!after.success) throw new AuditEntryRefusedError('shape', 'after');
+  const secret = findSecretPath({ before: before.data, after: after.data });
+  if (secret !== null) throw new AuditEntryRefusedError('secret', secret);
+  return {
+    actorId: entry.actorId,
+    actorLabel: entry.actorLabel,
+    event: entry.event,
+    objectType,
+    objectId: entry.object.id,
+    objectLabel: label,
+    before: before.data,
+    after: after.data,
+    requestId: entry.requestId,
+  };
+}
+
 export function createAuditService({ audit }: AuditServiceDependencies): AuditService {
   return {
     async record(tx, entry) {
-      const definition = AUDIT_EVENTS[entry.event];
-      const objectType = objectTypeOf(definition.objectType, entry.objectType);
-      const label = entry.object.label;
-      if (label.length === 0 || label.length > OBJECT_LABEL_MAX_LENGTH) throw new AuditEntryRefusedError('shape', 'object.label');
-      if (entry.actorLabel.length === 0 || entry.actorLabel.length > OBJECT_LABEL_MAX_LENGTH) throw new AuditEntryRefusedError('shape', 'actorLabel');
-      // A generic master event is checked against the shape of the entry's own object type, not against every master's (QLT-11).
-      const schemas = definition.schemasFor(objectType);
-      if (schemas === null) throw new AuditEntryRefusedError('shape', 'objectType');
-      const before = schemas.before.safeParse(entry.before);
-      if (!before.success) throw new AuditEntryRefusedError('shape', 'before');
-      const after = schemas.after.safeParse(entry.after);
-      if (!after.success) throw new AuditEntryRefusedError('shape', 'after');
-      const secret = findSecretPath({ before: before.data, after: after.data });
-      if (secret !== null) throw new AuditEntryRefusedError('secret', secret);
+      await audit.append(checkedRow(entry), tx);
+    },
 
-      await audit.append(
-        {
-          actorId: entry.actorId,
-          actorLabel: entry.actorLabel,
-          event: entry.event,
-          objectType,
-          objectId: entry.object.id,
-          objectLabel: label,
-          before: before.data,
-          after: after.data,
-          requestId: entry.requestId,
-        },
-        tx,
-      );
+    async recordMany(tx, entries) {
+      // Every entry is checked before anything is written: one refusal throws, and the caller's transaction rolls back with its change.
+      const rows = entries.map((entry) => checkedRow(entry));
+      if (rows.length === 0) return;
+      await audit.appendMany(rows, tx);
     },
 
     async list(query) {
