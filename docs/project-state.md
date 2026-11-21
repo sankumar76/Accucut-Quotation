@@ -16,6 +16,24 @@
 | Last updated       | 2026-11-20 by orchestrator (daily update) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
+## Resume after pause 4 (2026-11-21, night, orchestrator)
+
+> This section wins over everything below it.
+
+**Pause 4:** the delivery lead stopped all agents via Remote Control on 21 Nov; no pause resume point was written, so this resume starts from the "Hardening progress (2026-11-21, evening)" block below and the main session's state check. Jira AQP-1 comment 12563.
+
+**`master` = c0cf1d2** (#583 DEF-054). CI run 44924430846 and Windows package run 44924430870 green: QA closes DEF-054 on that run.
+
+**#590** (export limits, ADR-017): the merge commit pushed at the pause (b371e1d) left conflict markers in a doc comment in `next.config.ts`; the main session pushed the resolution as feacd096 (both bullets kept). CI running; merges when green.
+
+**#588** (10.09 load/capacity): every required check green. The one red check is the Nightly workflow's "CI feedback time" job (`scripts/check-ci-time.ts`: p95 28 m 06 s over 4 runs). It is not a required check (required: "Stages 1 to 11", strict) and it is red on every scheduled `master` Nightly since 19 Nov (44490538538, 44703275771, 44884087674) and on #584's PR runs before #584 merged; CI measurement windows are frozen under §9 item 4. Not a blocker for #588.
+
+**Merge order (strict up-to-date rule, so one at a time):** #590, #589, #588, #591, then records #494 and docs #581. #476 waits for the delivery lead.
+
+**Lanes restarted (at most 3; C: about 15 GB free):** 1: aqp-341, DEF-057 (#591) plus a decision on the untracked `tests/integration/masters/zz-race-diag.test.ts` (commit or drop, with the reason, never silently), then a small `.gitignore` PR for `.playwright-mcp/` (append only). 3: aqp-383, STORY-10.08 (AQP-370; 1 ahead, 1 behind `master`, no PR yet): sync, open the PR. 2: advisories #536 / #537 in a new worktree after #590 merges. QA: DEF-054 closure, DEF-056 leftovers check, test-plan check; the final regression after the hardening merges land.
+
+**Worktrees:** records-t, aqp-341, aqp-383, aqp-410. aqp-384 removed (agent memory archived in `.claude/agent-memory/_archive-2026-11-21/aqp-384/`). **aqp-410's `node_modules` junction pointed into aqp-384 and is now dangling:** before any local run there, unlink it non-recursively (`cmd //c rmdir`) and run `npm ci`. Container aqp341-db is stopped.
+
 ## Hardening progress (2026-11-21, evening, orchestrator)
 
 > This section wins over everything below it.
