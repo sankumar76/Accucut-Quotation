@@ -106,16 +106,16 @@ test.describe('AC-1, AC-4, AC-9: the new card and the choice', () => {
     await expectFormAccessible(page);
   });
 
-  test('AC-8, AC-9: the choice is made with the arrow keys, saved as the option text, counted and ticked in the strip; Enter then moves on', async ({ page }, testInfo) => {
+  test('AC-8, AC-9: the choice is made by typing to it, saved as the option text, counted and ticked in the strip; Enter then moves on', async ({ page }, testInfo) => {
     const { sent } = await answerChoiceSave(page);
     await openFormWithChoice(page, testInfo);
     await choice(page).focus();
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('ArrowDown');
-    await expect(choice(page)).toHaveValue('Fine');
+    // Typing the first letters of an option chooses it with one change (the arrow keys choose by the same control, one option at a time).
+    await page.keyboard.type('Mi');
+    await expect(choice(page)).toHaveValue('Mirror');
     await expect.poll(() => sent.length).toBe(1);
     // What is saved is the text of the option, by the field's ID.
-    expect(sent[0]).toEqual({ [FIELD_ID]: 'Fine' });
+    expect(sent[0]).toEqual({ [FIELD_ID]: 'Mirror' });
     await expect(card(page)).toContainText('1 of 1 complete');
     await expect(strip(page).getByRole('link', { name: /^09 Finishing\s*All filled in$/ })).toBeVisible();
     // Enter never submits: on the last field of the form it moves to the Calculate button.
