@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { isPublicPath } from '@/lib/auth/public-path';
 import { config, proxy } from '@/proxy';
 
 /**
@@ -129,15 +130,30 @@ describe('STORY-01.06 AC-3 and AC-4: telling the page that the browser sent a se
 describe('what the proxy covers', () => {
   const pattern = new RegExp(`^${config.matcher[0] ?? ''}$`);
 
-  it.each(['/queue', '/', '/estimates/Q-2026-0001', '/design-system', '/api/v1/tasks', '/forgot-passwords', '/reset-password-now', '/account/reset-password'])('%s is checked', (path) => {
+  // Since DEF-054 the proxy runs for every page and API route, public or not, because it puts the security headers (and the nonce) on each answer.
+  it.each(['/queue', '/', '/estimates/Q-2026-0001', '/design-system', '/api/v1/tasks', '/sign-in', '/forgot-password', '/reset-password', '/api/auth/session', '/no/such/page'])('%s goes through the proxy', (path) => {
     expect(pattern.test(path)).toBe(true);
   });
 
+  // Static files carry their headers from next.config.ts, so the proxy does not run for them.
+  it.each(['/_next/static/chunks/a.js', '/_next/image', '/accucut-logo.jpg'])('%s does not', (path) => {
+    expect(pattern.test(path)).toBe(false);
+  });
+});
+
+describe('which pages are checked for a session (public paths)', () => {
+  it.each(['/queue', '/', '/estimates/Q-2026-0001', '/design-system', '/api/v1/tasks', '/forgot-passwords', '/reset-password-now', '/account/reset-password', '/sign-ins'])('%s is checked', (path) => {
+    expect(isPublicPath(path)).toBe(false);
+  });
+
   // STORY-09.07: the two pages of the reset by e-mailed link are public (a person who forgot their password has no session); a path that only starts like them is still checked.
-  it.each(['/forgot-password', '/forgot-password/', '/reset-password', '/reset-password/', '/sign-in', '/sign-in/', '/api/auth/session', '/api/auth/callback/credentials', '/_next/static/chunks/a.js', '/_next/image', '/accucut-logo.jpg'])(
-    '%s is not checked',
-    (path) => {
-      expect(pattern.test(path)).toBe(false);
-    },
-  );
+  it.each(['/forgot-password', '/forgot-password/', '/reset-password', '/reset-password/', '/sign-in', '/sign-in/', '/api/auth/session', '/api/auth/callback/credentials'])('%s is public', (path) => {
+    expect(isPublicPath(path)).toBe(true);
+  });
+
+  it('sends no one away from a public page, with or without a cookie', () => {
+    expect(proxy(request('/sign-in')).status).toBe(200);
+    expect(proxy(request('/forgot-password')).status).toBe(200);
+    expect(proxy(request('/api/auth/session')).status).toBe(200);
+  });
 });
