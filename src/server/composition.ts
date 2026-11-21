@@ -231,9 +231,11 @@ export function getEstimateService(): EstimateService {
       // The part pictures (STORY-05.07): stored whole in the database, added and read by the runtime role and never changed.
       images: createImageRepository(runtimeClient()),
       transactions: createTransactionRunner(runtimeClient()),
-      // The part form (STORY-05.03): a part's material is locked in the Material Master (`lockMaterialForUse`, no number is read), and the form is built from the current registry.
+      // The part form (STORY-05.03): a part's material is locked in the Material Master (`lockMaterialForUse`, no number is read), and the form is built from the current registry, except for an
+      // APPROVED estimate, whose form is built from the version it was calculated with (STORY-08.05), read by its ID and cached per version.
       materials: createMasterRepository(runtimeClient()),
       currentConfiguration: async () => (await getCurrentVersion(configurations)).document,
+      configurationById: async (versionId) => (await getVersionById(configurations, versionId)).document,
     });
   }
   return estimateService;

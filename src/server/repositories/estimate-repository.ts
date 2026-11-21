@@ -66,11 +66,25 @@ export interface EstimateAccess {
   readonly status: EstimateStatus;
 }
 
+/**
+ * What decides which configuration version the part form is built from (STORY-08.05): the estimate's status and the version its **current calculation** was made with. The version's ID only, no figure of the
+ * calculation is read; null while the estimate has no current calculation.
+ */
+export interface ConfigurationBasis {
+  readonly status: EstimateStatus;
+  readonly configVersionId: string | null;
+}
+
 export interface EstimateRepository {
   /** The task with this code and its estimate, or null when there is none. */
   findWorkspaceByCode(code: string): Promise<WorkspaceRecord | null>;
   /** The owner and state of the estimate with this ID, **without a lock** (a read of the tree); null for an unknown ID (or one that is not a UUID). */
   findEstimateAccess(id: string): Promise<EstimateAccess | null>;
+  /**
+   * The status of the estimate and the configuration version of its current calculation, in **one statement** (so the two are one moment), **without a lock** (a read of the form); null for an unknown ID (or one that is
+   * not a UUID). It reads no figure: the calculation's `config_version_id` is the only column taken from it.
+   */
+  findConfigurationBasis(id: string): Promise<ConfigurationBasis | null>;
   /** The estimate with this ID, **locked for update until the transaction ends**; null for an unknown ID (or one that is not a UUID). */
   lockEstimate(id: string, tx: Transaction): Promise<EstimateLock | null>;
   /** The customer with this ID, locked for share; null for an unknown ID, a deleted customer or an ID that is not a UUID. */
@@ -148,6 +162,7 @@ const WORKSPACE_ROWS = z.array(
   }),
 );
 const LOCK_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, customerId: z.string().nullable(), inputsRevision: z.number().int(), taskCode: z.string() }));
+const BASIS_ROWS = z.array(z.strictObject({ status: STATUS, configVersionId: z.string().nullable() }));
 const ACCESS_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS }));
 const CUSTOMER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string() }));
 const MATERIAL_ROWS = z.array(z.strictObject({ id: z.string(), deleted: z.boolean() }));
@@ -182,6 +197,16 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
           FROM estimates e JOIN tasks t ON t.id = e.task_id
           WHERE e.id = ${id}::uuid`;
         return ACCESS_ROWS.parse(rows)[0] ?? null;
+      }),
+
+    findConfigurationBasis: (id) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(id)) return null;
+        const rows = await db.$queryRaw`
+          SELECT e.status::text AS "status", c.config_version_id::text AS "configVersionId"
+          FROM estimates e LEFT JOIN calculations c ON c.id = e.current_calculation_id
+          WHERE e.id = ${id}::uuid`;
+        return BASIS_ROWS.parse(rows)[0] ?? null;
       }),
 
     lockEstimate: (id, tx) =>
