@@ -1,7 +1,7 @@
-import { expect, test, type Page, type Response, type TestInfo } from '@playwright/test';
+import { expect, test, type Page, type Response } from '@playwright/test';
 
 import { createDisposableUser, E2E_ADMIN, readEstimateState, readWarningRecord, saveCanaryQuantity, setCanaryQuantity, useFreshAddress, type E2eUser } from './support/auth';
-import { engineerWithEstimate, signInAs } from './support/calculated-estimate';
+import { calculateAnywayWithoutThePage, engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
 
 /**
@@ -31,24 +31,6 @@ const NOTICE_MEANING = 'This row costs 0 in this estimate. Approving is not stop
 const APPROVE_LINE = 'This calculation has a quantity warning. 1 Invented text costs 0 in this estimate. Approving is not stopped, and there is no box to tick.';
 const WENT_AHEAD = /went ahead on \d{2} [A-Z][a-z]{2} \d{4}, \d{2}:\d{2} IST with 0 in QTY per Assy on 1 row: 1 Invented text\./;
 
-/**
- * DIAGNOSTIC ONLY (AQP-381, DEF-051); this commit is never the final head. Phase marks in ms since the case's first line, printed as one line:
- * `AQP381 w=<project> <phase>=<ms>... end=<ms>`.
- */
-function startPhases(testInfo: TestInfo): { readonly mark: (name: string) => void; readonly print: () => void } {
-  const startedAt = Date.now();
-  const marks: string[] = [];
-  return {
-    mark: (name) => {
-      marks.push(`${name}=${Date.now() - startedAt}`);
-    },
-    print: () => {
-      // eslint-disable-next-line no-console -- diagnostic output, read from the CI log
-      console.log(`AQP381 w=${testInfo.project.name} ${marks.join(' ')} end=${Date.now() - startedAt}`);
-    },
-  };
-}
-
 const recalculateButton = (page: Page) => page.locator('#review-calculate');
 const dialog = (page: Page) => page.getByRole('alertdialog');
 const goBack = (page: Page) => dialog(page).getByRole('button', { name: 'Go back', exact: true });
@@ -66,19 +48,12 @@ async function warnedEstimate(testInfo: Parameters<typeof engineerWithEstimate>[
   return made;
 }
 
-/** The Engineer presses Calculate, is asked about the 0 and goes ahead, through the portal (the requests the button and the dialog send). */
-async function engineerWentAhead(page: Page, owner: E2eUser & { readonly id: string }, code: string): Promise<void> {
-  await signInAs(page, owner);
-  await page.goto(`/estimates/${code}`);
-  const statuses = await page.evaluate(async (id) => {
-    const url = `/api/v1/estimates/${id}/calculate`;
-    const asked = await fetch(url, { method: 'POST' });
-    const { inputsRevision } = (await asked.json()) as { inputsRevision: number };
-    const went = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acknowledge: { inputsRevision } }) });
-    return { asked: asked.status, went: went.status };
-  }, owner.id);
-  expect(statuses).toEqual({ asked: 409, went: 200 });
-  expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+/**
+ * The Engineer presses Calculate, is asked about the 0 and goes ahead, with the requests the button and the dialog send and without loading a page (`calculateAnywayWithoutThePage`): every case that needs the
+ * Engineer's going ahead only as a set-up opens a page for the Lead next, so the Engineer's own page open is not made (DEF-051: one page open in a case).
+ */
+async function engineerWentAhead(page: Page, owner: E2eUser & { readonly id: string }): Promise<void> {
+  await calculateAnywayWithoutThePage(page, owner);
 }
 
 async function openAs(page: Page, person: E2eUser, code: string): Promise<void> {
@@ -91,7 +66,7 @@ async function openAs(page: Page, person: E2eUser, code: string): Promise<void> 
 /** The Engineer went ahead, an input then changed (so the figures are cleared and the Lead may Recalculate), and a Lead opens the estimate. */
 async function clearedForLead(page: Page, testInfo: Parameters<typeof engineerWithEstimate>[0]) {
   const { owner, code } = await warnedEstimate(testInfo);
-  await engineerWentAhead(page, owner, code);
+  await engineerWentAhead(page, owner);
   // A save from another tab: the count is typed again (still 0), the revision goes up and every figure is cleared.
   await saveCanaryQuantity(owner.id, '0');
   const lead = await createDisposableUser('axe', testInfo, 'LEAD');
@@ -215,7 +190,7 @@ test.describe('AC-2, AC-3: "Recalculate anyway" makes the Lead\'s own calculatio
 
   test('AC-3: while the Engineer\'s calculation is the one in view, the notice names the Engineer, and `GET /costs` carries the same list', async ({ page }, testInfo) => {
     const { owner, code } = await warnedEstimate(testInfo);
-    await engineerWentAhead(page, owner, code);
+    await engineerWentAhead(page, owner);
     const lead = await createDisposableUser('axe', testInfo, 'LEAD');
     await openAs(page, lead, code);
 
@@ -230,7 +205,7 @@ test.describe('AC-2, AC-3: "Recalculate anyway" makes the Lead\'s own calculatio
 
   test('AC-3: an Admin sees the same notice', async ({ page }, testInfo) => {
     const { owner, code } = await warnedEstimate(testInfo);
-    await engineerWentAhead(page, owner, code);
+    await engineerWentAhead(page, owner);
     await openAs(page, E2E_ADMIN, code);
     await expect(notice(page)).toContainText(`${owner.name} went ahead on`);
   });
@@ -245,55 +220,25 @@ test.describe('AC-2, AC-3: "Recalculate anyway" makes the Lead\'s own calculatio
 
 test.describe('AC-5: the approval dialog says so, and Approve is not stopped', () => {
   test('AC-5: one line names the row, there is no box to tick, and Approve and lock approves the calculation that carries the warning', async ({ page }, testInfo) => {
-    const phases = startPhases(testInfo);
-    try {
-      const { owner, code } = await warnedEstimate(testInfo);
-      phases.mark('made');
-      await signInAs(page, owner);
-      phases.mark('engineerSignedIn');
-      await page.goto(`/estimates/${code}`);
-      phases.mark('engineerGoto');
-      const statuses = await page.evaluate(async (id) => {
-        const url = `/api/v1/estimates/${id}/calculate`;
-        const asked = await fetch(url, { method: 'POST' });
-        const { inputsRevision } = (await asked.json()) as { inputsRevision: number };
-        const went = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acknowledge: { inputsRevision } }) });
-        return { asked: asked.status, went: went.status };
-      }, owner.id);
-      expect(statuses).toEqual({ asked: 409, went: 200 });
-      expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
-      phases.mark('wentAhead');
-      const lead = await createDisposableUser('axe', testInfo, 'LEAD');
-      phases.mark('leadMade');
-      await signInAs(page, lead);
-      phases.mark('leadSignedIn');
-      const response = await page.goto(`/estimates/${code}`);
-      expect(response?.status()).toBe(200);
-      phases.mark('leadGoto');
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
-      await expect(page.locator('#review-approve')).toBeEnabled();
-      await waitUntilHydrated(page, '#review-approve');
-      phases.mark('leadHydrated');
-      await page.locator('#review-approve').click();
+    const { owner, code } = await warnedEstimate(testInfo);
+    await engineerWentAhead(page, owner);
+    const lead = await createDisposableUser('axe', testInfo, 'LEAD');
+    await openAs(page, lead, code);
+    await expect(page.locator('#review-approve')).toBeEnabled();
+    await waitUntilHydrated(page, '#review-approve');
+    await page.locator('#review-approve').click();
 
-      const approve = page.getByRole('dialog', { name: 'Approve and lock' });
-      await expect(approve).toBeVisible();
-      phases.mark('dialogOpen');
-      await expect(approve).toContainText(APPROVE_LINE);
-      await expect(approve.getByRole('checkbox')).toHaveCount(0);
-      const submit = approve.getByRole('button', { name: 'Approve and lock', exact: true });
-      await expect(submit).toBeEnabled();
-      phases.mark('dialogAsserted');
-      await submit.click();
-      await expect(page.locator('#review-approved-notice')).toBeVisible();
-      phases.mark('approvedNotice');
-      expect(await readEstimateState(owner.id)).toEqual({ status: 'APPROVED', calculations: 1 });
-      // Approved: the notice and the mark stay with what was approved.
-      await expect(notice(page)).toContainText(`${owner.name} went ahead on`);
-      phases.mark('noticeKept');
-    } finally {
-      phases.print();
-    }
+    const approve = page.getByRole('dialog', { name: 'Approve and lock' });
+    await expect(approve).toBeVisible();
+    await expect(approve).toContainText(APPROVE_LINE);
+    await expect(approve.getByRole('checkbox')).toHaveCount(0);
+    const submit = approve.getByRole('button', { name: 'Approve and lock', exact: true });
+    await expect(submit).toBeEnabled();
+    await submit.click();
+    await expect(page.locator('#review-approved-notice')).toBeVisible();
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'APPROVED', calculations: 1 });
+    // Approved: the notice and the mark stay with what was approved.
+    await expect(notice(page)).toContainText(`${owner.name} went ahead on`);
   });
 });
 
@@ -334,7 +279,7 @@ test.describe('AC-8: keyboard, focus and accessibility at this width', () => {
 
   test('AC-8: no sideways scroll and no axe violation with the notice and the marks on the page', async ({ page }, testInfo) => {
     const { owner, code } = await warnedEstimate(testInfo);
-    await engineerWentAhead(page, owner, code);
+    await engineerWentAhead(page, owner);
     const lead = await createDisposableUser('axe', testInfo, 'LEAD');
     await openAs(page, lead, code);
     await expect(notice(page)).toBeVisible();
