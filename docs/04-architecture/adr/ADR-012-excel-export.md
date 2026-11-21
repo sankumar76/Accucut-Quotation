@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-16, D-20) and for architectures v0.7 and v0.8: no file exists until a calculation is current (AQP-1 comments 10545, 10554), for `master` to check at G4 |
+| Status | Accepted (G3 CONDITIONAL GO, condition 14, 2026-11-01). Revised for v0.3 (D-16, D-20) and for architectures v0.7 and v0.8: no file exists until a calculation is current (AQP-1 comments 10545, 10554), for `master` to check at G4. **The thread's time and memory limits, the app's heap and the body cap are set by [ADR-017](ADR-017-export-limits-from-target-host.md) (2026-11-21); "no hard limit on size" still holds** |
 | Date | 2026-11-01 |
 | Deciders | solution-architect (+ Santhosh at G3) |
 | Related | FR-066 to 071; NFR-010, 027; RISK-010; OQ-PM-05; Q-31, Q-37; D-16, D-20; ADR-007 |
