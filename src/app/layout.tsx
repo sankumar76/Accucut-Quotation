@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
 
 import './globals.css';
-import { NONCE_HEADER } from '@/lib/security/csp';
+import { NONCE_HEADER, NONCE_PATTERN } from '@/lib/security/csp';
 import { SITE_NAME, TITLE_TEMPLATE } from '@/lib/page-metadata';
 
 import { FONT_VARIABLE_CLASSES } from './fonts/fonts';
@@ -30,7 +30,9 @@ export const metadata: Metadata = {
  * the nonce there, and without it the policy blocks the element. The script that sets it carries the nonce itself.
  */
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  const nonce = (await headers()).get(NONCE_HEADER);
+  // The proxy sets this header, but this is written into a script, so it is checked to be a nonce (base64) and not trusted for where it came from.
+  const sent = (await headers()).get(NONCE_HEADER);
+  const nonce = sent !== null && NONCE_PATTERN.test(sent) ? sent : null;
   return (
     <html lang="en-IN" className={FONT_VARIABLE_CLASSES}>
       <body>

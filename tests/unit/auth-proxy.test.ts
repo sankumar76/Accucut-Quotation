@@ -131,12 +131,12 @@ describe('what the proxy covers', () => {
   const pattern = new RegExp(`^${config.matcher[0] ?? ''}$`);
 
   // Since DEF-054 the proxy runs for every page and API route, public or not, because it puts the security headers (and the nonce) on each answer.
-  it.each(['/queue', '/', '/estimates/Q-2026-0001', '/design-system', '/api/v1/tasks', '/sign-in', '/forgot-password', '/reset-password', '/api/auth/session', '/no/such/page'])('%s goes through the proxy', (path) => {
+  it.each(['/queue', '/', '/estimates/Q-2026-0001', '/design-system', '/api/v1/tasks', '/sign-in', '/forgot-password', '/reset-password', '/api/auth/session', '/no/such/page', '/_next/staticfoo', '/_next/static', '/_next/image-x', '/_next/imagefoo'])('%s goes through the proxy', (path) => {
     expect(pattern.test(path)).toBe(true);
   });
 
   // Static files carry their headers from next.config.ts, so the proxy does not run for them.
-  it.each(['/_next/static/chunks/a.js', '/_next/image', '/accucut-logo.jpg'])('%s does not', (path) => {
+  it.each(['/_next/static/chunks/a.js', '/_next/image', '/_next/image/', '/accucut-logo.jpg'])('%s does not', (path) => {
     expect(pattern.test(path)).toBe(false);
   });
 });

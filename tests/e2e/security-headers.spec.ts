@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { z } from 'zod';
 
-import { E2E_LEAD, E2E_PASSWORD, signInThroughThePage, useFreshAddress } from './support/auth';
+import { createDisposableUser, E2E_LEAD, E2E_PASSWORD, signInThroughThePage, useFreshAddress } from './support/auth';
 import { isDesktopProject, openDrawer, waitUntilAccountMenuIsLive, waitUntilHydrated } from './support/design-system';
 import { PRODUCTION_URL } from './support/servers';
 
@@ -198,4 +198,21 @@ test('DEF-054: a signed-in Lead gets the same headers on the queue, opens the me
   const missing = await page.goto('/no/such/page');
   expect(missing?.status()).toBe(404);
   expectPagePolicy(expectSecurityHeaders(missing?.headers() ?? {}, 'same-origin'));
+});
+
+test('DEF-054 (SQR-01): the picture download reaches the browser with sandbox in its policy, and is a PNG that nothing can sniff', async ({ page, context }, testInfo) => {
+  // The picture of this person's canary estimate has the person's own ID (`insertCanaryEstimate`).
+  const owner = await createDisposableUser('scan', testInfo);
+  await useFreshAddress(context);
+  await page.goto('/sign-in');
+  await signInThroughThePage(page, owner.email, E2E_PASSWORD);
+  await expect(page).toHaveURL(/\/queue$/);
+
+  const picture = await page.request.get(`/api/v1/images/${owner.id}`);
+  expect(picture.status()).toBe(200);
+  expect(picture.headers()['content-type']).toBe('image/png');
+  // Next.js drops a route's header of the same name as one the proxy set, so this is the proxy's policy, and it must hold what ADR-013 asks of a picture.
+  expect(picture.headers()['content-security-policy']).toBe("default-src 'none'; frame-ancestors 'none'; sandbox");
+  expect(picture.headers()['x-content-type-options']).toBe('nosniff');
+  expect(picture.headers()['x-frame-options']).toBe('DENY');
 });

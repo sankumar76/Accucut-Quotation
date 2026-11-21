@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import nextConfig from '../../next.config';
-import { API_CONTENT_SECURITY_POLICY, createNonce, EARLY_INTENT_SCRIPT_SOURCE, pageContentSecurityPolicy } from '@/lib/security/csp';
+import { API_CONTENT_SECURITY_POLICY, AUTH_ROUTE_CONTENT_SECURITY_POLICY, createNonce, EARLY_INTENT_SCRIPT_SOURCE, NONCE_PATTERN, pageContentSecurityPolicy } from '@/lib/security/csp';
 import { PERMISSIONS_POLICY } from '@/lib/security/header-values';
 import { EARLY_INTENT_SCRIPT } from '@/lib/ui/early-intent-script';
 import { proxy } from '@/proxy';
@@ -148,6 +148,68 @@ describe('every answer of the proxy carries the headers', () => {
     expect(response.headers.get('x-middleware-request-x-return-path')).toBeNull();
     expect(response.headers.get('x-middleware-request-x-session-cookie')).toBeNull();
     expect(response.headers.get('Cache-Control')).toBeNull();
+  });
+});
+
+describe('a stored file and next-auth through the proxy (SQR-01, AQP-384 review)', () => {
+  const PICTURE = '/api/v1/images/00000000-0000-4000-8000-000000000001';
+
+  it('the picture download gets default-src none, frame-ancestors none and sandbox: the policy on the wire is the proxy\x27s, because Next.js drops a route header the proxy already set', () => {
+    for (const cookie of [undefined, 'next-auth.session-token=abc']) {
+      const policy = get(PICTURE, cookie).headers.get('Content-Security-Policy') ?? '';
+      expect(policy).toBe("default-src 'none'; frame-ancestors 'none'; sandbox");
+      expect(policy).toContain('sandbox');
+    }
+  });
+
+  it('every API answer and the signed-out redirect carry sandbox, and next-auth\x27s own routes do not', () => {
+    expect(API_CONTENT_SECURITY_POLICY).toContain('sandbox');
+    expect(get('/api/v1/me').headers.get('Content-Security-Policy')).toBe(API_CONTENT_SECURITY_POLICY);
+    expect(get('/queue').headers.get('Content-Security-Policy')).toBe(API_CONTENT_SECURITY_POLICY);
+    for (const path of ['/api/auth/session', '/api/auth/csrf', '/api/auth/callback/credentials']) {
+      const policy = get(path).headers.get('Content-Security-Policy');
+      expect(policy, path).toBe(AUTH_ROUTE_CONTENT_SECURITY_POLICY);
+      expect(policy, path).not.toContain('sandbox');
+    }
+  });
+
+  it('a page never gets sandbox, which would stop its scripts and forms', () => {
+    expect(get('/sign-in').headers.get('Content-Security-Policy')).not.toContain('sandbox');
+    expect(get('/queue', 'next-auth.session-token=abc').headers.get('Content-Security-Policy')).not.toContain('sandbox');
+  });
+});
+
+describe('the development switch is exactly NODE_ENV === development (SQR-03, AQP-384 review)', () => {
+  const policyOf = (): ReadonlyArray<string> => {
+    const policy = get('/sign-in').headers.get('Content-Security-Policy') ?? '';
+    return [directive(policy, 'script-src').join(' '), directive(policy, 'style-src').join(' '), directive(policy, 'connect-src').join(' ')];
+  };
+
+  it.each(['test', 'production', 'staging', ''])('NODE_ENV "%s" gets the strict policy: no unsafe-eval, no unsafe-inline in style-src, no web socket', (value) => {
+    vi.stubEnv('NODE_ENV', value);
+    const [scripts, styles, connect] = policyOf();
+    expect(scripts).not.toContain('unsafe-');
+    expect(styles).not.toContain('unsafe-');
+    expect(connect).toBe("'self'");
+  });
+
+  it('NODE_ENV development, and only it, adds unsafe-eval, inline styles and the hot-reload socket', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const [scripts, styles, connect] = policyOf();
+    expect(scripts).toContain("'unsafe-eval'");
+    expect(scripts).not.toContain("'unsafe-inline'");
+    expect(styles).toContain("'unsafe-inline'");
+    expect(connect).toContain('ws:');
+  });
+});
+
+describe('the nonce pattern (SQR-02, AQP-384 review)', () => {
+  it('accepts what createNonce makes', () => {
+    for (let index = 0; index < 20; index += 1) expect(NONCE_PATTERN.test(createNonce())).toBe(true);
+  });
+
+  it.each(['</script><script>alert(1)</script>', 'abc"def', "abc'def", 'a b c d e f g h i j k l', '<b>', '', 'short', 'AAAAAAAAAAAAAAAA\n</script>', 'AAAAAAAAAAAAAAAA=x'])('rejects %j, so it never becomes markup in the layout\x27s script', (value) => {
+    expect(NONCE_PATTERN.test(value)).toBe(false);
   });
 });
 

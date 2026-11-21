@@ -33,6 +33,9 @@ const NONCE_BYTES = 16;
  */
 export const NONCE_HEADER = 'x-nonce';
 
+/** What a nonce looks like: base64. The root layout checks the header it was given against this before it writes it into a script, so a value that is not one never becomes markup. */
+export const NONCE_PATTERN = /^[A-Za-z0-9+/]{16,}={0,2}$/;
+
 /** A fresh value for every request: 128 random bits, base64, never reused and never stored. */
 export function createNonce(): string {
   return Buffer.from(crypto.getRandomValues(new Uint8Array(NONCE_BYTES))).toString('base64');
@@ -42,10 +45,16 @@ export function createNonce(): string {
 export const EARLY_INTENT_SCRIPT_SOURCE = `'sha256-${createHash('sha256').update(EARLY_INTENT_SCRIPT, 'utf8').digest('base64')}'`;
 
 /**
- * An answer that is data and not a page (a JSON body, a redirect): nothing may load from it and nothing may frame it. A route that
- * serves a stored file sets its own, stricter policy (`file-response.ts`), which replaces this one.
+ * An answer that is data and not a page (a JSON body, a redirect, a stored file): nothing may load from it, nothing may frame it, and opened as a page it gets an opaque origin
+ * (`sandbox`: no forms, no pop-ups, no navigation). `sandbox` is what ADR-013 and STORY-05.07 AC-5 ask of a picture download.
+ *
+ * It is set here, by the proxy, and not by the route: when a route sets a header that the proxy already set, Next.js keeps the proxy's value and drops the route's (`send-response.js` adds a
+ * route header only if it is absent). So `file-response.ts` has the same policy for its own tests, but the one on the wire is this one, and `tests/unit/security-headers.test.ts` pins it through the proxy.
  */
-export const API_CONTENT_SECURITY_POLICY = "default-src 'none'; frame-ancestors 'none'";
+export const API_CONTENT_SECURITY_POLICY = "default-src 'none'; frame-ancestors 'none'; sandbox";
+
+/** next-auth's own routes (`/api/auth/*`) get the same policy without `sandbox`, so nothing it ever shows as a page (a sign-in form, an error page) can be blocked by it. */
+export const AUTH_ROUTE_CONTENT_SECURITY_POLICY = "default-src 'none'; frame-ancestors 'none'";
 
 export interface PageCspOptions {
   readonly nonce: string;

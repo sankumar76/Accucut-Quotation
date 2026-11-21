@@ -4,7 +4,7 @@ import { isPublicPath } from '@/lib/auth/public-path';
 import { RETURN_PATH_HEADER, signInPathFor } from '@/lib/auth/return-path';
 import { hasSessionCookie, SESSION_COOKIE_HEADER, SESSION_COOKIE_PRESENT } from '@/lib/auth/session-ended';
 import { loadOriginEnv } from '@/lib/env';
-import { API_CONTENT_SECURITY_POLICY, createNonce, NONCE_HEADER, pageContentSecurityPolicy } from '@/lib/security/csp';
+import { API_CONTENT_SECURITY_POLICY, AUTH_ROUTE_CONTENT_SECURITY_POLICY, createNonce, NONCE_HEADER, pageContentSecurityPolicy } from '@/lib/security/csp';
 import { securityHeaders } from '@/lib/security/response-headers';
 
 /**
@@ -22,14 +22,17 @@ import { securityHeaders } from '@/lib/security/response-headers';
  * own, whether the browser sent a session cookie, so that a session that ended (the cookie is there, the token in it is
  * dead) is told apart from a visit with no session (STORY-01.06).
  *
- * Every response it handles carries `Cache-Control: private, no-store`, so the browser's back button after
- * sign-out cannot show a protected page from its cache, and `X-Robots-Tag` so a crawler that is turned away does
- * not index the redirect (architecture section 8, "Indexing and sharing").
+ * Every response it handles for a path that is not public carries `Cache-Control: private, no-store`, so the browser's back button after
+ * sign-out cannot show a protected page from its cache, and a redirect also carries `X-Robots-Tag` so a crawler that is turned away does
+ * not index it (architecture section 8, "Indexing and sharing").
  *
  * The public pages (sign-in, the two reset pages, next-auth's routes) are not redirected and not marked `no-store` here, but they get
  * the security headers like every other page. The Content Security Policy carries a nonce made for this request: the proxy puts the
  * policy on the request too, and Next.js reads the nonce from it while it renders and puts it on its own scripts. A page must
- * therefore be rendered per request: the root layout calls `connection()` for that, so no page is built ahead of time without a nonce.
+ * therefore be rendered per request: the root layout reads the request's headers for that, so no page is built ahead of time without a nonce.
+ *
+ * An API answer gets the policy of data (`API_CONTENT_SECURITY_POLICY`, with `sandbox`; next-auth's routes without it). It is the one that reaches the browser for a picture download too: a route's own
+ * header of the same name is dropped by Next.js when the proxy has set it already, so a policy that a route needs must be set here.
  */
 
 const NO_STORE = 'private, no-store';
@@ -88,11 +91,12 @@ export function proxy(request: NextRequest): NextResponse {
   if (isPublic || sentSessionCookie || isApi) {
     const forwarded = forwardedHeaders(request, sentSessionCookie, isPublic);
     // An API answer is data: its policy needs no nonce. A page's policy is made for this request and is also given to Next.js on the request, where it reads the nonce.
-    const nonce = createNonce();
-    const policy = isApi ? API_CONTENT_SECURITY_POLICY : pageContentSecurityPolicy({ nonce, development: process.env.NODE_ENV === 'development' });
+    let policy = isPublic && isApi ? AUTH_ROUTE_CONTENT_SECURITY_POLICY : API_CONTENT_SECURITY_POLICY;
     if (isApi) {
       forwarded.delete(NONCE_HEADER);
     } else {
+      const nonce = createNonce();
+      policy = pageContentSecurityPolicy({ nonce, development: process.env.NODE_ENV === 'development' });
       forwarded.set('Content-Security-Policy', policy);
       forwarded.set(NONCE_HEADER, nonce);
     }
@@ -108,8 +112,9 @@ export function proxy(request: NextRequest): NextResponse {
 
 /**
  * Everything except the build output, Next.js's image route and the logo, which the proxy never needs to see (they are static files; `next.config.ts`
- * gives them their security headers). Every page, every API route and every error page goes through it, public or not.
+ * gives them their security headers). Every page, every API route and every error page goes through it, public or not. The two prefixes end at a boundary,
+ * so `/_next/staticfoo` and `/_next/image-x`, which are not those files and are answered by the app's not-found page, go through the proxy too.
  */
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|accucut-logo\\.jpg$).*)'],
+  matcher: ['/((?!_next/static/|_next/image(?:$|/)|accucut-logo\\.jpg$).*)'],
 };
