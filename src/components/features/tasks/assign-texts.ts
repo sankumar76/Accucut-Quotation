@@ -65,3 +65,6 @@ export const NEXT_STEPS: ReadonlyArray<string> = [
 ];
 export const FOLDER_HELP_LABEL = 'How the folder link works';
 export const FOLDER_HELP_BODY = 'Everyone sees the path as a link plus a Copy path button. Browsers often block links to network folders; the button always works.';
+
+/** The title of the load-error page of SCR-04 (STORY-10.07 AC-4): the Engineers, or the task being changed, could not be read. */
+export const ASSIGN_LOAD_ERROR_TITLE = 'We could not load the assign form';
