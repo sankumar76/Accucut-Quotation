@@ -37,7 +37,7 @@ Candidate stories, provisional IDs. The scrum-master creates them in Jira; the p
 | 6 | STORY-01.06 | 12-hour session | Session ends 12 hours after sign-in; "Session ended" page (FR-099) | Business rule | 01.01 | Draft |
 | 7 | STORY-01.07 | Audit service and audit screen | Append-only entries (who, when, object, before and after); Admin lists and filters them; the event list is open to the later epics (approvals, unlocks, overrides, master edits, acknowledged quantity warnings, cancelled approvals and removed prices, FR-011, NFR-007) | Workflow step: service first, screen on top | 01.02 | Draft |
 | 8 | STORY-01.08 | About page | Exact SPEC section 9 description, "Version No: 1.0" and copyright (FR-010) | Single read-only screen | 10.02 | Draft |
-| 9 | STORY-01.09 | Admin hand-over (R2) | One confirmed step that asks for the Admin's password; exactly one Admin after (FR-006, NFR-004). Effort is carried in EPIC-09's row (release plan 3.1) | Workflow step | 01.04, 01.05, 01.07, 06.14 (step-up) | Draft |
+| 9 | STORY-01.09 | Admin hand-over (R2) | One confirmed step that asks for the Admin's password; exactly one Admin after (FR-006, NFR-004). Effort is carried in EPIC-09's row (release plan 3.1) | Workflow step | 01.04, 01.05, 01.07, 06.14 (step-up) | Ready for Dev (AQP-356, PO-validated 2026-11-18, 2026-11-18, 5 points, critical-review) |
 
 Splitting note: 01.01 to 01.08 are vertical (UI, API, data). 01.07's service is the only layer-shaped item and is justified because masters, approval and configuration all emit into it; its screen ships in the same story so it is not a bare enabler.
 

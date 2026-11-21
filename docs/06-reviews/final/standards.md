@@ -1,0 +1,136 @@
+# Final Review: Standards (whole product)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-standards |
+| Review round | 1 (the one full review of the fast track, CLAUDE.md section 9 item 3) |
+| Base...branch | whole product at `master` (no diff); read-only worktree |
+| Commit reviewed | `242c21f7` |
+| Date | 2026-11-21 |
+| Rule book | `docs/standards/coding-standards.md` (cited as CS section), `docs/standards/definition-of-done.md`, `docs/04-architecture/architecture.md` |
+| **Verdict** | **REQUEST CHANGES** (3 Major; no Blocker, no Critical) |
+
+## Summary
+
+The product is in very good standards health for its size (752 source files under `src/`, 817 under `tests/`). The hard rules the rule book states for TypeScript are met everywhere I looked: no `any`, no `as` assertion other than `as const`, no non-null assertion, no `console.*` in `src/`, no `eslint-disable`, no raw SQL outside `src/server/repositories`, no `dangerouslySetInnerHTML` except the one pinned inline script, every API handler goes through `withRoute` or `withPublicRoute` (CSRF origin check, session, role, strict input and output schemas), logs carry error name and code but never message, stack, e-mail or token, and every GitHub Action is pinned by SHA. Migrations were never edited after being applied.
+
+Three things must be fixed before G8. (1) The page security headers and CSP that architecture section 8 requires were never built (STD-F-01, issue #37 raised to Major). (2) The Windows install leaves the TLS reverse proxy to the installer and documents none of the behaviours the portal's security assumes of it (STD-F-02, issue #576). (3) The 40-line function rule is unenforced by lint and broken 154 times, by up to 379 lines (STD-F-03, issue #577). The ten Minor findings are cheap clean-ups; the Info items record decisions that are already made.
+
+| Severity | Count |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 3 |
+| Minor | 10 |
+| Info | 4 |
+
+## Checks Run
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Lint, type-check, format-check, tests | not run | The review worktree has no `node_modules` and, by the brief, is not built. CI is the evidence for these on each merged PR. No formatter is configured (STD-F-11). |
+| Function length, `as` assertions, non-null assertions | TypeScript parser (read-only, run from another checkout's `typescript`) over every `.ts`/`.tsx` in `src/` | 2,901 block-bodied functions: 154 over 40 lines, 77 over 60, largest 379. `as` assertions (not `as const`): 0. Non-null assertions: 0. |
+| File length | `wc -l` over tracked `src/` files | 7 files over 400 lines besides the 10,059-line password data file (STD-F-04) |
+| Banned constructs | `grep` for `console.`, `any`, `eslint-disable`, `TODO/FIXME`, `$queryRaw`/`$executeRaw` outside repositories, `dangerouslySetInnerHTML`, `innerHTML`, `localStorage`, `target="_blank"` | Clean, except the single pinned inline script `src/app/(portal)/layout.tsx:45` |
+| Unused exports | name-count script over `src/`, `tests/`, `scripts/` | 22 exports named nowhere else (STD-F-09) |
+| Layering | `grep` of imports: components/lib to server, repositories to services, services to Prisma client, app to repositories | Only `import type` of `@/server/views/schemas/*` from components (contract types, erased at build); no violation |
+| Page access | every `src/app/**/page.tsx` calls `authorizePage` or is one of the three public pages | Pass |
+| Secrets | `.mcp.json` Authorization header shape, `compose.dev.yml`, `values.example.txt`, CI workflows, `.gitleaks.toml` presence | Env-variable references or placeholders only; no secret found. `.env.example` could not be read by this reviewer (access denied by the permission rules), so its content is not reviewed. |
+| Secret and dependency scanners | not run | Not run by this review; CI runs gitleaks and the licence check (`check:licences`); advisories are already #535 to #537. |
+
+## Findings
+
+Fix-before-G8 items are the three Majors. File:line are at `242c21f7`.
+
+| ID | Severity | File:line | Rule | Issue | Why it matters | Suggested fix | GitHub |
+|----|----------|-----------|------|-------|----------------|---------------|--------|
+| STD-F-01 | **Major** | `next.config.ts:49-56`; `src/lib/ui/early-intent-script.ts:7`; architecture section 8 line 1071 and AQP-188 note line 1543 | CS section 5 (secure by default; output encoding); architecture section 8 "Security headers"; threat TB-1 | `next.config.ts` sets headers only for the logo and the two reset pages. No page or JSON answer carries a CSP, `frame-ancestors`, `X-Content-Type-Options`, HSTS or `Permissions-Policy` (only the picture download does, `src/server/http/file-response.ts:36-39`). There is no nonce anywhere in `src/`. The architecture text still describes the CSP, including the SHA-256 hash of `EARLY_INTENT_SCRIPT`, as built. | Any site can frame sign-in and the Approve, Unlock and step-up screens (clickjacking). The stored-XSS defence the threat model counts on (TB-1, "CSP with nonces") does not exist. Issue #37 has been open since AQP-28 as Info with "before G8" as its due date. | Add the policy of section 8 in `proxy.ts` or `next.config.ts` (`default-src 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, `img-src 'self' blob:`, nonce plus the script hash for `script-src`, `style-src-attr 'unsafe-inline'`), `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS; test on the built server and in one E2E run with the CSP on; mind the NFR-009 budget (ADR-016). | #37 (comment raises it to Major) |
+| STD-F-02 | **Major** | `deploy/windows/README.md:52-53`; `deploy/windows/install.ps1:59-60,1099-1103`; `src/server/auth/client-address.ts:1-31` | CS section 8 (README/config docs updated when behaviour or configuration changes); CS section 5 | The install says "you install the proxy" and nothing documents what it must do: TLS (the session cookie is `__Secure-`), append the real client address to `X-Forwarded-For` (the last entry drives the sign-in, password-change and reset limits), send the section 8 headers, keep the reset token out of its access log, cap the request body. No Caddyfile or IIS example, no post-install check. | A Windows IT person will install a proxy that works but not the one the security assumes. A wrong forwarded-address rule gives all callers one counter or lets an attacker mint fresh ones (#59, #560 SQR-02); the reset token lands in a log (#560 SQR-03); the body cap is missing (#410). | A "Reverse proxy" section with a tested Caddyfile and an IIS equivalent, and a post-install check of the public address (single well-formed forwarded IP, HSTS present). Close the proxy items of #59 and #560 with it. | #576 (new) |
+| STD-F-03 | **Major** | `eslint.config.mjs:225-240`; worst: `src/components/features/estimate-workspace/use-part-form.ts:80` (379 lines), `src/components/features/queues/queue-screen.tsx:94` (249), `part-picture.tsx:106` (187), `users/users-screen.tsx:51` (170), `audit/audit-screen.tsx:57` (150), `users/user-form-dialog.tsx:107` (146), `settings/alerts-card.tsx:90` (139), `estimate-workspace/part-fields.tsx:107` (135), `use-parts-tree.ts:37` (132), `estimate-workspace.tsx:69` (126) | CS section 1 (functions <= 40 lines, complexity <= 10, justify exceptions inline) | The size rules are not in ESLint, so nothing enforces them; 154 of 2,901 functions exceed 40 lines. The ten largest are components and hooks that mix state, effects, validation and layout. The server factories (`createCalculationService` 178 lines, `createUserRepository` 175, `createCalculationRepository` 174, `createEstimateService` 161, `createApprovalRepository` 159) are closures of short methods, exceed the rule and carry no inline justification. | A 379-line hook cannot be read or unit-tested in parts, and the number only grows with no gate. Complexity was not measured (see "not covered"). | Split the ten into hooks and sub-components of 40 lines or less; add `max-lines-per-function` and `complexity` at `warn` with a baseline of today's offenders, then `error` for new code; or have the delivery lead waive the rule for closure factories in writing and record it in the standards. | #577 (new); also #110, #171 |
+| STD-F-04 | Minor | `src/server/services/audit-events.ts` (669 lines), `src/server/composition.ts` (537), `src/server/services/calculation-service.ts` (471), `src/components/features/estimate-workspace/use-part-form.ts` (460), `src/server/services/estimate-service.ts` (426), `src/server/http/route-manifest.ts` (411), `src/server/repositories/calculation-repository.ts` (406) | CS section 1 (files <= 400 lines) | Seven files exceed 400 lines. `route-manifest.ts` and `audit-events.ts` are tables of rows and read well; `composition.ts` is the wiring file. | Reviewing a 537-line wiring file for a missed dependency is slow; the rule has no `max-lines` gate. | Split `composition.ts` by area (auth, masters, estimates, mail) and `calculation-service.ts` and `use-part-form.ts` with STD-F-03. Accept the two data files with a one-line comment stating the exception. | - |
+| STD-F-05 | Minor | `src/server/services/task-mail.ts:57` (copy of `estimatePathOf`, `src/lib/tasks/task-link.ts:5`); `src/server/mail/templates/task-assigned.ts:35,38` and `task-overdue.ts:37,40` (`OPEN_THE_TASK`, `BLOCKED_LINK_ADVICE` twice); `src/components/features/masters/master-delete-dialogs.tsx:150`, `queue/queue-list.tsx:48`, `cost-details.tsx:59`, `estimate-export.tsx:112,346` (the same `/estimates/${encodeURIComponent(code)}`); `src/lib/auth/sign-in-validation.ts:8` and `src/lib/masters/customers.ts:23` (the same e-mail message); `src/lib/estimates/form-client.ts:180` and `tree-client.ts:59` (identical `base`) | CS section 1 (DRY, rule of three), section 3 (shared modules) | The task-mail constants are in two templates plus a third copy of the estimate path in the mail service, while `estimatePathOf` already exists and the overdue job uses it. The path is built by hand in at least five more places. The expression `error instanceof Error ? error.name : ...` with `isAppError(error) ? error.code : undefined` is written out nine times (`src/app/(portal)/layout.tsx:24`, `server/auth/options.ts:76,213`, `viewer-role.ts:27`, `export/thread-protocol.ts:34`, `http/with-public-route.ts:120`, `http/with-route.ts:134`, `jobs/run-job.ts:62`, `observability/request-error.ts:128`) with two different fallbacks (`'unknown'` and `'NonError'`). | A change to a link, a message or the log shape has to be found in every copy; the two fallbacks already differ. | Export `OPEN_THE_TASK` and `BLOCKED_LINK_ADVICE` from `mail/layout.ts` (or a `task-mail-text.ts`); use `estimatePathOf` in `task-mail.ts` and the components; add one `describeFailure(error)` in `src/lib/errors.ts` (the one in `with-route.ts:131` is the model) and use it in the nine places. | - |
+| STD-F-06 | Minor | `src/worker/main.ts:38-43` (own `log`), `:72,77` (`process.env.LOG_DIRECTORY`, `PG_DATA_VOLUME`, `BACKUP_VOLUME`); `src/lib/env.ts` (not in the schema) | CS section 3 (do not re-implement shared modules), section 4 (shared logger), CS section 10 TypeScript (validate env vars with zod) | The worker writes its JSON lines with a private `log` and not the shared pino logger, so the field-name redaction of `src/lib/logger.ts` does not apply to them. Three path settings are read raw from `process.env` outside the zod environment schema. `log-prune` and `backup-watch` do validate the value themselves, and the job fields are typed scalars, so there is no leak today. | A job that is later given a field named `email` or `token` is not redacted; a mistyped path is a silent "job is off" line rather than a refused start. | Give the worker the shared logger (or `createLogger` with a `process: 'worker'` binding) behind the `JobLogger` type; add the three settings to `src/lib/env.ts` as optional absolute paths. | - |
+| STD-F-07 | Minor | `src/server/services/account-service.ts:83`; `src/server/services/step-up-service.ts:74`; `src/app/api/health/route.ts:26` | CS section 4 and section 10 (never swallow errors silently) | `throttles.releaseAttempt(key).catch(() => undefined)` drops a failed give-back with no line, so a database fault that leaves a sign-in or step-up attempt counted against a person is invisible. `GET /api/health` returns 503 from a bare `catch` with no log line, so a database outage leaves no trace in the portal's own log. The comment says the error is not printed because it may carry a connection detail; the error name and code, which are safe, are logged everywhere else. | Operators cannot tell a failed give-back or a dead database from the log alone. | In each place, `logger.warn({ requestId, errorName, errorCode }, '...')` using the helper of STD-F-05. Keep the answer as it is. | - |
+| STD-F-08 | Minor | `src/server/http/with-route.ts:47-49`; `docs/04-architecture/architecture.md:1799`, `:1348-1356` | CS section 8 (documentation current) | The `withRoute` header says a public form of the wrapper "arrives with its story"; `with-public-route.ts` exists and the health route is declared outside both. The architecture index still lists ADR-002 as "Accepted, revised for v0.9" while the ADR itself is "Superseded by ADR-015 for the runtime"; section 9.7 still gives the Docker release steps under an override notice. | A new developer reads two contradictory descriptions of how a public route is declared and how the portal is deployed. | Reword the `withRoute` paragraph; set the ADR-002 index row to "Superseded by ADR-015 (runtime); backups stand"; replace the 9.7 Docker steps with a pointer to 9.9. (Architect's file: log it, do not edit from review.) | - |
+| STD-F-09 | Minor | `src/components/features/config/formula-editor-texts.ts:55` (`USES_HEADING`); `insert-field-texts.ts:100` (`lettersNewLine`); `tasks/reassign-texts.ts:12` (`REASSIGN_META_TITLE`); `src/lib/config/field-insert-words.ts:77` (`insertButtonLabel`); `src/lib/estimate/choice-value.ts:15` (`CHOOSE_OPTION_MESSAGE`); `src/lib/estimate/product-totals.ts:25` (`APPROVED_PRICE_NOT_SET_TEXT`) | CS section 1; DoD (no dead code) | Six exported values are named nowhere else in `src/`, `tests/` or `scripts/`. Sixteen more exports (fifteen types and the shadcn `SheetClose`) are also unreferenced (for example `ApproveAnswer`, `UnlockAnswer`, `SettingsResponse`, `ExportWarningView`, `DataType`, `DisplayMode`). | Words that look like live UX copy but are not shown anywhere mislead the next ux-expert review. | Delete the six constants (or wire them in if a screen is missing the text); drop the unused type aliases or mark them as public contract. Add `knip` or `ts-prune` to CI only if the architect approves a new dev dependency. | - |
+| STD-F-10 | Minor | `prisma/schema.prisma:101` (`config_checkpoints`), `:495` (`job_runs`), `:512` (`email_outbox`), `:555` (`password_reset_tokens`); `docs/04-architecture/architecture.md:742-750` | CS section 10 SQL (every table has `created_at` and `updated_at`); architecture rule that a new departure is listed before its migration is written | Four tables have no `updated_at` and are not in the architecture's table of departures (which lists `config_versions`, `calculations`, `calculation_rows`, `audit_log`, `part_images`, `approvals`, `exchange_rates`). `email_outbox` and `password_reset_tokens` are updated in place (status, attempts, `used_at`). | The rule and its list drift apart, and an updated mutable row has no change time. | Add `updated_at` to `email_outbox` in a new migration, or list all four as departures in the architecture table, each with its reason. | - |
+| STD-F-11 | Minor | repo root (no `.prettierrc`, no `.editorconfig`, no `format` script); `src/worker/main.ts:23` (550 characters), `src/components/ui/button.tsx:27` (478) | Review checklist item 1 (format-check gate) | No formatter or format check exists, so layout is by hand: 415 lines in `src/` are longer than 200 characters, two longer than 400, mostly comment lines of 300 to 500 characters. | Long one-line comments are hard to read in a diff and in a split editor; there is no gate to hold a layout. | Add Prettier with `printWidth: 120` and `proseWrap` for comments off, run it once in a single "format" PR (squash, no behaviour change), and add `npm run format:check` to CI. Needs architect approval as a new dev dependency. | - |
+| STD-F-12 | Minor | `.gitignore:1` and `:4`; repo root (`Agents/`, `AMADA-20261006.xlsx`, `Accucut_Quotation_Portal_Req_Understanding_Draft_v5.docx`, `Accucut Quotation Portal UI-UX.html`); GitHub branches | CS section 9 (one logical change per commit; no unrelated or generated files); CLAUDE.md section 7.3 | (a) `.gitignore` begins with a leftover "Append these lines..." comment and ignores `.claude/agent-memory-local/` but not `.claude/agent-memory/` (#559): a developer or agent note can be committed (it was once, in an intermediate head of #553). (b) `Agents/` is a tracked copy of the delivery kit (13 agents, hooks, skills, a second `CLAUDE.md`) beside the live `.claude/`. (c) Of the last 300 commits on `master`, 168 start `AQP-nnn:`, 28 are Conventional Commits or Dependabot, 10 have no Jira key (for example `#244: ...`, `#245: ...`, `#218: ...`, `#119: ...`) and one is a merge commit (`Merge pull request #51`). CS section 9 says Conventional Commits; CLAUDE.md section 7.3 says the PR title is `<KEY>: <title>`, and squash merges use the latter. (d) 70 branches are still on GitHub, among them `diag/*`, `chore/AQP-340-trace*`, `feat/AQP-324`...`334` and two `AQP-325` branches. | A short-lived-branch model with 70 branches is noise; a stale second kit can be mistaken for the live one. | Add `.claude/agent-memory/` and `.claude/runs/` guards to `.gitignore` and drop the first line (#559); delete `Agents/` if it is not the kit's own source; state in CS section 9 that the squash title `<KEY>: <title>` is the rule on `master`; delete merged branches (delivery-lead housekeeping). | #559 |
+| STD-F-13 | Minor | `tests/e2e/aqp-234-qa.spec.ts:386`, `estimate-autosave.spec.ts:44`, `estimate-calculate.spec.ts:225`, `estimate-save.spec.ts:99,322` (`waitForTimeout`); `tests/acceptance/aqp-*.test.ts` (24 files named by ticket); `tests/unit/windows-deploy-files.test.ts` (1,353 lines), `tests/e2e/canary-scan.spec.ts` (1,068) | CS section 6 (deterministic tests; descriptive names; one behaviour per test) | Five fixed sleeps in E2E specs; 24 test files are named for a ticket and not the behaviour they hold; two test files exceed 1,000 lines. `test.skip` is used with a stated reason everywhere (good). | Fixed sleeps are a common cause of timing-flaky specs, and several are open (#364, #468, #481, #488). | Replace each `waitForTimeout` with a condition (`expect.poll`, `waitForResponse`); rename acceptance files by behaviour when next touched; split the two largest files by topic. | - |
+| STD-F-14 | Info | `src/server/export/build-workbook.ts:15`; `tests/unit/export/build-workbook.test.ts:128` | CS section 5 (output encoding) | Issue #394 (a typed value starting `=`, `+`, `-` or `@` must never become an Excel formula) is implemented (a string is always a string cell; the model has no formula cell) and tested with all four characters, yet the issue is open. | Open issues that are done hide the real hardening list. | Close #394 with a pointer to the test. | #394 |
+| STD-F-15 | Info | repo root: `AMADA-20261006.xlsx`, `Accucut_Quotation_Portal_Req_Understanding_Draft_v5.docx` | CLAUDE.md section 6 rule 7; RISK-006; DL-008, DL-046 | The repository is public and tracks the sample workbook and the draft requirements document. The delivery lead decided this (DL-008); that they hold no real data is their statement, not verified. I did not open either file. | RISK-006 (score 12) is "reviewed again at G8". | No action for this review. Reconfirm with the delivery lead at G8 that nothing real was added since 2026-11-02, and that master data for AQP-10 stays outside the repository (ADR-014). | - |
+| STD-F-16 | Info | whole product | CS sections 3, 4, 5, 10 | Good practice worth keeping: strict response schemas on every route (NFR-002), `withRoute` order (CSRF, session, role, then parse), logs with error name and code only, redaction list in `src/lib/logger.ts`, reset token never persisted in clear after send (`SECRET_BEARING_EVENTS`), single-use token claim in one UPDATE, argon2 only for passwords, SHA-pinned CI actions, no `pull_request_target`, `Sec-Fetch-Site` plus `Origin` with deny by default, `log-prune` limited to named files and non-links, no migration ever edited. | - | Keep. | - |
+| STD-F-17 | Info | `src/app/api/test-only/leak/route.ts:1-20` | CS section 5 | The negative-control route is compiled into every build and answers 404 unless `NODE_ENV` is `test`; `scripts/check-production-routes.ts` checks the gate. It is documented and pinned by a test. | A reviewer of the production bundle will see a route named `leak`. | None needed. Optionally exclude the file from `next build` by a build-time alias. | - |
+
+<details><summary>Detailed notes for the three Majors</summary>
+
+### STD-F-01 (security headers)
+**Current** (`next.config.ts:49-56`)
+```ts
+headers: () => [
+  { source: '/accucut-logo.jpg', headers: [{ key: 'Cache-Control', value: LOGO_CACHE_CONTROL }] },
+  { source: '/forgot-password', headers: RESET_PAGE_HEADERS },
+  { source: '/reset-password', headers: RESET_PAGE_HEADERS },
+],
+```
+**Suggested** (shape only; the nonce goes through `proxy.ts`, which already builds the forwarded request headers)
+```ts
+const BASELINE_HEADERS = [
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'same-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  { key: 'Strict-Transport-Security', value: 'max-age=31536000' },
+];
+// proxy.ts: per-request nonce, then
+// Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-<n>' 'sha256-<EARLY_INTENT_SCRIPT>';
+//   style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' blob:; object-src 'none'; frame-ancestors 'none'
+```
+Check on the built server for `/sign-in` and one portal page; keep the first-load budget (#418, ADR-016) in view.
+
+### STD-F-02 (proxy)
+The Caddy example needs only a site block, `reverse_proxy 127.0.0.1:<port>`, `header Strict-Transport-Security`, and a `log` block that drops the query string of `/reset-password`. Caddy by default sets `X-Forwarded-For` to the real client address and replaces a client-supplied value unless `trusted_proxies` is set (#59), so the last entry is the right one, which is what `clientAddressFrom` expects. The IIS notes must say the same for ARR (`X-Forwarded-For` appended, not replaced by a client value, and `Server` header removed).
+
+### STD-F-03 (size)
+The first cut costs the least: `usePartValues` (379 lines) holds field values, dirty tracking, save and focus rules; `QueueScreen` (249) holds filters, list and empty states. Both split along those lines with no change to the component API, so the existing E2E specs stay as they are.
+</details>
+
+## Areas covered
+
+- Tooling and rule enforcement: `eslint.config.mjs`, `tsconfig`, `package.json` scripts, CI and nightly and Windows-package workflows (permissions, pinned actions, triggers).
+- Auth: `src/server/auth/*` (options, client address, session cookie and token), password reset (service, token, route, outbox handling of the secret), step-up service and the routes that call it (config edit, revert, checkpoints, remove price, cancel, admin hand-over), account and change-password services.
+- HTTP boundary: `with-route`, `with-public-route`, `origin-check`, `proxy.ts`, `next.config.ts`, `page-access`, `file-response`, upload, the health and test-email routes, route manifest rows, input schemas (bounded strings).
+- Error handling and logging: every `logger.*` call, the worker `log`, `request-error.ts`, jobs `run-job`, 54 empty or near-empty `catch` sites.
+- Cost confidentiality (NFR-002) at the structure level: strict response schemas, Engineer import rule, logger redaction of `inputs`, `outputs`, `rate`. Behavioural proof stays with the cost scan.
+- Exports: `build-workbook` text handling (#394), thread protocol. Mail: templates, layout escaping, outbox secret clearing, transport TLS. Images: content checks.
+- Windows deploy: `install.ps1`, `values.example.txt`, service files, `log-prune`; grep for unsafe PowerShell constructs (none found).
+- Structure and layering by import direction; Prisma schema and migration list against the SQL conventions; shadcn/ui use (raw `<button>`, `<input>`, `<table>`: one each in `error.tsx`).
+- Documentation: README commands against `package.json`, deploy README, architecture sections 8, 9.7, 10 and the ADR index, ADR-002 and ADR-015 status.
+- Version control: master history, branch list, `.gitignore`, tracked root files, `.mcp.json`.
+
+## Areas not covered
+
+- Lint, type-check, unit, integration and E2E runs: not run (no `node_modules`, brief says do not build). Cyclomatic complexity was not measured; only length.
+- `.env.example`: not readable by this reviewer. Whether every variable the code reads is documented there is not verified.
+- Secret scanners (gitleaks) and `npm audit`: not run.
+- Bodies of `backup.ps1`, `restore.ps1`, `update.ps1`, `clear-copies.ps1` and `AccucutOps.psm1` (3,346 lines): grep only, no line-by-line read. The JEA files were not read.
+- SQL inside individual migrations and repositories: sampled (`email-outbox-repository`, `password-reset-repository`), not read in full.
+- Most React components and hooks: read for size and imports only; behaviour, accessibility and copy belong to quality and QA.
+- Most of `tests/`: reviewed by naming, skips, sleeps and size, not for adequacy. `docs/03-ux/` HTML screens and the generator were not read.
+- Algorithmic performance and design correctness (performance and quality reviewers).
+
+## Previous Findings
+
+Not a re-review. Open issues deduplicated against this report: #37 (STD-F-01), #59 and #560 and #410 (STD-F-02 context), #110 and #171 (STD-F-03), #559 (STD-F-12), #394 (STD-F-14), #513, #516, #523, #524, #532, #545, #547, #558, #563, #566, #568, #569 (no overlap; not raised again).
+
+## Issues for other roles
+
+- **solution-architect:** correct the ADR-002 index row and section 9.7 (STD-F-08); add the four tables to the departures list or decide to add `updated_at` (STD-F-10); update the section 8 and AQP-188 text to say whether the CSP exists or is planned until STD-F-01 is built.
+- **delivery lead:** reconfirm RISK-006 at G8 (STD-F-15); decide whether the 40-line rule is waived for closure factories (STD-F-03); delete merged branches (STD-F-12).
+
+## Hand-off
+- Status: COMPLETE
+- Artefacts written/updated: `docs/06-reviews/final/standards.md`
+- Jira / GitHub updates: new issues #576 (STD-F-02) and #577 (STD-F-03); comment on #37 for STD-F-01 (https://github.com/sankumar76/Accucut-Quotation/issues/37#issuecomment-7062328461); Jira AQP-1 hand-off comment
+- Open questions: none
+- Risks raised: none new; RISK-006 reconfirmation at G8 (STD-F-15)
+- Recommended next agent: developer for #37, #576, #577 in the hardening window; master to log the verdict and the Major list
