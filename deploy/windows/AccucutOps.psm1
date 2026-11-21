@@ -814,6 +814,174 @@ function Wait-AccucutHealth {
     }
 }
 
+function Assert-AccucutProxyOrigin {
+    <# With a proxy in front, people reach the portal over https and the session cookie is Secure-only, so APP_ORIGIN must be the https address the proxy serves (architecture section 8 P1, #576). Throws, and nothing has been changed yet, when it is not. #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Origin)
+
+    if ($Origin -notmatch '^https://[^/\s?#]+$') {
+        throw "With -WithProxy, APP_ORIGIN must be the https address the proxy serves, such as https://portal.example.test (a scheme and a host, no path); it is '$Origin'. The proxy ends TLS and the session cookie is Secure-only: over plain http nobody could sign in. Nothing was changed."
+    }
+}
+
+function Get-AccucutHttpResponse {
+    <#
+    One GET that never follows a redirect, for the proxy checks: the status (0 when nothing answered), every header (names in lower case, each with its values) and the reason when nothing answered.
+    A certificate that Windows does not trust counts as nothing answering, which is what check C1 asks for.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [hashtable]$RequestHeaders = @{},
+        [int]$TimeoutSeconds = 15
+    )
+
+    $result = @{ Status = 0; Headers = @{}; Error = '' }
+    $response = $null
+    try {
+        $request = [System.Net.HttpWebRequest]::Create($Url)
+        $request.Method = 'GET'
+        $request.Timeout = $TimeoutSeconds * 1000
+        $request.AllowAutoRedirect = $false
+        $request.UserAgent = 'AccucutInstallCheck'
+        foreach ($name in $RequestHeaders.Keys) { $request.Headers[[string]$name] = [string]$RequestHeaders[$name] }
+        $response = $request.GetResponse()
+    }
+    catch [System.Net.WebException] {
+        $response = $_.Exception.Response
+        if ($null -eq $response) {
+            $result.Error = $_.Exception.Message
+            return $result
+        }
+    }
+    try {
+        $result.Status = [int]$response.StatusCode
+        foreach ($key in $response.Headers.AllKeys) { $result.Headers[$key.ToLowerInvariant()] = @($response.Headers.GetValues($key)) }
+    }
+    finally { $response.Close() }
+    return $result
+}
+
+function Test-AccucutProxyRedirect {
+    <# Check C2 (P1): plain http goes to the https address. Returns the problems; none means it passes. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][int]$Status,
+        [AllowEmptyString()][string]$Location = '',
+        [Parameter(Mandatory)][string]$Origin
+    )
+
+    $problems = [System.Collections.Generic.List[string]]::new()
+    $expected = "$Origin/sign-in"
+    if ($Status -ne 301 -and $Status -ne 308) { $problems.Add("plain http answered $Status, not a redirect (301 or 308) to https") }
+    elseif ($Location -ne $expected) { $problems.Add("plain http was sent to '$Location', not to '$expected'") }
+    return @($problems)
+}
+
+function Test-AccucutProxyHeaders {
+    <#
+    Check C3 (P3): the headers of the sign-in page through the proxy. -Headers maps a lower-case name to its values. HSTS exactly once with the one-year value, the portal's own
+    Content-Security-Policy with frame-ancestors 'none', nosniff, a Referrer-Policy and a Permissions-Policy passed through, and no Server and no X-Powered-By.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][hashtable]$Headers)
+
+    $problems = [System.Collections.Generic.List[string]]::new()
+    $hsts = @()
+    if ($Headers.ContainsKey('strict-transport-security')) { $hsts = @($Headers['strict-transport-security']) }
+    if ($hsts.Count -ne 1 -or [string]$hsts[0] -ne 'max-age=31536000') { $problems.Add('Strict-Transport-Security must be there once, as max-age=31536000') }
+    $policy = ''
+    if ($Headers.ContainsKey('content-security-policy')) { $policy = (@($Headers['content-security-policy']) -join ',') }
+    if ($policy -notmatch "frame-ancestors 'none'") { $problems.Add("the portal's Content-Security-Policy with frame-ancestors 'none' did not come through") }
+    if (-not $Headers.ContainsKey('x-content-type-options') -or (@($Headers['x-content-type-options']) -join ',') -ne 'nosniff') { $problems.Add('X-Content-Type-Options: nosniff did not come through') }
+    if (-not $Headers.ContainsKey('referrer-policy')) { $problems.Add('Referrer-Policy did not come through') }
+    if (-not $Headers.ContainsKey('permissions-policy')) { $problems.Add('Permissions-Policy did not come through') }
+    if ($Headers.ContainsKey('server')) { $problems.Add('a Server header is still sent: the proxy must remove it') }
+    if ($Headers.ContainsKey('x-powered-by')) { $problems.Add('an X-Powered-By header is still sent: the proxy must remove it') }
+    return @($problems)
+}
+
+function Test-AccucutClientAddressSeen {
+    <# Check C5 (P2): the address the portal worked out (X-Client-Address-Seen of /api/health) must be a real address, not the one this request pretended to forward. #>
+    [CmdletBinding()]
+    param(
+        [AllowEmptyString()][string]$Seen = '',
+        [Parameter(Mandatory)][string]$Sent
+    )
+
+    $problems = [System.Collections.Generic.List[string]]::new()
+    $parsed = $null
+    if ([string]::IsNullOrEmpty($Seen)) { $problems.Add('the health page sent no X-Client-Address-Seen header') }
+    elseif ($Seen -eq 'none') { $problems.Add('the portal found no usable address: the proxy must write the connecting address as the last entry of X-Forwarded-For') }
+    elseif ($Seen -eq $Sent) { $problems.Add("the portal took the address this request pretended to forward ($Sent): the proxy passes on an address a browser sent, so the sign-in limits can be dodged") }
+    elseif ($Seen -match '^\d+\.\d+\.\d+\.\d+:\d+$' -or -not [System.Net.IPAddress]::TryParse($Seen, [ref]$parsed)) { $problems.Add("the portal worked out '$Seen', which is not an address without a port: the proxy must not add a port to X-Forwarded-For") }
+    return @($problems)
+}
+
+function Write-AccucutProxyCheckResult {
+    <# Logs one proxy check: passed, or each problem as a warning. Returns true when it passed. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Id,
+        [Parameter(Mandatory)][string]$Title,
+        [string[]]$Problems = @(),
+        [string]$LogFile
+    )
+
+    if (@($Problems).Count -eq 0) {
+        Write-AccucutLog -Message "Proxy check $Id ($Title): passed." -LogFile $LogFile
+        return $true
+    }
+    foreach ($problem in $Problems) { Write-AccucutLog -Message "Proxy check $Id ($Title): FAILED, $problem." -Level Warning -LogFile $LogFile }
+    return $false
+}
+
+function Invoke-AccucutProxyChecks {
+    <#
+    The end of an install with -WithProxy: checks C2, C3 and C5 of the install guide ("Reverse proxy") against -Origin, as the portal's own server sees it. Returns the ids of the checks that
+    did not pass (none when all passed). It never throws for a failed check: the portal is installed and running, and the proxy may not have been installed yet, so the install says what is missing and the IT person runs the
+    checklist again after installing the proxy. C1 (a trusted certificate) is in all three, since a certificate Windows does not trust answers nothing.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Origin,
+        [string]$LogFile
+    )
+
+    $failed = [System.Collections.Generic.List[string]]::new()
+    $address = [System.Uri]$Origin
+    $forged = '203.0.113.7'
+
+    if ($address.IsDefaultPort) {
+        $plain = Get-AccucutHttpResponse -Url "http://$($address.Host)/sign-in"
+        $location = ''
+        if ($plain.Headers.ContainsKey('location')) { $location = [string](@($plain.Headers['location'])[0]) }
+        $problems = @(Test-AccucutProxyRedirect -Status $plain.Status -Location $location -Origin $Origin)
+        if ($plain.Status -eq 0) { $problems = @("nothing answered on plain http at $($address.Host) ($($plain.Error))") }
+        if (-not (Write-AccucutProxyCheckResult -Id 'C2' -Title 'http goes to https' -Problems $problems -LogFile $LogFile)) { $failed.Add('C2') }
+    }
+    else {
+        Write-AccucutLog -Message "Proxy check C2 (http goes to https): skipped, because $Origin has a port. Check it by hand (README, Reverse proxy)." -Level Warning -LogFile $LogFile
+    }
+
+    $page = Get-AccucutHttpResponse -Url "$Origin/sign-in"
+    if ($page.Status -eq 0) { $problems = @("nothing answered at $Origin/sign-in ($($page.Error))") }
+    elseif ($page.Status -ne 200) { $problems = @("the sign-in page answered $($page.Status), not 200") }
+    else { $problems = @(Test-AccucutProxyHeaders -Headers $page.Headers) }
+    if (-not (Write-AccucutProxyCheckResult -Id 'C3' -Title 'the headers' -Problems $problems -LogFile $LogFile)) { $failed.Add('C3') }
+
+    $health = Get-AccucutHttpResponse -Url "$Origin/api/health" -RequestHeaders @{ 'X-Forwarded-For' = $forged }
+    if ($health.Status -eq 0) { $problems = @("nothing answered at $Origin/api/health ($($health.Error))") }
+    else {
+        $seen = ''
+        if ($health.Headers.ContainsKey('x-client-address-seen')) { $seen = [string](@($health.Headers['x-client-address-seen'])[0]) }
+        $problems = @(Test-AccucutClientAddressSeen -Seen $seen -Sent $forged)
+    }
+    if (-not (Write-AccucutProxyCheckResult -Id 'C5' -Title 'the real address, last' -Problems $problems -LogFile $LogFile)) { $failed.Add('C5') }
+
+    return @($failed)
+}
+
 function Assert-AccucutFreeSpace {
     <# Stops with an error when the volume that holds -Path has less than -MinimumBytes free. Run before unpacking a release. #>
     [CmdletBinding()]
@@ -3330,6 +3498,7 @@ Export-ModuleMember -Function @(
     'Get-AccucutServiceSid', 'ConvertTo-AccucutIdentity', 'Set-AccucutFileAcl', 'Write-AccucutSecureFile', 'Expand-AccucutTemplate',
     'Get-AccucutCurrentRelease', 'Set-AccucutCurrentRelease', 'Remove-AccucutOldReleases', 'Remove-AccucutDirectory', 'Copy-AccucutTree', 'Remove-AccucutOldLogs',
     'Get-AccucutServiceNames', 'Get-AccucutPostgresServiceName', 'Stop-AccucutServices', 'Start-AccucutServices', 'Get-AccucutHttpStatus', 'Wait-AccucutHealth',
+    'Assert-AccucutProxyOrigin', 'Get-AccucutHttpResponse', 'Test-AccucutProxyRedirect', 'Test-AccucutProxyHeaders', 'Test-AccucutClientAddressSeen', 'Write-AccucutProxyCheckResult', 'Invoke-AccucutProxyChecks',
     'Grant-AccucutFolderAccess', 'Grant-AccucutInstallFolderAccess',
     'Assert-AccucutFreeSpace', 'Assert-AccucutServiceIdentity', 'Set-AccucutServiceIdentity', 'Initialize-AccucutServiceFiles', 'Invoke-AccucutMigration',
     'Get-AccucutBackupAccountSid', 'Get-AccucutRightHolder', 'Grant-AccucutBatchLogonRight', 'Revoke-AccucutBatchLogonRight', 'Test-AccucutBatchRightPolicy', 'Test-AccucutModuleLogging', 'Test-AccucutEventSource', 'New-AccucutEventSource', 'Register-AccucutEventSource', 'Get-AccucutRandomNumber', 'New-AccucutComplexPassword', 'Register-AccucutBackupTask', 'Remove-AccucutBackupAccount', 'Wait-AccucutBackupTask', 'Test-AccucutLogonTypeFailure',

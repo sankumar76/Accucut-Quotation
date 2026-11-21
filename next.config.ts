@@ -1,5 +1,8 @@
 import type { NextConfig } from 'next';
 
+// A relative path: Next.js loads this file before the `@/` alias exists. The module has no imports.
+import { REFERRER_POLICY_RESET_PAGE, STATIC_FILE_SECURITY_HEADERS } from './src/lib/security/header-values';
+
 /** The first and last second octet of the RFC 1918 block 172.16.0.0 to 172.31.255.255. */
 const PRIVATE_172_RANGE = { first: 16, last: 31 } as const;
 
@@ -11,8 +14,16 @@ const PRIVATE_172_ORIGINS = Array.from(
 /** The headers of the two reset pages: never stored, and no Referer header leaves them (the reset page's address holds the token). */
 const RESET_PAGE_HEADERS = [
   { key: 'Cache-Control', value: 'private, no-store' },
-  { key: 'Referrer-Policy', value: 'no-referrer' },
+  { key: 'Referrer-Policy', value: REFERRER_POLICY_RESET_PAGE },
 ];
+
+/**
+ * The most bytes of a request body Next.js hands to a route (GitHub issue 410, PRF-F-06; ADR-017 decision 3). With a proxy configured Next.js reads up to 10 MB of every request into memory before a route's
+ * own checks run. 768 KB is twice the largest JSON body the schemas accept (a save of 64 part values of 2,000 characters of 3 bytes: about 387 KB), above twice the picture upload ceiling
+ * (256 KB, which also has its own cap while it reads) and inside the reverse proxy's 1 MB (deploy/windows/README.md, P5), so the app normally decides first.
+ * tests/unit/request-body-cap.test.ts sizes it from the real schemas. A body over the cap reaches the route cut off, and the route answers 400 for it.
+ */
+const REQUEST_BODY_CAP_BYTES = 768 * 1024;
 
 /** A day, then a stale copy may serve for a week while it is refreshed: the logo URL carries no version, so not `immutable`. */
 const LOGO_CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800';
@@ -35,6 +46,9 @@ const LOGO_CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800
  *   and the version is pinned; it has no effect on the other rules (no Server Actions, ADR-010). The same flag lets a page
  *   call `unauthorized()`, which renders `app/unauthorized.tsx` (SCR-26 "Session ended") with status 401 when the session
  *   has ended; `requireUserOrRedirect` is the only caller (STORY-01.06 AC-3).
+ * - `experimental.proxyClientMaxBodySize`: the largest request body a route is given (`REQUEST_BODY_CAP_BYTES`).
+ * - security headers (DEF-054, architecture section 8): `src/proxy.ts` puts the Content Security Policy and the other headers on every page and API answer; this file gives the three
+ *   static ones to the files the proxy does not run for (`/_next/static` and the logo).
  * - `agentRules: false`: `next dev` would otherwise write an AGENTS.md into the working tree. This
  *   project's agent instructions are in CLAUDE.md.
  */
@@ -45,9 +59,11 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   allowedDevOrigins: ['192.168.*.*', '10.*.*.*', ...PRIVATE_172_ORIGINS],
   agentRules: false,
-  experimental: { authInterrupts: true },
+  experimental: { authInterrupts: true, proxyClientMaxBodySize: REQUEST_BODY_CAP_BYTES },
   headers: () => [
-    { source: '/accucut-logo.jpg', headers: [{ key: 'Cache-Control', value: LOGO_CACHE_CONTROL }] },
+    { source: '/accucut-logo.jpg', headers: [{ key: 'Cache-Control', value: LOGO_CACHE_CONTROL }, ...STATIC_FILE_SECURITY_HEADERS] },
+    // The build output is a static file too, which `src/proxy.ts` does not run for: it gets the three headers that mean something for a file (DEF-054).
+    { source: '/_next/static/:path*', headers: [...STATIC_FILE_SECURITY_HEADERS] },
     // The reset pages (STORY-09.07 AC-9): the address of one carries a secret token, so neither page is cached and the reset page sends no Referer to anything it links or loads.
     { source: '/forgot-password', headers: RESET_PAGE_HEADERS },
     { source: '/reset-password', headers: RESET_PAGE_HEADERS },
