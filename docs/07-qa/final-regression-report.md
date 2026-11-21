@@ -235,5 +235,5 @@ QA did not change the GitHub issue states or the defect files above in this run 
 
 ## Addendum, 2026-11-21 (later the same day; rulings after this report)
 - **#382** (AQP-293 SQR-01) is off the list of G8-blocking Majors (DL-284 (3)); its remaining items are Minor. Section 1's table of blockers is read without it.
-- **DEF-038** was re-graded to Sev-3, type Test (DL-277), and **DEF-034** is closed (fix #579); the Sev-2 count in section 1 is therefore DEF-054 and DEF-055 only. **DEF-053** is closed (fix #571) with a watch of 1 of 2 (DL-284). **DEF-056** (AQP-386) is a Test defect (DL-283); **DEF-057** (AQP-387) is open. **RISK-031** was reopened by DL-276.
+- **DEF-038** was re-graded to Sev-3, type Test (DL-277), and **DEF-034** is closed (fix #579); the Sev-2 count in section 1 is therefore DEF-054 and DEF-055 only. **DEF-053** is closed (fix #571) with a watch of 1 of 2 (DL-284). **DEF-056** (AQP-386) is a Test defect (DL-283); **DEF-057** (AQP-387) is open. **RISK-031** was reopened by DL-276 and closed again by DL-279.
 - This report is not edited above this line; the current state is in `docs/07-qa/test-plan.md` section 7 and the defect files.
