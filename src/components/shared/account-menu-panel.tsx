@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { useRef, type ReactNode } from 'react';
 
-import { AccountTrigger, type AccountUser } from '@/components/shared/account-trigger';
+import { ACCOUNT_WRAPPER, AccountTrigger, type AccountUser } from '@/components/shared/account-trigger';
+import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/cn';
 
 export interface AccountMenuItem {
   readonly label: string;
@@ -55,7 +57,7 @@ export function AccountMenuPanel({ user, items = [], note, keyboard }: AccountMe
   };
 
   return (
-    <div className="relative">
+    <div className={ACCOUNT_WRAPPER}>
       <DropdownMenu modal={false} defaultOpen>
         <DropdownMenuTrigger asChild>
           <AccountTrigger user={user} />
@@ -63,8 +65,9 @@ export function AccountMenuPanel({ user, items = [], note, keyboard }: AccountMe
         {/* `onOpenAutoFocus` is a prop of Radix's menu content that its public types leave out; the content forwards it. `shell-lazy-load.spec.ts` (AC-4, QLT-55) fails if a Radix upgrade stops doing so. */}
         <DropdownMenuContent {...{ onOpenAutoFocus: focusOnOpen }}>
           <DropdownMenuLabel>
-            <span className="font-semibold text-ink">{user.name}</span>
-            <span className="text-label text-ink-2">{user.email}</span>
+            {/* A name and an e-mail are typed by people: they wrap, however long they are (ux-spec 6.0 "Names wrap", DEF-034). */}
+            <span className={cn('font-semibold text-ink', BREAK_LONG_NAMES)}>{user.name}</span>
+            <span className={cn('text-label text-ink-2', BREAK_LONG_NAMES)}>{user.email}</span>
             <span className="text-label text-ink-2">{user.role}</span>
           </DropdownMenuLabel>
           {items.map((item) =>
