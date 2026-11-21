@@ -106,7 +106,8 @@ describe('AC-7: least privilege, no secret, pinned actions', () => {
     expect(jobText('lighthouse')).toMatch(/^ {4}runs-on: ubuntu-24\.04$/m);
     expect(jobText('ci-time')).toMatch(/^ {4}runs-on: ubuntu-24\.04$/m);
     const labels = LINES.filter((line) => /^\s*runs-on:/.test(line)).map((line) => line.trim());
-    expect(labels).toEqual(['runs-on: ubuntu-24.04', 'runs-on: ubuntu-24.04', 'runs-on: ubuntu-latest']);
+    // The capacity job (STORY-10.09) is the third one on the reference image.
+    expect(labels).toEqual(['runs-on: ubuntu-24.04', 'runs-on: ubuntu-24.04', 'runs-on: ubuntu-24.04', 'runs-on: ubuntu-latest']);
   });
 
   it('makes its passwords and its session secret in the job, and masks them', () => {

@@ -171,6 +171,31 @@ the previous release are kept.
 
 After a Windows Update reboot both services start by themselves, a minute or so after PostgreSQL (NFR-012).
 
+## Uptime monitor (NFR-012)
+
+The portal should answer **99 % of the time** (NFR-012). The way to know when it does not is an **external monitor**: a free or paid web service that asks the portal's health address every **5 minutes** and tells the IT person when the answer is wrong. It runs outside the server, so it also notices a server that is switched off or cut off from the network, which nothing on the server can report. **Setting it up is a human step for the IT person after go-live and is not a condition for accepting a release** (it needs the web address of the portal, which Accucut IT has not given yet: Q-18).
+
+What to give the monitor:
+
+| Setting | Value |
+|---------|-------|
+| Type | HTTP(S) monitor (not "ping") |
+| Address | The portal's web address followed by `/api/health`, for example `https://quotes.example.test/api/health` (the address is Accucut's; the example is invented). The path needs no sign-in and no value in the request |
+| Interval | **5 minutes** |
+| Healthy answer | HTTP **200** with the body `{"status":"ok"}`. If the service can look for a word in the answer, the word `ok` is enough |
+| Alert when | The answer is anything else, or there is no answer. If the service lets you wait for **2 checks in a row** (10 minutes) before it alerts, do so: one slow reply or a restart for an update then wakes nobody |
+| Who receives the alerts | **The IT person who looks after the server** (the one who ran the install), by e-mail. Add a second address, such as the delivery lead's, if Accucut wants a back-up reader. The portal's own e-mail cannot be the alert route: if the portal is down, it cannot send |
+
+**What a 503 means.** The portal answers **503** with `{"status":"unavailable"}` in two cases, and the answer never says which (it reveals nothing about the server to a stranger): the **database** did not answer, or the **worker** has stopped (it writes a heartbeat every minute, and the check turns red when the newest one is 3 minutes old). Alerts that come with no answer at all (a timeout, no connection) mean the server, the network or the reverse proxy is down, or the web address is wrong. For any of these:
+
+1. On the server, run `Get-Service AccucutApp, AccucutWorker, postgresql-x64-17`. Start what is stopped (`Start-Service`), PostgreSQL first.
+2. If a service keeps stopping, read `AccucutApp.*.err.log` and `AccucutWorker.*.err.log` in `C:\Accucut\logs\` (the "Look and fix" table above says where to begin).
+3. Open `http://127.0.0.1:3000/api/health` on the server. `200` with `{"status":"ok"}` there but an alert from outside means the fault is between the monitor and the server: the reverse proxy, the certificate, the firewall or DNS.
+
+An update and a restart take the portal down for under a minute (see "Update"); that is why waiting for two checks is worth setting.
+
+**Which service, and the plan terms (architecture A-02).** The service chosen at the design review is **UptimeRobot**. Sources disagree on whether its **free plan allows business use**, so **Accucut IT must read the current terms** before relying on it, or buy the paid plan. Any external HTTP monitor with a **5-minute** interval meets NFR-012, so the choice is easy to change: use another service if the terms do not suit. Whatever is chosen, **read the monitor's own report once a month** and note the percentage: 99 % is about 7 hours of downtime in a month.
+
 ## Backups (STORY-10.05)
 
 **What happens.** Every Sunday at 02:00 **server time** (keep the server on India Standard Time: the install warns "The backup runs at 02:00 server time; this server is not set to India Standard Time." when it is not), the scheduled task
