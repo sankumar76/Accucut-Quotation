@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TOUCH_TARGET } from './support/design-system';
+import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
 import {
   ADD,
   addButton,
@@ -265,6 +265,8 @@ test.describe('reset to defaults (AC-3, AC-8)', () => {
     await setRates(page, customer, { [FIRST_RATE.id]: '9.5', [PERCENT_RATE.id]: '30' });
     await page.reload();
     await expect(page.getByText(DIFFERS)).toHaveCount(2);
+    // The reload makes the Reset button plain HTML again; a press before React attaches its handler is lost (DEF-011).
+    await waitUntilHydrated(page, 'main button[data-action="reset"]');
     const reset = page.getByRole('button', { name: 'Reset to defaults' });
     await pressWithKeyboard(reset);
     const dialog = page.getByRole('alertdialog', { name: `Reset ${customer.name} to defaults?` });
@@ -297,6 +299,8 @@ test.describe('reset to defaults (AC-3, AC-8)', () => {
     await openCustomer(page, customer);
     await setRates(page, customer, { [FIRST_RATE.id]: '9.5' });
     await page.reload();
+    // The reload makes the Reset button plain HTML again; a press before React attaches its handler is lost (DEF-011).
+    await waitUntilHydrated(page, 'main button[data-action="reset"]');
     await page.getByRole('button', { name: 'Reset to defaults' }).click();
     const dialog = page.getByRole('alertdialog', { name: `Reset ${customer.name} to defaults?` });
     await dialog.getByRole('button', { name: 'Keep current rates' }).click();

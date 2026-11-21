@@ -95,6 +95,7 @@ function build(options: Options = {}) {
           audited.push(entry);
           return Promise.resolve();
         },
+        recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')),
         list: () => Promise.reject(new Error('Not used.')),
       },
     },
