@@ -4,7 +4,8 @@ import { EARLY_INTENT_ATTRIBUTE, EARLY_INTENT_GLOBAL } from './early-intent';
  * The inline script that keeps a tap made before the page is interactive (AQP-188 AC-10, DEF-013). React cannot see
  * a tap made before its bundle has run, so only a script already in the HTML can. It is imported by the server
  * layout only, so its text is never part of the browser's JavaScript, and an inline script has no `src`, so it does not
- * count against the budget (test strategy 10.1). It carries the CSP nonce once the CSP is built (architecture section 10).
+ * count against the budget (test strategy 10.1). The Content Security Policy allows it by the SHA-256 hash of this exact text, computed from this constant
+ * (`src/lib/security/csp.ts`, DEF-054, architecture section 10), so the layout must render the constant as it is, with nothing added around it.
  *
  * What it does, and nothing else:
  *   - A click (a tap, a mouse click, Enter or Space on a button) on an element marked `data-early-intent` marks that
