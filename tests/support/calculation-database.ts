@@ -103,6 +103,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
     transactions: db.transactions,
     materials: db.masterRepository,
     currentConfiguration: () => Promise.resolve(seedConfig),
+    configurationById: () => Promise.resolve(seedConfig),
   });
   const approvals = createApprovalRepository(db.prisma);
   const approvalService = createApprovalService({

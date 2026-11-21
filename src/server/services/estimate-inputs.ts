@@ -89,8 +89,13 @@ export interface EstimateInputsDependencies {
    * name (`findTreatmentOptionById`, STORY-05.06): an ID and a name, no lock, because a part refers to a treatment by no key.
    */
   readonly materials: Pick<MasterRepository, 'lockMaterialForUse' | 'findTreatmentOptionById'>;
-  /** The field registry the form is built from (the current version, cached per version by `getCurrentVersion`). */
+  /** The field registry a save is checked against: the latest version (cached per version by `getCurrentVersion`). */
   readonly currentConfiguration: () => Promise<ConfigDocument>;
+  /**
+   * The registry the form of **this estimate** is built from and its stored values are read back with (STORY-08.05; FR-065, FR-077, SPEC section 8.4): the version of the current calculation for an APPROVED
+   * estimate, the latest one for every other. The caller has already checked that this person may open the estimate, so nothing here is asked twice.
+   */
+  readonly configurationFor: (estimateId: string) => Promise<ConfigDocument>;
   readonly transactions: TransactionRunner;
   /** The estimate's ID for a read: 404 when it is not this person's or does not exist. */
   readonly openForRead: (viewer: EstimateViewer, estimateId: string) => Promise<string>;
@@ -105,8 +110,8 @@ export interface EstimateInputs {
   getForm(viewer: EstimateViewer, estimateId: string): Promise<EstimateForm>;
   /** Saves values into a part (`PATCH /api/v1/estimates/{id}/nodes/{nodeId}/inputs`). 404, 409 (not editable, or a stale revision), 422 under each field at fault. */
   saveInputs(viewer: EstimateViewer, estimateId: string, request: SaveInputsRequest): Promise<SavedInputs>;
-  /** Of what is stored in a part, the values of fields of the form, in the registry as it is now: what may be sent back. */
-  visibleInputs(inputs: Readonly<Record<string, unknown>>): Promise<Readonly<Record<string, string>>>;
+  /** Of what is stored in a part of this estimate, the values of fields of its form, in the registry the form is built from (`configurationFor`): what may be sent back. */
+  visibleInputs(estimateId: string, inputs: Readonly<Record<string, unknown>>): Promise<Readonly<Record<string, string>>>;
 }
 
 /**
@@ -128,7 +133,7 @@ function typedValues(document: ConfigDocument, inputs: Readonly<Record<string, u
 }
 
 export function createEstimateInputs(dependencies: EstimateInputsDependencies): EstimateInputs {
-  const { nodes, materials, currentConfiguration, transactions, openForRead, lockForChange, bumpInputsRevision } = dependencies;
+  const { nodes, materials, currentConfiguration, configurationFor, transactions, openForRead, lockForChange, bumpInputsRevision } = dependencies;
 
   /**
    * Treatment / Color: the shape first (`readTreatmentInput`, the browser's own rule), then the row. "Other" keeps the typed words; a listed entry and "Not applicable" take the row's name and
@@ -187,7 +192,7 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
   return {
     async getForm(viewer, estimateId) {
       const id = await openForRead(viewer, estimateId);
-      const [document, written] = await Promise.all([currentConfiguration(), nodes.lastWrittenAt(id)]);
+      const [document, written] = await Promise.all([configurationFor(id), nodes.lastWrittenAt(id)]);
       return { sections: buildFormSections(document), lastSavedAt: written === null ? null : written.toISOString() };
     },
 
@@ -232,8 +237,8 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
       });
     },
 
-    async visibleInputs(inputs) {
-      return typedValues(await currentConfiguration(), inputs);
+    async visibleInputs(estimateId, inputs) {
+      return typedValues(await configurationFor(estimateId), inputs);
     },
   };
 }
