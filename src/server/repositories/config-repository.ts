@@ -17,6 +17,9 @@ import { clientFor, type Transaction } from './transaction';
 /** Version numbers start at 1; the seed is version 1. */
 export const SEED_VERSION_NUMBER = 1;
 
+/** The name of the checkpoint the seed gets (STORY-08.06 AC-1, assumption A-1: proposed words, for the ux-expert). The migration inserts the same name for an install that already holds version 1. */
+export const SEED_CHECKPOINT_NAME = 'Original configuration';
+
 /** Which version is the latest, without its ~35 KB snapshot (architecture ruling R5). */
 export interface ConfigVersionRef {
   readonly id: string;
@@ -54,9 +57,9 @@ const INSERTED_ROWS = z.array(z.strictObject({ id: z.uuid(), number: z.number().
 
 export interface ConfigRepository {
   /**
-   * Inserts the seed as version 1 only if the table holds no version at all, in one statement. Returns
+   * Inserts the seed as version 1 only if the table holds no version at all, **together with the seed checkpoint** that names it (STORY-08.06 AC-1), in one statement. Returns
    * true if it inserted, false if a version already existed. Two runs at once cannot both insert: the
-   * unique number settles it.
+   * unique number settles it, and the checkpoint is made only from a version this statement inserted, so a second run leaves one.
    */
   insertSeedVersionIfNone(input: { readonly snapshot: unknown; readonly reason: string }): Promise<boolean>;
   /**
@@ -83,11 +86,17 @@ export function createConfigRepository(db: PrismaClient): ConfigRepository {
     insertSeedVersionIfNone({ snapshot, reason }) {
       return withDatabaseErrors(async () => {
         // Parameterised; the casts give each parameter a type, which `INSERT ... SELECT` cannot infer.
+        // The count is the rows of the last statement, the checkpoint's: 1 only when the version was inserted, 0 when a version existed and nothing was.
         const inserted = await db.$executeRaw`
-          INSERT INTO config_versions (number, snapshot, created_by, reason)
-          SELECT ${SEED_VERSION_NUMBER}::integer, ${JSON.stringify(snapshot)}::jsonb, NULL, ${reason}::text
-          WHERE NOT EXISTS (SELECT 1 FROM config_versions)
-          ON CONFLICT (number) DO NOTHING`;
+          WITH seed AS (
+            INSERT INTO config_versions (number, snapshot, created_by, reason)
+            SELECT ${SEED_VERSION_NUMBER}::integer, ${JSON.stringify(snapshot)}::jsonb, NULL, ${reason}::text
+            WHERE NOT EXISTS (SELECT 1 FROM config_versions)
+            ON CONFLICT (number) DO NOTHING
+            RETURNING id
+          )
+          INSERT INTO config_checkpoints (name, config_version_id, created_by)
+          SELECT ${SEED_CHECKPOINT_NAME}::text, seed.id, NULL FROM seed`;
         return inserted === 1;
       });
     },

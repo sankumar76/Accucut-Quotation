@@ -138,6 +138,12 @@ export class ConfigVersionChangedError extends ConflictError {
   }
 }
 
+/** The `code` of the 409 of a checkpoint name that another checkpoint has, in any letter case (STORY-08.06 AC-2). The screen shows the sentence under the name field. */
+export const CHECKPOINT_NAME_TAKEN_CODE = 'CHECKPOINT_NAME_TAKEN';
+
+/** The `code` of the 409 of a revert to a version whose content is the current configuration already (STORY-08.06 AC-4): nothing would change, and no password was asked for. */
+export const NOTHING_TO_REVERT_CODE = 'NOTHING_TO_REVERT';
+
 /** A password that does not meet the rule (STORY-01.05 AC-2, FR-098): the 422 names the part that failed, under the field it belongs to. */
 export const PASSWORD_RULE_CODE = 'PASSWORD_RULE';
 
