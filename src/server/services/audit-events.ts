@@ -603,6 +603,7 @@ export const AUDIT_EVENTS = {
   'config.reverted': defineEvent({
     objectType: 'config_version',
     category: 'config_change',
+    kindLabel: 'Checkpoint revert',
     status: 'wired',
     before: revertedBeforeState,
     after: revertedAfterState,
