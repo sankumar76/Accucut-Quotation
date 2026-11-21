@@ -114,7 +114,7 @@ export interface OutboxSendDependencies {
 }
 
 export interface OutboxSendSummary {
-  /** Every row the claim took: those to send, those it skipped and those it gave up on. */
+  /** The rows the claim took to send. Rows it ended itself (skipped, or given up on) are in `skipped` and `failed`. */
   readonly claimed: number;
   readonly sent: number;
   /** Rows marked `skipped`: by the claim (expired, alerts off), by `beginSend` (expired since the claim) or after it (no recipient). */
@@ -234,7 +234,7 @@ export async function runOutboxSend(dependencies: OutboxSendDependencies): Promi
     logAttempt(log, row, 'sent', recorded ? undefined : 'NOT_RECORDED');
   }
 
-  return { claimed: claim.claimed.length + claim.skipped.length + claim.failed.length, sent, skipped, retrying, failed, failures, lost, notRecorded };
+  return { claimed: claim.claimed.length, sent, skipped, retrying, failed, failures, lost, notRecorded };
 }
 
 /** One line for the worker's log: counts and codes only. */
@@ -254,7 +254,7 @@ export function describeOutboxSend(summary: OutboxSendSummary): string {
 export async function performOutboxSend(dependencies: OutboxSendDependencies): Promise<JobOutcome> {
   const startedAt = dependencies.clock.now();
   const summary = await runOutboxSend(dependencies);
-  if (summary.claimed === 0) return { level: 'debug' };
+  if (summary.claimed + summary.skipped + summary.failed === 0) return { level: 'debug' };
   await dependencies.jobRuns.recordRun({
     job: OUTBOX_SEND_JOB,
     startedAt,

@@ -1,10 +1,10 @@
 import { FieldValidationError, MailTestFailedError, NO_SENDER_CODE, NotFoundError, ValidationError, type FieldProblem } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import type { SendFailureCode } from '../../lib/mail/codes';
-import { MAIL_FAILURE_WINDOW_DAYS } from '../../lib/mail/failure-window';
+import { mailFailureSince } from '../../lib/mail/failure-window';
 import { deriveBackupStatus } from '../../lib/settings/backup-status';
 import { senderProblems, trimmedSender, type AlertSettingsInput } from '../../lib/settings/validation';
-import { type Clock, MILLISECONDS_PER_DAY } from '../../lib/time';
+import type { Clock } from '../../lib/time';
 import { renderMail } from '../mail/layout';
 import type { MailService } from '../mail/mail-service';
 import type { EmailOutboxRepository } from '../repositories/email-outbox-repository';
@@ -128,7 +128,7 @@ export function createSettingsService({ jobRuns, outbox, settings, users, mail, 
     },
 
     async getMailFailures() {
-      const summary = await outbox.failedSince(new Date(clock.now().getTime() - MAIL_FAILURE_WINDOW_DAYS * MILLISECONDS_PER_DAY));
+      const summary = await outbox.failedSince(mailFailureSince(clock.now()));
       return summary === null ? null : { count: summary.count, lastCode: summary.lastCode, lastAt: summary.lastAt.toISOString() };
     },
 

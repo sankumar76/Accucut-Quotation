@@ -147,7 +147,7 @@ describe('runOutboxSend: skipped rows (STORY-09.01 AC-5, STORY-09.06 AC-7)', () 
         { id: 'b', event: 'task-overdue', attempts: 1, code: 'EXPIRED' },
       ],
     });
-    expect(await runOutboxSend(dependencies)).toMatchObject({ claimed: 2, skipped: 2, sent: 0 });
+    expect(await runOutboxSend(dependencies)).toMatchObject({ claimed: 0, skipped: 2, sent: 0 });
     expect(sentMail).toEqual([]);
   });
 
@@ -266,7 +266,7 @@ describe('runOutboxSend: failed sends are retried (STORY-09.06 AC-1)', () => {
 
   it('a row the claim gave up on (a taken-back row with no attempt left) is counted as failed with UNKNOWN and logged', async () => {
     const { dependencies, lines } = harness({ failed: [{ id: IDS[0], event: 'password-reset', attempts: 4, code: 'UNKNOWN' }] });
-    expect(await runOutboxSend(dependencies)).toMatchObject({ claimed: 1, failed: 1, failures: { UNKNOWN: 1 } });
+    expect(await runOutboxSend(dependencies)).toMatchObject({ claimed: 0, failed: 1, failures: { UNKNOWN: 1 } });
     expect(attemptLines(lines)).toEqual([
       { message: 'outbox attempt failed', level: 'error', fields: { job: 'outbox-send', outboxId: IDS[0], event: 'password-reset', attempt: 4, result: 'failed', code: 'UNKNOWN' } },
     ]);
@@ -483,7 +483,7 @@ describe('the job_runs row (STORY-09.06 AC-6, NFR-024)', () => {
     });
     clock.advance(0);
     await performOutboxSend(dependencies);
-    expect(recorded).toEqual([{ job: 'outbox-send', startedAt: NOW, finishedAt: NOW, result: { status: 'ok', claimed: 4, sent: 1, retrying: 1, failed: 1, skipped: 1 } }]);
+    expect(recorded).toEqual([{ job: 'outbox-send', startedAt: NOW, finishedAt: NOW, result: { status: 'ok', claimed: 3, sent: 1, retrying: 1, failed: 1, skipped: 1 } }]);
     expect(JSON.stringify(recorded)).not.toMatch(/example.com|Subject|Body|to-0/);
   });
 
@@ -491,7 +491,7 @@ describe('the job_runs row (STORY-09.06 AC-6, NFR-024)', () => {
     const { dependencies, recorded } = harness({ skipped: [{ id: 'z', event: 'task-overdue', attempts: 2, code: 'ALERTS_OFF' }] });
     await performOutboxSend(dependencies);
     expect(recorded).toHaveLength(1);
-    expect(recorded[0]?.result).toMatchObject({ claimed: 1, skipped: 1 });
+    expect(recorded[0]?.result).toMatchObject({ claimed: 0, skipped: 1 });
   });
 
   it('AC-6: a database fault while the row is written throws to the wrapper, which logs it at error and still lets the next run happen', async () => {

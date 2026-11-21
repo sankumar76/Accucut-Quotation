@@ -4,9 +4,11 @@ import { SEND_FAILURE_CODES, SKIP_CODES, type OutboxErrorCode, type SendFailureC
 import { ALERT_EVENTS, isMailEvent, type MailEvent, SECRET_BEARING_EVENTS } from '../../lib/mail/events';
 import { MAX_SEND_ATTEMPTS } from '../../lib/mail/retry';
 
+import type { BackupMissedAlert, BackupMissedQueued } from '../jobs/backup-watch';
+
 import { withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
-import { clientFor, type Transaction } from './transaction';
+import { clientFor, createTransactionRunner, type Transaction } from './transaction';
 
 /**
  * The e-mail outbox and the mail settings (STORY-09.01, FR-081 to FR-084, FR-003; STORY-09.06; architecture sections 4.7 and 5.1; ADR-011). Raw SQL lives only here, as tagged templates, and
@@ -340,4 +342,28 @@ function finish(
       WHERE id = ${row.id}::uuid AND status = 'sending' AND attempts = ${row.attempts}`;
     return changed === 1;
   });
+}
+
+const adminRowSchema = z.object({ id: z.string() });
+
+/**
+ * The way `backup-watch` queues its e-mail to the Admin (STORY-09.06 AC-10, decision D-a; `BackupMissedAlert` in `src/server/jobs/backup-watch.ts`). In ONE transaction it reads the alerts
+ * switch, finds the one active Admin by role in `users` (the table's unique index allows only one) and writes the row with the Admin's ID as the To and no Cc: the outbox holds a user ID, never an
+ * address (NFR-028, DL-262), and `outbox-send` reads the address again, active only, when it sends. With the switch OFF, or with no active Admin, nothing is written. The key is the caller's
+ * (`backup-missed:<IST date>`), so a second run on the same date queues nothing. No address is taken from anywhere but `users`.
+ */
+export function createBackupMissedQueue(db: PrismaClient): BackupMissedAlert {
+  const outbox = createEmailOutboxRepository(db);
+  const transactions = createTransactionRunner(db);
+  return {
+    queue: (mail, now) =>
+      transactions.run(async (tx): Promise<BackupMissedQueued> => {
+        const client = clientFor(db, tx);
+        const settings = z.array(settingsRowSchema).parse(await client.$queryRaw`SELECT alerts_enabled, sender_name, sender_mailbox FROM settings WHERE id = 1`)[0];
+        if (settings?.alerts_enabled !== true) return 'alerts-off';
+        const admin = z.array(adminRowSchema).parse(await client.$queryRaw`SELECT id::text AS id FROM users WHERE role = 'ADMIN'::user_role AND is_active ORDER BY created_at, id LIMIT 1`)[0];
+        if (admin === undefined) return 'no-admin';
+        return outbox.enqueue(tx, { ...mail, toUserId: admin.id, ccUserIds: [] }, now);
+      }),
+  };
 }

@@ -18,9 +18,11 @@ const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
 const MAIL_FILES = {
   'src/server/mail': ['layout.ts', 'logo.ts', 'mail-service.ts', 'microsoft-token.ts', 'send.ts', 'transport.ts'],
-  'src/lib/mail': ['codes.ts', 'events.ts'],
+  // STORY-09.06: the retry policy (pure) and the length of the Settings window for failed e-mail (one constant and one date rule).
+  'src/lib/mail': ['codes.ts', 'events.ts', 'failure-window.ts', 'retry.ts'],
   // STORY-09.03, 09.04 and 09.05: the message of each alert is a pure function from a fixed DTO of plain strings (no cost field), on top of the shared layout.
-  'src/server/mail/templates': ['daily-digest.ts', 'task-assigned.ts', 'task-overdue.ts'],
+  // STORY-09.06: the Admin's "server check needed" message is built from two booleans, so it cannot hold a figure or a path.
+  'src/server/mail/templates': ['backup-missed.ts', 'daily-digest.ts', 'task-assigned.ts', 'task-overdue.ts'],
 } as const;
 
 const JOB_FILE = 'src/server/jobs/outbox-send.ts';
@@ -44,7 +46,9 @@ const ALLOWED_SPECIFIER = [
   // From `src/server/jobs/overdue-scan.ts` and `daily-digest.ts` (STORY-09.04, 09.05): the plain, pure rules of a task, and the overdue and digest templates.
   /^\.\.\/\.\.\/lib\/tasks\/(folder-path|overdue|task-link)$/,
   /^\.\.\/mail\/templates\/(task-overdue|daily-digest)$/,
-  /^\.\.\/\.\.\/lib\/mail\/(codes|events)$/,
+  /^\.\.\/\.\.\/lib\/mail\/(codes|events|retry)$/,
+  // From `src/lib/mail/retry.ts` and `failure-window.ts` (STORY-09.06): the time constants of the same lib folder.
+  /^\.\.\/time$/,
   /^\.\.\/mail\/send$/,
   /^\.\.\/repositories\/(email-outbox-repository|transaction)$/,
 ];

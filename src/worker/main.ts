@@ -1,6 +1,6 @@
 import { EnvValidationError, loadAppEnv, loadEmailFeature } from '../lib/env';
 import { systemClock } from '../lib/time';
-import { scheduleBackupWatch, type BackupWatchStore } from '../server/jobs/backup-watch';
+import { type BackupMissedAlert, scheduleBackupWatch, type BackupWatchStore } from '../server/jobs/backup-watch';
 import { scheduleDailyDigest } from '../server/jobs/daily-digest';
 import { type HeartbeatStore, scheduleHeartbeat } from '../server/jobs/heartbeat';
 import { scheduleLogPrune } from '../server/jobs/log-prune';
@@ -9,7 +9,7 @@ import { scheduleMailJobs } from '../server/jobs/outbox-send';
 import type { JobLogFields, JobLogLevel } from '../server/jobs/run-job';
 import { createMailer } from '../server/mail/send';
 import { createMailTransport } from '../server/mail/transport';
-import { createEmailOutboxRepository } from '../server/repositories/email-outbox-repository';
+import { createBackupMissedQueue, createEmailOutboxRepository } from '../server/repositories/email-outbox-repository';
 import { createDailyDigestStore, createOverdueScanStore } from '../server/repositories/overdue-repository';
 import { getPrismaClient } from '../server/repositories/prisma-client';
 import { createHeartbeatRepository, createJobRunRepository, createJobRunWriter } from '../server/repositories/job-run-repository';
@@ -71,9 +71,11 @@ function start(): void {
   // The daily log-prune job (ADR-015 Amendment 2.1): it runs only when the install has written LOG_DIRECTORY into `.env`.
   const logPrune = scheduleLogPrune(process.env.LOG_DIRECTORY, log);
   // The daily backup-watch job (ADR-015 Amendment 3 point 5): the install writes the two drive roots into `.env`; with neither set it is off.
-  const backupWatch = scheduleBackupWatch({ dataVolume: process.env.PG_DATA_VOLUME, backupVolume: process.env.BACKUP_VOLUME }, store, log);
-  // The mail jobs (STORY-09.01 AC-6): scheduled only when FEATURE_EMAIL=on. With it off nothing is built, so no mail transport and no extra database client exist.
+  // With FEATURE_EMAIL=on it also e-mails the Admin when the backup is late or the disk is nearly full (STORY-09.06 AC-10); the queue is built on first use, so nothing is opened for a worker without volumes.
   const emailOn = loadEmailFeature();
+  const backupAlert: BackupMissedAlert | undefined = emailOn ? { queue: (mail, now) => createBackupMissedQueue(getPrismaClient('worker', databaseUrl)).queue(mail, now) } : undefined;
+  const backupWatch = scheduleBackupWatch({ dataVolume: process.env.PG_DATA_VOLUME, backupVolume: process.env.BACKUP_VOLUME }, store, log, undefined, backupAlert);
+  // The mail jobs (STORY-09.01 AC-6): scheduled only when FEATURE_EMAIL=on. With it off nothing is built, so no mail transport and no extra database client exist.
   const mailJobs = scheduleMailJobs(
     emailOn,
     () => {
