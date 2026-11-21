@@ -1,12 +1,12 @@
-# DEF-056: `process-items.test.ts:269` "two requests at once": exactly one create wins, but a loser got RATE_NAME_REFUSED instead of NAME_TAKEN (seen once, PR #580 run 44904746418)
+# DEF-056 (Test): `process-items.test.ts:269` "two requests at once": exactly one create wins, but a loser got RATE_NAME_REFUSED instead of NAME_TAKEN (seen once, PR #580 run 44904746418)
 
 | Field | Value |
 |-------|-------|
 | Story / AC | STORY-02.01 (AQP-113) AC-2 (a name another rate has, ignoring letter case, is refused as taken) and AC-3 (a name that reads as formula text is refused); relates to STORY-02.08 (AQP-365, PR #564, squash `242c21f7`) |
-| Severity | **Sev-3 Moderate, provisional** (master, DL-278). **Sev-2 at once** if the table lock or the read is shown not to cover the name check; QA re-grades and master is told the same day |
+| Severity | **Sev-3 Moderate** until close (re-typed to Test on master's DL-283, 2026-11-21; the Sev-2 trigger of DL-278 lapsed because the lock is shown to serialise the check) |
 | Priority | P3 |
-| Type | Product (a losing create gets the wrong refusal code; not shown to be a harmless test fault) |
-| Status | New (logged 2026-11-21) |
+| Type | **Test** (DL-283: the test's assumption that every spelling is valid alone was wrong; no product defect). Was logged as Product, provisional |
+| Status | **Open, fix in review**: PR #587 (tests only, head `3d56061d`; CI pending when re-typed). Close-out (DL-283): #587's run of record plus the first `master` push after the merge with `process-items.test.ts` green |
 | Jira / GitHub | [AQP-386](https://sankumar76.atlassian.net/browse/AQP-386) / [#582](https://github.com/sankumar76/Accucut-Quotation/issues/582). Jira "relates to" AQP-113 and AQP-365 |
 | Found by / date | CI, 2026-11-21; logged by qa-engineer on master's DL-278 |
 | Build / commit | PR #580 head `02d13ec1` (tests only: nothing under `src/`), so the code under test is `master` `7e42970c` plus nothing |
@@ -54,3 +54,9 @@ The product must answer `NAME_TAKEN`. No loosening of the assertion (accepting `
 | Fixed | developer | | `fix/AQP-386-<slug>` |
 | Regression test added | developer | | the same test, unchanged assertion; plus a case for the stale read if hypothesis 2 holds |
 | Verified | qa-engineer | | CI run of record and the first `master` push run after the merge |
+
+## Re-typed to Test (master DL-283, 2026-11-21)
+- **Cause (master, from `rate-names.ts` `rateNameIssues`):** `readsAsFormulaText(name, otherNames)` refuses a name that reads as column letters, numbers, operators or other rate names (`RATE_NAME_IS_COLUMN_LETTER`, surfaced as `RATE_NAME_REFUSED`). The test's `RACE-RATE` in capitals reads as the columns RACE minus RATE, so it is refused on its own, by design, whenever it takes the lock first (no rate has the name yet, so no `NAME_TAKEN` applies). The test's assumption, that every case spelling is valid alone, was wrong.
+- **Corrects:** DL-278 (1) and QA's own filing, which graded it Product on the reading that a loser could only reach the `RATE_NAME_REFUSED` rules if the read under the lock missed the winner. QA's hypotheses 1 to 4 above are superseded: the lock serialises the check (developer: 200 races per run on PostgreSQL 17, 0 reads after a winner's lock that missed the winner; 67 of 200 mismatches before the change, every one `RACE-RATE` taking the lock first; 0 of 200 after).
+- **Fix:** PR #587 (tests only, one file `tests/integration/masters/process-items.test.ts`): `rACE-RATE` replaces `RACE-RATE` (valid alone; four case spellings kept; the `NAME_TAKEN` assertion unchanged), a gated test that holds the first create uncommitted and shows a second create of a name refused alone waits for the lock and answers `NAME_TAKEN` (fails with the lock call removed), and tests of the all-capitals name alone and after another rate has it. No `src/` change; no section 9 item 2 review.
+- **Close-out (QA):** #587's run of record and the first `master` push after the merge, with `process-items.test.ts` green.
