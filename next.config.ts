@@ -46,12 +46,9 @@ const LOGO_CACHE_CONTROL = 'public, max-age=86400, stale-while-revalidate=604800
  *   and the version is pinned; it has no effect on the other rules (no Server Actions, ADR-010). The same flag lets a page
  *   call `unauthorized()`, which renders `app/unauthorized.tsx` (SCR-26 "Session ended") with status 401 when the session
  *   has ended; `requireUserOrRedirect` is the only caller (STORY-01.06 AC-3).
-<<<<<<< HEAD
  * - `experimental.proxyClientMaxBodySize`: the largest request body a route is given (`REQUEST_BODY_CAP_BYTES`).
-=======
  * - security headers (DEF-054, architecture section 8): `src/proxy.ts` puts the Content Security Policy and the other headers on every page and API answer; this file gives the three
  *   static ones to the files the proxy does not run for (`/_next/static` and the logo).
->>>>>>> origin/master
  * - `agentRules: false`: `next dev` would otherwise write an AGENTS.md into the working tree. This
  *   project's agent instructions are in CLAUDE.md.
  */
