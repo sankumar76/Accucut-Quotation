@@ -103,8 +103,9 @@ describe('AC-4 and AC-7: what the revert dialog shows after the answer', () => {
       stale: true,
     });
     expect(await revert(problem(409, 'NOTHING_TO_REVERT', 'This checkpoint is the same as the current configuration.'))).toMatchObject({ phase: { kind: 'stopped', message: 'This checkpoint is the same as the current configuration.' }, stale: true });
-    expect(await revert(problem(422, 'VALIDATION_FAILED', 'AL Cutting Cost uses a rate that is no longer in the Process master.', { errors: [{ field: 'AL Cutting Cost', message: 'AL Cutting Cost uses a rate that is no longer in the Process master.' }] }))).toMatchObject({
-      phase: { kind: 'stopped', message: 'AL Cutting Cost uses a rate that is no longer in the Process master.' },
+    // The server's title for this error type is generic; the sentences are in `errors`, one for each field, and the screen shows them all.
+    expect(await revert(problem(422, 'VALIDATION_FAILED', 'Check the values and try again.', { errors: [{ field: 'AL Cutting Cost', message: 'AL Cutting Cost uses a rate that is no longer in the Process master.' }, { field: 'AM Notch Cost', message: 'AM Notch Cost uses a rate that is no longer in the Process master.' }] }))).toMatchObject({
+      phase: { kind: 'stopped', message: 'AL Cutting Cost uses a rate that is no longer in the Process master. AM Notch Cost uses a rate that is no longer in the Process master.' },
       stale: false,
     });
     expect(await revert(problem(404, 'NOT_FOUND', 'Not found.'))).toMatchObject({ phase: { kind: 'stopped' }, stale: true });

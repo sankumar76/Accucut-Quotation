@@ -40,6 +40,8 @@ export function phaseAfterRevert(outcome: Outcome<RevertedVersion>): RevertChang
   if (outcome.status === 'failed') return { phase: { kind: 'unconfirmed' }, passwordError: null, stale: true };
   if (outcome.code === STEP_UP_FAILED_CODE) return { phase: { kind: 'confirm' }, passwordError: stepUpFailedLine(outcome.title), stale: false };
   if (outcome.code === STEP_UP_LOCKED_CODE) return { phase: { kind: 'locked', message: stepUpLockedLine(outcome.title) }, passwordError: null, stale: false };
-  // A 422 that names the fields of an unusable target says them all in its title; any other refusal is the server's one sentence.
-  return { phase: { kind: 'stopped', message: outcome.title }, passwordError: null, stale: NOT_WHAT_THE_SCREEN_SHOWED.has(outcome.code) || outcome.httpStatus === 404 };
+  // A 422 for a target that cannot be used names each field in its own sentence (`errors`); the title of that error type is a generic "Check the values", so the sentences are what is shown. Any other refusal is the server's one title.
+  const sentences = Object.values(outcome.fields);
+  const message = outcome.httpStatus === 422 && sentences.length > 0 ? sentences.join(' ') : outcome.title;
+  return { phase: { kind: 'stopped', message }, passwordError: null, stale: NOT_WHAT_THE_SCREEN_SHOWED.has(outcome.code) || outcome.httpStatus === 404 };
 }

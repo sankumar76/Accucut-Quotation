@@ -1,9 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
+import { createTransactionHandle } from '@/server/repositories/transaction';
+
 import { defined } from '../support/defined';
 import { HARNESS_PASSWORD } from '../support/harness-password';
 import { inputAfterAx } from '../support/insert-specs';
+import { SEED_PROCESS_ITEMS } from '../support/seed-config';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 
 /**
@@ -42,6 +45,7 @@ const revertRoute = await import('@/app/api/v1/config/versions/[id]/revert/route
 const currentRoute = await import('@/app/api/v1/config/current/route');
 
 const WRONG = 'Not-the-right-1!';
+const CUTTING_RATE_ID = defined(SEED_PROCESS_ITEMS.find((item) => item.name === 'Cutting-Rate-per-Sec')).id;
 const record = z.record(z.string(), z.unknown());
 const asJson = async (response: Response) => record.parse(await response.json());
 const headers = { origin: ORIGIN, 'content-type': 'application/json' };
@@ -218,6 +222,26 @@ describe('AC-4: five wrong passwords in a row lock the step-up, and nothing is r
     const locked = await revert(target, { password: HARNESS_PASSWORD, baseVersion: 4 });
     expect(locked.status).toBe(429);
     expect(await asJson(locked)).toMatchObject({ code: 'STEP_UP_LOCKED', title: 'Too many wrong passwords. Try again in 15 minutes.' });
+    expect(await currentVersion()).toBe(4);
+  });
+});
+
+describe('AC-5: a target that can no longer be used, as the route answers it', () => {
+  it('answers 422 with one sentence for each field in `errors` (the title is the generic one), no rate name, and asks no password', async () => {
+    // The Process master loses a rate that version 1 reads (this is the last test of the file: the lock test above needs version 1 usable).
+    expect(await harness.masters.deleteProcessItem(CUTTING_RATE_ID, createTransactionHandle())).toBe(true);
+    const response = await revert(firstVersionIdOf(), { password: WRONG, baseVersion: 4 });
+    expect(response.status).toBe(422);
+    const text = await response.text();
+    const body = record.parse(JSON.parse(text));
+    expect(body['code']).toBe('VALIDATION_FAILED');
+    expect(body['title']).not.toContain('Process master');
+    const errors = z.array(record).parse(body['errors']);
+    expect(errors.length).toBeGreaterThan(0);
+    for (const error of errors) expect(error['message']).toMatch(/^[A-Z]{1,3} .+ uses a rate that is no longer in the Process master.$/);
+    expect(errors.map((error) => error['field'])).toContain('AL Cutting Cost');
+    expect(text).not.toContain('Cutting-Rate-per-Sec');
+    expect(text).not.toContain(WRONG);
     expect(await currentVersion()).toBe(4);
   });
 });
