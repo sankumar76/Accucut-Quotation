@@ -1,4 +1,4 @@
-import type { FieldDefinition, SectionDefinition } from '../fields/field-schema';
+import type { FieldDefinition, InputFieldDefinition, SectionDefinition } from '../fields/field-schema';
 import { fieldLetter, fieldsInFormOrder, findFieldById, findFieldByKey, sectionColumnRange } from '../fields/registry';
 import type { ConfigDocument } from '../fields/schema';
 import { isEngineerVisibleAllowed } from '../fields/visibility';
@@ -20,14 +20,18 @@ import { MAX_LONG_TEXT_LENGTH, MAX_OTHER_TREATMENT_LENGTH, MAX_PART_TEXT_LENGTH 
  * (`formFieldById`), so a value for Material Rate or any calculated field has no place to go.
  */
 
-/** The sections of the form: 01 Part Details to 08 Other Costs and Remarks (STORY-05.03 built 01 and 02, STORY-05.04 the rest, STORY-05.06 the treatments of 07 and Treatment / Color of 01). */
-export const FORM_SECTION_NUMBERS: ReadonlyArray<number> = [1, 2, 3, 4, 5, 6, 7, 8];
+/**
+ * **The sections of the form are the registry's** (STORY-08.08 AC-4): 01 Part Details to 08 Other Costs and Remarks as seeded (STORY-05.03 built 01 and 02, STORY-05.04 the rest, STORY-05.06 the treatments of 07 and
+ * Treatment / Color of 01), and every section an Admin adds after them, in the order of its `number`. There is no fixed list of numbers any more: a field is on the form because of what it is (the allow-list below),
+ * not because of the number of its section.
+ */
 
 /**
- * The input types the form can draw and save: numbers and texts, Treatment / Color (`select_other`: a listed treatment, or "Other" with words) and the eight surface treatments (`flag`: chosen or
- * not; STORY-05.06). The picture (`image`, Part Model, STORY-05.07) is on the form too, with its own rule (`picture`): it is added, replaced and removed by its own routes and is never a typed value.
+ * The input types the form can draw and save: numbers and texts, Treatment / Color (`select_other`: a listed treatment, or "Other" with words), the eight surface treatments (`flag`: chosen or
+ * not; STORY-05.06) and a choice from a list the Admin gave (`select` with `options`, STORY-08.08; Material in Drawing is the `select` of the Material Master and has its own rule). The picture (`image`, Part Model,
+ * STORY-05.07) is on the form too, with its own rule (`picture`): it is added, replaced and removed by its own routes and is never a typed value.
  */
-const TYPED_DATA_TYPES: ReadonlyArray<FieldDefinition['dataType']> = ['number', 'text', 'image', 'select_other', 'flag'];
+const TYPED_DATA_TYPES: ReadonlyArray<FieldDefinition['dataType']> = ['number', 'text', 'image', 'select_other', 'flag', 'select'];
 
 /** The decimals a typed number may have (SPEC section 7.3). */
 export const NUMBER_DECIMALS = 2;
@@ -62,6 +66,8 @@ export type FormRule =
   | { readonly type: 'number'; readonly decimals: number }
   | { readonly type: 'text'; readonly maxLength: number; readonly multiline: boolean }
   | { readonly type: 'select'; readonly source: 'materials' }
+  /** A choice from the list the Admin gave (`options`, one or more, in their stored order): saved as the option's text (`choice-value.ts`, STORY-08.08). */
+  | { readonly type: 'choice'; readonly options: ReadonlyArray<string> }
   /** Treatment / Color (G): one of the listed treatments, or "Other" with words of up to `maxLength` characters. Saved as `{ id, text }` (`treatment-value.ts`). */
   | { readonly type: 'treatment'; readonly maxLength: number }
   /** One of the surface treatments (Z to AG): chosen (`1`) or not (`0`). The form draws the flags of a section as one multi-select (SCR-05 section 07). */
@@ -104,13 +110,20 @@ export interface FormSectionView {
   readonly fields: ReadonlyArray<FormFieldView>;
 }
 
-const sectionNumberOf = (document: ConfigDocument, field: FieldDefinition): number => document.sections.find((section) => section.id === field.sectionId)?.number ?? 0;
+const hasSection = (document: ConfigDocument, field: FieldDefinition): boolean => field.sectionId !== null && document.sections.some((section) => section.id === field.sectionId);
+
+/** A `select` other than Material in Drawing is drawn only with a list to choose from: one with none has nothing to offer and is not on the form. */
+const hasOptions = (field: InputFieldDefinition): boolean => field.options !== null && field.options.length > 0;
 
 function isOnForm(document: ConfigDocument, field: FieldDefinition): boolean {
-  if (field.sectionId === null || !FORM_SECTION_NUMBERS.includes(sectionNumberOf(document, field))) return false;
+  if (!hasSection(document, field)) return false;
   if (field.systemRole === 'sl-no') return true;
+  // Every one of these is still asked, in a new section as in an old one: the flag, the allow-list (a rate or a calculated field can never be on the form) and the kind (an output or an auto field is never drawn).
   if (!field.engineerVisible || !isEngineerVisibleAllowed(field)) return false;
-  if (field.kind === 'input') return field.key === MATERIAL_IN_DRAWING_KEY || TYPED_DATA_TYPES.includes(field.dataType);
+  if (field.kind === 'input') {
+    if (field.key === MATERIAL_IN_DRAWING_KEY) return true;
+    return field.dataType === 'select' ? hasOptions(field) : TYPED_DATA_TYPES.includes(field.dataType);
+  }
   return field.key === MATERIAL_CONSIDERED_KEY;
 }
 
@@ -123,6 +136,7 @@ function ruleOf(document: ConfigDocument, field: FieldDefinition): FormRule {
   if (field.kind !== 'input') return { type: 'derived', from: field.key === MATERIAL_CONSIDERED_KEY ? (findFieldByKey(document, MATERIAL_IN_DRAWING_KEY)?.id ?? null) : null };
   if (field.key === MATERIAL_IN_DRAWING_KEY) return { type: 'select', source: 'materials' };
   if (field.dataType === 'image') return { type: 'picture' };
+  if (field.dataType === 'select') return { type: 'choice', options: [...(field.options ?? [])] };
   if (field.dataType === 'select_other') return { type: 'treatment', maxLength: MAX_OTHER_TREATMENT_LENGTH };
   if (field.dataType === 'flag') return { type: 'flag' };
   if (field.dataType === 'number') return { type: 'number', decimals: NUMBER_DECIMALS };
@@ -160,10 +174,9 @@ function sectionOf(document: ConfigDocument, section: SectionDefinition): FormSe
   };
 }
 
-/** The sections of the form, in order, each with the fields it shows. A section with none is left out. */
+/** The sections of the form, in the order of their `number`, each with the fields it shows. A section with none is left out. */
 export function buildFormSections(document: ConfigDocument): ReadonlyArray<FormSectionView> {
-  return document.sections
-    .filter((section) => FORM_SECTION_NUMBERS.includes(section.number))
+  return [...document.sections]
     .sort((a, b) => a.number - b.number)
     .map((section) => sectionOf(document, section))
     .filter((section) => section.fields.length > 0);

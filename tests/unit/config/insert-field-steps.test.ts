@@ -86,12 +86,18 @@ describe('AC-2 step 2: the details of an input', () => {
     expect(html).toContain('Only when another field has a value');
   });
 
-  it('offers Number and Text only (decision D-2), the sections, and the number formats in words', () => {
+  it('offers Number, Text and, since STORY-08.08, a choice from a list, the sections with "A new section", and the number formats in words', () => {
     expect(html).toContain('Number, 2 decimals');
     expect(html).toContain('>Text</option>');
-    expect(html).not.toContain('Choice from a list');
+    expect(html).toContain('>Choice from a list</option>');
     expect(html).toContain('01 Invented Section');
+    expect(html).toContain('>A new section</option>');
     expect(html).toContain('Money, 2 decimals');
+  });
+
+  it('draws no list of choices and no names of a new section until they are chosen', () => {
+    expect(html).not.toContain('Choices, one per line');
+    expect(html).not.toContain('Name of the new section');
   });
 
   it('lists every column as "letter name" and pre-chooses the one named in the address', () => {

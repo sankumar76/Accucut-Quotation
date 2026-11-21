@@ -147,7 +147,7 @@ export function useInsertWizard(options: InsertOptions, afterId: string | null):
     patchInput: (patch) => {
       setForm((current) => applyInputPatch(current, patch, options));
       // Choosing the type may turn "hide the line" off, so a refusal of it is cleared with the rest.
-      edited([...namesOf('input', patch), ...(patch.dataType === undefined ? [] : ['cost.hideWhenInputIsZero', 'input.numFmt'])]);
+      edited([...namesOf('input', patch), ...(patch.dataType === undefined ? [] : ['cost.hideWhenInputIsZero', 'input.numFmt', 'input.choices', 'input.defaultValue'])]);
     },
     patchOutput: (patch) => {
       setForm((current) => ({ ...current, output: { ...current.output, ...patch } }));

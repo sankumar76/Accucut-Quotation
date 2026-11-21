@@ -4,6 +4,8 @@
  * from the registry. The success and audit words are proposed (assumption A-4) and are the ux-expert's to rule on at the end review.
  */
 
+import { MAX_CHOICE_LENGTH, MAX_CHOICES, MAX_SECTION_NAME_LENGTH, MAX_SECTION_SHORT_NAME_LENGTH } from '@/lib/config/field-insert-limits';
+
 export const INSERT_TITLE = 'Insert field';
 export const INSERT_META_DESCRIPTION = 'Add an input, an output, or an input with its cost column to the quotation worksheet, and see the letter changes before you save.';
 export const INSERT_DESCRIPTION = 'Add an input, an output, or an input together with its cost column.';
@@ -46,8 +48,17 @@ export const LABEL_LABEL = 'Label';
 export const VALUE_TYPE_LABEL = 'Type of value';
 export const VALUE_TYPE_NUMBER = 'Number, 2 decimals';
 export const VALUE_TYPE_TEXT = 'Text';
+/** A choice input and a new section (STORY-08.08 AC-6). The limits repeat the server's (`field-insert-limits.ts`); the words under a refused control are the server's. Proposed (OQ-1), the ux-expert's to rule on. */
+export const VALUE_TYPE_SELECT = 'Choice from a list';
+export const CHOICES_LABEL = 'Choices, one per line';
+export const CHOICES_HINT = `From 1 to ${String(MAX_CHOICES)} choices, each up to ${String(MAX_CHOICE_LENGTH)} characters, none the same as another. The Engineer sees them in this order.`;
+export const NEW_SECTION_CHOICE = 'A new section';
+export const NEW_SECTION_NAME_LABEL = 'Name of the new section';
+export const NEW_SECTION_SHORT_LABEL = 'Short name on the section strip';
+export const NEW_SECTION_HINT = `The new section is added after the last one. Name up to ${String(MAX_SECTION_NAME_LENGTH)} characters, short name up to ${String(MAX_SECTION_SHORT_NAME_LENGTH)}.`;
 export const DEFAULT_LABEL = 'Default value';
 export const DEFAULT_HINT = 'Leave empty for no default. Without one, the Engineer must enter a value before Calculate.';
+export const DEFAULT_CHOICE_HINT = 'Leave empty for no default. A default must be one of the choices.';
 export const AFTER_LABEL = 'Insert after column';
 export const AFTER_PLACEHOLDER = 'Choose a column';
 export const SECTION_LABEL = 'Section of the Engineer form';

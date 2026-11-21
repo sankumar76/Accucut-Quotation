@@ -92,6 +92,9 @@ function readField(field: TypedField, stored: unknown): string | null {
     }
     case 'select':
       return raw.trim() === '' ? null : raw.trim().toLowerCase();
+    case 'choice':
+      // A choice is its option's text. What is stored is a value (a value no longer in the list is kept, STORY-08.08 AC-2); a default is data of the registry and is not trusted, so it counts only when it is one of the options.
+      return typed.trim() !== '' ? typed.trim() : field.rule.options.includes((field.defaultValue ?? '').trim()) ? (field.defaultValue ?? '').trim() : null;
   }
 }
 
@@ -168,10 +171,10 @@ function numbersOf(part: PartToCheck, document: ConfigDocument, read: ReadonlyAr
   return numbers;
 }
 
-/** The typed words, and the words of Treatment / Color (G) as the part holds them (the row's name for a listed entry and for "Not applicable", the typed words for "Other"). */
+/** The typed words, the option a choice holds, and the words of Treatment / Color (G) as the part holds them (the row's name for a listed entry and for "Not applicable", the typed words for "Other"). */
 function textsOf(read: ReadonlyArray<FieldValue>): Record<string, string> {
   const texts: Record<string, string> = {};
-  for (const { field, value } of read.filter(({ field: candidate }) => candidate.rule.type === 'text' || candidate.rule.type === 'treatment')) {
+  for (const { field, value } of read.filter(({ field: candidate }) => candidate.rule.type === 'text' || candidate.rule.type === 'treatment' || candidate.rule.type === 'choice')) {
     if (value !== null) texts[field.id] = value;
   }
   return texts;

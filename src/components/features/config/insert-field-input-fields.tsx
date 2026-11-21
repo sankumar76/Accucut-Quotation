@@ -1,12 +1,15 @@
 import { FormField } from '@/components/shared/form-field';
 import { NativeSelect } from '@/components/ui/native-select';
-import { columnChoice, controlId, type InputDetails, type ValueType } from '@/lib/config/insert-field-form';
+import { columnChoice, controlId, NEW_SECTION_VALUE, type InputDetails, type ValueType } from '@/lib/config/insert-field-form';
 import type { InsertColumnOption, InsertOptions } from '@/lib/config/insert-field-client';
 
-import { errorOf, RadioChoices, SelectField, TextField, type Choice, type Errors } from './insert-field-controls';
+import { errorOf, LinesField, RadioChoices, SelectField, TextField, type Choice, type Errors } from './insert-field-controls';
 import {
   AFTER_LABEL,
   AFTER_PLACEHOLDER,
+  CHOICES_HINT,
+  CHOICES_LABEL,
+  DEFAULT_CHOICE_HINT,
   DEFAULT_HINT,
   DEFAULT_LABEL,
   formatWords,
@@ -14,11 +17,16 @@ import {
   FORMAT_PLACEHOLDER,
   HINT_LABEL,
   LABEL_LABEL,
+  NEW_SECTION_CHOICE,
+  NEW_SECTION_HINT,
+  NEW_SECTION_NAME_LABEL,
+  NEW_SECTION_SHORT_LABEL,
   SECTION_LABEL,
   SECTION_PLACEHOLDER,
   UNIT_LABEL,
   VALUE_TYPE_LABEL,
   VALUE_TYPE_NUMBER,
+  VALUE_TYPE_SELECT,
   VALUE_TYPE_TEXT,
   VISIBILITY_ALWAYS,
   VISIBILITY_LABEL,
@@ -30,8 +38,9 @@ import {
 } from './insert-field-texts';
 
 /**
- * The controls of the input the Admin adds (SCR-19 step 2; STORY-08.03 AC-2): label, type of value (Number or Text, decision D-2), default, where it goes, its section on the Engineer's form, the unit beside it, a
- * hint, its Excel width and number format, and a visibility rule. The server reads every one again; this draws them and reports what was typed.
+ * The controls of the input the Admin adds (SCR-19 step 2; STORY-08.03 AC-2, STORY-08.08 AC-6): label, type of value (Number, Text or Choice from a list), the choices of a list, default, where it goes, its section
+ * on the Engineer's form (an existing one or a new one with its names), the unit beside it, a hint, its Excel width and number format, and a visibility rule. The server reads every one again; this draws them and
+ * reports what was typed.
  */
 
 export const columnChoices = (columns: ReadonlyArray<InsertColumnOption>): ReadonlyArray<Choice> => columns.map((column) => ({ value: column.id, text: columnChoice(column) }));
@@ -62,16 +71,17 @@ export function AfterField({
   );
 }
 
-/** The ids of the two choices, so the type-of-value group and its labels agree. */
+/** The ids of the three choices, so the type-of-value group and its labels agree. */
 const VALUE_TYPE_ID = controlId('input.dataType');
 
 function ValueTypeField({ value, onChange, errors }: { readonly value: ValueType; readonly onChange: (value: ValueType) => void; readonly errors: Errors }) {
   return (
     <FormField id={VALUE_TYPE_ID} label={VALUE_TYPE_LABEL} {...errorOf(errors, 'input.dataType')}>
       {(control) => (
-        <NativeSelect {...control} value={value} onChange={(event) => onChange(event.target.value === 'text' ? 'text' : 'number')}>
+        <NativeSelect {...control} value={value} onChange={(event) => onChange(event.target.value === 'text' ? 'text' : event.target.value === 'select' ? 'select' : 'number')}>
           <option value="number">{VALUE_TYPE_NUMBER}</option>
           <option value="text">{VALUE_TYPE_TEXT}</option>
+          <option value="select">{VALUE_TYPE_SELECT}</option>
         </NativeSelect>
       )}
     </FormField>
@@ -133,10 +143,11 @@ export function InputFields({ options, value, onChange, errors, after }: InputFi
     <>
       <TextField name="input.label" label={LABEL_LABEL} errors={errors} value={value.label} onChange={(label) => onChange({ label })} />
       <ValueTypeField value={value.dataType} onChange={(dataType) => onChange({ dataType })} errors={errors} />
+      {value.dataType === 'select' ? <LinesField name="input.choices" label={CHOICES_LABEL} hint={CHOICES_HINT} errors={errors} value={value.choices} onChange={(choices) => onChange({ choices })} /> : null}
       <TextField
         name="input.defaultValue"
         label={DEFAULT_LABEL}
-        hint={DEFAULT_HINT}
+        hint={value.dataType === 'select' ? DEFAULT_CHOICE_HINT : DEFAULT_HINT}
         errors={errors}
         value={value.defaultValue}
         onChange={(defaultValue) => onChange({ defaultValue })}
@@ -149,9 +160,21 @@ export function InputFields({ options, value, onChange, errors, after }: InputFi
         errors={errors}
         value={value.sectionId}
         onChange={(sectionId) => onChange({ sectionId })}
-        choices={options.sections.map((section) => ({ value: section.id, text: `${String(section.number).padStart(2, '0')} ${section.name}` }))}
+        choices={[...options.sections.map((section) => ({ value: section.id, text: `${String(section.number).padStart(2, '0')} ${section.name}` })), { value: NEW_SECTION_VALUE, text: NEW_SECTION_CHOICE }]}
         placeholder={SECTION_PLACEHOLDER}
       />
+      {value.sectionId === NEW_SECTION_VALUE ? (
+        <div className="grid gap-s-4 sm:grid-cols-2">
+          <TextField name="input.newSectionName" label={NEW_SECTION_NAME_LABEL} hint={NEW_SECTION_HINT} errors={errors} value={value.newSectionName} onChange={(newSectionName) => onChange({ newSectionName })} />
+          <TextField
+            name="input.newSectionShortName"
+            label={NEW_SECTION_SHORT_LABEL}
+            errors={errors}
+            value={value.newSectionShortName}
+            onChange={(newSectionShortName) => onChange({ newSectionShortName })}
+          />
+        </div>
+      ) : null}
       <TextField name="input.unit" label={UNIT_LABEL} errors={errors} value={value.unit} onChange={(unit) => onChange({ unit })} />
       <TextField name="input.hint" label={HINT_LABEL} errors={errors} value={value.hint} onChange={(hint) => onChange({ hint })} />
       <div className="grid gap-s-4 sm:grid-cols-2">
