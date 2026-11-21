@@ -218,7 +218,7 @@ describe('AC-2: the unlock is written in one piece', () => {
   it('an audit entry that cannot be written takes the status and the unlock with it', async () => {
     const { estimateId } = await approvedEstimate();
     const before = await storedOf(db, estimateId);
-    const failing = unlockOver({ audit: { record: () => Promise.reject(new Error(INVENTED_FAILURE)), list: db.audit.list } });
+    const failing = unlockOver({ audit: { record: () => Promise.reject(new Error(INVENTED_FAILURE)), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list } });
     await expect(failing.unlock(lead(), estimateId, request())).rejects.toThrow(INVENTED_FAILURE);
     expect(await storedOf(db, estimateId)).toEqual(before);
     expect(await statusOf(db, estimateId)).toBe('APPROVED');

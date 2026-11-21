@@ -166,7 +166,7 @@ describe('AC-3: the acknowledged press calculates, records the warnings and writ
 
   it('an entry that is refused takes the calculation with it: no calculation, no entry, a draft (one transaction)', async () => {
     const { estimateId } = await addWarnedEstimate();
-    const refusing = db.buildService({}, { audit: { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), list: db.audit.list } });
+    const refusing = db.buildService({}, { audit: { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list } });
     await expect(refusing.calculate(engineer(), estimateId, acknowledge(3))).rejects.toBeInstanceOf(AuditEntryRefusedError);
     await expectNothingWritten(estimateId, 3);
   });

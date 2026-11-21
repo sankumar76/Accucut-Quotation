@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { startOfIstDay } from '@/lib/time';
 import { decodeAuditCursor } from '@/server/services/audit-cursor';
-import { createAuditService, type AuditService } from '@/server/services/audit-service';
+import { createAuditService, type AnyAuditEntryInput, type AuditService } from '@/server/services/audit-service';
 import { AuditEntryRefusedError } from '@/server/services/audit-secrets';
 
 import { createFakeAuditWorld, type FakeAuditWorld } from '../support/fake-audit';
@@ -74,6 +74,79 @@ describe('AC-2: record appends in the caller\'s transaction', () => {
       await service.record(tx, { event: 'user.deactivated', actorId: ADMIN, actorLabel: 'Invented Admin', requestId: REQUEST_ID, object: { id: PERSON, label: 'Invented Person' }, before: { isActive: true }, after: { isActive: false } });
     });
     expect(world.audit.committed.map((row) => row.event)).toEqual(['user.role_changed', 'user.deactivated']);
+  });
+});
+
+describe("recordMany (ADR-018, GitHub #568): a batch in the caller's transaction, every entry checked as record checks it", () => {
+  const base = { actorId: ADMIN, actorLabel: 'Invented Admin', requestId: REQUEST_ID } as const;
+  const entryFor = (label: string) => ({ ...base, event: 'user.deactivated', object: { id: PERSON, label }, before: { isActive: true }, after: { isActive: false } }) as const;
+  type Entry = ReturnType<typeof entryFor>;
+
+  async function refusalOf(entries: ReadonlyArray<Entry>): Promise<unknown> {
+    return world.transactions.run((tx) => service.recordMany(tx, entries)).then(
+      () => {
+        throw new Error('expected a refusal');
+      },
+      (error: unknown) => error,
+    );
+  }
+
+  it('writes every entry with one call of the repository, and keeps them when the transaction commits', async () => {
+    await world.transactions.run((tx) => service.recordMany(tx, [entryFor('Invented One'), entryFor('Invented Two'), entryFor('Invented Three')]));
+    expect(world.audit.committed.map((row) => row.objectLabel).sort()).toEqual(['Invented One', 'Invented Three', 'Invented Two']);
+    expect(world.audit.calls).toEqual({ single: 0, batches: [3] });
+  });
+
+  it('drops the whole batch when the transaction rolls back', async () => {
+    const failure = new Error('the change failed after the batch was recorded');
+    await expect(
+      world.transactions.run(async (tx) => {
+        await service.recordMany(tx, [entryFor('Invented One'), entryFor('Invented Two')]);
+        throw failure;
+      }),
+    ).rejects.toBe(failure);
+    expect(world.audit.committed).toEqual([]);
+  });
+
+  it('refuses the whole batch when the second entry does not fit, and appends nothing, not even the first', async () => {
+    const badSecond = { ...entryFor('Invented Two'), after: { isActive: false, extra: 'not in the shape' } } as unknown as Entry;
+    expect(await refusalOf([entryFor('Invented One'), badSecond])).toMatchObject({ reason: 'shape', where: 'after' });
+    expect(world.audit.appended).toEqual([]);
+    expect(world.audit.calls).toEqual({ single: 0, batches: [] });
+  });
+
+  it('refuses the whole batch when one entry holds a secret, and names where', async () => {
+    const withHash = {
+      ...base,
+      event: 'approval.cancelled',
+      object: { id: PERSON, label: 'Invented Person' },
+      before: { approvedPrice: '100.00', status: 'APPROVED' },
+      after: { reason: '$argon2id$v=19$m=1,t=1,p=1$a$b', status: 'DRAFT' },
+    } as unknown as Entry;
+    expect(await refusalOf([entryFor('Invented One'), withHash])).toMatchObject({ reason: 'secret', where: 'after.reason' });
+    expect(world.audit.appended).toEqual([]);
+  });
+
+  it('refuses an empty label and a too long actor label as record does', async () => {
+    expect(await refusalOf([entryFor('')])).toMatchObject({ reason: 'shape', where: 'object.label' });
+    expect(await refusalOf([{ ...entryFor('Invented One'), actorLabel: 'x'.repeat(201) } as unknown as Entry])).toMatchObject({ reason: 'shape', where: 'actorLabel' });
+    expect(world.audit.appended).toEqual([]);
+  });
+
+  it('refuses at compile time an entry that pairs one event with the shape of another (the entries are the union of the events, not a mix)', () => {
+    // @ts-expect-error user.deactivated takes { isActive }, not the role change of user.role_changed
+    const mismatched: AnyAuditEntryInput = { ...base, event: 'user.deactivated', object: { id: PERSON, label: 'Invented Person' }, before: { role: 'ENGINEER' }, after: { role: 'LEAD' } };
+    expect(mismatched.event).toBe('user.deactivated');
+  });
+
+  it('sends no query for an empty list', async () => {
+    await world.transactions.run((tx) => service.recordMany(tx, []));
+    expect(world.audit.calls).toEqual({ single: 0, batches: [] });
+    expect(world.audit.committed).toEqual([]);
+  });
+
+  it('cannot write without a transaction: the repository refuses a handle it did not open', async () => {
+    await expect(service.recordMany({ kind: 'database-transaction' }, [entryFor('Invented One')])).rejects.toThrow('did not open');
   });
 });
 

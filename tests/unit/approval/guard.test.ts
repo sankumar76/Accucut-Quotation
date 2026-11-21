@@ -148,7 +148,7 @@ describe('AC-5: the service refuses an Engineer as a rejected promise, before it
       calculations: { findFigureBasis: touch, findCalculatedTotal: touch },
       approvals: { insertApproval: touch },
       transactions: { run: touch },
-      workflow: { transition: touch, audit: { record: touch, list: touch } },
+      workflow: { transition: touch, audit: { record: touch, recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: touch } },
     });
     const audit = { actorId: engineer.id, actorLabel: 'Invented Engineer', requestId: 'request-1' };
     await expect(service.approve(engineer, 'estimate-1', { calculationId: CURRENT_ID, price: '1.00', audit })).rejects.toBeInstanceOf(ForbiddenError);
@@ -186,6 +186,7 @@ describe('STORY-06.06: the write refuses what the guard cannot, and writes nothi
             audited.push(entry.after);
             return Promise.resolve();
           },
+          recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')),
           list: () => Promise.reject(new Error('Not used.')),
         },
       },
