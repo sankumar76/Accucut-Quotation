@@ -50,13 +50,20 @@ The product must answer `NAME_TAKEN`. No loosening of the assertion (accepting `
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Measured (hypotheses above) | developer | | AQP-386 comment or a diagnostic PR (never merged) |
-| Fixed | developer | | `fix/AQP-386-<slug>` |
-| Regression test added | developer | | the same test, unchanged assertion; plus a case for the stale read if hypothesis 2 holds |
-| Verified | qa-engineer | | CI run of record and the first `master` push run after the merge |
+| Measured (hypotheses above) | developer | 2026-11-21 | AQP-386 comment 12540: 200 races per run on PostgreSQL 17, 0 reads after a winner's lock that missed the winner; 67 of 200 mismatches before, 0 of 200 after; the cause is the test's `RACE-RATE` spelling (DL-283) |
+| Fixed | developer | 2026-11-21 | PR #587 (tests only), squash `dcf8a192` |
+| Regression test added | developer | 2026-11-21 | the `NAME_TAKEN` assertion unchanged with `rACE-RATE`; a gated lock test; all-capitals tests (`process-items.test.ts`, 28 tests) |
+| Verified | qa-engineer | 2026-11-21 | `master` push runs 44922163960 (`dcf8a192`) and 44924430846 (`c0cf1d21`): `process-items.test.ts` 28 tests green (1,256 ms and 1,620 ms) |
 
 ## Re-typed to Test (master DL-283, 2026-11-21)
 - **Cause (master, from `rate-names.ts` `rateNameIssues`):** `readsAsFormulaText(name, otherNames)` refuses a name that reads as column letters, numbers, operators or other rate names (`RATE_NAME_IS_COLUMN_LETTER`, surfaced as `RATE_NAME_REFUSED`). The test's `RACE-RATE` in capitals reads as the columns RACE minus RATE, so it is refused on its own, by design, whenever it takes the lock first (no rate has the name yet, so no `NAME_TAKEN` applies). The test's assumption, that every case spelling is valid alone, was wrong.
 - **Corrects:** DL-278 (1) and QA's own filing, which graded it Product on the reading that a loser could only reach the `RATE_NAME_REFUSED` rules if the read under the lock missed the winner. QA's hypotheses 1 to 4 above are superseded: the lock serialises the check (developer: 200 races per run on PostgreSQL 17, 0 reads after a winner's lock that missed the winner; 67 of 200 mismatches before the change, every one `RACE-RATE` taking the lock first; 0 of 200 after).
 - **Fix:** PR #587 (tests only, one file `tests/integration/masters/process-items.test.ts`): `rACE-RATE` replaces `RACE-RATE` (valid alone; four case spellings kept; the `NAME_TAKEN` assertion unchanged), a gated test that holds the first create uncommitted and shows a second create of a name refused alone waits for the lock and answers `NAME_TAKEN` (fails with the lock call removed), and tests of the all-capitals name alone and after another rate has it. No `src/` change; no section 9 item 2 review.
 - **Close-out (QA):** #587's run of record and the first `master` push after the merge, with `process-items.test.ts` green.
+
+## Close-out re-check (qa-engineer, 2026-11-21, after pause 4)
+- Jira AQP-386 Done (resolved 2026-11-21 11:21), GitHub #582 closed as completed, and this file Closed: all three agree.
+- Nothing left in the product or the suite: the test file at `c0cf1d21` has no `.skip`, `.fixme`, `.todo`, retry or `slow()`; the `NAME_TAKEN` assertions are in place (the race test at :272, also :139, :175, :301, :315); PR #587 changed one test file and nothing under `src/`; no open follow-up issue names DEF-056 or AQP-386 (GitHub search: #582 only, closed; #114 is the older AQP-113 G7 observation list and does not mention it).
+- The race diagnostic `tests/integration/masters/zz-race-diag.test.ts` named in the pause-4 notes is not on `master`, not on the remote branch `fix/AQP-386-rate-name-race` (its only file is `process-items.test.ts`) and no longer in the `aqp-341` worktree (clean apart from `.claude/agent-memory/`); nothing to commit or drop.
+- Housekeeping only: the remote branch `fix/AQP-386-rate-name-race` (4 ahead, 2 behind `master`, PR #587 merged) is not deleted; the orchestrator or delivery lead may delete it.
+- Run 44924430846 (`c0cf1d21`, #583 on top) passed the file again: 28 tests, 1,620 ms.

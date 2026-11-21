@@ -237,3 +237,32 @@ QA did not change the GitHub issue states or the defect files above in this run 
 - **#382** (AQP-293 SQR-01) is off the list of G8-blocking Majors (DL-284 (3)); its remaining items are Minor. Section 1's table of blockers is read without it.
 - **DEF-038** was re-graded to Sev-3, type Test (DL-277), and **DEF-034** is closed (fix #579); the Sev-2 count in section 1 is therefore DEF-054 and DEF-055 only. **DEF-053** is closed (fix #571) with a watch of 1 of 2 (DL-284). **DEF-056** (AQP-386) is a Test defect (DL-283); **DEF-057** (AQP-387) is open. **RISK-031** was reopened by DL-276 and closed again by DL-279.
 - This report is not edited above this line; the current state is in `docs/07-qa/test-plan.md` section 7 and the defect files.
+
+## Addendum 2, 2026-11-21 night (after pause 4; qa-engineer): the plan sections brought up to date
+Sections 1 to 9 above are not edited. This addendum replaces what is stale in section 1's blocker table and section 8's step list. The scope of the final regression itself is **`docs/07-qa/test-plan.md` section 7.1** (version 0.3). The final regression has not been run; it starts after the merges named there land.
+
+**State at `master` `c0cf1d21` (#583).** `master` push run 44924430846 and Windows package run 44924430870 are green (unit 441 files / 9,792 tests; integration 595 files / 15,185 tests; E2E 534 / 527 / 528 / 513 passed; 1 flaky: `customers.spec.ts:262` [desktop], first occurrence, a watch item in test plan section 7).
+
+| Section 1 blocker | Now |
+|---|---|
+| DEF-034, DEF-038 (Sev-2) | DEF-034 closed (#579); DEF-038 re-graded Sev-3, type Test (DL-277), open on its diagnostic |
+| DEF-054 (Sev-2) | **Closed 2026-11-21**: #583, run 44924430846, 21 of 21 header E2E cases on the production build; Jira AQP-384 Done, #37 closed |
+| DEF-055 (Sev-2) | Closed (#586, `ae1bb352`, with the data migration of DL-282) |
+| Majors | #382 off the list (DL-284); #568 in #589 (open); #573 in #588 (open); #575, #576, #410 in #590 (open) and docs #581 (open); #574 a watch, re-graded with G8-C-NFR9; #485 met (#584); STD-F-03 (#577) waiver with the delivery lead (D9) |
+| Open Sev-1 or Sev-2 Bugs | **none** (Jira: 11 open Bugs, all Sev-3 or Sev-4) |
+| Unbuilt story work | STORY-10.09 in #588 (open, required checks green); STORY-10.08 PR opening (AQP-370) |
+| Human steps | unchanged: G8-C-AC8, G8-C-NFR10, 09.08 |
+
+| Section 8 step | Now |
+|---|---|
+| 1 G8-C-AC8 | unchanged (Accucut IT, D3) |
+| 2 G8-C-NFR10 | unchanged; the re-read runs with #590's export limits in force |
+| 3 G8-C-NFR9 | figures from #584 accepted by master (DL-281 (4)); met when reviewer-performance records them and #574 is re-graded; QA checks them against the Nightly Lighthouse log |
+| 4 09.08 | DEF-055 is merged; add the count of pending `task-assigned` rows with no `send_before` before and after the upgrade (DL-282) to the checklist |
+| 5 live header check | the in-CI proof is done (production build, c0cf1d21); what remains is the check **behind the real reverse proxy** of the rehearsal install (one CSP, one HSTS, no header twice, framing refused), with #576 |
+| 9 and 10 (NFR-010 and NFR-011 timings; browser matrix) | built in #588 and the AQP-370 PR; verified by reading their results, not their tables |
+| 11 install and restore rehearsal | the README "Uptime monitor" and reverse-proxy sections come with #588, #590 and docs #581 |
+| 13 full regression again | freeze about 30 Nov, not 29 Nov (DL-276 (7)); every merge after it needs a new pass |
+| Steps 6, 7, 8, 12 | unchanged |
+
+Section 7 (record reconciliation) is done: GitHub #127, #128 and #394 are closed; DEF-020, DEF-021 and DEF-024 to DEF-026 are Closed on file; the files for DEF-013 and DEF-037 to DEF-044 exist. Section 9's five asks were ruled by master (DL-276, DL-279, DL-284).
