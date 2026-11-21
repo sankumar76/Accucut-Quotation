@@ -1,10 +1,12 @@
 import { z } from 'zod';
 
+import { SEND_FAILURE_CODES } from '../../../lib/mail/codes';
+
 /**
  * The contract of `GET` and `PUT /api/v1/settings` and of `POST /api/v1/settings/test-email` (STORY-02.09 AC-1 to AC-5, STORY-09.02 AC-2 to AC-4; architecture section 6, "Settings"). The
  * answer is a strict object, so a key the schema does not name cannot leave (NFR-002): the last good backup time, whether it is late, the newest free-space reading (a whole
  * percentage, when it was read and how old it is), whether the disk is nearly full, and the e-mail alerts: the switch, the sender name and address, and whether this server sends
- * e-mail at all (`FEATURE_EMAIL=on`). No file path, volume name, mail server setting or credential is in it, and nothing here is a cost or a rate.
+ * e-mail at all (`FEATURE_EMAIL=on`), and, since STORY-09.06, `mailFailures`: null, or how many e-mails failed in the last 7 days with the last class code and time. No file path, volume name, mail server setting or credential is in it, and nothing here is a cost or a rate.
  */
 
 const diskReadingSchema = z.strictObject({
@@ -24,11 +26,19 @@ const alertSettingsShape = {
 
 export const alertSettingsSchema = z.strictObject(alertSettingsShape);
 
+/** E-mails that failed for good in the last 7 days (STORY-09.06 AC-8): how many, the newest one's class code and its time. No address, no subject, no ID. */
+const mailFailuresSchema = z.strictObject({
+  count: z.number().int().min(1),
+  lastCode: z.enum(SEND_FAILURE_CODES),
+  lastAt: z.iso.datetime(),
+});
+
 export const settingsSchema = z.strictObject({
   lastGoodBackupAt: z.iso.datetime().nullable(),
   backupLate: z.boolean(),
   diskReading: diskReadingSchema.nullable(),
   diskNearlyFull: z.boolean(),
+  mailFailures: mailFailuresSchema.nullable(),
   ...alertSettingsShape,
 });
 

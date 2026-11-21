@@ -1,11 +1,13 @@
 import { FieldValidationError, MailTestFailedError, NO_SENDER_CODE, NotFoundError, ValidationError, type FieldProblem } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import type { SendFailureCode } from '../../lib/mail/codes';
+import { MAIL_FAILURE_WINDOW_DAYS } from '../../lib/mail/failure-window';
 import { deriveBackupStatus } from '../../lib/settings/backup-status';
 import { senderProblems, trimmedSender, type AlertSettingsInput } from '../../lib/settings/validation';
-import type { Clock } from '../../lib/time';
+import { type Clock, MILLISECONDS_PER_DAY } from '../../lib/time';
 import { renderMail } from '../mail/layout';
 import type { MailService } from '../mail/mail-service';
+import type { EmailOutboxRepository } from '../repositories/email-outbox-repository';
 import type { JobRunRepository } from '../repositories/job-run-repository';
 import type { SettingsRepository } from '../repositories/settings-repository';
 import type { UserRepository } from '../repositories/user-repository';
@@ -22,6 +24,9 @@ import type { UserRepository } from '../repositories/user-repository';
  * address. A change is not an audit event (decision D-i, AQP-349). The row holds no credential of any kind, and none can reach a caller: the answer is built field by field.
  * `sendTestEmail(adminId)` sends one message at once to the address of the person who pressed the button, which it reads from the database by their ID. It takes no address from anywhere
  * else, so no request can name another recipient (architecture section 4.7). It goes through `sendNow` with the saved sender, and a failure is a class code, never the server's words.
+ *
+ * Failed e-mail (STORY-09.06 AC-8). `getMailFailures` asks the outbox how many rows failed for good in the last 7 days and what the newest one's class code was, and answers that and the time, or null
+ * when none did. It reads no address, subject or ID, and the answer is built field by field, so none can reach a caller.
  *
  * Admin only, and the routes and the page that call it are in the manifest for the Admin alone; it is listed as a service an Engineer view may not import
  * (`tests/security/engineer-import-rule.test.ts`).
@@ -51,8 +56,17 @@ export interface AlertSettingsView {
   readonly emailEnabled: boolean;
 }
 
+/** E-mails that could not be sent in the last 7 days: how many, the newest one's class code and when it failed. Never an address, a subject or an ID. */
+export interface MailFailuresView {
+  readonly count: number;
+  readonly lastCode: SendFailureCode;
+  readonly lastAt: string;
+}
+
 export interface SettingsService {
   getBackupStatus(): Promise<BackupStatusView>;
+  /** The e-mails that failed in the last 7 days, or null when none did. */
+  getMailFailures(): Promise<MailFailuresView | null>;
   getAlertSettings(): Promise<AlertSettingsView>;
   /** Saves the switch and the sender. Throws a `FieldValidationError` (422) naming each field that is wrong, and saves nothing then. */
   updateAlertSettings(input: AlertSettingsInput, actor: { readonly id: string }): Promise<AlertSettingsView>;
@@ -62,6 +76,7 @@ export interface SettingsService {
 
 export interface SettingsServiceDependencies {
   readonly jobRuns: JobRunRepository;
+  readonly outbox: Pick<EmailOutboxRepository, 'failedSince'>;
   readonly settings: SettingsRepository;
   readonly users: Pick<UserRepository, 'findAccountById'>;
   readonly mail: Pick<MailService, 'sendNow'>;
@@ -91,7 +106,7 @@ function failureOf(code: SendFailureCode): Error {
   return new MailTestFailedError(code);
 }
 
-export function createSettingsService({ jobRuns, settings, users, mail, emailEnabled, clock }: SettingsServiceDependencies): SettingsService {
+export function createSettingsService({ jobRuns, outbox, settings, users, mail, emailEnabled, clock }: SettingsServiceDependencies): SettingsService {
   async function alertSettings(): Promise<AlertSettingsView> {
     const row = await settings.readAlertSettings();
     return { alertsEnabled: row.alertsEnabled, senderName: row.senderName, senderAddress: row.senderAddress, emailEnabled: emailEnabled() };
@@ -110,6 +125,11 @@ export function createSettingsService({ jobRuns, settings, users, mail, emailEna
             : { freePercent: status.diskReading.freePercent, readAt: status.diskReading.readAt.toISOString(), ageSeconds: status.diskReading.ageSeconds, stale: status.diskReading.stale },
         diskNearlyFull: status.diskNearlyFull,
       };
+    },
+
+    async getMailFailures() {
+      const summary = await outbox.failedSince(new Date(clock.now().getTime() - MAIL_FAILURE_WINDOW_DAYS * MILLISECONDS_PER_DAY));
+      return summary === null ? null : { count: summary.count, lastCode: summary.lastCode, lastAt: summary.lastAt.toISOString() };
     },
 
     getAlertSettings: alertSettings,

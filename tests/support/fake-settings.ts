@@ -66,7 +66,7 @@ export interface FakeSettingsWorld extends SettingsServiceDependencies {
   readonly fakeMail: FakeMail;
 }
 
-type Overridable = Partial<Pick<SettingsServiceDependencies, 'jobRuns' | 'users' | 'emailEnabled' | 'clock'>>;
+type Overridable = Partial<Pick<SettingsServiceDependencies, 'jobRuns' | 'outbox' | 'users' | 'emailEnabled' | 'clock'>>;
 
 /** Dependencies for `createSettingsService` with every part in memory; a test overrides the jobs, the users, the feature flag or the clock, and reads the settings row and the mail it sent. */
 export function fakeSettingsDependencies(overrides: Overridable = {}): FakeSettingsWorld {
@@ -74,6 +74,7 @@ export function fakeSettingsDependencies(overrides: Overridable = {}): FakeSetti
   const fakeMail = createFakeMail(settings);
   return {
     jobRuns: createFakeJobRunRepository(),
+    outbox: { failedSince: () => Promise.resolve(null) },
     settings,
     users: { findAccountById: () => Promise.resolve(null) },
     mail: fakeMail,
