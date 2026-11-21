@@ -96,22 +96,16 @@ test.describe('the list', () => {
     mark('animations');
     await expectNoAxeViolations(page);
     mark('scan1End');
-    const lines: string[] = [];
-    page.on('console', (message) => { lines.push(message.text()); });
-    await new AxeBuilder({ page }).withTags(AXE_TAGS).options({ performanceTimer: true }).analyze();
-    mark('scan2TimedEnd');
-    const parsed = lines.map((text) => ({ text, ms: Number(/([0-9]+(?:.[0-9]+)?)s*ms/.exec(text)?.[1] ?? Number.NaN) })).filter((item) => !Number.isNaN(item.ms)).sort((a, b) => b.ms - a.ms);
+    for (const label of ['violationsOnlyA', 'violationsOnlyB']) {
+      const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).options({ resultTypes: ['violations'] }).analyze();
+      // eslint-disable-next-line no-console -- diagnostic output
+      console.log(`${tag} ${label} violations=${results.violations.length} passes=${results.passes.length} passNodes=${results.passes.reduce((sum, rule) => sum + rule.nodes.length, 0)}`);
+      mark(`${label}End`);
+    }
+    const full = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
     // eslint-disable-next-line no-console -- diagnostic output
-    console.log(`${tag} consoleLines=${lines.length} top: ${parsed.slice(0, 8).map((item) => item.text.slice(0, 90)).join(' | ')}`);
-    await page.evaluate(() => {
-      for (const selector of ['tbody tr[data-user-id]', 'li[data-user-id]']) document.querySelectorAll(selector).forEach((element, index) => { if (index >= 20) element.remove(); });
-    });
-    const left = await page.locator('[data-user-id]').count();
-    mark('trimmed');
-    await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
-    // eslint-disable-next-line no-console -- diagnostic output
-    console.log(`${tag} rowsAfterTrim=${left}`);
-    mark('scan3End');
+    console.log(`${tag} fullResult passes=${full.passes.length} passNodes=${full.passes.reduce((sum, rule) => sum + rule.nodes.length, 0)} bytes=${JSON.stringify(full).length}`);
+    mark('fullEnd');
   });
 
   test('AC-7: controls are at least 44 px, and the icon buttons of a table row at least 36 px', async ({ page }, testInfo) => {
