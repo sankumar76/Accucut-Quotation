@@ -5,6 +5,7 @@ import { createCompletenessReader, type CompletenessReader } from '../../lib/est
 import type { PartView } from '../../lib/estimate/part-view';
 import { decideTransition, TRANSITION_REFUSALS, type EstimateEvent } from '../../lib/estimate/state-machine';
 import { subtreeFingerprint } from '../../lib/estimate/subtree-fingerprint';
+import type { ConfigDocument } from '../../lib/fields/schema';
 import { buildTree, canMove, changedPlacements, childCount, descendantIds, insertNode, moveNode, removeNodes, siblingIndex, type PlacedNode } from '../../lib/estimate/tree';
 import { folderUrlOf } from '../../lib/tasks/folder-path';
 import type { EstimateNodeRepository, NodeRecord } from '../repositories/estimate-node-repository';
@@ -201,6 +202,8 @@ export interface EstimateDependencies {
   /** The Material Master lookup of a part's material and the field registry the form is built from (STORY-05.03; see `estimate-inputs.ts`). */
   readonly materials: EstimateInputsDependencies['materials'];
   readonly currentConfiguration: EstimateInputsDependencies['currentConfiguration'];
+  /** One configuration version's document by its ID (cached per version): the registry an APPROVED estimate's form is built from (STORY-08.05). */
+  readonly configurationById: (versionId: string) => Promise<ConfigDocument>;
 }
 
 const mayOpen = (viewer: EstimateViewer, engineerId: string): boolean => viewer.role !== 'ENGINEER' || viewer.id.toLowerCase() === engineerId.toLowerCase();
@@ -260,7 +263,7 @@ async function applyTransition(
 }
 
 // Over 40 lines on purpose (coding standards section 1): one object of the service's methods, each a few lines; the longer steps are the named helpers above and inside.
-export function createEstimateService({ estimates, nodes, images, transactions, materials, currentConfiguration }: EstimateDependencies): EstimateService {
+export function createEstimateService({ estimates, nodes, images, transactions, materials, currentConfiguration, configurationById }: EstimateDependencies): EstimateService {
   /** Locks the estimate for a change: 404 when it is not this person's, 409 when this person may no longer change its inputs (`assertEditable`). Returns the estimate's ID. */
   async function lockForChange(viewer: EstimateViewer, estimateId: string, tx: Transaction): Promise<string> {
     const estimate = await estimates.lockEstimate(estimateId, tx);
@@ -274,6 +277,16 @@ export function createEstimateService({ estimates, nodes, images, transactions, 
     const estimate = await estimates.findEstimateAccess(estimateId);
     if (estimate === null || !mayOpen(viewer, estimate.engineerId)) throw new NotFoundError();
     return estimate.id;
+  }
+
+  /**
+   * The registry the form of this estimate is built from (STORY-08.05; FR-065, FR-077, SPEC section 8.4). **An APPROVED estimate keeps the fields it was approved with**: its form is the document of the version of its current
+   * calculation, so a field inserted later does not appear on it and a field deleted later is still shown with its stored value. Every other estimate (a new Draft, an unlocked one, one whose approval was cancelled, a
+   * Submitted one that was never approved) uses the latest version. The status and the version are read in one statement, each time, so an unlock is seen at once. The version is never part of an answer (NFR-002).
+   */
+  async function configurationFor(estimateId: string): Promise<ConfigDocument> {
+    const basis = await estimates.findConfigurationBasis(estimateId);
+    return basis?.status === 'APPROVED' && basis.configVersionId !== null ? configurationById(basis.configVersionId) : currentConfiguration();
   }
 
   /** What every change to the tree ends with: the places of the siblings that shifted (they get no new revision), the input change, and the tree as it is now. */
@@ -291,7 +304,7 @@ export function createEstimateService({ estimates, nodes, images, transactions, 
   const completenessReader = async (): Promise<CompletenessReader> => createCompletenessReader(await currentConfiguration());
 
   // The part form shares the estimate's lock and its rules for who may open or change it, so they are handed over and not written twice.
-  const inputs = createEstimateInputs({ nodes, materials, currentConfiguration, transactions, openForRead, lockForChange, bumpInputsRevision: (estimateId, tx) => estimates.bumpInputsRevision(estimateId, tx) });
+  const inputs = createEstimateInputs({ nodes, materials, currentConfiguration, configurationFor, transactions, openForRead, lockForChange, bumpInputsRevision: (estimateId, tx) => estimates.bumpInputsRevision(estimateId, tx) });
 
   // The part pictures share the same lock and the same rules, handed over in the same way (STORY-05.07).
   const pictures = createImageService({ nodes, images, transactions, currentConfiguration, lockForChange, bumpInputsRevision: (estimateId, tx) => estimates.bumpInputsRevision(estimateId, tx), mayOpen });
@@ -347,7 +360,7 @@ export function createEstimateService({ estimates, nodes, images, transactions, 
       const view = viewsOf(records, await completenessReader()).find((candidate) => candidate.id === record.id);
       if (view === undefined) throw new NotFoundError();
       // Of what is stored, only the values of fields of the form leave (ADR-008: the answer is built from an allow-list).
-      return { ...view, inputs: await inputs.visibleInputs(record.inputs), picture: await pictures.pictureOf(estimateId, record.imageId) };
+      return { ...view, inputs: await inputs.visibleInputs(estimateId, record.inputs), picture: await pictures.pictureOf(estimateId, record.imageId) };
     },
 
     async addPart(viewer, estimateId, request) {

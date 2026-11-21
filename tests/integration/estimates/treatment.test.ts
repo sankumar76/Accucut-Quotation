@@ -44,6 +44,7 @@ beforeAll(async () => {
     transactions: createTransactionRunner(db.prisma),
     materials: createMasterRepository(db.prisma),
     currentConfiguration: () => Promise.resolve(seedConfig),
+    configurationById: () => Promise.resolve(seedConfig),
   });
   leadId = await insertPersonAsOwner(db, 'Treatment Lead', 'LEAD');
   arjunId = await insertPersonAsOwner(db, 'Treatment Arjun', 'ENGINEER');

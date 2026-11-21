@@ -29,6 +29,8 @@ export interface FakeEstimate {
   inputsRevision: number;
   /** The calculation the estimate is linked to (STORY-03.05). Absent counts as none. */
   currentCalculationId?: string | null;
+  /** The configuration version that calculation was made with (STORY-08.05); absent counts as none. */
+  configVersionId?: string | null;
 }
 
 /** A part of an estimate's tree as the fake holds it: what the real table keeps, by estimate. */
@@ -137,6 +139,10 @@ export function createFakeEstimateWorld(
     findEstimateAccess: (id) => {
       const estimate = estimates.find((candidate) => same(candidate.id, id));
       return Promise.resolve(estimate === undefined ? null : { id: estimate.id, engineerId: estimate.engineerId, status: estimate.status });
+    },
+    findConfigurationBasis: (id) => {
+      const estimate = estimates.find((candidate) => same(candidate.id, id));
+      return Promise.resolve(estimate === undefined ? null : { status: estimate.status, configVersionId: estimate.currentCalculationId == null ? null : (estimate.configVersionId ?? null) });
     },
     lockEstimate: (id) => {
       const estimate = estimates.find((candidate) => same(candidate.id, id));
