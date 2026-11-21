@@ -19,11 +19,13 @@ const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const MAIL_FILES = {
   'src/server/mail': ['layout.ts', 'logo.ts', 'mail-service.ts', 'microsoft-token.ts', 'send.ts', 'transport.ts'],
   'src/lib/mail': ['codes.ts', 'events.ts'],
-  // STORY-09.03: the message of each alert is a pure function from a fixed DTO of plain strings (no cost field), on top of the shared layout.
-  'src/server/mail/templates': ['task-assigned.ts'],
+  // STORY-09.03 and 09.04: the message of each alert is a pure function from a fixed DTO of plain strings (no cost field), on top of the shared layout.
+  'src/server/mail/templates': ['task-assigned.ts', 'task-overdue.ts'],
 } as const;
 
 const JOB_FILE = 'src/server/jobs/outbox-send.ts';
+/** The job that queues the overdue e-mail (STORY-09.04): it builds the message from plain fields and takes its store by parameter, as `outbox-send` does. */
+const SCAN_FILE = 'src/server/jobs/overdue-scan.ts';
 
 /** The only things these files may import, by exact specifier. Nothing that holds a cost, a rate, a formula or a calculation is on it, and nothing may be added without a review. */
 const ALLOWED_SPECIFIER = [
@@ -34,9 +36,12 @@ const ALLOWED_SPECIFIER = [
   // STORY-10.09a: the one job wrapper, which imports nothing itself (engineer-import-rule.test.ts classes it).
   /^\.\/run-job$/,
   /^\.\.\/\.\.\/lib\/(env|time)$/,
-  // From `src/server/mail/templates/`: the shared layout above it, and `formatIst` from the time module, three levels up.
+  // From `src/server/mail/templates/`: the shared layout above it, `formatIst` from the time module and the overdue rule of a task (STORY-09.04), three levels up.
   /^\.\.\/layout$/,
-  /^\.\.\/\.\.\/\.\.\/lib\/time$/,
+  /^\.\.\/\.\.\/\.\.\/lib\/(time|tasks\/overdue)$/,
+  // From `src/server/jobs/overdue-scan.ts` (STORY-09.04): the plain, pure rules of a task, and the overdue template.
+  /^\.\.\/\.\.\/lib\/tasks\/(folder-path|overdue|task-link)$/,
+  /^\.\.\/mail\/templates\/task-overdue$/,
   /^\.\.\/\.\.\/lib\/mail\/(codes|events)$/,
   /^\.\.\/mail\/send$/,
   /^\.\.\/repositories\/(email-outbox-repository|transaction)$/,
@@ -61,7 +66,7 @@ describe('every file of the mail module is classed (AC-10)', () => {
   });
 });
 
-const GUARDED = [...Object.entries(MAIL_FILES).flatMap(([directory, names]) => names.map((name) => `${directory}/${name}`)), JOB_FILE];
+const GUARDED = [...Object.entries(MAIL_FILES).flatMap(([directory, names]) => names.map((name) => `${directory}/${name}`)), JOB_FILE, SCAN_FILE];
 
 describe('the mail module imports no cost, rate, formula or calculation module (AC-10)', () => {
   it.each(GUARDED)('%s imports only what is on the allowed list', (path) => {
@@ -79,8 +84,8 @@ describe('the mail module imports no cost, rate, formula or calculation module (
     }
   });
 
-  it('the job takes the data layer by parameter: it names no repository module at all', () => {
-    const specifiers = specifiersOf(readFileSync(join(ROOT, JOB_FILE), 'utf8'));
+  it.each([JOB_FILE, SCAN_FILE])('the job %s takes the data layer by parameter: it names no repository module at all', (job) => {
+    const specifiers = specifiersOf(readFileSync(join(ROOT, job), 'utf8'));
     expect(specifiers.filter((specifier) => /repositories|services|composition|generated|@prisma|\bpg\b/.test(specifier))).toEqual([]);
   });
 });
