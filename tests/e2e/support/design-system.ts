@@ -93,7 +93,9 @@ export async function waitForAnimationsToFinish(page: Page): Promise<void> {
 export async function expectNoAxeViolations(page: Page): Promise<void> {
   // A named step, so a timeout in a test report says it was waiting for animations and not scanning (QLT-40).
   await test.step('wait for animations and transitions to finish before the axe scan', () => waitForAnimationsToFinish(page));
-  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
+  // Violations only (AQP-383, DEF-053, DL-275): the same rules, tags and whole-page scope run, and every violation is still reported with all its nodes. The passes,
+  // incomplete and inapplicable lists, which this helper never reads, are cut to one node each, so the result that crosses from the browser is small on a long page.
+  const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).options({ resultTypes: ['violations'] }).analyze();
   const summary = results.violations.map((violation) => ({
     id: violation.id,
     impact: violation.impact,
