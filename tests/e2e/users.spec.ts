@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { createDisposableUser, E2E_ADMIN } from './support/auth';
-import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TABLET_MIN_WIDTH, TOUCH_TARGET, waitUntilHydrated, widthOf } from './support/design-system';
+import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TABLET_MIN_WIDTH, TOUCH_TARGET, waitForAnimationsToFinish, waitUntilHydrated, widthOf } from './support/design-system';
 import { ADMIN_STATE } from './support/servers';
 
 /**
@@ -56,13 +56,25 @@ async function pressWithKeyboard(button: Locator): Promise<void> {
 
 test.describe('the list', () => {
   test('AC-1, AC-7: shows name, e-mail, role and status, does not scroll sideways and has no axe violations', async ({ page }, testInfo) => {
+    // DIAGNOSTIC ONLY (AQP-383); removed before the final head. Each phase prints as soon as it ends, so a time-out still leaves its lines.
+    const startedAt = Date.now();
+    const tag = `AQP383 ${testInfo.project.name} w${testInfo.workerIndex} r${testInfo.retry} start=${Math.round(testInfo.duration)}`;
+    // eslint-disable-next-line no-console -- diagnostic output, read from the CI log
+    const mark = (label: string): void => console.log(`${tag} ${label}=${Date.now() - startedAt}`);
     const person = await createDisposableUser('managed', testInfo);
-    await openUsers(page);
+    mark('person');
+    await page.goto('/users');
+    mark('goto');
+    await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
+    mark('heading');
+    await waitUntilHydrated(page, 'main button[data-action="add"]');
+    mark('hydrated');
     const row = rowOf(page, person.name);
     await expect(row).toContainText(person.email);
     await expect(row).toContainText('Engineer');
     await expect(row).toContainText('Active');
     await expect(rowOf(page, E2E_ADMIN.name)).toContainText('Admin');
+    mark('rows');
     // STORY-01.05 T7: on the phone card, and only there, the Admin's own row says in text why Reset password is disabled; no other card does.
     if ((await widthOf(page)) < TABLET_MIN_WIDTH) {
       await expect(rowOf(page, E2E_ADMIN.name).getByText(OWN_PHONE_LINE, { exact: true })).toBeVisible();
@@ -71,8 +83,20 @@ test.describe('the list', () => {
     } else {
       await expect(page.getByText(OWN_PHONE_LINE)).toBeHidden();
     }
+    mark('phoneText');
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    mark('overflow');
+    const people = await page.locator('[data-user-id]').count();
+    const shown = await page.locator('[data-user-id]:visible').count();
+    const nodes = await page.evaluate(() => document.getElementsByTagName('*').length);
+    // eslint-disable-next-line no-console -- diagnostic output
+    console.log(`${tag} people=${people} shown=${shown} domNodes=${nodes}`);
+    await waitForAnimationsToFinish(page);
+    mark('animations');
     await expectNoAxeViolations(page);
+    mark('scan1End');
+    await expectNoAxeViolations(page);
+    mark('scan2End');
   });
 
   test('AC-7: controls are at least 44 px, and the icon buttons of a table row at least 36 px', async ({ page }, testInfo) => {
