@@ -220,7 +220,7 @@ test.describe('an Engineer', () => {
 });
 
 test.describe('a Lead', () => {
-  test('AC-2, AC-3, AC-7: sees every Engineer\'s tasks with the Engineer, Customer, Folder and Assigned by columns by width, "Not chosen yet", and the Assign task button', async ({ page }, testInfo) => {
+  test('AC-2, AC-3, AC-7: sees the tasks they assigned (STORY-04.06 default; the E2E Lead assigned this one) with the Engineer, Customer, Folder and Assigned by columns by width, "Not chosen yet", and the Assign task button', async ({ page }, testInfo) => {
     const engineer = await createDisposableUser('queue', testInfo);
     const seeded = await seedQueueTask(engineer.id, '2000-01-01T00:00:00.000Z', 'DRAFT', 'E2E lead view');
     await page.goto('/queue');

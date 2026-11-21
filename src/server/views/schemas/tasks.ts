@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { ESTIMATE_STATUSES } from '../../../lib/estimate/state-machine';
 import { DEFAULT_QUEUE_TAB, QUEUE_DEFAULT_LIMIT, QUEUE_MAX_LIMIT, QUEUE_TABS } from '../../../lib/tasks/queue';
+import { QUEUE_SEARCH_MAX_LENGTH } from '../../../lib/tasks/queue-filters';
+import { isIsoDate } from '../../../lib/time';
 import { decodeTaskQueueCursor, TASK_QUEUE_CURSOR_MAX_LENGTH } from '../../services/task-queue-cursor';
 
 /**
@@ -70,14 +72,22 @@ export const assignContextSchema = z.strictObject({ engineers: z.array(engineerS
 
 const LIMIT_MESSAGE = `The limit must be a whole number from 1 to ${QUEUE_MAX_LIMIT}.`;
 const CURSOR_MESSAGE = 'This is not a place in the list. Start again from the first page.';
-const ASSIGNED_BY_MESSAGE = 'The assignedBy filter can only be "me".';
+const ASSIGNED_BY_MESSAGE = 'The assignedBy filter can only be "me" or "anyone".';
+const SEARCH_MESSAGE = `The search can be at most ${QUEUE_SEARCH_MAX_LENGTH} characters.`;
+const ENGINEER_MESSAGE = 'The Engineer filter must be the ID of an Engineer.';
+const CUSTOMER_MESSAGE = 'The customer filter must be the ID of a customer.';
+const FROM_MESSAGE = 'The start date must be a real date written YYYY-MM-DD.';
+const TO_MESSAGE = 'The end date must be a real date written YYYY-MM-DD.';
+
+const day = (message: string) => z.string({ error: message }).refine(isIsoDate, message);
 
 /**
- * `GET /api/v1/tasks?tab=&limit=&cursor=&assignedBy=` (STORY-04.02 AC-1, AC-2; STORY-04.03 AC-3; architecture section 6, "Tasks"). The query is a strict object, so
- * a name that is not offered is an error and is never read: in particular there is no field that names whose tasks to list (the scope comes from the session). Of
- * the filters of STORY-04.06 (`assignedBy`, `engineer`, `customer`, `from`, `to`, `q`) only `assignedBy=me` exists, because a Lead's bell opens the Overdue tab
- * with it (it names the signed-in person, never another, and can only narrow what the role may see); the rest are not accepted until that story adds them with
- * their rules. Query strings arrive as text: the limit becomes a whole number and the cursor the place it names.
+ * `GET /api/v1/tasks?tab=&limit=&cursor=&assignedBy=&q=&engineer=&customer=&from=&to=` (STORY-04.02 AC-1, AC-2; STORY-04.03 AC-3; STORY-04.06 AC-3, AC-4;
+ * architecture section 6, "Tasks"). The query is a strict object, so a name that is not offered is an error and is never read: in particular there is no field that
+ * names whose tasks to list (the scope comes from the session). The filters only narrow what the role may see. `assignedBy` is `me` (the signed-in person, never
+ * another) or `anyone`; `q` is the task ID or title, `engineer` and `customer` are IDs, `from` and `to` are deadline days in IST (`YYYY-MM-DD`, both inclusive). What
+ * only a Lead or an Admin may use, and a range that ends before it begins, are the task service's to refuse. Query strings arrive as text: the limit becomes a whole
+ * number and the cursor the place it names.
  */
 export const taskQueueQuerySchema = z.strictObject({
   tab: z.enum(QUEUE_TABS, { error: 'The tab must be open, closed or overdue.' }).default(DEFAULT_QUEUE_TAB),
@@ -99,7 +109,17 @@ export const taskQueueQuerySchema = z.strictObject({
       return position;
     })
     .optional(),
-  assignedBy: z.literal('me', { error: ASSIGNED_BY_MESSAGE }).optional(),
+  assignedBy: z.enum(['me', 'anyone'], { error: ASSIGNED_BY_MESSAGE }).optional(),
+  q: z
+    .string({ error: SEARCH_MESSAGE })
+    .trim()
+    .max(QUEUE_SEARCH_MAX_LENGTH, SEARCH_MESSAGE)
+    .transform((text) => (text === '' ? undefined : text))
+    .optional(),
+  engineer: z.uuid({ error: ENGINEER_MESSAGE }).optional(),
+  customer: z.uuid({ error: CUSTOMER_MESSAGE }).optional(),
+  from: day(FROM_MESSAGE).optional(),
+  to: day(TO_MESSAGE).optional(),
 });
 
 /**
