@@ -18,6 +18,6 @@ export const metadata = pageMetadata(SETTINGS_TITLE, SETTINGS_META_DESCRIPTION);
 export default async function SettingsPage() {
   const user = await authorizePage('/settings');
   const service = getSettingsService();
-  const [status, alerts] = await Promise.all([service.getBackupStatus(), service.getAlertSettings()]);
-  return <SettingsScreen status={status} alerts={alerts} adminAddress={user.email} />;
+  const [status, alerts, mailFailures] = await Promise.all([service.getBackupStatus(), service.getAlertSettings(), service.getMailFailures()]);
+  return <SettingsScreen status={status} alerts={alerts} adminAddress={user.email} mailFailures={mailFailures} />;
 }

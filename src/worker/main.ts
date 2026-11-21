@@ -1,6 +1,6 @@
 import { EnvValidationError, loadAppEnv, loadEmailFeature } from '../lib/env';
 import { systemClock } from '../lib/time';
-import { scheduleBackupWatch, type BackupWatchStore } from '../server/jobs/backup-watch';
+import { type BackupMissedAlert, scheduleBackupWatch, type BackupWatchStore } from '../server/jobs/backup-watch';
 import { scheduleDailyDigest } from '../server/jobs/daily-digest';
 import { type HeartbeatStore, scheduleHeartbeat } from '../server/jobs/heartbeat';
 import { scheduleLogPrune } from '../server/jobs/log-prune';
@@ -9,7 +9,7 @@ import { scheduleMailJobs } from '../server/jobs/outbox-send';
 import type { JobLogFields, JobLogLevel } from '../server/jobs/run-job';
 import { createMailer } from '../server/mail/send';
 import { createMailTransport } from '../server/mail/transport';
-import { createEmailOutboxRepository } from '../server/repositories/email-outbox-repository';
+import { createBackupMissedQueue, createEmailOutboxRepository } from '../server/repositories/email-outbox-repository';
 import { createDailyDigestStore, createOverdueScanStore } from '../server/repositories/overdue-repository';
 import { getPrismaClient } from '../server/repositories/prisma-client';
 import { createHeartbeatRepository, createJobRunRepository, createJobRunWriter } from '../server/repositories/job-run-repository';
@@ -20,7 +20,7 @@ import { createHeartbeatRepository, createJobRunRepository, createJobRunWriter }
  * Scope note (STORY-10.04): this is the start-up shell only. It checks the settings exactly as the web process does, stays
  * running and stops cleanly on a stop request, so the service can be installed, started and supervised. The one job it runs is
  * `log-prune` (`src/server/jobs/log-prune.ts`, daily at 03:30 IST, only when LOG_DIRECTORY is set) and, since STORY-10.05, `backup-watch`
- * (`src/server/jobs/backup-watch.ts`, daily at 09:00 IST, only when PG_DATA_VOLUME or BACKUP_VOLUME is set). Since STORY-09.01, `outbox-send` (every minute, only when FEATURE_EMAIL=on). Since STORY-09.04, `overdue-scan` (`src/server/jobs/overdue-scan.ts`, every minute, only when FEATURE_EMAIL=on). Since STORY-09.05, `daily-digest` (`src/server/jobs/daily-digest.ts`, 11:00 IST, with a catch-up at start-up, only when FEATURE_EMAIL=on). Since STORY-10.09a, `heartbeat`
+ * (`src/server/jobs/backup-watch.ts`, daily at 09:00 IST, only when PG_DATA_VOLUME or BACKUP_VOLUME is set). Since STORY-09.01, `outbox-send` (every minute, only when FEATURE_EMAIL=on; STORY-09.06 adds its retries, its per-attempt log lines and its `job_runs` row). Since STORY-09.04, `overdue-scan` (`src/server/jobs/overdue-scan.ts`, every minute, only when FEATURE_EMAIL=on). Since STORY-09.05, `daily-digest` (`src/server/jobs/daily-digest.ts`, 11:00 IST, with a catch-up at start-up, only when FEATURE_EMAIL=on). Since STORY-10.09a, `heartbeat`
  * (`src/server/jobs/heartbeat.ts`, every minute and once at start, always on): `GET /api/health` is red when the worker's newest heartbeat is 3 minutes old. Every job runs through `runJob`
  * (`src/server/jobs/run-job.ts`), which writes its start and outcome lines and, for a job that throws, one `error` line. The jobs that are left (the failure surfacing of STORY-09.06 and 09.07) are later stories',
  * which add them here and run through the same wrapper; nothing below changes how the service is installed.
@@ -71,17 +71,22 @@ function start(): void {
   // The daily log-prune job (ADR-015 Amendment 2.1): it runs only when the install has written LOG_DIRECTORY into `.env`.
   const logPrune = scheduleLogPrune(process.env.LOG_DIRECTORY, log);
   // The daily backup-watch job (ADR-015 Amendment 3 point 5): the install writes the two drive roots into `.env`; with neither set it is off.
-  const backupWatch = scheduleBackupWatch({ dataVolume: process.env.PG_DATA_VOLUME, backupVolume: process.env.BACKUP_VOLUME }, store, log);
-  // The mail jobs (STORY-09.01 AC-6): scheduled only when FEATURE_EMAIL=on. With it off nothing is built, so no mail transport and no extra database client exist.
+  // With FEATURE_EMAIL=on it also e-mails the Admin when the backup is late or the disk is nearly full (STORY-09.06 AC-10); the queue is built on first use, so nothing is opened for a worker without volumes.
   const emailOn = loadEmailFeature();
+  const backupAlert: BackupMissedAlert | undefined = emailOn ? { queue: (mail, now) => createBackupMissedQueue(getPrismaClient('worker', databaseUrl)).queue(mail, now) } : undefined;
+  const backupWatch = scheduleBackupWatch({ dataVolume: process.env.PG_DATA_VOLUME, backupVolume: process.env.BACKUP_VOLUME }, store, log, undefined, backupAlert);
+  // The mail jobs (STORY-09.01 AC-6): scheduled only when FEATURE_EMAIL=on. With it off nothing is built, so no mail transport and no extra database client exist.
   const mailJobs = scheduleMailJobs(
     emailOn,
     () => {
       const env = loadAppEnv();
+      const client = getPrismaClient('worker', env.DATABASE_URL);
       return {
-        store: createEmailOutboxRepository(getPrismaClient('worker', env.DATABASE_URL)),
+        store: createEmailOutboxRepository(client),
         mailer: createMailer(createMailTransport(env, { clock: systemClock })),
         clock: systemClock,
+        log,
+        jobRuns: createJobRunWriter(client),
       };
     },
     log,

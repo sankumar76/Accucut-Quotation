@@ -105,7 +105,7 @@ beforeAll(async () => {
     appOrigin: () => 'https://portal.example.com',
   });
   service = createTaskService({ tasks: createTaskRepository(db.prisma), transactions, clock, audit: db.audit, mail });
-  sendDependencies = { store: outbox, mailer: createMailer(capture.transport), clock };
+  sendDependencies = { store: outbox, mailer: createMailer(capture.transport), clock, log: () => undefined, jobRuns: { recordRun: () => Promise.resolve() } };
   leadId = await person('Mail Lead', 'LEAD');
   otherLeadId = await person('Mail Other Lead', 'LEAD');
   adminId = await person('Mail Admin', 'ADMIN');

@@ -24,7 +24,7 @@ const ALERTS_OFF: AlertSettingsView = { alertsEnabled: false, senderName: '', se
 const ADMIN_ADDRESS = 'admin.own@example.com';
 
 const render = (status: BackupStatusView, alerts: AlertSettingsView = ALERTS_OFF): string =>
-  renderToStaticMarkup(createElement(SettingsScreen, { status, alerts, adminAddress: ADMIN_ADDRESS }));
+  renderToStaticMarkup(createElement(SettingsScreen, { status, alerts, adminAddress: ADMIN_ADDRESS, mailFailures: null }));
 
 describe('AC-1: a good backup and no warning', () => {
   const html = render(GOOD);

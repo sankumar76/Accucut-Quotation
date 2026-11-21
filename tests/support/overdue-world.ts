@@ -76,7 +76,7 @@ export function restartWorker(): void {
 export async function resetWorld(): Promise<void> {
   clock = createFixedClock(NOW);
   restartWorker();
-  sendDependencies = { store: outbox, mailer: createMailer(capture.transport), clock };
+  sendDependencies = { store: outbox, mailer: createMailer(capture.transport), clock, log: () => undefined, jobRuns: { recordRun: () => Promise.resolve() } };
   await db.owner.query('DELETE FROM email_outbox');
   await db.owner.query('DELETE FROM job_runs');
   await db.owner.query('DELETE FROM estimates');

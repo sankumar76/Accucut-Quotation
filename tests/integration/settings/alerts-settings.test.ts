@@ -264,7 +264,7 @@ describe('AC-7: the switch takes effect at claim time, without a restart', () =>
   };
 
   beforeEach(() => {
-    dependencies = { store: outbox, mailer: createMailer(capture.transport), clock };
+    dependencies = { store: outbox, mailer: createMailer(capture.transport), clock, log: () => undefined, jobRuns: { recordRun: () => Promise.resolve() } };
   });
 
   it('OFF: an alert row is skipped. ON: the next row is sent. A row skipped while OFF stays skipped after ON (D-d)', async () => {
