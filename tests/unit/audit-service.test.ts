@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { startOfIstDay } from '@/lib/time';
 import { decodeAuditCursor } from '@/server/services/audit-cursor';
-import { createAuditService, type AuditService } from '@/server/services/audit-service';
+import { createAuditService, type AnyAuditEntryInput, type AuditService } from '@/server/services/audit-service';
 import { AuditEntryRefusedError } from '@/server/services/audit-secrets';
 
 import { createFakeAuditWorld, type FakeAuditWorld } from '../support/fake-audit';
@@ -131,6 +131,12 @@ describe("recordMany (ADR-018, GitHub #568): a batch in the caller's transaction
     expect(await refusalOf([entryFor('')])).toMatchObject({ reason: 'shape', where: 'object.label' });
     expect(await refusalOf([{ ...entryFor('Invented One'), actorLabel: 'x'.repeat(201) } as unknown as Entry])).toMatchObject({ reason: 'shape', where: 'actorLabel' });
     expect(world.audit.appended).toEqual([]);
+  });
+
+  it('refuses at compile time an entry that pairs one event with the shape of another (the entries are the union of the events, not a mix)', () => {
+    // @ts-expect-error user.deactivated takes { isActive }, not the role change of user.role_changed
+    const mismatched: AnyAuditEntryInput = { ...base, event: 'user.deactivated', object: { id: PERSON, label: 'Invented Person' }, before: { role: 'ENGINEER' }, after: { role: 'LEAD' } };
+    expect(mismatched.event).toBe('user.deactivated');
   });
 
   it('sends no query for an empty list', async () => {

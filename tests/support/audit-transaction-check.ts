@@ -272,7 +272,7 @@ function isUseOf(context: Context, identifier: ts.Identifier, symbol: ts.Symbol)
 
 function problemAtCallback(parameter: ParameterRef, repositoryCallSeen: boolean): string | undefined {
   if (parameter.index !== 0) return 'the transaction is not the first parameter of the .run( callback';
-  return repositoryCallSeen ? undefined : 'the .run( callback passes its transaction to no repository call other than record';
+  return repositoryCallSeen ? undefined : 'the .run( callback passes its transaction to no repository call other than the audit write';
 }
 
 /** Why the function that holds a transaction parameter does not qualify, or undefined when it does. */
@@ -311,10 +311,10 @@ function problemWithUse(context: Context, parameter: ParameterRef, use: ts.Ident
   return problemWithPlacement(context, call, caller, `the call to ${name} at line ${lineOf(call)}`) ?? chainProblem(context, caller, next);
 }
 
-function problemWithRecord(context: Context, call: ts.CallExpression): string | undefined {
+function problemWithAuditWrite(context: Context, call: ts.CallExpression): string | undefined {
   const parameter = parameterOf(context, call.arguments[0]);
-  if (parameter === undefined) return 'the transaction passed to record is not a parameter of the function that holds the call';
-  return problemWithPlacement(context, call, parameter, 'the record call') ?? chainProblem(context, parameter, { steps: 0, path: [], repositoryCallSeen: false });
+  if (parameter === undefined) return 'the transaction passed to the audit write is not a parameter of the function that holds the call';
+  return problemWithPlacement(context, call, parameter, 'the audit write call') ?? chainProblem(context, parameter, { steps: 0, path: [], repositoryCallSeen: false });
 }
 
 /** `AuditService.record` or `AuditService.recordMany` (the named method), the member of the interface in `audit-service.ts`. */
@@ -327,19 +327,19 @@ function isAuditServiceWrite(receiver: ts.Type, method: string): boolean {
   );
 }
 
-/** Whether a node is a use of `AuditService.record`, and if so why it fails. */
+/** Whether a node is a use of `AuditService.record` or `AuditService.recordMany`, and if so why it fails. */
 function verdictOn(context: Context, node: ts.Node): Verdict {
   const access = memberAccess(node);
   if (access === undefined || !AUDIT_WRITE_METHODS.has(access.name)) return undefined;
-  // `audit?.record(...)` has a receiver typed `AuditService | undefined`: ask about the part that has the member.
+  // `audit?.record(...)` (or `recordMany`) has a receiver typed `AuditService | undefined`: ask about the part that has the member.
   const receiver = context.checker.getNonNullableType(context.checker.getTypeAtLocation(access.target));
-  if ((receiver.flags & ts.TypeFlags.Any) !== 0) return { problem: 'the receiver of record is typed any, so the call cannot be told from another record' };
+  if ((receiver.flags & ts.TypeFlags.Any) !== 0) return { problem: `the receiver of ${access.name} is typed any, so the call cannot be told from another ${access.name}` };
   if (!isAuditServiceWrite(receiver, access.name)) return undefined;
   const call = node.parent;
   if (!ts.isCallExpression(call) || call.expression !== node) {
-    return { problem: 'AuditService.record is used other than as the callee of a direct call (.call, .bind or an alias), which the check cannot follow' };
+    return { problem: `AuditService.${access.name} is used other than as the callee of a direct call (.call, .bind or an alias), which the check cannot follow` };
   }
-  return { problem: problemWithRecord(context, call) };
+  return { problem: problemWithAuditWrite(context, call) };
 }
 
 function checkSource(context: Context, source: ts.SourceFile): AuditTransactionReport {
@@ -357,14 +357,14 @@ function checkSource(context: Context, source: ts.SourceFile): AuditTransactionR
 }
 
 /**
- * Checks every use of `AuditService.record` in `files` (paths as the program knows them). A file the program does not hold is an
+ * Checks every use of `AuditService.record` and `recordMany` in `files` (paths as the program knows them). A file the program does not hold is an
  * error, not a pass, so a typo in a path cannot make the check visit nothing.
  */
 export function checkAuditTransactions(program: ts.Program, root: string, files: readonly string[]): AuditTransactionReport {
   const context: Context = { checker: program.getTypeChecker(), rootDir: rootOf(root) };
   const reports = files.map((name) => {
     const source = program.getSourceFile(name);
-    if (source === undefined) throw new Error(`${name} is not part of the program, so its record calls were not checked`);
+    if (source === undefined) throw new Error(`${name} is not part of the program, so its audit writes were not checked`);
     return checkSource(context, source);
   });
   return { checked: reports.reduce((sum, report) => sum + report.checked, 0), findings: reports.flatMap((report) => report.findings) };

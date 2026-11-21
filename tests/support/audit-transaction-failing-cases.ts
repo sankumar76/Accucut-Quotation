@@ -9,7 +9,7 @@ import { MAX_HELPER_STEPS } from './audit-transaction-check';
 
 /** The message fragments the cases look for. */
 const NOT_A_PARAMETER = 'is not a parameter of the function that holds the call';
-const NO_REPOSITORY_CALL = 'passes its transaction to no repository call other than record';
+const NO_REPOSITORY_CALL = 'passes its transaction to no repository call other than the audit write';
 const NESTED = 'sits in a nested function';
 const NOT_AWAITED = 'is not awaited or returned';
 const NOT_A_CALLEE = 'used other than as the callee of a direct call';

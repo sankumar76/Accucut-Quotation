@@ -57,6 +57,9 @@ export interface AuditEntryInput<E extends AuditEventName> extends AuditEventPay
   readonly objectType?: string | undefined;
 }
 
+/** An entry of any one event: the union over the events, so each member pairs its event with that event's own `before` and `after` (`AuditEntryInput<AuditEventName>` would mix them). */
+export type AnyAuditEntryInput = { [E in AuditEventName]: AuditEntryInput<E> }[AuditEventName];
+
 export interface AuditListQuery {
   /** The ID of the person who made the change. */
   readonly who?: string | undefined;
@@ -102,7 +105,7 @@ export interface AuditService {
    * customers take seconds). Each entry passes exactly the checks `record` applies; **all are checked before any is written**, and one refusal throws
    * `AuditEntryRefusedError` with nothing appended. An empty list sends no query. Entries of one call may share a `created_at` millisecond.
    */
-  recordMany(tx: Transaction, entries: ReadonlyArray<AuditEntryInput<AuditEventName>>): Promise<void>;
+  recordMany(tx: Transaction, entries: ReadonlyArray<AnyAuditEntryInput>): Promise<void>;
   list(query: AuditListQuery): Promise<AuditPage>;
 }
 
@@ -142,7 +145,7 @@ function filterOf(query: AuditListQuery): AuditRowFilter {
  * Every check an entry must pass, and the row it is stored as (AC-4). The one place the checks live: `record` and `recordMany` both come through it, so a batch is
  * judged exactly as the same entries written one by one would be (ADR-018). Throws `AuditEntryRefusedError`; writes nothing.
  */
-function checkedRow(entry: AuditEntryInput<AuditEventName>): NewAuditRow {
+function checkedRow<E extends AuditEventName>(entry: AuditEntryInput<E>): NewAuditRow {
   const definition = AUDIT_EVENTS[entry.event];
   const objectType = objectTypeOf(definition.objectType, entry.objectType);
   const label = entry.object.label;

@@ -60,18 +60,29 @@ function countingAudit() {
   return { calls, service: createAuditService({ audit: repository }) };
 }
 
+/** The entries of one request: exactly the customers' (each once, under the request's one ID) and the given number of the rate's own (SQR-03 of the combined review of PR 589). */
+async function expectEntriesOf(requestId: string, rateEntries: number): Promise<void> {
+  const everyCustomer = (await db.owner.query<{ id: string }>('SELECT id::text AS id FROM customers')).rows.map((row) => row.id).sort();
+  const customerEntries = (await db.owner.query<{ id: string }>("SELECT object_id::text AS id FROM audit_log WHERE request_id = $1 AND object_type = 'customer'", [requestId])).rows.map((row) => row.id).sort();
+  expect(customerEntries).toHaveLength(CUSTOMERS);
+  expect(customerEntries).toEqual(everyCustomer);
+  const { rows } = await db.owner.query<{ entries: string }>("SELECT count(*) AS entries FROM audit_log WHERE request_id = $1 AND object_type = 'process_item'", [requestId]);
+  expect(Number(defined(rows[0]).entries)).toBe(rateEntries);
+}
+
 describe(`NFR-011: ${String(CUSTOMERS)} customers`, () => {
   it('the save moves all of them and writes 501 entries, in one request', async () => {
     const skip = await entryCount(db);
     const { calls, service } = countingAudit();
     const started = performance.now();
-    const answer = await db.buildMastersService({ audit: service }).updateProcessItem(contextOf(adminId), ITEM, { defaultValue: '2.52' });
+    const answer = await db.buildMastersService({ audit: service }).updateProcessItem({ ...contextOf(adminId), requestId: 'req-volume-save' }, ITEM, { defaultValue: '2.52' });
     const elapsed = performance.now() - started;
     report('PATCH of a default (the rate and its 500 customer entries)', elapsed);
     expect(answer.propagation).toMatchObject({ moved: CUSTOMERS, differing: [] });
     expect(await entryCount(db)).toBe(skip + 1 + CUSTOMERS);
     // The rate's entry is one append, the 500 customers' entries are one statement (ADR-018).
     expect(calls).toEqual({ single: 1, batches: [CUSTOMERS] });
+    await expectEntriesOf('req-volume-save', 1);
     expect(elapsed).toBeLessThan(ABSURD_MS);
   });
 
@@ -82,12 +93,13 @@ describe(`NFR-011: ${String(CUSTOMERS)} customers`, () => {
     const skip = await entryCount(db);
     const { calls, service } = countingAudit();
     const started = performance.now();
-    const counts = await db.buildMastersService({ audit: service }).applyPropagation(contextOf(adminId), ITEM, { newDefault: '2.52', choices: shown });
+    const counts = await db.buildMastersService({ audit: service }).applyPropagation({ ...contextOf(adminId), requestId: 'req-volume-choices' }, ITEM, { newDefault: '2.52', choices: shown });
     const elapsed = performance.now() - started;
     report('POST of 500 choices (500 customer entries)', elapsed);
     expect(counts).toEqual({ applied: CUSTOMERS, kept: 0, skipped: 0 });
     expect(await entryCount(db)).toBe(skip + CUSTOMERS);
     expect(calls).toEqual({ single: 0, batches: [CUSTOMERS] });
+    await expectEntriesOf('req-volume-choices', 0);
     expect(elapsed).toBeLessThan(ABSURD_MS);
   });
 });

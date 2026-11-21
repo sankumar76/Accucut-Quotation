@@ -91,7 +91,7 @@ export interface AuditRepository {
   count(filter: AuditRowFilter): Promise<number>;
 }
 
-/** The most rows one `INSERT` of `appendMany` carries: 9 bound values a row, so 9,000 of PostgreSQL's 32,767 per statement (ADR-018). */
+/** The most rows one `INSERT` of `appendMany` carries: 9 bound values a row, so 9,000 bound values, well under PostgreSQL's 65,535 per statement (ADR-018). */
 export const MAX_ROWS_PER_STATEMENT = 1_000;
 
 /** The text of a JSON value for a `::jsonb` bind; null stays SQL NULL (as `jsonColumn` does for `append`), not the JSON text "null". */

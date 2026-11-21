@@ -93,11 +93,12 @@ describe('how the propagation writes its entries (ADR-018)', () => {
     await db.owner.query('UPDATE customer_rates SET value = 1.50 WHERE process_item_id = $1::uuid', [ITEM]);
     await db.owner.query('UPDATE process_items SET default_value = $2 WHERE id = $1::uuid', [ITEM, NEW]);
     const { calls, service } = countingAudit();
-    const choices = ids.map((customerId) => ({ customerId, choice: 'apply' as const, shownValue: '1.50' }));
+    // The shown value is sent with a leading zero, which the request's pattern allows: the entry's before must be the value the statement matched ('1.50', the number's own text), not this spelling of it (SQR-02 of the review of PR 564).
+    const choices = ids.map((customerId) => ({ customerId, choice: 'apply' as const, shownValue: '01.50' }));
     const counts = await db.buildMastersService({ audit: service }).applyPropagation(by('req-batch-choices'), ITEM, { newDefault: NEW, choices });
     expect(counts).toEqual({ applied: CUSTOMERS, kept: 0, skipped: 0 });
     expect(calls).toEqual({ single: 0, batches: [CUSTOMERS] });
-    // The value each entry says the customer held came from the statement that changed it.
+    // The value each entry says the customer held came from the statement that changed it, not from the request's text.
     const { rows } = await db.owner.query<{ before: { rates: ReadonlyArray<{ value: string }> } }>("SELECT before FROM audit_log WHERE request_id = $1 AND object_type = 'customer'", ['req-batch-choices']);
     expect(rows).toHaveLength(CUSTOMERS);
     expect(new Set(rows.map((row) => defined(row.before.rates[0]).value))).toEqual(new Set(['1.50']));
