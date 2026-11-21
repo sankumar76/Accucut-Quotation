@@ -4,6 +4,7 @@ import type {
   EstimateStatus,
   LockedTask,
   NewTask,
+  QueueFilter,
   QueueRow,
   QueueScope,
   TaskDetailRow,
@@ -101,6 +102,19 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
   const inTab = (row: QueueRow, tab: 'open' | 'closed' | 'overdue', now: Date): boolean =>
     tab === 'closed' ? row.status === 'APPROVED' : row.status !== 'APPROVED' && (tab === 'open' || row.deadlineAt.getTime() < now.getTime());
 
+  /** The filter row of a read, written the way the SQL means it: a literal contains on the code and the title ignoring case, the estimate's customer, and the deadline range. */
+  const passes = (row: QueueRow, filter: QueueFilter): boolean => {
+    const text = filter.text?.toLowerCase() ?? null;
+    const customerId = estimates.find((candidate) => candidate.taskId === row.id)?.customerId ?? null;
+    return (
+      (text === null || row.code.toLowerCase().includes(text) || (row.title ?? '').toLowerCase().includes(text)) &&
+      (filter.engineerId === null || row.engineer.id === filter.engineerId) &&
+      (filter.customerId === null || customerId === filter.customerId) &&
+      (filter.deadlineFrom === null || row.deadlineAt.getTime() >= filter.deadlineFrom.getTime()) &&
+      (filter.deadlineBefore === null || row.deadlineAt.getTime() < filter.deadlineBefore.getTime())
+    );
+  };
+
   /** The rows of a scope: one Engineer's own, the ones one person assigned, both, or all (the same cut as `scopeFilter` of the real repository). */
   const inScope = (scope: QueueScope): QueueRow[] => {
     const assignedBy = new Map(tasks.map((task) => [task.id, task.assignedById]));
@@ -138,16 +152,16 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
       const detail: TaskDetailRow | null = row === undefined || task === undefined ? null : { ...row, notes: task.notes };
       return Promise.resolve(detail);
     },
-    listQueue: ({ tab, scope, now, limit, after }) => {
+    listQueue: ({ tab, scope, now, limit, after, filter }) => {
       const earlier = (row: QueueRow): boolean =>
         after === null || row.deadlineAt.getTime() > after.deadlineAt.getTime() || (row.deadlineAt.getTime() === after.deadlineAt.getTime() && row.code > after.code);
       const rows = inScope(scope)
-        .filter((row) => inTab(row, tab, now) && earlier(row))
+        .filter((row) => inTab(row, tab, now) && earlier(row) && passes(row, filter))
         .sort((a, b) => a.deadlineAt.getTime() - b.deadlineAt.getTime() || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
       return Promise.resolve(rows.slice(0, limit));
     },
-    countQueue: (scope, now) => {
-      const mine = inScope(scope);
+    countQueue: (scope, now, filter) => {
+      const mine = inScope(scope).filter((row) => passes(row, filter));
       const count = (tab: 'open' | 'closed' | 'overdue'): number => mine.filter((row) => inTab(row, tab, now)).length;
       return Promise.resolve({ open: count('open'), closed: count('closed'), overdue: count('overdue') });
     },

@@ -3,11 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { QueueList } from '@/components/features/queues/queue-list';
-import { QueueScreen } from '@/components/features/queues/queue-screen';
+import { QueueScreen, type QueueScreenProps } from '@/components/features/queues/queue-screen';
 import { descriptionFor, emptyTextFor } from '@/components/features/queues/queue-texts';
 import type { RoleName } from '@/lib/auth/roles';
 import { QUEUE_TABS } from '@/lib/tasks/queue';
 import type { QueuePageData, QueueRowData } from '@/lib/tasks/queue-client';
+import { NO_QUEUE_FILTERS, type QueueFilters } from '@/lib/tasks/queue-filters';
 
 /**
  * STORY-04.02 T4, T5 (AC-1, AC-3, AC-4, AC-6): what SCR-03 draws, rendered to markup with no browser: the tabs with counts and the sort note, the columns of each
@@ -42,7 +43,8 @@ const page = (tasks: ReadonlyArray<QueueRowData>, overrides: Partial<QueuePageDa
   ...overrides,
 });
 
-const screen = (role: RoleName, data: QueuePageData, assignedByMe = false): string => renderToStaticMarkup(createElement(QueueScreen, { role, initialPage: data, assignedByMe }));
+const screen = (role: RoleName, data: QueuePageData, filters: Partial<QueueFilters> = {}, options: Partial<QueueScreenProps> = {}): string =>
+  renderToStaticMarkup(createElement(QueueScreen, { role, initialPage: data, initialFilters: { ...NO_QUEUE_FILTERS, ...filters }, ...options }));
 const list = (role: RoleName, tasks: ReadonlyArray<QueueRowData>, asOf: string = AS_OF): string => renderToStaticMarkup(createElement(QueueList, { role, tasks, asOf }));
 const occurrences = (html: string, text: string): number => html.split(text).length - 1;
 
@@ -249,12 +251,74 @@ describe('STORY-04.03 AC-1: the Overdue tab says how many tasks are overdue, in 
   });
 });
 
-describe('STORY-04.03 AC-3: the Lead\'s Overdue tab from the bell says it shows the tasks that Lead assigned', () => {
-  it('says so, with a way back to every task, only when it is cut that way', () => {
-    const cut = screen('LEAD', page([row()], { tab: 'overdue' }), true);
-    expect(cut).toContain('Showing only the tasks you assigned.');
-    expect(cut).toContain('href="/queue"');
-    expect(cut).toContain('Show all tasks');
-    expect(screen('LEAD', page([row()], { tab: 'overdue' }))).not.toContain('Showing only the tasks you assigned.');
+describe('STORY-04.03 AC-3, STORY-04.06 AC-1, AC-2: a view cut to the tasks the person assigned says so with the chip', () => {
+  it('shows the removable chip only while the cut is in force, and no longer the old note and link', () => {
+    const cut = screen('LEAD', page([row()], { tab: 'overdue' }), { assignedBy: 'me' });
+    expect(cut).toContain('Assigned by me');
+    expect(cut).toContain('aria-label="Remove filter Assigned by me"');
+    expect(cut).not.toContain('Showing only the tasks you assigned.');
+    expect(cut).not.toContain('Show all tasks');
+    expect(screen('LEAD', page([row()], { tab: 'overdue' }))).not.toContain('Assigned by me');
+  });
+
+  it('offers a Lead who removed it a control that puts it back, and an Admin only the chip when an address brings it in (D-1)', () => {
+    const removed = screen('LEAD', page([row()]), { assignedBy: 'anyone' });
+    expect(removed).toContain('Assigned by me');
+    expect(removed).not.toContain('Remove filter Assigned by me');
+    expect(removed).toMatch(/<button[^>]*>Assigned by me<\/button>/);
+    const admin = screen('ADMIN', page([row()]), { assignedBy: 'me' });
+    expect(admin).toContain('Remove filter Assigned by me');
+    expect(screen('ADMIN', page([row()]), { assignedBy: '' })).not.toContain('Assigned by me');
+  });
+});
+
+const OPTIONS = {
+  engineers: [{ id: '00000000-0000-4000-8000-0000000000e1', name: 'Invented Arjun' }],
+  customers: [{ id: '00000000-0000-4000-8000-0000000000c1', name: 'Invented Customer' }],
+};
+
+describe('STORY-04.06 AC-3, AC-5, AC-9: the filter row', () => {
+  it('gives a Lead and an Admin every control with a visible label: search, Engineer, Customer, From and To', () => {
+    for (const role of ['LEAD', 'ADMIN'] as const) {
+      const html = screen(role, page([row()]), {}, OPTIONS);
+      for (const label of ['Search tasks', 'Engineer', 'Customer', 'Deadline from (IST)', 'Deadline to (IST)']) expect(html).toContain(`>${label}</label>`);
+      expect(html).toContain('Invented Arjun');
+      expect(html).toContain('Invented Customer');
+      expect(html).toContain('All Engineers');
+      expect(html).toContain('All customers');
+    }
+  });
+
+  it('offers an Engineer the search and nothing else', () => {
+    const html = screen('ENGINEER', page([row()]));
+    expect(html).toContain('>Search tasks</label>');
+    for (const label of ['>Engineer</label>', '>Customer</label>', 'Deadline from', 'Deadline to', 'Assigned by me']) expect(html).not.toContain(label);
+  });
+
+  it('fills the controls from the filters of the address, and says a range that ends before it begins under To', () => {
+    const html = screen('LEAD', page([row()]), { q: 'hopper', from: '2026-11-20', to: '2026-11-10', assignedBy: 'anyone' }, OPTIONS);
+    expect(html).toContain('value="hopper"');
+    expect(html).toContain('value="2026-11-20"');
+    expect(html).toContain('The start date is after the end date.');
+    // Nothing is shown for filters that make no sense: no tabs.
+    expect(html).not.toContain('role="tablist"');
+  });
+});
+
+describe('STORY-04.06 AC-6: no match', () => {
+  it('says so for a Lead and an Admin with Clear filters, and for an Engineer in words about the search, with no button', () => {
+    const manager = screen('LEAD', page([]), { q: 'zzz' }, OPTIONS);
+    expect(manager).toContain('No tasks match your filters.');
+    expect(manager).toContain('Clear filters');
+    const engineer = screen('ENGINEER', page([]), { q: 'zzz' });
+    expect(engineer).toContain('No tasks match your search.');
+    expect(engineer).toContain('Try a different task ID or part of the title.');
+    expect(engineer).not.toContain('Clear filters');
+  });
+
+  it('is not shown for the chip alone: an empty list under "Assigned by me" is the tab\'s ordinary empty state', () => {
+    const html = screen('LEAD', page([]), { assignedBy: 'me' });
+    expect(html).toContain('No open tasks');
+    expect(html).not.toContain('No tasks match your filters.');
   });
 });

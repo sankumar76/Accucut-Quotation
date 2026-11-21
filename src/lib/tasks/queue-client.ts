@@ -1,6 +1,7 @@
 import { ACCEPT_JSON, isRecord, sendJson, type Fetch, type Outcome } from '../api-client';
 
-import { isQueueTab, queueQueryString, type QueueCounts, type QueueTab, type TaskEstimateStatus } from './queue';
+import { isQueueTab, type QueueCounts, type QueueTab, type TaskEstimateStatus } from './queue';
+import { NO_QUEUE_FILTERS, queueQueryString, type QueueFilters } from './queue-filters';
 
 /**
  * The browser's side of `GET /api/v1/tasks` (SCR-03; architecture section 6, "Tasks"): ask for a page of a tab and turn the answer into something the screen
@@ -80,7 +81,7 @@ export function readQueuePage(body: unknown): QueuePageData | null {
 }
 
 /**
- * One page of a tab, after `cursor` when one is given. Pass a `signal` to cancel the call when the person changes tab before the answer arrives; a cancelled
+ * One page of a tab under these filters (STORY-04.06), after `cursor` when one is given. Pass a `signal` to cancel the call when the person changes tab before the answer arrives; a cancelled
  * call answers `failed`, which the screen ignores when a newer call has taken over. A session that ended takes the person to sign-in (`sendJson`).
  */
 export function fetchQueuePage(
@@ -88,7 +89,7 @@ export function fetchQueuePage(
   cursor?: string,
   doFetch: Fetch = fetch,
   signal?: AbortSignal,
-  assignedByMe = false,
+  filters: QueueFilters = NO_QUEUE_FILTERS,
 ): Promise<Outcome<QueuePageData>> {
-  return sendJson(doFetch, `${TASKS_PATH}?${queueQueryString(tab, cursor, assignedByMe)}`, { method: 'GET', headers: ACCEPT_JSON, ...(signal === undefined ? {} : { signal }) }, readQueuePage);
+  return sendJson(doFetch, `${TASKS_PATH}?${queueQueryString(tab, cursor, filters)}`, { method: 'GET', headers: ACCEPT_JSON, ...(signal === undefined ? {} : { signal }) }, readQueuePage);
 }

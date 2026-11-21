@@ -29,6 +29,7 @@ export function completePartInputsFor(document: ConfigDocument, materialId: stri
     for (const field of section.fields) {
       if (!field.editable || !field.required || isHidable(document, field.id)) continue;
       if (field.rule.type === 'select') inputs[field.id] = materialId;
+      else if (field.rule.type === 'choice') inputs[field.id] = field.rule.options[0] ?? INVENTED_TEXT;
       else if (field.rule.type === 'treatment') inputs[field.id] = { id: OTHER_TREATMENT_ID, text: INVENTED_TEXT };
       else if (field.rule.type === 'number') inputs[field.id] = INVENTED_NUMBER;
       // A field with a default (Fasteners: "None") is left to it, as a part nobody typed into is.

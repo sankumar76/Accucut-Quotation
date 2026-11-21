@@ -15,6 +15,8 @@ export type FormRule =
   | { readonly type: 'number'; readonly decimals: number }
   | { readonly type: 'text'; readonly maxLength: number; readonly multiline: boolean }
   | { readonly type: 'select'; readonly source: 'materials' }
+  /** A choice from the list the Admin gave (STORY-08.08): the options in their stored order. Saved as the option's text. */
+  | { readonly type: 'choice'; readonly options: ReadonlyArray<string> }
   /** Treatment / Color (STORY-05.06): a listed treatment, or "Other" with words of up to `maxLength` characters. */
   | { readonly type: 'treatment'; readonly maxLength: number }
   /** A surface treatment (STORY-05.06): chosen or not. The form draws the flags of a section as one multi-select. */
@@ -90,6 +92,10 @@ function toRule(value: unknown): FormRule | null {
       return typeof value['maxLength'] === 'number' && typeof value['multiline'] === 'boolean' ? { type: 'text', maxLength: value['maxLength'], multiline: value['multiline'] } : null;
     case 'select':
       return value['source'] === 'materials' ? { type: 'select', source: 'materials' } : null;
+    case 'choice': {
+      const options = value['options'];
+      return Array.isArray(options) && options.length > 0 && options.every(isNonEmptyText) ? { type: 'choice', options } : null;
+    }
     case 'treatment':
       return typeof value['maxLength'] === 'number' ? { type: 'treatment', maxLength: value['maxLength'] } : null;
     case 'flag':

@@ -55,6 +55,15 @@ export function TextField({
   );
 }
 
+/** A long text box for a list typed one item per line (the choices of a choice input); the same field as `TextField`, with rows. */
+export function LinesField({ name, label, hint, errors, tag, value, onChange }: BaseProps & { readonly value: string; readonly onChange: (value: string) => void }) {
+  return (
+    <FormField id={controlId(name)} label={label} {...hintOf(hint)} {...tagOf(tag)} {...errorOf(errors, name)}>
+      {(control) => <Textarea {...control} rows={5} value={value} onChange={(event) => onChange(event.target.value)} autoComplete="off" />}
+    </FormField>
+  );
+}
+
 export function FormulaField({ name, label, hint, errors, tag, value, onChange, describedBy }: BaseProps & { readonly value: string; readonly onChange: (value: string) => void; readonly describedBy?: string }) {
   return (
     <FormField id={controlId(name)} label={label} {...hintOf(hint)} {...tagOf(tag)} {...errorOf(errors, name)}>

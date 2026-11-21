@@ -77,10 +77,11 @@ describe('AC-8: nothing of SCR-07 reaches the Engineer', () => {
   });
 
   it('there is no loading boundary beside the page: it would answer 200 before forbidden() and notFound() run (TD-06)', () => {
-    const beside = ALL.filter((file) => file.path.startsWith('src/app/(portal)/estimates/[code]/costs/') && !file.path.endsWith('/page.tsx')).map((file) => file.path);
+    // STORY-10.07 AC-4: a route-level error.tsx is allowed beside the page (a render error shows its own load error); a loading boundary is not.
+    const beside = ALL.filter((file) => file.path.startsWith('src/app/(portal)/estimates/[code]/costs/') && !/\/(page|error)\.tsx$/.test(file.path)).map((file) => file.path);
     expect(beside).toEqual([]);
     expect(statSync(join(SRC, 'app', '(portal)', 'estimates', '[code]', 'costs', '[slNo]')).isDirectory()).toBe(true);
-    expect(readdirSync(join(SRC, 'app', '(portal)', 'estimates', '[code]', 'costs', '[slNo]'))).toEqual(['page.tsx']);
+    expect(readdirSync(join(SRC, 'app', '(portal)', 'estimates', '[code]', 'costs', '[slNo]')).sort()).toEqual(['error.tsx', 'page.tsx']);
   });
 
   it('the page is a server component and the route is a read with one schema', () => {

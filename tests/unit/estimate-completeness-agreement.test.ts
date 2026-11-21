@@ -9,6 +9,7 @@ import type { FormSection } from '@/lib/estimates/form-client';
 import type { ConfigDocument } from '@/lib/fields/schema';
 
 import { completePartInputs, fieldIdOf, INVENTED_NUMBER } from '../support/complete-part';
+import { choiceSectionVersion } from '../support/choice-section-version';
 import { seedConfig } from '../support/seed-config';
 
 /**
@@ -128,5 +129,49 @@ describe('AC-3: the count, the server and Calculate agree', () => {
     expect(countOf(filled).complete).toBe(countOf(filled).total);
     expect(validateForCalculate([{ id: 'a', slNo: '1', inputs: complete }], wider).ok).toBe(false);
     expect(validateForCalculate([{ id: 'a', slNo: '1', inputs: filled }], wider).ok).toBe(true);
+  });
+});
+
+/**
+ * STORY-08.08 AC-4: the same three readings agree over a registry that has a **choice input in a new section** (the insert of 08.03 through its pure core, so the test needs no database). The new card
+ * counts like the eight before it, a blank or unlisted choice keeps the part from `COMPLETE`, a value in the new section is counted, and Calculate names exactly the parts the server calls incomplete.
+ */
+describe('STORY-08.08 AC-4: a choice field in a new section is counted by the page, the server and Calculate alike', () => {
+  const version = choiceSectionVersion();
+  const wide = version.document;
+  const wideSections = buildFormSections(wide) as unknown as FormSection[];
+  const read = createCompletenessReader(wide);
+  const wideComplete = { ...completePartInputs(wide), [version.fieldId]: 'Fine' };
+  const countOf = (inputs: Readonly<Record<string, unknown>>) => {
+    const texts = textsOf(inputs);
+    return sumProgress(shownSections(wideSections, texts).map((section) => sectionProgress(section, texts, {})));
+  };
+  const namesPart = (inputs: Readonly<Record<string, unknown>>): boolean => !validateForCalculate([{ id: '00000000-0000-4000-8000-0000000000b1', slNo: '1', inputs }], wide).ok;
+  const dropped = (inputs: Readonly<Record<string, unknown>>, fieldId: string) => Object.fromEntries(Object.entries(inputs).filter(([key]) => key !== fieldId));
+
+  const parts: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
+    ['empty', {}],
+    ['complete, with the choice made', wideComplete],
+    ['complete but the choice blank', dropped(wideComplete, version.fieldId)],
+    ['complete, the choice holding a value no longer in the list', { ...wideComplete, [version.fieldId]: 'Retired grade' }],
+    ['only the choice made', { [version.fieldId]: 'Mirror' }],
+    ...Object.keys(wideComplete).map((fieldId): readonly [string, Record<string, unknown>] => [`complete, one input missing (${fieldId})`, dropped(wideComplete, fieldId)]),
+  ];
+
+  it.each(parts)('%s: "n of n" is true exactly when the server says COMPLETE, and Calculate names the part exactly when it does not', (_name, inputs) => {
+    const counts = countOf(inputs);
+    const word = read(inputs);
+    expect(counts.complete === counts.total && counts.total > 0, 'n of n').toBe(word === 'COMPLETE');
+    expect(namesPart(inputs), 'Calculate names the part').toBe(word !== 'COMPLETE');
+  });
+
+  it('counts the new card as a card of its own: one field, "1 of 1" once the choice is made, and the part total is the cards added up', () => {
+    const texts = textsOf(wideComplete);
+    const cards = shownSections(wideSections, texts).map((section) => ({ number: section.number, ...sectionProgress(section, texts, {}) }));
+    expect(cards.at(-1)).toEqual({ number: 9, complete: 1, total: 1 });
+    const blank = textsOf(dropped(wideComplete, version.fieldId));
+    expect(shownSections(wideSections, blank).map((section) => sectionProgress(section, blank, {})).at(-1)).toEqual({ complete: 0, total: 1 });
+    expect(countOf(wideComplete).total).toBe(cards.reduce((sum, card) => sum + card.total, 0));
+    expect(read(wideComplete)).toBe('COMPLETE');
   });
 });

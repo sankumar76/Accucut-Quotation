@@ -4,10 +4,11 @@ import { isTaskClosed } from '../../lib/estimate/task-status';
 import { checkAssign, ENGINEER_MESSAGE, type AssignInput } from '../../lib/tasks/assign';
 import { folderUrlOf } from '../../lib/tasks/folder-path';
 import { QUEUE_DEFAULT_LIMIT, type QueueCounts, type QueueTab, type TaskEstimateStatus } from '../../lib/tasks/queue';
+import { DATE_ORDER_MESSAGE } from '../../lib/tasks/queue-filters';
 import { checkReassign, TASK_CLOSED_CODE, TASK_CLOSED_MESSAGE, type ReassignInput } from '../../lib/tasks/reassign';
 import { formatTaskCode } from '../../lib/tasks/task-code';
-import { istYearOf, type Clock } from '../../lib/time';
-import type { EngineerRecord, EstimateRecord, QueueRow, QueueScope, TaskRepository } from '../repositories/task-repository';
+import { istYearOf, startOfIstDay, startOfNextIstDay, type Clock } from '../../lib/time';
+import type { EngineerRecord, EstimateRecord, QueueFilter, QueueRow, QueueScope, TaskRepository } from '../repositories/task-repository';
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
 import type { AuditContext, AuditService } from './audit-service';
@@ -122,8 +123,17 @@ export interface QueueQuery {
   readonly tab: QueueTab;
   readonly limit?: number | undefined;
   readonly cursor?: TaskQueueCursor | undefined;
-  /** `me`: only the tasks the viewer assigned (STORY-04.03). The one value of the `assignedBy` filter that exists before STORY-04.06. */
-  readonly assignedBy?: 'me' | undefined;
+  /** `me`: only the tasks the viewer assigned (STORY-04.03); `anyone` or absent: no cut by assigner. The Lead's default `me` is applied by the page from the address (STORY-04.06 A-1), not here. */
+  readonly assignedBy?: 'me' | 'anyone' | undefined;
+  /** Task ID or title, contains, ignoring letter case (STORY-04.06 AC-3). */
+  readonly q?: string | undefined;
+  /** An Engineer's ID (a Lead and an Admin only). */
+  readonly engineer?: string | undefined;
+  /** A customer's ID (a Lead and an Admin only): a task whose estimate has no customer yet matches none. */
+  readonly customer?: string | undefined;
+  /** First and last deadline day in IST, `YYYY-MM-DD`, both inclusive (a Lead and an Admin only). */
+  readonly from?: string | undefined;
+  readonly to?: string | undefined;
 }
 
 export interface TaskService {
@@ -169,7 +179,7 @@ const EVERY_TASK: QueueScope = { engineerId: null, assignedById: null };
  * AC-3): it is ANDed with the role's cut, so it can only narrow, and the person it names is the session's, never the request's. A switch, so a fourth role cannot
  * compile without a decision.
  */
-function scopeOf(viewer: QueueViewer, assignedBy?: 'me'): QueueScope {
+function scopeOf(viewer: QueueViewer, assignedBy?: 'me' | 'anyone'): QueueScope {
   const assignedById = assignedBy === 'me' ? viewer.id : null;
   switch (viewer.role) {
     case 'ENGINEER':
@@ -178,6 +188,29 @@ function scopeOf(viewer: QueueViewer, assignedBy?: 'me'): QueueScope {
     case 'ADMIN':
       return { engineerId: null, assignedById };
   }
+}
+
+const ENGINEER_FILTER_MESSAGE = 'Only a Lead or an Admin can use this filter.';
+const FILTER_FIELDS = ['assignedBy', 'engineer', 'customer', 'from', 'to'] as const;
+
+/**
+ * The filter row of a query as the repository reads it (STORY-04.06 AC-3, AC-4, AC-5). An Engineer may search and nothing else: any other filter is a 422 naming it, so a
+ * hostile `engineer=` or `assignedBy=anyone` is refused and never ignored in silence. A range that ends before it begins is a 422 under To. The values are narrowing only:
+ * they are ANDed with the scope, which comes from the session.
+ */
+function filterOf(viewer: QueueViewer, query: QueueQuery): QueueFilter {
+  if (viewer.role === 'ENGINEER') {
+    const refused = FILTER_FIELDS.filter((field) => query[field] !== undefined);
+    if (refused.length > 0) throw new FieldValidationError(refused.map((field) => ({ field, message: ENGINEER_FILTER_MESSAGE })));
+  }
+  if (query.from !== undefined && query.to !== undefined && query.from > query.to) throw new FieldValidationError([{ field: 'to', message: DATE_ORDER_MESSAGE }]);
+  return {
+    text: query.q === undefined || query.q === '' ? null : query.q,
+    engineerId: query.engineer ?? null,
+    customerId: query.customer ?? null,
+    deadlineFrom: query.from === undefined ? null : startOfIstDay(query.from),
+    deadlineBefore: query.to === undefined ? null : startOfNextIstDay(query.to),
+  };
 }
 
 /** What the bell counts (FR-037, STORY-04.03 AC-2): an Engineer's own overdue tasks, the overdue tasks a Lead assigned, and every overdue task for an Admin. */
@@ -272,12 +305,13 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
 
     async listQueue(viewer, query) {
       const now = clock.now();
+      const filter = filterOf(viewer, query);
       const scope = scopeOf(viewer, query.assignedBy);
       const limit = query.limit ?? QUEUE_DEFAULT_LIMIT;
       // One more than the page, to know whether another page follows without a count of its own.
       const [rows, counts] = await Promise.all([
-        tasks.listQueue({ tab: query.tab, scope, now, limit: limit + 1, after: query.cursor ?? null }),
-        tasks.countQueue(scope, now),
+        tasks.listQueue({ tab: query.tab, scope, now, limit: limit + 1, after: query.cursor ?? null, filter }),
+        tasks.countQueue(scope, now, filter),
       ]);
       const page = rows.slice(0, limit);
       const last = page.at(-1);
