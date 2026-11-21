@@ -25,10 +25,11 @@ const CHANGED_COUNT = '7';
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 const reviewDownload = (page: Page): Locator => page.getByRole('link', { name: 'Download .xlsx' });
 
-/** A calculated estimate, opened on SCR-06 by a Lead or the Admin. */
-async function openReview(page: Page, testInfo: TestInfo, role: 'LEAD' | 'ADMIN'): Promise<{ readonly code: string; readonly ownerId: string }> {
+/** An estimate opened on SCR-06 by a Lead or the Admin: calculated (`current`), never calculated (`none`), or calculated and then changed (`cleared`). */
+async function openReview(page: Page, testInfo: TestInfo, role: 'LEAD' | 'ADMIN', figures: 'current' | 'none' | 'cleared' = 'current'): Promise<{ readonly code: string; readonly ownerId: string }> {
   const { owner, code } = await engineerWithEstimate(testInfo);
-  await calculateWithoutThePage(page, owner);
+  if (figures !== 'none') await calculateWithoutThePage(page, owner);
+  if (figures === 'cleared') await saveCanaryQuantity(owner.id, CHANGED_COUNT);
   await signInAsLead(page, testInfo, role);
   const response = await page.goto(`/estimates/${code}`);
   expect(response?.status()).toBe(200);
@@ -81,6 +82,21 @@ test.describe('AC-1, AC-5: the button on SCR-06 is on while the figures are curr
     await expect(page).toHaveURL(new RegExp(`/estimates/${code}/export$`));
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Excel export');
   });
+});
+
+test.describe('AC-2: no link while there is no current calculation', () => {
+  for (const figures of ['none', 'cleared'] as const) {
+    test(`${figures === 'none' ? 'never calculated' : 'the total cleared by an input change'}: Download stays a disabled button described by its reason, and nothing on the page links to SCR-10`, async ({ page }, testInfo) => {
+      await openReview(page, testInfo, 'LEAD', figures);
+
+      const button = page.locator('#review-download');
+      await expect(button).toBeDisabled();
+      await expect(button).toHaveAttribute('aria-describedby', 'review-download-reason');
+      await expect(page.locator('#review-download-reason')).toHaveText('Calculate or Recalculate first. There is no file until a calculation is current.');
+      await expect(page.getByRole('link', { name: 'Download .xlsx' })).toHaveCount(0);
+      await expect(page.locator('a[href$="/export"]')).toHaveCount(0);
+    });
+  }
 });
 
 test.describe('AC-3: the figures are cleared after SCR-06 was drawn', () => {
