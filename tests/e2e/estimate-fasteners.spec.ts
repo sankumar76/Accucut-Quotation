@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 import { FIELD_ID_NAMESPACE, seedId } from '../../prisma/seed/config/seed-sections-and-stages';
 import { columnLetterToIndex } from '../../src/lib/columns';
@@ -44,6 +44,41 @@ async function storedValues(page: Page, id: string): Promise<Record<string, stri
   expect(response.status()).toBe(200);
   const body = (await response.json()) as { readonly inputs: ReadonlyArray<{ readonly fieldId: string; readonly value: string }> };
   return Object.fromEntries(body.inputs.map((entry) => [entry.fieldId, entry.value]));
+}
+
+/**
+ * DEF-038 (AQP-341): every save the page sent for the part, with the time since the page was open, what it carried and the answer. The one failure seen (run 43998662056, first attempt) was the stored values
+ * still old after the save of "None" was answered 200, and the trace of that attempt was not kept. Nothing here changes what the test does or asserts.
+ */
+function recordSaves(page: Page): string[] {
+  const started = Date.now();
+  const saves: string[] = [];
+  page.on('response', (response) => {
+    const request = response.request();
+    if (isPatchOfInputs(request.url(), request.method())) saves.push(`+${String(Date.now() - started)} ms PATCH ${String(response.status())} ${request.postData() ?? ''}`);
+  });
+  return saves;
+}
+
+/**
+ * The stored values are those expected. When they are not, the job log and an attachment get the saves the page sent and a second read of the server two seconds later, which tells a write that landed
+ * late (or a save that was never sent) from one that was answered and never stored, and then the assertion fails as it always did.
+ */
+async function expectStored(page: Page, id: string, expected: Record<string, string>, saves: ReadonlyArray<string>, testInfo: TestInfo): Promise<void> {
+  const first = await storedValues(page, id);
+  if (Object.entries(expected).some(([fieldId, value]) => first[fieldId] !== value)) {
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    const second = await storedValues(page, id);
+    const report = [
+      `[AQP-341 stored-values diagnostic] ${testInfo.project.name} | attempt ${String(testInfo.retry + 1)} | the first read did not hold what was saved`,
+      `  first read: ${JSON.stringify(first)}`,
+      `  second read, 2 s later: ${JSON.stringify(second)}`,
+      ...saves.map((line) => `  save ${line}`),
+    ].join('\n');
+    process.stdout.write(`${report}\n`);
+    await testInfo.attach('stored-values-diagnostic', { body: report, contentType: 'text/plain' });
+  }
+  expect(first).toMatchObject(expected);
 }
 
 /** Leaves Fasteners with the text and waits for the save that follows. */
@@ -115,6 +150,7 @@ test.describe('AC-2, AC-3: any other word shows them, with what was typed earlie
     // 22.9 s of actions in the trace of a tablet attempt that ran out of its 30 s on the slowest shard (runs 44025795508, 44045571667). Three times the default, for this test only.
     test.slow();
     const owner = await openForm(page, testInfo);
+    const saves = recordSaves(page);
     await saveFasteners(page, WITH_FASTENERS);
     for (const [letter, typed] of [
       ['T', TYPED_QTY],
@@ -131,7 +167,7 @@ test.describe('AC-2, AC-3: any other word shows them, with what was typed earlie
     await expect(control(page, 'U')).toHaveCount(0);
     await expect(region(page)).toContainText(COUNT_WITHOUT_QTY_AND_COST);
     // The rule is the server's: what it holds for them is 0.00, whatever was typed before (SPEC section 14.4).
-    expect(await storedValues(page, owner.id)).toMatchObject({ [fieldId('S')]: NONE, [fieldId('T')]: HIDDEN_NUMBER, [fieldId('U')]: HIDDEN_NUMBER });
+    await expectStored(page, owner.id, { [fieldId('S')]: NONE, [fieldId('T')]: HIDDEN_NUMBER, [fieldId('U')]: HIDDEN_NUMBER }, saves, testInfo);
 
     // The values typed earlier come back with the fields, and the server is given them again, so the screen and the part agree.
     await saveFasteners(page, OTHER_FASTENERS);
