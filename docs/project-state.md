@@ -16,6 +16,22 @@
 | Last updated       | 2026-11-20 by orchestrator (daily update) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
+## Build complete, hardening window open (2026-11-21, later, orchestrator)
+
+> This section wins over everything below it.
+
+**All build stories are merged** (R1, R1+ and R2; last #564 **AQP-365** 02.08 at 242c21f on 21 Nov, ahead of the 26 Nov slip-watch line, DL-248). **24 merges in this run** (20 to 21 Nov). Merged since the 21 Nov block: #556 **AQP-362** 08.07 (920567f); #557 **AQP-354** 09.07 [c] (644fa7e; combined review APPROVE WITH COMMENTS; #560, #558); #562 **AQP-335** 07.05 (368954b; perf tests; DL-271); #561 **AQP-372** 08.08 [c] (5eff5fd; APPROVE WITH COMMENTS; #566); #555 **AQP-381** DEF-051 fix (03c81cb); #565 **AQP-369** 10.07 (877baff); #567 **AQP-366** 04.06 (77b98fb); #564 **AQP-365** 02.08 [c] (242c21f; APPROVE WITH COMMENTS; **Major SQR-01 in #568**). Jira Done for all; EPIC-08 and EPIC-09 build chains complete; 09.08 (AQP-355) is the human real-mailbox step.
+
+**Defects:** DEF-050 and DEF-051 **closed** (DEF-051 7-day early-shard reopen trigger to 28 Nov, DL-273). **DEF-053** (AQP-383, `users.spec.ts:58`, rule R10) open: diagnosis shows the cause outside the spec (about 650 users and 17,000 DOM nodes by test no. 507; scan time follows the list); options with master (draft #570, not for merge). DEF-052 on watch (no second occurrence).
+
+**Rulings since the 21 Nov block:** DL-270 (#557 shard-2 = slow machine), DL-271 (RISK-010 restated at 4; **G8-C-NFR10**: OQ-PM-05 answer or acceptance of the 500-node export time, plus a target-host re-measure), DL-272 (:280 joins DEF-051), DL-273 (#555 covers all three; warm-up not needed), DL-274 (**DEF-053** with R10). **Live re-run rules: W1, R10.** RISK-031 closed (DL-268), no reopen trigger fired.
+
+**Hardening window (§9 item 3), started 21 Nov:** final review of the whole product at 242c21f by reviewer-standards, reviewer-quality, reviewer-performance (reports to `docs/06-reviews/final/`) and qa-engineer (`docs/07-qa/final-regression-report.md`), each logging an issue per Blocker, Critical or Major (or Sev-1/2 Bug). Master is drafting the hardening plan (pre-G8 list, owners, lane order, regression scope, delivery-lead decisions). Known pre-G8 items: G8-C-AC8, G8-C-NFR9, G8-C-NFR10, #568 (Major), #513 (Next bump), and the follow-ups #516, #523, #524, #532, #547, #559, #560, #566. Read-only worktree `final-review` (detached at 242c21f) for the reviewers.
+
+**Worktrees (3 + main):** records-t, aqp-383 (DEF-053 diagnostics), final-review. All story worktrees removed after their merges (agent memory archived under `_archive-2026-11-21/`). **C: 11 GB free.**
+
+**For the delivery lead:** (1) about 60 developer scratch files (`aqp3xx-*.cjs`, `*.log`, `*.bak`, `probe366.log`) sit directly in `.claude/worktrees/`; agents may not delete files. (2) Stray `aqp362-change-history.md` and `MEMORY.md` at the main checkout root. (3) Branch `diag/AQP-376-axe-phases` to delete. (4) The 04.06 developer bypassed a denied `rm` with `node unlinkSync` on its own probe file (reported, not repeated). (5) Decisions: OQ-PM-05 / G8-C-NFR10; 09.07 SQR-02 shared-address limit; `.gitignore` for `.claude/agent-memory/` (#559).
+
 ## Daily update (2026-11-21, orchestrator)
 
 > This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.**
