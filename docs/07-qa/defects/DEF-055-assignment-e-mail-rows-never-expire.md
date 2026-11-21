@@ -6,7 +6,7 @@
 | Severity | **Sev-2 Major** (qa-engineer, 2026-11-21): lands on the first real send; the workaround (clear the outbox by hand before switching on) is not documented and does not cover an outage |
 | Priority | P2. Fix before STORY-09.08 (AQP-355, the real send) and before G8 |
 | Type | Product |
-| Status | New (logged 2026-11-21) |
+| Status | **Closed 2026-11-21 (qa-engineer).** Fixed by PR #586 (squash `ae1bb352`, combined review APPROVE WITH COMMENTS; DL-282 data-only migration `20261121160000_expire_unsent_assignment_mail`). Verified on `master` push run 44917849003 (green, 0 flaky). Jira AQP-385 Done, GitHub #578 closed. **Open for 09.08:** the before-and-after count of pending `task-assigned` rows with `send_before IS NULL` on the rehearsal install (test plan section 9.5, row 09.08) |
 | Jira / GitHub | [AQP-385](https://sankumar76.atlassian.net/browse/AQP-385) / [#578](https://github.com/sankumar76/Accucut-Quotation/issues/578) (existing, label `sev-2` added). Same as reviewer-quality QLT-F-01 (`docs/06-reviews/final/quality.md`) |
 | Found by / date | qa-engineer, final regression, 2026-11-21, by reading code (no live app) |
 | Build / commit | master `242c21f7` |
@@ -33,6 +33,6 @@ Every queued "Task assigned" mail goes out at the send rate, including mails abo
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer | | `fix/AQP-385-<slug>` |
-| Regression test added | developer | | unit and integration: expiry; a reassigned row is not sent |
-| Verified | qa-engineer | | CI, then the 09.08 real send |
+| Fixed | developer | 2026-11-21 | PR #586, `ae1bb352` |
+| Regression test added | developer | 2026-11-21 | `assign-email.test.ts` (integration, 28), `assign-email-service.test.ts` (unit, 21), `task-mail.test.ts` (12), `outbox-expire-unsent.test.ts` (6), `expire-unsent-assignment-mail-migration.test.ts` (7) |
+| Verified | qa-engineer | 2026-11-21 | the five test files above passed in Stage 11 of `master` push run 44917849003 (`ae1bb352`); the 09.08 real send and the before-and-after count remain for the release round |
