@@ -3,10 +3,10 @@
 | Field | Value |
 |-------|-------|
 | Story / AC | STORY-05.05 (AQP-313) AC-2, AC-3; SPEC section 14.4 (the server holds 0.00 for Qty and Cost while Fasteners is None) |
-| Severity | **Sev-2 Major, provisional** (a data path: a quotation could be priced with fasteners the user removed) |
-| Priority | P2 (Jira High) |
-| Type | Product, unconfirmed (may be a test timing fault) |
-| Status | **Open** (Jira In Progress, no fix PR). Blocks G8 (DL-275 A2); a data path, so section 9 item 2 combined review applies when fixed |
+| Severity | **Sev-3 Moderate** (downgraded from provisional Sev-2 by master, DL-277, 2026-11-21, under DL-231 C4, on substitute evidence). **Returns to provisional Sev-2 the same day** if the diagnostic line appears (see Reopen trigger) |
+| Priority | P3 (Jira Medium since 2026-11-21) |
+| Type | **Test** (DL-277: the test read before the None save landed is the remaining reading; the product keeps None with zeroed values atomically) |
+| Status | **Open on watch** (Jira In Review). No longer blocks G8 as a Sev-2 (DL-275 A2, DL-276); at G8 master accepts it in writing if the diagnostic has not fired (test plan section 6). PR #580 (tests only: a diagnostic in `estimate-fasteners.spec.ts`, a PostgreSQL journey test, a unit test of the request chain) merges on fully green CI with no combined review (DL-277 (3)) |
 | Jira / GitHub | [AQP-341](https://sankumar76.atlassian.net/browse/AQP-341) / [#462](https://github.com/sankumar76/Accucut-Quotation/issues/462) |
 | Found by / date | qa-engineer, 2026-11-17 (DL-231 condition C4) |
 | Environment | CI run 43998662056, Stage 12 shard 1, Chromium [mobile], master `dc2f98ea` |
@@ -27,3 +27,8 @@ Not investigated: ordering of the "None" save against the read (`saveFasteners`,
 
 ## Fix & Verification  _(developer / qa-engineer)_
 Downgrade rule (DL-231 C4): to Sev-3 Test if a trace shows the read came before the save landed; keep Sev-2 if the save returned 200 and the server still held the old values. QA note 2026-11-21: `estimate-form-sections.spec.ts:161` [tablet] (Fasteners "None", reload, locator not found) was flaky on master push 44892640890; its error is a missing locator, not a wrong value, so it is not shown to be a recurrence. The developer should read it first.
+
+## Re-grade and watch (DL-277, 2026-11-21)
+- Grade: Sev-3, type Test. Jira priority Medium and label sev-3; GitHub #462 label sev-3. Substitute evidence read by master: the server keeps None with Qty and Cost zeroed in one transaction under the estimate lock with a revision-conditioned UPDATE; 12 concurrent journeys never showed an old value; the form sends four chained saves; no recurrence in hundreds of later runs of the case at three widths. Condition: a test that a 409 on a part save shows the conflict state and re-reads the part (cited in #580 or added to it).
+- **Reopen trigger:** any `[AQP-341 stored-values diagnostic]` line in a CI job log, or any first-read mismatch of this case. It then returns to provisional Sev-2 the same day, blocks G8, qa-engineer reads the second read and the save list, and master is told.
+- QA reads every `master` push run daily for the line (test plan section 7). Final-regression note: `estimate-form-sections.spec.ts:161` [tablet] was flaky on 44892640890 with a missing locator after reload, not a wrong value; it is not this defect.
