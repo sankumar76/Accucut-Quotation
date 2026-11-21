@@ -56,6 +56,8 @@ const REPOSITORIES = {
     'audit-repository',
     // STORY-03.05 (AC-4, NFR-002): every column of the calculation record is cost data (calculations and calculation_rows are Restricted, architecture section 5.1).
     'calculation-repository',
+    // STORY-08.06 (NFR-002): the checkpoints of the configuration, for the Admin only; no Engineer view reads or writes them.
+    'config-checkpoint-repository',
     'config-repository',
     'customer-repository',
     'decimal-text',
@@ -105,6 +107,8 @@ const SERVICES = {
     'calculation-service',
     // STORY-06.12 (NFR-002): cancel approval reads and writes the approval (its price is in the audit entry), for the Admin only; no Engineer view imports it.
     'cancel-approval-service',
+    // STORY-08.06 (NFR-002): checkpoints and revert read whole configuration snapshots and save a version with the Admin's password. Admin only; no Engineer view imports it.
+    'config-checkpoint-service',
     // STORY-08.02 (NFR-002): the formula editor reads formulas, rate names and a stored calculation, and saves a version with the Admin's password. Admin only; no Engineer view imports it.
     'config-edit-service',
     'config-read-service',

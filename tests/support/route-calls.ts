@@ -3,6 +3,7 @@ import type { HttpMethod, RouteRow } from '../../src/server/http/route-manifest'
 import { FIELD_ID_NAMESPACE, seedId } from '../../prisma/seed/config/seed-sections-and-stages';
 
 import { CUSTOMER_DELETE_RECIPE_ID, CUSTOMER_RECIPE_ID } from './customer-canary';
+import { checkpointCall } from './checkpoint-calls';
 import { canaryEstimatePageFor } from './estimate-recipe';
 import { EXCHANGE_RATE_CANARIES } from './exchange-rate-canary';
 import { HARNESS_NEXT_PASSWORD, HARNESS_PASSWORD } from './harness-password';
@@ -368,7 +369,7 @@ export function validCallFor(method: HttpMethod, path: string, context: CallCont
     case 'PUT /api/v1/exchange-rates':
       return { id: NO_RECIPE_ID, body: { usd: EXCHANGE_RATE_CANARIES.usd, eur: EXCHANGE_RATE_CANARIES.eur }, status: 200 };
     default:
-      return treatmentCall(method, path) ?? customerCall(method, path) ?? taskCall(method, path, context) ?? estimateCall(method, path, context) ?? DEFAULT_CALL;
+      return treatmentCall(method, path) ?? customerCall(method, path) ?? taskCall(method, path, context) ?? estimateCall(method, path, context) ?? checkpointCall(method, path) ?? DEFAULT_CALL;
   }
 }
 

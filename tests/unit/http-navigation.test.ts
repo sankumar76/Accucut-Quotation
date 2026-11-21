@@ -23,7 +23,8 @@ describe('the menu of each role, from the manifest as it is now', () => {
     // The Process master (STORY-02.01), Customers (STORY-02.02) and Materials and lists (STORY-02.03) are the Admin's alone, in the Masters group, which comes before Administration.
     // Assign task (STORY-04.01) is the Lead's and the Admin's, in Work, between the queue and Home; an Engineer is never shown it.
     // Settings (STORY-02.09) is the Admin's alone, in Administration between Users and the Audit log.
-    const admin = role === 'ADMIN' ? ['Process master', 'Customers', 'Materials and lists', 'Fields and formulas', 'Users', 'Settings', 'Audit log'] : [];
+    // Checkpoints (STORY-08.06) is the Admin's alone, in Configuration right after Fields and formulas.
+    const admin = role === 'ADMIN' ? ['Process master', 'Customers', 'Materials and lists', 'Fields and formulas', 'Checkpoints', 'Users', 'Settings', 'Audit log'] : [];
     // Fields and formulas (STORY-08.01) is in Configuration, after the masters: the Admin's with that label, and a Lead's, marked as view only (AC-4). An Engineer is never shown it.
     const formulas = role === 'LEAD' ? ['Fields and formulas (view only)'] : [];
     const assign = role === 'ENGINEER' ? [] : ['Assign task'];
@@ -32,7 +33,7 @@ describe('the menu of each role, from the manifest as it is now', () => {
   });
 
   it('a production build does not list the design-system page', () => {
-    expect(labels('ADMIN', false)).toEqual(['Task queue', 'Assign task', 'Home', 'Process master', 'Customers', 'Materials and lists', 'Fields and formulas', 'Users', 'Settings', 'Audit log', 'About']);
+    expect(labels('ADMIN', false)).toEqual(['Task queue', 'Assign task', 'Home', 'Process master', 'Customers', 'Materials and lists', 'Fields and formulas', 'Checkpoints', 'Users', 'Settings', 'Audit log', 'About']);
   });
 
   it('every entry has a fixed address, a label and an icon, and an address that is a page of the manifest', () => {
