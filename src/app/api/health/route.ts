@@ -1,6 +1,7 @@
 import { isHeartbeatFresh } from '@/lib/health/heartbeat';
 import { systemClock } from '@/lib/time';
 import { getHeartbeatRepository } from '@/server/composition';
+import { clientAddressFrom } from '@/server/auth/client-address';
 import { NO_STORE } from '@/server/http/problem';
 
 /**
@@ -11,20 +12,26 @@ import { NO_STORE } from '@/server/http/problem';
  * Public, with no session and no input, so it does not go through `withRoute` (it is listed with the other own-protected public routes in
  * `tests/support/route-files.ts`). It says only `ok` or `unavailable`: no version, no setting, no error text, no count, and never which check failed, so it tells a
  * stranger nothing. One read does both checks: the newest `heartbeat` row's `finished_at` (one index descent), which fails when the database is down.
+ *
+ * It also says, in `X-Client-Address-Seen`, the address the portal worked out for the caller by the rule of the sign-in limit (`clientAddressFrom`: the last entry of
+ * `X-Forwarded-For`, a well-formed address with no port), or `none`. That lets the install see that the reverse proxy writes the real address (check C5 of the install guide, #576). It is
+ * the caller's own address, on a 503 as well as a 200, so it tells a stranger nothing.
  */
-const NO_CACHE_HEADERS = { 'Cache-Control': NO_STORE } as const;
+const CLIENT_ADDRESS_HEADER = 'X-Client-Address-Seen';
+const NO_ADDRESS = 'none';
 
-function unavailable(): Response {
-  return Response.json({ status: 'unavailable' }, { status: 503, headers: NO_CACHE_HEADERS });
+function answer(body: { readonly status: 'ok' | 'unavailable' }, status: number, request: Request | undefined): Response {
+  const seen = clientAddressFrom(request === undefined ? undefined : Object.fromEntries(request.headers));
+  return Response.json(body, { status, headers: { 'Cache-Control': NO_STORE, [CLIENT_ADDRESS_HEADER]: seen ?? NO_ADDRESS } });
 }
 
-export async function GET(): Promise<Response> {
+export async function GET(request?: Request): Promise<Response> {
   try {
     const latest = await getHeartbeatRepository().latestHeartbeatAt();
-    if (!isHeartbeatFresh(latest, systemClock.now())) return unavailable();
-    return Response.json({ status: 'ok' }, { headers: NO_CACHE_HEADERS });
+    if (!isHeartbeatFresh(latest, systemClock.now())) return answer({ status: 'unavailable' }, 503, request);
+    return answer({ status: 'ok' }, 200, request);
   } catch {
     // The error is not printed or returned: it may carry a connection detail. The monitor sees the 503.
-    return unavailable();
+    return answer({ status: 'unavailable' }, 503, request);
   }
 }
