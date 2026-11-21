@@ -1,4 +1,6 @@
 import { BACKUP_LATE_AFTER_DAYS, DISK_NEARLY_FULL_BELOW_PERCENT, DISK_READING_STALE_AFTER_DAYS } from '@/lib/settings/backup-status';
+import type { SendFailureCode } from '@/lib/mail/codes';
+import { MAIL_FAILURE_WINDOW_DAYS } from '@/lib/mail/failure-window';
 import { formatIst, formatIstWithWeekday } from '@/lib/time';
 
 /**
@@ -73,6 +75,29 @@ export const NO_SENDER_BODY = 'The test e-mail was not sent. Save a sender name 
 
 /** Proposed (AC-8): shown while `FEATURE_EMAIL` is off. Saving and the test e-mail still work, so the Admin can prove the mailbox before anyone is e-mailed. */
 export const EMAIL_NOT_ENABLED = 'Sending is not enabled on this server yet. Accucut IT turns it on. You can still save these settings and send a test e-mail.';
+
+/**
+ * Proposed (STORY-09.06 AC-8): the spec says only that Settings shows failed e-mails, so these words are the developer's, for the ux-expert's end review. One plain sentence for each class code of
+ * the outbox (`src/lib/mail/codes.ts`), each ending the notice with "Ask Accucut IT"; the code itself is never shown.
+ */
+export const MAIL_FAILED_TITLE = 'E-mails not sent';
+
+const MAIL_PROBLEM: Readonly<Record<SendFailureCode, string>> = {
+  SENDER_NOT_ALLOWED: 'The mail server did not accept the sender address for this mailbox.',
+  AUTH_FAILED: 'The mail server refused the sign-in.',
+  CONNECTION: 'The mail server could not be reached.',
+  NO_SENDER: 'No sender name and e-mail address are saved.',
+  UNKNOWN: 'The cause is not known.',
+};
+
+export const mailProblemText = (code: SendFailureCode): string => MAIL_PROBLEM[code];
+
+/** "2 e-mails could not be sent in the last 7 days. Last failure: 19 Nov 2026, 14:00 IST. Last problem: The mail server could not be reached. Ask Accucut IT." */
+export function mailFailedBody(failures: { readonly count: number; readonly lastCode: SendFailureCode; readonly lastAt: Date }): string {
+  const { count, lastCode, lastAt } = failures;
+  const counted = `${count} ${count === 1 ? 'e-mail' : 'e-mails'}`;
+  return `${counted} could not be sent in the last ${MAIL_FAILURE_WINDOW_DAYS} days. Last failure: ${formatIst(lastAt)}. Last problem: ${mailProblemText(lastCode)} Ask Accucut IT.`;
+}
 
 export const ERROR_TITLE = 'We could not load the settings';
 export const ERROR_RETRY = 'Try again';

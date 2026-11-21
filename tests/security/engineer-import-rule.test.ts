@@ -381,10 +381,11 @@ describe('every worker job is classed and takes nothing from the data layer (NFR
     expect(source).not.toMatch(/readFile|createReadStream|open\(/);
   });
 
-  it('backup-watch takes only Node, node-cron and one plain lib module, and its row holds figures of the disk and nothing about an estimate', () => {
+  it('backup-watch takes only Node, node-cron, plain lib modules and one pure template, and its row holds figures of the disk and nothing about an estimate', () => {
     const source = readFileSync(`${ROOT}src/server/jobs/backup-watch.ts`, 'utf8');
     const specifiers = [...source.matchAll(/from '([^']+)'/g)].map((match) => match[1] ?? '').sort();
-    expect(specifiers).toEqual(['../../lib/settings/backup-status', './run-job', 'node-cron', 'node:fs/promises']);
+    // STORY-09.06 AC-10: the key builders and the IST date, the one "nearly full" rule (already in backup-status) and the Admin's message, a pure template of two flags.
+    expect(specifiers).toEqual(['../../lib/mail/events', '../../lib/settings/backup-status', '../../lib/time', '../mail/templates/backup-missed', './run-job', 'node-cron', 'node:fs/promises']);
     expect(source).not.toMatch(/\b(?:estimates?|customers?|rates?|costs?|prices?)\b/i);
   });
 });

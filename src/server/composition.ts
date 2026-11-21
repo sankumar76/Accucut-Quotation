@@ -414,6 +414,7 @@ export function getRemovePriceService(): RemovePriceService {
 export function getSettingsService(): SettingsService {
   settingsService ??= createSettingsService({
     jobRuns: createJobRunRepository(runtimeClient()),
+    outbox: createEmailOutboxRepository(runtimeClient()),
     settings: createSettingsRepository(runtimeClient()),
     users: getUserRepository(),
     mail: getMailService(),
