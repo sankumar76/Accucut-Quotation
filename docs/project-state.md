@@ -13,8 +13,28 @@
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target 1 Dec 2026, range 1 to 3 Dec (DL-248)** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-21 (late evening) by orchestrator (daily update, CR-01 scope) |
+| Last updated       | 2026-11-22 by orchestrator (daily update) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-22, orchestrator)
+
+> This section wins over everything below it.
+
+**`master` = d959e8f, green** (push run 45006794087 on ea91515: success, no 30 s cuts). Merged since the 21 Nov evening update (all squash by the orchestrator with `gh pr merge`): #595, #592, #596 (CR-01 UX spec v0.33), #597 (`.env.example` EXPORT_TIMEOUT_SECONDS=240, delivery lead's PR plus a test fix), #598 (UX spec v0.34), #593 (10.08, AQP-370 Done), #600 (**AQP-388** CR-01 item 1, Done), #599 (**AQP-389** CR-01 item 2, Done), #588 (10.09, AQP-371 Done), #610 (DEF-060 fix), #605 (DEF-058 fix). AQP-392 and AQP-394 In QA for their P2 proofs.
+
+**Rulings today:** DL-288/289 (#596, #598 docs merges; touch rule for compact fields), DL-290 (#599: re-run outside rules, R11, allow-list accepted, DEF-058), DL-291 (DEF-059 probable layout fault; lanes), DL-292 (#494 needs the delivery lead because of the DL-247 settings line; #581 after it, G8-C-581), DL-293 (red `master` from #588's load-plan test → DEF-060 and a freeze, now lifted; **RISK-031 reopened at 9**, trigger (b) 2 of 2 on 22 Nov; DEF-061), DL-294 (**DEF-057 re-graded Sev-2, blocks G8**, RISK-033 at 6; process-propagation:109 watch; DEF-061 product fix plus test fix).
+
+**CR-01 (DL-287):** AQP-388 and AQP-389 merged. **AQP-390** (#601): combined review APPROVE WITH COMMENTS at 247e286d (follow-ups #606, #607); updated to d959e8f, CI running, merges when green with the same net change. **AQP-391** (#604 draft): pure parts built; wiring after #601. PRD v0.33, SPEC 1.15, architecture v0.59.
+
+**Open PRs:** #601, #604, #611 (DEF-061, CI), #612 (DEF-057, CI; cause pointer: cold first compile of `/recalculate`; fix route needs master), #581 (after #494), #494 (delivery lead), #476 (delivery lead).
+
+**Defects open:** DEF-057 Sev-2 (#612), DEF-059 (after #601), DEF-061 (#611), DEF-058 and DEF-060 awaiting P2 close, plus the older Sev-3 list. **RISK-031** closes when DEF-060 and DEF-058 are closed on proof and a later `master` push is clean.
+
+**Worktrees (6 of 7):** records-t, aqp-390, aqp-391, arch-581, def-061, aqp-387. Removed today: cr01-ux, env-timeout, aqp-383 (memory archived in `_archive-2026-11-22/aqp-383/`), aqp-388, aqp-389, aqp-371, def-060, aqp-392.
+
+**G8 forecast:** recommendation about **4 Dec (range 3 to 5 Dec)** holds for CR-01; DEF-057 (Sev-2, cause not yet fixed) is the main new risk to it. Freeze about 1 Dec.
+
+**For the delivery lead:** #494 merge (DL-292); G8 date; STD-F-03 (#577); D2, D3, D4, D6, D7; #476; OQ-PM-11; OQ-PM-13; OQ-ARCH-CR01-1/2; A-CR01-1 to 3 on Monday; QLT-08 (short-name backfill on a demo copy before the demo runs CR-01 code); denied commands left behind in aqp-390 (`rm -f playwright.local.config.ts`, `rm -rf` of Playwright output; git-ignored, gone with the worktree) and in def-060 (`rm -rf node_modules`; worktree since removed); AQP-395 has a stale "relates to AQP-303" link to remove by hand.
 
 ## Daily update and CR-01 scope (2026-11-21, late evening, orchestrator)
 
