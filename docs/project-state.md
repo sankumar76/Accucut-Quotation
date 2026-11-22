@@ -16,6 +16,29 @@
 | Last updated       | 2026-11-22 (evening) by orchestrator (daily update) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
 
+## Resume point (2026-11-22, pause 5, orchestrator)
+
+> This section wins over everything below it. The delivery lead paused the run; all agents finished their current task and stopped. Nothing new was started.
+
+**`master` = 59a885d** (#620 AQP-398 7A merged last). Merged today after the evening update: #618 (UX v0.35), #581 (docs), #621 (AQP-403 3A), #623 (AQP-404 3B), #620 (AQP-398 7A).
+
+**Open PRs and the exact next step (strict up-to-date rule: one at a time):**
+| PR | Story | Review | CI | Next step |
+|---|---|---|---|---|
+| #624 | AQP-399 7B | APPROVE WITH COMMENTS (round 2, c505157e) | RED at Stages 1 to 11b on dbc1bb2b: `tests/integration/jobs/daily-digest.test.ts:281` "Mailpit answered 404 for GET /api/v1/message/…" (looks like a vanished message, not an assertion; passed on 13f82aae). **No re-run rule covers it: master rules first.** | Update branch (7A now on master), master ruling on the Mailpit 404, green run, merge |
+| #625 | AQP-405 3C | APPROVE WITH COMMENTS (e830818d); 7 Minors (QLT-02..08) to the developer or hardening | Run 45041853021 on 28cfd8e5 was running; behind master after #620 | Update branch, green run, merge; update PR body first-load (185,710 B, headroom 14,290 B) |
+| #622 | AQP-402 7E | APPROVE WITH COMMENTS round 2 (623b93ab); QLT-06 → #626 | Green on 4bc8dbdd; behind master | Update branch, green run, merge |
+| #628 | AQP-397 DEF-063 probe removal | test-only (DL-301) | Updated to c8631786, run was in progress; behind after #620 | Update branch, green run, merge |
+| #476 | Dependabot next 16.4.6 | — | — | Delivery lead (D6) |
+
+**Lanes when resuming:** lane 1 (aqp-403 worktree): 3D AQP-406 after Monday's A-CR01-5 answer. Lane 2 (aqp-398 / aqp-397b worktrees): 7C AQP-400 and 7D AQP-401 after Monday's A-CR01-3/A-CR01-2 answers (7D ACs per DL-304, QLT-B6/B7/B9/B10; 7C adds the quote-dialog chip). Lane 3 (aqp-402): free after #622 merges. DEF-057 (Sev-2, G8 blocker): observer on master since #612; master re-rules by 26 Nov if no failure names the stall. Follow-ups: #619 (UX wording), #626 (SCR-10 chip refresh), #627 (rollback notes for applied CR-01 migrations; checksum caution), #606/#607 (AQP-390), QA to read the 34bc3250 push run (45027664779) into the trigger (b) ledger.
+
+**Watch:** `/queue` first-load headroom about 8.7 to 9.2 KB (under the 10,000 B line) — 7C and 7D must keep code out of its first load.
+
+**Worktrees (5 of 7):** records-u, aqp-403 (3C branch), aqp-398 (7B branch), aqp-402 (7E), aqp-397b (probe removal). **Junction warning:** `C:\Users\sanku\AppData\Local\Temp\claude\859e50c63dd2e28b\8cbadfbd-eb52-4717-ac94-93bcd491fd2f\scratchpad\aqp403-mut\node_modules` is a junction into `aqp-403\node_modules`: unlink it non-recursively before removing either folder.
+
+**For the delivery lead:** (1) OQ-PM-14 (AQP-1 12730): (a) build a Lead/Admin edit entry on SCR-06 before G8, or (b) waive the Lead-edit part of FR-064 until after G8. (2) Accept the new G8 forecast: recommendation about 6 Dec (5 to 8 Dec), freeze about 3 Dec (option (a) adds 1 to 2 days). (3) Monday 23 Nov customer review: A-CR01-1, 2, 3, 5, A-CR01-8 (Ignored refusals incl. download and reassign), no kind column in Excel. (4) D2, D3, D4, D6, D7; #476. (5) QLT-08: short-name backfill on a demo copy before the demo runs CR-01 code. (6) Denied commands, not worked around: scratch-copy cleanup (`aqp403-mut`, junction first), temp logs `aqp398-*`/`aqp399-*` under `C:\Users\sanku\Documents\`, the full :224 rate-count script, a Monitor re-arm, `git merge --ff-only` on records-u, compound `cd … && git merge` (approved `git -C` form used instead). (7) Stale Jira link AQP-395 → AQP-303.
+
 ## Daily update (2026-11-22, evening, orchestrator)
 
 > This section wins over everything below it.
