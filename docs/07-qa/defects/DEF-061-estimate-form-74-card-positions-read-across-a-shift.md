@@ -1,13 +1,13 @@
-# DEF-061: `estimate-form.spec.ts:74` [tablet] AC-1: cards 03 and 04 read 110 px apart on one flex line, because the page moved between two separate position reads (Test, product not excluded)
+# DEF-061: `estimate-form.spec.ts:74` [tablet] AC-1: cards 03 and 04 read 110 px apart on one flex line, because the picture slot's 48 px skeleton is replaced by a control about 160 px tall (Product, layout)
 
 | Field | Value |
 |-------|-------|
-| Story / AC | STORY-05.03 (AQP-303, Done), AC-1: "the cards sit one above the other on a phone and side by side from a tablet". The case measures the first two cards of a pair (cards 03 and 04 since #600) |
-| Severity | **Sev-3 Moderate** (master's DL-293 (3)): a Test-type defect, fails closed only if both attempts fail, workaround is the retry, and the geometry shows the cards do sit side by side, so no product regression |
-| Priority | P3. **Lane (DL-293 (3), (4)(e)):** the next free lane after the DEF-060 fix and #605; it does not displace DEF-059's place after #601 (DL-291 (3)(b)) |
-| Type | **Test**, **product not excluded** (if the element that grows has loading and loaded states of different heights, that is a layout shift the UX spec's loading states should prevent, and it comes back to master as a product question, as DEF-059 did) |
-| Status | **New** (logged 2026-11-22) |
-| Jira / GitHub | [AQP-395](https://sankumar76.atlassian.net/browse/AQP-395) / [#609](https://github.com/sankumar76/Accucut-Quotation/issues/609). Jira "relates to" AQP-388 (CR-01 item 1, #600, which exposed it), AQP-303 (STORY-05.03) and AQP-1 (Intake). **Not linked to RISK-031** (a received value, not a time-out). Labels `ai-delivery`, `aiid-DEF-061`, `agent-qa-engineer`, `final-review`, `sev-3`; priority Medium. GitHub labels `bug`, `sev-3`, `ai-delivery` |
+| Story / AC | **Owning story STORY-05.07 (AQP-315, #408), the picture control and its slot** (master's DL-294 (4); first logged against STORY-05.03, AQP-303, whose AC-1 is the case's subject: "the cards sit one above the other on a phone and side by side from a tablet"). UX spec :417 (Loading) requires "Skeleton rows shaped like the content" |
+| Severity | **Sev-3 Moderate** (DL-294 (4): stays). A loading state off the UX spec, with a workaround (the control arrives); nothing is lost or exposed |
+| Priority | P3. **Lane (DL-294 (4)):** the DEF-061 developer keeps the lane and works now, one PR (product fix and test fix). Under the freeze it squashes only after the DEF-060 fix (done, #610), on its own fully green run on a head that is not behind; if it is ready with #605 or #601, those go first. DEF-057 takes the next lane that frees |
+| Type | **Product (layout)** (master's DL-294 (4); was Test, product not excluded) |
+| Status | **New**, type moved to Product (layout) by DL-294 (logged 2026-11-22) |
+| Jira / GitHub | [AQP-395](https://sankumar76.atlassian.net/browse/AQP-395) / [#609](https://github.com/sankumar76/Accucut-Quotation/issues/609). Jira "relates to" **AQP-315 (STORY-05.07, the owning story; the site has no "is caused by" type)**, AQP-388 (CR-01 item 1, #600, which exposed it) and AQP-1 (Intake); the earlier "relates to" AQP-303 (STORY-05.03) stays on the issue because QA has no tool to remove a link. **Not linked to RISK-031** (a received value, not a time-out). RISK-033 (DL-294 (5)). Labels `ai-delivery`, `aiid-DEF-061`, `agent-qa-engineer`, `final-review`, `sev-3`; priority Medium. GitHub labels `bug`, `sev-3`, `ai-delivery` |
 | Risk / rule | None. **Never re-run** this failure: it is the case's subject failing with a received value (DL-293 (3)); no rule may cover it. RISK-031 trigger (b): not counted (not a time-out) |
 | Found by / date | CI, `master` push 44995772811; read by master (DL-293 (3)); logged by qa-engineer, 2026-11-22 |
 | Build / commit | `master` push 44995772811 (62ff83c4, #588 squash), Stage 12 shard 2, job 137126360509. #600 is 08394110 |
@@ -38,19 +38,17 @@ Received:   110
 ## Evidence
 `master` push 44995772811 Stage 12 shard 2 job 137126360509 (the error block above, from the log; `Error Context: test-results/estimate-form-AC-1-AC-2-AC-fd98b--side-by-side-from-a-tablet-tablet/error-context.md`, not kept by CI for the failed attempt; shard 2 `1 flaky, 529 passed (20.0m)`); DL-293 (3).
 
-## What decides it (not collected)
-- **Test:** two separate reads across a shift. A one-frame read (both boxes in one `evaluate`) after a page signal that the growing element settled removes it.
-- **Product:** what grows by 110 px is not named. If it is a product element whose loading and loaded states differ in height, that is a layout-shift question for master.
 
-## Suspected Area
-`tests/e2e/estimate-form.spec.ts:74-94` (`waitForForm`, the two `boundingBox()` reads at :78 and :79); the elements above card 03 in the form (cards 01 and 02, the picture slot, the part progress line).
+## What grows (master's DL-294 (4), read on origin/master 62ff83c4; not measured, Playwright is CI-only here)
+`picture-slot.tsx` loads the picture control by a bare `import()` in a `useEffect` (:13, :26) and renders `<Skeleton className="h-s-7" />` until it arrives (:41). `--s-7` is 48 px (`globals.css:35`). The loaded `part-picture.tsx` control is about 158 to 162 px tall at 768 px by its CSS (the developer's sum), so about 110 to 114 px taller, which matches the received 110 px gap between cards 03 and 04. `git log`: `picture-slot.tsx` came from AQP-315 (STORY-05.07, #408). UX spec :417 (Loading) requires "Skeleton rows shaped like the content"; the no-shift line at :1280 covers only the menu button and the account trigger. A 48 px bar is not shaped like a control about 160 px tall, and every card below card 01 jumps about 110 px on each part open. Master's ruling: **option 1, a product fix plus the test fix, in one PR** (option 2, test-only and accept the shift, rejected: it would hide a product deviation the case caught, as DEF-059 was routed away from in DL-291).
 
-## Binding for the fix (DL-293 (3); developer, test-only, `tests/e2e/estimate-form.spec.ts` only)
-1. **First name what grows:** a one-off diagnostic in the PR (the heights of cards 01 and 02 and of the picture slot, read before and after the page settles), with its output in the PR body.
-2. Read both boxes in one `evaluate` (one frame), after a wait for a page signal that the growing element has reached its final state, proven by the `src/` line that renders it (DL-240).
-3. Every assertion kept; no budget, retry, timeout, skip or fixed sleep.
-4. If the grower is a product element whose loading and loaded states differ in height, **stop and come back to master**.
-5. **Proof:** attempt-1 pass at tablet and desktop on the PR run of record and on the next `master` push.
+## Binding for the fix PR (DL-294 (4); supersedes the first-logged binding; one PR, the DEF-061 developer, from current `master`)
+1. **Measure first, red-first:** a case that holds the picture control's code request so the skeleton is on screen, reads the slot's height, releases the request, and reads the height again once `[data-picture-zone]` (or the loaded control's own marker, proven by its `src/` line) is visible. It asserts the two heights are equal within 2 px at all three widths, attaches both, and is shown red before the `src/` change (printed in the PR body). The hold mechanism is the developer's choice; if the chunk cannot be held reliably, stop and come back to master.
+2. **The `src/` change** is only the loading branch of `picture-slot.tsx` (:41): a skeleton shaped like the loaded control (its label line, drop zone and hint line, or one block of the same height at each width), built from the existing `Skeleton` and existing spacing tokens. No other `src/` file, no `part-picture.tsx` change, no new token, and no text, role, label, `aria` or behaviour change. If equal heights within 2 px cannot be reached that way, come back to master.
+3. **The test change ships in the same PR:** in `tests/e2e/estimate-form.spec.ts`, read both boxes in one `evaluate` after waiting for the loaded control's marker, proven by its `src/` line (DL-240). Every assertion kept; no budget, retry, timeout, skip or fixed sleep. The one-off diagnostic of the first binding is replaced by the red-first case. The PR's files: `picture-slot.tsx`, `tests/e2e/estimate-form.spec.ts` and, if the red-first case lives there, `tests/e2e/estimate-picture.spec.ts`; nothing else.
+4. **No combined review:** not a section 9 item 2 area; the gate is fully green CI (section 9 item 1).
+5. **Proof:** the red-first case red before and green after at all three widths, and :74 passing attempt 1 at tablet and desktop, both on the PR run of record and on the first `master` push after the squash.
+**For ux-expert (not blocking, before G8's final review):** one sentence in the UX spec Loading row: "a skeleton holds the height of the content that replaces it, so nothing below it moves".
 
 ## Re-run rule
 None. Never re-run.
@@ -59,7 +57,7 @@ None. Never re-run.
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
 | Logged | qa-engineer | 2026-11-22 | AQP-395, #609 |
-| Diagnostic (what grows) | developer | | one-off diagnostic output in the PR body |
-| Fixed | developer | | `fix/AQP-395-<slug>`, `tests/e2e/estimate-form.spec.ts` only |
-| Regression test added | developer | | the one-frame read after the settle signal; every assertion kept |
-| Verified | qa-engineer | | attempt-1 pass at tablet and desktop on the PR run of record and on the next `master` push |
+| Red-first case (heights equal within 2 px, skeleton vs loaded) | developer | | printed red in the PR body before the `src/` change |
+| Fixed | developer | | `fix/AQP-395-<slug>`: `picture-slot.tsx` loading branch (:41), `tests/e2e/estimate-form.spec.ts`, and `estimate-picture.spec.ts` only if the case lives there |
+| Regression test added | developer | | the red-first height case; the one-frame read of :74 after the loaded control's marker; every assertion kept |
+| Verified | qa-engineer | | the red-first case green at all three widths and :74 attempt-1 green at tablet and desktop, on the PR run of record and on the first `master` push after the squash |
