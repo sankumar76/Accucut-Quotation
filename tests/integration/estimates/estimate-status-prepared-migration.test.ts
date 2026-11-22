@@ -84,7 +84,7 @@ describe('AC-2: the rename over existing estimates (run in order, in one databas
     for (const [code, status] of planted) {
       const { rows: tasks } = await owner.query<{ id: string }>(
         `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject)
-         VALUES ($1, $2::uuid, $2::uuid, 'C:\\Invented\\' || $1, '2026-12-01T10:00:00Z', $1, 'Invented subject') RETURNING id::text`,
+         VALUES ($1, $2::uuid, $2::uuid, '\\\\invented-server\\share\\' || $1, '2026-12-01T10:00:00Z', $1, 'Invented subject') RETURNING id::text`,
         [code, engineerId],
       );
       await owner.query('INSERT INTO estimates (task_id, status) VALUES ($1::uuid, $2::estimate_status)', [tasks[0]?.id, status]);
