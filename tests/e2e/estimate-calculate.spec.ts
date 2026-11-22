@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Response } from '@playwright/test';
+import { expect, test, type Page, type Response, type TestInfo } from '@playwright/test';
 
 import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
@@ -6,7 +6,7 @@ import { defined } from '../support/defined';
 import { makeCanaryEstimateCalculable, readCalculatedValues, readEstimateState, useFreshAddress } from './support/auth';
 import { engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { horizontalOverflow, waitUntilHydrated } from './support/design-system';
-import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree } from './support/part-form';
+import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree, waitForForm } from './support/part-form';
 
 /**
  * STORY-05.09 T6 (AC-1, AC-2, AC-6, AC-7, AC-9): Calculate on SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server. Each test signs in as a person of its own with an
@@ -41,6 +41,18 @@ async function makeComplete(page: Page, ownerId: string): Promise<void> {
   await page.reload();
   await expect(partForm(page)).toBeVisible();
   await expect(control(page, 'E')).toBeEnabled();
+}
+
+/**
+ * An Engineer whose estimate is already ready to calculate in the database (the customer chosen, one part holding every input) opens the workspace once, and the page shows it as the database has it.
+ * `openForm` and then `makeComplete` loaded the page twice before the press (AQP-396, DEF-062); this is the one load. Answers the owner, whose ID is the ID of the estimate and of its one part.
+ */
+async function openCalculable(page: Page, testInfo: TestInfo): Promise<{ readonly id: string }> {
+  const { owner, code } = await engineerWithEstimate(testInfo);
+  await signInAs(page, owner);
+  await page.goto(`/estimates/${code}`);
+  await waitForForm(page);
+  return owner;
 }
 
 /**
@@ -141,8 +153,7 @@ test.describe('AC-1: a blank input blocks, and the page says where', () => {
 
 test.describe('AC-2, AC-6: a complete estimate is submitted, and the page shows a status and a sentence', () => {
   test('AC-2: Calculate answers exactly {status, message}, the page turns to "Submitted": read-only inputs, no part actions, a disabled button, the one sentence and no number', async ({ page }, testInfo) => {
-    const owner = await openForm(page, testInfo);
-    await makeComplete(page, owner.id);
+    const owner = await openCalculable(page, testInfo);
     if (!isPhone(page)) await expect(page.getByRole('button', { name: 'New item' })).toBeVisible();
 
     const response = await press(page);
@@ -200,8 +211,7 @@ test.describe('AC-2: Calculate sends what the screen shows (review SQR-01 of AQP
   };
 
   test('AC-2: a value typed just before the press is saved first: the press waits ("Calculating"), sends nothing until the save has been answered, and the record holds the typed value', async ({ page }, testInfo) => {
-    const owner = await openForm(page, testInfo);
-    await makeComplete(page, owner.id);
+    const owner = await openCalculable(page, testInfo);
     const posts = countPosts(page, owner.id);
     // The save of the field is held at the server's door until the test lets it go, so the press certainly arrives while the save is in flight.
     let release: () => void = () => undefined;
@@ -236,8 +246,7 @@ test.describe('AC-2: Calculate sends what the screen shows (review SQR-01 of AQP
   });
 
   test('AC-2: nothing is sent while a field shows a value that is not saved: the page says so, the field says why, and fixing the field lets the next press go', async ({ page }, testInfo) => {
-    const owner = await openForm(page, testInfo);
-    await makeComplete(page, owner.id);
+    const owner = await openCalculable(page, testInfo);
     const posts = countPosts(page, owner.id);
 
     await control(page, 'J').fill('abc');

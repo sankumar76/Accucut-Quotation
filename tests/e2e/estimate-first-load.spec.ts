@@ -3,7 +3,7 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
 
 import { ensureCanaryCustomers, ensureCanaryMaterials, useFreshAddress } from './support/auth';
-import { waitUntilHydrated } from './support/design-system';
+import { waitUntilHydrated, widthOf } from './support/design-system';
 import { ScriptGate, SLOW_OPEN_WAIT_MILLISECONDS, SLOW_REQUEST_MILLISECONDS } from './support/lazy-load';
 import { isPhone, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
 
@@ -67,6 +67,47 @@ test.describe('AC-4: the part form fetches its fields', () => {
     await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
     await expect(page.getByRole('status', { name: 'Loading the form' })).toBeVisible();
     await expect(partForm(page)).toBeVisible({ timeout: SLOW_OPEN_WAIT_MILLISECONDS });
+    await expect(page.getByRole('status', { name: 'Loading the form' })).toHaveCount(0);
+  });
+
+  // DEF-059 (AQP-393): the status of the part's stored values on their way (`part-fields.tsx`) is the one on screen when the part's read (`GET .../nodes/{id}`) is held. Its box is attached
+  // before it is judged, so a width of 0 (a row item with no grow, whose children are empty blocks) is read from the report and not guessed from "hidden".
+  test('AC-4: while the stored values of the part are on their way the skeleton has a width and shows as a status', async ({ page }, testInfo) => {
+    await ensureCanaryCustomers();
+    await ensureCanaryMaterials();
+    const owner = await signInAsNewEngineer(page, testInfo);
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reached: () => void = () => undefined;
+    const readReached = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    await page.route(
+      (url) => /^\/api\/v1\/estimates\/[^/]+\/nodes\/[^/]+$/.test(url.pathname),
+      async (route) => {
+        if (route.request().method() !== 'GET') return route.fallback();
+        reached();
+        await held;
+        return route.continue();
+      },
+    );
+    try {
+      await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
+      // The read starts only once the part's fields are mounted, so the status that is on screen from here is the part's own and not the form definition's.
+      await readReached;
+      const status = page.getByRole('status', { name: 'Loading the form' });
+      await expect(status).toBeAttached();
+      const box = await status.boundingBox();
+      const measured = JSON.stringify({ viewportWidth: await widthOf(page), box });
+      await testInfo.attach('part-fields-skeleton-box', { body: measured, contentType: 'application/json' });
+      expect(box?.width ?? 0, `the part's loading status box: ${measured}`).toBeGreaterThan(0);
+      await expect(status).toBeVisible();
+    } finally {
+      release();
+    }
+    await expect(partForm(page)).toBeVisible();
     await expect(page.getByRole('status', { name: 'Loading the form' })).toHaveCount(0);
   });
 });
