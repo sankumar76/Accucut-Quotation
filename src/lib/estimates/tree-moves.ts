@@ -33,25 +33,24 @@ export function deleteGuardOf(nodes: ReadonlyArray<PartItem>, id: string): { rea
   return { parts: removed.length, subtree: subtreeFingerprint(removed) };
 }
 
-/** A part with what a tree needs to say about where it is: its level (1 at the top), its place among its siblings (1 is first) and how many siblings it has. */
-export interface PartRow {
-  readonly part: PartItem;
-  readonly level: number;
-  readonly position: number;
-  readonly size: number;
+/** A node and the nodes directly under it, in order: the nesting of the tree (CR-01 item 3B). The level, the place among the siblings and their number are not stored: nesting tells them, and no aria count does. */
+export interface Branch<T> {
+  readonly node: T;
+  readonly children: ReadonlyArray<Branch<T>>;
 }
 
-/** Every part in reading order with its level and place, for `aria-level`, `aria-posinset` and `aria-setsize`. A part whose parent is not in the list is at level 1. */
-export function rowsOf(nodes: ReadonlyArray<PartItem>): PartRow[] {
-  const levels = new Map<string, number>();
-  const counts = new Map<string | null, number>();
-  for (const node of nodes) counts.set(node.parentId, (counts.get(node.parentId) ?? 0) + 1);
-  const seen = new Map<string | null, number>();
-  return nodes.map((part) => {
-    const position = (seen.get(part.parentId) ?? 0) + 1;
-    seen.set(part.parentId, position);
-    const level = part.parentId === null ? 1 : (levels.get(part.parentId) ?? 0) + 1;
-    levels.set(part.id, level);
-    return { part, level, position, size: counts.get(part.parentId) ?? 1 };
-  });
+/**
+ * The tree as nesting, from nodes in reading order (parents before their children, siblings in order). A node whose parent is not in the list is at the top, so a broken link is shown, not lost.
+ * Built in one pass with no recursion, so a legacy tree of any depth cannot overflow the stack (the rendering recurses, the building does not).
+ */
+export function branchesOf<T extends { readonly id: string; readonly parentId: string | null }>(nodes: ReadonlyArray<T>): Branch<T>[] {
+  const made = new Map<string, { readonly node: T; readonly children: Branch<T>[] }>(nodes.map((node) => [node.id, { node, children: [] }]));
+  const top: Branch<T>[] = [];
+  for (const node of nodes) {
+    const branch = made.get(node.id);
+    if (branch === undefined) continue;
+    const parent = node.parentId === null ? undefined : made.get(node.parentId);
+    (parent === undefined ? top : parent.children).push(branch);
+  }
+  return top;
 }

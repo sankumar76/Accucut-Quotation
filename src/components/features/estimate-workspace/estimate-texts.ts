@@ -68,6 +68,8 @@ export const partCompleteText = (slNo: string): string => `Part ${slNo} is compl
 
 /** The parts tree (STORY-05.02; UX spec SCR-05 "Tree", "Delete part"). No word names a rate, a price or a formula (UX-24). */
 export const TREE_TITLE = 'Parts tree';
+/** The ID of the form area's title: the row links of the parts tree point at it (CR-01 item 3B), because a row opens the details that sit beside the tree. */
+export const FORM_AREA_TITLE_ID = 'estimate-form-area-title';
 export const TREE_CLOSE = 'Close parts tree';
 export const TREE_HIDE = 'Hide parts tree';
 export const TREE_EMPTY = 'No parts yet. Choose "New item" to add the first one.';

@@ -1,14 +1,13 @@
 import { Check, Circle, Contrast, TriangleAlert, type LucideIcon } from 'lucide-react';
+import type { MouseEvent } from 'react';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { Icon } from '@/components/shared/icon';
+import { NodeKindIcon } from '@/components/shared/node-kind-icon';
 import { cn } from '@/lib/cn';
-import type { PartRow } from '@/lib/estimates/tree-moves';
+import type { PartItem } from '@/lib/estimates/tree-client';
 
-import { TREE_ALL_INPUTS, TREE_MISSING_INPUTS, TREE_NO_INPUTS, TREE_PART_NAME, TREE_SOME_INPUTS } from './estimate-texts';
-
-/** The indent of each level; a part deeper than the last entry keeps the last indent, so a deep tree never grows wider than the panel (no sideways scroll at 360 px). */
-const LEVEL_INDENT = ['pl-s-2', 'pl-s-4', 'pl-s-5', 'pl-s-6', 'pl-s-7'] as const;
+import { FORM_AREA_TITLE_ID, TREE_ALL_INPUTS, TREE_MISSING_INPUTS, TREE_NO_INPUTS, TREE_PART_NAME, TREE_SOME_INPUTS } from './estimate-texts';
 
 const COMPLETENESS_TEXT = { EMPTY: TREE_NO_INPUTS, PARTIAL: TREE_SOME_INPUTS, COMPLETE: TREE_ALL_INPUTS } as const;
 
@@ -19,40 +18,46 @@ const COMPLETENESS_TEXT = { EMPTY: TREE_NO_INPUTS, PARTIAL: TREE_SOME_INPUTS, CO
 const COMPLETENESS_ICON: Record<keyof typeof COMPLETENESS_TEXT, LucideIcon> = { EMPTY: Circle, PARTIAL: Contrast, COMPLETE: Check };
 
 export interface TreeNodeProps {
-  readonly row: PartRow;
+  readonly part: PartItem;
+  /** The name of the row's kind ("Part" or "Sub-part" by its siblings, `nodeKindLabel`): the tooltip and the spoken name of the kind icon. */
+  readonly kindLabel: string;
+  /** The row whose details are open in the form beside the tree. */
   readonly selected: boolean;
   /** Calculate found a missing input in this part (STORY-05.09; architecture A-16: client state from the blocked answer, never stored): a triangle and words follow the name. */
   readonly missing?: boolean;
-  /** The part took focus (a click or an arrow key): it becomes the selected one. */
-  readonly onFocusPart: (id: string) => void;
+  /** The row was chosen. `byKeyboard` is true for Enter on the link: the form then takes the focus (STORY-05.03, review SQR-11), as Enter on a part did before. */
+  readonly onChoose: (id: string, byKeyboard: boolean) => void;
 }
 
 /**
- * One part in the tree (STORY-05.02 AC-9; UX spec SCR-05 "Accessibility"): a `treeitem` with its level, its place among its siblings and whether it is selected. It is
- * the one tab stop of the tree while it is selected (roving tabindex), and taking focus selects it. What it is (its Sl. No and name) and how filled it is are text, so a
- * screen reader reads both; no figure is ever shown here. The name is empty until the part form stores one (STORY-05.03), so "Part" stands in.
+ * The link of one row of the parts tree (CR-01 item 3B; UX spec SCR-05 "Accessibility"; STORY-05.02 AC-9 as changed): a link to the form area that opens this row's details, which is what a press or Enter
+ * on it does (`onChoose`; the page does not move). It reads, in order, the kind icon (its name is a tooltip and the spoken name), the number and the name, and the status icon at the end; there is **no text
+ * label for the kind**. The open row carries `aria-current="true"`. Tab moves from a row to its arrow and to its buttons; there is no roving tab stop and no arrow-key navigation (PM ruling). What it is
+ * and how filled it is are text, so a screen reader reads both; no figure is ever shown here. The name is empty until the part form stores one (STORY-05.03), so "Part" stands in.
  */
-export function TreeNode({ row, selected, missing = false, onFocusPart }: TreeNodeProps) {
-  const { part, level, position, size } = row;
+export function TreeNode({ part, kindLabel, selected, missing = false, onChoose }: TreeNodeProps) {
+  const choose = (event: MouseEvent<HTMLAnchorElement>): void => {
+    // The link is the way to the details, not a move of the page: the form beside the tree shows them. A press with a finger or a mouse has a detail of 1 or more, a key a detail of 0.
+    event.preventDefault();
+    onChoose(part.id, event.detail === 0);
+  };
   return (
-    <li
-      role="treeitem"
+    <a
+      href={`#${FORM_AREA_TITLE_ID}`}
       data-part-id={part.id}
-      aria-level={level}
-      aria-posinset={position}
-      aria-setsize={size}
-      aria-selected={selected}
-      tabIndex={selected ? 0 : -1}
-      onFocus={() => onFocusPart(part.id)}
+      aria-current={selected ? 'true' : undefined}
+      onClick={choose}
       className={cn(
-        'flex min-h-(--control-h) cursor-pointer items-center gap-s-2 rounded-md border border-transparent py-s-1 pr-s-2 text-body text-ink hover:bg-surface-2',
-        'aria-selected:border-primary-line aria-selected:bg-primary-soft aria-selected:font-semibold',
-        LEVEL_INDENT[Math.min(level, LEVEL_INDENT.length) - 1],
+        'flex min-h-(--control-h) fine-wide:min-h-(--compact-field-h) cursor-pointer items-center gap-s-2 rounded-md border border-transparent py-s-1 pr-s-2 pl-s-1 text-body text-ink no-underline hover:bg-surface-2',
+        'aria-[current=true]:border-primary-line aria-[current=true]:bg-primary-soft aria-[current=true]:font-semibold',
         BREAK_LONG_NAMES,
       )}
     >
-      <span className="shrink-0 tabular-nums">{part.slNo}</span>
-      <span className="min-w-0">{part.label === '' ? TREE_PART_NAME : part.label}</span>
+      <NodeKindIcon kind={part.nodeKind} label={kindLabel} />
+      <span data-sl-no="" className="shrink-0 tabular-nums">
+        {part.slNo}
+      </span>
+      <span className="min-w-0 flex-1">{part.label === '' ? TREE_PART_NAME : part.label}</span>
       <Icon icon={COMPLETENESS_ICON[part.completeness]} size="small" data-completeness={part.completeness} className={cn('shrink-0', part.completeness === 'COMPLETE' ? 'text-success' : 'text-ink-3')} />
       {missing ? (
         <>
@@ -61,6 +66,6 @@ export function TreeNode({ row, selected, missing = false, onFocusPart }: TreeNo
         </>
       ) : null}
       <span className="sr-only">{COMPLETENESS_TEXT[part.completeness]}</span>
-    </li>
+    </a>
   );
 }

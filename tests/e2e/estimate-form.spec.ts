@@ -223,7 +223,7 @@ test.describe('AC-6: Enter moves to the next field', () => {
   test('SQR-11: Enter on a part in the tree opens its form: the first field takes the focus', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
     await showTree(page);
-    await tree(page).getByRole('treeitem').first().focus();
+    await tree(page).getByRole('link').first().focus();
     await page.keyboard.press('Enter');
     await expect(control(page, 'B')).toBeFocused();
     // On a phone the drawer has closed.

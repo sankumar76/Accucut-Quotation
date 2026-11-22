@@ -25,7 +25,8 @@ export const NUMBER_RULE = 'Enter 0 or more, with up to 2 decimals.';
 /** The control of a field: its ID is the registry's, and the page's control ID is made from it. */
 export const control = (page: Page, letter: string): Locator => page.locator(`#part-field-${seedId(FIELD_ID_NAMESPACE, columnLetterToIndex(letter))}`);
 export const partForm = (page: Page): Locator => page.locator('form[data-part-form]');
-export const tree = (page: Page): Locator => page.getByRole('tree', { name: 'Parts tree' });
+/** The parts tree: a `nav` of nested lists of row links since CR-01 item 3B (not `role="tree"`); a row is its link. */
+export const tree = (page: Page): Locator => page.getByRole('navigation', { name: 'Parts tree' });
 export const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 export const isPatchOfInputs = (url: string, method: string): boolean => method === 'PATCH' && /\/api\/v1\/estimates\/[^/]+\/nodes\/[^/]+\/inputs$/.test(new URL(url).pathname);
 
