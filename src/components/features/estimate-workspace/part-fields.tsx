@@ -121,7 +121,7 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
   }
   if (values.stored.status === 'loading') {
     return (
-      <div role="status" aria-label={FORM_LOADING} className="flex flex-col gap-s-3">
+      <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
         <PartProgressSkeleton />
         <Skeleton className="h-(--control-h)" />
         <Skeleton className="h-(--control-h)" />
