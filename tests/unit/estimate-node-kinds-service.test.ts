@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { FieldValidationError, NotFoundError } from '@/lib/errors';
+import { FieldValidationError, NotFoundError, TreeChangedError } from '@/lib/errors';
 import { ALLOWED_CHILDREN, NODE_KINDS, nodeKindLabel, type NodeKind, type ParentKind } from '@/lib/estimate/node-kinds';
 import { subtreeFingerprint } from '@/lib/estimate/subtree-fingerprint';
 import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, MOVE_ACROSS_PARENTS_CODE, NODE_KIND_NOT_ALLOWED_CODE, type EstimateViewer } from '@/server/services/estimate-service';
@@ -160,6 +160,18 @@ describe('AC-5 (A-CR01-5, 14.32): a row is reordered only among rows with the sa
     expect(result).toBeInstanceOf(FieldValidationError);
     expect(result).toMatchObject({ code: MOVE_ACROSS_PARENTS_CODE, httpStatus: 422 });
     expect((result as FieldValidationError).fields.map((field) => field.field)).toEqual(['parentId']);
+    expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
+    expect(setUpped.revision()).toBe(revision);
+  });
+
+  it('a stale move to another parent is the 409 with the fresh tree first, and not the 422: the revision is judged before the content of the move (QLT-01 of the combined review)', async () => {
+    const setUpped = setUp([estimate()], KINDED);
+    const before = JSON.stringify(setUpped.world.nodes);
+    const revision = setUpped.revision();
+    const result = await moveTo(setUpped, id(5), id(2), 0, 9);
+    expect(result).toBeInstanceOf(TreeChangedError);
+    expect(result).toMatchObject({ httpStatus: 409 });
+    expect((result as TreeChangedError).tree).toHaveLength(KINDED.length);
     expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
     expect(setUpped.revision()).toBe(revision);
   });
