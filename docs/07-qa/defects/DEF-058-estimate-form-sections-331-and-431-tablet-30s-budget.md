@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (master's DL-290 ruling A2): a Test-type defect, fails closed (a red required check if both attempts fail), workaround is the retry or an R11 re-run, no product behaviour affected as far as the evidence shows. Same grade family as DEF-045 to DEF-053 |
 | Priority | P3. **Lane (DL-290 (5)):** hardening window, behind the Sev-2 and Major items already queued, ahead of the Minors |
 | Type | **Test** (E2E, Playwright, `tablet` project; duration-tail class: 60 to 80 % of the 30 s budget on an ordinary draw) |
-| Status | **New** (logged 2026-11-22) |
+| Status | **Closed** (logged 2026-11-22; P1, P2 and P3 met, closed by QA 2026-11-22, see "Proof P2 and close-out") |
 | Jira / GitHub | [AQP-392](https://sankumar76.atlassian.net/browse/AQP-392) / [#602](https://github.com/sankumar76/Accucut-Quotation/issues/602). Jira "relates to" AQP-1 (Intake), AQP-304 (STORY-05.04) and AQP-368 (STORY-05.11). RISK-031 (master's register, closed by DL-279) is the context: not a Jira issue, named in the Jira description. Labels `ai-delivery`, `aiid-DEF-058`, `agent-qa-engineer`, `final-review`, `sev-3`; priority Medium |
 | Risk / rule | RISK-031 (closed; this Bug does not reopen it: the failures are on a PR run and trigger (b) counts `master` push runs only, DL-290 (4)). Re-run rule **R11** (DL-290 (5)) governs PR runs until this Bug closes; live rules with it: W1, R10 |
 | Found by / date | CI, on PR #599 (AQP-389); read by master (DL-290); logged by qa-engineer, 2026-11-22. Earlier history: :431 watch entry (DL-270, DL-274 (3), DL-281); :331 failed both attempts once before, inside PR #538's 1.62x wave (DL-265), which does not count |
@@ -83,6 +83,24 @@ What the readings show: neither case failed on any of the 24 readings added here
 
 Worst 21.4 s (tablet, "with a message showing"), under the 25 s P2 line, so **P1's attempt-1 and under-25 s clauses read met on this run of record** for #605's head; P1 is for master and QA to read on the run of record, and P2 (the first `master` push after the squash) is still to come. The first-load case by title read 12.0 / 14.8 / 14.5 s (mobile / tablet / desktop) on the same run. Shard 2 (tablet) ran 21.3 minutes, the longest of the four.
 
+## Proof P2 and close-out (qa-engineer, 2026-11-22; DL-291 (3)(a), DL-294 (3), DL-295 request)
+The fix is #605 (AQP-392, squashed as `d959e8f7`; test-only, one file). **P1** is the PR run of record 44999981920 (head 9f54429d): 12 of 12 readings passed on attempt 1, worst 21.4 s (master re-read it, DL-294 (3)(a)). **P2** is the first `master` push after the merge, CI run 45008501202 (`d959e8f7`), `Stages 1 to 11` success, `Stages 1 to 11b` success, Stage 12 shards `538 passed (13.5m)`, `532 passed (18.3m)`, `534 passed (11.1m)`, `517 passed (10.9m)`: **0 flaky, 0 failed**. Readings, seconds, attempt 1, all passed:
+
+| Case (by title) | mobile | tablet | desktop |
+|---|---|---|---|
+| AC-8 first paint (:341) | 9.0 | 16.2 | 6.7 |
+| AC-8 with a message showing (:350) | 10.3 | 15.0 | 7.4 |
+| AC-8 with values saved (:359) | 9.6 | 13.2 | 8.2 |
+| AC-4, AC-8 the save that completes a part (:445) | 10.9 | 15.9 | 10.0 |
+
+The next `master` push, 45010599354 (`d119ae39`, #601), also has 0 flaky and 0 failed in all four shards: the same cases read 8.8 / 9.4 / 11.6, 8.3 / 10.8 / 10.5, 7.3 / 10.9 / 9.0 and 10.0 / 12.1 / 12.8 (mobile / tablet / desktop).
+
+- **P1:** attempt-1 pass at all three widths, under 25 s: **met** (worst 21.4 s). **P2:** the same on the first `master` push: **met** (worst 16.2 s, tablet).
+- **P3 (structural floor, DL-257 (A)):** each case opens the page once and runs at most one axe scan. QA read the spec on `origin/master`: the three AC-8 cases each call `openForm` once and end on `expectFitsAndAccessible` (one overflow check and one `expectFormAccessible`); the AC-4, AC-8 case opens the page with one `page.goto` and ends on one `expectFormAccessible`. **Met.**
+- **15 s, reported not gated:** above 15 s: 6 of the 12 P1 readings (tablet 19.8, 21.4, 20.0, 16.4; desktop 15.6, 16.0) and 2 of the 12 P2 readings (tablet 16.2 and 15.9); none of the 12 on `d119ae39`.
+- **R11 ends with this Bug** (DL-290 (5): in force until it closes). W1 and R10 stay.
+- **Closed by QA 2026-11-22.** Jira AQP-392 Done; GitHub #602 closed.
+
 ## Proof still to come (DL-290 (7), reported on the PR, not a further condition)
 On the run of record of #599's updated head (after #600 squashes and "Update branch"): the shard summaries with every flaky line named, and the :331 and :431 readings at the three widths. **Done 2026-11-22:** run of record 44990897082 (95d882cc) is read above (0 flaky, both cases attempt-1 green at all three widths, worst 20.6 s).
 
@@ -90,6 +108,6 @@ On the run of record of #599's updated head (after #600 squashes and "Update bra
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
 | Logged | qa-engineer | 2026-11-22 | AQP-392, #602 |
-| Fixed | developer | | `fix/AQP-392-<slug>`, from a `master` containing #600 |
-| Regression test added | developer | | the fix is the test change; every assertion kept |
-| Verified | qa-engineer | | P1 on the PR run of record and P2 on the first `master` push run after the merge: each case first attempt at all three widths, under 25 s |
+| Fixed | developer | 2026-11-22 | #605 (`fix/AQP-392-form-sections-margin`), squashed as `d959e8f7`; test-only, `tests/e2e/estimate-form-sections.spec.ts` |
+| Regression test added | developer | 2026-11-22 | the fix is the test change (the AC-8 case split into three one-scan cases; the AC-4, AC-8 case opens the page once); every assertion kept (master read P1, DL-294 (3)) |
+| Verified | qa-engineer | 2026-11-22 | P1 (run 44999981920, worst 21.4 s), P2 (`master` push 45008501202, worst 16.2 s), P3 (one page open and at most one scan per case): all met |
