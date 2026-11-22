@@ -193,9 +193,10 @@ describe('AC-9: the audit log names every customer that changed, in the save', (
     ]);
     expect(new Set(written.map((entry) => entry.request_id))).toEqual(new Set(['req-save-0001']));
     expect(written.map((entry) => entry.object_label)).toEqual(['Invented-renamed-rate', 'alpha works', 'Bravo Works']);
+    // A propagation entry keeps the customer's name and the one rate only (see customerState): the short name is not part of it, so the audit schema holds null before and after.
     for (const entry of written.slice(1)) {
-      expect(entry.before).toEqual({ name: entry.object_label, contact: [], rates: [{ processItemId: ITEM, name: 'Invented-renamed-rate', unit: expect.any(String), value: OLD }] });
-      expect(entry.after).toEqual({ name: entry.object_label, contact: [], rates: [{ processItemId: ITEM, name: 'Invented-renamed-rate', unit: expect.any(String), value: NEW }] });
+      expect(entry.before).toEqual({ name: entry.object_label, shortName: null, contact: [], rates: [{ processItemId: ITEM, name: 'Invented-renamed-rate', unit: expect.any(String), value: OLD }] });
+      expect(entry.after).toEqual({ name: entry.object_label, shortName: null, contact: [], rates: [{ processItemId: ITEM, name: 'Invented-renamed-rate', unit: expect.any(String), value: NEW }] });
     }
     for (const silent of [other, already, gone]) expect(written.some((entry) => entry.object_id === silent)).toBe(false);
   });

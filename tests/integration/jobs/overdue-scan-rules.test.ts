@@ -134,7 +134,7 @@ describe('AC-7 (NFR-002, NFR-015): the message', () => {
   });
 
   it('finds none of the forbidden canary strings of the masters, the rate names or the formula markers in any captured message or outbox row', async () => {
-    const codes = [(await seed({ deadline: ago(MILLISECONDS_PER_MINUTE) })).code, (await seed({ deadline: ago(2 * MILLISECONDS_PER_MINUTE), title: null })).code];
+    const codes = [(await seed({ deadline: ago(MILLISECONDS_PER_MINUTE) })).code, (await seed({ deadline: ago(2 * MILLISECONDS_PER_MINUTE), title: 'Shaft guard' })).code];
     await minute();
     const forbidden = forbiddenStrings();
     expect(forbidden.length).toBeGreaterThan(0);

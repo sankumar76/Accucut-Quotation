@@ -104,7 +104,7 @@ export interface Seed {
   readonly engineer?: string;
   readonly assigner?: string;
   readonly status?: 'DRAFT' | 'SUBMITTED' | 'APPROVED';
-  readonly title?: string | null;
+  readonly title?: string;
 }
 
 /** A task and its estimate. */
