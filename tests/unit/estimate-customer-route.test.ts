@@ -6,10 +6,10 @@ import { defined } from '../support/defined';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 
 /**
- * STORY-05.01 T5 (AC-3, AC-5, AC-6), through the real `withRoute`, the real session and the real estimate service over in-memory storage: what the body must
- * look like, what each refusal answers (404 the same for an estimate that is not the Engineer's and one that does not exist, 409, 422 under the field), that
- * a first choice and a change raise the revision and the same customer does not, and that the one strict answer carries an ID and a name of a customer and
- * nothing else, for every role. Who may call is `tests/security`. Every name and ID is invented.
+ * STORY-05.01 T5 (AC-3, AC-5, AC-6), changed by CR-01 item 6 (AQP-390, AC-7, AC-8, AC-13, AC-17), through the real `withRoute`, the real session and the real estimate service over in-memory storage: what the
+ * body must look like, what each refusal answers, that a change raises the revision and the same customer does not, that a change writes one entry and the same customer none, and that the one strict answer
+ * carries an ID, a name and a short name of a customer and nothing else. **Only a Lead and an Admin may change the customer**: an Engineer is 403 before the ID is looked at, the same for their own estimate, another's
+ * and one that does not exist. Who may call is also `tests/security`. Every name and ID is invented.
  */
 
 vi.mock('next-auth', async () => ({ getServerSession: (await import('../support/session-harness')).harness.getServerSession }));
@@ -43,13 +43,14 @@ function request(body?: unknown): Request {
 const withId = (id: string) => ({ params: Promise.resolve({ id }) });
 const estimate = () => defined(harness.estimateWorld.estimates[0]);
 const owned = (): string => estimate().id;
+const canary = () => defined(harness.masters.customers.find((customer) => customer.id === CUSTOMER_RECIPE_ID));
 
 beforeAll(holdSessionClock);
 afterAll(releaseSessionClock);
 
 beforeEach(() => {
   vi.stubEnv('APP_ORIGIN', ORIGIN);
-  harness.signInAs('ENGINEER');
+  harness.signInAs('LEAD');
 });
 
 /** Puts the harness estimate back as the recipe made it, whatever a test did to it. */
@@ -60,59 +61,120 @@ afterEach(() => {
   held.inputsRevision = 0;
   held.engineerId = harness.idOf.ENGINEER;
   for (const customer of harness.masters.customers) customer.deleted = false;
+  harness.estimateAudit.rows.length = 0;
 });
 
-describe('AC-3: the Engineer chooses the customer of their own task', () => {
-  it('answers 200 with the estimate, its status and the customer, stores it and raises the revision', async () => {
+describe('AC-3, AC-13: a Lead or an Admin changes the customer', () => {
+  it.each(['LEAD', 'ADMIN'] as const)('as %s answers 200 with the estimate, its status and the customer with its short name, stores it and raises the revision', async (role) => {
+    harness.signInAs(role);
     const response = await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()));
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
-    expect(record.parse(await response.json())).toEqual({ id: owned(), status: 'DRAFT', customer: { id: CUSTOMER_RECIPE_ID, name: defined(CUSTOMER_CANARIES[0]).name } });
+    expect(record.parse(await response.json())).toEqual({
+      id: owned(),
+      status: 'DRAFT',
+      customer: { id: CUSTOMER_RECIPE_ID, name: defined(CUSTOMER_CANARIES[0]).name, shortName: canary().shortName },
+    });
     expect(estimate().customerId).toBe(CUSTOMER_RECIPE_ID);
     expect(estimate().inputsRevision).toBe(1);
   });
 
-  it('the same customer again answers 200 and leaves the revision alone (AC-4)', async () => {
+  it('the same customer again answers 200 and leaves the revision alone (AC-13) and writes no entry', async () => {
     await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()));
+    harness.estimateAudit.rows.length = 0;
     const again = await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()));
     expect(again.status).toBe(200);
     expect(estimate().inputsRevision).toBe(1);
+    expect(harness.estimateAudit.rows).toHaveLength(0);
   });
 
-  it('a Lead and an Admin may choose it on any draft, the Engineer\'s included', async () => {
-    for (const role of ['LEAD', 'ADMIN'] as const) {
-      harness.signInAs(role);
-      expect((await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()))).status).toBe(200);
-    }
+  it('a submitted estimate may be changed by a Lead (their inputs); the estimate of another Engineer too', async () => {
+    estimate().status = 'SUBMITTED';
+    estimate().engineerId = harness.targetId;
+    expect((await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()))).status).toBe(200);
+    expect(estimate().status).toBe('SUBMITTED');
   });
 });
 
-describe('AC-5: the refusals', () => {
-  it('another Engineer\'s estimate is the same 404 as one that does not exist, apart from the request ID', async () => {
+describe('AC-17: the audit entry', () => {
+  it('a change writes one estimate.customer_changed entry by the signed-in person, about the task code, with the company names before and after', async () => {
+    estimate().customerId = null;
+    const response = await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()));
+    expect(response.status).toBe(200);
+    expect(harness.estimateAudit.rows).toHaveLength(1);
+    expect(harness.estimateAudit.rows[0]).toMatchObject({
+      event: 'estimate.customer_changed',
+      actorId: harness.idOf.LEAD,
+      objectType: 'estimate',
+      objectId: owned(),
+      objectLabel: estimate().code,
+      before: { customer: null },
+      after: { customer: { name: defined(CUSTOMER_CANARIES[0]).name, shortName: canary().shortName } },
+    });
+    expect(harness.estimateAudit.rows[0]?.requestId).toMatch(/^req-[0-9a-f]{8}$/);
+  });
+});
+
+describe('AC-7: the Engineer is refused, before the ID is looked at', () => {
+  it('answers 403 for their own estimate, another Engineer\'s, an ID that does not exist and text that is no ID, with the same body apart from the request ID, and changes nothing', async () => {
+    harness.signInAs('ENGINEER');
+    const own = await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()));
     estimate().engineerId = harness.targetId;
     const notOwn = await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()));
     const missing = await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(UNKNOWN_ID));
     const malformed = await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId('not-an-id'));
-    expect([notOwn.status, missing.status, malformed.status]).toEqual([404, 404, 404]);
+    expect([own.status, notOwn.status, missing.status, malformed.status]).toEqual([403, 403, 403, 403]);
     const strip = async (response: Response) => {
       const { requestId, ...rest } = record.parse(await response.json());
       expect(requestId).toMatch(/^req-[0-9a-f]{8}$/);
       return rest;
     };
-    const [a, b, c] = [await strip(notOwn), await strip(missing), await strip(malformed)];
-    expect(a).toEqual(b);
-    expect(b).toEqual(c);
+    const bodies = [await strip(own), await strip(notOwn), await strip(missing), await strip(malformed)];
+    for (const body of bodies) expect(body).toEqual(bodies[0]);
     expect(estimate().customerId).toBeNull();
+    expect(estimate().inputsRevision).toBe(0);
+    expect(harness.estimateAudit.rows).toHaveLength(0);
+  });
+
+  it('is refused before the body is read: an Engineer sending a body that is not JSON, or has a stray key, still gets 403', async () => {
+    harness.signInAs('ENGINEER');
+    const notJson = new Request(`${ORIGIN}/api/v1/estimates/x/customer`, { method: 'PUT', headers: { origin: ORIGIN, 'content-type': 'application/json' }, body: '{' });
+    expect((await PUT(notJson, withId(owned()))).status).toBe(403);
+    expect((await PUT(request({ customerId: CUSTOMER_RECIPE_ID, inputsRevision: 99 }), withId(owned()))).status).toBe(403);
     expect(estimate().inputsRevision).toBe(0);
   });
 
-  it.each(['SUBMITTED', 'APPROVED'] as const)('a %s estimate is 409 ESTIMATE_NOT_EDITABLE, and nothing changes', async (status) => {
-    estimate().status = status;
-    const response = await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()));
-    expect(response.status).toBe(409);
-    expect(record.parse(await response.json())).toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE', title: 'This estimate can no longer be changed.' });
+  it('a signed-out caller is 401 and nothing changes', async () => {
+    harness.signInAs(null);
+    expect((await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()))).status).toBe(401);
+    expect(estimate().customerId).toBeNull();
+  });
+});
+
+describe('AC-5, AC-7: the other refusals', () => {
+  it('an estimate that does not exist and an ID that is no ID are the same 404 for a Lead, apart from the request ID', async () => {
+    const missing = await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(UNKNOWN_ID));
+    const malformed = await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId('not-an-id'));
+    expect([missing.status, malformed.status]).toEqual([404, 404]);
+    const strip = async (response: Response) => {
+      const { requestId, ...rest } = record.parse(await response.json());
+      expect(requestId).toMatch(/^req-[0-9a-f]{8}$/);
+      return rest;
+    };
+    expect(await strip(missing)).toEqual(await strip(malformed));
+  });
+
+  it('an APPROVED estimate is 409 ESTIMATE_NOT_EDITABLE for a Lead and an Admin, and nothing changes', async () => {
+    estimate().status = 'APPROVED';
+    for (const role of ['LEAD', 'ADMIN'] as const) {
+      harness.signInAs(role);
+      const response = await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()));
+      expect(response.status).toBe(409);
+      expect(record.parse(await response.json())).toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE', title: 'This estimate can no longer be changed.' });
+    }
     expect(estimate().customerId).toBeNull();
     expect(estimate().inputsRevision).toBe(0);
+    expect(harness.estimateAudit.rows).toHaveLength(0);
   });
 
   it.each([
@@ -128,7 +190,7 @@ describe('AC-5: the refusals', () => {
   });
 
   it('a customer that was deleted is 422 too', async () => {
-    defined(harness.masters.customers.find((customer) => customer.id === CUSTOMER_RECIPE_ID)).deleted = true;
+    canary().deleted = true;
     expect((await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()))).status).toBe(422);
     expect(estimate().customerId).toBeNull();
   });
@@ -141,15 +203,15 @@ describe('AC-5: the refusals', () => {
   });
 });
 
-describe('AC-6 (NFR-002): one strict answer, for every role, with no rate, cost or formula', () => {
-  it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('as %s the answer is exactly an ID, a status and a customer ID and name, and holds none of the customer rates or contact details', async (role) => {
+describe('AC-8 (NFR-002): one strict answer with no rate, cost or formula', () => {
+  it.each(['LEAD', 'ADMIN'] as const)('as %s the answer is exactly an ID, a status and a customer ID, name and short name, and holds none of the customer rates or contact details', async (role) => {
     harness.signInAs(role);
     const response = await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()));
     const body = record.parse(await response.json());
     expect(Object.keys(body).sort()).toEqual(['customer', 'id', 'status']);
-    expect(Object.keys(record.parse(body['customer'])).sort()).toEqual(['id', 'name']);
+    expect(Object.keys(record.parse(body['customer'])).sort()).toEqual(['id', 'name', 'shortName']);
     const text = JSON.stringify(body);
-    for (const canary of CUSTOMER_CANARIES) for (const rate of canary.rates) expect(text).not.toContain(rate.value);
+    for (const customer of CUSTOMER_CANARIES) for (const rate of customer.rates) expect(text).not.toContain(rate.value);
     expect(text).not.toContain(CUSTOMER_CANARY_PHONE);
   });
 });

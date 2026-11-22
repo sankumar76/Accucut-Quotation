@@ -41,6 +41,8 @@ const ALLOWED_SPECIFIER = [
   // STORY-10.09a: the one job wrapper, which imports nothing itself (engineer-import-rule.test.ts classes it).
   /^\.\/run-job$/,
   /^\.\.\/\.\.\/lib\/(env|time)$/,
+  // AQP-389: the product name, one pure file of three string constants (no cost, rate, formula or calculation); the layout builds `PORTAL_NAME` from it.
+  /^\.\.\/\.\.\/lib\/product-name$/,
   // From `src/server/mail/templates/`: the shared layout above it, `formatIst` from the time module and the overdue rule of a task (STORY-09.04), three levels up.
   /^\.\.\/layout$/,
   /^\.\.\/\.\.\/\.\.\/lib\/(time|tasks\/overdue|auth\/password-reset)$/,

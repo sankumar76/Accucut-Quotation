@@ -323,7 +323,7 @@ describe('performBackupWatch: the e-mail to the Admin (STORY-09.06 AC-10)', () =
     const outcome = await performBackupWatch({ backupVolume: 'C:/' }, test.dependencies);
     expect(test.queued).toHaveLength(1);
     // 03:30 UTC on 16 November is 09:00 IST on 16 November.
-    expect(test.queued[0]?.mail).toMatchObject({ idempotencyKey: 'backup-missed:2026-11-16', event: 'backup-missed', subject: 'Accucut Quotation Portal: server check needed' });
+    expect(test.queued[0]?.mail).toMatchObject({ idempotencyKey: 'backup-missed:2026-11-16', event: 'backup-missed', subject: 'Accucut RFQ Portal: server check needed' });
     expect(test.queued[0]?.mail.bodyText).toContain('The weekly backup is late.');
     expect(test.queued[0]?.mail.bodyText).not.toContain('disk is nearly full');
     expect(outcome.level).toBe('error');

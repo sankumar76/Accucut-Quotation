@@ -6,9 +6,9 @@ import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 
-import { connectToTestDatabase, ensureCanaryCustomers, ensureCanaryMaterials, useFreshAddress } from './support/auth';
+import { connectToTestDatabase, ensureCanaryCustomers, ensureCanaryMaterials, setCanaryCustomer, useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { control, expectFormAccessible, nextSave, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
+import { control, expectFormAccessible, leastFieldHeight, nextSave, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 import { deleteTreatment, insertTreatment, newTreatmentName, readPartInputs, renameTreatment, storeTreatmentInPart } from './support/treatment-rows';
 
@@ -71,8 +71,7 @@ async function openFormWithEveryTreatmentStored(page: Page, testInfo: TestInfo):
   await ensureCanaryCustomers();
   await ensureCanaryMaterials();
   const owner = await signInAsNewEngineer(page, testInfo);
-  const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers: { origin: DEVELOPMENT_URL }, data: { customerId: defined(CUSTOMER_CANARIES[0]).id } });
-  expect(chosen.status(), 'the customer is chosen').toBe(200);
+  await setCanaryCustomer(owner.id, defined(CUSTOMER_CANARIES[0]).id);
   const client = await connectToTestDatabase();
   try {
     await client.query('UPDATE estimate_nodes SET inputs = inputs || $2::jsonb WHERE id = $1::uuid', [owner.id, JSON.stringify(EVERY_TREATMENT_STORED)]);
@@ -270,7 +269,7 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);
     expect((await trigger(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
-    expect((await control(page, 'G').boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    expect((await control(page, 'G').boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(await leastFieldHeight(page));
   });
 
   test('AC-8 (list open): every checkbox is 44 px, there is no sideways scroll, axe finds nothing, and Escape closes the list', async ({ page }, testInfo) => {
@@ -293,7 +292,7 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
     await treatmentsLoaded(page);
     // "Other" last in the original order: leaving its empty box shows a message and moves the cards below, so nothing is pressed after it.
     await control(page, 'G').selectOption({ label: 'Other' });
-    expect((await otherBox(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    expect((await otherBox(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(await leastFieldHeight(page));
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);
   });

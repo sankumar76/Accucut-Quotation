@@ -21,7 +21,7 @@ export interface ReviewPageArgs {
   readonly viewer: EstimateViewer;
   readonly estimateId: string;
   readonly header: WorkspaceHeaderView;
-  readonly customer: { readonly id: string; readonly name: string } | null;
+  readonly customer: { readonly id: string; readonly name: string; readonly shortName: string } | null;
 }
 
 export async function renderReview({ viewer, estimateId, header, customer }: ReviewPageArgs): Promise<ReactElement> {

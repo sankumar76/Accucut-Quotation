@@ -71,6 +71,7 @@ export function mastersNow(now: MastersNow = {}): FixtureMasters {
         customer: {
           id: FIXTURE_CUSTOMER_ID,
           name: 'Invented Customer',
+          shortName: 'INV',
           phone: null,
           email: null,
           address: null,

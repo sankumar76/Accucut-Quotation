@@ -2,6 +2,8 @@ import { randomBytes } from 'node:crypto';
 
 import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 
+import { shortNameOf } from '../../support/customer-short-name';
+
 import { waitUntilHydrated } from './design-system';
 import { DEVELOPMENT_URL } from './servers';
 
@@ -17,6 +19,10 @@ export const TITLE = 'Customers';
 export const ADD = 'Add customer';
 export const NAME_REQUIRED = 'Enter the customer name.';
 export const NAME_TAKEN = 'A customer with this name already exists.';
+/** CR-01 item 6 (AQP-390): the short name's words, as the story gives them. */
+export const SHORT_NAME_REQUIRED = 'Enter a short name.';
+export const SHORT_NAME_TOO_LONG = 'Keep the short name under 10 characters.';
+export const SHORT_NAME_TAKEN = 'A customer with this short name already exists.';
 export const EMAIL_FORMAT = 'Enter an e-mail address like name@company.com.';
 export const RATE_DECIMALS = 'Enter a number, 0 or more, with up to 2 decimals.';
 export const LOAD_ERROR_TITLE = 'We could not load customers';
@@ -49,7 +55,7 @@ export function newCustomerName(testInfo: TestInfo): string {
 
 /** Makes a customer through the API, the way the screen does (every rate at the current default), and returns its name and ID. */
 export async function makeCustomer(page: Page, name: string): Promise<MadeCustomer> {
-  const response = await page.request.post(API, { headers: JSON_HEADERS, data: { name } });
+  const response = await page.request.post(API, { headers: JSON_HEADERS, data: { name, shortName: shortNameOf(name) } });
   expect(response.status()).toBe(201);
   const body: unknown = await response.json();
   const id = typeof body === 'object' && body !== null && 'id' in body && typeof body.id === 'string' ? body.id : '';

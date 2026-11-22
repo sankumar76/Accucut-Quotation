@@ -35,8 +35,8 @@ const WIRED_CALCULATION: ReadonlyArray<AuditEventName> = ['calculation.warning_a
 const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'approval.price_overridden', 'approval.unlocked', 'approval.cancelled', 'approval.price_removed'];
 /** STORY-08.02: a formula of the field registry changed. Registry order puts it after the approval events and before the calculation event. */
 const WIRED_CONFIG: ReadonlyArray<AuditEventName> = ['config.formula_changed', 'config.field_inserted', 'config.field_deleted', 'config.reverted'];
-/** STORY-04.07: a task given to another Engineer, a new deadline, or both. */
-const WIRED_TASK: ReadonlyArray<AuditEventName> = ['task.reassigned'];
+/** CR-01 item 6: the customer of an estimate changed (registry order puts it before the reassign); STORY-04.07: a task given to another Engineer, a new deadline, or both. */
+const WIRED_TASK: ReadonlyArray<AuditEventName> = ['estimate.customer_changed', 'task.reassigned'];
 const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CONFIG, ...WIRED_CALCULATION, ...WIRED_TASK];
 /** With STORY-06.13 no event is declared and left unwired. */
 const RESERVED: ReadonlyArray<AuditEventName> = [];
@@ -453,6 +453,30 @@ describe('STORY-08.03 AC-9: the words and the shapes of a field insert', () => {
     expect(event.after.safeParse({ fields: [], moved: [], version: 2 }).success).toBe(false);
     expect(event.after.safeParse({ fields: [NEW_INPUT, NEW_COST, NEW_COST], moved: [], version: 2 }).success).toBe(false);
     expect(event.describeStored(null, { fields: [NEW_INPUT], moved: [], version: 0 })).toBeNull();
+  });
+});
+
+describe('CR-01 item 6, AC-17 (SCR-16 "Task change"): the customer-changed event keeps the two companies by name and short name, and nothing else', () => {
+  const event = AUDIT_EVENTS['estimate.customer_changed'];
+  const BWC = { name: 'Brightwater Controls', shortName: 'BWC' };
+  const MAS = { name: 'Marlow Agro Systems', shortName: 'MAS' };
+
+  it('is wired, about the estimate, under the "Task change" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'task_change' });
+  });
+
+  it('says the customer before and after with its short name, and "No customer" for an estimate that had none', () => {
+    expect(event.describeStored({ customer: BWC }, { customer: MAS })).toEqual({ before: 'Brightwater Controls (BWC)', after: 'Marlow Agro Systems (MAS)' });
+    expect(event.describeStored({ customer: null }, { customer: MAS })).toEqual({ before: 'No customer', after: 'Marlow Agro Systems (MAS)' });
+  });
+
+  it('has no key for a rate, a figure, a contact detail or an ID: a state with one is refused, and an empty name is refused', () => {
+    expect(event.after.safeParse({ customer: { ...MAS, rate: '1.00' } }).success).toBe(false);
+    expect(event.after.safeParse({ customer: { ...MAS, phone: '+99 555 0142' } }).success).toBe(false);
+    expect(event.after.safeParse({ customer: { ...MAS, id: '00000000-0000-4000-8000-0000000000c1' } }).success).toBe(false);
+    expect(event.after.safeParse({ customer: { name: '', shortName: 'MAS' } }).success).toBe(false);
+    expect(event.after.safeParse({ customer: MAS, extra: true }).success).toBe(false);
+    expect(event.describeStored({ customer: BWC }, { customer: { name: 'x' } })).toBeNull();
   });
 });
 

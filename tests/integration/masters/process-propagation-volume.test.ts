@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import type { AuditRepository } from '@/server/repositories/audit-repository';
+import { createAuditService } from '@/server/services/audit-service';
+
 import { contextOf, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { defined } from '../../support/defined';
 
@@ -8,8 +11,9 @@ import { itemIds, openCustomerDefaults, resetCustomerTables } from './customers-
 /**
  * STORY-02.08 NFR-011 and the story's one measurement: at the planning volume (500 customers) a save that changes a default moves every customer on the old one and writes 501
  * entries (the rate's, then one per customer) in one transaction, and Save choices applies 500 customers' choices with 500 entries. Each is timed once and the figure printed,
- * with a sentence when it is over the 500 ms of the architect's estimate (architecture section 8 "Customers": above that, the remedy is a validated `recordMany`, reported to the
- * architect). The test fails only for a result that is wrong or absurdly slow (30 s); a slow machine is not a defect, so the 500 ms is reported and not asserted. Every name and number is invented.
+ * with a sentence when it is over the 500 ms of the architect's estimate (architecture section 8 "Customers"; ADR-018 made the customers' entries one multi-row statement, GitHub #568, after
+ * 500 single inserts took 1.5 to 1.8 s). The test fails only for a result that is wrong or absurdly slow (30 s); a slow machine is not a defect, so the 500 ms is reported and not asserted
+ * (DL-057). What is asserted is how the entries were written: one `appendMany` for the customers of a step, and no `append` for them. Every name and number is invented.
  */
 
 const CUSTOMERS = 500;
@@ -25,7 +29,7 @@ beforeAll(async () => {
   adminId = await insertPersonAsOwner(db, 'Admin', 'ADMIN');
   await db.users.list();
   await openCustomerDefaults(db);
-  await db.owner.query(`INSERT INTO customers (name) SELECT 'Invented volume customer ' || lpad(n::text, 4, '0') FROM generate_series(1, ${String(CUSTOMERS)}) AS n`);
+  await db.owner.query(`INSERT INTO customers (name, short_name) SELECT 'Invented volume customer ' || lpad(n::text, 4, '0'), 'V' || lpad(n::text, 4, '0') FROM generate_series(1, ${String(CUSTOMERS)}) AS n`);
   await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) SELECT c.id, pi.id, pi.default_value FROM customers c CROSS JOIN process_items pi');
 }, 120_000);
 
@@ -35,19 +39,50 @@ afterAll(async () => {
 });
 
 function report(what: string, milliseconds: number): void {
-  const verdict = milliseconds > PLANNING_LIMIT_MS ? `OVER the ${String(PLANNING_LIMIT_MS)} ms of the architect's estimate: report it to the architect (recordMany)` : `within ${String(PLANNING_LIMIT_MS)} ms`;
+  const verdict = milliseconds > PLANNING_LIMIT_MS ? `OVER the ${String(PLANNING_LIMIT_MS)} ms of the architect's estimate: report the split to the architect (ADR-018)` : `within ${String(PLANNING_LIMIT_MS)} ms`;
   process.stdout.write(`\nSTORY-02.08 ${what} at ${String(CUSTOMERS)} customers: ${milliseconds.toFixed(0)} ms, ${verdict}.\n`);
+}
+
+/** The real repository, counting how the entries reach it: the `append` calls (one row each) and the size of each `appendMany` call. */
+function countingAudit() {
+  const calls = { single: 0, batches: [] as number[] };
+  const repository: AuditRepository = {
+    ...db.auditRepository,
+    append(row, tx) {
+      calls.single += 1;
+      return db.auditRepository.append(row, tx);
+    },
+    appendMany(rows, tx) {
+      calls.batches.push(rows.length);
+      return db.auditRepository.appendMany(rows, tx);
+    },
+  };
+  return { calls, service: createAuditService({ audit: repository }) };
+}
+
+/** The entries of one request: exactly the customers' (each once, under the request's one ID) and the given number of the rate's own (SQR-03 of the combined review of PR 589). */
+async function expectEntriesOf(requestId: string, rateEntries: number): Promise<void> {
+  const everyCustomer = (await db.owner.query<{ id: string }>('SELECT id::text AS id FROM customers')).rows.map((row) => row.id).sort();
+  const customerEntries = (await db.owner.query<{ id: string }>("SELECT object_id::text AS id FROM audit_log WHERE request_id = $1 AND object_type = 'customer'", [requestId])).rows.map((row) => row.id).sort();
+  expect(customerEntries).toHaveLength(CUSTOMERS);
+  expect(customerEntries).toEqual(everyCustomer);
+  const { rows } = await db.owner.query<{ entries: string }>("SELECT count(*) AS entries FROM audit_log WHERE request_id = $1 AND object_type = 'process_item'", [requestId]);
+  expect(Number(defined(rows[0]).entries)).toBe(rateEntries);
 }
 
 describe(`NFR-011: ${String(CUSTOMERS)} customers`, () => {
   it('the save moves all of them and writes 501 entries, in one request', async () => {
     const skip = await entryCount(db);
+    const { calls, service } = countingAudit();
     const started = performance.now();
-    const answer = await db.mastersService.updateProcessItem(contextOf(adminId), ITEM, { defaultValue: '2.52' });
+    const answer = await db.buildMastersService({ audit: service }).updateProcessItem({ ...contextOf(adminId), requestId: 'req-volume-save' }, ITEM, { defaultValue: '2.52' });
     const elapsed = performance.now() - started;
     report('PATCH of a default (the rate and its 500 customer entries)', elapsed);
     expect(answer.propagation).toMatchObject({ moved: CUSTOMERS, differing: [] });
     expect(await entryCount(db)).toBe(skip + 1 + CUSTOMERS);
+    // The rate's entry is one append, the 500 customers' entries are one statement (ADR-018).
+    expect(calls).toEqual({ single: 1, batches: [CUSTOMERS] });
+    await expectEntriesOf('req-volume-save', 1);
     expect(elapsed).toBeLessThan(ABSURD_MS);
   });
 
@@ -56,12 +91,15 @@ describe(`NFR-011: ${String(CUSTOMERS)} customers`, () => {
     const shown = (await db.owner.query<{ id: string }>('SELECT id::text AS id FROM customers ORDER BY name')).rows.map((row) => ({ customerId: row.id, choice: 'apply' as const, shownValue: '3.10' }));
     expect(shown).toHaveLength(CUSTOMERS);
     const skip = await entryCount(db);
+    const { calls, service } = countingAudit();
     const started = performance.now();
-    const counts = await db.mastersService.applyPropagation(contextOf(adminId), ITEM, { newDefault: '2.52', choices: shown });
+    const counts = await db.buildMastersService({ audit: service }).applyPropagation({ ...contextOf(adminId), requestId: 'req-volume-choices' }, ITEM, { newDefault: '2.52', choices: shown });
     const elapsed = performance.now() - started;
     report('POST of 500 choices (500 customer entries)', elapsed);
     expect(counts).toEqual({ applied: CUSTOMERS, kept: 0, skipped: 0 });
     expect(await entryCount(db)).toBe(skip + CUSTOMERS);
+    expect(calls).toEqual({ single: 0, batches: [CUSTOMERS] });
+    await expectEntriesOf('req-volume-choices', 0);
     expect(elapsed).toBeLessThan(ABSURD_MS);
   });
 });

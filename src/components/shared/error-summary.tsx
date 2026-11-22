@@ -36,7 +36,7 @@ export function ErrorSummary({ title, items }: ErrorSummaryProps) {
       <ul className="mt-s-1 list-disc pl-s-5">
         {items.map((item) => (
           <li key={item.fieldId}>
-            <a href={`#${item.fieldId}`} onClick={(event) => goToField(event, item.fieldId)} className="font-semibold text-danger-ink underline underline-offset-2">
+            <a href={`#${item.fieldId}`} onClick={(event) => goToField(event, item.fieldId)} className="inline-block py-s-1 font-semibold text-danger-ink underline underline-offset-2">
               {item.message}
             </a>
           </li>

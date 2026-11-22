@@ -239,7 +239,7 @@ test.describe('AC-4: sign-out', { tag: '@one-width' }, () => {
     await expect(page).toHaveURL(/\/sign-in\?callbackUrl=%2F$/);
     await signInThroughThePage(page, E2E_ENGINEER.email, E2E_PASSWORD);
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Accucut Quotation Portal' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Accucut RFQ Portal' })).toBeVisible();
   });
 });
 

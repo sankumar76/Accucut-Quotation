@@ -15,6 +15,7 @@
     "test:coverage": "vitest run --coverage",
     "test:perf": "vitest run --config vitest.perf.config.ts",
     "test:e2e": "playwright test",
+    "test:e2e:sweep": "playwright test --config playwright.sweep.config.ts",
     "check:data-files": "tsx scripts/check-data-files.ts",
     "check:licences": "tsx scripts/check-licences.ts"
   },
@@ -62,6 +63,10 @@
   },
   "overrides": {
     "effect": "3.22.4",
+    "exceljs": {
+      "uuid": "11.1.1"
+    },
+    "get-uri": "8.0.2",
     "next-auth": {
       "nodemailer": "$nodemailer"
     }

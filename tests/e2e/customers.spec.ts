@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TOUCH_TARGET } from './support/design-system';
+import { shortNameOf } from '../support/customer-short-name';
+
+import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
 import {
   ADD,
   addButton,
@@ -13,6 +15,9 @@ import {
   type MadeCustomer,
   NAME_REQUIRED,
   NAME_TAKEN,
+  SHORT_NAME_REQUIRED,
+  SHORT_NAME_TAKEN,
+  SHORT_NAME_TOO_LONG,
   newCustomerName,
   openCustomer,
   openCustomers,
@@ -115,7 +120,7 @@ test.describe('the list (AC-1, AC-8)', () => {
 });
 
 test.describe('add a customer (AC-1, AC-6, AC-8)', () => {
-  test('by keyboard: Enter opens the dialog on Customer name, Escape closes it with focus back on the button; then a name alone is saved with Enter, the notice says so and the list shows it', async ({ page }, testInfo) => {
+  test('by keyboard: Enter opens the dialog on Customer name, Escape closes it with focus back on the button; then a name and a short name are saved with Enter, the notice says so and the list shows both', async ({ page }, testInfo) => {
     const name = newCustomerName(testInfo);
     await openCustomers(page);
     const add = addButton(page);
@@ -134,10 +139,15 @@ test.describe('add a customer (AC-1, AC-6, AC-8)', () => {
     await pressWithKeyboard(add);
     await expect(dialog.getByLabel('Customer name')).toBeFocused();
     await page.keyboard.type(`  ${name}  `);
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByLabel('Short name')).toBeFocused();
+    await page.keyboard.type(`  ${shortNameOf(name)}  `);
     await page.keyboard.press('Enter');
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('status').filter({ hasText: `${name} was added. Every rate starts at the current default. The change is in the audit log.` })).toBeVisible();
     await expect(rowOf(page, name)).toBeVisible();
+    // The list shows the short name beside the customer (stored trimmed, as typed).
+    await expect(rowOf(page, name)).toContainText(shortNameOf(name));
     await expect(add).toBeFocused();
   });
 
@@ -150,9 +160,22 @@ test.describe('add a customer (AC-1, AC-6, AC-8)', () => {
 
     await submit.click();
     await expect(dialog.getByText(NAME_REQUIRED)).toBeVisible();
+    await expect(dialog.getByText(SHORT_NAME_REQUIRED)).toBeVisible();
     await expect(dialog.getByLabel('Customer name')).toBeFocused();
 
+    // The short name: too long is refused in words; a taken one (any letter case, a deleted customer's included) is refused by the server and names no other customer.
     await dialog.getByLabel('Customer name').fill('E2E-never-stored');
+    await dialog.getByLabel('Short name').fill('S'.repeat(11));
+    await submit.click();
+    await expect(dialog.getByText(SHORT_NAME_TOO_LONG)).toBeVisible();
+    await expect(dialog.getByLabel('Short name')).toBeFocused();
+    await dialog.getByLabel('Short name').fill(shortNameOf(existing).toUpperCase());
+    await submit.click();
+    await expect(dialog.getByText(SHORT_NAME_TAKEN)).toBeVisible();
+    await expect(dialog.getByLabel('Short name')).toBeFocused();
+    await expect(dialog.getByText(existing)).toHaveCount(0);
+
+    await dialog.getByLabel('Short name').fill(shortNameOf('E2E-never-stored'));
     await dialog.getByLabel('E-mail').fill('not-an-address');
     await submit.click();
     await expect(dialog.getByText(EMAIL_FORMAT)).toBeVisible();
@@ -180,7 +203,8 @@ test.describe('the edit page (AC-1, AC-2, AC-8)', () => {
     await expect(page.getByRole('heading', { level: 1, name: customer.name })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: TITLE })).toBeVisible();
     await expect(page.getByText('Every rate is at its default.')).toBeVisible();
-    for (const label of ['Customer name', 'Phone', 'E-mail', 'Address']) await expect(page.getByLabel(label, { exact: true })).toBeVisible();
+    for (const label of ['Customer name', 'Short name', 'Phone', 'E-mail', 'Address']) await expect(page.getByLabel(label, { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Short name', { exact: true })).toHaveValue(shortNameOf(customer.name));
     await expectEveryRateSame(page);
     await expect(page.getByText(DIFFERS)).toHaveCount(0);
     await expect(rateInput(page, customer, PERCENT_RATE)).toBeVisible();
@@ -265,6 +289,8 @@ test.describe('reset to defaults (AC-3, AC-8)', () => {
     await setRates(page, customer, { [FIRST_RATE.id]: '9.5', [PERCENT_RATE.id]: '30' });
     await page.reload();
     await expect(page.getByText(DIFFERS)).toHaveCount(2);
+    // The reload makes the Reset button plain HTML again; a press before React attaches its handler is lost (DEF-011).
+    await waitUntilHydrated(page, 'main button[data-action="reset"]');
     const reset = page.getByRole('button', { name: 'Reset to defaults' });
     await pressWithKeyboard(reset);
     const dialog = page.getByRole('alertdialog', { name: `Reset ${customer.name} to defaults?` });
@@ -297,6 +323,8 @@ test.describe('reset to defaults (AC-3, AC-8)', () => {
     await openCustomer(page, customer);
     await setRates(page, customer, { [FIRST_RATE.id]: '9.5' });
     await page.reload();
+    // The reload makes the Reset button plain HTML again; a press before React attaches its handler is lost (DEF-011).
+    await waitUntilHydrated(page, 'main button[data-action="reset"]');
     await page.getByRole('button', { name: 'Reset to defaults' }).click();
     const dialog = page.getByRole('alertdialog', { name: `Reset ${customer.name} to defaults?` });
     await dialog.getByRole('button', { name: 'Keep current rates' }).click();

@@ -51,7 +51,7 @@ describe('overlay imports (AQP-339 AC-6)', () => {
     for (const name of [
       'src/components/shared/menu-drawer.tsx',
       'src/components/shared/account-menu-panel.tsx',
-      'src/components/features/estimate-workspace/change-customer-dialog.tsx',
+      'src/components/features/estimate-customer/change-customer-dialog.tsx',
       'src/components/features/estimate-workspace/delete-part-dialog.tsx',
       // The quantity-warning dialog (STORY-05.12, STORY-06.10): the one AlertDialog of the Engineer's SCR-05 and the Lead's SCR-06 is the shared view; each page's own file wraps it and is lazy.
       'src/components/shared/quantity-warning-dialog.tsx',
@@ -71,7 +71,7 @@ describe('overlay imports (AQP-339 AC-6)', () => {
       'src/components/features/masters/exchange-rates-panel.tsx',
       'src/components/features/masters/treatment-panel.tsx',
       'src/components/features/auth/portal-account-panel.tsx',
-      'src/components/features/estimate-workspace/change-customer-dialog.tsx',
+      'src/components/features/estimate-customer/change-customer-dialog.tsx',
       'src/components/features/estimate-workspace/delete-part-dialog.tsx',
       'src/components/features/estimate-workspace/parts-tree-drawer.tsx',
       'src/components/features/estimate-workspace/part-fields.tsx',

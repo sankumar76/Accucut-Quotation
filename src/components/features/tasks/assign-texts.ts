@@ -1,4 +1,4 @@
-import type { AssignFieldName } from '@/lib/tasks/assign';
+import { SUBJECT_MAX_LENGTH, TITLE_MAX_LENGTH, type AssignFieldName } from '@/lib/tasks/assign';
 
 /**
  * The words of SCR-04 "Assign task" (UX spec section 6, SCR-04), written once. The messages under the fields are the rules' (`lib/tasks/assign.ts`), which the
@@ -14,19 +14,29 @@ export const QUEUE_LINK_LABEL = 'Task queue';
 
 export const FIELD_LABELS: Readonly<Record<AssignFieldName | 'deadlineTime', string>> = {
   engineerId: 'Engineer',
+  customerId: 'Customer Name',
   folderPath: 'Network folder path',
   deadline: 'Deadline date',
   deadlineTime: 'Deadline time',
   title: 'Title',
+  subject: 'Subject (project name)',
   notes: 'Notes',
 };
+
+/** The read-only output under Customer Name (CR-01 item 6): filled from the Customer master, never typed. */
+export const SHORT_NAME_LABEL = 'Customer Short Name';
+export const SHORT_NAME_HINT = 'From the Customer master. It fills in when you choose the customer.';
+export const CUSTOMER_PLACEHOLDER = 'Choose the customer';
+export const CUSTOMER_HINT = 'From the Customer master. Only a Lead or an Admin sets or changes it; the Engineer sees it read-only.';
+export const NO_CUSTOMERS_HINT = 'There is no customer to choose. Ask the Admin to add one.';
 
 export const ENGINEER_PLACEHOLDER = 'Choose an Engineer';
 export const NO_ENGINEERS_HINT = 'There is no active Engineer to assign to. Ask the Admin to add one.';
 export const FOLDER_PATH_HINT = 'The folder with the drawings and requirements, for example \\\\server\\share\\RFQ-123.';
 export const IST_ADDON = 'IST';
 export const TIME_HINT = 'India Standard Time (UTC+5:30).';
-export const TITLE_HINT = 'Up to 120 characters. Shown in the queue next to the task ID.';
+export const TITLE_HINT = `Up to ${TITLE_MAX_LENGTH} characters. Shown in the queue next to the task ID.`;
+export const SUBJECT_HINT = `Up to ${SUBJECT_MAX_LENGTH} characters. The project name.`;
 export const NOTES_HINT = 'Up to 1,000 characters.';
 export const OPTIONAL_TAG = '(optional)';
 
@@ -61,7 +71,7 @@ export const NEXT_TITLE = 'What happens next';
 export const NEXT_STEPS: ReadonlyArray<string> = [
   'An empty estimate is created in Draft with a task ID like Q-2026-0324.',
   "It appears in the Engineer's Open queue, sorted by deadline.",
-  'The Engineer chooses the customer and enters the part data.',
+  'The Engineer enters the part data. They see the customer and the subject, but cannot change them.',
 ];
 export const FOLDER_HELP_LABEL = 'How the folder link works';
 export const FOLDER_HELP_BODY = 'Everyone sees the path as a link plus a Copy path button. Browsers often block links to network folders; the button always works.';

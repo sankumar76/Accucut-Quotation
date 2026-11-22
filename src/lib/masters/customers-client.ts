@@ -38,6 +38,7 @@ export type NewCustomerBody = CustomerDetails;
 /** The body of a PATCH: only what changed. A contact field given as `null` is cleared. */
 export interface CustomerChangesBody {
   readonly name?: string | undefined;
+  readonly shortName?: string | undefined;
   readonly phone?: string | null | undefined;
   readonly email?: string | null | undefined;
   readonly address?: string | null | undefined;
@@ -52,12 +53,12 @@ function textOrNull(value: unknown): string | null | undefined {
 }
 
 function toDetails(value: Record<string, unknown>): CustomerDetails | null {
-  const { name } = value;
+  const { name, shortName } = value;
   const phone = textOrNull(value['phone']);
   const email = textOrNull(value['email']);
   const address = textOrNull(value['address']);
-  if (typeof name !== 'string' || phone === undefined || email === undefined || address === undefined) return null;
-  return { name, phone, email, address };
+  if (typeof name !== 'string' || typeof shortName !== 'string' || phone === undefined || email === undefined || address === undefined) return null;
+  return { name, shortName, phone, email, address };
 }
 
 /** One row of `GET /api/v1/customers` as the list holds it, or `null` when the value is not that shape (the answer is never trusted blindly). */

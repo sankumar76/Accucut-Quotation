@@ -254,6 +254,8 @@ export function getEstimateService(): EstimateService {
     const configurations = createConfigRepository(runtimeClient());
     estimateService = createEstimateService({
       estimates: createEstimateRepository(runtimeClient()),
+      // A customer change writes its audit entry in its own transaction (CR-01 item 6).
+      audit: getAuditService(),
       nodes: createEstimateNodeRepository(runtimeClient()),
       // The part pictures (STORY-05.07): stored whole in the database, added and read by the runtime role and never changed.
       images: createImageRepository(runtimeClient()),

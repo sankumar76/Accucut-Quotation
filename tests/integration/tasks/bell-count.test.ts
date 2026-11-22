@@ -54,7 +54,7 @@ afterEach(async () => {
 
 async function seed(code: string, engineerId: string, assignedById: string, deadlineAt: Date, status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' = 'DRAFT'): Promise<string> {
   const task = await db.owner.query<{ id: string }>(
-    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at) VALUES ($1, $2::uuid, $3::uuid, $4, $5) RETURNING id::text',
+    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, \'Invented task\', \'Invented subject\') RETURNING id::text',
     [code, engineerId, assignedById, PATH, deadlineAt],
   );
   const id = defined(task.rows[0]).id;

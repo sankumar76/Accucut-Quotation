@@ -28,8 +28,8 @@ import type { AuditContext, AuditEntryInput, AuditService } from './audit-servic
  *     default is no longer the one chosen for, the whole request is a 409 and nothing changes. An unknown customer ID or a repeated one is a 422.
  *
  * **The audit log** (AC-9, ruling of the architect 2026-11-19): one `master.edited` per customer whose rate changed, `object_type` `customer`, one rate with the
- * old and the new value as decimal text, as Reset to Defaults writes it, written through `audit.record` in a loop in the same transaction; the rate's own entry
- * comes first, and all entries of a step share the request's ID. This file builds the entries (`customerRateEntries`) and writes those of Save choices; the entries of the
+ * old and the new value as decimal text, as Reset to Defaults writes it, written through `audit.recordMany` (one multi-row statement per 1,000, ADR-018, GitHub issue 568) in the same transaction; the rate's own entry
+ * comes first, through `record`, and all entries of a step share the request's ID. This file builds the entries (`customerRateEntries`) and writes those of Save choices; the entries of the
  * save are written by `masters-service.ts`, in the file of the transaction they belong to, which is where the static check of section 6 looks for it. A customer that was kept, skipped or already at the new default gets none. The counts are not
  * in the log: they are in the page notice and in one `info` line with no name and no value.
  */
@@ -146,9 +146,9 @@ async function applyChoices(
   await assertChoicesUsable(masters, tx, input.choices);
   const applying = input.choices.filter((entry) => entry.choice === 'apply');
   const changed = await masters.applyDefaultToCustomers(item.id, item.defaultValue, applying.map(({ customerId, shownValue }) => ({ customerId, shownValue })), tx);
-  const shown = new Map(applying.map((entry) => [entry.customerId.toLowerCase(), entry.shownValue]));
-  const changes = changed.map((customer) => ({ ...customer, previous: trimDecimalText(shown.get(customer.customerId.toLowerCase()) ?? item.defaultValue) }));
-  for (const entry of customerRateEntries(context, item, changes)) await audit.record(tx, entry);
+  // The value each customer held comes from the statement that changed it (SQR-02 of the review of PR 564), not from the request's text.
+  const changes = changed.map((customer) => ({ ...customer, previous: trimDecimalText(customer.previous) }));
+  await audit.recordMany(tx, customerRateEntries(context, item, changes));
   const counts: PropagationCounts = { applied: changed.length, kept: input.choices.length - applying.length, skipped: applying.length - changed.length };
   logger.info({ requestId: context.requestId, processItemId: item.id, ...counts }, 'default propagated: choices saved');
   return counts;

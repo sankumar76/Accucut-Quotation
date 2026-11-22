@@ -83,6 +83,7 @@ function CustomerTable(props: CustomerListProps) {
       <TableHeader>
         <TableRow>
           <TableHead>{CUSTOMER_HEADINGS.name}</TableHead>
+          <TableHead>{CUSTOMER_HEADINGS.shortName}</TableHead>
           <TableHead>{CUSTOMER_HEADINGS.phone}</TableHead>
           <TableHead className="hidden lg:table-cell">{CUSTOMER_HEADINGS.email}</TableHead>
           <TableHead className="text-right">{CUSTOMER_HEADINGS.rates}</TableHead>
@@ -95,6 +96,7 @@ function CustomerTable(props: CustomerListProps) {
             <TableCell className={BREAK_LONG_NAMES}>
               <NameText item={item} />
             </TableCell>
+            <TableCell className={cn('font-mono text-ink', BREAK_LONG_NAMES)}>{item.shortName}</TableCell>
             <TableCell className={cn('text-ink-2', BREAK_LONG_NAMES)}>{item.phone}</TableCell>
             <TableCell className={cn('hidden text-ink-2 lg:table-cell', BREAK_LONG_NAMES)}>{item.email}</TableCell>
             <TableCell className="text-right tabular-nums">
@@ -121,6 +123,7 @@ function CustomerCards(props: CustomerListProps) {
         <li key={item.id} data-item-id={item.id} className="flex flex-col gap-s-3 border-b border-border p-s-4 last:border-b-0">
           <div className="flex flex-col gap-s-1">
             <NameText item={item} />
+            <span className={cn('font-mono text-label text-ink-2', BREAK_LONG_NAMES)}>{item.shortName}</span>
             {item.phone === null ? null : <span className={cn('text-ink-2', BREAK_LONG_NAMES)}>{item.phone}</span>}
             <span className="text-label text-ink-2">
               <RatesText differ={item.differ} />

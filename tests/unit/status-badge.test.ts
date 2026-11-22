@@ -36,6 +36,8 @@ const header = (status: EstimateStatus): WorkspaceHeaderView => ({
   folderPath: '\\\\invented-server\\invented-share\\RFQ-1',
   folderUrl: 'file:////invented-server/invented-share/RFQ-1',
   title: 'Hopper cover',
+  subject: 'Feed hopper',
+  customer: { name: 'Invented Customer', shortName: 'INV' },
   notes: null,
   assignedByName: 'Invented Boss',
 });
