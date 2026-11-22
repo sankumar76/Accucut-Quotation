@@ -50,7 +50,7 @@ export function SurfaceTreatments({ id, fields, texts, editable, onToggle }: Sur
   const chosen = fields.filter((field) => isFlagOn(textOf(field, texts)));
 
   return (
-    <div className="flex min-w-0 flex-col gap-s-2">
+    <div data-treatments="" className="flex min-w-0 flex-col gap-s-2">
       <Label id={labelId} htmlFor={id}>
         {SURFACE_LABEL}
       </Label>
