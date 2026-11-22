@@ -164,7 +164,7 @@ describe('AC-4: what cannot be calculated is a named 409 or a 404, and nothing i
   });
 
   it('a customer deleted after it was chosen is the 409 CUSTOMER_DELETED, not a 404 (STORY-02.07)', async () => {
-    const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name, deleted_at) VALUES ('Invented deleted customer', now()) RETURNING id::text");
+    const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name, deleted_at) VALUES ('Invented deleted customer', left(md5('Invented deleted customer'), 10), now()) RETURNING id::text");
     const estimateId = await db.addCompleteEstimate();
     await db.owner.query('UPDATE estimates SET customer_id = $2::uuid WHERE id = $1::uuid', [estimateId, defined(rows[0]).id]);
     expect(await failure(db.service.calculate(engineer(), estimateId))).toMatchObject({ code: 'CUSTOMER_DELETED', httpStatus: 409 });

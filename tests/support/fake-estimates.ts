@@ -22,7 +22,10 @@ export interface FakeEstimate {
   assignedByName: string;
   folderPath: string;
   deadlineAt: Date;
+  /** A test that does not care leaves it null: the workspace then shows the invented title `Invented task` (a task always has one since CR-01 item 6). */
   title: string | null;
+  /** The project name (CR-01 item 6); absent counts as the invented `Invented subject`. */
+  subject?: string;
   notes: string | null;
   status: EstimateStatus;
   customerId: string | null;
@@ -58,6 +61,8 @@ export interface FakeImage {
 export interface FakeCustomerEntry {
   readonly id: string;
   readonly name: string;
+  /** Absent counts as `SHORT`. */
+  readonly shortName?: string;
   readonly deleted: boolean;
 }
 
@@ -115,7 +120,7 @@ export function createFakeEstimateWorld(
   let lastWritten = new Date();
   const customerOf = (id: string | null): CustomerChoice | null => {
     const found = id === null ? undefined : customers().find((customer) => same(customer.id, id));
-    return found === undefined ? null : { id: found.id, name: found.name };
+    return found === undefined ? null : { id: found.id, name: found.name, shortName: found.shortName ?? 'SHORT' };
   };
 
   const repository: EstimateRepository = {
@@ -130,7 +135,8 @@ export function createFakeEstimateWorld(
         engineerId: estimate.engineerId,
         folderPath: estimate.folderPath,
         deadlineAt: estimate.deadlineAt,
-        title: estimate.title,
+        title: estimate.title ?? 'Invented task',
+        subject: estimate.subject ?? 'Invented subject',
         notes: estimate.notes,
         assignedByName: estimate.assignedByName,
       };
@@ -151,8 +157,9 @@ export function createFakeEstimateWorld(
     },
     findActiveCustomer: (id) => {
       const found = customers().find((customer) => same(customer.id, id) && !customer.deleted);
-      return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name });
+      return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name, shortName: found.shortName ?? 'SHORT' });
     },
+    findCustomerChoice: (id) => Promise.resolve(customerOf(id)),
     lockMaterialsInUse: () => Promise.resolve([...materialsInUse].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))),
     linkCalculation: (estimateId, calculationId, status) => {
       const estimate = estimates.find((candidate) => same(candidate.id, estimateId));

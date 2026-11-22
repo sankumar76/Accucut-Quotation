@@ -8,6 +8,7 @@ import {
   acceptedPicture,
   addCallsFor,
   customerName,
+  customerShortName,
   deadlineText,
   engineerEmail,
   mapLimit,
@@ -58,6 +59,8 @@ describe('AC-10: the names are invented placeholders that follow one pattern', (
   it('numbers customers, items, materials and treatments, and keeps every volume name starting "Volume " so a rerun can count them', () => {
     expect(customerName(1)).toBe('Volume customer 001');
     expect(customerName(500)).toBe('Volume customer 500');
+    expect(customerShortName(1)).toBe('VOL001');
+    expect(customerShortName(500)).toBe('VOL500');
     expect(processItemName(7)).toBe('Volume process item 07');
     expect(materialName(200)).toBe('Volume material 200');
     expect(treatmentName(3)).toBe('Volume treatment 03');

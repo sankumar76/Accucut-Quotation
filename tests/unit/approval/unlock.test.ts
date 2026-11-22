@@ -60,7 +60,7 @@ function build(options: Options = {}) {
       findEstimateAccess: (id) => Promise.resolve(id === ESTIMATE_ID ? { id, engineerId: 'engineer-1', status } : null),
       findActiveCustomer: () => {
         writes.push('customer');
-        return Promise.resolve(options.customerDeleted === true ? null : { id: CUSTOMER_ID, name: 'Invented Customer' });
+        return Promise.resolve(options.customerDeleted === true ? null : { id: CUSTOMER_ID, name: 'Invented Customer', shortName: 'INV' });
       },
       lockMaterialsInUse: () => {
         writes.push('materials');

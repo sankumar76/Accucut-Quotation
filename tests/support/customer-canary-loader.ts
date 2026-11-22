@@ -11,7 +11,7 @@ import type { QueryableConnection } from './material-canary-loader';
  * invented and this database is thrown away.
  */
 
-const INSERT_CUSTOMER = 'INSERT INTO customers (id, name, phone) VALUES ($1::uuid, $2, $3) ON CONFLICT DO NOTHING';
+const INSERT_CUSTOMER = 'INSERT INTO customers (id, name, short_name, phone) VALUES ($1::uuid, $2, left(md5($2), 10), $3) ON CONFLICT DO NOTHING';
 
 /** One rate row for every Process Master item the customer does not have yet, at the item's default (SPEC section 4.2 rule 1). */
 const INSERT_RATES = `INSERT INTO customer_rates (customer_id, process_item_id, value)

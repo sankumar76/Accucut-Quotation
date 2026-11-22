@@ -4,10 +4,9 @@ import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 
-import { ensureCanaryCustomers, ensureCanaryMaterials, useFreshAddress } from './support/auth';
+import { ensureCanaryCustomers, ensureCanaryMaterials, setCanaryCustomer, useFreshAddress } from './support/auth';
 import { horizontalOverflow, waitUntilHydrated } from './support/design-system';
 import { expectFormAccessible, isPatchOfInputs, leastFieldHeight, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
-import { DEVELOPMENT_URL } from './support/servers';
 
 /**
  * STORY-08.08 AC-1, AC-4, AC-8, AC-9 (FR-074; NFR-016 to NFR-018): the part form of SCR-05 draws a **choice input in a new section** the Admin added, at 360x800, 768x1024 and 1366x768 on the development server,
@@ -78,8 +77,7 @@ async function openFormWithChoice(page: Page, testInfo: TestInfo): Promise<{ rea
   await ensureCanaryCustomers();
   await ensureCanaryMaterials();
   const owner = await signInAsNewEngineer(page, testInfo);
-  const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers: { origin: DEVELOPMENT_URL }, data: { customerId: ALPHA_CUSTOMER_ID } });
-  expect(chosen.status(), 'the customer is chosen').toBe(200);
+  await setCanaryCustomer(owner.id, ALPHA_CUSTOMER_ID);
   await page.route('**/api/v1/estimates/*/form', answerFormWithChoice);
   await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
   await waitForForm(page);

@@ -7,9 +7,8 @@ import { MATERIAL_CANARIES } from '../../support/material-master-canary';
 import { FIELD_ID_NAMESPACE, seedId } from '../../../prisma/seed/config/seed-sections-and-stages';
 import { columnLetterToIndex } from '../../../src/lib/columns';
 
-import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, signInWithoutThePage, type E2eUser } from './auth';
+import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, setCanaryCustomer, signInWithoutThePage, type E2eUser } from './auth';
 import { expectNoAxeViolations, widthOf } from './design-system';
-import { DEVELOPMENT_URL } from './servers';
 
 /**
  * What the part-form specs (`estimate-form.spec.ts`, STORY-05.03, and `estimate-form-sections.spec.ts`, STORY-05.04) share: a person of the test's own who owns a task with an empty draft
@@ -72,10 +71,8 @@ export async function openForm(page: Page, testInfo: TestInfo, options: { readon
   await ensureCanaryMaterials();
   const owner = await signInAsNewEngineer(page, testInfo);
   if (options.fromTheQueue === true) await page.goto('/queue');
-  // The customer is chosen with the call that the drop-down makes (`PUT /api/v1/estimates/{id}/customer`), before the page is opened, so the page opens on the form. Choosing it through the
-  // drop-down cost 3 to 4 s of a test's 30 s on a loaded runner (traces of AQP-340) and is judged by `estimate-customer.spec.ts`, whose subject it is.
-  const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers: { origin: DEVELOPMENT_URL }, data: { customerId: ALPHA_CUSTOMER_ID } });
-  expect(chosen.status(), 'the customer is chosen').toBe(200);
+  // The customer is set in the database before the page is opened, as a task is assigned with one (CR-01 item 6): the Engineer cannot choose it. Changing it is the Lead's, `estimate-customer.spec.ts`.
+  await setCanaryCustomer(owner.id, ALPHA_CUSTOMER_ID);
   await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
   await waitForForm(page);
   return owner;

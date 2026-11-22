@@ -58,7 +58,7 @@ function countingAudit() {
 
 /** `count` customers at every default, made by the owner in two statements, and their IDs. */
 async function bulkCustomers(count: number): Promise<ReadonlyArray<string>> {
-  const { rows } = await db.owner.query<{ id: string }>(`INSERT INTO customers (name) SELECT 'Batch ' || lpad(n::text, 4, '0') || ' Works' FROM generate_series(1, ${String(count)}) AS n RETURNING id::text`);
+  const { rows } = await db.owner.query<{ id: string }>(`INSERT INTO customers (name, short_name) SELECT 'Batch ' || lpad(n::text, 4, '0') || ' Works', 'B' || lpad(n::text, 4, '0') FROM generate_series(1, ${String(count)}) AS n RETURNING id::text`);
   const ids = rows.map((row) => row.id);
   await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) SELECT c.id, pi.id, pi.default_value FROM customers c CROSS JOIN process_items pi WHERE c.id = ANY($1::uuid[])', [ids]);
   return ids;

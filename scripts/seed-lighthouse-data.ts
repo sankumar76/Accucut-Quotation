@@ -77,7 +77,7 @@ async function seedMasters(client: Client, leadId: string): Promise<{ readonly c
   const extraItems = PROCESS_ITEM_TOTAL - SEED_PROCESS_ITEM_COUNT;
   await client.$executeRaw`INSERT INTO process_items (name, unit, default_value)
     SELECT 'Invented process item ' || lpad(g::text, 2, '0'), 'per unit', ${INVENTED_RATE}::numeric FROM generate_series(1, ${extraItems}::int) g ON CONFLICT DO NOTHING`;
-  await client.$executeRaw`INSERT INTO customers (name) SELECT 'Invented customer ' || lpad(g::text, 4, '0') FROM generate_series(1, ${CUSTOMER_COUNT}::int) g ON CONFLICT DO NOTHING`;
+  await client.$executeRaw`INSERT INTO customers (name, short_name) SELECT 'Invented customer ' || lpad(g::text, 4, '0'), 'LH' || lpad(g::text, 4, '0') FROM generate_series(1, ${CUSTOMER_COUNT}::int) g ON CONFLICT DO NOTHING`;
   // One rate for every item of every customer (SPEC section 4.2 rule 1): 500 x 50 = 25,000 rows. The 15 seed items have a default of 0, so their rate here is typed, as an Admin types it.
   await client.$executeRaw`INSERT INTO customer_rates (customer_id, process_item_id, value)
     SELECT c.id, p.id, ${INVENTED_RATE}::numeric FROM customers c CROSS JOIN process_items p WHERE c.name LIKE 'Invented customer %' ON CONFLICT DO NOTHING`;
@@ -98,9 +98,9 @@ async function seedMasters(client: Client, leadId: string): Promise<{ readonly c
 
 /** The tasks of the queue and the assign screen, each with its estimate, round the queue's Engineers. */
 async function seedQueue(client: Client, people: People): Promise<void> {
-  await client.$executeRaw`INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, notes)
+  await client.$executeRaw`INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes)
     SELECT ${QUEUE_CODE_PREFIX} || lpad(g::text, 4, '0'), (${people.engineerIds}::uuid[])[1 + (g % ${people.engineerIds.length}::int)], ${people.leadId}::uuid, ${FOLDER_PATH},
-           now() + make_interval(hours => g), 'Invented task ' || g, 'Invented notes.'
+           now() + make_interval(hours => g), 'Invented task ' || g, 'Invented subject ' || g, 'Invented notes.'
     FROM generate_series(1, ${QUEUE_TASK_COUNT}::int) g ON CONFLICT DO NOTHING`;
   await client.$executeRaw`INSERT INTO estimates (task_id) SELECT t.id FROM tasks t WHERE t.code LIKE ${`${QUEUE_CODE_PREFIX}%`} ON CONFLICT DO NOTHING`;
 }
@@ -117,8 +117,8 @@ async function seedTree500Estimate(
   const ids: string[] = [];
   const nextPlace = new Map<number | null, number>();
   await client.$transaction(async (tx) => {
-    await tx.$executeRaw`INSERT INTO tasks (id, code, engineer_id, assigned_by, folder_path, deadline_at, title, notes)
-      VALUES (${taskId}::uuid, ${input.code}, ${input.engineerId}::uuid, ${input.leadId}::uuid, ${FOLDER_PATH}, now() + interval '30 days', 'Invented estimate of 500 parts', 'Invented notes.')`;
+    await tx.$executeRaw`INSERT INTO tasks (id, code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes)
+      VALUES (${taskId}::uuid, ${input.code}, ${input.engineerId}::uuid, ${input.leadId}::uuid, ${FOLDER_PATH}, now() + interval '30 days', 'Invented estimate of 500 parts', 'Invented subject', 'Invented notes.')`;
     await tx.$executeRaw`INSERT INTO estimates (id, task_id, customer_id) VALUES (${estimateId}::uuid, ${taskId}::uuid, ${input.customerId}::uuid)`;
     for (const node of tree.nodes) {
       const sortIndex = nextPlace.get(node.parentIndex) ?? 0;

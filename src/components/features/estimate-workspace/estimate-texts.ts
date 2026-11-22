@@ -10,26 +10,23 @@ export const FOLDER_TITLE = 'Task folder';
 export const NOTES_FROM_PREFIX = 'Notes from';
 export const NO_LINK_NOTE = 'This path has no link. Select it and copy it yourself.';
 
-export const NO_CUSTOMER_TITLE = 'Choose the customer to start.';
-export const NO_CUSTOMER_BODY = 'The form opens as soon as you pick one.';
+/**
+ * The customer, its short name and the subject on the header (CR-01 item 6, AQP-390): read-only labelled text for every role. The customer is set when the task is assigned and changed only by a Lead or an Admin
+ * on SCR-06, so there is no "choose the customer first" step on this page any more. The sentence for an estimate made before that, which has no customer, is one constant: a neutral line for the
+ * Engineer (who cannot set one), for the ux-expert to confirm. The refusal of Calculate keeps its words until that ruling (AC-11).
+ */
+export const IDENTITY_LABEL = 'Customer and subject';
+export const CUSTOMER_NAME_LABEL = 'Customer Name';
+export const CUSTOMER_SHORT_NAME_LABEL = 'Customer Short Name';
+/** What the short name shows for an estimate that has no customer: a value, so the label is never bare. */
+export const SHORT_NAME_NOT_SET = 'Not set';
+export const SUBJECT_LABEL = 'Subject (project name)';
 
-export const CUSTOMER_LABEL = 'Customer';
-export const CUSTOMER_TAG = 'Choose this first';
-export const CUSTOMER_HINT = 'Choose the customer this estimate is for. Changing it later asks you to confirm.';
-export const CUSTOMER_PLACEHOLDER = 'Choose the customer';
-export const CUSTOMER_LOADING = 'Loading customers';
-export const CUSTOMER_LOCKED_HINT = 'This estimate can no longer be changed.';
-export const CUSTOMER_SAVED = 'Customer saved.';
-export const CUSTOMER_SAVING = 'Saving';
-
-export const LOAD_FAILED_TITLE = 'We could not load the customers';
-export const SAVE_FAILED_TITLE = 'The customer was not saved';
 export const FAILED_BODY = 'Check your connection and try again. What you typed is kept.';
 export const TRY_AGAIN = 'Try again';
 
 
 export const FORM_AREA_TITLE = 'Parts and inputs';
-export const FORM_AREA_LOCKED = 'The parts tree and the form open here once the customer is chosen.';
 
 /**
  * The part form (STORY-05.03; UX spec SCR-05 "Content and microcopy", "States"). The labels, letters, hints and ranges of the fields come from the server, from the registry, and are

@@ -8,6 +8,7 @@ import { createTaskService, type QueueViewer, type TaskService } from '@/server/
 import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
+import { shortNameOf } from '../../support/customer-short-name';
 
 /**
  * STORY-04.04 T6 (AC-1, AC-3, AC-4, AC-5) against real PostgreSQL in a throwaway database: one task and the status of its estimate through the real task service and
@@ -41,7 +42,7 @@ beforeAll(async () => {
   adminId = await insertPersonAsOwner(db, 'Status Admin', 'ADMIN');
   arjunId = await insertPersonAsOwner(db, 'Status Arjun', 'ENGINEER');
   priyaId = await insertPersonAsOwner(db, 'Status Priya', 'ENGINEER');
-  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Invented status customer') RETURNING id::text");
+  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Invented status customer', left(md5('Invented status customer'), 10)) RETURNING id::text");
   customerId = defined(customer.rows[0]).id;
 });
 
@@ -57,7 +58,7 @@ afterEach(async () => {
 /** A task and its estimate in any state; returns the task's ID. */
 async function seed(code: string, engineerId: string, status: Status, chosenCustomerId: string | null = null, notes: string | null = null): Promise<string> {
   const task = await db.owner.query<{ id: string }>(
-    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, notes) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7) RETURNING id::text',
+    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, \'Invented subject\', $7) RETURNING id::text',
     [code, engineerId, leadId, PATH, DEADLINE, 'Hopper cover', notes],
   );
   const id = defined(task.rows[0]).id;
@@ -84,8 +85,10 @@ describe('AC-1: the status is the estimate\'s, in every state', () => {
       id,
       code: 'Q-2026-0001',
       title: 'Hopper cover',
+      subject: 'Invented subject',
       notes: 'Sheet metal only.',
       engineer: { id: arjunId, name: 'Invented Status Arjun' },
+      customer: { id: customerId, name: 'Invented status customer', shortName: shortNameOf('Invented status customer') },
       customerName: 'Invented status customer',
       folderPath: PATH,
       folderUrl: 'file:////invented-server/invented-share/RFQ-123',
@@ -131,6 +134,7 @@ describe('AC-3, AC-5: a Lead and an Admin open any task, with the same fields as
     expect(Object.keys(defined(await service.getTask(asEngineer(arjunId), id))).sort()).toEqual([
       'assignedByName',
       'code',
+      'customer',
       'customerName',
       'deadlineAt',
       'engineer',
@@ -139,6 +143,7 @@ describe('AC-3, AC-5: a Lead and an Admin open any task, with the same fields as
       'id',
       'notes',
       'status',
+      'subject',
       'title',
     ]);
   });

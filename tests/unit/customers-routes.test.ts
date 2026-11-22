@@ -73,7 +73,7 @@ beforeEach(() => {
     0,
     harness.masters.customers.length,
     ...CUSTOMER_CANARIES.map((canary) => ({
-      ...fakeCustomer(harness.masters.records, canary.name, Object.fromEntries(canary.rates.map((rate) => [rate.processItemId, rate.value])), { phone: canary.phone }),
+      ...fakeCustomer(harness.masters.records, canary.name, Object.fromEntries(canary.rates.map((rate) => [rate.processItemId, rate.value])), { phone: canary.phone, shortName: 'CANARYA' }),
       id: canary.id,
     })),
   );
@@ -85,17 +85,17 @@ describe('GET /api/v1/customers (AC-1)', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     const customers = z.array(record).parse(record.parse(await response.json())['customers']);
-    expect(customers).toEqual([{ id: ALPHA, name: 'Canary-Customer-Alpha', phone: CUSTOMER_CANARY_PHONE, email: null, address: null, differ: 2 }]);
+    expect(customers).toEqual([{ id: ALPHA, name: 'Canary-Customer-Alpha', shortName: 'CANARYA', phone: CUSTOMER_CANARY_PHONE, email: null, address: null, differ: 2 }]);
   });
 });
 
 describe('POST /api/v1/customers (AC-1, AC-6)', () => {
-  it('adds a customer with a name only: 201, the name trimmed, 15 rates at the current default, and exactly one master.created entry with object_type customer', async () => {
+  it('adds a customer with a name and a short name only: 201, both trimmed, 15 rates at the current default, and exactly one master.created entry with object_type customer', async () => {
     const before = harness.auditWorld.audit.committed.length;
-    const response = await POST(request('POST', { name: '  Invented Works ' }));
+    const response = await POST(request('POST', { name: '  Invented Works ', shortName: ' IW ' }));
     expect(response.status).toBe(201);
     const body = record.parse(await response.json());
-    expect(body).toMatchObject({ id: expect.any(String), name: 'Invented Works', phone: null, email: null, address: null });
+    expect(body).toMatchObject({ id: expect.any(String), name: 'Invented Works', shortName: 'IW', phone: null, email: null, address: null });
     expect(z.array(record).parse(body['rates'])).toHaveLength(15);
     for (const rate of z.array(record).parse(body['rates'])) {
       expect(Object.keys(rate).sort()).toEqual(['defaultValue', 'name', 'processItemId', 'unit', 'value']);
@@ -103,12 +103,12 @@ describe('POST /api/v1/customers (AC-1, AC-6)', () => {
     }
     const entries = entriesSince(before);
     expect(entries.map((row) => [row.event, row.objectType, row.objectLabel])).toEqual([['master.created', 'customer', 'Invented Works']]);
-    expect(entries[0]).toMatchObject({ before: null, after: { name: 'Invented Works', contact: [] } });
+    expect(entries[0]).toMatchObject({ before: null, after: { name: 'Invented Works', shortName: 'IW', contact: [] } });
   });
 
   it('keeps the contact details given and records their names in the entry and never their values', async () => {
     const before = harness.auditWorld.audit.committed.length;
-    const response = await POST(request('POST', { name: 'Invented Works', phone: '+99 555 0142', email: 'buying@invented.example.test', address: null }));
+    const response = await POST(request('POST', { name: 'Invented Works', shortName: 'IW', phone: '+99 555 0142', email: 'buying@invented.example.test', address: null }));
     expect(response.status).toBe(201);
     expect(record.parse(await response.json())).toMatchObject({ phone: '+99 555 0142', email: 'buying@invented.example.test', address: null });
     const entry = defined(entriesSince(before)[0]);
@@ -117,13 +117,13 @@ describe('POST /api/v1/customers (AC-1, AC-6)', () => {
   });
 
   it('checks the 100-character limit on the stored (canonical) name, as the form does: 101 characters with one double space is 100 once stored (QLT-04)', async () => {
-    const response = await POST(request('POST', { name: `${'A'.repeat(49)}  ${'B'.repeat(50)}` }));
+    const response = await POST(request('POST', { name: `${'A'.repeat(49)}  ${'B'.repeat(50)}`, shortName: 'AB' }));
     expect(response.status).toBe(201);
     expect(record.parse(await response.json())['name']).toBe(`${'A'.repeat(49)} ${'B'.repeat(50)}`);
   });
 
   it('still refuses a name that is over 100 characters in its stored form (QLT-04)', async () => {
-    const response = await POST(request('POST', { name: `${'A'.repeat(50)} ${'B'.repeat(50)}` }));
+    const response = await POST(request('POST', { name: `${'A'.repeat(50)} ${'B'.repeat(50)}`, shortName: 'AB' }));
     expect(response.status).toBe(422);
     expect((await fieldMessages(response))['name']).toBe('Use 100 characters or fewer.');
   });
@@ -133,11 +133,17 @@ describe('POST /api/v1/customers (AC-1, AC-6)', () => {
     ['a missing name', {}, 'name', 'Enter the customer name.'],
     ['a name that is not text', { name: 7 }, 'name', 'Enter the customer name.'],
     ['a name over 100 characters', { name: 'x'.repeat(101) }, 'name', 'Use 100 characters or fewer.'],
-    ['an e-mail address with no @', { name: 'Invented Works', email: 'not-an-address' }, 'email', 'Enter an e-mail address like name@company.com.'],
-    ['an e-mail address with no dot after the @', { name: 'Invented Works', email: 'name@company' }, 'email', 'Enter an e-mail address like name@company.com.'],
-    ['an e-mail address with a space', { name: 'Invented Works', email: 'na me@company.com' }, 'email', 'Enter an e-mail address like name@company.com.'],
-    ['a phone number over 30 characters', { name: 'Invented Works', phone: '9'.repeat(31) }, 'phone', 'Use 30 characters or fewer.'],
-    ['an address over 300 characters', { name: 'Invented Works', address: 'x'.repeat(301) }, 'address', 'Use 300 characters or fewer.'],
+    ['a missing short name', { name: 'Invented Works' }, 'shortName', 'Enter a short name.'],
+    ['a blank short name', { name: 'Invented Works', shortName: '   ' }, 'shortName', 'Enter a short name.'],
+    ['a short name that is not text', { name: 'Invented Works', shortName: 7 }, 'shortName', 'Enter a short name.'],
+    ['a short name over 10 characters', { name: 'Invented Works', shortName: 'S'.repeat(11) }, 'shortName', 'Keep the short name under 10 characters.'],
+    ['a short name with a line break', { name: 'Invented Works', shortName: 'A\nB' }, 'shortName', 'Enter the short name without line breaks, hidden characters or other control characters.'],
+    ['a short name with a hidden character', { name: 'Invented Works', shortName: 'AC\u200bME' }, 'shortName', 'Enter the short name without line breaks, hidden characters or other control characters.'],
+    ['an e-mail address with no @', { name: 'Invented Works', shortName: 'IW', email: 'not-an-address' }, 'email', 'Enter an e-mail address like name@company.com.'],
+    ['an e-mail address with no dot after the @', { name: 'Invented Works', shortName: 'IW', email: 'name@company' }, 'email', 'Enter an e-mail address like name@company.com.'],
+    ['an e-mail address with a space', { name: 'Invented Works', shortName: 'IW', email: 'na me@company.com' }, 'email', 'Enter an e-mail address like name@company.com.'],
+    ['a phone number over 30 characters', { name: 'Invented Works', shortName: 'IW', phone: '9'.repeat(31) }, 'phone', 'Use 30 characters or fewer.'],
+    ['an address over 300 characters', { name: 'Invented Works', shortName: 'IW', address: 'x'.repeat(301) }, 'address', 'Use 300 characters or fewer.'],
   ])('refuses %s with 422, names the field, and stores nothing', async (_what, body, field, message) => {
     const entries = harness.auditWorld.audit.committed.length;
     const customers = harness.masters.customers.length;
@@ -150,17 +156,67 @@ describe('POST /api/v1/customers (AC-1, AC-6)', () => {
 
   it('refuses a name another customer has, ignoring letter case, in the words of AC-1, and stores nothing', async () => {
     const entries = harness.auditWorld.audit.committed.length;
-    const response = await POST(request('POST', { name: 'canary-customer-ALPHA' }));
+    const response = await POST(request('POST', { name: 'canary-customer-ALPHA', shortName: 'ZZ' }));
     expect(response.status).toBe(422);
     expect(await fieldMessages(response, 'NAME_TAKEN')).toEqual({ name: 'A customer with this name already exists.' });
     expect(harness.auditWorld.audit.committed).toHaveLength(entries);
   });
 
+  it('refuses a short name another customer has, ignoring letter case, under shortName, naming no other customer, and stores and audits nothing (AC-14)', async () => {
+    const entries = harness.auditWorld.audit.committed.length;
+    const response = await POST(request('POST', { name: 'Invented Works', shortName: 'canarya' }));
+    expect(response.status).toBe(422);
+    expect(await fieldMessages(response, 'NAME_TAKEN')).toEqual({ shortName: 'A customer with this short name already exists.' });
+    expect(harness.auditWorld.audit.committed).toHaveLength(entries);
+    expect(harness.masters.customers).toHaveLength(1);
+  });
+
+  it('keeps the short name of a deleted customer taken (the unique index covers every row)', async () => {
+    const deleted = defined(harness.masters.customers[0]);
+    deleted.deleted = true;
+    const response = await POST(request('POST', { name: 'Invented Works', shortName: 'CanaryA' }));
+    expect(response.status).toBe(422);
+    expect(await fieldMessages(response, 'NAME_TAKEN')).toEqual({ shortName: 'A customer with this short name already exists.' });
+  });
+
   it('refuses a key the route does not offer (a strict body), such as a rate or a deleted flag', async () => {
     for (const extra of [{ deletedAt: '2026-01-01' }, { rates: [] }, { id: ALPHA }]) {
-      expect((await POST(request('POST', { name: 'Invented Works', ...extra }))).status).toBe(422);
+      expect((await POST(request('POST', { name: 'Invented Works', shortName: 'IW', ...extra }))).status).toBe(422);
     }
     expect(harness.masters.customers).toHaveLength(1);
+  });
+});
+
+describe('PATCH /api/v1/customers/{id}: the short name (CR-01 item 6, AC-14, AC-17)', () => {
+  it('changes the short name: 200, one master.edited entry with the short name before and after, no contact name and no rate', async () => {
+    const before = harness.auditWorld.audit.committed.length;
+    const response = await PATCH(request('PATCH', { shortName: ' NewShort ' }, `/api/v1/customers/${ALPHA}`), withId(ALPHA));
+    expect(response.status).toBe(200);
+    expect(record.parse(await response.json())).toMatchObject({ shortName: 'NewShort' });
+    const entries = entriesSince(before);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      event: 'master.edited',
+      before: { name: 'Canary-Customer-Alpha', shortName: 'CANARYA', contact: [], rates: [] },
+      after: { name: 'Canary-Customer-Alpha', shortName: 'NewShort', contact: [], rates: [] },
+    });
+  });
+
+  it('writes nothing for the same short name again, with the same case and spaces around it', async () => {
+    const before = harness.auditWorld.audit.committed.length;
+    const response = await PATCH(request('PATCH', { shortName: ' CANARYA ' }, `/api/v1/customers/${ALPHA}`), withId(ALPHA));
+    expect(response.status).toBe(200);
+    expect(entriesSince(before)).toHaveLength(0);
+  });
+
+  it('refuses a short name that is blank, too long or taken by another customer, ignoring letter case, with the field named', async () => {
+    harness.masters.customers.push(fakeCustomer(harness.masters.records, 'Invented Second', {}, { shortName: 'SECOND' }));
+    const path = `/api/v1/customers/${ALPHA}`;
+    expect((await fieldMessages(await PATCH(request('PATCH', { shortName: ' ' }, path), withId(ALPHA))))['shortName']).toBe('Enter a short name.');
+    expect((await fieldMessages(await PATCH(request('PATCH', { shortName: 'S'.repeat(11) }, path), withId(ALPHA))))['shortName']).toBe('Keep the short name under 10 characters.');
+    const taken = await PATCH(request('PATCH', { shortName: 'second' }, path), withId(ALPHA));
+    expect(taken.status).toBe(422);
+    expect(await fieldMessages(taken, 'NAME_TAKEN')).toEqual({ shortName: 'A customer with this short name already exists.' });
   });
 });
 
