@@ -266,3 +266,15 @@ Sections 1 to 9 above are not edited. This addendum replaces what is stale in se
 | Steps 6, 7, 8, 12 | unchanged |
 
 Section 7 (record reconciliation) is done: GitHub #127, #128 and #394 are closed; DEF-020, DEF-021 and DEF-024 to DEF-026 are Closed on file; the files for DEF-013 and DEF-037 to DEF-044 exist. Section 9's five asks were ruled by master (DL-276, DL-279, DL-284).
+
+## Addendum 3, 2026-11-22 (qa-engineer; DL-290 and DL-285 (3)): two new Test Bugs, the DEF-057 occurrence, and the `master` push runs of 22 Nov
+Sections 1 to 9 and the earlier addenda are not edited. Times are UTC. The final regression has still not been run; this is the record of what changed in the Bug list and the flaky watch. Detail is in `docs/07-qa/test-plan.md` section 7 (the 2026-11-22 note) and in the defect files.
+
+| Item | Result |
+|---|---|
+| **DEF-058** (AQP-392, #602), Sev-3, type Test | `estimate-form-sections.spec.ts` :331 (STORY-05.04 AC-8) and :431 (STORY-05.11 AC-4, AC-8), both [tablet]: PR #599 run 44985919886 attempt 1, shard 2 (job 137096326780), 30 s budget; :331 failed both attempts (30.2 s, 31.5 s), :431 failed attempt 1 (30.2 s) and passed on the retry (31.2 s); shard 2 at 1.23x the base, not a ruled wave. Rule R11 (PR runs only) until closed. Fix test-only, hardening window, from a `master` containing #600. Open Bugs: the 11 counted in test plan section 7.1 E plus DEF-058 and DEF-059, **none Sev-1 or Sev-2** (not re-reconciled against Jira in this run) |
+| **DEF-059** (AQP-393, #603), Sev-3, type Test, product not excluded | `estimate-first-load.spec.ts:64` [desktop]: attempt 1 failed on its own 15 s `expect` at :77 on `master` pushes 44975509844 (26.2 s) and 44983705175 (25.6 s), both passed on the retry. DL-285 (3), second occurrence; no earlier ruling covers the case. Not counted on RISK-031 trigger (b). No re-run rule |
+| **DEF-057** (AQP-387) | Third attempt-1 failure and the first on a `master` push: `rates-changed.spec.ts:224` [tablet], run 44985240147 (60ac0d18), 33.1 s, "no answer to the Recalculate request was seen", 0 notice elements. Not the Sev-2 trigger; stays Sev-3, no re-run rule. Counted by master as the one trigger (b) occurrence of 22 Nov |
+| **`master` push run 44988681963** (45512bd4, #593) | CI and Windows package run 44988681968 success. `Stages 1 to 11b` success; E2E 534 / 527 / 529 / 513 passed (shards 1 / 2 / 3 / 4; 6, 4 and 20 skipped in shards 2, 3 and 4 as before): **0 flaky, 0 failed, no `Test timeout of 30000ms exceeded.` in any shard.** The four cases above read 9.2 to 23.9 s on it (`estimate-form-sections` :431 tablet 23.9 s, desktop 23.8 s; :331 desktop 22.4 s; `estimate-first-load:64` 8.9 / 16.4 / 13.2 s; `rates-changed:224` 9.2 / 16.3 / 15.5 s) |
+| **Later `master` push runs** | run 44990887665 (08394110) was **in progress** at 05:47Z start and not read here (Stage 12 unfinished when QA wrote this); QA reads it and any later run when they complete and records the result in the next addendum |
+| **RISK-031 trigger (b), 22 Nov count** | **1 of 2** (unchanged). Triggers (a), (c) and (d) not touched. The risk register is master's and is not edited here |

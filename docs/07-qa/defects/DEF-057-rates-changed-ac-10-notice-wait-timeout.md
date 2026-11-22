@@ -36,6 +36,14 @@ Expected: 0   Received: 1
 - Test timeout of 30000ms exceeded.
 at tests/e2e/rates-changed.spec.ts:155:34
 ```
+**Third occurrence, 2026-11-22 (qa-engineer, read with master's DL-290 (4)): the first on a `master` push run, and the first with the diagnostic of #591.** `master` push run 44985240147 (60ac0d18), Stage 12 shard 3 (job 137094268903), `rates-changed.spec.ts:224` [tablet] (the AC-10 case, renumbered from :135): attempt 1 failed at **33.1 s** (test no. 77), retry passed in 14.8 s; the shard `1 flaky, 528 passed (14.5m)`. The error is `Test timeout of 30000ms exceeded.` alone, with the case's own attachment:
+```
+[AQP-387 rates-changed diagnostic] tablet | attempt 1 | after the press the test ended as "timedOut" | no answer to the Recalculate request was seen
+  Recalculate request: sent +null ms after the press; answer none
+  notice elements still on the page: 0
+```
+**Read against this file's Sev-2 trigger** (Recalculate answered 200 while the notice stays, or the server cleared and the screen kept it): **not met.** No answer to the request was seen and no notice element was left on the page, so this attempt shows no stale notice. The diagnostic does not say whether the press was lost or the request was never sent, so the cause (test, runner or product) is still open. The case reads 9.2 / 16.3 / 15.5 s (mobile / tablet / desktop, attempt 1) on `master` push 44988681963 (45512bd4, 0 flaky). The failure is a budget cut, so master counted it as the one RISK-031 trigger (b) occurrence of 22 Nov (1 of 2, DL-290 (4)); RISK-031 stays closed. Severity stays Sev-3, no re-run rule; a red run (both attempts) comes to master.
+
 Other readings of the case in the logs QA holds: mobile 10.4 to 12.5 s; desktop 9.1 to 17.4 s; tablet 10.5 s on the retry.
 
 ## Evidence
