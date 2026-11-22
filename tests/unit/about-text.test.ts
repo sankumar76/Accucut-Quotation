@@ -19,7 +19,7 @@ import { describeFinding, scanResponses, type RecordedResponse } from '../suppor
  */
 
 const SPEC_DESCRIPTION =
-  'The Accucut Quotation Portal helps Accucut Lasers prepare, review and approve manufacturing cost estimates. Engineers enter part details, the portal does the calculation, and a Lead or Admin reviews and approves the estimate.';
+  'The Accucut RFQ Portal helps Accucut Lasers prepare, review and approve manufacturing cost estimates. Engineers enter part details, the portal does the calculation, and a Lead or Admin reviews and approves the estimate.';
 const SPEC_VERSION = 'Version No: 1.0';
 const SPEC_COPYRIGHT = '\u00a9 Accucut Lasers Pvt Ltd. All rights reserved.';
 
@@ -68,7 +68,7 @@ describe('the card shows the words (AC-1)', () => {
   const lines = textLines(renderToStaticMarkup(createElement(AboutCard)));
 
   it('AC-1: the lockup, the sentence, the version and the copyright line appear in this order, each as its own text', () => {
-    expect(lines).toEqual(['ACCUCUT LASERS', 'Quotation Portal', SPEC_DESCRIPTION, SPEC_VERSION, SPEC_COPYRIGHT]);
+    expect(lines).toEqual(['ACCUCUT LASERS', 'RFQ Portal', SPEC_DESCRIPTION, SPEC_VERSION, SPEC_COPYRIGHT]);
   });
 
   it('AC-1: the logo is the supplied file, with its text alternative', () => {
@@ -79,7 +79,7 @@ describe('the card shows the words (AC-1)', () => {
 
   it('AC-1: the subtitle of the lockup is not hidden on a phone, because the card has room for it', () => {
     const markup = renderToStaticMarkup(createElement(AboutCard));
-    const subtitle = /<span class="([^"]*)">Quotation Portal<\/span>/.exec(markup)?.[1] ?? '';
+    const subtitle = /<span class="([^"]*)">RFQ Portal<\/span>/.exec(markup)?.[1] ?? '';
     expect(subtitle).not.toBe('');
     expect(subtitle.split(' ')).not.toContain('hidden');
   });

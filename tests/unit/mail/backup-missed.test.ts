@@ -11,7 +11,7 @@ import { renderBackupMissed } from '@/server/mail/templates/backup-missed';
 describe('the words (AC-10)', () => {
   it('AC-10: a late backup alone', () => {
     const { subject, html, text } = renderBackupMissed({ backupLate: true, diskNearlyFull: false });
-    expect(subject).toBe('Accucut Quotation Portal: server check needed');
+    expect(subject).toBe('Accucut RFQ Portal: server check needed');
     for (const body of [html, text]) {
       expect(body).toContain('The weekly backup is late.');
       expect(body).not.toContain('disk');

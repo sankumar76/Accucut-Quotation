@@ -9,7 +9,7 @@ const VIEWPORT_WIDTHS: Readonly<Record<string, number>> = { mobile: 360, tablet:
 
 test('home page loads at this project\'s width without horizontal scroll (NFR-016)', async ({ page }, testInfo) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Accucut Quotation Portal' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Accucut RFQ Portal' })).toBeVisible();
 
   const expectedWidth = VIEWPORT_WIDTHS[testInfo.project.name];
   expect(page.viewportSize()?.width).toBe(expectedWidth);
