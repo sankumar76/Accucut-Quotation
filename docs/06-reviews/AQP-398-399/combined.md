@@ -121,3 +121,33 @@
 - **product-manager:** can a Lead or Admin reassign an ignored task (QLT-B2)? Not specified in §4.12 or DL-300.
 - **ux-expert or product-owner:** the "Nothing was submitted" wording (QLT-A2), already raised by the developer.
 - **orchestrator:** after #620 merges, retarget #624 to `master` and re-run CI before merging it. Re-create any demo database from scratch after CR-01 merges (QLT-A3).
+
+## Addendum: round 2 (2026-11-22, re-read of the merges and fixes only)
+
+| Item | Value |
+|---|---|
+| Heads re-read | #620 `9f483d75ad67702cbf94ec504d8eda5415680ec9`: merges of `master` `5b006268` (3A, #621) and `5db39609` (3B, #623) into 7A; no rebase. #624 `dbc1bb2b35f5dbcfdb11ea68b96a907c3122fbbc`: the fix commit `8e5e3304` plus merges of the updated 7A. Base is now `master` (retargeted; `MERGEABLE`) |
+| Scope | As proposed in round 1: the conflict resolution, the word grep, the 3A check (QLT-A1, QLT-B1), and the fixes the developer made for QLT-B2 to B5 and B8. The rest of the diff was not re-reviewed |
+| CI | **Pending at the time of writing; the review was paused by the delivery lead.** #620 run 45040542543 on `9f483d75`: Stages 1 to 11b **success**, E2E shard 4 success, shards 1 to 3 in progress. #624 run 45040682212 on `dbc1bb2b`: Stages 1 to 11b and E2E shards 1 to 4 in progress. Neither PR may merge until its run has concluded success (§9 item 1) |
+| **Verdict #620** | **APPROVE WITH COMMENTS** on the code (Blocker 0 · Critical 0 · Major 0 · Minor 0 · Info 3), **conditional on run 45040542543 concluding success** |
+| **Verdict #624** | **APPROVE WITH COMMENTS** on the code (Blocker 0 · Critical 0 · Major 0 · Minor 0 · Info 5), **conditional on run 45040682212 concluding success** |
+
+### Previous findings
+
+| ID | Prior severity | Status | Note |
+|---|---|---|---|
+| QLT-A1 | Major | **Fixed** | `origin/master` (`5db39609`) is now an ancestor of `9f483d75`, and `git merge-tree` against `master` reports no conflict for either head. **The resolution is the rename alone:** `git diff origin/master 9f483d75 -- src prisma` gives exactly the round-1 figure, 56 files, +200 / -163, so every 3A and 3B line is kept. A word diff of the five conflict files shows only `submitted` → `prepared` in the two route comments, and the status words and values in the three tree tests. The three new 3A rows in `estimate-node-kinds-service.test.ts` are now `'PREPARED'`. Grep `git grep -n -i submitted -- src prisma scripts tests`: 48 lines in 21 files, the same list as in round 1 (the legacy read, the two migrations, the legacy and migration tests, the "Nothing was submitted" verbs, form submission). `SUBMITTED` in `src/` appears only in `audit-events.ts:179-183`. The re-pasted grep is in the PR body |
+| QLT-A2 | Info | Open (accepted) | The UX wording follow-up stands |
+| QLT-A3 | Info | Open | Release note and demo database, unchanged |
+| QLT-B1 | Major | **Fixed** (code); CI pending | #624 is retargeted to `master`. All of 3A's tree writes reach `assertEditable` with the full state through `lockForChange` (`estimate-service.ts:292-295`, used by add, move and delete at :408, :423 and :448; setCustomer at :370). New integration tests in `quoted-ignored.test.ts`: an ignored DRAFT, PREPARED or APPROVED estimate refuses add, move and delete with 409 `ESTIMATE_IGNORED`, with no part stored; the same Draft, once restored, takes an add; a QUOTED estimate gets 409 `ESTIMATE_NOT_EDITABLE` for all three. 3B (`5db39609`) adds UI and the cost view's `nodeKind` only, with no new server write |
+| QLT-B2 | Minor | **Fixed** | `isTaskClosed`, `isTaskOpen` and `tabsOf` take the layer as a **required** argument. Every caller passes it, and those with no layer in their row yet (queue list, overdue marker, reassign form, `task-service.ts` reassign, `taskStatusOf`, `taskTab`) pass an explicit `false` with a 7D pointer. The workspace's `ignored: false` was already explicit. The reassign question stays with the product-manager for 7D |
+| QLT-B3 | Minor | **Fixed** | `closed-rule-architecture.test.ts` parses both `NOT IN` lists in `overdue-repository.ts`. It asserts that each equals `LOCKED_STATUSES`, that `LOCKED_STATUSES` equals `ESTIMATE_STATUSES.filter(isLocked)`, and that no third status comparison exists in the file |
+| QLT-B4 | Minor | **Fixed** | File 1's step now clears `quoted_at` and `quoted_by`. File 2's header starts with a Restore in SQL that never touches `status`. The test reads both from the headers, runs them in order, and asserts that QUOTED becomes APPROVED and that an ignored Draft and an ignored Prepared keep their status. It also asserts that the Restore statement does not name `"status"` |
+| QLT-B5 | Minor | **Fixed** | A-CR01-1 is marked PENDING in the test comment, and the PR body says pending. The PR's CI row cites run 45035340703 (the round-1 head); the new run is to be added when it ends |
+| QLT-B6 | Info | Open, for 7D | Noted on AQP-401 by the developer |
+| QLT-B7 | Info | Open, for 7C | — |
+| QLT-B8 | Info | **Fixed** | The comment now covers both refusals |
+| QLT-B9 | Info | Open, for 7C | — |
+| QLT-B10 | Info | Open, for 7D | Re-read the `/queue` figure from run 45040682212's JS budget once it ends |
+
+**New findings in round 2:** none.
