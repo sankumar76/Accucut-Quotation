@@ -5,8 +5,8 @@ import { istDayMonthYearOf } from '../time';
  * `MAS_Feed-hopper_21-11-2026.xlsx`. The date is the IST date of the download.
  *
  * Pure, so the browser and the server share it, and it is the **only** place the name is made. Both parts are typed by a person, so each is cleaned before it reaches a header (and a file system):
- * Unicode NFC; every whitespace character and each of `/ \ : * ? " < > |` becomes one hyphen (runs are not collapsed, the rule is literal); control, format (bidirectional overrides, zero-width) and lone
- * surrogate characters are removed. Letters, digits, `_`, `-`, `.` and non-ASCII letters are kept. `isExportFileName` is the one check of a finished name, used wherever a name is read back.
+ * Unicode NFC; every whitespace character and each of `/ \ : * ? " < > |` becomes one hyphen (runs are not collapsed, the rule is literal); control, format (bidirectional overrides, zero-width), lone
+ * surrogate and other default-ignorable (invisible) characters are removed; each leading dot of the short name becomes a hyphen. Letters, digits, `_`, `-`, `.` and non-ASCII letters are kept. `isExportFileName` is the one check of a finished name, used wherever a name is read back.
  */
 
 /** The longest stem of a file name, everything before `.xlsx`, counted in Unicode code points. Never stored, so no database ceiling follows from it. */
@@ -26,10 +26,15 @@ const MIN_SUBJECT_LENGTH = 1;
 
 /** Whitespace and the characters a file system or a path would give a meaning to; each becomes one hyphen. */
 const TO_HYPHEN = /[\s/\\:*?"<>|]/gu;
-/** Control characters, format characters (bidirectional overrides, zero-width) and lone surrogates; each is removed. */
-const REMOVED = /[\p{Cc}\p{Cf}\p{Cs}]/gu;
-/** What a finished stem must never hold: whitespace, the reserved characters of `TO_HYPHEN`, control, format and lone surrogate characters. `;`, `'`, `%` and the like are allowed in a name: the header builder encodes them. */
-const REFUSED_IN_STEM = /[\s/\\:*?"<>|\p{Cc}\p{Cf}\p{Cs}]/u;
+/**
+ * Control characters, format characters (bidirectional overrides, zero-width), lone surrogates and the other default-ignorable characters (Hangul fillers U+3164, the combining grapheme joiner,
+ * variation selectors, which Cf does not cover and which draw nothing, so a part made of them would look empty); each is removed.
+ */
+const REMOVED = /[\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}]/gu;
+/** What a finished stem must never hold: whitespace, the reserved characters of `TO_HYPHEN`, and every character `REMOVED` removes. `;`, `'`, `%` and the like are allowed in a name: the header builder encodes them. */
+const REFUSED_IN_STEM = /[\s/\\:*?"<>|\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}]/u;
+/** A name that starts with a dot is a hidden file on macOS, Linux and Android, and Chromium trims leading dots, so the saved name would differ from the one on the card. */
+const LEADING_DOTS = /^\.+/u;
 
 const codePointsOf = (text: string): string[] => Array.from(text);
 const cut = (text: string, length: number): string => codePointsOf(text).slice(0, length).join('');
@@ -63,7 +68,8 @@ function fitParts(shortName: string, subject: string): { readonly shortName: str
 }
 
 export function exportFileName({ customerShortName, subject, taskCode, now }: ExportFileNameInput): string {
-  const shortName = cleanPart(customerShortName) || CUSTOMER_FALLBACK;
+  // Each leading dot of the short name (the start of the name) becomes one hyphen, the rule of the other reserved characters; a dot at the start of the subject sits after the separator and is harmless.
+  const shortName = cleanPart(customerShortName).replace(LEADING_DOTS, (dots) => '-'.repeat(dots.length)) || CUSTOMER_FALLBACK;
   const subjectOrCode = cleanPart(subject) || cleanPart(taskCode);
   if (subjectOrCode === '') throw new RangeError('exportFileName needs a subject or a usable task code.');
   const fitted = fitParts(shortName, subjectOrCode);
@@ -71,12 +77,12 @@ export function exportFileName({ customerShortName, subject, taskCode, now }: Ex
 }
 
 /**
- * Whether a name is one the export could have made: ends `.xlsx`, a stem of 1 to `EXPORT_FILE_NAME_STEM_MAX_LENGTH` code points, and no whitespace, control, format or reserved character in it.
+ * Whether a name is one the export could have made: ends `.xlsx`, a stem of 1 to `EXPORT_FILE_NAME_STEM_MAX_LENGTH` code points that does not start with a dot, and no whitespace, control, format, invisible or reserved character in it.
  * The one check for the server's schemas, the header builder and the browser's reading of the header.
  */
 export function isExportFileName(name: string): boolean {
   if (!name.endsWith(FILE_NAME_EXTENSION)) return false;
   const stem = name.slice(0, -FILE_NAME_EXTENSION.length);
   const length = codePointsOf(stem).length;
-  return length >= 1 && length <= EXPORT_FILE_NAME_STEM_MAX_LENGTH && !REFUSED_IN_STEM.test(stem);
+  return length >= 1 && length <= EXPORT_FILE_NAME_STEM_MAX_LENGTH && !REFUSED_IN_STEM.test(stem) && !LEADING_DOTS.test(stem);
 }

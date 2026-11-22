@@ -87,70 +87,117 @@ describe('exportFileName sanitising (AQP-391 AC-3)', () => {
   });
 });
 
-describe('exportFileName length (AQP-391 AC-4, AC-10)', () => {
-  it('has the one limit of 100 for the stem', () => {
+describe('exportFileName length (AQP-391 AC-4, AC-10; NFR-032: every edge is read from the constant)', () => {
+  /** The two separators and the date, which the subject's budget leaves room for (AC-4). */
+  const FIXED = 12;
+  const LIMIT = EXPORT_FILE_NAME_STEM_MAX_LENGTH;
+  const SHORT = 10;
+  /** What a subject may hold under a short name of `SHORT`. */
+  const ROOM = LIMIT - FIXED - SHORT;
+
+  it('has the one limit of 100 for the stem (the one pinned value; every other test follows the constant)', () => {
     expect(EXPORT_FILE_NAME_STEM_MAX_LENGTH).toBe(100);
   });
 
-  it('keeps a stem of exactly 100 code points whole', () => {
-    // 10 (short name) + 1 + 78 (subject) + 1 + 10 (date) = 100.
-    const name = nameOf('S'.repeat(10), 'x'.repeat(78));
-    expect(lengthOf(stemOf(name))).toBe(100);
-    expect(name).toBe(`${'S'.repeat(10)}_${'x'.repeat(78)}_${DATE}.xlsx`);
+  it('keeps a stem of exactly the limit whole', () => {
+    const name = nameOf('S'.repeat(SHORT), 'x'.repeat(ROOM));
+    expect(lengthOf(stemOf(name))).toBe(LIMIT);
+    expect(name).toBe(`${'S'.repeat(SHORT)}_${'x'.repeat(ROOM)}_${DATE}.xlsx`);
   });
 
-  it('cuts the end of the subject when the stem would be 101, and the date survives', () => {
-    const name = nameOf('S'.repeat(10), 'x'.repeat(79));
-    expect(lengthOf(stemOf(name))).toBe(100);
-    expect(name).toBe(`${'S'.repeat(10)}_${'x'.repeat(78)}_${DATE}.xlsx`);
+  it('cuts the end of the subject when the stem would be one over the limit, and the date survives', () => {
+    const name = nameOf('S'.repeat(SHORT), 'x'.repeat(ROOM + 1));
+    expect(lengthOf(stemOf(name))).toBe(LIMIT);
+    expect(name).toBe(`${'S'.repeat(SHORT)}_${'x'.repeat(ROOM)}_${DATE}.xlsx`);
   });
 
-  it('cuts 2 characters of a subject of 80 under a short name of 10', () => {
-    const name = nameOf('S'.repeat(10), 'y'.repeat(80));
-    expect(name).toBe(`${'S'.repeat(10)}_${'y'.repeat(78)}_${DATE}.xlsx`);
+  it('cuts 2 characters of a subject of the room plus 2 (the story: 80 under a short name of 10 loses 2)', () => {
+    const name = nameOf('S'.repeat(SHORT), 'y'.repeat(ROOM + 2));
+    expect(name).toBe(`${'S'.repeat(SHORT)}_${'y'.repeat(ROOM)}_${DATE}.xlsx`);
   });
 
-  it('leaves a shorter stem alone', () => {
+  it('leaves a stem one under the limit alone', () => {
+    expect(nameOf('S'.repeat(SHORT), 'x'.repeat(ROOM - 1))).toBe(`${'S'.repeat(SHORT)}_${'x'.repeat(ROOM - 1)}_${DATE}.xlsx`);
     expect(nameOf('MAS', 'x'.repeat(50))).toBe(`MAS_${'x'.repeat(50)}_${DATE}.xlsx`);
   });
 
   it('keeps the short name and the date of a very long subject', () => {
-    const name = nameOf('MAS', 'z'.repeat(5000));
+    const name = nameOf('MAS', 'z'.repeat(LIMIT * 50));
     expect(name.startsWith('MAS_')).toBe(true);
     expect(name.endsWith(`_${DATE}.xlsx`)).toBe(true);
-    expect(lengthOf(stemOf(name))).toBe(EXPORT_FILE_NAME_STEM_MAX_LENGTH);
+    expect(lengthOf(stemOf(name))).toBe(LIMIT);
   });
 
   it('counts code points: it never splits a character outside the BMP at the cut', () => {
-    // short name 3, so the subject budget is 100 - 3 - 12 = 85; a subject of 90 emoji keeps 85 whole emoji.
-    const name = nameOf('MAS', '🔧'.repeat(90));
-    expect(name).toBe(`MAS_${'🔧'.repeat(85)}_${DATE}.xlsx`);
-    expect(lengthOf(stemOf(name))).toBe(100);
+    const room = LIMIT - FIXED - 'MAS'.length;
+    const name = nameOf('MAS', '🔧'.repeat(room + 5));
+    expect(name).toBe(`MAS_${'🔧'.repeat(room)}_${DATE}.xlsx`);
+    expect(lengthOf(stemOf(name))).toBe(LIMIT);
     expect(name).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/);
   });
 
   it('measures the short name in code points as well', () => {
-    const name = nameOf('🔧'.repeat(10), 'x'.repeat(200));
-    expect(lengthOf(stemOf(name))).toBe(100);
-    expect(name).toBe(`${'🔧'.repeat(10)}_${'x'.repeat(78)}_${DATE}.xlsx`);
+    const name = nameOf('🔧'.repeat(SHORT), 'x'.repeat(LIMIT * 2));
+    expect(lengthOf(stemOf(name))).toBe(LIMIT);
+    expect(name).toBe(`${'🔧'.repeat(SHORT)}_${'x'.repeat(ROOM)}_${DATE}.xlsx`);
   });
 
   it('gives a smaller subject to a longer short name (the database ceiling of 20)', () => {
-    const name = nameOf('S'.repeat(20), 'x'.repeat(80));
-    expect(name).toBe(`${'S'.repeat(20)}_${'x'.repeat(68)}_${DATE}.xlsx`);
+    const ceiling = 20;
+    const name = nameOf('S'.repeat(ceiling), 'x'.repeat(LIMIT * 2));
+    expect(name).toBe(`${'S'.repeat(ceiling)}_${'x'.repeat(LIMIT - FIXED - ceiling)}_${DATE}.xlsx`);
   });
 
   it('still gives a valid name, with one character of subject, when the short name alone would use the whole stem', () => {
-    const name = nameOf('S'.repeat(500), 'subject');
+    const name = nameOf('S'.repeat(LIMIT * 5), 'subject');
     expect(isExportFileName(name)).toBe(true);
-    expect(lengthOf(stemOf(name))).toBe(EXPORT_FILE_NAME_STEM_MAX_LENGTH);
-    expect(name).toBe(`${'S'.repeat(87)}_s_${DATE}.xlsx`);
+    expect(lengthOf(stemOf(name))).toBe(LIMIT);
+    expect(name).toBe(`${'S'.repeat(LIMIT - FIXED - 1)}_s_${DATE}.xlsx`);
     expect(name.endsWith(`_${DATE}.xlsx`)).toBe(true);
   });
 
-  it('counts the two separators and the 10-character date in the budget, so a stem below 100 is never cut', () => {
+  it('counts the two separators and the 10-character date in the budget (FIXED is 12)', () => {
     expect(DATE).toHaveLength(10);
-    expect(nameOf('S'.repeat(10), 'x'.repeat(77))).toBe(`${'S'.repeat(10)}_${'x'.repeat(77)}_${DATE}.xlsx`);
+    expect(FIXED).toBe(2 + DATE.length);
+  });
+});
+
+describe('exportFileName invisible characters (AQP-391 review QLT-01)', () => {
+  it.each([
+    ['a Hangul filler (U+3164)', 'ㅤ'],
+    ['a halfwidth Hangul filler (U+FFA0)', 'ﾠ'],
+    ['a combining grapheme joiner (U+034F)', '͏'],
+    ['a variation selector (U+FE0F)', '️'],
+    ['a soft hyphen (U+00AD)', '­'],
+  ])('a subject of only %s falls back to the task code, so no part looks empty', (_label, character) => {
+    expect(nameOf('MAS', character)).toBe(`MAS_${TASK_CODE}_${DATE}.xlsx`);
+    expect(nameOf(character, 'Feed')).toBe(`Customer_Feed_${DATE}.xlsx`);
+  });
+
+  it('removes such a character from inside a part', () => {
+    expect(nameOf('MAS', 'a️bㅤc')).toBe(`MAS_abc_${DATE}.xlsx`);
+  });
+
+  it('is refused by isExportFileName', () => {
+    for (const character of ['ㅤ', '͏', '️', 'ﾠ']) expect(isExportFileName(`M${character}_x_${DATE}.xlsx`), character).toBe(false);
+  });
+});
+
+describe('exportFileName leading dot (AQP-391 review QLT-02)', () => {
+  it('turns each leading dot of the short name into a hyphen, so the name is not hidden and the browser saves what the card shows', () => {
+    expect(nameOf('.MAS', 'x')).toBe(`-MAS_x_${DATE}.xlsx`);
+    expect(nameOf('..', 'x')).toBe(`--_x_${DATE}.xlsx`);
+    expect(nameOf('...M.A', 'x')).toBe(`---M.A_x_${DATE}.xlsx`);
+  });
+
+  it('keeps a dot that is not leading, and a dot at the start of the subject (it is not the start of the name)', () => {
+    expect(nameOf('M.A.S', '.x.')).toBe(`M.A.S_.x._${DATE}.xlsx`);
+  });
+
+  it('is refused by isExportFileName when the stem starts with a dot', () => {
+    expect(isExportFileName(`.a_x_${DATE}.xlsx`)).toBe(false);
+    expect(isExportFileName(`..a_x_${DATE}.xlsx`)).toBe(false);
+    expect(isExportFileName(`a._x_${DATE}.xlsx`)).toBe(true);
   });
 });
 
@@ -216,14 +263,14 @@ describe('isExportFileName (AQP-391 AC-8)', () => {
   it('accepts the names the builder makes, including non-ASCII ones and hyphens and dots', () => {
     expect(isExportFileName('MAS_Feed-hopper_21-11-2026.xlsx')).toBe(true);
     expect(isExportFileName('M_Kühler-Ø-40.5-工场_21-11-2026.xlsx')).toBe(true);
-    expect(isExportFileName(`${'a'.repeat(100)}.xlsx`)).toBe(true);
+    expect(isExportFileName(`${'a'.repeat(EXPORT_FILE_NAME_STEM_MAX_LENGTH)}.xlsx`)).toBe(true);
     expect(isExportFileName('a.xlsx')).toBe(true);
   });
 
-  it('refuses a stem longer than 100 code points, and counts a character outside the BMP as one', () => {
-    expect(isExportFileName(`${'a'.repeat(101)}.xlsx`)).toBe(false);
-    expect(isExportFileName(`${'🔧'.repeat(100)}.xlsx`)).toBe(true);
-    expect(isExportFileName(`${'🔧'.repeat(101)}.xlsx`)).toBe(false);
+  it('refuses a stem longer than the limit in code points, and counts a character outside the BMP as one', () => {
+    expect(isExportFileName(`${'a'.repeat(EXPORT_FILE_NAME_STEM_MAX_LENGTH + 1)}.xlsx`)).toBe(false);
+    expect(isExportFileName(`${'🔧'.repeat(EXPORT_FILE_NAME_STEM_MAX_LENGTH)}.xlsx`)).toBe(true);
+    expect(isExportFileName(`${'🔧'.repeat(EXPORT_FILE_NAME_STEM_MAX_LENGTH + 1)}.xlsx`)).toBe(false);
   });
 
   it.each([
@@ -270,7 +317,7 @@ describe('property: any text a person types gives a valid name (AQP-391 Testing 
   }
   const ALPHABET = ['a', 'Z', '0', '_', '-', '.', ' ', '/', '\\', ':', '*', '?', '"', '<', '>', '|', ';', '\r', '\n', '\t', '\u0000', '‮', '​', ' ', 'ü', 'Ø', '工', '🔧', '\ud800', '\udc00', 'ü'];
 
-  it('is a name that passes isExportFileName, with a stem of at most 100 code points', () => {
+  it('is a name that passes isExportFileName, with a stem of at most the limit in code points', () => {
     const next = random(391);
     const text = (): string => Array.from({ length: Math.floor(next() * 140) }, () => ALPHABET[Math.floor(next() * ALPHABET.length)]).join('');
     for (let index = 0; index < 500; index += 1) {
