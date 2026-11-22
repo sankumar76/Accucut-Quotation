@@ -50,6 +50,8 @@ model User {
   unlocks           Approval[]         @relation("ApprovalUnlocker")
   cancellations     Approval[]         @relation("ApprovalCanceller")
   removals          Approval[]         @relation("ApprovalRemover")
+  estimatesQuoted   Estimate[]         @relation("EstimateQuoter")
+  estimatesIgnored  Estimate[]         @relation("EstimateIgnorer")
 
   @@unique([email], map: "uq_users_email")
   @@map("users")
@@ -272,6 +274,8 @@ enum EstimateStatus {
   DRAFT
   PREPARED
   APPROVED
+  /// An approved estimate whose quote a Lead or Admin has marked as sent (CR-01 item 7B, architecture section 4.12 a). A live approval still stands behind it.
+  QUOTED
 
   @@map("estimate_status")
 }
@@ -329,12 +333,21 @@ model Estimate {
   status               EstimateStatus @default(DRAFT)
   inputsRevision       Int            @default(0) @map("inputs_revision")
   currentCalculationId String?        @map("current_calculation_id") @db.Uuid
+  /// Set exactly when `status` is QUOTED (`ck_estimates_quoted`); Unlock and Cancel clear them in the same UPDATE.
+  quotedAt             DateTime?      @map("quoted_at") @db.Timestamptz(6)
+  quotedById           String?        @map("quoted_by") @db.Uuid
+  /// The Ignored layer over the status (ADR-019): all three set or all three null (`ck_estimates_ignored_all_or_none`). The status underneath is kept, so Restore loses nothing.
+  ignoredAt            DateTime?      @map("ignored_at") @db.Timestamptz(6)
+  ignoredById          String?        @map("ignored_by") @db.Uuid
+  ignoreRemarks        String?        @map("ignore_remarks")
   createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   task               Task           @relation(fields: [taskId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_task_id")
   customer           Customer?      @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_customer_id")
   currentCalculation Calculation?   @relation("CurrentCalculation", fields: [currentCalculationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_current_calculation_id")
+  quotedBy           User?          @relation("EstimateQuoter", fields: [quotedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_quoted_by")
+  ignoredBy          User?          @relation("EstimateIgnorer", fields: [ignoredById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_ignored_by")
   calculations       Calculation[]  @relation("EstimateCalculations")
   approvals          Approval[]
   nodes              EstimateNode[]
