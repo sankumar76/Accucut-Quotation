@@ -238,7 +238,7 @@ async function showTree(page: Page): Promise<void> {
 async function insertTwoSubParts(ownerId: string): Promise<void> {
   const client = await connectToTestDatabase();
   try {
-    await client.query('INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index) VALUES ($1::uuid, $1::uuid, 0), ($1::uuid, $1::uuid, 1)', [ownerId]);
+    await client.query('INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index, node_kind) VALUES ($1::uuid, $1::uuid, 0, \'PART\'), ($1::uuid, $1::uuid, 1, \'PART\')', [ownerId]);
   } finally {
     await client.end();
   }

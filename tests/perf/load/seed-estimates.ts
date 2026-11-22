@@ -86,7 +86,7 @@ async function addParts(admin: Session, estimateId: string, parts: number): Prom
   const calls = addCallsFor(buildTree500().nodes.slice(0, parts));
   const ids: string[] = [];
   for (const step of calls) {
-    const json = step.kind === 'item' ? { kind: 'item' } : { kind: 'sub-part', nodeId: ids[step.parentIndex] };
+    const json = step.kind === 'item' ? { parentId: null, nodeKind: 'MAIN_ASSEMBLY' } : { parentId: ids[step.parentIndex], nodeKind: step.nodeKind };
     const reply = await mustCall(admin, 'adding a part', 'POST', `/api/v1/estimates/${estimateId}/nodes`, CREATED, { json });
     ids.push(parse('adding a part', reply, added).nodeId);
   }

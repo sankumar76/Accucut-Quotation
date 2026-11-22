@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { isAllowedChild, type NodeKind } from '../../src/lib/estimate/node-kinds';
 import { checkPicture, MAX_PICTURE_BYTES } from '../../src/lib/images/picture-rules';
 import { buildTree500 } from '../support/builders/tree500';
 import {
@@ -34,16 +35,25 @@ describe('AC-3: the 500-part estimate is the tree500 fixture, built through the 
     });
   });
 
-  it('gives the fixture\'s Sl. Nos when each call is replayed by the API\'s rule (an item or a sub-part goes last)', () => {
-    const children = new Map<number | null, number>();
-    const slNos: string[] = [];
+  it("builds a tree the API accepts (CR-01 item 3A): replayed by the add rule, each kind is allowed under its parent's, and no row is below the fourth level", () => {
+    const kinds: NodeKind[] = [];
+    const levels: number[] = [];
     addCallsFor(nodes).forEach((call) => {
       const parent = call.kind === 'item' ? null : call.parentIndex;
-      const position = (children.get(parent) ?? 0) + 1;
-      children.set(parent, position);
-      slNos.push(parent === null ? String(position) : `${slNos[parent] ?? ''}.${position}`);
+      const kind = call.kind === 'item' ? 'MAIN_ASSEMBLY' : call.nodeKind;
+      expect(isAllowedChild(parent === null ? null : (kinds[parent] ?? null), kind)).toBe(true);
+      kinds.push(kind);
+      levels.push(parent === null ? 1 : (levels[parent] ?? 0) + 1);
     });
-    expect(slNos).toEqual(nodes.map((node) => node.sl));
+    expect(Math.max(...levels)).toBe(4);
+  });
+
+  it('keeps every part of the fixture, and a part of its first four levels keeps its parent', () => {
+    const calls = addCallsFor(nodes);
+    nodes.forEach((node, index) => {
+      const call = calls[index];
+      if (node.depth <= 4) expect(call?.kind === 'sub-part' ? call.parentIndex : null).toBe(node.parentIndex);
+    });
   });
 
   it('is the same for any first N parts of the fixture, because a parent always comes before its children', () => {

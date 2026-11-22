@@ -218,7 +218,7 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     case 'PATCH /api/v1/estimates/[id]/nodes/[nodeId]/inputs':
       return { id, body: { revision: 1, values: {} }, status: 200 };
     case 'POST /api/v1/estimates/[id]/nodes':
-      return { id, body: { kind: 'item' }, status: 201 };
+      return { id, body: { parentId: null, nodeKind: 'MAIN_ASSEMBLY' }, status: 201 };
     case 'POST /api/v1/estimates/[id]/tree/move':
       return { id, body: { nodeId: id, ...stay }, status: 200 };
     case 'PUT /api/v1/estimates/[id]/nodes/[nodeId]':

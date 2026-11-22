@@ -175,8 +175,8 @@ export function problemFromAppError(error: AppError, requestId: string): Problem
     return { ...problem(error.httpStatus, error.code, error.message, requestId), inputsRevision: error.inputsRevision, warnings };
   }
   if (error instanceof TreeChangedError) {
-    // Named field by field, so a part can never carry more than the six facts of the tree even if the service one day hands over a richer record.
-    const tree = error.tree.map(({ id, parentId, slNo, label, completeness, revision }) => ({ id, parentId, slNo, label, completeness, revision }));
+    // Named field by field, so a part can never carry more than the seven facts of the tree (the kind holds no figure, CR-01 item 3A) even if the service one day hands over a richer record.
+    const tree = error.tree.map(({ id, parentId, slNo, label, nodeKind, completeness, revision }) => ({ id, parentId, slNo, label, nodeKind, completeness, revision }));
     return { ...problem(error.httpStatus, error.code, error.message, requestId), tree };
   }
   if (error instanceof MasterInUseError) {

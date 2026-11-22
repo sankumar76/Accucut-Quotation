@@ -67,7 +67,7 @@ async function setUpPart(): Promise<string> {
     [arjunId, leadId, PATH],
   );
   estimateId = defined((await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id) VALUES ($1::uuid) RETURNING id::text AS id', [defined(task.rows[0]).id])).rows[0]).id;
-  return (await service.addPart(arjun, estimateId, { kind: 'item' })).nodeId;
+  return (await service.addPart(arjun, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
 }
 
 async function stored(nodeId: string): Promise<Record<string, unknown>> {
@@ -145,5 +145,5 @@ async function setUpAnotherPart(index: number): Promise<{ estimate: string; node
     [`Q-2026-${String(3000 + index)}`, arjunId, leadId, PATH],
   );
   const estimate = defined((await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id) VALUES ($1::uuid) RETURNING id::text AS id', [defined(task.rows[0]).id])).rows[0]).id;
-  return { estimate, node: (await service.addPart(arjun, estimate, { kind: 'item' })).nodeId };
+  return { estimate, node: (await service.addPart(arjun, estimate, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId };
 }

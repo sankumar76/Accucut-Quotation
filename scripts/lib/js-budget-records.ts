@@ -121,7 +121,7 @@ const estimatePathOf = (estimate: MadeEstimate): string => `/estimates/${encodeU
 
 /** Adds one part to the estimate, which is then the part at the top (Sl. No 1), and returns the path of its cost details (STORY-06.03). */
 async function makeCostsPath(admin: AdminCall, estimate: MadeEstimate): Promise<string> {
-  await admin.post(`/api/v1/estimates/${encodeURIComponent(estimate.estimateId)}/nodes`, { kind: 'item' });
+  await admin.post(`/api/v1/estimates/${encodeURIComponent(estimate.estimateId)}/nodes`, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
   return `${estimatePathOf(estimate)}/costs/${FIRST_PART_SL_NO}`;
 }
 

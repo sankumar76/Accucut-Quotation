@@ -104,15 +104,14 @@ const inputsRevision = async (): Promise<number> => {
   return defined(rows[0]).inputs_revision;
 };
 
-/** 1, 1.1, 1.1.1, 1.1.2, 1.2, 1.3, 1.4, 1.5 and 2, made by the service. */
+/** 1 (Main Assembly), 1.1 (Sub-Assembly), 1.1.1 and 1.1.2 (Parts), 1.2 to 1.5 (Parts) and 2 (Main Assembly), made by the service. */
 async function storyTree(): Promise<PartView[]> {
-  const one = (await service.addPart(arjun, estimateId, { kind: 'item' })).nodeId;
-  const oneOne = (await service.addPart(arjun, estimateId, { kind: 'sub-part', nodeId: one })).nodeId;
-  await service.addPart(arjun, estimateId, { kind: 'sub-part', nodeId: oneOne });
-  await service.addPart(arjun, estimateId, { kind: 'sub-part', nodeId: oneOne });
-  await service.addPart(arjun, estimateId, { kind: 'beside', nodeId: oneOne });
-  for (let sibling = 0; sibling < 3; sibling += 1) await service.addPart(arjun, estimateId, { kind: 'sub-part', nodeId: one });
-  const last = await service.addPart(arjun, estimateId, { kind: 'item' });
+  const one = (await service.addPart(arjun, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
+  const oneOne = (await service.addPart(arjun, estimateId, { parentId: one, nodeKind: 'SUB_ASSEMBLY' })).nodeId;
+  await service.addPart(arjun, estimateId, { parentId: oneOne, nodeKind: 'PART' });
+  await service.addPart(arjun, estimateId, { parentId: oneOne, nodeKind: 'PART' });
+  for (let sibling = 0; sibling < 4; sibling += 1) await service.addPart(arjun, estimateId, { parentId: one, nodeKind: 'PART' });
+  const last = await service.addPart(arjun, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
   expect(numbers(last.nodes)).toEqual(['1', '1.1', '1.1.1', '1.1.2', '1.2', '1.3', '1.4', '1.5', '2']);
   return [...last.nodes];
 }
@@ -120,29 +119,29 @@ async function storyTree(): Promise<PartView[]> {
 describe('the table keeps its own rules, whoever writes to it', () => {
   it('refuses a part that is its own parent, a negative place, a revision of 0 and inputs that are not an object', async () => {
     await setUpEstimates();
-    const own = defined((await db.owner.query<{ id: string }>('INSERT INTO estimate_nodes (estimate_id, sort_index) VALUES ($1::uuid, 0) RETURNING id::text AS id', [estimateId])).rows[0]).id;
+    const own = defined((await db.owner.query<{ id: string }>('INSERT INTO estimate_nodes (estimate_id, sort_index, node_kind) VALUES ($1::uuid, 0, \'MAIN_ASSEMBLY\') RETURNING id::text AS id', [estimateId])).rows[0]).id;
     await expect(db.owner.query('UPDATE estimate_nodes SET parent_id = id WHERE id = $1::uuid', [own])).rejects.toThrow(/ck_estimate_nodes_not_own_parent/);
-    await expect(db.owner.query('INSERT INTO estimate_nodes (estimate_id, sort_index) VALUES ($1::uuid, -1)', [estimateId])).rejects.toThrow(/ck_estimate_nodes_sort_index_not_negative/);
-    await expect(db.owner.query('INSERT INTO estimate_nodes (estimate_id, sort_index, revision) VALUES ($1::uuid, 0, 0)', [estimateId])).rejects.toThrow(/ck_estimate_nodes_revision_positive/);
-    await expect(db.owner.query(`INSERT INTO estimate_nodes (estimate_id, sort_index, inputs) VALUES ($1::uuid, 0, '[]')`, [estimateId])).rejects.toThrow(/ck_estimate_nodes_inputs_is_object/);
+    await expect(db.owner.query('INSERT INTO estimate_nodes (estimate_id, sort_index, node_kind) VALUES ($1::uuid, -1, \'MAIN_ASSEMBLY\')', [estimateId])).rejects.toThrow(/ck_estimate_nodes_sort_index_not_negative/);
+    await expect(db.owner.query('INSERT INTO estimate_nodes (estimate_id, sort_index, node_kind, revision) VALUES ($1::uuid, 0, \'MAIN_ASSEMBLY\', 0)', [estimateId])).rejects.toThrow(/ck_estimate_nodes_revision_positive/);
+    await expect(db.owner.query(`INSERT INTO estimate_nodes (estimate_id, sort_index, node_kind, inputs) VALUES ($1::uuid, 0, 'MAIN_ASSEMBLY', '[]')`, [estimateId])).rejects.toThrow(/ck_estimate_nodes_inputs_is_object/);
   });
 
   it('refuses a parent that belongs to another estimate, on insert and on update', async () => {
     await setUpEstimates();
-    const foreign = defined((await db.owner.query<{ id: string }>('INSERT INTO estimate_nodes (estimate_id, sort_index) VALUES ($1::uuid, 0) RETURNING id::text AS id', [otherEstimateId])).rows[0]).id;
-    await expect(db.owner.query('INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index) VALUES ($1::uuid, $2::uuid, 0)', [estimateId, foreign])).rejects.toThrow(/same estimate/);
-    const mine = defined((await db.owner.query<{ id: string }>('INSERT INTO estimate_nodes (estimate_id, sort_index) VALUES ($1::uuid, 0) RETURNING id::text AS id', [estimateId])).rows[0]).id;
+    const foreign = defined((await db.owner.query<{ id: string }>('INSERT INTO estimate_nodes (estimate_id, sort_index, node_kind) VALUES ($1::uuid, 0, \'MAIN_ASSEMBLY\') RETURNING id::text AS id', [otherEstimateId])).rows[0]).id;
+    await expect(db.owner.query('INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index, node_kind) VALUES ($1::uuid, $2::uuid, 0, \'PART\')', [estimateId, foreign])).rejects.toThrow(/same estimate/);
+    const mine = defined((await db.owner.query<{ id: string }>('INSERT INTO estimate_nodes (estimate_id, sort_index, node_kind) VALUES ($1::uuid, 0, \'MAIN_ASSEMBLY\') RETURNING id::text AS id', [estimateId])).rows[0]).id;
     await expect(db.owner.query('UPDATE estimate_nodes SET parent_id = $2::uuid WHERE id = $1::uuid', [mine, foreign])).rejects.toThrow(/same estimate/);
   });
 
   it('lets the runtime role read, add, change and delete parts and not truncate the table; the table holds no cost column', async () => {
     await setUpEstimates();
-    await db.runtime.query('INSERT INTO estimate_nodes (estimate_id, sort_index) VALUES ($1::uuid, 0)', [estimateId]);
+    await db.runtime.query('INSERT INTO estimate_nodes (estimate_id, sort_index, node_kind) VALUES ($1::uuid, 0, \'MAIN_ASSEMBLY\')', [estimateId]);
     await db.runtime.query('UPDATE estimate_nodes SET sort_index = 1 WHERE estimate_id = $1::uuid', [estimateId]);
     await db.runtime.query('DELETE FROM estimate_nodes WHERE estimate_id = $1::uuid', [estimateId]);
     await expect(db.runtime.query('TRUNCATE estimate_nodes')).rejects.toThrow(/permission denied/);
     const columns = await db.owner.query<{ column_name: string }>(`SELECT column_name FROM information_schema.columns WHERE table_name = 'estimate_nodes' ORDER BY column_name`);
-    expect(columns.rows.map((row) => row.column_name)).toEqual(['created_at', 'estimate_id', 'id', 'image_id', 'inputs', 'parent_id', 'revision', 'sort_index', 'updated_at']);
+    expect(columns.rows.map((row) => row.column_name)).toEqual(['created_at', 'estimate_id', 'id', 'image_id', 'inputs', 'node_kind', 'parent_id', 'revision', 'sort_index', 'updated_at']);
   });
 });
 
@@ -159,22 +158,22 @@ describe('AC-1, AC-2: adding and renumbering, through the real tables', () => {
     expect(await inputsRevision()).toBe(9);
   });
 
-  it('moves up and down, to another parent and to the top, and renumbers each time', async () => {
+  it('moves up and down inside the parent, also at the top, and renumbers each time', async () => {
     await setUpEstimates();
     const tree = await storyTree();
     const up = await service.moveNode(arjun, estimateId, { nodeId: idOf(tree, '1.3'), revision: 1, parentId: idOf(tree, '1'), index: 1 });
     expect(up.find((node) => node.id === idOf(tree, '1.3'))?.slNo).toBe('1.2');
     expect(up.find((node) => node.id === idOf(tree, '1.2'))?.slNo).toBe('1.3');
-    const across = await service.moveNode(arjun, estimateId, { nodeId: idOf(tree, '1.1'), revision: 1, parentId: idOf(tree, '2'), index: 0 });
-    expect(numbers(across)).toEqual(['1', '1.1', '1.2', '1.3', '1.4', '2', '2.1', '2.1.1', '2.1.2']);
-    const top = await service.moveNode(arjun, estimateId, { nodeId: idOf(tree, '1.1.2'), revision: 1, parentId: null, index: 0 });
-    expect(top.find((node) => node.id === idOf(tree, '1.1.2'))?.slNo).toBe('1');
+    const down = await service.moveNode(arjun, estimateId, { nodeId: idOf(tree, '1.1'), revision: 1, parentId: idOf(tree, '1'), index: 2 });
+    expect(numbers(down)).toEqual(['1', '1.1', '1.2', '1.3', '1.3.1', '1.3.2', '1.4', '1.5', '2']);
+    const top = await service.moveNode(arjun, estimateId, { nodeId: idOf(tree, '2'), revision: 1, parentId: null, index: 0 });
+    expect(top.find((node) => node.id === idOf(tree, '2'))?.slNo).toBe('1');
   });
 
   it('a part is added to the estimate it was asked for and never to another: the part of another estimate is 404', async () => {
     await setUpEstimates();
-    const foreign = await service.addPart(arjun, otherEstimateId, { kind: 'item' });
-    await expect(service.addPart(arjun, estimateId, { kind: 'sub-part', nodeId: foreign.nodeId })).rejects.toBeInstanceOf(NotFoundError);
+    const foreign = await service.addPart(arjun, otherEstimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
+    await expect(service.addPart(arjun, estimateId, { parentId: foreign.nodeId, nodeKind: 'PART' })).rejects.toBeInstanceOf(NotFoundError);
     expect(await stored()).toHaveLength(0);
   });
 });
@@ -194,7 +193,7 @@ describe('AC-3: delete removes the part and its sub-parts in one statement', () 
     await setUpEstimates();
     const tree = await storyTree();
     const shown = await seen(idOf(tree, '1.2'));
-    await service.addPart(lead, estimateId, { kind: 'sub-part', nodeId: idOf(tree, '1.2') });
+    await service.addPart(lead, estimateId, { parentId: idOf(tree, '1.2'), nodeKind: 'FASTENER' });
     const before = await inputsRevision();
     const refused = await service.deleteNode(arjun, estimateId, { nodeId: idOf(tree, '1.2'), revision: 1, parts: 1, subtree: shown }).catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(TreeChangedError);
@@ -205,13 +204,13 @@ describe('AC-3: delete removes the part and its sub-parts in one statement', () 
 });
 
 describe('SQR-01: what the person confirmed is what is deleted', () => {
-  it('refuses with 409 and the tree, and deletes nothing, when the count is the same but a sub-part was moved out and another moved in', async () => {
+  it('refuses with 409 and the tree, and deletes nothing, when the count is the same but a sub-part was deleted and another added', async () => {
     await setUpEstimates();
     const tree = await storyTree();
     const target = idOf(tree, '1.1');
     const shown = await seen(target);
-    await service.moveNode(lead, estimateId, { nodeId: idOf(tree, '1.1.2'), revision: 1, parentId: null, index: 0 });
-    await service.moveNode(lead, estimateId, { nodeId: idOf(tree, '1.5'), revision: 1, parentId: target, index: 0 });
+    await service.deleteNode(lead, estimateId, { nodeId: idOf(tree, '1.1.2'), revision: 1, parts: 1, subtree: await seen(idOf(tree, '1.1.2')) });
+    await service.addPart(lead, estimateId, { parentId: target, nodeKind: 'PART' });
     const rows = JSON.stringify(await stored());
     const refused = await service.deleteNode(arjun, estimateId, { nodeId: target, revision: 1, parts: 3, subtree: shown }).catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(TreeChangedError);
@@ -232,14 +231,15 @@ describe('SQR-01: what the person confirmed is what is deleted', () => {
 });
 
 describe('SQR-06: a move under a real part of another estimate is 422, not a database error', () => {
-  it('answers FieldValidationError under parentId and writes nothing', async () => {
+  it('answers FieldValidationError under parentId (MOVE_ACROSS_PARENTS) and writes nothing', async () => {
     await setUpEstimates();
     const tree = await storyTree();
-    const foreign = (await service.addPart(arjun, otherEstimateId, { kind: 'item' })).nodeId;
+    const foreign = (await service.addPart(arjun, otherEstimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
     const rows = JSON.stringify(await stored());
     const refused = await service.moveNode(arjun, estimateId, { nodeId: idOf(tree, '1.2'), revision: 1, parentId: foreign, index: 0 }).catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(FieldValidationError);
     expect((refused as FieldValidationError).fields[0]?.field).toBe('parentId');
+    expect(refused).toMatchObject({ code: 'MOVE_ACROSS_PARENTS' });
     expect(JSON.stringify(await stored())).toBe(rows);
   });
 });
@@ -274,7 +274,7 @@ describe('AC-4, AC-5: refused moves change nothing, and a change that fails leav
       transactions: createTransactionRunner(db.prisma),
       ...inputsDependencies(),
     });
-    await expect(failing.addPart(arjun, estimateId, { kind: 'item' })).rejects.toThrow('the revision write failed');
+    await expect(failing.addPart(arjun, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toThrow('the revision write failed');
     expect(await stored()).toHaveLength(0);
     expect(await inputsRevision()).toBe(0);
   });
@@ -286,8 +286,8 @@ describe('AC-6: concurrency', () => {
     const tree = await storyTree();
     const target = idOf(tree, '1.4');
     const results = await Promise.allSettled([
-      service.moveNode(arjun, estimateId, { nodeId: target, revision: 1, parentId: idOf(tree, '2'), index: 0 }),
-      service.moveNode(lead, estimateId, { nodeId: target, revision: 1, parentId: idOf(tree, '1'), index: 0 }),
+      service.moveNode(arjun, estimateId, { nodeId: target, revision: 1, parentId: idOf(tree, '1'), index: 0 }),
+      service.moveNode(lead, estimateId, { nodeId: target, revision: 1, parentId: idOf(tree, '1'), index: 1 }),
     ]);
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
@@ -299,7 +299,7 @@ describe('AC-6: concurrency', () => {
 
   it('ten parts added at once are all stored with distinct places, and the revision counts every one', async () => {
     await setUpEstimates();
-    const results = await Promise.all(Array.from({ length: 10 }, () => service.addPart(arjun, estimateId, { kind: 'item' })));
+    const results = await Promise.all(Array.from({ length: 10 }, () => service.addPart(arjun, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })));
     expect(new Set(results.map((result) => result.nodeId)).size).toBe(10);
     const rows = await stored();
     expect(rows.map((row) => row.place).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -311,20 +311,20 @@ describe('AC-7: who may write', () => {
   it('another Engineer and an unknown estimate are 404, and a submitted estimate is 409, with nothing written', async () => {
     await setUpEstimates();
     const tree = await storyTree();
-    await expect(service.addPart(priya, estimateId, { kind: 'item' })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.addPart(priya, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toBeInstanceOf(NotFoundError);
     await expect(service.getTree(priya, estimateId)).rejects.toBeInstanceOf(NotFoundError);
-    await expect(service.addPart(arjun, MISSING, { kind: 'item' })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.addPart(arjun, MISSING, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toBeInstanceOf(NotFoundError);
     await db.owner.query(`UPDATE estimates SET status = 'SUBMITTED' WHERE id = $1::uuid`, [estimateId]);
     const rows = JSON.stringify(await stored());
-    await expect(service.addPart(arjun, estimateId, { kind: 'item' })).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.addPart(arjun, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toBeInstanceOf(ConflictError);
     await expect(service.moveNode(arjun, estimateId, { nodeId: idOf(tree, '2'), revision: 1, parentId: null, index: 0 })).rejects.toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
     await expect(service.deleteNode(arjun, estimateId, { nodeId: idOf(tree, '2'), revision: 1, parts: 1, subtree: await seen(idOf(tree, '2')) })).rejects.toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
     expect(JSON.stringify(await stored())).toBe(rows);
     expect(await service.getTree(lead, estimateId)).toHaveLength(9);
     // The shared rule (STORY-06.01): a Lead may still change a submitted estimate, nobody an approved one.
-    expect((await service.addPart(lead, estimateId, { kind: 'item' })).nodes).toHaveLength(10);
+    expect((await service.addPart(lead, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodes).toHaveLength(10);
     await db.owner.query(`UPDATE estimates SET status = 'APPROVED' WHERE id = $1::uuid`, [estimateId]);
-    await expect(service.addPart(lead, estimateId, { kind: 'item' })).rejects.toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
+    await expect(service.addPart(lead, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
   });
 });
 
@@ -334,11 +334,14 @@ describe('AC-8: a 500-node tree', () => {
     const { nodes: built } = buildTree500();
     const ids: string[] = [];
     const counts = new Map<number | null, number>();
+    const parentIndexes = new Set(built.map((entry) => entry.parentIndex));
     for (const entry of built) {
       const place = counts.get(entry.parentIndex) ?? 0;
       counts.set(entry.parentIndex, place + 1);
       const parent = entry.parentIndex === null ? null : defined(ids[entry.parentIndex]);
-      const { rows } = await db.owner.query<{ id: string }>('INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index) VALUES ($1::uuid, $2::uuid, $3) RETURNING id::text AS id', [estimateId, parent, place]);
+      // A legacy-shaped tree: six levels, as the kinds of the migration's backfill would hold it (depth 1 Main, depth 2 with a child Sub-Assembly, every other Part).
+      const kind = entry.depth === 1 ? 'MAIN_ASSEMBLY' : entry.depth === 2 && parentIndexes.has(entry.index) ? 'SUB_ASSEMBLY' : 'PART';
+      const { rows } = await db.owner.query<{ id: string }>('INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index, node_kind) VALUES ($1::uuid, $2::uuid, $3, $4::estimate_node_kind) RETURNING id::text AS id', [estimateId, parent, place, kind]);
       ids.push(defined(rows[0]).id);
     }
     const started = performance.now();
