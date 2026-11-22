@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { Outcome } from '@/lib/api-client';
-import { NODE_KIND_NAMES } from '@/lib/estimate/node-kinds';
-import { addRequestOf, type AddButton } from '@/lib/estimates/tree-add';
+import type { NodeKind } from '@/lib/estimate/node-kinds';
 import { addPart, deletePart, loadTree, movePart, treeFromRefusal, type PartItem, type TreeAnswer } from '@/lib/estimates/tree-client';
-import { deleteGuardOf, stepOf } from '@/lib/estimates/tree-moves';
+import { deleteGuardOf, partsRemoved, stepOf } from '@/lib/estimates/tree-moves';
 
-import { addedMessage, deletedMessage, noSubPartMessage, renumberedMessage } from './estimate-texts';
+import { addedMessage, deletedMessage, renumberedMessage } from './estimate-texts';
 
 /** Why the last change did not go through: the tree changed under the person (the fresh one is shown), a refusal in the server's words, or nothing but "it failed". */
 export type TreeProblem =
@@ -26,6 +25,8 @@ export interface DeleteTarget {
   readonly parts: number;
   /** The fingerprint of those parts with their revisions, as the dialog showed them. */
   readonly subtree: string;
+  /** The IDs of those parts: the open row stays open unless it is one of them. */
+  readonly removedIds: ReadonlyArray<string>;
 }
 
 const slNoOf = (nodes: ReadonlyArray<PartItem>, id: string | null): string => nodes.find((node) => node.id === id)?.slNo ?? '';
@@ -47,6 +48,8 @@ export function usePartsTree(estimateId: string) {
   // The delete the dialog is about, and whether it is open: the dialog keeps its words while it fades out, so the target is not cleared on close.
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // The row that took the focus after it was added (CR-01 item 3C AC-3): kept in a ref, because it is read once, when the new row's link is mounted, and is not something to draw.
+  const focusAfterAdd = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,19 +93,23 @@ export function usePartsTree(estimateId: string) {
     return false;
   }
 
-  function add(button: AddButton): void {
-    const request = addRequestOf(button, selected);
-    if (request === null) {
-      if (button === 'sub-part' && selected !== null) setProblem({ kind: 'refused', message: noSubPartMessage(NODE_KIND_NAMES[selected.nodeKind]) });
-      return;
-    }
+  /** Adds a row of this kind last under the row `parentId` (null: the top level, "Add main assembly"). The new row is opened and takes the focus. The server decides whether the kind is allowed there (CR-01 item 3C). */
+  function addUnder(parentId: string | null, nodeKind: NodeKind): void {
     void change(
-      () => addPart(estimateId, request),
+      () => addPart(estimateId, { parentId, nodeKind }),
       (answer) => {
+        focusAfterAdd.current = answer.nodeId;
         setSelectedId(answer.nodeId);
         setAnnouncement(addedMessage(slNoOf(answer.nodes, answer.nodeId)));
       },
     );
+  }
+
+  /** True once for the row that was just added: its link takes the focus when it is mounted. */
+  function wantsFocus(id: string): boolean {
+    if (focusAfterAdd.current !== id) return false;
+    focusAfterAdd.current = null;
+    return true;
   }
 
   function move(direction: 'up' | 'down'): void {
@@ -116,22 +123,24 @@ export function usePartsTree(estimateId: string) {
     );
   }
 
-  /** "Delete" on a part: the dialog opens and names how many parts would go. Nothing is sent yet. */
-  function askDelete(): void {
-    if (selected === null || nodes === null || busy) return;
+  /** The "-" of a row: the dialog opens and names how many parts would go. Nothing is sent yet. The row need not be the open one. */
+  function askDelete(id: string): void {
+    const row = nodes?.find((node) => node.id === id);
+    if (row === undefined || nodes === null || busy) return;
     setProblem(null);
-    setDeleting({ id: selected.id, slNo: selected.slNo, revision: selected.revision, parentId: selected.parentId, ...deleteGuardOf(nodes, selected.id) });
+    setDeleting({ id: row.id, slNo: row.slNo, revision: row.revision, parentId: row.parentId, ...deleteGuardOf(nodes, row.id), removedIds: partsRemoved(nodes, row.id).map((part) => part.id) });
     setDeleteOpen(true);
   }
 
   async function confirmDelete(): Promise<void> {
     if (deleting === null) return;
-    const { id, revision, parts, subtree, parentId } = deleting;
+    const { id, revision, parts, subtree, parentId, removedIds } = deleting;
     // The dialog closes whatever the server says: on a refusal the notice and the fresh tree are on the page, which is where the person has to look.
     await change(
       () => deletePart(estimateId, { nodeId: id, revision, parts, subtree }),
       () => {
-        setSelectedId(parentId);
+        // The open row stays open unless it went with the deleted ones; then its parent is open (the first row, at the top).
+        setSelectedId((current) => (current !== null && removedIds.includes(current) ? parentId : current));
         setAnnouncement(deletedMessage(parts));
       },
     );
@@ -162,7 +171,8 @@ export function usePartsTree(estimateId: string) {
     deleting,
     deleteOpen,
     select: setSelectedId,
-    add,
+    addUnder,
+    wantsFocus,
     move,
     askDelete,
     confirmDelete,

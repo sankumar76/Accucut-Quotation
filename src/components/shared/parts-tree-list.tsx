@@ -26,6 +26,11 @@ export interface PartsTreeListProps<T extends PartsTreeItem> {
   /** The accessible name of the navigation landmark ("Parts tree"). */
   readonly label: string;
   readonly renderRow: RenderPartsTreeRow<T>;
+  /**
+   * What goes in the toolbar slot at the end of each row (CR-01 item 3C: the "+" and "-"; 3D adds the move handle), or nothing: the slot is there either way, empty, so no story lays a row out again. The toolbar
+   * shows on hover, on keyboard focus within the row and on the open row, and on a touch screen in line on the open row only.
+   */
+  readonly renderToolbar?: RenderPartsTreeRow<T>;
   /** The ID of the `nav`, for a caller that moves focus into it. */
   readonly id?: string;
   /**
@@ -78,11 +83,19 @@ interface BranchItemProps<T extends PartsTreeItem> {
   readonly siblings: ReadonlyArray<T>;
   readonly level: number;
   readonly renderRow: RenderPartsTreeRow<T>;
+  readonly renderToolbar: RenderPartsTreeRow<T> | undefined;
   readonly closed: ReadonlySet<string> | undefined;
   readonly onToggle: ((id: string) => void) | undefined;
 }
 
-function BranchItem<T extends PartsTreeItem>({ branch, siblings, level, renderRow, closed, onToggle }: BranchItemProps<T>) {
+/**
+ * The toolbar slot of a row. A fine pointer sees it over the end of the row while the row is hovered, holds keyboard focus or is the open one (`aria-current`); it is in the tab order always, so Tab moves from a row to its
+ * buttons. A touch screen has no hover: the slot is in line, after the row, and only on the open row.
+ */
+const TOOLBAR_SLOT =
+  'absolute inset-y-0 right-0 flex items-center opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 group-has-[[aria-current=true]]/row:opacity-100 pointer-coarse:static pointer-coarse:hidden pointer-coarse:opacity-100 pointer-coarse:group-has-[[aria-current=true]]/row:flex';
+
+function BranchItem<T extends PartsTreeItem>({ branch, siblings, level, renderRow, renderToolbar, closed, onToggle }: BranchItemProps<T>) {
   const { node, children } = branch;
   const interactive = closed !== undefined && onToggle !== undefined;
   const open = !(closed?.has(node.id) ?? false);
@@ -90,15 +103,17 @@ function BranchItem<T extends PartsTreeItem>({ branch, siblings, level, renderRo
   return (
     <li data-part-row={node.id}>
       {/* The row. `relative` and the empty slot at its end are where the toolbar of 3C (add, delete) and 3D (move) goes, so neither has to lay the row out again. */}
-      <div className="relative flex items-start">
+      <div className="group/row relative flex items-start">
         <ArrowCell branch={branch} open={open} interactive={interactive} onToggle={interactive ? () => onToggle(node.id) : undefined} controls={childrenId} />
         <div className="min-w-0 flex-1">{renderRow(node, nodeKindLabel(node, siblings))}</div>
-        <div data-row-toolbar="" className="absolute inset-y-0 right-0 flex items-center" />
+        <div data-row-toolbar="" className={TOOLBAR_SLOT}>
+          {renderToolbar?.(node, nodeKindLabel(node, siblings))}
+        </div>
       </div>
       {children.length > 0 && open ? (
         <ul id={childrenId} className={cn('flex flex-col', level < LAST_INDENTED_LEVEL && 'ml-s-5 border-l border-border')}>
           {children.map((child) => (
-            <BranchItem key={child.node.id} branch={child} siblings={children.map((sibling) => sibling.node)} level={level + 1} renderRow={renderRow} closed={closed} onToggle={onToggle} />
+            <BranchItem key={child.node.id} branch={child} siblings={children.map((sibling) => sibling.node)} level={level + 1} renderRow={renderRow} renderToolbar={renderToolbar} closed={closed} onToggle={onToggle} />
           ))}
         </ul>
       ) : null}
@@ -111,13 +126,13 @@ function BranchItem<T extends PartsTreeItem>({ branch, siblings, level, renderRo
  * later its "+", "-" and move buttons). The level is told by the nesting and by thin guide lines, never by an `aria-level`, `aria-posinset` or `aria-setsize`. Each row is an arrow cell (a button when the tree
  * can open and close, a mark when it cannot, and the same empty space for a leaf row), what the caller draws, and the empty toolbar slot at the row's end.
  */
-export function PartsTreeList<T extends PartsTreeItem>({ nodes, label, renderRow, id, closed, onToggle }: PartsTreeListProps<T>) {
+export function PartsTreeList<T extends PartsTreeItem>({ nodes, label, renderRow, renderToolbar, id, closed, onToggle }: PartsTreeListProps<T>) {
   const top = branchesOf(nodes);
   return (
     <nav aria-label={label} {...(id === undefined ? {} : { id })}>
       <ul className="flex flex-col">
         {top.map((branch) => (
-          <BranchItem key={branch.node.id} branch={branch} siblings={top.map((sibling) => sibling.node)} level={1} renderRow={renderRow} closed={closed} onToggle={onToggle} />
+          <BranchItem key={branch.node.id} branch={branch} siblings={top.map((sibling) => sibling.node)} level={1} renderRow={renderRow} renderToolbar={renderToolbar} closed={closed} onToggle={onToggle} />
         ))}
       </ul>
     </nav>
