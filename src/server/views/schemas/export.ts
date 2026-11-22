@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { isExportFileName } from '../../../lib/export/file-name';
 import { XLSX_MIME } from '../../export/export-model';
 
 import { downloadMarkerSchema } from './download-marker';
@@ -17,14 +18,14 @@ import { downloadMarkerSchema } from './download-marker';
  * rows, only while the state is `current` (the schema refuses it in any other), for the Lead and the Admin alone, and never in the file (A-24). **The download marker (STORY-CR01.7E)** is `download`, in every state.
  */
 
-/** What a file name may be (`lib/export/file-name.ts` makes only these): letters, digits, underscore and hyphen, then `.xlsx`. It goes into a header, so nothing else may. */
-export const EXPORT_FILE_NAME_PATTERN = /^[A-Za-z0-9_-]{1,200}\.xlsx$/;
+/** A name the export makes (`isExportFileName`, `lib/export/file-name.ts`): `<short name>_<subject>_<DD-MM-YYYY>.xlsx`, which may hold non-ASCII letters. It goes into a header, so no other name may. */
+const exportFileNameSchema = z.string().refine(isExportFileName, { message: 'Not a name the export makes.' });
 
 /** The file route's answer: the MIME type of a workbook, its bytes and its name. `withRoute` turns it into the attachment (`file-response.ts`). */
 export const exportFileSchema = z.strictObject({
   mime: z.literal(XLSX_MIME),
   bytes: z.instanceof(Uint8Array),
-  fileName: z.string().regex(EXPORT_FILE_NAME_PATTERN),
+  fileName: exportFileNameSchema,
 });
 
 const columnLetters = z.string().regex(/^[A-Z]{1,10}$/);
@@ -76,7 +77,7 @@ export const exportWarningSchema = z.strictObject({
 
 export const exportSummarySchema = z.strictObject({
   /** The name the file would have if it were downloaded now (the date is today's IST date). */
-  fileName: z.string().regex(EXPORT_FILE_NAME_PATTERN),
+  fileName: exportFileNameSchema,
   /** The parts of the estimate: the rows the file will hold below its header. */
   partCount: z.number().int().min(0),
   /** The parts that have a picture. */
