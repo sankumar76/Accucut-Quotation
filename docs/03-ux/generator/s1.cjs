@@ -17,7 +17,7 @@ function scr00() {
   <section class="card" aria-labelledby="ds-brand"><div class="card-head"><span class="section-no">01</span><h2 id="ds-brand" class="t-sub">Brand: Red Leads</h2><span class="spacer"></span><span class="badge badge-neutral">Delivery lead decision</span></div>
    <div class="card-body stack-lg">
     <div class="split">
-     <div class="split-side" style="flex-basis:360px"><div class="card" style="box-shadow:none"><div class="topbar" style="position:static;border:0;border-radius:var(--radius-lg)"><a class="brand" href="#"><img src="../assets/accucut-logo.jpg" width="56" height="56" alt="AccuCut logo"><span><span class="brand-name">ACCUCUT LASERS</span> <span class="brand-sub">Quotation Portal</span></span></a></div></div>
+     <div class="split-side" style="flex-basis:360px"><div class="card" style="box-shadow:none"><div class="topbar" style="position:static;border:0;border-radius:var(--radius-lg)"><a class="brand" href="#"><img src="../assets/accucut-logo.jpg" width="56" height="56" alt="AccuCut logo"><span><span class="brand-name">ACCUCUT LASERS</span> <span class="brand-sub">RFQ Portal</span></span></a></div></div>
       <p class="field-hint mt-2">White top bar. The logo is the supplied file, shown unaltered at 56 px (44 px on phones). The name is Tinos Bold, which is the closest match to the company board, in logo red.</p></div>
      <div class="split-main"><ul class="stack-sm t-body"><li>${icon('check', 16)} Logo file used as supplied; never redrawn, recoloured, cropped or stretched. It needs a light background, so the top bar is white.</li><li>${icon('check', 16)} "ACCUCUT LASERS" in logo red (#DE3030, 4.6:1 on white), 18 px bold serif with wide letter spacing.</li><li>${icon('check', 16)} Dark graphite side menu (#17181C). Active item: lighter graphite plus a red marker.</li><li>${icon('check', 16)} Red main buttons. Overdue and attention use amber, never red. Errors use a separate darker red and always carry an icon, a thick border and text.</li><li>${icon('check', 16)} The logo is 200 &times; 200 px. A sharper original (open question Q-16) will replace the file; nothing else changes.</li></ul></div>
     </div>
@@ -75,7 +75,9 @@ function scr00() {
   <div class="split">
    <section class="card split-main" aria-labelledby="ds-badge"><div class="card-head"><span class="section-no">07</span><h2 id="ds-badge" class="t-sub">Status badges and notices</h2></div>
     <div class="card-body stack">
-     <div class="row">${badge('neutral', 'Draft', 'edit')}${badge('info', 'Submitted', 'send')}${badge('success', 'Approved and locked', 'lock')}${badge('warn', 'Overdue by 2 d 4 h', 'clock')}${badge('danger', 'Missing data', 'alert')}${badge('brand', 'Release 2', 'star')}</div>
+     <div class="row">${['Draft', 'Prepared', 'Approved', 'Quoted', 'Ignored'].map((s) => L.STATUS[s]()).join('')}${badge('warn', 'Overdue by 2 d 4 h', 'clock')}</div>
+     <div class="row"><span class="t-label t-muted">Download marker (not a status):</span>${L.dlChip(null)}${L.dlChip({ n: 2, by: 'Kiran Bose', at: '05 Nov, 11:30' })}${L.dlChip({ n: 1, by: 'Kiran Bose', at: '05 Nov, 11:30', stale: true })}</div>
+     <div class="row">${badge('danger', 'Missing data', 'alert')}${badge('brand', 'Release 2', 'star')}</div>
      ${notice('info', 'info', 'Neutral information. Graphite on grey.')}
      ${notice('success', 'checkc', 'Saved at 10:42 IST.', 'status')}
      ${notice('warn', 'clock', 'Attention. Amber is used for overdue and for changes that need a decision.')}
@@ -105,14 +107,14 @@ function scr00() {
     <p class="field-hint">The hairline left of the buttons is part of the sticky column. Below 768 px the list becomes cards and this table is not shown.</p>
    </div></section>
   </main>`;
-  return page({ id: 'SCR-00', file: 'SCR-00.html', name: 'Design system', desc: 'Design tokens, brand, components and states used on every screen of the Accucut Quotation Portal.', role: 'admin', active: '', noSide: true, roleLabel: 'all', release: 'R1', frs: 'FR-085, FR-086, FR-088', body });
+  return page({ id: 'SCR-00', file: 'SCR-00.html', name: 'Design system', desc: 'Design tokens, brand, components and states used on every screen of the Accucut RFQ Portal.', role: 'admin', active: '', noSide: true, roleLabel: 'all', release: 'R1', frs: 'FR-085, FR-086, FR-088', body });
 }
 
 /* ============================ SCR-01 Sign in ============================ */
 function scr01() {
   const err = (id, t) => `<span class="field-error" id="${id}">${icon('alertc', 14)}<span>${t}</span></span>`;
   const body = `<div class="auth">
-  <header class="auth-top"><a class="brand" href="#" aria-label="Accucut Lasers Quotation Portal"><img src="../assets/accucut-logo.jpg" width="56" height="56" alt="AccuCut logo"><span><span class="brand-name">ACCUCUT LASERS</span> <span class="brand-sub">Quotation Portal</span></span></a></header>
+  <header class="auth-top"><a class="brand" href="#" aria-label="Accucut Lasers RFQ Portal"><img src="../assets/accucut-logo.jpg" width="56" height="56" alt="AccuCut logo"><span><span class="brand-name">ACCUCUT LASERS</span> <span class="brand-sub">RFQ Portal</span></span></a></header>
   <main id="main" class="auth-main"><div class="auth-card stack-lg">
    <div class="stack-sm"><h1 class="t-heading">Sign in</h1><p class="t-body t-muted">Use the e-mail and password you were given.</p></div>
    <div data-show="expired" hidden>${notice('info', 'info', 'Your session ended. Sign in again to continue where you left off.', 'status')}</div>
@@ -128,12 +130,12 @@ function scr01() {
    ${reviewNote('Release 1 shows "Forgot your password? Ask the Admin to reset it." as plain text; the link above arrives in Release 2 (FR-003). The same error text is used for a wrong e-mail, a wrong password and a deactivated account, so the page never says which part was wrong (FR-001). Field errors on submit: empty e-mail "Enter your e-mail address."; not an e-mail "Enter an e-mail address like name@company.com."; empty password "Enter your password." The page is marked "do not index" like every other page, and carries no sharing image (FR-089).')}
   </div></main>
   <footer class="auth-foot">${copyright}</footer></div>`;
-  return page({ id: 'SCR-01', file: 'SCR-01.html', name: 'Sign in', desc: 'Sign in to the Accucut Quotation Portal to prepare, review and approve manufacturing cost estimates.', role: 'engineer', noShell: true, states: ['default', 'loading', 'error:Wrong e-mail or password', 'locked:Locked out', 'expired:Session ended'], roleLabel: 'all (signed out)', release: 'R1', frs: 'FR-001, FR-003 link in R2', body });
+  return page({ id: 'SCR-01', file: 'SCR-01.html', name: 'Sign in', desc: 'Sign in to the Accucut RFQ Portal to prepare, review and approve manufacturing cost estimates.', role: 'engineer', noShell: true, states: ['default', 'loading', 'error:Wrong e-mail or password', 'locked:Locked out', 'expired:Session ended'], roleLabel: 'all (signed out)', release: 'R1', frs: 'FR-001, FR-003 link in R2', body });
 }
 
 /* ============================ SCR-02 Forgot / reset password ============================ */
 function scr02() {
-  const head = `<div class="auth"><header class="auth-top"><a class="brand" href="SCR-01.html" aria-label="Accucut Lasers Quotation Portal"><img src="../assets/accucut-logo.jpg" width="56" height="56" alt="AccuCut logo"><span><span class="brand-name">ACCUCUT LASERS</span> <span class="brand-sub">Quotation Portal</span></span></a></header><main id="main" class="auth-main"><div class="auth-card stack-lg">`;
+  const head = `<div class="auth"><header class="auth-top"><a class="brand" href="SCR-01.html" aria-label="Accucut Lasers RFQ Portal"><img src="../assets/accucut-logo.jpg" width="56" height="56" alt="AccuCut logo"><span><span class="brand-name">ACCUCUT LASERS</span> <span class="brand-sub">RFQ Portal</span></span></a></header><main id="main" class="auth-main"><div class="auth-card stack-lg">`;
   const body = head + `
    <div data-show="request sent">
     <div class="stack-sm"><h1 class="t-heading">Reset your password</h1><p class="t-body t-muted">Enter your e-mail. If it is registered, we send a link that works once.</p></div></div>
@@ -150,49 +152,60 @@ function scr02() {
     <button class="btn btn-primary btn-block" type="submit">Save new password</button></div></form>
    ${reviewNote('Release 2 (FR-003). The reply on the first step is always the same, whether or not the e-mail is registered. Until Release 2 the Admin resets passwords from the Users screen (FR-004). Password rule (their answer, AQP-1 10490, D-19): 10 to 128 characters, at least one number and one symbol, not the e-mail address, not a common password. Other messages for this field: "The new password must be at least 10 characters.", "Use 128 characters or fewer.", "Add at least one number.", "Add at least one symbol, such as ! # $ or %." and "The password cannot be the same as your e-mail address." The page carries noindex because its address holds a single-use token (UX-12).')}
   </div></main><footer class="auth-foot">${copyright}</footer></div>`;
-  return page({ id: 'SCR-02', file: 'SCR-02.html', name: 'Forgot and reset password', title: 'Reset password', desc: 'Reset your Accucut Quotation Portal password with a single-use link sent to your e-mail.', role: 'engineer', noShell: true, states: ['request:Ask for link', 'sent:Link sent', 'reset:New password', 'toocommon:Password too common', 'nonumsym:Needs number and symbol', 'invalid:Link used or expired', 'done:Done'], roleLabel: 'all (signed out)', release: 'R2', frs: 'FR-003', robots: 'noindex, nofollow', body });
+  return page({ id: 'SCR-02', file: 'SCR-02.html', name: 'Forgot and reset password', title: 'Reset password', desc: 'Reset your Accucut RFQ Portal password with a single-use link sent to your e-mail.', role: 'engineer', noShell: true, states: ['request:Ask for link', 'sent:Link sent', 'reset:New password', 'toocommon:Password too common', 'nonumsym:Needs number and symbol', 'invalid:Link used or expired', 'done:Done'], roleLabel: 'all (signed out)', release: 'R2', frs: 'FR-003', robots: 'noindex, nofollow', body });
 }
 
 /* ============================ Queue rows ============================ */
-const closedTask = { id: 'Q-2026-0299', title: 'Gearbox housing', eng: 'Divya Shah', cust: 'Marlow Agro Systems', by: 'Sunita Pillai', due: '28 Oct 2026, 17:00', st: 'Approved', path: '\\\\fileserver\\rfq\\RFQ-2026-021' };
-const stBadge = (s) => (s === 'Draft' ? badge('neutral', 'Draft', 'edit') : s === 'Submitted' ? badge('info', 'Submitted', 'send') : badge('success', 'Approved', 'lock'));
+const stBadge = (s) => L.STATUS[s]();
 const overTxt = (t) => (t.over ? `<div class="row" style="gap:var(--s-1);color:var(--accent-ink)">${icon('clock', 14)}<strong class="t-label">Overdue by ${t.over}</strong></div>` : '');
-function rowsFor(list, role, closed) {
+const custTxt = (t) => `${t.cust} <span class="t-mono t-muted">(${L.CUSTOMERS[t.cust]})</span>`;
+/* Status cell: the badge, then (Lead and Admin, once approved) the download marker, then the remarks of an ignored RFQ. */
+const stCell = (t, eng) => `${stBadge(t.st)}${!eng && (t.st === 'Approved' || t.st === 'Quoted') ? `<div style="margin-top:var(--s-1)">${L.dlChip(t.dl, true)}</div>` : ''}${t.ign ? `<div class="t-label t-muted" style="margin-top:var(--s-1);max-width:240px">${eng ? '' : `${t.ign.by}, ${t.ign.at}: `}${esc(t.ign.why)}</div>` : ''}`;
+function rowAction(t, eng) {
+  if (eng) return `<a class="btn btn-secondary" href="SCR-05.html" style="height:36px">Open</a>`;
+  if (t.st === 'Ignored') return `<a class="btn btn-secondary btn-icon" href="SCR-06.html#state=ignored" title="Restore" aria-label="Restore ${t.id}" style="width:36px;height:36px">${icon('undo', 16)}</a>`;
+  if (t.st === 'Approved') return `<a class="btn btn-secondary btn-icon" href="SCR-06.html#state=quotedlg" title="Mark as quoted" aria-label="Mark ${t.id} as quoted" style="width:36px;height:36px">${icon('send', 16)}</a>`;
+  if (t.st === 'Quoted') return '<span class="t-label t-muted">Quoted</span>';
+  return `<a class="btn btn-secondary btn-icon" href="SCR-04.html#state=edit" aria-label="Reassign or change deadline for ${t.id}" style="width:36px;height:36px">${icon('edit', 16)}</a>`;
+}
+function rowsFor(list, role) {
   const eng = role === 'engineer';
   return list.map((t) => `<tr${t.over ? ' class="is-overdue"' : ''}>
-   <td><a class="t-strong" href="${role === 'engineer' ? 'SCR-05.html' : 'SCR-06.html'}">${t.id}</a><div class="t-body">${t.title}</div></td>
+   <td><a class="t-strong" href="${role === 'engineer' ? 'SCR-05.html' : 'SCR-06.html'}">${t.id}</a><div class="t-body">${t.title}</div><div class="t-label t-muted">Subject: ${t.subj}</div></td>
    ${eng ? '' : `<td>${t.eng}</td>`}
-   ${eng ? '' : `<td class="hide-md">${t.cust || '<span class="t-faint">Not chosen yet</span>'}</td>`}
+   ${eng ? '' : `<td class="hide-md">${custTxt(t)}</td>`}
    <td class="hide-md"><span class="mono">${esc(t.path)}</span><div class="row" style="gap:var(--s-2);margin-top:var(--s-1)"><a href="file:///${esc(t.path.replace(/^\\\\/, '').replace(/\\/g, '/'))}">Open folder</a><button class="btn btn-ghost" type="button" data-copy="${esc(t.path)}" style="height:32px;padding:0 var(--s-2)">${icon('copy', 14)}<span class="copy-label">Copy path</span></button></div></td>
    <td class="nowrap"><span class="t-num">${t.due}</span>${overTxt(t)}</td>
-   <td>${stBadge(t.st)}</td>
-   ${eng ? `<td class="hide-md">${t.by}</td>` : `<td class="hide-md">${t.by}</td>`}
-   <td class="t-right">${eng ? `<a class="btn btn-secondary" href="SCR-05.html" style="height:36px">Open</a>` : closed ? '<span class="t-label t-muted">Closed</span>' : `<a class="btn btn-secondary btn-icon" href="SCR-04.html#state=edit" aria-label="Reassign or change deadline for ${t.id}" style="width:36px;height:36px">${icon('edit', 16)}</a>`}</td></tr>`).join('');
+   <td>${stCell(t, eng)}</td>
+   <td class="hide-md">${t.by}</td>
+   <td class="t-right">${rowAction(t, eng)}</td></tr>`).join('');
 }
 function cardsFor(list, role) {
   const eng = role === 'engineer';
   return list.map((t) => `<article class="card task-card${t.over ? ' is-overdue' : ''}" aria-label="${t.id} ${t.title}">
    <div class="row-nowrap"><a class="t-strong" href="${eng ? 'SCR-05.html' : 'SCR-06.html'}">${t.id}</a><span class="spacer"></span>${stBadge(t.st)}</div>
    <div class="t-sub">${t.title}</div>
-   <div class="stack-sm t-body"><div class="row" style="gap:var(--s-2)">${icon('clock', 16)}<span>Due ${t.due} IST</span></div>${overTxt(t)}${eng ? `<div class="t-muted">Assigned by ${t.by}</div>` : `<div class="t-muted">${t.eng} &middot; ${t.cust || 'Customer not chosen yet'}</div>`}</div>
+   <div class="stack-sm t-body"><div class="t-muted">Subject: ${t.subj} &middot; ${custTxt(t)}</div><div class="row" style="gap:var(--s-2)">${icon('clock', 16)}<span>Due ${t.due} IST</span></div>${overTxt(t)}${eng ? `<div class="t-muted">Assigned by ${t.by}</div>` : `<div class="t-muted">${t.eng}</div>`}${!eng && (t.st === 'Approved' || t.st === 'Quoted') ? L.dlChip(t.dl, true) : ''}${t.ign ? `<div class="t-label t-muted">${esc(t.ign.why)}</div>` : ''}</div>
    <div class="row"><button class="btn btn-secondary" type="button" data-copy="${esc(t.path)}">${icon('copy', 18)}<span class="copy-label">Copy path</span></button><a class="btn btn-primary" href="${eng ? 'SCR-05.html' : 'SCR-06.html'}" style="flex:1">Open</a></div></article>`).join('');
 }
 function queueBody(role) {
   const eng = role === 'engineer';
   const open = L.TASKS.filter((t) => (eng ? t.eng === 'Priya Nair' || true : true));
-  const engList = eng ? [L.TASKS[2], L.TASKS[4], { id: 'Q-2026-0316', title: 'Cable duct clips', eng: 'Priya Nair', cust: null, by: 'Sunita Pillai', due: '04 Nov 2026, 09:00', over: '2 h', st: 'Draft', path: '\\\\fileserver\\rfq\\RFQ-2026-030' }].sort((a, b) => (a.over ? -1 : 1)) : open;
+  const engList = eng ? [L.TASKS[2], L.TASKS[4], { id: 'Q-2026-0316', title: 'Cable duct clips', subj: 'Duct clip range', eng: 'Priya Nair', cust: 'Ridgeline Pumps', by: 'Sunita Pillai', due: '04 Nov 2026, 09:00', over: '2 h', st: 'Draft', path: '\\\\fileserver\\rfq\\RFQ-2026-030' }].sort((a, b) => (a.over ? -1 : 1)) : open;
   const overdue = engList.filter((t) => t.over);
-  const closed = eng ? [{ ...closedTask, eng: 'Priya Nair' }] : [closedTask];
+  const closed = eng ? L.CLOSED.filter((t) => t.eng === 'Priya Nair') : L.CLOSED;
+  const ignored = eng ? L.IGNORED.map((t) => ({ ...t, eng: 'Priya Nair' })) : L.IGNORED;
   const cols = eng
     ? ['Task', 'Folder', 'Deadline (IST)', 'Status', 'Assigned by', '']
     : ['Task', 'Engineer', 'Customer', 'Folder', 'Deadline (IST)', 'Status', 'Assigned by', ''];
   const hideMd = eng ? [1, 4] : [2, 3, 6];
   const thead = `<thead><tr>${cols.map((c, i) => `<th scope="col"${hideMd.includes(i) ? ' class="hide-md"' : ''}>${c || '<span class="sr-only">Actions</span>'}</th>`).join('')}</tr></thead>`;
-  const table = (list, isClosed) => `<div class="table-wrap hide-mobile"><table class="table">${thead}<tbody>${rowsFor(list, role, isClosed)}</tbody></table></div><div class="stack show-mobile" style="padding:var(--s-4)">${cardsFor(list, role)}</div>`;
+  const table = (list) => `<div class="table-wrap hide-mobile"><table class="table">${thead}<tbody>${rowsFor(list, role)}</tbody></table></div><div class="stack show-mobile" style="padding:var(--s-4)">${cardsFor(list, role)}</div>`;
   const tabs = `<div class="tabs" role="tablist" aria-label="Task queues">
    <a class="tab" role="tab" href="#state=open" data-tab-for="open default">Open <span class="badge badge-neutral">${engList.length}</span></a>
+   <a class="tab" role="tab" href="#state=overdue" data-tab-for="overdue">${icon('clock', 16)} Overdue <span class="badge badge-warn">${overdue.length}</span></a>
    <a class="tab" role="tab" href="#state=closed" data-tab-for="closed">Closed <span class="badge badge-neutral">${closed.length}</span></a>
-   <a class="tab" role="tab" href="#state=overdue" data-tab-for="overdue">${icon('clock', 16)} Overdue <span class="badge badge-warn">${overdue.length}</span></a></div>`;
+   <a class="tab" role="tab" href="#state=ignored" data-tab-for="ignored">${icon('eyeoff', 16)} Ignored <span class="badge badge-neutral">${ignored.length}</span></a></div>`;
   const filters = eng
     ? `<div class="row"><div class="input-icon" style="flex:1 1 260px"><span class="sr-only"><label for="q">Search tasks</label></span>${icon('search', 18)}<input class="input" id="q" type="search" placeholder="Search by task ID or title" aria-label="Search by task ID or title"></div></div>`
     : `<div class="row" style="align-items:flex-end">
@@ -206,13 +219,14 @@ function queueBody(role) {
   const panel = (st, list, extra = '') => `<div data-show="${st}"${st === 'open default' ? '' : ' hidden'}>${list.length ? table(list) : ''}</div>`;
   const mainContent = `
   <div data-show="open default">${table(engList)}</div>
-  <div data-show="closed" hidden>${table(closed, true)}</div>
+  <div data-show="closed" hidden>${eng ? '' : `<p class="t-label t-muted" style="padding:var(--s-3) var(--s-4) 0">Approved and Quoted RFQs. The send button marks an Approved RFQ as quoted once the quote has been sent to the customer. The download marker shows whether the Excel file was downloaded, and turns amber when the estimate was approved again after the last download.</p>`}${table(closed)}</div>
+  <div data-show="ignored" hidden><p class="t-label t-muted" style="padding:var(--s-3) var(--s-4) 0">RFQs that were not taken forward. They are out of Open and Overdue.${eng ? '' : ' Restore puts one back where it was, with its status, and is logged.'}</p>${table(ignored)}</div>
   <div data-show="overdue" hidden>${table(overdue)}</div>
   <div data-show="loading" hidden aria-busy="true"><p class="sr-only" role="status">Loading tasks</p>${skeletonRows(5, 5)}</div>
   <div data-show="empty" hidden>${eng ? emptyState({ ic: 'list', title: 'Nothing assigned to you right now', text: 'When a Lead assigns you a task it appears here, with its folder and deadline.' }) : emptyState({ ic: 'list', title: 'No open tasks', text: 'Assign a task to an Engineer and it appears here.', action: '<a class="btn btn-primary" href="SCR-04.html">' + icon('plus', 18) + ' Assign task</a>' })}</div>
   <div data-show="nomatch" hidden>${eng ? emptyState({ ic: 'search', title: 'No tasks match your search', text: 'Try a different task ID or part of the title.', action: '<button class="btn btn-secondary" type="button">Clear search</button>' }) : emptyState({ ic: 'search', title: 'No tasks match these filters', text: 'Try a different Engineer, customer or date range.', action: '<button class="btn btn-secondary" type="button">Clear filters</button>' })}</div>
   <div data-show="error" hidden>${emptyState({ ic: 'alert', title: 'We could not load the tasks', text: 'Check your connection and try again. Nothing has been changed.', action: '<button class="btn btn-secondary" type="button">' + icon('undo', 18) + ' Try again</button>' })}</div>`;
-  const states = eng ? ['open:Open', 'closed:Closed', 'overdue:Overdue', 'loading:Loading', 'empty:Empty', 'nomatch:No match', 'error:Error'] : ['open:Open', 'closed:Closed', 'overdue:Overdue', 'loading:Loading', 'empty:Empty', 'nomatch:No match', 'error:Error'];
+  const states = ['open:Open', 'overdue:Overdue', 'closed:Closed', 'ignored:Ignored', 'loading:Loading', 'empty:Empty', 'nomatch:No match', 'error:Error'];
   const main = `<main class="page" id="main">
    ${pageHead({ title: eng ? 'My tasks' : 'Task queue', sub: eng ? 'Tasks assigned to you. Open one to start entering part data.' : role === 'lead' ? 'All tasks. Filtered to the ones you assigned; remove the filter to see everyone\'s.' : 'All tasks across Engineers and Leads.', actions: eng ? '' : `<a class="btn btn-primary" href="SCR-04.html">${icon('plus', 18)} Assign task</a>` })}
    <div data-show="overdue" hidden>${notice('warn', 'clock', `<strong>${overdue.length} ${overdue.length === 1 ? 'task is' : 'tasks are'} overdue.</strong><span>Overdue tasks are marked with a clock, the words "Overdue by", an amber bar and a tinted row. They also stay in Open.</span>`, 'status')}</div>
@@ -239,29 +253,33 @@ function scr04() {
    <div data-show="edit" hidden>${pageHead({ title: 'Reassign or change deadline', sub: 'Q-2026-0314 · Pump skid frame', badgeHtml: badge('warn', 'Overdue by 23 h', 'clock') })}</div>
    <div data-show="success" hidden>${notice('success', 'checkc', '<strong>Task Q-2026-0324 assigned to Arjun Rao.</strong><span><a href="SCR-03.html">View in the task queue</a> or assign another task below.</span>', 'status')}</div>
    <div data-show="alertsoff" hidden>${notice('warn', 'mail', '<span class="badge badge-brand">Release 2</span><strong>E-mail alerts are OFF.</strong><span>Arjun Rao will not be e-mailed about this task. It still appears in their queue. The Admin can turn alerts on in Settings.</span>')}</div>
-   <div data-show="error" hidden>${notice('danger', 'xc', '<strong>3 things need fixing before this task can be assigned.</strong><ul style="padding-left:var(--s-4);list-style:disc"><li><a href="#engineer">Choose an Engineer</a></li><li><a href="#path">Enter the network folder path</a></li><li><a href="#date">Choose a deadline later than now</a></li></ul>', 'alert')}</div>
-   <div data-show="edit" hidden>${notice('info', 'history', '<strong>Changes are logged.</strong><span>The log records your name, the time, and the old and new values. Only the Engineer and the deadline can be changed here.</span>')}</div>
+   <div data-show="error" hidden>${notice('danger', 'xc', '<strong>5 things need fixing before this task can be assigned.</strong><ul style="padding-left:var(--s-4);list-style:disc;display:flex;flex-direction:column;gap:var(--s-1)"><li><a href="#engineer">Choose an Engineer</a></li><li><a href="#customer">Choose the customer</a></li><li><a href="#subject">Enter the subject (project name)</a></li><li><a href="#path">Enter the network folder path</a></li><li><a href="#date">Choose a deadline later than now</a></li></ul>', 'alert')}</div>
+   <div data-show="edit" hidden>${notice('info', 'history', '<strong>Changes are logged.</strong><span>The log records your name, the time, and the old and new values. The Engineer, the customer and the deadline can be changed here. A new customer\'s rates apply at the next Calculate or Recalculate.</span>')}</div>
    <div class="split"><form class="card split-main" id="assign-form" novalidate aria-label="Assign task" style="flex-basis:520px"><div class="card-body stack">
-     <div class="field"><label class="field-label" for="engineer">Engineer</label><select class="select" id="engineer" name="engineer" required data-error-in="error"><option>Choose an Engineer</option><option>Priya Nair</option><option selected>Arjun Rao</option><option>Divya Shah</option></select>
+     <div class="grid-2"><div class="field"><label class="field-label" for="engineer">Engineer</label><select class="select" id="engineer" name="engineer" required data-error-in="error"><option>Choose an Engineer</option><option>Priya Nair</option><option selected>Arjun Rao</option><option>Divya Shah</option></select>
        <span class="field-error" data-show="error" hidden>${icon('alertc', 14)} Choose an Engineer.</span></div>
+      <div class="field"><label class="field-label" for="customer">Customer Name</label><select class="select" id="customer" name="customer" required data-error-in="error" aria-describedby="customer-h">${['Choose the customer', ...Object.keys(L.CUSTOMERS)].map((c) => `<option${c === 'Marlow Agro Systems' ? ' selected' : ''}>${c}</option>`).join('')}</select><span class="field-hint" id="customer-h">From the Customer master. Only a Lead or Admin can set or change it; the Engineer sees it read-only.</span>
+       <span class="field-error" data-show="error" hidden>${icon('alertc', 14)} Choose the customer.</span></div></div>
+     <div class="field"><span class="field-label" id="short-l">Customer Short Name</span><div class="output" aria-labelledby="short-l"><span class="t-mono">MAS</span><span class="t-label t-faint" style="margin-left:auto">From the Customer master</span></div><span class="field-hint">Fills in when you choose the customer. It starts the Excel file name, for example MAS_Feed-hopper_17-11-2026.xlsx.</span></div>
      <div class="field"><label class="field-label" for="path">Network folder path</label><input class="input mono" id="path" name="path" required data-error-in="error" value="\\\\fileserver\\rfq\\RFQ-2026-033" aria-describedby="path-h" style="font-size:var(--fs-body)"><span class="field-hint" id="path-h">The folder with the drawings and requirements, for example \\\\server\\share\\RFQ-123.</span>
        <span class="field-error" data-show="error" hidden>${icon('alertc', 14)} Enter the network folder path. It starts with two backslashes, like \\\\server\\share\\RFQ-123.</span></div>
      <div class="grid-2"><div class="field"><label class="field-label" for="date">Deadline date</label><input class="input" id="date" name="date" type="date" required value="2026-11-09" data-error-in="error"><span class="field-error" data-show="error" hidden>${icon('alertc', 14)} Choose a deadline later than now.</span></div>
       <div class="field"><label class="field-label" for="time">Deadline time</label><div class="input-group"><input class="input" id="time" name="time" type="time" required value="10:00"><span class="addon">IST</span></div><span class="field-hint">India Standard Time (UTC+5:30).</span></div></div>
      <div data-show="default error submitting success alertsoff">
-     <div class="field"><label class="field-label" for="title">Title <span class="t-faint" style="font-weight:400">(optional)</span></label><input class="input" id="title" name="title" maxlength="120" value="Hopper cover" aria-describedby="title-h"><span class="field-hint" id="title-h">Up to 120 characters. Shown in the queue next to the task ID.</span></div>
+     <div class="grid-2"><div class="field"><label class="field-label" for="title">Title</label><input class="input" id="title" name="title" required maxlength="120" value="Hopper cover" aria-describedby="title-h"><span class="field-hint" id="title-h">Up to 120 characters. Shown in the queue next to the task ID.</span></div>
+      <div class="field"><label class="field-label" for="subject">Subject (project name)</label><input class="input" id="subject" name="subject" required maxlength="80" value="Feed hopper" data-error-in="error" aria-describedby="subject-h"><span class="field-hint" id="subject-h">Up to 80 characters. Used in the Excel file name and the e-mail subject.</span><span class="field-error" data-show="error" hidden>${icon('alertc', 14)} Enter the subject, the project name.</span></div></div>
      <div class="field mt-4"><label class="field-label" for="notes">Notes <span class="t-faint" style="font-weight:400">(optional)</span></label><textarea class="textarea" id="notes" name="notes" maxlength="1000">Customer wants the sheet-metal parts only. Fasteners are supplied.</textarea><span class="field-hint">Up to 1,000 characters.</span></div></div>
-     <div data-show="edit" hidden><div class="field"><span class="field-label">Folder, title and notes</span><div class="output">Locked. Only the Engineer and deadline can change.</div></div></div>
+     <div data-show="edit" hidden><div class="field"><span class="field-label">Folder, title, subject and notes</span><div class="output">Locked. Only the Engineer, customer and deadline can change.</div></div></div>
     </div>
     <div class="card-foot"><a class="btn btn-secondary" href="SCR-03.html">Cancel</a><span class="spacer"></span>
       <button class="btn btn-primary" type="submit" data-show="default error success alertsoff edit">${icon('send', 18)} <span data-show="edit" hidden>Save changes</span><span data-hide="edit">Assign task</span></button>
       <button class="btn btn-primary" type="button" disabled aria-busy="true" data-show="submitting" hidden>${icon('loader', 18, 'ic-spin')} Assigning</button></div></form>
     <aside class="card split-side" aria-labelledby="next"><div class="card-head"><h2 id="next" class="t-sub">What happens next</h2></div><div class="card-body stack">
-     <ol class="stack-sm" style="list-style:decimal;padding-left:var(--s-5)"><li>An empty estimate is created in Draft with a task ID like Q-2026-0324.</li><li>It appears in the Engineer's Open queue, sorted by deadline.</li><li>The Engineer chooses the customer and enters the part data.</li><li>If e-mail alerts are ON, the Engineer is e-mailed and you are copied (Release 2).</li></ol>
+     <ol class="stack-sm" style="list-style:decimal;padding-left:var(--s-5)"><li>An empty estimate is created in Draft with a task ID like Q-2026-0324.</li><li>It appears in the Engineer's Open queue, sorted by deadline.</li><li>The Engineer enters the part data. They see the customer, but cannot change it.</li><li>If e-mail alerts are ON, the Engineer is e-mailed at once from the company's noreply address, with you copied and set as Reply-To (Release 2).</li></ol>
      <hr class="divider"><div class="stack-sm"><span class="t-label t-caps t-muted">How the folder link works</span><p class="t-body">Everyone sees the path as a link plus a <strong>Copy path</strong> button. Browsers often block links to network folders; the button always works.</p><div class="tip-bubble" id="tip-copy" role="note">${L.TIP_COPY}</div></div></div></aside></div>
-   ${reviewNote('Create screen is Release 1 (FR-032, FR-033). The "Reassign or change deadline" mode and its log are Release 2 (FR-040); there is no cancel action. Validation runs on submit; the date-time is checked again on the server. Title and notes limits (120 and 1,000 characters) are proposals.')}
+   ${reviewNote('Create screen is Release 1 (FR-032, FR-033). The "Reassign or change deadline" mode and its log are Release 2 (FR-040); there is no cancel action. Validation runs on submit; the date-time is checked again on the server. Title and notes limits (120 and 1,000 characters) are proposals. <strong>Change request CR-01 (customer feedback, 2026-11-17):</strong> Customer Name, Customer Short Name (from the Customer master) and Subject (project name) are added; Title and Subject are both required; the customer is set here by the Lead or Admin and is read-only for the Engineer. The Subject limit of 80 characters is a proposal.')}
   </main>`;
-  return page({ id: 'SCR-04', file: 'SCR-04.html', name: 'Assign task', desc: 'Assign an estimation task to an Engineer with a folder path and a deadline.', role: 'lead', active: 'assign', states: ['default', 'error:Validation errors', 'submitting:Saving', 'success:Assigned', 'alertsoff:Alerts OFF (R2)', 'edit:Edit (R2)'], roleLabel: 'Lead, Admin', release: 'R1; edit R2', frs: 'FR-032, FR-033, FR-040', body });
+  return page({ id: 'SCR-04', file: 'SCR-04.html', name: 'Assign task', desc: 'Assign an estimation task to an Engineer with a folder path and a deadline.', role: 'lead', active: 'assign', states: ['default', 'error:Validation errors', 'submitting:Saving', 'success:Assigned', 'alertsoff:Alerts OFF (R2)', 'edit:Edit (R2)'], roleLabel: 'Lead, Admin', release: 'R1; edit R2', frs: 'FR-032, FR-033, FR-040, CR-01', body });
 }
 
 module.exports = { scr00, scr01, scr02, scr03, scr03e, scr04, queueBody };
