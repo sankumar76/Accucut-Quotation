@@ -380,3 +380,66 @@ test.describe('AC-8: small screens and accessibility', () => {
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 });
+
+/**
+ * What the picture slot of card 01 is at this moment, read in one `evaluate` (one frame): the grid item that holds the picture (the skeleton, or the block that holds it, while the control's file is
+ * awaited; the control after), the height of its parts, the height of card 01, and where card 02 starts on the page. `count` must be 1: one item of the card's grid is the picture's.
+ */
+async function slotNow(page: Page): Promise<{ readonly count: number; readonly slot: number; readonly parts: ReadonlyArray<number>; readonly card: number; readonly below: number }> {
+  return section(page).evaluate((card) => {
+    const items = [...(card.querySelector('[data-slot="card-content"]')?.children ?? [])].filter((item) => item.matches('[data-slot="skeleton"]') || item.querySelector('[data-slot="skeleton"], [data-picture-zone]') !== null);
+    const next = card.nextElementSibling;
+    return {
+      count: items.length,
+      slot: items[0]?.getBoundingClientRect().height ?? 0,
+      parts: [...(items[0]?.children ?? [])].map((part) => part.getBoundingClientRect().height),
+      card: card.getBoundingClientRect().height,
+      below: next === null ? 0 : next.getBoundingClientRect().top + window.scrollY,
+    };
+  });
+}
+
+/** A fragment that only the picture control's file holds: the paste hint of `picture-texts.ts`, imported by `part-picture.tsx` alone. The chunk that carries it is the one `PictureSlot` asks for. */
+const PICTURE_CHUNK_MARK = 'Ctrl+V pastes a copied picture.';
+
+test.describe('AQP-395 (DEF-061): the slot of the picture holds its height until the control arrives', () => {
+  test('AC-1: the picture slot under its skeleton is as high as the control that replaces it, so card 01 and everything below it stay where they are when the control\'s file arrives', async ({ page }, testInfo) => {
+    // The file of the picture control is held at the network: every script of the page is fetched, and the one that holds the control's paste hint (`PICTURE_CHUNK_MARK`) waits for `release`.
+    let release = (): void => undefined;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let held = false;
+    await page.route(/\/_next\/static\/.*\.js(\?.*)?$/, async (route) => {
+      const response = await route.fetch();
+      if ((await response.text()).includes(PICTURE_CHUNK_MARK)) {
+        held = true;
+        await released;
+      }
+      await route.fulfill({ response }).catch(() => undefined);
+    });
+    try {
+      // `openForm` returns when the form is on the page; the picture field is not (`PictureSlot` is fetching its file, which is held), so what the slot shows now is its skeleton.
+      await openForm(page, testInfo);
+      await expect.poll(() => held, { message: 'the picture control\'s file was asked for and held' }).toBe(true);
+      await expect(zone(page)).toHaveCount(0);
+      const under = await slotNow(page);
+      expect(under.count, `one item of card 01 is the picture's: ${JSON.stringify(under)}`).toBe(1);
+
+      release();
+      // The control's own box (`data-picture-zone`, a group named "Part Model") is on the page: the marker that the slot is in its final state (`part-picture.tsx`, the div with `role="group"`).
+      await expect(zone(page)).toBeVisible({ timeout: 45_000 });
+      const after = await slotNow(page);
+      expect(after.count, `one item of card 01 is the picture's: ${JSON.stringify(after)}`).toBe(1);
+
+      await testInfo.attach('picture-slot-heights', { body: JSON.stringify({ skeleton: under, control: after }, null, 2), contentType: 'application/json' });
+      const why = `under the skeleton ${JSON.stringify(under)}, with the control ${JSON.stringify(after)}`;
+      expect(Math.abs(after.slot - under.slot), `the slot's height, ${why}`).toBeLessThan(2);
+      expect(Math.abs(after.card - under.card), `card 01's height, ${why}`).toBeLessThan(2);
+      expect(Math.abs(after.below - under.below), `where card 02 starts, ${why}`).toBeLessThan(2);
+    } finally {
+      release();
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+    }
+  });
+});
