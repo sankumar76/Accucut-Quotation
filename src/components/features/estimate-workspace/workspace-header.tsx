@@ -11,7 +11,7 @@ import { cn } from '@/lib/cn';
 import { NO_CUSTOMER_SET_MESSAGE } from '@/lib/estimate/calculate-words';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
 
-import { CUSTOMER_NAME_LABEL, CUSTOMER_SHORT_NAME_LABEL, FOLDER_TITLE, IDENTITY_LABEL, NO_LINK_NOTE, NOTES_FROM_PREFIX, SUBJECT_LABEL } from './estimate-texts';
+import { CUSTOMER_NAME_LABEL, CUSTOMER_SHORT_NAME_LABEL, FOLDER_TITLE, IDENTITY_LABEL, NO_LINK_NOTE, NOTES_FROM_PREFIX, SHORT_NAME_NOT_SET, SUBJECT_LABEL } from './estimate-texts';
 
 /**
  * The top of SCR-05 and of SCR-06 (STORY-05.01 AC-1; UX-15; CR-01 item 6): the task code, its status, the deadline, the customer, its short name and the subject (read-only, as labelled text, for every
@@ -80,7 +80,7 @@ export function WorkspaceHeader({ view, noCustomerText = NO_CUSTOMER_SET_MESSAGE
                 {customerAction}
               </span>
             </Identity>
-            <Identity label={CUSTOMER_SHORT_NAME_LABEL}>{view.customer === null ? '' : <span className="font-mono">{view.customer.shortName}</span>}</Identity>
+            <Identity label={CUSTOMER_SHORT_NAME_LABEL}>{view.customer === null ? SHORT_NAME_NOT_SET : <span className="font-mono">{view.customer.shortName}</span>}</Identity>
             <Identity label={SUBJECT_LABEL}>{view.subject}</Identity>
           </dl>
         </CardContent>

@@ -15,12 +15,12 @@ export const CALCULATE_SUBMITTED_STATUS = 'SUBMITTED';
 
 /** The 409s of a Calculate that cannot go ahead although every input is there (AC-4), each with its code. */
 export const CUSTOMER_NOT_CHOSEN_CODE = 'CUSTOMER_NOT_CHOSEN';
+export const CUSTOMER_NOT_CHOSEN_MESSAGE = 'Choose the customer before calculating.';
 /**
- * One sentence for an estimate that has no customer, made before CR-01 item 6 (AQP-390): the header of SCR-05 and the refusal of Calculate both say it. Neutral on purpose: since then only a Lead or an
- * Admin sets the customer, so the Engineer is not told to choose one. A proposal for the ux-expert to confirm.
+ * The header's sentence for an estimate that has no customer, made before CR-01 item 6 (AQP-390). Neutral on purpose: since then only a Lead or an Admin sets the customer, so the Engineer is not told to choose
+ * one. A proposal for the ux-expert to confirm. The refusal of Calculate above keeps its words until the UX ruling (AC-11).
  */
 export const NO_CUSTOMER_SET_MESSAGE = 'No customer is set for this estimate. A Lead or an Admin can set one.';
-export const CUSTOMER_NOT_CHOSEN_MESSAGE = NO_CUSTOMER_SET_MESSAGE;
 export const NO_PARTS_CODE = 'NO_PARTS';
 export const NO_PARTS_MESSAGE = 'Add at least one part before calculating.';
 /** A customer or a material the estimate names was deleted by the Admin after it was chosen (STORY-02.07; A-13). Nothing is written. */

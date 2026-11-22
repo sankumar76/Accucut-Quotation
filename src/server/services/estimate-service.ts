@@ -345,7 +345,8 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
 
     setCustomer(viewer, context, estimateId, customerId) {
       // Only a Lead or an Admin sets the customer, whoever the estimate belongs to and whether or not it exists: refused before anything is read, so the answer is the same for every ID (AC-7).
-      if (viewer.role === 'ENGINEER') return Promise.reject(new ForbiddenError());
+      // An allow-list: a role added later gets nothing until someone decides, as the manifest row does.
+      if (viewer.role !== 'LEAD' && viewer.role !== 'ADMIN') return Promise.reject(new ForbiddenError());
       if (audit === undefined) return Promise.reject(new Error('This estimate service was built without the audit service, so it cannot change a customer.'));
       return transactions.run(async (tx) => {
         const estimate = await estimates.lockEstimate(estimateId, tx);

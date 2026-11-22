@@ -267,7 +267,8 @@ export async function fillCanaryPart(ownerId: string): Promise<void> {
 export async function setCanaryCustomer(ownerId: string, customerId: string): Promise<void> {
   const client = await connectToTestDatabase();
   try {
-    await client.query('UPDATE estimates SET customer_id = $2::uuid WHERE id = $1::uuid', [ownerId, customerId]);
+    const result = await client.query('UPDATE estimates SET customer_id = $2::uuid WHERE id = $1::uuid', [ownerId, customerId]);
+    if (result.rowCount !== 1) throw new Error('The canary estimate was not found: set it up first.');
   } finally {
     await client.end();
   }

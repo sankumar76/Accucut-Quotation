@@ -110,7 +110,8 @@ describe('AC-5, AC-6: POST /api/v1/tasks with the customer, the subject and the 
 
   it('refuses a subject over the limit with the number from the constant, and one with a line break', async () => {
     expect(await messages(await post({ ...valid(), subject: 'S'.repeat(81) }))).toEqual({ subject: 'Keep the subject under 80 characters.' });
-    expect(await messages(await post({ ...valid(), subject: 'one\ntwo' }))).toEqual({ subject: 'Enter the subject on one line.' });
+    expect(await messages(await post({ ...valid(), subject: 'one\ntwo' }))).toEqual({ subject: 'Enter the subject on one line, without hidden characters.' });
+    expect(await messages(await post({ ...valid(), subject: 'one\u200btwo' }))).toEqual({ subject: 'Enter the subject on one line, without hidden characters.' });
   });
 
   it.each([

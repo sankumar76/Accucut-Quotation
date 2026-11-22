@@ -49,7 +49,7 @@ describe('AC-3: the words of the messages are the UX spec’s', () => {
     expect(TITLE_MESSAGE).toBe('Keep the title under 120 characters.');
     expect(SUBJECT_REQUIRED_MESSAGE).toBe('Enter the subject.');
     expect(SUBJECT_MESSAGE).toBe('Keep the subject under 80 characters.');
-    expect(SUBJECT_ONE_LINE_MESSAGE).toBe('Enter the subject on one line.');
+    expect(SUBJECT_ONE_LINE_MESSAGE).toBe('Enter the subject on one line, without hidden characters.');
     expect(NOTES_MESSAGE).toBe('Keep the notes under 1,000 characters.');
   });
 });
@@ -163,8 +163,12 @@ describe('CR-01 item 6 (AQP-390): the customer, the subject and the title are re
     expect(result.ok && result.values.subject).toBe('Feed hopper, \u0905\u0928\u0941');
   });
 
-  it.each(['Line one\nline two', 'Tab\tseparated', 'Carriage\rreturn', 'Null\u0000byte'])('refuses a subject that is not one line (%j)', (subject) => {
+  it.each(['Line one\nline two', 'Tab\tseparated', 'Carriage\rreturn', 'Null\u0000byte', 'Hopper\u200b', 'Fe\u200ded', 'Bidi\u202eover'])('refuses a subject that is not one line of visible text (%j)', (subject) => {
     expect(checkAssign({ ...valid, subject }, NOW)).toMatchObject({ ok: false, errors: { subject: SUBJECT_ONE_LINE_MESSAGE } });
+  });
+
+  it.each(['\u200b', '\u200b\u200b', '\u2060'])('says "required" for a subject with nothing visible (%j)', (subject) => {
+    expect(checkAssign({ ...valid, subject }, NOW)).toMatchObject({ ok: false, errors: { subject: SUBJECT_REQUIRED_MESSAGE } });
   });
 
   it('puts none of the typed value in a message', () => {

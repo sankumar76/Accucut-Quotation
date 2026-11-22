@@ -29,7 +29,7 @@ export const CUSTOMER_NAME_TAKEN_MESSAGE = 'A customer with this name already ex
 /** The short name's words (CR-01 item 6). The message for a taken short name names no other customer. */
 export const SHORT_NAME_REQUIRED_MESSAGE = 'Enter a short name.';
 export const SHORT_NAME_TOO_LONG_MESSAGE = `Keep the short name under ${CUSTOMER_SHORT_NAME_MAX_LENGTH} characters.`;
-export const SHORT_NAME_CONTROL_MESSAGE = 'Enter the short name without line breaks or other control characters.';
+export const SHORT_NAME_CONTROL_MESSAGE = 'Enter the short name without line breaks, hidden characters or other control characters.';
 export const SHORT_NAME_TAKEN_MESSAGE = 'A customer with this short name already exists.';
 export const EMAIL_FORMAT_MESSAGE = 'Enter an e-mail address like name@company.com.';
 export const NOTHING_TO_CHANGE_CUSTOMER_MESSAGE = 'Change at least one of the details or a rate.';
@@ -92,15 +92,17 @@ export function customerNameProblem(value: string): string | null {
   return trimmed.length > CUSTOMER_NAME_MAX_LENGTH ? NAME_TOO_LONG_MESSAGE : null;
 }
 
-/** A line break, a tab or any other control character: a short name is one line of printable text (assumption A-CR01-A2; a narrower set is a code-only change here). */
-const CONTROL_CHARACTER = /\p{Cc}/u;
+/** A line break, a tab, any other control character or a hidden format character (a zero-width space, a joiner, a bidi override): a short name is one line of visible text (assumption A-CR01-A2). A hidden character would let two short names that look alike both be stored. */
+const HIDDEN_OR_CONTROL = /[\p{Cc}\p{Cf}]/u;
+/** Nothing a person can see: spaces, control and format characters only. */
+const NOTHING_VISIBLE = /^[\s\p{Cc}\p{Cf}]*$/u;
 
 /** The message under the short-name field, or `null`: required, any printable text without a control character, and at most `CUSTOMER_SHORT_NAME_MAX_LENGTH` characters (a letter outside the basic plane counts as one, as the database counts). */
 export function shortNameProblem(value: string): string | null {
   const stored = canonicalShortName(value);
-  if (stored === '') return SHORT_NAME_REQUIRED_MESSAGE;
+  if (NOTHING_VISIBLE.test(stored)) return SHORT_NAME_REQUIRED_MESSAGE;
   if (Array.from(stored).length > CUSTOMER_SHORT_NAME_MAX_LENGTH) return SHORT_NAME_TOO_LONG_MESSAGE;
-  return CONTROL_CHARACTER.test(stored) ? SHORT_NAME_CONTROL_MESSAGE : null;
+  return HIDDEN_OR_CONTROL.test(stored) ? SHORT_NAME_CONTROL_MESSAGE : null;
 }
 
 /** The message under the phone field, or `null`: at most 30 characters; a phone number is otherwise free text (AC-1). */

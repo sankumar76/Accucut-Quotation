@@ -69,12 +69,14 @@ export const TITLE_REQUIRED_MESSAGE = 'Enter a title.';
 export const TITLE_MESSAGE = `Keep the title under ${TITLE_MAX_LENGTH} characters.`;
 export const SUBJECT_REQUIRED_MESSAGE = 'Enter the subject.';
 export const SUBJECT_MESSAGE = `Keep the subject under ${SUBJECT_MAX_LENGTH} characters.`;
-export const SUBJECT_ONE_LINE_MESSAGE = 'Enter the subject on one line.';
+export const SUBJECT_ONE_LINE_MESSAGE = 'Enter the subject on one line, without hidden characters.';
 export const NOTES_MESSAGE = 'Keep the notes under 1,000 characters.';
 
 const DEADLINE_FORMAT = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/;
-/** A line break, a tab or any other control character: a subject is one line of text (it becomes part of a file name). */
-const CONTROL_CHARACTER = /\p{Cc}/u;
+/** A line break, a tab, any other control character or a hidden format character (a zero-width space, a joiner, a bidi override): a subject is one line of visible text (it becomes part of a file name). */
+const HIDDEN_OR_CONTROL = /[\p{Cc}\p{Cf}]/u;
+/** Nothing a person can see: spaces, control and format characters only. */
+const NOTHING_VISIBLE = /^[\s\p{Cc}\p{Cf}]*$/u;
 
 /** The length in characters as the database counts them (a letter outside the basic plane is one), not in UTF-16 units. */
 function lengthOf(text: string): number {
@@ -99,9 +101,9 @@ function titleProblem(title: string): string | undefined {
 
 /** The message under the subject, or `undefined`: required, on one line, and at most `SUBJECT_MAX_LENGTH` characters. */
 function subjectProblem(subject: string): string | undefined {
-  if (subject === '') return SUBJECT_REQUIRED_MESSAGE;
+  if (NOTHING_VISIBLE.test(subject)) return SUBJECT_REQUIRED_MESSAGE;
   if (lengthOf(subject) > SUBJECT_MAX_LENGTH) return SUBJECT_MESSAGE;
-  return CONTROL_CHARACTER.test(subject) ? SUBJECT_ONE_LINE_MESSAGE : undefined;
+  return HIDDEN_OR_CONTROL.test(subject) ? SUBJECT_ONE_LINE_MESSAGE : undefined;
 }
 
 /** The deadline as a UTC instant, or `undefined` when it is missing, is not a real date and time, or is not later than now. */

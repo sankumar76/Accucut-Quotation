@@ -48,7 +48,7 @@ describe('CR-01 item 6 (AQP-390), AC-14: the short name', () => {
     expect(SHORT_NAME_TOO_LONG_MESSAGE).toBe('Keep the short name under 10 characters.');
     expect(SHORT_NAME_TOO_LONG_MESSAGE).toContain(String(CUSTOMER_SHORT_NAME_MAX_LENGTH));
     expect(SHORT_NAME_TAKEN_MESSAGE).toBe('A customer with this short name already exists.');
-    expect(SHORT_NAME_CONTROL_MESSAGE).toBe('Enter the short name without line breaks or other control characters.');
+    expect(SHORT_NAME_CONTROL_MESSAGE).toBe('Enter the short name without line breaks, hidden characters or other control characters.');
   });
 
   it('is required, trimmed first: empty and spaces-only are refused', () => {
@@ -72,6 +72,15 @@ describe('CR-01 item 6 (AQP-390), AC-14: the short name', () => {
 
   it.each(['A\nB', 'A\tB', 'A\rB', 'A\u0000B', 'A\u001bB'])('refuses a control character: %j', (shortName) => {
     expect(shortNameProblem(shortName)).toBe(SHORT_NAME_CONTROL_MESSAGE);
+  });
+
+  // QLT-02: a hidden format character would let "ACME" and "ACME" plus a zero-width space both be stored (and become one file-name stem).
+  it.each(['ACME\u200b', 'A\u200dB', 'A\u202eB', 'A\u2060B', 'AC\ufeffME'])('refuses a hidden format character: %j', (shortName) => {
+    expect(shortNameProblem(shortName)).toBe(SHORT_NAME_CONTROL_MESSAGE);
+  });
+
+  it.each(['\u200b', '\u200b\u200b', ' \u200b ', '\u202e'])('says "required" for text with nothing visible: %j', (shortName) => {
+    expect(shortNameProblem(shortName)).toBe(SHORT_NAME_REQUIRED_MESSAGE);
   });
 
   it('keeps the short name as typed, trimmed, and nothing else changed: letter case and inner spaces stay', () => {

@@ -75,14 +75,16 @@ type Problem =
 const WRAPPING_BUTTON = cn('h-auto min-h-(--control-h) py-s-2 leading-snug whitespace-normal', BREAK_LONG_NAMES);
 
 /** What the dialog holds and what pressing "Change customer" does. */
-function useChangeCustomer({ estimateId, current, onChanged }: Pick<ChangeCustomerDialogProps, 'estimateId' | 'current' | 'onChanged'>) {
+function useChangeCustomer({ open, estimateId, current, onChanged }: Pick<ChangeCustomerDialogProps, 'open' | 'estimateId' | 'current' | 'onChanged'>) {
   const [choices, setChoices] = useState<Choices>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [selected, setSelected] = useState('');
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
 
+  // The list is read each time the dialog opens (and again on "Read again"), so a customer added or deleted meanwhile is not missing or stale; what was read last stays shown while it is read.
   useEffect(() => {
+    if (!open) return undefined;
     let cancelled = false;
     void loadCustomerChoices().then((outcome) => {
       if (!cancelled) setChoices(outcome.status === 'ok' ? { status: 'ready', options: outcome.value } : { status: 'failed' });
@@ -90,7 +92,7 @@ function useChangeCustomer({ estimateId, current, onChanged }: Pick<ChangeCustom
     return () => {
       cancelled = true;
     };
-  }, [attempt]);
+  }, [attempt, open]);
 
   const chosen = choices.status === 'ready' ? choices.options.find((option) => option.id === selected) : undefined;
 
@@ -122,7 +124,7 @@ function useChangeCustomer({ estimateId, current, onChanged }: Pick<ChangeCustom
 }
 
 export function ChangeCustomerDialog({ open, onOpenChange, estimateId, current, onChanged, onCloseAutoFocus }: ChangeCustomerDialogProps) {
-  const change = useChangeCustomer({ estimateId, current, onChanged });
+  const change = useChangeCustomer({ open, estimateId, current, onChanged });
   const { choices, chosen, saving, problem } = change;
   const fieldError = problem?.kind === 'field' ? problem.message : undefined;
   const options = choices.status === 'ready' ? choices.options : [];
