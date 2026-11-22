@@ -10,17 +10,17 @@ const DEVICES = [
   { file: 'SCR-03-phone.html', id: 'SCR-03', type: 'phone', src: 'SCR-03-engineer.html', name: 'My tasks (Engineer) on a phone', variants: [['Open', 'state=open'], ['Overdue', 'state=overdue'], ['Menu open', 'state=open&drawer=nav'], ['Loading', 'state=loading'], ['Empty', 'state=empty']] },
   { file: 'SCR-03-tablet.html', id: 'SCR-03', type: 'tablet', src: 'SCR-03.html', name: 'Task queue (Lead) on a tablet', variants: [['Open', 'state=open'], ['Overdue', 'state=overdue'], ['Menu open', 'state=open&drawer=nav'], ['Loading', 'state=loading']] },
   { file: 'SCR-04-phone.html', id: 'SCR-04', type: 'phone', src: 'SCR-04.html', name: 'Assign task on a phone', variants: [['Default', 'state=default'], ['Validation errors', 'state=error'], ['Assigned', 'state=success']] },
-  { file: 'SCR-05-phone.html', id: 'SCR-05', type: 'phone', src: 'SCR-05.html', name: 'Estimate workspace (Engineer) on a phone', variants: [['Default', 'state=default'], ['Parts tree drawer', 'state=default&drawer=tree'], ['Calculate blocked', 'state=error'], ['Picture too large', 'state=imgerror'], ['No customer', 'state=nocustomer'], ['Submitted', 'state=submitted']] },
-  { file: 'SCR-05-tablet.html', id: 'SCR-05', type: 'tablet', src: 'SCR-05.html', name: 'Estimate workspace (Engineer) on a tablet', variants: [['Default', 'state=default'], ['Calculate blocked', 'state=error'], ['Submitted', 'state=submitted']] },
-  { file: 'SCR-06-phone.html', id: 'SCR-06', type: 'phone', src: 'SCR-06.html', name: 'Estimate review (Lead, Admin) on a phone', variants: [['Submitted', 'state=default'], ['Total cleared', 'state=cleared'], ['Approved', 'state=approved'], ['Parts tree drawer', 'state=default&drawer=tree']] },
-  { file: 'SCR-06-tablet.html', id: 'SCR-06', type: 'tablet', src: 'SCR-06.html', name: 'Cost review on a tablet', variants: [['Submitted', 'state=default'], ['Total cleared', 'state=cleared'], ['Approved', 'state=approved']] },
+  { file: 'SCR-05-phone.html', id: 'SCR-05', type: 'phone', src: 'SCR-05.html', name: 'Estimate workspace (Engineer) on a phone', variants: [['Default', 'state=default'], ['Parts tree drawer', 'state=default&drawer=tree'], ['Calculate blocked', 'state=error'], ['Picture too large', 'state=imgerror'], ['Add under a row (+)', 'state=addmenu'], ['Prepared', 'state=submitted']] },
+  { file: 'SCR-05-tablet.html', id: 'SCR-05', type: 'tablet', src: 'SCR-05.html', name: 'Estimate workspace (Engineer) on a tablet', variants: [['Default', 'state=default'], ['Calculate blocked', 'state=error'], ['Prepared', 'state=submitted']] },
+  { file: 'SCR-06-phone.html', id: 'SCR-06', type: 'phone', src: 'SCR-06.html', name: 'Estimate review (Lead, Admin) on a phone', variants: [['Prepared', 'state=default'], ['Total cleared', 'state=cleared'], ['Approved', 'state=approved'], ['Parts tree drawer', 'state=default&drawer=tree']] },
+  { file: 'SCR-06-tablet.html', id: 'SCR-06', type: 'tablet', src: 'SCR-06.html', name: 'Cost review on a tablet', variants: [['Prepared', 'state=default'], ['Total cleared', 'state=cleared'], ['Approved', 'state=approved']] },
   { file: 'SCR-07-phone.html', id: 'SCR-07', type: 'phone', src: 'SCR-07.html', name: 'Cost details on a phone (stages as accordion)', variants: [['Default', 'state=default'], ['Loading', 'state=loading'], ['Error', 'state=error']] },
   { file: 'SCR-11-tablet.html', id: 'SCR-11', type: 'tablet', src: 'SCR-11.html', name: 'Process master on a tablet', variants: [['Default', 'state=default'], ['Customers differ prompt', 'state=sync']] },
   { file: 'SCR-25-phone.html', id: 'SCR-25', type: 'phone', src: 'SCR-25.html', name: 'Navigation drawer on a phone', variants: [['Drawer open', 'state=default&drawer=nav'], ['Drawer closed', 'state=default'], ['Menu button pending', 'state=menupending'], ['Menu button failed', 'state=menufailed'], ['Account trigger pending', 'state=acctpending'], ['Account trigger failed', 'state=acctfailed']] },
 ];
 
 function devicePage(d) {
-  const title = `${d.id} ${d.type} frame · Accucut Quotation Portal`;
+  const title = `${d.id} ${d.type} frame · Accucut RFQ Portal`;
   const w = d.type === 'phone' ? '360 by 720 px' : '768 by 1024 px';
   const first = d.variants[0][1];
   const html = `<!doctype html>
@@ -29,12 +29,12 @@ function devicePage(d) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
-<meta name="description" content="Review frame showing a screen of the Accucut Quotation Portal at ${d.type} size.">
+<meta name="description" content="Review frame showing a screen of the Accucut RFQ Portal at ${d.type} size.">
 <meta name="robots" content="noindex, nofollow">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Accucut Quotation Portal">
+<meta property="og:site_name" content="Accucut RFQ Portal">
 <meta property="og:title" content="${esc(title)}">
-<meta property="og:description" content="Review frame showing a screen of the Accucut Quotation Portal at ${d.type} size.">
+<meta property="og:description" content="Review frame showing a screen of the Accucut RFQ Portal at ${d.type} size.">
 <link rel="icon" href="../assets/accucut-logo.jpg">
 <link rel="stylesheet" href="screens.css">
 </head>
@@ -80,17 +80,17 @@ const GROUPS = [
     ['SCR-26', 'SCR-26.html', 'No access, not found, error, session ended', 'All', 'R1', 'FR-007, 088', [['404', 'notfound'], ['Server error', 'error500'], ['Session ended', 'expired']]],
   ]],
   ['Work: queues and assignment', [
-    ['SCR-03', 'SCR-03.html', 'Task queue (Lead, Admin)', 'Lead, Admin', 'R1 (filters R1+)', 'FR-034 to 039, 041', [['Closed', 'closed'], ['Overdue', 'overdue'], ['Loading', 'loading'], ['Empty', 'empty'], ['No match', 'nomatch'], ['Error', 'error']], [['Tablet', 'SCR-03-tablet.html']]],
-    ['SCR-03', 'SCR-03-engineer.html', 'My tasks (Engineer)', 'Engineer', 'R1', 'FR-033, 034, 036, 037', [['Closed', 'closed'], ['Overdue', 'overdue'], ['Loading', 'loading'], ['Empty', 'empty'], ['No match', 'nomatch'], ['Error', 'error']], [['Phone', 'SCR-03-phone.html']]],
-    ['SCR-04', 'SCR-04.html', 'Assign task, and reassign (R2)', 'Lead, Admin', 'R1; edit R2', 'FR-032, 033, 040', [['Validation errors', 'error'], ['Saving', 'submitting'], ['Assigned', 'success'], ['Alerts OFF notice (R2)', 'alertsoff'], ['Reassign (R2)', 'edit']], [['Phone', 'SCR-04-phone.html']]],
+    ['SCR-03', 'SCR-03.html', 'Task queue (Lead, Admin)', 'Lead, Admin', 'R1 (filters R1+)', 'FR-034 to 039, 041', [['Overdue', 'overdue'], ['Closed (download marker)', 'closed'], ['Ignored', 'ignored'], ['Loading', 'loading'], ['Empty', 'empty'], ['No match', 'nomatch'], ['Error', 'error']], [['Tablet', 'SCR-03-tablet.html']]],
+    ['SCR-03', 'SCR-03-engineer.html', 'My tasks (Engineer)', 'Engineer', 'R1', 'FR-033, 034, 036, 037', [['Overdue', 'overdue'], ['Closed (download marker)', 'closed'], ['Ignored', 'ignored'], ['Loading', 'loading'], ['Empty', 'empty'], ['No match', 'nomatch'], ['Error', 'error']], [['Phone', 'SCR-03-phone.html']]],
+    ['SCR-04', 'SCR-04.html', 'Assign task, and reassign (R2)', 'Lead, Admin', 'R1; edit R2', 'FR-032, 033, 040, CR-01', [['Validation errors', 'error'], ['Saving', 'submitting'], ['Assigned', 'success'], ['Alerts OFF notice (R2)', 'alertsoff'], ['Reassign (R2)', 'edit']], [['Phone', 'SCR-04-phone.html']]],
   ]],
   ['Estimate: enter, review, approve, export', [
-    ['SCR-05', 'SCR-05.html', 'Estimate workspace, guided form (Engineer view: no costs)', 'Engineer', 'R1', 'FR-042 to 057, 087, 102, 104', [['Saved', 'saved'], ['Calculate blocked', 'error'], ['Picture too large', 'imgerror'], ['No customer', 'nocustomer'], ['Change customer', 'changecust'], ['Unsaved changes', 'leave'], ['Delete part', 'deletepart'], ['Loading', 'loading'], ['Quantity warning', 'qtywarn'], ['Warning, list changed', 'qtywarn2'], ['Submitted', 'submitted'], ['Approved', 'approved']], [['Phone', 'SCR-05-phone.html'], ['Tablet', 'SCR-05-tablet.html']]],
-    ['SCR-06', 'SCR-06.html', 'Estimate review, cost view (Lead, Admin view)', 'Lead, Admin', 'R1', 'FR-058 to 065, 070, 100, 104, 106 to 108', [['Total cleared', 'cleared'], ['Not calculated', 'draft'], ['Draft after unlock', 'unlocked'], ['Unlocked and changed', 'unlockedcleared'], ['No Tool Cost', 'notool'], ['Rates changed', 'ratechanged'], ['Quantity warning (Recalculate)', 'qtywarn'], ['Warning on this calculation', 'qtywarned'], ['Approved (Lead)', 'approved'], ['Approved (Admin)', 'adminapproved'], ['Cancel approval (Admin)', 'cancel'], ['Approval cancelled (Admin)', 'cancelled'], ['Approval cancelled (Lead)', 'cancelledlead'], ['Remove price (Admin)', 'removeprice'], ['Price removed', 'removed'], ['Loading', 'loading'], ['Error', 'error']], [['Phone', 'SCR-06-phone.html'], ['Tablet', 'SCR-06-tablet.html']]],
+    ['SCR-05', 'SCR-05.html', 'Estimate workspace, guided form (Engineer view: no costs)', 'Engineer', 'R1', 'FR-042 to 057, 087, 102, 104', [['Add under a row (+)', 'addmenu'], ['Drag to reorder', 'drag'], ['Move without dragging', 'movemenu'], ['Saved', 'saved'], ['Calculate blocked', 'error'], ['Picture too large', 'imgerror'], ['Unsaved changes', 'leave'], ['Delete part', 'deletepart'], ['Loading', 'loading'], ['Quantity warning', 'qtywarn'], ['Warning, list changed', 'qtywarn2'], ['Prepared', 'submitted'], ['Approved', 'approved']], [['Phone', 'SCR-05-phone.html'], ['Tablet', 'SCR-05-tablet.html']]],
+    ['SCR-06', 'SCR-06.html', 'Estimate review, cost view (Lead, Admin view)', 'Lead, Admin', 'R1', 'FR-058 to 065, 070, 100, 104, 106 to 108, CR-01', [['Total cleared', 'cleared'], ['Not calculated', 'draft'], ['Draft after unlock', 'unlocked'], ['Unlocked and changed', 'unlockedcleared'], ['No Tool Cost', 'notool'], ['Rates changed', 'ratechanged'], ['Quantity warning (Recalculate)', 'qtywarn'], ['Warning on this calculation', 'qtywarned'], ['Approved (Lead)', 'approved'], ['Approved (Admin)', 'adminapproved'], ['Cancel approval (Admin)', 'cancel'], ['Approval cancelled (Admin)', 'cancelled'], ['Approval cancelled (Lead)', 'cancelledlead'], ['Remove price (Admin)', 'removeprice'], ['Price removed', 'removed'], ['Ignore RFQ (dialog)', 'ignoredlg'], ['Ignored', 'ignored'], ['Mark as quoted (dialog)', 'quotedlg'], ['Quoted', 'quoted'], ['Changed since download', 'dlstale'], ['Change customer (Lead)', 'changecust'], ['Loading', 'loading'], ['Error', 'error']], [['Phone', 'SCR-06-phone.html'], ['Tablet', 'SCR-06-tablet.html']]],
     ['SCR-07', 'SCR-07.html', 'Cost details for one row, six stages with formulas', 'Lead, Admin', 'R1', 'FR-058, 059, 060, 026, 100', [['Assembly row (Not applicable)', 'assembly'], ['Total cleared', 'cleared'], ['Loading', 'loading'], ['Error', 'error']], [['Phone', 'SCR-07-phone.html']]],
     ['SCR-08', 'SCR-08.html', 'Approve and lock (dialog)', 'Lead, Admin', 'R1', 'FR-062, 101, 103, 104, 106', [['Price changed', 'override'], ['Price changed with reason', 'overridereason'], ['Reason too long', 'reasonlong'], ['Invalid price', 'error'], ['Saving', 'saving'], ['Estimate changed while open', 'stale'], ['Figures recalculated while open', 'recalc'], ['Approval not confirmed', 'unconfirmed'], ['Quantity warning on this calculation', 'qtywarned'], ['Rates changed', 'ratechanged'], ['After an unlock', 'earlier']]],
     ['SCR-09', 'SCR-09.html', 'Unlock (dialog)', 'Lead, Admin', 'R1', 'FR-063', [['Config or rates changed', 'changed'], ['Reason missing', 'error'], ['Saving', 'saving']]],
-    ['SCR-10', 'SCR-10.html', 'Excel export, the rows in the file', 'Lead, Admin', 'R1', 'FR-066 to 071, 100, 104, 107', [['Total cleared', 'cleared'], ['Not calculated', 'nevercalc'], ['Building file', 'generating'], ['Error', 'error'], ['Empty', 'empty'], ['Approved', 'approved'], ['After an unlock', 'earlier'], ['Quantity warning on this calculation', 'qtywarned']]],
+    ['SCR-10', 'SCR-10.html', 'Excel export, the rows in the file', 'Lead, Admin', 'R1', 'FR-066 to 071, 100, 104, 107', [['Total cleared', 'cleared'], ['Not calculated', 'nevercalc'], ['Building file', 'generating'], ['Error', 'error'], ['Empty', 'empty'], ['Approved', 'approved'], ['Just downloaded', 'downloaded'], ['After an unlock', 'earlier'], ['Quantity warning on this calculation', 'qtywarned']]],
   ]],
   ['Masters and administration', [
     ['SCR-11', 'SCR-11.html', 'Process master', 'Admin', 'R1 (prompt R1+)', 'FR-012, 014', [['Saved', 'saved'], ['Add rate', 'add'], ['Customers differ', 'sync'], ['Delete blocked', 'blocked'], ['Loading', 'loading'], ['No match', 'nomatch'], ['Error', 'error']], [['Tablet', 'SCR-11-tablet.html']]],
@@ -129,21 +129,31 @@ function buildIndex() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Screens for review · Accucut Quotation Portal</title>
-<meta name="description" content="Review mock-ups of every screen of the Accucut Quotation Portal, with fictional data.">
+<title>Screens for review · Accucut RFQ Portal</title>
+<meta name="description" content="Review mock-ups of every screen of the Accucut RFQ Portal, with fictional data.">
 <meta name="robots" content="noindex, nofollow">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Accucut Quotation Portal">
-<meta property="og:title" content="Screens for review · Accucut Quotation Portal">
-<meta property="og:description" content="Review mock-ups of every screen of the Accucut Quotation Portal, with fictional data.">
+<meta property="og:site_name" content="Accucut RFQ Portal">
+<meta property="og:title" content="Screens for review · Accucut RFQ Portal">
+<meta property="og:description" content="Review mock-ups of every screen of the Accucut RFQ Portal, with fictional data.">
 <link rel="icon" href="../assets/accucut-logo.jpg">
 <link rel="stylesheet" href="screens.css">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to main content</a>
-<header class="topbar" style="position:static"><a class="brand" href="index.html"><img src="../assets/accucut-logo.jpg" width="56" height="56" alt="AccuCut logo"><span><span class="brand-name">ACCUCUT LASERS</span> <span class="brand-sub">Quotation Portal &middot; screens for review</span></span></a></header>
+<header class="topbar" style="position:static"><a class="brand" href="index.html"><img src="../assets/accucut-logo.jpg" width="56" height="56" alt="AccuCut logo"><span><span class="brand-name">ACCUCUT LASERS</span> <span class="brand-sub">RFQ Portal &middot; screens for review</span></span></a></header>
 <main class="page" id="main">
  <div class="stack-sm"><h1 class="t-heading">Screens for review (G3)</h1><p class="t-body t-muted">Review mock-ups, not production code. Developers rebuild them with shadcn/ui. All names, part numbers, rates and prices are invented. Version 0.5, 2026-11-02 (architecture v0.8 and SPEC v1.10: the whole-order rule with a parent showing only its own row, Warn for a row that costs 0, every calculated figure cleared on any input change, no Excel file until a calculation is current, the approved price kept until a new approval or the Admin removes it, Cancel approval and Remove price for the Admin, the rate-change notice, the optional Part Model and the Last backup line). Specification: <a href="../ux-spec.md">docs/03-ux/ux-spec.md</a>.</p></div>
+ <section class="card" aria-labelledby="cr01-t" style="border-top:4px solid var(--primary)"><div class="card-head"><h2 id="cr01-t" class="t-sub">What changed: customer feedback of 17 Nov 2026 (CR-01)</h2></div><div class="card-body"><ul class="stack-sm">
+  <li>${icon('check', 16)} <span><strong>Name:</strong> "Quotation Portal" is now "RFQ Portal" on every screen and e-mail. "ACCUCUT LASERS" is unchanged.</span></li>
+  <li>${icon('check', 16)} <span><strong>Compact input and output screens:</strong> the eight input sections sit side by side with several fields to a row, and the output tiles and cost-detail rows are tighter. <a href="SCR-05.html">SCR-05 inputs</a>, <a href="SCR-06.html">SCR-06 review</a>, <a href="SCR-07.html">SCR-07 cost details</a>.</span></li>
+  <li>${icon('check', 16)} <span><strong>Parts tree with five kinds of row</strong> (Main Assembly, Sub-Assembly, Part, Sub-part, Fastener), each shown by its own icon in the manner of a CAD feature tree, with arrows to open and close branches, and a "+" next to each row that offers only what may go under it. "Part" or "Sub-part" is named automatically. More than one main assembly can be added. Fasteners stay in the input section too. On hover each row also shows "−" to delete it and a handle to drag it to a new place (or Move up / Move down). <a href="SCR-05.html#state=addmenu">See the "+" menu open</a>, <a href="SCR-05.html#state=drag">a row being dragged</a>.</span></li>
+  <li>${icon('check', 16)} <span><strong>Assign task:</strong> Customer Name, Customer Short Name (from the <a href="SCR-12.html">Customer master</a>) and Subject (project name); Title and Subject are required. Only a Lead or Admin sets or changes the customer. <a href="SCR-04.html">SCR-04</a>, <a href="SCR-06.html#state=changecust">change customer</a>.</span></li>
+  <li>${icon('check', 16)} <span><strong>Statuses:</strong> Draft, Prepared (was Submitted), Approved, Quoted (a button after the quote is sent) and Ignored (remarks required, can be restored, own tab). <a href="SCR-06.html#state=ignoredlg">Ignore</a>, <a href="SCR-06.html#state=quotedlg">Mark as quoted</a>, <a href="SCR-03.html#state=ignored">Ignored tab</a>.</span></li>
+  <li>${icon('check', 16)} <span><strong>Downloaded marker</strong> (not a status): "Downloaded 2&times;, last by whom and when", turning amber "Changed since download" if the estimate is approved again afterwards. <a href="SCR-03.html#state=closed">Queue, Closed tab</a>, <a href="SCR-06.html#state=dlstale">on the estimate</a>.</span></li>
+  <li>${icon('check', 16)} <span><strong>Excel file name:</strong> &lt;Customer Short Name&gt;_&lt;Subject&gt;_&lt;DD-MM-YYYY&gt;.xlsx, with the download date. <a href="SCR-10.html">SCR-10</a>.</span></li>
+  <li>${icon('check', 16)} <span><strong>E-mail on assignment</strong> to the Engineer, from noreply@ the company domain (Google Workspace), with the Lead copied and as Reply-To. <a href="SCR-22.html">SCR-22</a>.</span></li>
+ </ul></div></section>
  <section class="card"><div class="card-head"><h2 class="t-sub">How to review</h2></div><div class="card-body"><ul class="stack-sm">
   <li>${icon('check', 16)} Open any page by double-click. Nothing needs a server, a build or a sign-in.</li>
   <li>${icon('check', 16)} The yellow bar at the top of each screen is review-only. Its buttons switch the screen between its states: default, loading, empty, error, success, and the dialogs. Links in the table below open a state directly.</li>

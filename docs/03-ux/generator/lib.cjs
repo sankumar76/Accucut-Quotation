@@ -20,6 +20,7 @@ const P = {
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
   trash: '<path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
@@ -69,6 +70,11 @@ const P = {
   arrowleft: '<path d="M19 12H5M12 19l-7-7 7-7"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/>',
   wifioff: '<path d="M1 1l22 22M16.7 11.1A11 11 0 0 1 21.5 14M5 12.6a11 11 0 0 1 5.2-2.5M8.5 16.4a6 6 0 0 1 7 0M12 20h.01"/>',
+  /* CR-01 parts-tree kinds, in the manner of a CAD feature tree (customer sample, 17 Nov 2026): one shape per kind. */
+  kasm: '<path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z"/><path d="m7 16.5-4.74-2.85M7 16.5l5-3M7 16.5v5.17"/><path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z"/><path d="m17 16.5-5-3M17 16.5l4.74-2.85M17 16.5v5.17"/><path d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z"/><path d="M12 8 7.26 5.15M12 8l4.74-2.85M12 13.5V8"/>',
+  ksub: '<rect width="7" height="7" x="14" y="3" rx="1"/><path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"/>',
+  kpart: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>',
+  kfst: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><circle cx="12" cy="12" r="4"/>',
 };
 function icon(n, s = 18, cls = '') {
   if (!P[n]) throw new Error('icon ' + n);
@@ -135,19 +141,35 @@ function calc(n) {
   return o;
 }
 const z = { J: 0, K: 0, L: 0, N: 0, P: 0, Q: 0, R: 0, S: 'None', T: 0, U: 0, V: 0, W: 0, X: 0, Y: 0, AP: 0, AU: 0, BM: 0 };
+/* Change request CR-01 (customer feedback, 2026-11-17): every row has a kind.
+   asm = Main Assembly, sub = Sub-Assembly, part = Part or Sub-part (named automatically: "Part" when it is the only part
+   under its parent, "Sub-part" when there are two or more), fst = Fastener. Every kind has the same eight sections of inputs
+   and is its own row in the Excel file. CHILD_KINDS is what the "+" button next to each row offers. */
 const NODES = [
-  { no: '1', name: 'Control cabinet assembly', d: 0, st: 'done', n: { ...z, H: 2, E: 'NA', G: 'Not applicable', B: 'XP-1000', D: 'Assembly, control cabinet CC-40', AJ: 'Assembly row, nothing of its own' } },
-  { no: '1.1', name: 'Base frame', d: 1, st: 'done', n: { ...z, H: 4, E: 'MS', G: 'Textured grey', B: 'XP-1101', D: 'Base frame, laser cut, 4 bends', J: 720, K: 480, L: 3, N: 5.6, P: 96, Q: 2300, R: 4, S: 'M6 insert nut', T: 4, U: 3.2, V: 2, W: 6, X: 2, Y: 0, flags: ['AA', 'AE'], BM: 2800, AJ: 'Deburr all edges' } },
-  { no: '1.1.1', name: 'Corner gusset', d: 2, st: 'done', n: { ...z, H: 16, E: 'MS', G: 'Textured grey', B: 'XP-1111', D: 'Corner gusset', J: 120, K: 120, L: 3, N: 0.28, P: 12, Q: 260, R: 1, W: 2, flags: ['AE'], AJ: 'None' } },
-  { no: '1.1.2', name: 'Cross brace', d: 2, st: 'done', n: { ...z, H: 8, E: 'MS', G: 'Textured grey', B: 'XP-1112', D: 'Cross brace', J: 420, K: 60, L: 2, N: 0.33, P: 20, Q: 640, R: 2, V: 1, flags: ['AE'], AJ: 'None' } },
-  { no: '1.2', name: 'Side panel', d: 1, st: 'done', n: { ...z, H: 4, E: 'MS', G: 'Textured grey', B: 'XP-1102', D: 'Side panel', J: 900, K: 500, L: 1.5, N: 5.2, P: 140, Q: 3600, R: 4, W: 4, flags: ['AA', 'AE'], AJ: 'None' } },
-  { no: '1.3', name: 'Door', d: 1, st: 'part', n: { ...z, H: 2, E: 'SS', G: 'Brushed finish', B: 'XP-1103', D: 'Door with window cut-out', J: 800, K: 450, L: 1.5, N: 4.1, P: 120, Q: 3000, R: 4, S: 'Hinge set', T: 2, U: 18.5, W: 6, Y: 2, flags: ['AC'], AP: 120, BM: 1500, AJ: 'Fit gasket after finish' } },
-  { no: '1.4', name: 'Top cover', d: 1, st: 'done', n: { ...z, H: 2, E: 'MS', G: 'Textured grey', B: 'XP-1104', D: 'Top cover with vent opening', J: 600, K: 400, L: 1.5, N: 2.4, P: 80, Q: 2200, R: 4, W: 8, flags: ['AE'], AJ: 'None' } },
-  { no: '1.4.1', name: 'Vent grille', d: 2, st: 'done', n: { ...z, H: 12, E: 'AL', G: 'Anodised natural', B: 'XP-1141', D: 'Vent grille, aluminium', J: 100, K: 80, L: 1.2, N: 0.02, P: 18, Q: 300, flags: ['AG'], AJ: 'None' } },
-  { no: '2', name: 'Mounting bracket kit', d: 0, st: 'part', n: { ...z, H: 3, E: 'NA', G: 'Not applicable', B: 'XP-2000', D: 'Assembly, mounting bracket kit', AJ: 'Assembly row, nothing of its own' } },
-  { no: '2.1', name: 'Bracket plate', d: 1, st: 'todo', n: { ...z, H: 3, E: 'MS', G: 'Textured grey', B: 'XP-2101', D: 'Bracket plate', J: 200, K: 100, L: 4, N: 0.55, P: 22, Q: 520, R: 2, flags: [], BM: 600, AJ: 'None' } },
+  { no: '1', k: 'asm', name: 'Control cabinet assembly', d: 0, st: 'done', n: { ...z, H: 2, E: 'NA', G: 'Not applicable', B: 'XP-1000', D: 'Assembly, control cabinet CC-40', AJ: 'Assembly row, nothing of its own' } },
+  { no: '1.1', k: 'sub', name: 'Base frame', d: 1, st: 'done', n: { ...z, H: 4, E: 'MS', G: 'Textured grey', B: 'XP-1101', D: 'Base frame, laser cut, 4 bends', J: 720, K: 480, L: 3, N: 5.6, P: 96, Q: 2300, R: 4, S: 'M6 insert nut', T: 4, U: 3.2, V: 2, W: 6, X: 2, Y: 0, flags: ['AA', 'AE'], BM: 2800, AJ: 'Deburr all edges' } },
+  { no: '1.1.1', k: 'part', name: 'Corner gusset', d: 2, st: 'done', n: { ...z, H: 16, E: 'MS', G: 'Textured grey', B: 'XP-1111', D: 'Corner gusset', J: 120, K: 120, L: 3, N: 0.28, P: 12, Q: 260, R: 1, W: 2, flags: ['AE'], AJ: 'None' } },
+  { no: '1.1.2', k: 'part', name: 'Cross brace', d: 2, st: 'done', n: { ...z, H: 8, E: 'MS', G: 'Textured grey', B: 'XP-1112', D: 'Cross brace', J: 420, K: 60, L: 2, N: 0.33, P: 20, Q: 640, R: 2, V: 1, flags: ['AE'], AJ: 'None' } },
+  { no: '1.1.3', k: 'fst', name: 'Hex bolt set M6', d: 2, st: 'done', n: { ...z, H: 32, E: 'NA', G: 'Not applicable', B: 'XP-1113', D: 'Hex bolt M6 x 16 with washer, bought out', S: 'M6 hex bolt with washer', T: 1, U: 4.5, AJ: 'Bought out' } },
+  { no: '1.2', k: 'part', name: 'Side panel', d: 1, st: 'done', n: { ...z, H: 4, E: 'MS', G: 'Textured grey', B: 'XP-1102', D: 'Side panel', J: 900, K: 500, L: 1.5, N: 5.2, P: 140, Q: 3600, R: 4, W: 4, flags: ['AA', 'AE'], AJ: 'None' } },
+  { no: '1.3', k: 'part', name: 'Door', d: 1, st: 'part', n: { ...z, H: 2, E: 'SS', G: 'Brushed finish', B: 'XP-1103', D: 'Door with window cut-out', J: 800, K: 450, L: 1.5, N: 4.1, P: 120, Q: 3000, R: 4, S: 'Hinge set', T: 2, U: 18.5, W: 6, Y: 2, flags: ['AC'], AP: 120, BM: 1500, AJ: 'Fit gasket after finish' } },
+  { no: '1.4', k: 'sub', name: 'Top cover', d: 1, st: 'done', n: { ...z, H: 2, E: 'MS', G: 'Textured grey', B: 'XP-1104', D: 'Top cover with vent opening', J: 600, K: 400, L: 1.5, N: 2.4, P: 80, Q: 2200, R: 4, W: 8, flags: ['AE'], AJ: 'None' } },
+  { no: '1.4.1', k: 'part', name: 'Vent grille', d: 2, st: 'done', n: { ...z, H: 12, E: 'AL', G: 'Anodised natural', B: 'XP-1141', D: 'Vent grille, aluminium', J: 100, K: 80, L: 1.2, N: 0.02, P: 18, Q: 300, flags: ['AG'], AJ: 'None' } },
+  { no: '2', k: 'asm', name: 'Mounting bracket kit', d: 0, st: 'part', n: { ...z, H: 3, E: 'NA', G: 'Not applicable', B: 'XP-2000', D: 'Assembly, mounting bracket kit', AJ: 'Assembly row, nothing of its own' } },
+  { no: '2.1', k: 'part', name: 'Bracket plate', d: 1, st: 'todo', n: { ...z, H: 3, E: 'MS', G: 'Textured grey', B: 'XP-2101', D: 'Bracket plate', J: 200, K: 100, L: 4, N: 0.55, P: 22, Q: 520, R: 2, flags: [], BM: 600, AJ: 'None' } },
+  { no: '2.2', k: 'fst', name: 'Anchor bolt M10', d: 1, st: 'todo', n: { ...z, H: 12, E: 'NA', G: 'Not applicable', B: 'XP-2201', D: 'Anchor bolt M10, bought out', S: 'M10 anchor bolt', T: 1, U: 11, AJ: 'Bought out' } },
 ];
 NODES.forEach((x) => { x.o = calc(x.n); x.bg = x.o.BG; });
+const KIND_NAME = { asm: 'Main Assembly', sub: 'Sub-Assembly', fst: 'Fastener' };
+const KIND_SHORT = { asm: 'Assy', sub: 'Sub-assy', part: 'Part', subpart: 'Sub-part', fst: 'Fastener' };
+const CHILD_KINDS = { asm: ['sub', 'part', 'fst'], sub: ['part', 'fst'], part: ['fst'], fst: [] };
+const parentNo = (no) => (no.includes('.') ? no.slice(0, no.lastIndexOf('.')) : '');
+/* "Part" when it is the only part under its parent, "Sub-part" when there are two or more (their answer, CR-01 Q4). */
+function kindKey(x) {
+  if (x.k !== 'part') return x.k;
+  return NODES.filter((y) => y.k === 'part' && parentNo(y.no) === parentNo(x.no)).length > 1 ? 'subpart' : 'part';
+}
+const kindName = (x) => ({ ...KIND_NAME, part: 'Part', subpart: 'Sub-part' })[kindKey(x)];
 /* Quantity rule in force (settled by the delivery lead, AQP-26): the Engineer types the count for the WHOLE ORDER on every row
    (2 frames, 6 pipes, 24 lids). BG of a row already carries that count (BB = BA * H). BL is the sum of every row's BG.
    Nothing is multiplied down the tree. The comment below describes the superseded roll-up and is kept only as history.
@@ -186,12 +208,26 @@ const usd = (n) => '$ ' + fmt(n);
 const eur = (n) => '€ ' + fmt(n);
 
 /* ---------------- tasks (queue) ---------------- */
+/* Customer master short names (CR-01 Q12): set on the Customer master, filled in on Assign task, used in the file name. */
+const CUSTOMERS = { 'Brightwater Controls': 'BWC', 'Marlow Agro Systems': 'MAS', 'Orchid Rail Works': 'ORW', 'Ridgeline Pumps': 'RLP', 'Tamarind Switchgear': 'TSG' };
+/* Customer, Title and Subject (the project name) are all set by the Lead or Admin on Assign task (CR-01 Q11, Q13). */
 const TASKS = [
-  { id: 'Q-2026-0311', title: 'Switchgear door set', eng: 'Arjun Rao', cust: 'Tamarind Switchgear', by: 'Kiran Bose', due: '03 Nov 2026, 17:00', over: '1 d 18 h', st: 'Draft', path: '\\\\fileserver\\rfq\\RFQ-2026-027' },
-  { id: 'Q-2026-0314', title: 'Pump skid frame', eng: 'Divya Shah', cust: 'Ridgeline Pumps', by: 'Sunita Pillai', due: '04 Nov 2026, 12:00', over: '23 h', st: 'Draft', path: '\\\\fileserver\\rfq\\RFQ-2026-029' },
-  { id: 'Q-2026-0318', title: 'Control cabinet CC-40', eng: 'Priya Nair', cust: 'Brightwater Controls', by: 'Kiran Bose', due: '06 Nov 2026, 17:00', st: 'Draft', path: '\\\\fileserver\\rfq\\RFQ-2026-031' },
-  { id: 'Q-2026-0320', title: 'Hopper cover', eng: 'Arjun Rao', cust: null, by: 'Kiran Bose', due: '09 Nov 2026, 10:00', st: 'Draft', path: '\\\\fileserver\\rfq\\RFQ-2026-033' },
-  { id: 'Q-2026-0322', title: 'Rail bracket family', eng: 'Priya Nair', cust: 'Orchid Rail Works', by: 'Kiran Bose', due: '12 Nov 2026, 15:30', st: 'Submitted', path: '\\\\fileserver\\rfq\\RFQ-2026-034' },
+  { id: 'Q-2026-0311', title: 'Switchgear door set', subj: 'TS-9 panel line', eng: 'Arjun Rao', cust: 'Tamarind Switchgear', by: 'Kiran Bose', due: '03 Nov 2026, 17:00', over: '1 d 18 h', st: 'Draft', path: '\\\\fileserver\\rfq\\RFQ-2026-027' },
+  { id: 'Q-2026-0314', title: 'Pump skid frame', subj: 'Skid upgrade 2027', eng: 'Divya Shah', cust: 'Ridgeline Pumps', by: 'Sunita Pillai', due: '04 Nov 2026, 12:00', over: '23 h', st: 'Draft', path: '\\\\fileserver\\rfq\\RFQ-2026-029' },
+  { id: 'Q-2026-0318', title: 'Control cabinet CC-40', subj: 'CC-40 cabinet', eng: 'Priya Nair', cust: 'Brightwater Controls', by: 'Kiran Bose', due: '06 Nov 2026, 17:00', st: 'Draft', path: '\\\\fileserver\\rfq\\RFQ-2026-031' },
+  { id: 'Q-2026-0320', title: 'Hopper cover', subj: 'Feed hopper', eng: 'Arjun Rao', cust: 'Marlow Agro Systems', by: 'Kiran Bose', due: '09 Nov 2026, 10:00', st: 'Draft', path: '\\\\fileserver\\rfq\\RFQ-2026-033' },
+  { id: 'Q-2026-0322', title: 'Rail bracket family', subj: 'Platform brackets', eng: 'Priya Nair', cust: 'Orchid Rail Works', by: 'Kiran Bose', due: '12 Nov 2026, 15:30', st: 'Prepared', path: '\\\\fileserver\\rfq\\RFQ-2026-034' },
+];
+/* Closed and Ignored tabs (CR-01 Q7 to Q10). dl = the download marker: how many times, last by whom and when; stale = the
+   estimate was approved again after the last download, so the file on someone's disk is out of date. */
+const CLOSED = [
+  { id: 'Q-2026-0299', title: 'Gearbox housing', subj: 'GX-2 housing', eng: 'Divya Shah', cust: 'Marlow Agro Systems', by: 'Sunita Pillai', due: '28 Oct 2026, 17:00', st: 'Approved', path: '\\\\fileserver\\rfq\\RFQ-2026-021', dl: { n: 1, by: 'Sunita Pillai', at: '29 Oct, 10:15' } },
+  { id: 'Q-2026-0301', title: 'Valve guard', subj: 'Valve guard set', eng: 'Arjun Rao', cust: 'Ridgeline Pumps', by: 'Kiran Bose', due: '30 Oct 2026, 12:00', st: 'Approved', path: '\\\\fileserver\\rfq\\RFQ-2026-022' },
+  { id: 'Q-2026-0296', title: 'Meter box', subj: 'Meter box M2', eng: 'Priya Nair', cust: 'Brightwater Controls', by: 'Kiran Bose', due: '24 Oct 2026, 17:00', st: 'Quoted', path: '\\\\fileserver\\rfq\\RFQ-2026-019', dl: { n: 2, by: 'Kiran Bose', at: '27 Oct, 16:40' } },
+  { id: 'Q-2026-0302', title: 'Conveyor side guard', subj: 'Line 3 guards', eng: 'Divya Shah', cust: 'Tamarind Switchgear', by: 'Kiran Bose', due: '31 Oct 2026, 17:00', st: 'Approved', path: '\\\\fileserver\\rfq\\RFQ-2026-023', dl: { n: 1, by: 'Kiran Bose', at: '01 Nov, 09:05', stale: true } },
+];
+const IGNORED = [
+  { id: 'Q-2026-0305', title: 'Display stand', subj: 'Expo stand', eng: 'Arjun Rao', cust: 'Orchid Rail Works', by: 'Kiran Bose', due: '02 Nov 2026, 17:00', st: 'Ignored', path: '\\\\fileserver\\rfq\\RFQ-2026-025', ign: { by: 'Kiran Bose', at: '01 Nov 2026, 15:20', why: 'Customer asked for laser marking only; outside our scope.' } },
 ];
 
 /* ---------------- page shell ---------------- */
@@ -243,9 +279,9 @@ function topbar(role, opts = {}) {
   const menuCtl = fo ? `<span class="fo-wrap fo-wrap-nav">${menuBtn}${failLine('fo-menu-fail', 'fo-fail-menu', 'menufailed', FO_TEXT.menu)}</span>` : menuBtn;
   return `<header class="topbar">
   ${menuCtl}
-  <a class="brand" href="${role === 'engineer' ? 'SCR-03-engineer.html' : 'SCR-03.html'}" aria-label="Accucut Lasers, Quotation Portal, home">
+  <a class="brand" href="${role === 'engineer' ? 'SCR-03-engineer.html' : 'SCR-03.html'}" aria-label="Accucut Lasers, RFQ Portal, home">
     <img src="../assets/accucut-logo.jpg" width="56" height="56" alt="AccuCut logo">
-    <span><span class="brand-name">ACCUCUT LASERS</span> <span class="brand-sub">Quotation Portal</span></span>
+    <span><span class="brand-name">ACCUCUT LASERS</span> <span class="brand-sub">RFQ Portal</span></span>
   </a>
   <span class="spacer"></span>
   <a class="bell" href="${bellHref}" aria-label="Overdue tasks: ${u.bell}">${icon('bell', 20)}<span class="count" aria-hidden="true">${u.bell}</span></a>
@@ -274,7 +310,7 @@ function reviewBar(m) {
 function page(m) {
   /* m: id, file, name, title, desc, role, active, states, release, frs, roleLabel, body, noShell, bodyClass, menuOpen, robots,
      bases (overlay states that reuse another state's content, e.g. 'qtywarn=cleared': a dialog shown over that state) */
-  const title = `${m.title || m.name} · Accucut Quotation Portal`;
+  const title = `${m.title || m.name} · Accucut RFQ Portal`;
   if (title.length > 60) console.warn('TITLE >60', m.id, title.length);
   if (m.desc.length > 160) console.warn('DESC >160', m.id, m.desc.length);
   const statesAttr = (m.states || ['default']).join(',');
@@ -288,7 +324,7 @@ function page(m) {
 <meta name="description" content="${esc(m.desc)}">
 <meta name="robots" content="${robots}">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Accucut Quotation Portal">
+<meta property="og:site_name" content="Accucut RFQ Portal">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(m.desc)}">
 <meta name="twitter:card" content="summary">
@@ -322,11 +358,26 @@ ${m.body}
 
 /* ---------------- component helpers ---------------- */
 const badge = (kind, text, ic) => `<span class="badge badge-${kind}">${ic ? icon(ic, 12) : ''}${text}</span>`;
+/* Status model after CR-01: DRAFT -> PREPARED (was SUBMITTED) -> APPROVED -> QUOTED, and IGNORED (with remarks, can be
+   undone) from any status before QUOTED. Each badge has its own icon and word, never colour alone. */
 const STATUS = {
   Draft: () => badge('neutral', 'Draft', 'edit'),
-  Submitted: () => badge('info', 'Submitted', 'send'),
-  Approved: () => badge('success', 'Approved and locked', 'lock'),
+  Prepared: () => badge('info', 'Prepared', 'checkc'),
+  Approved: () => badge('success', 'Approved', 'lock'),
+  Quoted: () => badge('quoted', 'Quoted', 'send'),
+  Ignored: () => badge('ignored', 'Ignored', 'eyeoff'),
 };
+/* The download marker (CR-01 Q10): a chip, not a status. */
+function dlChip(dl, compact = false) {
+  if (!dl) return `<span class="dl-chip is-none">${icon('download', 12)}Not downloaded</span>`;
+  if (dl.stale) return `<span class="dl-chip is-stale">${icon('alert', 12)}Changed since download${compact ? '' : ` &middot; last ${dl.at}, ${dl.by}`}</span>`;
+  return `<span class="dl-chip is-done">${icon('download', 12)}Downloaded${dl.n > 1 ? ' ' + dl.n + '&times;' : ''}${compact ? '' : ` &middot; last ${dl.at}, ${dl.by}`}</span>`;
+}
+/* CR-01 (second look, 17 Nov 2026): the kind is an icon, not a text label. The name shows as a tooltip on hover and is read
+   out to screen readers (sr = false where the row already says it). Part and Sub-part share the part icon. */
+const KIND_ICON = { asm: 'kasm', sub: 'ksub', part: 'kpart', subpart: 'kpart', fst: 'kfst' };
+const kindIcon = (k, name, sr = true, s = 18) => `<span class="kind-ic kind-${k}" title="${name}">${icon(KIND_ICON[k], s)}</span>${sr ? `<span class="sr-only">${name}: </span>` : ''}`;
+const kindTag = (x, sr = true) => kindIcon(kindKey(x), kindName(x), sr);
 const notice = (kind, ic, html, role) => `<div class="notice notice-${kind}"${role ? ` role="${role}"` : ''}>${icon(ic, 18)}<div class="notice-body">${html}</div></div>`;
 function crumbs(list) {
   return `<nav aria-label="Breadcrumb" class="row t-body">` + list.map((c, i) => (i === list.length - 1 ? `<span class="t-strong" aria-current="page">${c[0]}</span>` : `<a href="${c[1]}">${c[0]}</a><span class="t-muted" aria-hidden="true">/</span>`)).join('') + `</nav>`;
@@ -386,4 +437,4 @@ const PW = {
   sameUser: "The password cannot be the same as the user's e-mail address.",
 };
 
-module.exports = { PW, SIG, ARR, OUT, fs, icon, P, PEOPLE, RATES, MAT, FX, TREAT, TCOL, NODES, ITEMS, BL, TOOL, BN, sigma, descendants, children, APPROVED, OVERRIDE_REASON, shown, roundCase, isParent, get, calc, fmt, inr, usd, eur, TASKS, NOW, esc, page, badge, STATUS, notice, crumbs, pageHead, field, selectField, stIcon, skeletonRows, emptyState, reviewNote, pathLink, TIP_COPY, sidebar, topbar, FO_TEXT };
+module.exports = { PW, SIG, ARR, OUT, fs, icon, P, PEOPLE, RATES, MAT, FX, TREAT, TCOL, NODES, ITEMS, BL, TOOL, BN, sigma, descendants, children, APPROVED, OVERRIDE_REASON, shown, roundCase, isParent, get, calc, fmt, inr, usd, eur, TASKS, CLOSED, IGNORED, CUSTOMERS, KIND_NAME, KIND_SHORT, CHILD_KINDS, kindKey, kindName, kindTag, kindIcon, KIND_ICON, parentNo, dlChip, NOW, esc, page, badge, STATUS, notice, crumbs, pageHead, field, selectField, stIcon, skeletonRows, emptyState, reviewNote, pathLink, TIP_COPY, sidebar, topbar, FO_TEXT };
