@@ -84,7 +84,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           cancelled: costs.approval.cancel !== null,
         };
   return (
-    <div className="group/review contents">
+    <div className="is-compact group/review contents">
       <WorkspaceHeader view={header} />
       <Card>
         <CardContent>

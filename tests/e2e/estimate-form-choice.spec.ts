@@ -5,8 +5,8 @@ import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 
 import { ensureCanaryCustomers, ensureCanaryMaterials, useFreshAddress } from './support/auth';
-import { horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
-import { expectFormAccessible, isPatchOfInputs, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
+import { horizontalOverflow, waitUntilHydrated } from './support/design-system';
+import { expectFormAccessible, isPatchOfInputs, leastFieldHeight, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
@@ -102,7 +102,7 @@ test.describe('AC-1, AC-4, AC-9: the new card and the choice', () => {
     await expect(list).toHaveCount(1);
     await expect(list).toBeEnabled();
     expect(await choice(page).locator('option').allTextContents()).toEqual([PLACEHOLDER, ...OPTIONS]);
-    expect(defined(await choice(page).boundingBox()).height).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    expect(defined(await choice(page).boundingBox()).height).toBeGreaterThanOrEqual(await leastFieldHeight(page));
 
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);

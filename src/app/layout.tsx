@@ -3,13 +3,14 @@ import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
 
 import './globals.css';
+import { PRODUCT_NAME_IN_A_SENTENCE } from '@/lib/product-name';
 import { NONCE_HEADER, NONCE_PATTERN } from '@/lib/security/csp';
 import { SITE_NAME, TITLE_TEMPLATE } from '@/lib/page-metadata';
 
 import { FONT_VARIABLE_CLASSES } from './fonts/fonts';
 
 // Generic wording only: no cost, rate or customer data in a page title or a sharing preview (FR-089, UX spec section 8).
-const SITE_DESCRIPTION = 'Accucut Lasers quotation portal: assign, prepare, review and approve estimates.';
+const SITE_DESCRIPTION = `Accucut Lasers ${PRODUCT_NAME_IN_A_SENTENCE}: assign, prepare, review and approve estimates.`;
 
 // No page is indexable until the web address and sharing image are decided (FR-089, architecture section 8).
 export const metadata: Metadata = {

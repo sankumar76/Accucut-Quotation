@@ -4,8 +4,8 @@ import { FIELD_ID_NAMESPACE, seedId } from '../../prisma/seed/config/seed-sectio
 import { columnLetterToIndex } from '../../src/lib/columns';
 
 import { useFreshAddress } from './support/auth';
-import { horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { control, expectFormAccessible, isPatchOfInputs, nextSave, openForm, partForm } from './support/part-form';
+import { horizontalOverflow } from './support/design-system';
+import { control, expectFormAccessible, isPatchOfInputs, leastFieldHeight, nextSave, openForm, partForm } from './support/part-form';
 
 /**
  * STORY-05.05 T6 (AC-1, AC-2, AC-3, AC-6; FR-048; SPEC section 14.4) at 360x800, 768x1024 and 1366x768 on the development server: Fasteners Qty (T) and Cost (U) show only when the part has
@@ -242,7 +242,7 @@ test.describe('AC-6: the screen at 360, 768 and 1366 px', () => {
     await expect(partForm(page)).toBeVisible();
     await expect(control(page, 'T')).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    for (const letter of ['T', 'U']) expect((await control(page, letter).boundingBox())?.height ?? 0, letter).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    for (const letter of ['T', 'U']) expect((await control(page, letter).boundingBox())?.height ?? 0, letter).toBeGreaterThanOrEqual(await leastFieldHeight(page));
     await expectFormAccessible(page);
     await saveFasteners(page, NONE);
     await expect(control(page, 'T')).toHaveCount(0);

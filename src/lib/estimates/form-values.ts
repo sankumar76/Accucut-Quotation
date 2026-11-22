@@ -84,6 +84,19 @@ export function shownSections(sections: ReadonlyArray<FormSection>, texts: Texts
 /** The fields that watch this one: the fields that showing or hiding it changes. */
 export const watchersOf = <T extends Pick<FormField, 'visibleWhen'>>(fields: ReadonlyArray<T>, fieldId: string): T[] => fields.filter((field) => field.visibleWhen?.fieldId === fieldId);
 
+/** The least weight of a card in the row of cards: a card with one field is as wide as one with two, so it is never squeezed to a sliver. */
+export const MIN_SECTION_WEIGHT = 2;
+
+/**
+ * How much of the row a card takes (CR-01 item 1, UX spec section 0.9; AQP-388 AC-2): its number of fields, so a card with more fields is wider than one with fewer. The cards sit side by side in
+ * wrapping rows and each one's share follows this number (`--n` in `globals.css`). The surface treatments are drawn together as one multi-select, so the flags of a card count once; the picture counts as a field.
+ */
+export function sectionWeight(section: { readonly fields: ReadonlyArray<Pick<FormField, 'rule'>> }): number {
+  const flags = section.fields.some((field) => field.rule.type === 'flag') ? 1 : 0;
+  const drawn = section.fields.filter((field) => field.rule.type !== 'flag').length + flags;
+  return Math.max(MIN_SECTION_WEIGHT, drawn);
+}
+
 /** How many of a section's fields are filled: `complete` of `total` (UX spec SCR-05 "Layout rules": "n of m" on every card). */
 export interface SectionProgress {
   readonly complete: number;
