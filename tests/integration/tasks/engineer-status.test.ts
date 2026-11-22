@@ -8,6 +8,7 @@ import { createTaskService, type QueueViewer, type TaskService } from '@/server/
 import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
+import { shortNameOf } from '../../support/customer-short-name';
 
 /**
  * STORY-04.04 T6 (AC-1, AC-3, AC-4, AC-5) against real PostgreSQL in a throwaway database: one task and the status of its estimate through the real task service and
@@ -84,8 +85,10 @@ describe('AC-1: the status is the estimate\'s, in every state', () => {
       id,
       code: 'Q-2026-0001',
       title: 'Hopper cover',
+      subject: 'Invented subject',
       notes: 'Sheet metal only.',
       engineer: { id: arjunId, name: 'Invented Status Arjun' },
+      customer: { id: customerId, name: 'Invented status customer', shortName: shortNameOf('Invented status customer') },
       customerName: 'Invented status customer',
       folderPath: PATH,
       folderUrl: 'file:////invented-server/invented-share/RFQ-123',
@@ -131,6 +134,7 @@ describe('AC-3, AC-5: a Lead and an Admin open any task, with the same fields as
     expect(Object.keys(defined(await service.getTask(asEngineer(arjunId), id))).sort()).toEqual([
       'assignedByName',
       'code',
+      'customer',
       'customerName',
       'deadlineAt',
       'engineer',
@@ -139,6 +143,7 @@ describe('AC-3, AC-5: a Lead and an Admin open any task, with the same fields as
       'id',
       'notes',
       'status',
+      'subject',
       'title',
     ]);
   });
