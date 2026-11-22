@@ -110,7 +110,7 @@ test.describe('AC-6: the five journeys', () => {
     await waitUntilHydrated(page, '#export-download');
     const [file] = await withExportTurn(() => Promise.all([page.waitForEvent('download'), button.click()]));
     expect(file.suggestedFilename()).toMatch(FILE_NAME);
-    expect(file.suggestedFilename()).toContain(`_${code}_`);
+    expect(file.suggestedFilename()).toContain('_Canary-subject_');
     // An .xlsx is a zip: its first two bytes are "PK".
     const bytes = await readFile(await file.path());
     expect([...bytes.subarray(0, ZIP_MAGIC.length)]).toEqual(ZIP_MAGIC);

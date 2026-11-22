@@ -115,7 +115,7 @@ test.describe('AC-3: the figures are cleared after SCR-06 was drawn', () => {
 
 test.describe('AC-6: the journey from the review to the file', () => {
   for (const role of ['LEAD', 'ADMIN'] as const) {
-    test(`a ${role === 'LEAD' ? 'Lead' : 'Admin'} presses Download on SCR-06, lands on SCR-10, and the file downloads under the customer, task and date name`, async ({ page }, testInfo) => {
+    test(`a ${role === 'LEAD' ? 'Lead' : 'Admin'} presses Download on SCR-06, lands on SCR-10, and the file downloads under the short name, subject and date name`, async ({ page }, testInfo) => {
       const { code } = await openReview(page, testInfo, role);
 
       await reviewDownload(page).click();
@@ -124,7 +124,7 @@ test.describe('AC-6: the journey from the review to the file', () => {
 
       const [download] = await withExportTurn(() => Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .xlsx' }).click()]));
       expect(download.suggestedFilename()).toMatch(FILE_NAME);
-      expect(download.suggestedFilename()).toContain(`_${code}_`);
+      expect(download.suggestedFilename()).toContain('_Canary-subject_');
     });
   }
 });

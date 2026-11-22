@@ -5,6 +5,7 @@ import { buildWorkbook } from '@/server/export/build-workbook';
 import { createExportRepository } from '@/server/repositories/export-repository';
 import { createExportService, type ExportService } from '@/server/services/export-service';
 import { createImageRepository } from '@/server/repositories/image-repository';
+import { attachmentDisposition } from '@/server/http/content-disposition';
 import { createConfigVersionCache, getCurrentVersion, getVersionById } from '@/server/services/config-service';
 import { exportFileSchema, exportSummarySchema } from '@/server/views/schemas/export';
 
@@ -48,23 +49,33 @@ afterAll(async () => {
   await db.close();
 });
 
-/** The task code of an estimate and the name of its customer, read as the owner (the truth the repository is held to). */
-async function headerAsStored(estimateId: string): Promise<{ readonly code: string; readonly customerName: string | null }> {
-  const { rows } = await db.owner.query<{ code: string; customerName: string | null }>(
-    'SELECT t.code AS "code", c.name AS "customerName" FROM estimates e JOIN tasks t ON t.id = e.task_id LEFT JOIN customers c ON c.id = e.customer_id WHERE e.id = $1::uuid',
+/** The task code and subject of an estimate and the short name of its customer, read as the owner (the truth the repository is held to). */
+async function headerAsStored(estimateId: string): Promise<{ readonly code: string; readonly customerShortName: string | null; readonly subject: string }> {
+  const { rows } = await db.owner.query<{ code: string; customerShortName: string | null; subject: string }>(
+    'SELECT t.code AS "code", c.short_name AS "customerShortName", t.subject AS "subject" FROM estimates e JOIN tasks t ON t.id = e.task_id LEFT JOIN customers c ON c.id = e.customer_id WHERE e.id = $1::uuid',
     [estimateId],
   );
   return defined(rows[0]);
 }
 
+/** Sets the subject of the estimate's task and, for a short name, adds a customer with it and chooses that customer on the estimate (as the owner). */
+async function setNameParts(estimateId: string, parts: { readonly subject?: string; readonly shortName?: string }): Promise<void> {
+  if (parts.subject !== undefined) await db.owner.query('UPDATE tasks SET subject = $1 WHERE id = (SELECT task_id FROM estimates WHERE id = $2::uuid)', [parts.subject, estimateId]);
+  if (parts.shortName !== undefined) {
+    const customer = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, $2) RETURNING id::text', [`Invented customer ${parts.shortName}`, parts.shortName]);
+    await db.owner.query('UPDATE estimates SET customer_id = $1::uuid WHERE id = $2::uuid', [defined(customer.rows[0]).id, estimateId]);
+  }
+}
+
 describe('the export repository, as the runtime role', () => {
-  it('reads the task code and the customer\'s name of an estimate with a customer, and a null name for one without', async () => {
+  it('reads the task code, the subject and the customer\'s short name of an estimate with a customer, and a null short name for one without', async () => {
     const withCustomer = await db.addEstimate({ engineer: true, withCustomer: true });
     const without = await db.addEstimate({ engineer: true, withCustomer: false });
     const repository = createExportRepository(db.prisma);
     expect(await repository.findHeader(withCustomer)).toEqual(await headerAsStored(withCustomer));
-    expect(defined(await repository.findHeader(withCustomer)).customerName).not.toBeNull();
-    expect(await repository.findHeader(without)).toEqual({ ...(await headerAsStored(without)), customerName: null });
+    expect(defined(await repository.findHeader(withCustomer)).customerShortName).not.toBeNull();
+    expect(await repository.findHeader(without)).toEqual({ ...(await headerAsStored(without)), customerShortName: null });
+    expect(defined(await repository.findHeader(without)).subject).toBe('Invented subject');
   });
 
   it('is null for an estimate that does not exist and for an ID that is not a UUID, without asking the database', async () => {
@@ -84,7 +95,7 @@ describe('AC-1, AC-2, AC-6: the file and the summary of a real estimate, for a L
 
     for (const viewer of [lead(), admin()]) {
       const file = exportFileSchema.parse(await exporter.getFile(viewer, estimateId));
-      expect(file.fileName).toMatch(new RegExp(`^Customer_${header.code}_14-11-2026\\.xlsx$`));
+      expect(file.fileName).toBe(`${defined(header.customerShortName)}_Invented-subject_14-11-2026.xlsx`);
       const sheet = defined((await loadWorkbook(file.bytes)).getWorksheet('Quotation'));
       expect(sheet.columnCount).toBe(document.fields.length);
       // The header, the one part, and the footer of the total Tool Cost two rows below it (row 4 is empty): 3 rows with values (STORY-07.03).
@@ -110,6 +121,34 @@ describe('AC-1, AC-2, AC-6: the file and the summary of a real estimate, for a L
       { slNo: '1.1', name: 'Invented second', count: '3' },
     ]);
     expect(JSON.stringify(summary)).not.toMatch(/₹|price|cost/i);
+  });
+});
+
+describe('AQP-391 AC-1, AC-3, AC-7, AC-8: the file name is <short name>_<subject>_<DD-MM-YYYY>.xlsx, read from the data', () => {
+  it('cleans a short name and a subject with a space, a slash and non-ASCII letters, and the file and the summary carry the same name, which the header encodes', async () => {
+    const estimateId = await db.addCompleteEstimate();
+    await db.service.calculate(engineer(), estimateId);
+    await setNameParts(estimateId, { shortName: 'M A/S', subject: 'Kühler Ø 40 – 工场/x' });
+    const expected = 'M-A-S_Kühler-Ø-40-–-工场-x_14-11-2026.xlsx';
+    const file = exportFileSchema.parse(await exporter.getFile(lead(), estimateId));
+    expect(file.fileName).toBe(expected);
+    expect(exportSummarySchema.parse(await exporter.getSummary(lead(), estimateId)).fileName).toBe(expected);
+    expect(attachmentDisposition(file.fileName)).toBe(
+      `attachment; filename="M-A-S_Khler--40---x_14-11-2026.xlsx"; filename*=UTF-8''M-A-S_K%C3%BChler-%C3%98-40-%E2%80%93-%E5%B7%A5%E5%9C%BA-x_14-11-2026.xlsx`,
+    );
+  });
+
+  it('is "Customer" while no customer is chosen, and the task code for a subject that is empty once cleaned (a legacy-shaped estimate)', async () => {
+    const estimateId = await db.addEstimate({ engineer: true, withCustomer: false });
+    await setNameParts(estimateId, { subject: '​' });
+    const header = await headerAsStored(estimateId);
+    expect(exportSummarySchema.parse(await exporter.getSummary(lead(), estimateId)).fileName).toBe(`Customer_${header.code}_14-11-2026.xlsx`);
+  });
+
+  it('cuts the end of a subject of 80 under a short name of 10, so the date stays', async () => {
+    const estimateId = await db.addEstimate({ engineer: true, withCustomer: false });
+    await setNameParts(estimateId, { shortName: 'ABCDEFGHIJ', subject: 'y'.repeat(80) });
+    expect(exportSummarySchema.parse(await exporter.getSummary(lead(), estimateId)).fileName).toBe(`ABCDEFGHIJ_${'y'.repeat(78)}_14-11-2026.xlsx`);
   });
 });
 

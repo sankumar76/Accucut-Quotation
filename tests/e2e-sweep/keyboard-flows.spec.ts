@@ -231,6 +231,6 @@ test.describe('AC-4: five flows by keyboard alone', () => {
     await pressUntilFocused(page, 'Tab', download, 'Download .xlsx');
     const [file] = await withExportTurn(() => Promise.all([page.waitForEvent('download'), page.keyboard.press('Enter')]));
     expect(file.suggestedFilename()).toMatch(FILE_NAME);
-    expect(file.suggestedFilename()).toContain(`_${code}_`);
+    expect(file.suggestedFilename()).toContain('_Canary-subject_');
   });
 });
