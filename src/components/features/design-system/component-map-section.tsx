@@ -25,7 +25,7 @@ const MAP_ROWS: ReadonlyArray<MapRow> = [
   { pattern: 'Tabs (queues, masters)', component: 'Tabs', note: 'Counts in Badge', built: false },
   { pattern: 'Dialogs', component: 'Dialog; AlertDialog for destructive and password steps', note: 'Focus returns to the trigger', built: false },
   { pattern: 'Multi-select (treatments)', component: 'Popover + Command with checkboxes', note: 'Keyboard type-ahead', built: false },
-  { pattern: 'Parts tree', component: 'Collapsible + custom tree (role=tree); Resizable on desktop', note: 'Sheet on phones', built: false },
+  { pattern: 'Parts tree', component: 'Collapsible + custom list of links (nav, nested ul; not role=tree); Resizable on desktop', note: 'Sheet on phones', built: false },
   { pattern: 'Toasts', component: 'Sonner', note: 'Also announced in a live region', built: false },
   { pattern: 'Stage list (cost details)', component: 'Accordion', note: 'All open on desktop', built: false },
   { pattern: 'Date and time', component: 'Calendar in Popover; time Input', note: 'IST shown explicitly', built: false },

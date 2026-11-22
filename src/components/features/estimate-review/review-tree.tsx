@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
+import { NodeKindIcon } from '@/components/shared/node-kind-icon';
+import { PartsTreeList } from '@/components/shared/parts-tree-list';
 import { QuantityTag } from '@/components/shared/quantity-tag';
+import { TreeLegend } from '@/components/shared/tree-legend';
 import { cn } from '@/lib/cn';
 import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
 import type { CostNode, CostsView } from '@/server/views/schemas/costs';
@@ -21,17 +24,12 @@ import {
 } from './review-texts';
 
 /**
- * The parts tree of SCR-06 (STORY-06.02 AC-2, AC-6; D-12, D-25; UX-53, UX-29): every row shows **its own BG** with its count beside it ("2 nos", already included in the figure). A parent shows
- * only its own row: there is no sum of the rows below it, no item total and no Σ, and the legend says so. While the figures may not be shown a row shows a dash ("Not calculated") or the
- * word "Cleared"; the count stays, because it is an input. The panel is a `details` element that is open at every width, so on a phone the tree can be folded away to leave the
- * tiles and the table in view (the "drawer" of the UX spec) with no script: nothing here ships to the browser as code.
+ * The parts tree of SCR-06 (STORY-06.02 AC-2, AC-6; D-12, D-25; UX-53, UX-29; CR-01 item 3B), **read-only**: the same row component as the workspace tree (`PartsTreeList`), with the arrow, the kind icon,
+ * the number and the name on the first line and, for the Lead and the Admin, the row's figures on a second line. No button and no "+": an arrow only tells that a branch is there. Every row shows **its own BG**
+ * with its count beside it ("2 nos", already included in the figure). A parent shows only its own row: there is no sum of the rows below it, no item total and no Σ, and the legend says so. While the figures
+ * may not be shown a row shows a dash ("Not calculated") or the word "Cleared"; the count stays, because it is an input. The panel is a `details` element that is open at every width, so on a phone the tree can
+ * be folded away to leave the tiles and the table in view (the "drawer" of the UX spec) with no script: nothing here ships to the browser as code.
  */
-
-/** The indent of each level; a part deeper than the last entry keeps the last indent, so a deep tree never grows wider than its panel (no sideways scroll at 360 px). */
-const LEVEL_INDENT = ['ml-0', 'ml-s-3', 'ml-s-4', 'ml-s-5', 'ml-s-6'] as const;
-
-const levelOf = (slNo: string): number => slNo.split('.').length;
-const indentOf = (slNo: string): string => LEVEL_INDENT[Math.min(levelOf(slNo), LEVEL_INDENT.length) - 1] ?? LEVEL_INDENT[0];
 
 function figureOf(state: CostsView['state'], node: CostNode): ReactNode {
   if (state === 'current') return formatFigure(node.figures?.unitPrice ?? null);
@@ -41,33 +39,32 @@ function figureOf(state: CostsView['state'], node: CostNode): ReactNode {
 /** The address of SCR-07 for a row: the task code and the row's Sl. No (STORY-06.03). A Lead and an Admin only: this folder is loaded for no one else. */
 const costDetailsHref = (code: string, slNo: string): string => `/estimates/${encodeURIComponent(code)}/costs/${encodeURIComponent(slNo)}`;
 
-function TreeRow({ node, state, code, warned }: { readonly node: CostNode; readonly state: CostsView['state']; readonly code: string; readonly warned: boolean }) {
+function TreeRow({ node, kindLabel, state, code, warned }: { readonly node: CostNode; readonly kindLabel: string; readonly state: CostsView['state']; readonly code: string; readonly warned: boolean }) {
+  const name = node.name === '' ? TREE_PART_NAME : node.name;
   return (
-    <li className={cn('flex flex-col gap-s-1 rounded-md border border-border bg-surface px-s-3 py-s-2', indentOf(node.slNo))}>
-      <div className="flex items-baseline gap-s-2 text-body text-ink">
-        <span className="shrink-0 text-ink-2 tabular-nums">{node.slNo}</span>
-        <span className={cn('min-w-0 flex-1', BREAK_LONG_NAMES)}>{node.name === '' ? TREE_PART_NAME : node.name}</span>
-        <span className="shrink-0 text-label text-ink-2 tabular-nums">
+    <div className="flex min-h-(--control-h) flex-col justify-center gap-s-1 py-s-1 pr-s-2 pl-s-1">
+      <div className="flex items-center gap-s-2 text-body text-ink">
+        <NodeKindIcon kind={node.nodeKind} label={kindLabel} />
+        <span data-sl-no="" className="shrink-0 text-ink-2 tabular-nums">
+          {node.slNo}
+        </span>
+        <span className={cn('min-w-0 flex-1', BREAK_LONG_NAMES)}>{name}</span>
+      </div>
+      {/* The second line: the row's own figures (a Lead's and an Admin's screen only), its count, the mark of a warned row and the way to its cost details. */}
+      <div className="flex flex-wrap items-baseline gap-x-s-3 gap-y-s-1 text-label text-ink-2">
+        <span className="tabular-nums">
           <span className="sr-only">{`${COUNT_HIDDEN_LABEL}: `}</span>
           {node.count === null ? NO_FIGURE : `${formatCount(node.count)} ${COUNT_UNIT}`}
         </span>
-        <span className="shrink-0 font-semibold tabular-nums">{figureOf(state, node)}</span>
-      </div>
-      {state === 'current' && node.figures !== null ? (
-        <p className="text-label text-ink-3 tabular-nums">{rowCurrencies(formatFigure(node.figures.unitPriceUsd), formatFigure(node.figures.unitPriceEur))}</p>
-      ) : null}
-      {warned ? (
-        <p>
-          <QuantityTag />
-        </p>
-      ) : null}
-      <p>
-        <a href={costDetailsHref(code, node.slNo)} className="text-label font-semibold text-primary-ink underline underline-offset-2">
+        <span className="text-body font-semibold text-ink tabular-nums">{figureOf(state, node)}</span>
+        {state === 'current' && node.figures !== null ? <span className="text-ink-3 tabular-nums">{rowCurrencies(formatFigure(node.figures.unitPriceUsd), formatFigure(node.figures.unitPriceEur))}</span> : null}
+        {warned ? <QuantityTag /> : null}
+        <a href={costDetailsHref(code, node.slNo)} className="font-semibold text-primary-ink underline underline-offset-2">
           {COST_DETAILS_LINK}
-          <span className="sr-only">{` for ${node.slNo} ${node.name === '' ? TREE_PART_NAME : node.name}`}</span>
+          <span className="sr-only">{` for ${node.slNo} ${name}`}</span>
         </a>
-      </p>
-    </li>
+      </div>
+    </div>
   );
 }
 
@@ -91,11 +88,14 @@ export function ReviewTree({ code, state, letters, nodes, warned }: ReviewTreePr
         {nodes.length === 0 ? (
           <p className="text-body text-ink-2">{TREE_EMPTY}</p>
         ) : (
-          <ul className="flex flex-col gap-s-2">
-            {nodes.map((node) => (
-              <TreeRow key={node.id} node={node} state={state} code={code} warned={warned.has(node.id)} />
-            ))}
-          </ul>
+          <>
+            <PartsTreeList
+              label={TREE_TITLE}
+              nodes={nodes}
+              renderRow={(node, kindLabel) => <TreeRow node={node} kindLabel={kindLabel} state={state} code={code} warned={warned.has(node.id)} />}
+            />
+            <TreeLegend />
+          </>
         )}
       </div>
     </details>

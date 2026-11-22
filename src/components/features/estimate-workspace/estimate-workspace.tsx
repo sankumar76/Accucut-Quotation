@@ -13,7 +13,7 @@ import { createSaveGate } from '@/lib/estimates/save-gate';
 import type { AutosaveProps } from './autosave';
 import type { CalculateBarProps } from './calculate-bar';
 import type { CalculateSummaryProps } from './calculate-summary';
-import { APPROVED_LOCKED_BODY, APPROVED_LOCKED_TITLE, CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_PREPARED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_TITLE, LEAVE_GUARD_FAILED_TITLE } from './estimate-texts';
+import { APPROVED_LOCKED_BODY, APPROVED_LOCKED_TITLE, CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_PREPARED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_TITLE, FORM_AREA_TITLE_ID, LEAVE_GUARD_FAILED_TITLE } from './estimate-texts';
 import { focusFirstField } from './focus-field';
 import type { LeaveGuardProps } from './leave-guard';
 import { PartForm } from './part-form';
@@ -136,9 +136,9 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
           {APPROVED_LOCKED_BODY}
         </Notice>
       ) : null}
-      <Card role="group" aria-labelledby="estimate-form-area-title">
+      <Card role="group" aria-labelledby={FORM_AREA_TITLE_ID}>
         <CardHeader>
-          <CardTitle id="estimate-form-area-title">{FORM_AREA_TITLE}</CardTitle>
+          <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-s-4 lg:flex-row">
           <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} />

@@ -10,7 +10,7 @@ import { costsSchema, FIGURE_STATES } from '@/server/views/schemas/costs';
 
 const APPROVAL_ID = '00000000-0000-4000-8000-0000000a9901';
 const letters = { count: 'H', unitPrice: 'BG', unitPriceUsd: 'BJ', unitPriceEur: 'BK', totalPrice: 'BL', pricePerToolCost: 'BN', approvedPrice: 'BO' };
-const node = { id: 'node-1', parentId: null, slNo: '1', name: 'Invented frame', count: '2', figures: { unitPrice: '0', unitPriceUsd: '0', unitPriceEur: '0' } };
+const node = { id: 'node-1', parentId: null, slNo: '1', nodeKind: 'MAIN_ASSEMBLY', name: 'Invented frame', count: '2', figures: { unitPrice: '0', unitPriceUsd: '0', unitPriceEur: '0' } };
 const good = {
   state: 'current',
   calculationId: '00000000-0000-4000-8000-0000000ca1c0',
@@ -145,7 +145,7 @@ describe('the answer, and exactly what it may hold', () => {
     expect(Object.keys(costsSchema.shape).sort()).toEqual(['approval', 'calculatedAt', 'calculationId', 'configurationNumber', 'letters', 'nodes', 'priceRemoved', 'ratesChanged', 'state', 'totals', 'warning']);
     expect(Object.keys(costsSchema.shape.letters.shape).sort()).toEqual(['approvedPrice', 'count', 'pricePerToolCost', 'totalPrice', 'unitPrice', 'unitPriceEur', 'unitPriceUsd']);
     const nodeShape = costsSchema.shape.nodes.unwrap().element.shape;
-    expect(Object.keys(nodeShape).sort()).toEqual(['count', 'figures', 'id', 'name', 'parentId', 'slNo']);
+    expect(Object.keys(nodeShape).sort()).toEqual(['count', 'figures', 'id', 'name', 'nodeKind', 'parentId', 'slNo']);
     const figuresShape = nodeShape.figures.unwrap().shape;
     expect(Object.keys(figuresShape).sort()).toEqual(['unitPrice', 'unitPriceEur', 'unitPriceUsd']);
     expect(Object.keys(costsSchema.shape.totals.unwrap().shape).sort()).toEqual(['pricePerToolCost', 'toolCostTotal', 'totalPrice']);
