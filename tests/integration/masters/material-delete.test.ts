@@ -76,8 +76,8 @@ async function estimateWith(status: Status, parts: ReadonlyArray<Record<string, 
   codes += 1;
   const code = `Q-2026-${String(9000 + codes).padStart(4, '0')}`;
   const task = await db.owner.query<{ id: string }>(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, notes)
-     VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented hopper cover', NULL) RETURNING id::text AS id`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes)
+     VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented hopper cover', 'Invented subject', NULL) RETURNING id::text AS id`,
     [code, engineerId, leadId, PATH],
   );
   const estimate = await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id, status) VALUES ($1::uuid, $2::estimate_status) RETURNING id::text AS id', [

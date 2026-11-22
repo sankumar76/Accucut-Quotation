@@ -69,7 +69,8 @@ describe('AC-7: triggers', () => {
 
   it('lists every script the workflow runs, and the scripts/lib modules those scripts import', () => {
     const paths = new Set(pullRequestPaths());
-    const called = [...new Set(runBlocks().flatMap((block) => [...block.matchAll(/npx tsx (scripts\/[\w-]+\.ts)/g)].map((match) => match[1] ?? '')))];
+    // `npx tsx scripts/x.ts`, and the same under the react-server condition (`node --conditions=react-server --import tsx scripts/x.ts`), which the scripts that import the formula engine need.
+    const called = [...new Set(runBlocks().flatMap((block) => [...block.matchAll(/(?:npx tsx|--import tsx) (scripts\/[\w-]+\.ts)/g)].map((match) => match[1] ?? '')))];
     expect(called.length).toBeGreaterThan(0);
     for (const script of called) {
       expect(paths.has(script), script).toBe(true);
@@ -105,13 +106,21 @@ describe('AC-7: least privilege, no secret, pinned actions', () => {
     expect(jobText('lighthouse')).toMatch(/^ {4}runs-on: ubuntu-24\.04$/m);
     expect(jobText('ci-time')).toMatch(/^ {4}runs-on: ubuntu-24\.04$/m);
     const labels = LINES.filter((line) => /^\s*runs-on:/.test(line)).map((line) => line.trim());
-    expect(labels).toEqual(['runs-on: ubuntu-24.04', 'runs-on: ubuntu-24.04', 'runs-on: ubuntu-latest']);
+    // Every job but the warm-up one is on the reference image, and the warm-up job is the only floating label. The rule is stated for any number of jobs (the browser matrix of
+    // STORY-10.08 and the capacity run of STORY-10.09 each added one), so a job added later has to choose its label on purpose and not by editing a count.
+    expect(labels.filter((label) => label === 'runs-on: ubuntu-latest')).toEqual(['runs-on: ubuntu-latest']);
+    expect(labels.every((label) => label === 'runs-on: ubuntu-24.04' || label === 'runs-on: ubuntu-latest')).toBe(true);
+    expect(jobText('warm-playwright-cache')).toMatch(/^ {4}runs-on: ubuntu-latest$/m);
   });
 
   it('makes its passwords and its session secret in the job, and masks them', () => {
     expect(stepNamed('Make the invented Admin')).toMatch(/openssl rand[\s\S]*::add-mask::/);
     expect(stepNamed('Start the production server')).toMatch(/openssl rand[\s\S]*::add-mask::/);
     expect(stepNamed('Create the database roles')).toMatch(/openssl rand[\s\S]*::add-mask::/);
+    // G8-C-NFR9: the measurement Engineer's password is made and masked in the job too, and kept for the sign-in script of the Lighthouse step.
+    const engineer = stepNamed('Make the planning-volume data');
+    expect(engineer).toMatch(/openssl rand[\s\S]*::add-mask::/);
+    expect(engineer).toContain('MEASUREMENT_ENGINEER_PASSWORD=${password}');
   });
 
   it('cancels a superseded run, and takes the repository token from the run, not a secret', () => {
@@ -144,6 +153,15 @@ describe('AC-7: the Lighthouse run', () => {
     expect(stepNamed('Make the invented Admin')).toContain('npx tsx scripts/ensure-measurement-user.ts');
     expect(WORKFLOW.indexOf('Make the invented Admin')).toBeLessThan(WORKFLOW.indexOf('Start the production server'));
     expect(WORKFLOW.indexOf('Start the production server')).toBeLessThan(WORKFLOW.indexOf('Lighthouse, Wi-Fi profile'));
+  });
+
+  it('G8-C-NFR9: stores the seed configuration version before the server starts, and makes the planning-volume data after it starts and before the first Lighthouse run', () => {
+    expect(stepNamed('Store the seed configuration version')).toContain('node --conditions=react-server --import tsx scripts/ensure-seed-version.ts');
+    // Calculate is pressed through the running server, so the data step follows the start; the key screens read the data, so it precedes the run.
+    expect(stepNamed('Make the planning-volume data')).toContain('node --conditions=react-server --import tsx scripts/seed-lighthouse-data.ts');
+    expect(WORKFLOW.indexOf('Store the seed configuration version')).toBeLessThan(WORKFLOW.indexOf('Start the production server'));
+    expect(WORKFLOW.indexOf('Start the production server')).toBeLessThan(WORKFLOW.indexOf('Make the planning-volume data'));
+    expect(WORKFLOW.indexOf('Make the planning-volume data')).toBeLessThan(WORKFLOW.indexOf('Lighthouse, Wi-Fi profile'));
   });
 
   it('keeps the reports for 30 days, writes the summary, and uploads nothing to a public server', () => {

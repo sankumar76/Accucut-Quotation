@@ -1,4 +1,4 @@
-import { renderMail } from '../layout';
+import { PORTAL_NAME, renderMail } from '../layout';
 
 /**
  * The "Server check needed" message to the Admin (STORY-09.06 AC-10, decision D-a; architecture sections 4.7 and 9.5): a pure function from two flags to the subject, the HTML and the plain text.
@@ -21,7 +21,7 @@ export interface RenderedBackupMissed {
   readonly text: string;
 }
 
-export const BACKUP_MISSED_SUBJECT = 'Accucut Quotation Portal: server check needed';
+export const BACKUP_MISSED_SUBJECT = `${PORTAL_NAME}: server check needed`;
 export const BACKUP_MISSED_HEADING = 'Server check needed';
 export const BACKUP_LATE_SENTENCE = 'The weekly backup is late.';
 export const DISK_FULL_SENTENCE = 'The server disk is nearly full.';

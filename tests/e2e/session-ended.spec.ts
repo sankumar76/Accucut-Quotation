@@ -126,6 +126,6 @@ test.describe('AC-3 and AC-6: from "Session ended" back to the page that was ask
     await page.keyboard.press('Enter');
 
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Accucut Quotation Portal' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Accucut RFQ Portal' })).toBeVisible();
   });
 });

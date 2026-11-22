@@ -42,3 +42,6 @@ dist/
 # Lighthouse CI writes its working files and the kept reports here; the nightly workflow uploads them as an artefact.
 .lighthouseci/
 lighthouse-reports/
+
+# Playwright MCP browser snapshots (local tool output)
+.playwright-mcp/

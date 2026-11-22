@@ -59,7 +59,9 @@ export function createFakePropagationMethods(records: ReadonlyArray<ProcessItemR
     applyDefaultToCustomers(processItemId: string, next: string, shown: ReadonlyArray<ShownRate>) {
       const sees = (customer: FakeCustomer, value: string): boolean =>
         !equal(value, next) && shown.some((entry) => sameId(entry.customerId, customer.id) && equal(entry.shownValue, value));
-      return Promise.resolve(move(processItemId, next, sees));
+      // The real statement returns the value it matched on (`u.shown`); a customer moved is one whose stored value equals it.
+      const previousOf = (customerId: string): string => shown.find((entry) => sameId(entry.customerId, customerId))?.shownValue ?? '';
+      return Promise.resolve(move(processItemId, next, sees).map((customer) => ({ ...customer, previous: previousOf(customer.customerId) })));
     },
   };
 }

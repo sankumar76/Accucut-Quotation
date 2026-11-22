@@ -10,7 +10,9 @@ import { NO_STORE, REQUEST_ID_HEADER } from './problem';
  *   - `Cache-Control: private, no-store`, as every answer of the API: a picture is confidential and is not kept by a shared cache or the disk;
  *   - `Content-Disposition: inline` with **no file name**: the stored name is display text and is never put in a header, so no name can break one. The one exception is a file the portal **makes** and
  *     names itself (the export, STORY-07.01 AC-2): it passes `fileName`, the answer is then an `attachment` of that name, and a name that is not only letters, digits, underscore, hyphen and one dot is refused;
- *   - `Content-Security-Policy: default-src 'none'; sandbox`, so the address opened as a page can run nothing; and `Cross-Origin-Resource-Policy: same-origin`, so another site cannot embed it.
+ *   - `Content-Security-Policy: default-src 'none'; sandbox`, so the address opened as a page can run nothing; and `Cross-Origin-Resource-Policy: same-origin`, so another site cannot embed it. Behind the proxy the
+ *     policy on the wire for this answer is the proxy's own (`API_CONTENT_SECURITY_POLICY`, which also holds `sandbox`): Next.js keeps a header the proxy set and drops the route's of the same name
+ *     (DEF-054, AQP-384). This one stays so the answer is safe by itself, and `tests/unit/security-headers.test.ts` pins the policy that reaches the browser.
  */
 
 export interface StoredFile {

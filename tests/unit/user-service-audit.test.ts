@@ -126,7 +126,7 @@ describe('AC-3: each change raises its event, once, with every part, in the same
       throttles,
       hasher,
       transactions: world.transactions,
-      audit: { record: () => Promise.reject(broken), list: () => Promise.reject(broken) },
+      audit: { record: () => Promise.reject(broken), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: () => Promise.reject(broken) },
       keySecret: KEY_SECRET,
     });
     expect(await refusal(failing.update(by(adminId), engineerId, { role: 'LEAD' }))).toBe(broken);
@@ -140,7 +140,7 @@ describe('AC-3: each change raises its event, once, with every part, in the same
       throttles,
       hasher,
       transactions: world.transactions,
-      audit: { record: () => Promise.reject(new Error('the audit write failed')), list: () => Promise.reject(new Error('unused')) },
+      audit: { record: () => Promise.reject(new Error('the audit write failed')), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: () => Promise.reject(new Error('unused')) },
       keySecret: KEY_SECRET,
     });
     const key = accountThrottleKey(KEY_SECRET, 'engineer@example.test');
@@ -165,7 +165,7 @@ describe('PRF-03: the password is hashed before the transaction opens', () => {
           return inner.run(work);
         },
       },
-      audit: { record: () => Promise.resolve(), list: () => Promise.reject(new Error('unused')) },
+      audit: { record: () => Promise.resolve(), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: () => Promise.reject(new Error('unused')) },
       keySecret: KEY_SECRET,
     });
     await watching.resetPassword(by(adminId), engineerId, 'temporary-password-1');
@@ -186,7 +186,7 @@ describe('PRF-03: the password is hashed before the transaction opens', () => {
           return inner.run(work);
         },
       },
-      audit: { record: () => Promise.resolve(), list: () => Promise.reject(new Error('unused')) },
+      audit: { record: () => Promise.resolve(), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: () => Promise.reject(new Error('unused')) },
       keySecret: KEY_SECRET,
     });
     await watching.create(by(adminId), { name: 'Rohan Das', email: 'rohan.das@example.test', role: 'ENGINEER', password: 'first-password-1' });

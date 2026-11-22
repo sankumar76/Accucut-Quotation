@@ -34,9 +34,14 @@
 #
 # Then it installs the browser itself, which has its own cache and needs no system packages.
 #
+# Which browsers (AQP-370, STORY-10.08 AC-6): `PLAYWRIGHT_BROWSERS` is a space-separated list and defaults to `chromium`, the only
+# browser of the required check, so every existing caller behaves exactly as before. The nightly browser matrix sets it to
+# `chromium firefox webkit`; its cache key then holds that list, because a key is saved once and the package set differs.
+#
 # Usage:   PLAYWRIGHT_DEBS_CACHE_HIT=true|false PLAYWRIGHT_DEBS_CACHE_KEY=<key> \
 #            bash scripts/ci/playwright-system-deps.sh <cache-directory>
 # Testable settings (tests/unit/playwright-system-deps.test.ts); the defaults are the runner's real values:
+#   PLAYWRIGHT_BROWSERS     the browsers to install                (chromium)
 #   APT_BOUNDS_FILE         where the apt settings are written    (/etc/apt/apt.conf.d/99-ci-bounds)
 #   APT_ARCHIVES_DIR        where apt keeps downloaded packages    (/var/cache/apt/archives)
 #   APT_SOURCES_DIR         where apt keeps its sources, read only (/etc/apt)
@@ -47,6 +52,14 @@ set -euo pipefail
 cache_dir="${1:?usage: playwright-system-deps.sh <cache-directory>}"
 cache_hit="${PLAYWRIGHT_DEBS_CACHE_HIT:-false}"
 cache_key="${PLAYWRIGHT_DEBS_CACHE_KEY:-unknown}"
+# Names only: a word that is not a lower-case browser name stops the script before anything runs, so the value can never carry an option into npx.
+browsers_text="${PLAYWRIGHT_BROWSERS:-chromium}"
+browsers_pattern='^[a-z]+( [a-z]+)*$'
+if ! [[ "${browsers_text}" =~ ${browsers_pattern} ]]; then
+  echo "::error::PLAYWRIGHT_BROWSERS must be browser names separated by spaces, got '${browsers_text}'."
+  exit 1
+fi
+read -r -a browsers <<< "${browsers_text}"
 bounds_file="${APT_BOUNDS_FILE:-/etc/apt/apt.conf.d/99-ci-bounds}"
 archives_dir="${APT_ARCHIVES_DIR:-/var/cache/apt/archives}"
 sources_dir="${APT_SOURCES_DIR:-/etc/apt}"
@@ -110,7 +123,7 @@ make_view() {
 # report. The dry run exits non-zero when packages are missing, so its status is not used.
 list_packages() {
   local dry_run
-  dry_run="$(npx playwright install-deps --dry-run chromium 2>&1 || true)"
+  dry_run="$(npx playwright install-deps --dry-run "${browsers[@]}" 2>&1 || true)"
   printf '%s\n' "${dry_run}" | bash "${script_dir}/playwright-deps-packages.sh"
 }
 
@@ -162,7 +175,7 @@ download_and_install() {
 # Miss path, fallback: the bounded install of AQP-206, used when the dry run cannot be read or the image has no
 # ubuntu.sources to build the mirror views from.
 bounded_install_deps() {
-  npx playwright install-deps chromium
+  npx playwright install-deps "${browsers[@]}"
 }
 
 # Miss path: bound apt, install the packages, then keep what was downloaded.
@@ -208,4 +221,4 @@ else
   install_and_cache
 fi
 
-npx playwright install chromium
+npx playwright install "${browsers[@]}"

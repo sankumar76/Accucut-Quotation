@@ -203,7 +203,7 @@ Status: **Draft** = to be written by the scrum-master. There is no Held story. A
 | 84 | 09.03 | Assignment e-mail | 09 | 081 | Must | R2 | |
 | 85 | 09.04 | Overdue e-mail within 5 minutes | 09 | 082 | Must | R2 | |
 | 86 | 09.05 | Daily digest at 11:00 IST | 09 | 083 | Must | R2 | |
-| 87 | 09.06 | No duplicates, logged, retried | 09 | 084 | Must | R2 | |
+| 87 | 09.06 | No duplicates, logged, retried | 09 | 084 | Must | R2 | Includes the missed-backup e-mail (AC-10, 2026-11-18) |
 | 88 | 09.07 | Reset a password by e-mailed link | 09 | 003 | Should | R2 | |
 | 89 | 09.08 | One real send on the real mailbox | 09 | 019 (verification) | Must | R2 | Waits for Accucut IT |
 

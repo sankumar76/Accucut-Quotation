@@ -32,6 +32,8 @@ const HEADER: WorkspaceHeaderView = {
   folderPath: '\\\\invented-server\\invented-share\\RFQ-0318',
   folderUrl: null,
   title: 'Invented cabinet',
+  subject: 'Invented subject',
+  customer: { name: 'Invented Customer', shortName: 'INV' },
   notes: null,
   assignedByName: 'Invented Lead',
 };
@@ -44,7 +46,7 @@ async function costsOf(options: ReviewWorldOptions): Promise<CostsView> {
 
 const render = (
   costs: CostsView,
-  customer: { id: string; name: string } | null = { id: 'c1', name: 'Invented Customer' },
+  customer: { id: string; name: string; shortName: string } | null = { id: 'c1', name: 'Invented Customer', shortName: 'INV' },
   header: WorkspaceHeaderView = HEADER,
   viewerRole: 'ADMIN' | 'LEAD' = 'LEAD',
 ): string =>
@@ -808,11 +810,13 @@ describe('STORY-06.10 AC-5: the approval dialog is told the rows of the warning,
 });
 
 describe('the header and the customer', () => {
-  it('shows the task, its status and the customer by name, or "Not chosen yet"', async () => {
+  it('shows the task, its status and the customer by name and short name, or "Not set" with the Set customer action (CR-01 item 6)', async () => {
     const costs = await current();
     expect(render(costs)).toContain('Q-2026-0318');
     expect(render(costs)).toContain('Invented Customer');
-    expect(render(costs, null)).toContain('Not chosen yet');
+    expect(render(costs)).toContain('INV');
+    expect(render(costs, null)).toContain('Not set');
+    expect(render(costs, null)).toContain('Set customer');
   });
 });
 

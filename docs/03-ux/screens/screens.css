@@ -586,3 +586,94 @@ html[data-state="cleared"] .tree-fig .fig-clr, html[data-state="unlockedcleared"
 .tree-h { color: var(--ink-3); font-size: var(--fs-label); font-weight: 400; margin-right: var(--s-2); white-space: nowrap; }
 .tree-stale { display: flex; gap: var(--s-2); align-items: flex-start; color: var(--accent-ink); font-weight: 500; }
 .ov-reason { display: block; margin-top: var(--s-2); color: var(--ink); }
+
+/* ---------- Change request CR-01 (customer feedback, 2026-11-17) ---------- */
+/* Status badges added by CR-01: Quoted is solid green (white text 5.0:1), Ignored is neutral with a dashed edge. */
+.badge-quoted  { background: var(--success); color: #fff; }
+.badge-ignored { background: var(--surface); color: var(--ink-2); border: 1px dashed var(--border-strong); }
+
+/* Download marker: a chip, not a status. Icon plus words, so never colour alone. */
+.dl-chip { display: inline-flex; align-items: center; max-width: 100%; gap: var(--s-1); padding: 2px var(--s-2); border-radius: var(--radius-pill); font-size: var(--fs-label); line-height: var(--lh-label); font-weight: 500; border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); }
+.dl-chip.is-done { border-color: var(--success-line); background: var(--success-soft); color: var(--success-ink); }
+.dl-chip.is-stale { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+
+/* CR-01 parts tree, in the manner of a CAD feature tree (customer sample, 17 Nov 2026): an arrow opens or closes a branch,
+   an icon shows the kind (its name is a tooltip), thin guide lines show the levels. No text labels on the rows. */
+.kind-ic { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: var(--radius-sm); }
+.kind-ic .ic { stroke-width: 1.75; }
+.kind-asm { color: var(--primary-ink); background: var(--primary-soft); }
+.kind-sub { color: var(--accent-ink); background: var(--accent-soft); }
+.kind-part, .kind-subpart { color: var(--ink-2); background: var(--surface-2); }
+.kind-fst { color: var(--info-ink); background: var(--info-soft); }
+.name-k { display: inline-flex; align-items: center; gap: var(--s-2); }
+.tree-legend .kind-ic { width: 22px; height: 22px; }
+
+.tree-panel .tree { gap: 0; }
+.tree-row { --step: 20px; position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 0; padding-left: calc(var(--lvl, 0) * var(--step)); }
+.tree-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--lvl, 0) * var(--step)); pointer-events: none;
+  background: repeating-linear-gradient(to right, transparent 0 11px, var(--border) 11px 12px, transparent 12px var(--step)); }
+.tree-twist { flex: none; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink-2); cursor: pointer; padding: 0; }
+.tree-twist:hover { background: var(--surface-2); color: var(--ink); }
+.tree-twist .ic { transition: transform .15s; }
+.tree-twist[aria-expanded="false"] .ic { transform: rotate(-90deg); }
+.tree-twist.is-leaf { cursor: default; }
+.tree-row > .tree-item { flex: 1 1 0; min-width: 0; min-height: 36px; padding: 4px var(--s-2) 4px var(--s-1); gap: var(--s-2); }
+.tree-row .tree-no { flex: none; min-width: 0; margin: 0; }
+.tree-row[hidden] { display: none; }
+/* one line: kind icon, number, name, status; the lead's figures on a second line under the name */
+.tree-row > .tree-item { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; column-gap: var(--s-2); row-gap: 0; align-items: center; }
+.tree-row .tree-fig { grid-column: 3 / -1; display: flex; justify-content: flex-end; align-items: baseline; }
+
+/* Row actions (move, "+" add, "−" delete) float over the end of the row under the pointer or in focus, so names keep
+   the full width. On touch screens they sit in line on the selected row. */
+.tree-acts { position: absolute; right: 2px; top: 4px; z-index: 2; display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius); background: var(--surface); box-shadow: 0 0 0 1px var(--border), var(--shadow-1); opacity: 0; pointer-events: none; }
+.tree-row:hover > .tree-acts, .tree-row:focus-within > .tree-acts, .tree-acts:has([aria-expanded="true"]) { opacity: 1; pointer-events: auto; }
+.tree-act { flex: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink-2); cursor: pointer; padding: 0; }
+.tree-act:hover, .tree-act[aria-expanded="true"] { background: var(--surface-2); color: var(--ink); }
+.tree-del:hover { background: var(--danger-soft); color: var(--danger); }
+.tree-grip { cursor: grab; }
+.tree-act.is-none { cursor: default; }
+@media (hover: none) {
+  .tree-acts { display: none; }
+  .tree-row:has(.is-active) > .tree-acts { display: inline-flex; position: static; opacity: 1; pointer-events: auto; box-shadow: none; background: none; }
+}
+@media (max-width: 767px) { .tree-act, .tree-twist { width: 44px; height: 44px; } }
+/* Drag to reorder: the row being moved fades; a red line shows where it will land (only among rows with the same parent) */
+.tree-row.is-dragging, html[data-overlay="drag"] .tree-row[data-dragging] { opacity: .45; }
+html[data-overlay="drag"] .tree-row[data-dragging] > .tree-item { outline: 1px dashed var(--border-strong); outline-offset: -1px; }
+.tree-row.drop-before::after, .tree-row.drop-after::after, html[data-overlay="drag"] .tree-row[data-drop-before]::after { content: ''; position: absolute; z-index: 3; left: calc(var(--lvl, 0) * var(--step)); right: 0; height: 3px; border-radius: 2px; background: var(--primary); pointer-events: none; }
+.tree-row.drop-before::after, html[data-overlay="drag"] .tree-row[data-drop-before]::after { top: -2px; }
+.tree-row.drop-after::after { bottom: -2px; }
+
+/* "+" menu in the manner of the shadcn/ui DropdownMenu; opens in line under its row so the panel never clips it */
+.add-menu { position: static; flex: 1 0 100%; width: auto; max-width: 300px; margin: 2px 0 6px 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-2); padding: 4px; display: flex; flex-direction: column; gap: 0; }
+.add-menu-label { padding: 4px 8px 8px; margin-bottom: 4px; border-bottom: 1px solid var(--border); font-size: var(--fs-label); line-height: var(--lh-label); font-weight: 600; color: var(--ink-2); }
+.add-opt { display: flex; gap: var(--s-2); align-items: center; text-align: left; padding: 6px 8px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink); font: inherit; cursor: pointer; min-height: 44px; }
+.add-opt:hover, .add-opt:focus-visible { background: var(--surface-2); }
+.add-opt-hint { display: block; font-size: var(--fs-label); line-height: var(--lh-label); color: var(--ink-3); }
+
+/* Compact input and output screens: sections pack side by side by their number of fields (--n, set by the generator) and
+   fields sit several to a row. Fields are 36 px only at 1024 px and wider with a fine pointer (mouse); touch screens and anything narrower keep the 44 px target (NFR-017, OQ-PM-12). */
+.grid-sections.is-compact { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: stretch; }
+.grid-sections.is-compact > .section-card, .grid-sections.is-compact > .card { flex: var(--n, 2) 1 calc(var(--n, 2) * 150px); min-width: 0; }
+.is-compact .section-card .card-head { padding: var(--s-2) var(--s-3); gap: var(--s-2); }
+.is-compact .section-card .card-head .t-sub { font-size: var(--fs-body); line-height: var(--lh-body); }
+.is-compact .section-card .card-body { padding: var(--s-3); gap: var(--s-3); }
+.is-compact .grid-fields { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--s-3) var(--s-3); }
+.is-compact .field { gap: var(--s-1); }
+.is-compact .field:has(textarea), .is-compact .field:has(.dropzone) { grid-column: 1 / -1; }
+.is-compact .dropzone { padding: var(--s-2) var(--s-3); min-height: 64px; }
+.is-compact .stage-row { padding: var(--s-2) var(--s-3); }
+.is-compact .stage summary { padding-top: var(--s-2); padding-bottom: var(--s-2); }
+@media (min-width: 1024px) and (pointer: fine) {
+  .is-compact .input, .is-compact .select, .is-compact .output, .is-compact .input-group .addon { height: 36px; min-height: 36px; }
+  .is-compact textarea.textarea { min-height: 60px; }
+}
+@media (max-width: 767px) { .grid-sections.is-compact > .section-card { flex-basis: 100%; } }
+.ws:has(.tree-row) { --tree-w: 320px; }
+.tree-row .tree-name { white-space: normal; overflow: visible; text-overflow: clip; line-height: 18px; }
+.is-compact .field:has(.dropzone) { grid-column: span 2; }
+@media (max-width: 479px) { .is-compact .field:has(.dropzone) { grid-column: 1 / -1; } }
+.is-compact .grid-stats { gap: var(--s-3); }
+.is-compact .stat { padding: var(--s-3) var(--s-4); gap: var(--s-1); }
+.is-compact .fig-box { padding: var(--s-2) var(--s-3); }

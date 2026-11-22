@@ -29,6 +29,7 @@ import {
 import { type CalculationDatabase, idOf, openCalculationDatabase } from '../../support/calculation-database';
 import { defined } from '../../support/defined';
 import { smallPng } from '../../support/pictures';
+import { changeContext } from '../../support/customer-change';
 
 /**
  * STORY-06.06 AC-2, AC-4, AC-6, AC-7 and AC-9 (FR-062, FR-064, NFR-007; architecture sections 4.4, 4.8, 4.10 and 5.1) against real PostgreSQL in a throwaway database, as the **runtime role**: an approval is
@@ -140,7 +141,7 @@ describe('AC-2: the approval is written in one piece', () => {
       calculations: db.calculations,
       approvals: db.approvals,
       transactions: db.transactions,
-      workflow: { transition: db.estimateService.transition, audit: { record: () => Promise.reject(new Error('Invented audit failure.')), list: db.audit.list } },
+      workflow: { transition: db.estimateService.transition, audit: { record: () => Promise.reject(new Error('Invented audit failure.')), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list } },
     });
     const before = await storedOf(db, estimateId);
     await expect(failing.approve(lead(), estimateId, request(calculationId))).rejects.toThrow('Invented audit failure.');
@@ -260,7 +261,7 @@ describe('AC-4: once approved, every writer of an input is refused and nothing c
       ['a part added', () => db.estimateService.addPart(lead(), estimateId, { kind: 'item' }), ESTIMATE_NOT_EDITABLE_CODE],
       ['a part moved', () => db.estimateService.moveNode(lead(), estimateId, { nodeId: top, revision: topRevision, parentId: null, index: 0 }), ESTIMATE_NOT_EDITABLE_CODE],
       ['a part deleted', () => db.estimateService.deleteNode(lead(), estimateId, { nodeId: top, revision: topRevision, parts: 1, subtree: 'unused' }), ESTIMATE_NOT_EDITABLE_CODE],
-      ['the customer changed', () => db.estimateService.setCustomer(lead(), estimateId, customerId), ESTIMATE_NOT_EDITABLE_CODE],
+      ['the customer changed', () => db.estimateService.setCustomer(lead(), changeContext(lead()), estimateId, customerId), ESTIMATE_NOT_EDITABLE_CODE],
       ['a picture added', () => db.estimateService.putPicture(lead(), estimateId, top, { name: 'a.png', bytes: smallPng() }), ESTIMATE_NOT_EDITABLE_CODE],
       ['a picture removed', () => db.estimateService.removePicture(lead(), estimateId, top), ESTIMATE_NOT_EDITABLE_CODE],
       ['the Engineer\'s Calculate', () => db.service.calculate(engineer, estimateId), TRANSITION_REFUSALS.APPROVED_IS_LOCKED.code],

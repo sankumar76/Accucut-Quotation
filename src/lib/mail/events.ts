@@ -39,6 +39,9 @@ function instantKey(instant: Date): string {
   return instant.toISOString();
 }
 
+/** `task-assigned:<taskId>:` - what every revision's key of one task starts with (a task ID has no colon, so no other task's key starts with it). Not a key: it names a set of them (DEF-055). */
+export const taskAssignedKeyPrefix = (taskId: string): string => `task-assigned:${taskId}:`;
+
 /**
  * The idempotency keys (a unique index on `email_outbox.idempotency_key` enforces them). A changed deadline or a new assignment revision gives a new key, so a task that
  * becomes overdue again is reported again (architecture assumption A-09).

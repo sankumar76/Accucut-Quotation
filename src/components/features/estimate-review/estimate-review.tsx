@@ -1,11 +1,9 @@
 import { APPROVED_NOTICE_ID } from '@/components/features/estimate-approve/approve-ids';
-import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
+import { ChangeCustomerButton } from '@/components/features/estimate-customer/change-customer-button';
 import { Notice } from '@/components/shared/notice';
 import { warnedNodeIds } from '@/components/shared/quantity-tag';
 import { WarningNotice } from '@/components/shared/warning-notice';
-import { Card, CardContent } from '@/components/ui/card';
 import type { RoleName } from '@/lib/auth/roles';
-import { cn } from '@/lib/cn';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
@@ -26,7 +24,6 @@ import {
   CLEARED_NOTICE_BODY,
   CLEARED_NOTICE_TITLE,
   NOT_CALCULATED_NOTICE,
-  REVIEW_CUSTOMER_LABEL,
   REVIEW_NO_CUSTOMER,
 } from './review-texts';
 
@@ -46,7 +43,8 @@ export interface EstimateReviewProps {
   readonly header: WorkspaceHeaderView;
   /** The estimate's ID, for the Recalculate button's request (STORY-06.04). */
   readonly estimateId: string;
-  readonly customer: { readonly id: string; readonly name: string } | null;
+  /** The estimate's customer with its short name (CR-01 item 6), or null for one made before that. */
+  readonly customer: { readonly id: string; readonly name: string; readonly shortName: string } | null;
   readonly costs: CostsView;
   /** The time of the calculation written in IST (`formatIst`), or `null` while there is no calculation. */
   readonly calculatedAt: string | null;
@@ -84,16 +82,13 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           cancelled: costs.approval.cancel !== null,
         };
   return (
-    <div className="group/review contents">
-      <WorkspaceHeader view={header} />
-      <Card>
-        <CardContent>
-          <p className={cn('text-body', BREAK_LONG_NAMES)}>
-            <strong>{`${REVIEW_CUSTOMER_LABEL}: `}</strong>
-            {customer === null ? REVIEW_NO_CUSTOMER : customer.name}
-          </p>
-        </CardContent>
-      </Card>
+    <div className="is-compact group/review contents">
+      <WorkspaceHeader
+        view={header}
+        noCustomerText={REVIEW_NO_CUSTOMER}
+        // Change customer (CR-01 item 6, AC-12): on an estimate that is not approved only; the review is the Lead's and the Admin's, and the server refuses anyone else all the same.
+        customerAction={header.status === 'APPROVED' ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} />}
+      />
       {state === 'none' ? (
         <Notice tone="info" role="status">
           {NOT_CALCULATED_NOTICE}

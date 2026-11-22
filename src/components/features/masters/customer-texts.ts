@@ -1,4 +1,4 @@
-import type { CustomerRate } from '@/lib/masters/customers';
+import { CUSTOMER_SHORT_NAME_MAX_LENGTH, type CustomerRate } from '@/lib/masters/customers';
 import { RUPEE } from '@/lib/masters/master-rules';
 import { PERCENT_UNIT } from '@/lib/masters/process-items';
 
@@ -29,7 +29,7 @@ export const CUSTOMER_SEARCH_PLACEHOLDER = 'Customer name';
 
 export const CUSTOMER_LIST_LABEL = 'Customers';
 export const CUSTOMER_REGION_LABEL = 'Customers, scrollable';
-export const CUSTOMER_HEADINGS = { name: 'Customer', phone: 'Phone', email: 'E-mail', rates: 'Rates' } as const;
+export const CUSTOMER_HEADINGS = { name: 'Customer', shortName: 'Short name', phone: 'Phone', email: 'E-mail', rates: 'Rates' } as const;
 
 export const CUSTOMERS_LOADING_LABEL = 'Loading customers';
 export const CUSTOMERS_ERROR_TITLE = 'We could not load customers';
@@ -70,7 +70,9 @@ export const RATES_TITLE = 'Rates for this customer';
 export const RATES_HINT = 'Percent rates are typed as plain numbers: 12 means 12%, 12.5 means 12.5%';
 export const BREADCRUMB_LABEL = 'Breadcrumb';
 
-export const FIELD_LABELS = { name: 'Customer name', phone: 'Phone', email: 'E-mail', address: 'Address' } as const;
+export const FIELD_LABELS = { name: 'Customer name', shortName: 'Short name', phone: 'Phone', email: 'E-mail', address: 'Address' } as const;
+/** The hint under Short name (CR-01 item 6): the number is the constant's, so a changed limit changes the hint too. */
+export const SHORT_NAME_HINT = `Up to ${CUSTOMER_SHORT_NAME_MAX_LENGTH} characters, unique. It starts the Excel file name.`;
 
 export const RATE_HEADINGS = { rate: 'Rate', default: 'Default', own: 'This customer', status: 'Status' } as const;
 export const DIFFERS_TAG = 'Differs from default';

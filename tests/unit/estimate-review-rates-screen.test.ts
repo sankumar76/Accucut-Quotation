@@ -33,6 +33,8 @@ const headerOf = (status: EstimateStatus): WorkspaceHeaderView => ({
   folderPath: '\\\\invented-server\\invented-share\\RFQ-0318',
   folderUrl: null,
   title: 'Invented cabinet',
+  subject: 'Invented subject',
+  customer: { name: 'Invented Customer', shortName: 'INV' },
   notes: null,
   assignedByName: 'Invented Lead',
 });
@@ -48,7 +50,7 @@ const render = (costs: CostsView, status: EstimateStatus): string =>
     createElement(EstimateReview, {
       header: headerOf(status),
       estimateId: REVIEW_ESTIMATE_ID,
-      customer: { id: 'c1', name: 'Invented Customer' },
+      customer: { id: 'c1', name: 'Invented Customer', shortName: 'INV' },
       costs,
       calculatedAt: costs.calculatedAt === null ? null : AT,
       viewerRole: 'LEAD',

@@ -11,6 +11,7 @@ import { createTaskService, type TaskService } from '@/server/services/task-serv
 
 import { AUDIT_REQUEST_ID, entriesFor, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { defined } from '../../support/defined';
+import { insertAssignCustomer } from '../../support/assign-customer';
 
 /**
  * STORY-04.07 (AC-3 to AC-8; FR-040, NFR-007; architecture sections 4.4, 5.1 and 8) against real PostgreSQL in a throwaway database, as the runtime role: a reassign is one
@@ -37,6 +38,7 @@ let priyaId: string;
 let meeraId: string;
 let goneId: string;
 let taskId: string;
+let customerId: string;
 
 const by = (actorId: string, actorLabel: string) => ({ actorId, actorLabel, requestId: AUDIT_REQUEST_ID });
 const asLead = () => by(leadId, 'Invented Reassign Lead');
@@ -52,6 +54,7 @@ beforeAll(async () => {
   priyaId = await insertPersonAsOwner(db, 'Reassign Priya', 'ENGINEER');
   meeraId = await insertPersonAsOwner(db, 'Reassign Meera', 'ENGINEER');
   goneId = await insertPersonAsOwner(db, 'Reassign Gone', 'ENGINEER', false);
+  customerId = await insertAssignCustomer(db.owner, 'Reassign Customer');
 });
 
 afterAll(async () => {
@@ -64,7 +67,7 @@ beforeEach(async () => {
   await db.owner.query('DELETE FROM tasks');
   await db.owner.query('DELETE FROM task_sequences');
   clock.set(NOW);
-  const assigned = await service.assignTask(leadId, { engineerId: arjunId, folderPath: PATH, deadline: '2026-11-12T17:00', title: 'Hopper cover', notes: 'Invented notes.' });
+  const assigned = await service.assignTask(leadId, { engineerId: arjunId, customerId, folderPath: PATH, deadline: '2026-11-12T17:00', title: 'Hopper cover', subject: 'Feed hopper', notes: 'Invented notes.' });
   taskId = assigned.id;
 });
 

@@ -1,7 +1,7 @@
 import type { NextAuthOptions } from 'next-auth';
 
-import { loadAppEnv, loadEmailFeature, loadOriginEnv } from '../lib/env';
-import { systemClock } from '../lib/time';
+import { loadAppEnv, loadEmailFeature, loadExportEnv, loadOriginEnv } from '../lib/env';
+import { MILLISECONDS_PER_SECOND, systemClock } from '../lib/time';
 
 import { buildAuthOptions } from './auth/options';
 import { createThreadBuilder, exportThreadFile } from './export/thread-runner';
@@ -231,11 +231,15 @@ export function getTaskService(): TaskService {
     clock: systemClock,
     // A reassign writes its audit entry in its own transaction (STORY-04.07).
     audit: getAuditService(),
-    // The assignment e-mail (STORY-09.03). The mail service is reached only when alerts are ON, so an assignment with alerts OFF never builds the mail transport.
+    // The assignment e-mail (STORY-09.03). The mail service is reached only when a row is written (alerts ON and `FEATURE_EMAIL` on, DEF-055), so an assignment with either off never builds
+    // the mail transport; withdrawing an unsent row is a plain outbox update and does not build it either. `FEATURE_EMAIL` is read on every call, as the other writers of mail do.
     mail: createTaskMail({
       mail: { enqueue: (tx, message) => getMailService().enqueue(tx, message) },
+      outbox: createEmailOutboxRepository(runtimeClient()),
       settings: createSettingsRepository(runtimeClient()),
       appOrigin: () => loadOriginEnv().APP_ORIGIN,
+      clock: systemClock,
+      emailEnabled: () => loadEmailFeature(),
     }),
   });
   return taskService;
@@ -250,6 +254,8 @@ export function getEstimateService(): EstimateService {
     const configurations = createConfigRepository(runtimeClient());
     estimateService = createEstimateService({
       estimates: createEstimateRepository(runtimeClient()),
+      // A customer change writes its audit entry in its own transaction (CR-01 item 6).
+      audit: getAuditService(),
       nodes: createEstimateNodeRepository(runtimeClient()),
       // The part pictures (STORY-05.07): stored whole in the database, added and read by the runtime role and never changed.
       images: createImageRepository(runtimeClient()),
@@ -498,7 +504,7 @@ export function getExportService(): ExportService {
       images: createImageRepository(runtimeClient()),
       configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
       transactions: createTransactionRunner(runtimeClient()),
-      builder: createThreadBuilder({ entry: exportThreadFile(process.cwd()) }),
+      builder: createThreadBuilder({ entry: exportThreadFile(process.cwd()), timeoutMs: loadExportEnv().EXPORT_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND }),
       clock: systemClock,
     });
   }

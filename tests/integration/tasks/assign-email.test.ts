@@ -16,6 +16,7 @@ import { forbiddenStrings } from '../../support/canary-masters';
 import { defined } from '../../support/defined';
 import { AUDIT_REQUEST_ID, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { openMailCapture, type CapturedMail, type MailCapture } from '../../support/mail-capture';
+import { insertAssignCustomer } from '../../support/assign-customer';
 
 /**
  * STORY-09.03 AC-1 to AC-5, AC-7 and AC-8 against real PostgreSQL in a throwaway database, as the runtime role, with the real outbox, the real worker job and a capturing mail server
@@ -30,6 +31,8 @@ const PATH = '\\\\invented-server\\invented-share\\RFQ-123';
 
 let db: AuditDatabase;
 let clock: FixedClock;
+/** What `FEATURE_EMAIL` reads as for this server, set per test. */
+let emailOn = true;
 let capture: MailCapture;
 let transactions: TransactionRunner;
 let outbox: EmailOutboxRepository;
@@ -40,6 +43,7 @@ let adminId: string;
 let otherLeadId: string;
 let arjunId: string;
 let meeraId: string;
+let customerId: string;
 const addressOf: Record<string, string> = {};
 
 async function person(label: string, role: 'ADMIN' | 'LEAD' | 'ENGINEER', active = true): Promise<string> {
@@ -51,9 +55,11 @@ async function person(label: string, role: 'ADMIN' | 'LEAD' | 'ENGINEER', active
 
 const input = (overrides: Partial<AssignInput> = {}): AssignInput => ({
   engineerId: arjunId,
+  customerId,
   folderPath: PATH,
   deadline: '2026-11-12T17:00',
   title: 'Hopper cover',
+  subject: 'Feed hopper',
   notes: 'Sheet-metal parts only.',
   ...overrides,
 });
@@ -92,6 +98,17 @@ async function setAlerts(on: boolean): Promise<void> {
 /** The messages the capture holds for one task code (the subject names it), so a shared Mailpit and the other tests do not mix in. */
 const messagesFor = async (code: string): Promise<ReadonlyArray<CapturedMail>> => (await capture.list()).filter((mail) => mail.subject === `Task assigned: ${code}`);
 
+/** The assignment e-mail as the composition builds it: the real outbox and settings, the controlled clock, and `FEATURE_EMAIL` as the test set it. */
+const taskMail = () =>
+  createTaskMail({
+    mail: createMailService({ outbox, mailer: createMailer(capture.transport), clock }),
+    outbox,
+    settings: createSettingsRepository(db.prisma),
+    appOrigin: () => 'https://portal.example.com',
+    clock,
+    emailEnabled: () => emailOn,
+  });
+
 beforeAll(async () => {
   db = await openAuditDatabase();
   clock = createFixedClock(NOW);
@@ -99,13 +116,9 @@ beforeAll(async () => {
   outbox = createEmailOutboxRepository(db.prisma);
   capture = openMailCapture();
   await capture.clear();
-  const mail = createTaskMail({
-    mail: createMailService({ outbox, mailer: createMailer(capture.transport), clock }),
-    settings: createSettingsRepository(db.prisma),
-    appOrigin: () => 'https://portal.example.com',
-  });
-  service = createTaskService({ tasks: createTaskRepository(db.prisma), transactions, clock, audit: db.audit, mail });
+  service = createTaskService({ tasks: createTaskRepository(db.prisma), transactions, clock, audit: db.audit, mail: taskMail() });
   sendDependencies = { store: outbox, mailer: createMailer(capture.transport), clock, log: () => undefined, jobRuns: { recordRun: () => Promise.resolve() } };
+  customerId = await insertAssignCustomer(db.owner, 'Mail Customer');
   leadId = await person('Mail Lead', 'LEAD');
   otherLeadId = await person('Mail Other Lead', 'LEAD');
   adminId = await person('Mail Admin', 'ADMIN');
@@ -120,6 +133,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   clock.set(NOW);
+  emailOn = true;
   await db.owner.query('DELETE FROM email_outbox');
   await db.owner.query('DELETE FROM estimates');
   await db.owner.query('DELETE FROM tasks');
@@ -185,7 +199,7 @@ describe('AC-1, AC-2: an assignment with alerts ON writes one row in its own tra
       transactions: failing,
       clock,
       audit: db.audit,
-      mail: createTaskMail({ mail: createMailService({ outbox, mailer: createMailer(capture.transport), clock }), settings: createSettingsRepository(db.prisma), appOrigin: () => 'https://portal.example.com' }),
+      mail: taskMail(),
     });
     const numberBefore = await lastNumber();
     await expect(faulty.assignTask(leadId, input())).rejects.toThrow('Invented late failure.');
@@ -197,7 +211,7 @@ describe('AC-1, AC-2: an assignment with alerts ON writes one row in its own tra
 
   it('the same key twice is one row and one message', async () => {
     const assigned = await service.assignTask(leadId, input());
-    const mail = createTaskMail({ mail: createMailService({ outbox, mailer: createMailer(capture.transport), clock }), settings: createSettingsRepository(db.prisma), appOrigin: () => 'https://portal.example.com' });
+    const mail = taskMail();
     const task = { id: assigned.id, code: assigned.code, title: null, notes: null, folderPath: PATH, deadlineAt: assigned.deadlineAt, assignmentRevision: 1, engineer: assigned.engineer };
     const again = await transactions.run((tx) => mail.enqueueTaskAssigned(tx, task, { id: leadId, name: 'Invented Mail Lead', isActive: true }));
     expect(again).toBe('already-queued');
@@ -212,7 +226,7 @@ describe('AC-4 (BR-040): alerts OFF', () => {
     await setAlerts(false);
     const assigned = await service.assignTask(leadId, input());
     expect(await outboxRows()).toEqual([]);
-    expect(assigned).toMatchObject({ code: expect.stringMatching(/^Q-2026-\d{4}$/), engineer: { id: arjunId }, estimate: { status: 'DRAFT', customerId: null } });
+    expect(assigned).toMatchObject({ code: expect.stringMatching(/^Q-2026-\d{4}$/), engineer: { id: arjunId }, estimate: { status: 'DRAFT', customerId } });
     expect(await taskCount()).toBe(1);
     expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 0, sent: 0 });
     expect(await messagesFor(assigned.code)).toEqual([]);
@@ -286,9 +300,10 @@ describe('AC-7: a reassign through the real reassignTask', () => {
     expect(second.body_text).toContain('Title: Hopper cover');
     expect(second.body_text).toContain('13 Nov 2026, 23:30 IST');
 
-    await runOutboxSend(sendDependencies);
+    // The first Engineer's row was still unsent: it is withdrawn (DEF-055), so only the new Engineer is told.
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 1, skipped: 1 });
     const mails = await messagesFor(assigned.code);
-    expect(mails).toHaveLength(2);
+    expect(mails).toHaveLength(1);
     const toMeera = defined(mails.find((mail) => mail.to.includes(defined(addressOf[meeraId]))));
     expect(toMeera.cc).toEqual([addressOf[otherLeadId]]);
   });
@@ -308,11 +323,145 @@ describe('AC-7: a reassign through the real reassignTask', () => {
   });
 });
 
+/** The `send_before` of each row, by key. */
+async function sendBeforeOf(): Promise<Record<string, Date | null>> {
+  const { rows } = await db.owner.query<{ idempotency_key: string; send_before: Date | null }>('SELECT idempotency_key, send_before FROM email_outbox');
+  return Object.fromEntries(rows.map((row) => [row.idempotency_key, row.send_before]));
+}
+
+const hours = (count: number): Date => new Date(NOW.getTime() + count * 60 * 60 * 1000);
+
+describe('DEF-055 (AQP-385): an assignment e-mail expires, is not queued where it cannot be sent, and is withdrawn when the task is reassigned', () => {
+  it('every row carries send_before: 24 hours after it was written, by the controlled clock, and a withdrawn row has it set to the moment of the reassign', async () => {
+    const assigned = await service.assignTask(leadId, input());
+    expect((await sendBeforeOf())[`task-assigned:${assigned.id}:1`]).toEqual(hours(24));
+    clock.set(hours(3));
+    await service.reassignTask(by(leadId, 'Invented Mail Lead'), assigned.id, { engineerId: meeraId });
+    const found = await sendBeforeOf();
+    // The first row was withdrawn at 03:00 (a reassign), the second is good for 24 hours from then.
+    expect(found[`task-assigned:${assigned.id}:1`]).toEqual(hours(3));
+    expect(found[`task-assigned:${assigned.id}:2`]).toEqual(hours(27));
+  });
+
+  it('a row that is 24 hours old or more when the worker claims it is skipped as EXPIRED, and nothing is sent (e-mail switched on, or the worker back, a day later)', async () => {
+    const assigned = await service.assignTask(leadId, input());
+    clock.set(hours(25));
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 0, sent: 0, skipped: 1 });
+    expect(await outboxRows()).toMatchObject([{ status: 'skipped', last_error: 'EXPIRED' }]);
+    expect(await messagesFor(assigned.code)).toEqual([]);
+  });
+
+  it('a row inside its window is sent as before', async () => {
+    const assigned = await service.assignTask(leadId, input());
+    clock.set(new Date(hours(24).getTime() - 60_000));
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 1, skipped: 0 });
+    expect(await messagesFor(assigned.code)).toHaveLength(1);
+  });
+
+  it('after an outage of a day and a half, the old rows are skipped and a task assigned since is sent: the first send of a real mailbox does not flood it', async () => {
+    const old = await Promise.all([input(), input({ title: 'Second task' }), input({ title: 'Third task' })].map((one) => service.assignTask(leadId, one)));
+    clock.set(hours(36));
+    const fresh = await service.assignTask(leadId, input({ title: 'Fresh task', deadline: '2026-11-14T17:00' }));
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 1, skipped: 3 });
+    for (const task of old) expect(await messagesFor(task.code)).toEqual([]);
+    expect(await messagesFor(fresh.code)).toHaveLength(1);
+  });
+
+  it('with FEATURE_EMAIL off and alerts ON no row is written, and switching e-mail on later finds nothing to send', async () => {
+    emailOn = false;
+    const assigned = await service.assignTask(leadId, input());
+    expect(await outboxRows()).toEqual([]);
+    expect(await taskCount()).toBe(1);
+    emailOn = true;
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 0, sent: 0, skipped: 0 });
+    expect(await messagesFor(assigned.code)).toEqual([]);
+  });
+
+  it('a reassign withdraws the unsent row of the old Engineer: it is skipped as EXPIRED, and only the new Engineer is mailed', async () => {
+    const assigned = await service.assignTask(leadId, input());
+    await service.reassignTask(by(otherLeadId, 'Invented Mail Other Lead'), assigned.id, { engineerId: meeraId });
+    const found = await sendBeforeOf();
+    expect(found[`task-assigned:${assigned.id}:1`]).toEqual(NOW);
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 1, skipped: 1 });
+    const rows = await outboxRows();
+    expect(rows.find((row) => row.idempotency_key.endsWith(':1'))).toMatchObject({ status: 'skipped', last_error: 'EXPIRED' });
+    const mails = await messagesFor(assigned.code);
+    expect(mails.map((mail) => mail.to)).toEqual([[addressOf[meeraId]]]);
+  });
+
+  it('a task reassigned twice before the worker runs mails only the last Engineer', async () => {
+    const assigned = await service.assignTask(leadId, input());
+    await service.reassignTask(by(leadId, 'Invented Mail Lead'), assigned.id, { engineerId: meeraId });
+    await service.reassignTask(by(leadId, 'Invented Mail Lead'), assigned.id, { engineerId: arjunId });
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 1, skipped: 2 });
+    const mails = await messagesFor(assigned.code);
+    expect(mails.map((mail) => mail.to)).toEqual([[addressOf[arjunId]]]);
+  });
+
+  it('SQR-02: a row the worker has claimed but not yet sent when the task is reassigned is stopped at beginSend, and the old Engineer is not mailed; the new Engineer still is', async () => {
+    const assigned = await service.assignTask(leadId, input());
+    const claim = await outbox.claimDue(NOW, 25, hours(1));
+    const claimed = defined(claim.claimed[0]);
+    await service.reassignTask(by(otherLeadId, 'Invented Mail Other Lead'), assigned.id, { engineerId: meeraId });
+    expect(await outbox.beginSend({ id: claimed.id, attempts: claimed.attempts }, NOW, hours(1))).toBe('expired');
+    expect(await messagesFor(assigned.code)).toEqual([]);
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 1 });
+    expect((await messagesFor(assigned.code)).map((mail) => mail.to)).toEqual([[addressOf[meeraId]]]);
+  });
+
+  it('SQR-02: a claimed row whose attempt fails and goes back to pending after a reassign is skipped as EXPIRED at the next claim, not mailed to the old Engineer', async () => {
+    const assigned = await service.assignTask(leadId, input());
+    const claimed = defined((await outbox.claimDue(NOW, 25, hours(1))).claimed[0]);
+    await service.reassignTask(by(leadId, 'Invented Mail Lead'), assigned.id, { engineerId: meeraId });
+    expect(await outbox.markRetry({ id: claimed.id, attempts: claimed.attempts }, 'CONNECTION', new Date(NOW.getTime() + 60_000))).toBe(true);
+    clock.set(new Date(NOW.getTime() + 120_000));
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 1, skipped: 1 });
+    expect((await outboxRows()).find((row) => row.idempotency_key.endsWith(':1'))).toMatchObject({ status: 'skipped', last_error: 'EXPIRED' });
+    expect((await messagesFor(assigned.code)).map((mail) => mail.to)).toEqual([[addressOf[meeraId]]]);
+  });
+
+  it('a row that was already sent is not touched by a later reassign', async () => {
+    const assigned = await service.assignTask(leadId, input());
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ sent: 1 });
+    await service.reassignTask(by(leadId, 'Invented Mail Lead'), assigned.id, { engineerId: meeraId });
+    const rows = await outboxRows();
+    expect(rows.find((row) => row.idempotency_key.endsWith(':1'))?.status).toBe('sent');
+    expect((await sendBeforeOf())[`task-assigned:${assigned.id}:1`]).toEqual(hours(24));
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 1 });
+    expect(await messagesFor(assigned.code)).toHaveLength(2);
+  });
+
+  it('with FEATURE_EMAIL off a reassign still withdraws the unsent row written while it was on, and writes no new one', async () => {
+    const assigned = await service.assignTask(leadId, input());
+    emailOn = false;
+    await service.reassignTask(by(leadId, 'Invented Mail Lead'), assigned.id, { engineerId: meeraId });
+    expect(await outboxRows()).toHaveLength(1);
+    emailOn = true;
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 0, sent: 0, skipped: 1 });
+    expect(await messagesFor(assigned.code)).toEqual([]);
+  });
+
+  it('a reassign that fails after the withdrawal puts the old row back: the withdrawal is in the reassign\'s own transaction', async () => {
+    const assigned = await service.assignTask(leadId, input());
+    const failing: TransactionRunner = {
+      run: (work) =>
+        transactions.run(async (tx) => {
+          await work(tx);
+          throw new Error('Invented late failure.');
+        }),
+    };
+    const faulty = createTaskService({ tasks: createTaskRepository(db.prisma), transactions: failing, clock, audit: db.audit, mail: taskMail() });
+    await expect(faulty.reassignTask(by(leadId, 'Invented Mail Lead'), assigned.id, { engineerId: meeraId })).rejects.toThrow('Invented late failure.');
+    expect((await sendBeforeOf())[`task-assigned:${assigned.id}:1`]).toEqual(hours(24));
+    expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 1, sent: 1 });
+  });
+});
+
 describe('AC-3 (NFR-002): no cost, rate, formula or customer value in any message', () => {
   it('finds none of the forbidden canary strings of the masters, the rate names or the formula markers in any captured message', async () => {
     const codes: string[] = [];
     codes.push((await service.assignTask(leadId, input())).code);
-    codes.push((await service.assignTask(adminId, input({ title: '', notes: '' }))).code);
+    codes.push((await service.assignTask(adminId, input({ title: 'Second hopper cover', notes: '' }))).code);
     await runOutboxSend(sendDependencies);
     const forbidden = forbiddenStrings();
     expect(forbidden.length).toBeGreaterThan(0);

@@ -493,7 +493,7 @@ describe('STORY-05.12 AC-3: the acknowledged press calculates, records the warni
   });
 
   it('an entry that cannot be written takes the calculation with it: no record, and the estimate is a draft', async () => {
-    const refusing: AuditService = { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), list: createAuditSink().service.list };
+    const refusing: AuditService = { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: createAuditSink().service.list };
     const f = fixture({ nodes: warnedTree(), auditService: refusing });
     expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED))).toBeInstanceOf(AuditEntryRefusedError);
     expectNothingWritten(f);

@@ -19,9 +19,11 @@ import type { taskDetailSchema } from './schemas/tasks';
 export interface TaskDetailSource {
   readonly id: string;
   readonly code: string;
-  readonly title: string | null;
+  readonly title: string;
+  readonly subject: string;
   readonly notes: string | null;
   readonly engineer: { readonly id: string; readonly name: string };
+  readonly customer: { readonly id: string; readonly name: string; readonly shortName: string } | null;
   readonly customerName: string | null;
   readonly folderPath: string;
   readonly folderUrl: string | null;
@@ -35,8 +37,11 @@ export function buildTaskDetail(task: TaskDetailSource): z.input<typeof taskDeta
     id: task.id,
     code: task.code,
     title: task.title,
+    subject: task.subject,
     notes: task.notes,
     engineer: { id: task.engineer.id, name: task.engineer.name },
+    // Copied field by field: a field added to the customer record later (a contact detail, a rate) does not leave by accident (NFR-002).
+    customer: task.customer === null ? null : { id: task.customer.id, name: task.customer.name, shortName: task.customer.shortName },
     customerName: task.customerName,
     folderPath: task.folderPath,
     folderUrl: task.folderUrl,

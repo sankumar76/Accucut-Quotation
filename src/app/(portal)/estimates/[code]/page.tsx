@@ -20,7 +20,7 @@ interface PageProps {
  * Lead or an Admin; the server decides which. The page checks the role first, with its own address, before it reads anything (`authorizePage`, CR-33). A code that
  * is no task, and the task of another Engineer, are the same SCR-26 "not found" with HTTP 404, so the page never says that a code is real. A Lead and an Admin get the
  * review (SCR-06), which holds figures (NFR-002), so it lives in `review-page.tsx` and is loaded by a dynamic `import()` on their branch alone: this file imports no review
- * code, and the Engineer's request loads none. The task is read on the server for the first paint; the Engineer's screen then reads the customers and sends the choice through the API.
+ * code, and the Engineer's request loads none. The task is read on the server for the first paint; its customer and subject are shown read-only (CR-01 item 6).
  *
  * There is deliberately no `loading.tsx` beside this page: it would stream the response with status 200 before `forbidden()` and `notFound()` run (TD-06).
  */
@@ -36,13 +36,16 @@ export default async function EstimatePage({ params }: PageProps) {
     folderPath: workspace.folderPath,
     folderUrl: workspace.folderUrl,
     title: workspace.title,
+    subject: workspace.subject,
+    // Names only (NFR-002): the customer's ID stays on the server for the Change customer action's own request.
+    customer: workspace.customer === null ? null : { name: workspace.customer.name, shortName: workspace.customer.shortName },
     notes: workspace.notes,
     assignedByName: workspace.assignedByName,
   };
   // An allow-list by name, closed by `assertNever`: a fourth role added one day gets no branch here until someone decides (it fails to compile) and never the review's figures (NFR-002).
   switch (user.role) {
     case 'ENGINEER':
-      return <EstimateWorkspace header={header} estimateId={workspace.estimateId} customer={workspace.customer} />;
+      return <EstimateWorkspace header={header} estimateId={workspace.estimateId} />;
     case 'LEAD':
     case 'ADMIN': {
       // SCR-06 is Restricted: it is loaded here, on the Lead's and the Admin's branch only, and never imported by this file (NFR-002).

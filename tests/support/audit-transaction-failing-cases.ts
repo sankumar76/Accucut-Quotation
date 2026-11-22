@@ -9,7 +9,7 @@ import { MAX_HELPER_STEPS } from './audit-transaction-check';
 
 /** The message fragments the cases look for. */
 const NOT_A_PARAMETER = 'is not a parameter of the function that holds the call';
-const NO_REPOSITORY_CALL = 'passes its transaction to no repository call other than record';
+const NO_REPOSITORY_CALL = 'passes its transaction to no repository call other than the audit write';
 const NESTED = 'sits in a nested function';
 const NOT_AWAITED = 'is not awaited or returned';
 const NOT_A_CALLEE = 'used other than as the callee of a direct call';
@@ -300,6 +300,28 @@ export const FAILING: readonly Case[] = [
     }`,
     records: 1,
     findings: [NO_REPOSITORY_CALL],
+  },
+  {
+    name: 'a recordMany given a handle that is not the callback parameter (ADR-018)',
+    code: `export async function otherBatch() {
+      await transactions.run(async (tx) => {
+        await things.add('a', tx);
+        await audit.recordMany(stray, entries);
+      });
+    }`,
+    records: 1,
+    findings: [NOT_A_PARAMETER],
+  },
+  {
+    name: 'a recordMany with a forgotten await (ADR-018)',
+    code: `export async function forgottenBatch() {
+      await transactions.run(async (tx) => {
+        await things.add('a', tx);
+        audit.recordMany(tx, entries);
+      });
+    }`,
+    records: 1,
+    findings: [NOT_AWAITED],
   },
   {
     name: 'a record call with no transaction argument',

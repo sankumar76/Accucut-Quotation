@@ -62,11 +62,13 @@ export const E2E_CANARY: Pick<E2eUser, 'name' | 'email'> = { name: 'E2E Canary P
  *            for it, so the count it reads is its own whatever other specs seed in the shared database;
  *   password changes their own password on the account page (STORY-01.05), which raises `session_version` and counts wrong current passwords
  *            on a key of its own; nobody else's sessions or counts are touched.
+ *   long-name signs in under the name the test gives it (up to the 120 characters the Users form accepts) and only looks at the top bar and the
+ *            account menu (DEF-034, AQP-288), so the shared Lead's name is never changed.
  * Each run of each test gets a person of its own, made when the test starts, so the spec can be repeated
  * (`--repeat-each`), retried and run at three widths at the same time without one run's failures, block or sign-out
  * reaching another's. Nobody else is ever signed out or blocked.
  */
-export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan' | 'expiry' | 'password' | 'queue' | 'bell';
+export type DisposableKind = 'slip' | 'axe' | 'sign-out' | 'managed' | 'scan' | 'expiry' | 'password' | 'queue' | 'bell' | 'long-name';
 
 const UPSERT_USER = `
   INSERT INTO users (name, email, password_hash, role, is_active, must_change_password)
@@ -165,7 +167,7 @@ export async function ensureAuditCanaryEntry(): Promise<void> {
 
 /**
  * Gives the Engineer with this ID a task and its estimate for the confidentiality scan (STORY-05.01; `tests/support/estimate-recipe.ts`): both have the Engineer's own ID,
- * and the task a code made from it in a year no real task has, so the scan's recipes (`/estimates/<code>`, `PUT /api/v1/estimates/<id>/customer`) name a record the
+ * and the task a code made from it in a year no real task has, so the scan's recipes (`/estimates/<code>`, `PUT /api/v1/estimates/<id>/customer`, which an Engineer is refused) name a record the
  * signed-in Engineer really owns. Assigned by the E2E Lead. Inserts that do nothing on any conflict, so a repeat is safe. Invented values; the database is thrown away.
  */
 async function insertCanaryEstimate(client: Client, ownerId: string): Promise<void> {
@@ -173,8 +175,8 @@ async function insertCanaryEstimate(client: Client, ownerId: string): Promise<vo
   const lead = rows[0];
   if (lead === undefined) throw new Error('The E2E Lead does not exist yet: the set-up project makes it.');
   await client.query(
-    `INSERT INTO tasks (id, code, engineer_id, assigned_by, folder_path, deadline_at, title, notes)
-     VALUES ($1::uuid, $2, $1::uuid, $3::uuid, $4, '2099-01-01T04:30:00Z', 'Canary task', 'Invented notes.') ON CONFLICT DO NOTHING`,
+    `INSERT INTO tasks (id, code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes)
+     VALUES ($1::uuid, $2, $1::uuid, $3::uuid, $4, '2099-01-01T04:30:00Z', 'Canary task', 'Canary subject', 'Invented notes.') ON CONFLICT DO NOTHING`,
     [ownerId, canaryTaskCodeFor(ownerId), lead.id, CANARY_FOLDER_PATH],
   );
   await client.query('INSERT INTO estimates (id, task_id) VALUES ($1::uuid, $1::uuid) ON CONFLICT DO NOTHING', [ownerId]);
@@ -193,12 +195,18 @@ async function insertCanaryEstimate(client: Client, ownerId: string): Promise<vo
 /**
  * Makes a person for one run of one test, with the shared invented password, and returns them. The e-mail names the
  * kind, the screen size, the repeat and the retry, plus a random part, so no two runs ever share it. The rows stay in
- * the throwaway database (the runtime role cannot delete users); they are all `e2e.*@example.test`.
+ * the throwaway database (the runtime role cannot delete users); they are all `e2e.*@example.test`. `name` replaces the generated name;
+ * the e-mail still names the kind and the run, so it stays unique.
  */
-export async function createDisposableUser(kind: DisposableKind, testInfo: TestInfo, role: E2eUser['role'] = 'ENGINEER'): Promise<E2eUser & { readonly id: string }> {
+export async function createDisposableUser(
+  kind: DisposableKind,
+  testInfo: TestInfo,
+  role: E2eUser['role'] = 'ENGINEER',
+  name?: string,
+): Promise<E2eUser & { readonly id: string }> {
   const part = randomBytes(3).toString('hex');
   const label = `${kind}.${testInfo.project.name}.r${testInfo.repeatEachIndex}.t${testInfo.retry}.${part}`;
-  const user: E2eUser = { name: `E2E ${label}`, email: `e2e.${label}@example.test`, role };
+  const user: E2eUser = { name: name ?? `E2E ${label}`, email: `e2e.${label}@example.test`, role };
   const hash = await createTestHasher().hash(E2E_PASSWORD);
   const client = await connectToTestDatabase();
   try {
@@ -246,6 +254,21 @@ export async function fillCanaryPart(ownerId: string): Promise<void> {
     const snapshot = registryShape.parse(rows[0]?.snapshot);
     const inputs = canaryPartInputs(snapshot as unknown as ConfigDocument);
     await client.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [ownerId, JSON.stringify(inputs)]);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Sets the customer of the canary estimate of a person made by `createDisposableUser('scan', ...)` directly in the throwaway database (CR-01 item 6, AQP-390). An Engineer can no longer set the customer
+ * through the API (only a Lead and an Admin can, `estimate-customer.spec.ts`), and a task is assigned with one in the product; the canary estimate is inserted without one, so a spec that needs a
+ * customer on it states it with this. The estimate has the ID of its owner (`estimate-recipe.ts`). Repeatable. Throwaway database only (guarded by `connectToTestDatabase`).
+ */
+export async function setCanaryCustomer(ownerId: string, customerId: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    const result = await client.query('UPDATE estimates SET customer_id = $2::uuid WHERE id = $1::uuid', [ownerId, customerId]);
+    if (result.rowCount !== 1) throw new Error('The canary estimate was not found: set it up first.');
   } finally {
     await client.end();
   }
@@ -465,7 +488,7 @@ export const E2E_SECOND_CUSTOMER = 'E2E Second Customer';
 export async function ensureE2eSecondCustomer(): Promise<string> {
   const client = await connectToTestDatabase();
   try {
-    await client.query('INSERT INTO customers (name) VALUES ($1) ON CONFLICT DO NOTHING', [E2E_SECOND_CUSTOMER]);
+    await client.query('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) ON CONFLICT DO NOTHING', [E2E_SECOND_CUSTOMER]);
     const { rows } = await client.query<{ id: string }>('SELECT id::text AS id FROM customers WHERE name = $1', [E2E_SECOND_CUSTOMER]);
     const id = rows[0]?.id;
     if (id === undefined) throw new Error('The second E2E customer could not be made.');

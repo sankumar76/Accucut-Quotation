@@ -8,6 +8,7 @@ import { createLateFailingRunner } from '../../support/late-failure-runner';
 import { SEED_PROCESS_ITEMS } from '../../support/seed-config';
 
 import { itemIds, openCustomerDefaults, resetCustomerTables } from './customers-support';
+import { shortNameOf } from '../../support/customer-short-name';
 
 /**
  * STORY-02.08 AC-1 to AC-4, AC-6, AC-9 against real PostgreSQL in a throwaway database: a changed default reaches the customers that held the old one
@@ -48,14 +49,14 @@ afterEach(() => resetCustomerTables(db));
 
 /** A customer at the item's default (1.37), then at `value` when one is given. The owner writes it, so no entry is made. */
 async function customer(name: string, value?: string): Promise<string> {
-  const { id } = await db.mastersService.createCustomer(by(), { name, phone: null, email: null, address: null });
+  const { id } = await db.mastersService.createCustomer(by(), { name, shortName: shortNameOf(name), phone: null, email: null, address: null });
   if (value !== undefined) await setValue(id, value);
   return id;
 }
 
 /** `count` customers at every default, made in two statements by the owner (a customer made through the service takes the table lock one by one, so 17 of them are slow), and their IDs. */
 async function bulkCustomers(count: number): Promise<ReadonlyArray<string>> {
-  const { rows } = await db.owner.query<{ id: string }>(`INSERT INTO customers (name) SELECT 'Equal ' || lpad(n::text, 3, '0') || ' Works' FROM generate_series(1, ${String(count)}) AS n RETURNING id::text`);
+  const { rows } = await db.owner.query<{ id: string }>(`INSERT INTO customers (name, short_name) SELECT 'Equal ' || lpad(n::text, 3, '0') || ' Works', 'E' || lpad(n::text, 3, '0') FROM generate_series(1, ${String(count)}) AS n RETURNING id::text`);
   const ids = rows.map((row) => row.id);
   await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) SELECT c.id, pi.id, pi.default_value FROM customers c CROSS JOIN process_items pi WHERE c.id = ANY($1::uuid[])', [ids]);
   return ids;
@@ -85,13 +86,17 @@ interface EntryRow {
   readonly request_id: string;
 }
 
-/** The entries written after the first `skip` of the log, in the order they were written. */
+/**
+ * The entries written after the first `skip` of the log: the rate's own first, then the customers' by name. That order is this helper's, not the log's: the customers' entries of one request are one batch
+ * (ADR-018) and may share a millisecond, so no test asserts the order they are stored or listed in, only which entries there are.
+ */
 async function entriesAfter(skip: number): Promise<ReadonlyArray<EntryRow>> {
   const { rows } = await db.owner.query<EntryRow>(
     'SELECT event, object_type, object_id, object_label, before, after, request_id FROM audit_log ORDER BY created_at, id OFFSET $1',
     [skip],
   );
-  return rows;
+  const rank = (entry: EntryRow): number => (entry.object_type === 'process_item' ? 0 : 1);
+  return [...rows].sort((a, b) => rank(a) - rank(b) || a.object_label.toLowerCase().localeCompare(b.object_label.toLowerCase()));
 }
 
 describe('AC-1, AC-2: a save that changes the default', () => {
@@ -174,7 +179,7 @@ describe('AC-6: a save that changes no default touches no customer', () => {
 });
 
 describe('AC-9: the audit log names every customer that changed, in the save', () => {
-  it('writes the rate\'s own entry first, then one master.edited per moved customer in name order, all with one request ID, and none for the others', async () => {
+  it('writes the rate\'s own entry and one master.edited per moved customer, all with one request ID, and none for the others', async () => {
     const [bravo, alpha] = await Promise.all([customer('Bravo Works'), customer('alpha works')]);
     const [other, already, gone] = await Promise.all([customer('Charlie Works', '1.40'), customer('Delta Works', NEW), customer('Echo Works')]);
     await db.owner.query('UPDATE customers SET deleted_at = now() WHERE id = $1::uuid', [gone]);
@@ -188,9 +193,10 @@ describe('AC-9: the audit log names every customer that changed, in the save', (
     ]);
     expect(new Set(written.map((entry) => entry.request_id))).toEqual(new Set(['req-save-0001']));
     expect(written.map((entry) => entry.object_label)).toEqual(['Invented-renamed-rate', 'alpha works', 'Bravo Works']);
+    // A propagation entry keeps the customer's name and the one rate only (see customerState): the short name is not part of it, so the audit schema holds null before and after.
     for (const entry of written.slice(1)) {
-      expect(entry.before).toEqual({ name: entry.object_label, contact: [], rates: [{ processItemId: ITEM, name: 'Invented-renamed-rate', unit: expect.any(String), value: OLD }] });
-      expect(entry.after).toEqual({ name: entry.object_label, contact: [], rates: [{ processItemId: ITEM, name: 'Invented-renamed-rate', unit: expect.any(String), value: NEW }] });
+      expect(entry.before).toEqual({ name: entry.object_label, shortName: null, contact: [], rates: [{ processItemId: ITEM, name: 'Invented-renamed-rate', unit: expect.any(String), value: OLD }] });
+      expect(entry.after).toEqual({ name: entry.object_label, shortName: null, contact: [], rates: [{ processItemId: ITEM, name: 'Invented-renamed-rate', unit: expect.any(String), value: NEW }] });
     }
     for (const silent of [other, already, gone]) expect(written.some((entry) => entry.object_id === silent)).toBe(false);
   });

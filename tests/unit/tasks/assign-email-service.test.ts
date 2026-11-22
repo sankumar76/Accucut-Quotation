@@ -28,7 +28,17 @@ const PATH = '\\\\invented-server\\invented-share\\RFQ-123';
 /** 17:00 IST on 12 November. */
 const DEADLINE = new Date('2026-11-12T11:30:00.000Z');
 
-const input = (overrides: Partial<AssignInput> = {}): AssignInput => ({ engineerId: ARJUN.id, folderPath: PATH, deadline: '2026-11-12T17:00', title: 'Hopper cover', notes: 'Sheet-metal parts only.', ...overrides });
+const CUSTOMER_ID = '00000000-0000-4000-8000-0000000000c1';
+const input = (overrides: Partial<AssignInput> = {}): AssignInput => ({
+  engineerId: ARJUN.id,
+  customerId: CUSTOMER_ID,
+  folderPath: PATH,
+  deadline: '2026-11-12T17:00',
+  title: 'Hopper cover',
+  subject: 'Feed hopper',
+  notes: 'Sheet-metal parts only.',
+  ...overrides,
+});
 const by = (person: FakePerson) => ({ actorId: person.id, actorLabel: person.name, requestId: 'req-assign-email' });
 
 let people: FakePerson[];
@@ -36,26 +46,41 @@ let world: FakeTaskWorld;
 let clock: FixedClock;
 let settings: FakeSettingsRepository;
 let queued: OutboxMessage[];
+/** What the mail layer was asked to do, in order: `enqueue <key>` and `expire <key prefix>`. */
+let calls: string[];
+let emailOn: boolean;
 let service: TaskService;
 let failEnqueue: Error | null;
 
 beforeEach(() => {
   people = [LEAD, OTHER_LEAD, ADMIN, ARJUN, MEERA, GONE];
   world = createFakeTaskWorld(() => people);
+  world.customers.set(CUSTOMER_ID, 'Invented Customer');
   clock = createFixedClock(NOW);
   settings = createFakeSettingsRepository({ alertsEnabled: true, senderName: 'Invented Portal', senderAddress: 'portal@example.com' });
   queued = [];
+  calls = [];
+  emailOn = true;
   failEnqueue = null;
   const mail = createTaskMail({
     mail: {
       enqueue: (_tx, message) => {
         if (failEnqueue !== null) return Promise.reject(failEnqueue);
         queued.push(message);
+        calls.push(`enqueue ${message.idempotencyKey}`);
         return Promise.resolve('queued' as const);
+      },
+    },
+    outbox: {
+      expireUnsent: (_tx, _event, keyPrefix) => {
+        calls.push(`expire ${keyPrefix}`);
+        return Promise.resolve(0);
       },
     },
     settings,
     appOrigin: () => 'https://portal.example.com',
+    clock,
+    emailEnabled: () => emailOn,
   });
   service = createTaskService({ tasks: world.repository, transactions: world.transactions, clock, audit: createAuditSink().service, mail });
 });
@@ -92,9 +117,23 @@ describe('AC-4 (BR-040): alerts OFF', () => {
     settings.current = { ...settings.current, alertsEnabled: false };
     const assigned = await service.assignTask(LEAD.id, input());
     expect(queued).toEqual([]);
-    expect(assigned).toMatchObject({ code: 'Q-2026-0001', engineer: { id: ARJUN.id }, estimate: { status: 'DRAFT', customerId: null } });
+    expect(assigned).toMatchObject({ code: 'Q-2026-0001', engineer: { id: ARJUN.id }, estimate: { status: 'DRAFT', customerId: CUSTOMER_ID } });
     expect(world.tasks).toHaveLength(1);
     expect(world.estimates).toHaveLength(1);
+  });
+
+  it('DEF-055: with FEATURE_EMAIL off and alerts ON no row is written (the worker is not scheduled, so it could never be sent, and would go out late when e-mail is switched on), and the task is created as before', async () => {
+    emailOn = false;
+    const assigned = await service.assignTask(LEAD.id, input());
+    expect(queued).toEqual([]);
+    expect(assigned).toMatchObject({ code: 'Q-2026-0001', engineer: { id: ARJUN.id } });
+    expect(world.tasks).toHaveLength(1);
+    expect(world.estimates).toHaveLength(1);
+  });
+
+  it('DEF-055: the assign screen still says alerts are ON with FEATURE_EMAIL off: that boolean is the Settings switch, as AC-6 has it', async () => {
+    emailOn = false;
+    await expect(service.getAssignContext()).resolves.toMatchObject({ alertsEnabled: true });
   });
 
   it('a service built without the mail writes no row either (the shape every earlier test uses)', async () => {
@@ -120,7 +159,7 @@ describe('AC-5: the Admin as assigner; who is copied is judged when the row is w
   it('takes no address from the call: the only inputs are IDs from the session and the checked input, and the row holds IDs', async () => {
     await service.assignTask(LEAD.id, { ...input(), cc: 'someone@example.com', to: 'someone@example.com' } as AssignInput);
     expect(JSON.stringify(queued)).not.toContain('someone@example.com');
-    expect(Object.keys(queued[0] ?? {}).sort()).toEqual(['bodyHtml', 'bodyText', 'ccUserIds', 'event', 'idempotencyKey', 'subject', 'toUserId']);
+    expect(Object.keys(queued[0] ?? {}).sort()).toEqual(['bodyHtml', 'bodyText', 'ccUserIds', 'event', 'idempotencyKey', 'sendBefore', 'subject', 'toUserId']);
   });
 });
 
@@ -128,7 +167,7 @@ describe('AC-6: the assign context says whether alerts are on, and nothing else 
   it('answers alertsEnabled true or false with the Engineers, and no other key', async () => {
     const on = await service.getAssignContext();
     expect(on.alertsEnabled).toBe(true);
-    expect(Object.keys(on).sort()).toEqual(['alertsEnabled', 'engineers']);
+    expect(Object.keys(on).sort()).toEqual(['alertsEnabled', 'customers', 'engineers']);
     settings.current = { ...settings.current, alertsEnabled: false };
     expect((await service.getAssignContext()).alertsEnabled).toBe(false);
   });
@@ -176,6 +215,27 @@ describe('AC-7: a reassign to another Engineer sends the same message with the n
     const result = await service.reassignTask(by(LEAD), taskId, { engineerId: MEERA.id });
     expect(queued).toEqual([]);
     expect(result).toMatchObject({ engineerChanged: true, assignmentRevision: 2 });
+  });
+
+  it('DEF-055: an unsent row of the old Engineer is withdrawn before the new row is queued, in the same transaction as the change', async () => {
+    await service.reassignTask(by(OTHER_LEAD), taskId, { engineerId: MEERA.id });
+    expect(calls).toEqual([`expire task-assigned:${taskId}:`, `enqueue task-assigned:${taskId}:2`]);
+  });
+
+  it('DEF-055: with alerts OFF or FEATURE_EMAIL off the old row is still withdrawn (it may have been written while both were on), and no new row is written', async () => {
+    settings.current = { ...settings.current, alertsEnabled: false };
+    await service.reassignTask(by(LEAD), taskId, { engineerId: MEERA.id });
+    expect(calls).toEqual([`expire task-assigned:${taskId}:`]);
+    settings.current = { ...settings.current, alertsEnabled: true };
+    emailOn = false;
+    await service.reassignTask(by(LEAD), taskId, { engineerId: ARJUN.id });
+    expect(calls).toEqual([`expire task-assigned:${taskId}:`, `expire task-assigned:${taskId}:`]);
+  });
+
+  it('DEF-055: a deadline-only change, and a save that changes nothing, withdraw nothing', async () => {
+    await service.reassignTask(by(LEAD), taskId, { deadlineAt: '2026-11-13T06:30:00.000Z' });
+    await service.reassignTask(by(LEAD), taskId, { engineerId: ARJUN.id });
+    expect(calls).toEqual([]);
   });
 
   it('an enqueue that fails undoes the reassign: the Engineer and the revision stay as they were', async () => {

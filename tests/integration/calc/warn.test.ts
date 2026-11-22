@@ -94,7 +94,7 @@ describe('AC-2: a first press with a warning due is the 409, and writes nothing'
 
   it('is decided before any master is read: with the customer deleted from the masters, it is still the 409 about the quantity, and the first refusal that reads a master comes after the acknowledgement', async () => {
     const { estimateId } = await addWarnedEstimate();
-    const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name, deleted_at) VALUES ('Invented deleted customer', now()) RETURNING id::text");
+    const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name, deleted_at) VALUES ('Invented deleted customer', left(md5('Invented deleted customer'), 10), now()) RETURNING id::text");
     await db.owner.query('UPDATE estimates SET customer_id = $2::uuid WHERE id = $1::uuid', [estimateId, defined(customer.rows[0]).id]);
     await askedToConfirm(db.service.calculate(engineer(), estimateId));
     const failure = await db.service.calculate(engineer(), estimateId, acknowledge(3)).then(
@@ -166,7 +166,7 @@ describe('AC-3: the acknowledged press calculates, records the warnings and writ
 
   it('an entry that is refused takes the calculation with it: no calculation, no entry, a draft (one transaction)', async () => {
     const { estimateId } = await addWarnedEstimate();
-    const refusing = db.buildService({}, { audit: { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), list: db.audit.list } });
+    const refusing = db.buildService({}, { audit: { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list } });
     await expect(refusing.calculate(engineer(), estimateId, acknowledge(3))).rejects.toBeInstanceOf(AuditEntryRefusedError);
     await expectNothingWritten(estimateId, 3);
   });
@@ -296,7 +296,7 @@ describe('AC-8 (CE-9): the seven trees, calculated with the acknowledgement, giv
 
   beforeAll(async () => {
     // A customer whose rates are all 0, as the constructed cases assume (`quantity-cases.test.ts`): BG is then the per-piece cost times the count, and nothing else.
-    const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Invented zero-rate customer') RETURNING id::text");
+    const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Invented zero-rate customer', left(md5('Invented zero-rate customer'), 10)) RETURNING id::text");
     zeroRatesCustomerId = defined(rows[0]).id;
     for (const item of SEED_PROCESS_ITEMS) {
       await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) VALUES ($1::uuid, $2::uuid, 0)', [zeroRatesCustomerId, item.id]);

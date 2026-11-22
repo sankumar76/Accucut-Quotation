@@ -230,7 +230,7 @@ describe('AC-2 (NFR-007): the approval and its entries are one commit or none', 
       transactions: db.transactions,
       workflow: {
         transition: db.estimateService.transition,
-        audit: { record: (tx, entry) => (entry.event === OVERRIDE_EVENT ? Promise.reject(new Error('Invented audit failure.')) : db.audit.record(tx, entry)), list: db.audit.list },
+        audit: { record: (tx, entry) => (entry.event === OVERRIDE_EVENT ? Promise.reject(new Error('Invented audit failure.')) : db.audit.record(tx, entry)), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list },
       },
     });
     const before = await storedOf(db, estimate.estimateId);

@@ -144,7 +144,7 @@ describe('AC-3: the customer\'s rates reset, or the customer renamed, change not
     // The name shown is the current one (documented in the header of this file and in review-page.tsx); the name then stays in the snapshot.
     const code = defined((await db.owner.query<{ code: string }>('SELECT t.code FROM tasks t JOIN estimates e ON e.task_id = t.id WHERE e.id = $1::uuid', [approved.estimateId])).rows[0]).code;
     const workspace = defined(await db.estimates.findWorkspaceByCode(code));
-    expect(workspace.customer).toEqual({ id: db.customerId, name: 'Renamed approval customer' });
+    expect(workspace.customer).toEqual({ id: db.customerId, name: 'Renamed approval customer', shortName: (await masters.getCustomer(db.customerId)).shortName });
     expect(JSON.stringify(await snapshotOf())).toContain(originalName);
   });
 });

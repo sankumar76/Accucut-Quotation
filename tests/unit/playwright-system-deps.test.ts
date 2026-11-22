@@ -75,6 +75,8 @@ interface Scenario {
   readonly offlineExit?: number;
   /** The image has no ubuntu.sources. */
   readonly noImageSources?: boolean;
+  /** The value of PLAYWRIGHT_BROWSERS; absent means the variable is not set at all, as in the required check. */
+  readonly browsers?: string;
 }
 
 /** One apt view as the fake `apt-get update` saw it: the files in the view's source directory and the text of ubuntu.sources. */
@@ -121,6 +123,10 @@ const SCENARIO_LIST = [
   ['everyUpdateFails', { cacheHit: 'false', updates: ['fail', 'fail', 'fail'] }],
   ['everyDownloadFails', { cacheHit: 'false', downloads: ['hang', 'fail', 'hang'] }],
   ['offlineInstallFails', { cacheHit: 'false', offlineExit: 1 }],
+  // AQP-370 (STORY-10.08 AC-6): the nightly browser matrix installs three browsers through the same bounded script; a value that is not a list of names stops it before anything runs.
+  ['allBrowsers', { cacheHit: 'false', browsers: 'chromium firefox webkit' }],
+  ['allBrowsersOnAHit', { cacheHit: 'true', cached: ['libfoo.deb'], browsers: 'chromium firefox webkit' }],
+  ['optionInTheList', { cacheHit: 'false', browsers: 'chromium --with-deps' }],
 ] as const satisfies ReadonlyArray<readonly [string, Scenario]>;
 
 type ScenarioName = (typeof SCENARIO_LIST)[number][0];
@@ -225,6 +231,7 @@ describe.skipIf(!BASH_AVAILABLE)('scripts/ci/playwright-system-deps.sh', () => {
       encoding: 'utf8',
       env: {
         ...process.env,
+        ...(scenario.browsers === undefined ? {} : { PLAYWRIGHT_BROWSERS: scenario.browsers }),
         PATH: `${bin}${process.platform === 'win32' ? ';' : ':'}${process.env['PATH'] ?? ''}`,
         TMPDIR: scratchDir,
         CALLS: callsFile,
@@ -502,6 +509,25 @@ describe.skipIf(!BASH_AVAILABLE)('scripts/ci/playwright-system-deps.sh', () => {
     expect(aptCalls('offlineInstallFails')).toEqual(MISS_ON_IMAGE);
     expect(npxCalls('offlineInstallFails')).toEqual([DRY_RUN]);
     expect(run.cachedAfter).toEqual([]);
+  });
+
+  it('AQP-370: PLAYWRIGHT_BROWSERS names the browsers of the dry run and of the browser install; without it only chromium is used, as before', () => {
+    expect(npxCalls('miss')).toEqual([DRY_RUN, BROWSER]);
+    const all = outcome('allBrowsers');
+    expect(all.status).toBe(0);
+    expect(npxCalls('allBrowsers')).toEqual(['npx playwright install-deps --dry-run chromium firefox webkit', 'npx playwright install chromium firefox webkit']);
+    expect(aptCalls('allBrowsers')).toEqual(MISS_ON_IMAGE);
+    expect(all.cachedAfter).toEqual(KEPT);
+    const hit = outcome('allBrowsersOnAHit');
+    expect(hit.status).toBe(0);
+    expect(hit.calls.at(-1)).toBe('npx playwright install chromium firefox webkit');
+  });
+
+  it('AQP-370: a browser list that holds an option stops the script before dpkg, apt or npx run', () => {
+    const run = outcome('optionInTheList');
+    expect(run.status).not.toBe(0);
+    expect(run.output).toContain('PLAYWRIGHT_BROWSERS must be browser names');
+    expect(run.calls).toEqual([]);
   });
 
   it('G7 round 2: every apt view is removed with sudo, because apt (root) leaves root-owned files in it that the runner user cannot remove', () => {

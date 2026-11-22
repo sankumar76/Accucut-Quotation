@@ -3,12 +3,13 @@ import { Check } from 'lucide-react';
 import { BrandLockup } from '@/components/shared/brand-lockup';
 import { Icon } from '@/components/shared/icon';
 import { Badge } from '@/components/ui/badge';
+import { PRODUCT_NAME } from '@/lib/product-name';
 
 import { DsSection } from './section';
 
 const BRAND_RULES = [
   'The logo is the supplied file, used as it is: never redrawn, recoloured, cropped or stretched. It needs a light background, so the top bar is white.',
-  'The company name is Tinos Bold in the logo red, with "Quotation Portal" beneath it in Plex Sans.',
+  `The company name is Tinos Bold in the logo red, with "${PRODUCT_NAME}" beneath it in Plex Sans.`,
   'The side menu is graphite, the main button is red, and the darker red (--primary-ink) is used wherever red is text or a link.',
   'The logo file is 200 × 200 px. A sharper original (open question Q-16) replaces the file; nothing else changes.',
 ] as const;

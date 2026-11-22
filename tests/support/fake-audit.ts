@@ -21,6 +21,8 @@ export interface FakeAuditRepository extends AuditRepository {
   readonly committed: ReadonlyArray<AuditRow>;
   /** The rows as they were appended, with the request ID, oldest first. */
   readonly appended: ReadonlyArray<NewAuditRow>;
+  /** How the rows arrived: the `append` calls (one row each) and the size of each `appendMany` call (ADR-018). */
+  readonly calls: { readonly single: number; readonly batches: ReadonlyArray<number> };
 }
 
 export interface FakeAuditWorld {
@@ -56,31 +58,43 @@ export function createFakeAuditWorld(clock: FixedClock = createFixedClock(START)
   const committed: AuditRow[] = [];
   const appended: NewAuditRow[] = [];
   const open = new Map<Transaction, OpenTransaction>();
+  const calls = { single: 0, batches: [] as number[] };
   let nextId = 1;
+
+  /** One row into the transaction it belongs to, as both `append` and `appendMany` do it. */
+  function write(row: NewAuditRow, tx: Transaction): Promise<void> {
+    const transaction = open.get(tx);
+    if (transaction === undefined) return Promise.reject(new Error('The fake audit repository was given a transaction it did not open.'));
+    // One millisecond apart, so the order of entries in a test is the order they were written in.
+    clock.advance(1);
+    transaction.rows.push({
+      id: `10000000-0000-4000-8000-${String(nextId).padStart(12, '0')}`,
+      createdAt: clock.now(),
+      actorId: row.actorId,
+      actorLabel: row.actorLabel,
+      event: row.event,
+      objectType: row.objectType,
+      objectId: row.objectId,
+      objectLabel: row.objectLabel,
+      before: row.before,
+      after: row.after,
+    });
+    transaction.appended.push(row);
+    nextId += 1;
+    return Promise.resolve();
+  }
 
   const audit: FakeAuditRepository = {
     committed,
     appended,
+    calls,
     append(row, tx) {
-      const transaction = open.get(tx);
-      if (transaction === undefined) return Promise.reject(new Error('The fake audit repository was given a transaction it did not open.'));
-      // One millisecond apart, so the order of entries in a test is the order they were written in.
-      clock.advance(1);
-      transaction.rows.push({
-        id: `10000000-0000-4000-8000-${String(nextId).padStart(12, '0')}`,
-        createdAt: clock.now(),
-        actorId: row.actorId,
-        actorLabel: row.actorLabel,
-        event: row.event,
-        objectType: row.objectType,
-        objectId: row.objectId,
-        objectLabel: row.objectLabel,
-        before: row.before,
-        after: row.after,
-      });
-      transaction.appended.push(row);
-      nextId += 1;
-      return Promise.resolve();
+      calls.single += 1;
+      return write(row, tx);
+    },
+    async appendMany(rows, tx) {
+      calls.batches.push(rows.length);
+      for (const row of rows) await write(row, tx);
     },
     list(filter: AuditRowFilter, page: AuditPageRequest): Promise<AuditRowPage> {
       const found = committed

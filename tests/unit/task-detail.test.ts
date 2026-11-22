@@ -45,14 +45,16 @@ describe('AC-1: the task and the status of its estimate, in every state', () => 
     expect((await service.getTask({ id: ARJUN.id, role: 'ENGINEER' }, id()))?.status).toBe(status);
   });
 
-  it('answers the task\'s own fields: code, title, notes, the people\'s names, the folder, the deadline and the customer\'s name', async () => {
+  it('answers the task\'s own fields: code, title, subject, notes, the people\'s names, the folder, the deadline and the customer (names only, none for an estimate made before CR-01 item 6)', async () => {
     const task = await service.getTask({ id: ARJUN.id, role: 'ENGINEER' }, draft);
     expect(task).toEqual({
       id: draft,
       code: 'Q-2026-0001',
       title: 'Hopper cover',
+      subject: 'Invented subject',
       notes: 'Sheet metal only.',
       engineer: { id: ARJUN.id, name: 'Invented Arjun' },
+      customer: null,
       customerName: null,
       folderPath: '\\\\invented-server\\invented-share\\RFQ-1',
       folderUrl: 'file:////invented-server/invented-share/RFQ-1',
@@ -95,6 +97,6 @@ describe('AC-3, AC-5: a Lead and an Admin open any task and are told the same wo
     const engineerKeys = await keys({ id: ARJUN.id, role: 'ENGINEER' });
     expect(await keys({ id: LEAD.id, role: 'LEAD' })).toEqual(engineerKeys);
     expect(await keys({ id: ADMIN.id, role: 'ADMIN' })).toEqual(engineerKeys);
-    expect(engineerKeys).toEqual(['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'title']);
+    expect(engineerKeys).toEqual(['assignedByName', 'code', 'customer', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'subject', 'title']);
   });
 });

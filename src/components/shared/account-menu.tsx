@@ -2,7 +2,7 @@
 
 import type { ComponentType, KeyboardEvent, MouseEvent } from 'react';
 
-import { AccountTrigger, type AccountUser } from '@/components/shared/account-trigger';
+import { ACCOUNT_WRAPPER, AccountTrigger, type AccountUser } from '@/components/shared/account-trigger';
 import { FirstOpenFailure } from '@/components/shared/first-open-failure';
 import { useFirstOpen } from '@/components/shared/use-first-open';
 import { EARLY_INTENT_ATTRIBUTE } from '@/lib/ui/early-intent';
@@ -48,7 +48,7 @@ export function AccountMenu({ user, loadPanel }: AccountMenuProps) {
   };
 
   return (
-    <div className="relative">
+    <div className={ACCOUNT_WRAPPER}>
       <AccountTrigger
         user={user}
         {...{ [EARLY_INTENT_ATTRIBUTE]: 'account' }}
