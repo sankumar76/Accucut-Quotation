@@ -1,3 +1,4 @@
+| Status | **Closed** (logged 2026-11-22; #611 squashed as `eb4137f4`; P1 and P2 met; closed by QA 2026-11-22) |
 # DEF-061: `estimate-form.spec.ts:74` [tablet] AC-1: cards 03 and 04 read 110 px apart on one flex line, because the picture slot's 48 px skeleton is replaced by a control about 160 px tall (Product, layout)
 
 | Field | Value |
@@ -50,6 +51,22 @@ Received:   110
 5. **Proof:** the red-first case red before and green after at all three widths, and :74 passing attempt 1 at tablet and desktop, both on the PR run of record and on the first `master` push after the squash.
 **For ux-expert (not blocking, before G8's final review):** one sentence in the UX spec Loading row: "a skeleton holds the height of the content that replaces it, so nothing below it moves".
 
+## Second occurrence at desktop, proof and close-out (qa-engineer, 2026-11-22)
+**Desktop, before the fix:** PR #604 run 45011363827 (head b9bc893e), Stage 12 shard 4 (job 137174187838): `estimate-form.spec.ts:74` [desktop] failed attempt 1 with `layout {"formWidth":700,"columns":"none","viewport":1366}`, card 03 `{x 609, y 1451, h 165}`, card 04 `{x 965, y 1553, h 165}`: **Received 102** at :91, retry passed. The same two cards, the same single flex line and a 102 px difference at 1366 px: the picture-slot shift is not tablet-only (the red-first run in #611's PR body read 110 px at 768 px, 102 px at 1366 px by its own table).
+
+**Fix:** #611 (squashed as `eb4137f4`): the loading branch of `picture-slot.tsx` (a skeleton shaped like the control), the red-first case in `estimate-picture.spec.ts` and the one-frame read in `estimate-form.spec.ts`. **Red before** (read from #611's PR body, run 45007584457, head aba7fd05: the new case alone, no `src` change): red at all three widths (48 px skeleton against a 202 / 186 / 170 px control at 360 / 768 / 1366 px).
+
+**Proof** (DL-294 (4) (v); readings are the Stage 12 job logs, seconds, attempt 1, all passed):
+
+| Run | Case (by title) | mobile | tablet | desktop |
+|---|---|---|---|---|
+| **P1: PR #611 run of record 45011895045** (head 5e35f293; shards `536 passed (19.2m)`, `543 passed (18.4m)`, `538 passed (10.9m)`, `3 flaky, 519 passed (16.2m)`: the flaky were DEF-063's three fasteners cases) | `estimate-picture.spec.ts:406` the picture slot under its skeleton is as high as the control (AQP-395) | 7.7 | 9.0 | 7.6 |
+| | `estimate-form.spec.ts:74` AC-1 the cards sit one above the other ... | 7.6 | 10.3 | 7.8 |
+| **P2: first `master` push after the squash, run 45013997495** (eb4137f4; `Stages 1 to 11` success; shards `543 passed (18.6m)`, `536 passed (19.0m)`, `538 passed (14.1m)`, `522 passed (12.0m)`: **0 flaky, 0 failed**) | `estimate-picture.spec.ts:406` | 9.5 | 8.5 | 6.6 |
+| | `estimate-form.spec.ts:74` | 6.6 | 8.3 | 6.0 |
+
+All 12 readings passed on attempt 1, worst 10.3 s. **Met:** the red-first case red before and green after at all three widths, and :74 attempt-1 green at tablet and desktop (and mobile), on the PR run of record and on the first `master` push after the squash. **Closed by QA 2026-11-22** (Jira AQP-395 Done, GitHub #609 closed). The UX spec sentence about skeleton heights (ux-expert, before G8's final review) is not a QA condition.
+
 ## Re-run rule
 None. Never re-run.
 
@@ -57,7 +74,7 @@ None. Never re-run.
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
 | Logged | qa-engineer | 2026-11-22 | AQP-395, #609 |
-| Red-first case (heights equal within 2 px, skeleton vs loaded) | developer | | printed red in the PR body before the `src/` change |
-| Fixed | developer | | `fix/AQP-395-<slug>`: `picture-slot.tsx` loading branch (:41), `tests/e2e/estimate-form.spec.ts`, and `estimate-picture.spec.ts` only if the case lives there |
-| Regression test added | developer | | the red-first height case; the one-frame read of :74 after the loaded control's marker; every assertion kept |
-| Verified | qa-engineer | | the red-first case green at all three widths and :74 attempt-1 green at tablet and desktop, on the PR run of record and on the first `master` push after the squash |
+| Red-first case (heights equal within 2 px, skeleton vs loaded) | developer | 2026-11-22 | red at all three widths on run 45007584457 (head aba7fd05), in the PR body |
+| Fixed | developer | 2026-11-22 | #611, `fix/AQP-395-estimate-form-card-row`, squashed as `eb4137f4`: `picture-slot.tsx` loading branch, `estimate-picture.spec.ts` (red-first case), `estimate-form.spec.ts` |
+| Regression test added | developer | 2026-11-22 | `estimate-picture.spec.ts:406` (the red-first height case) and the one-frame read of :74 |
+| Verified | qa-engineer | 2026-11-22 | P1 (run 45011895045) and P2 (`master` push 45013997495): both cases attempt-1 green at all three widths, worst 10.3 s |

@@ -83,6 +83,20 @@ The notice was still shown at about +14.9 s after the press (18 polls). `process
 
 **Readings of the case on the two `master` pushes after #605 (QA; attempt 1, all passed), s, mobile / tablet / desktop:** `master` 45008501202 (d959e8f7) 10.0 / 17.6 / 10.1; 45010599354 (d119ae39) 7.9 / 12.6 / 14.0. PR #612 run 45008203701: 9.2 / **FAIL 31.3** / 9.8.
 
+**Sixth occurrence, found 2026-11-22 by the rate count (qa-engineer): `master` push 44941416105 (6e63bb90, the merge of #591, 21 Nov 19:31Z), shard 3 (job 136960478083), `rates-changed.spec.ts:224` [tablet], attempt 1 at 32.2 s** (test no. 77; the retry passed in 13.4 s; shard `1 flaky, 528 passed (14.3m)`). It was not in this file or in the test plan until now. It has the Sev-2 signature, read with the old matcher (headline "no answer to the Recalculate request was seen", which is wrong): `toHaveCount(0)` "24 x locator resolved to 1 element", 1 notice element, button `busy: true`, Approve disabled, server `current` / `ratesChanged: null` / SUBMITTED with 2 calculations. Request log: `POST /recalculate` sent +94 ms, **answered 200 at +8,117 ms**; `_rsc` refresh sent +8,134 ms, **headers answered 200 at +9,419 ms**; the notice was still shown at the end of the 15 s expect, about 15 s later. It is the first AC-10 failure on a `master` push whose log carries the diagnostic, and it shows the notice staying long after the refresh's headers (DL-295's open question: body end or applying). It is a 30 s time-out on a `master` push on 21 Nov: **possible RISK-031 trigger (b) event for 21 Nov, master to rule.**
+
+## Rate count for RISK-033 (DL-295 q2; the narrow route, 2026-11-22)
+**Scope counted, and what was not.** The full count over every CI run since 2026-11-20 (about 330 runs, by a script over all their Stage 12 logs) was **not run: the command was denied by the permission system and was not worked around**; the delivery lead is told by master. The narrow route (master's instruction) was read instead: the Stage 12 job logs of **every `master` push CI run from 2026-11-20 02:37Z to 22 Nov 10:04Z (49 runs: 9f9981fa to d119ae39) plus the push of eb4137f4 (45013997495)**, and the PR runs whose logs QA already held or read this week. Counted: attempt-1 results of the AC-10 case ("AC-10: an unlocked Draft with current figures", `:135` before its renumbering, `:224` now), by width, per run. PR runs not read are not in the figures.
+
+| Set | Runs | Attempt-1 failures, tablet | mobile | desktop |
+|---|---|---|---|---|
+| `master` push runs, 20 Nov 02:37Z to 22 Nov 10:04Z | 49 (each ran the case once at each width) | **2**: 44941416105 (6e63bb90, 21 Nov, 32.2 s), 44985240147 (60ac0d18, 22 Nov, 33.1 s) | 0 | 0 |
+| `master` push eb4137f4 (45013997495) | 1 | 0 | 0 | 0 |
+| PR runs read in full this week (QA): #599 run 44990897082; #605 run 44999981920; #611 runs 45009385390 and 45011895045; #612 run 45008203701 (mobile and desktop read as well) | 5 | **2**: 44999981920 (31.1 s), 45008203701 (31.3 s) | 0 | 0 |
+| PR runs outside what was read now, already in this file | | 44902999104 (#571, 21 Nov, 30.2 s) | | |
+
+So on the logs read: **`master` pushes 2 of 50 (4 %) at tablet, 0 of 50 at mobile, 0 of 50 at desktop; PR runs 2 of 5 at tablet, 0 of 5 elsewhere; 5 tablet attempt-1 failures since 20 Nov (44902999104, 44941416105, 44985240147, 44999981920, 45008203701), none at mobile or desktop.** Every failing attempt was test no. 77 to 80 of shard 3 (the case sits early in shard 3). On the PR runs read in full the passing tablet attempts read 13.8 to 29.4 s (29.4 s on PR #599 run 44990897082), mobile and desktop 11.2 to 18.4 s. The rate is a lower bound for PR runs (only the runs read are in it) and exact for `master` pushes. Failures per width are tablet-only on this evidence.
+
 ## Evidence
 Job log of the Stage 12 shard 3 job of run 44902999104; DL-257 (E) and (6) in `docs/00-governance/decision-log.md`; risk register RISK-031 text for run 44577408149. No trace of attempt 1 (`trace: on-first-retry`), so the page state at the failure is not kept.
 
