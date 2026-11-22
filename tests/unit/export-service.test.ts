@@ -776,7 +776,8 @@ describe('AC-2: the download log (STORY-CR01.7E)', () => {
     });
     const file = await service.getFile(LEAD, ESTIMATE_ID);
     order.push('returned');
-    expect(file.fileName).toBe('Quotation_Acme_Tools_Q-2026-0701_2026-11-14.xlsx');
+    // The name is unchanged by the log (AQP-391 owns its form).
+    expect(file.fileName).toBe('MAS_Feed-hopper_14-11-2026.xlsx');
     expect(order).toEqual(['built', 'recorded', 'returned']);
   });
 
