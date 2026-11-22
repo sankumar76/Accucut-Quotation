@@ -4,7 +4,7 @@ import { ConflictError, FieldValidationError, NotFoundError, TREE_CHANGED_CODE, 
 import type { PartView } from '@/lib/estimate/part-view';
 import { subtreeFingerprint } from '@/lib/estimate/subtree-fingerprint';
 import { descendantIds } from '@/lib/estimate/tree';
-import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, MAX_PARTS_PER_ESTIMATE, TREE_FULL_CODE, type EstimateViewer } from '@/server/services/estimate-service';
+import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, MAX_PARTS_PER_ESTIMATE, MOVE_ACROSS_PARENTS_CODE, TREE_FULL_CODE, type EstimateViewer } from '@/server/services/estimate-service';
 
 import { buildTree500 } from '../support/builders/tree500';
 import { completePartInputs, fieldIdOf } from '../support/complete-part';
@@ -69,16 +69,15 @@ const idOf = (nodes: ReadonlyArray<PartView>, slNo: string): string => {
 };
 const revisionOf = (nodes: ReadonlyArray<PartView>, slNo: string): number => nodes.find((node) => node.slNo === slNo)?.revision ?? -1;
 
-/** The tree of the story: 1, 1.1, 1.1.1, 1.1.2, 1.2, 1.3, 1.4, 1.5 and 2, made by the service with the Engineer's own requests. */
+/** The tree of the story: 1 (Main Assembly), 1.1 (Sub-Assembly), 1.1.1 and 1.1.2 (Parts), 1.2 to 1.5 (Parts) and 2 (Main Assembly), made by the service with the Engineer's own requests. */
 async function storyTree({ service }: Setup): Promise<PartView[]> {
-  const first = await service.addPart(arjun, ESTIMATE, { kind: 'item' });
+  const first = await service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
   const one = first.nodeId;
-  const oneOne = (await service.addPart(arjun, ESTIMATE, { kind: 'sub-part', nodeId: one })).nodeId;
-  await service.addPart(arjun, ESTIMATE, { kind: 'sub-part', nodeId: oneOne });
-  const deep = await service.addPart(arjun, ESTIMATE, { kind: 'sub-part', nodeId: oneOne });
-  await service.addPart(arjun, ESTIMATE, { kind: 'beside', nodeId: oneOne });
-  for (let sibling = 0; sibling < 3; sibling += 1) await service.addPart(arjun, ESTIMATE, { kind: 'sub-part', nodeId: one });
-  const last = await service.addPart(arjun, ESTIMATE, { kind: 'item' });
+  const oneOne = (await service.addPart(arjun, ESTIMATE, { parentId: one, nodeKind: 'SUB_ASSEMBLY' })).nodeId;
+  await service.addPart(arjun, ESTIMATE, { parentId: oneOne, nodeKind: 'PART' });
+  const deep = await service.addPart(arjun, ESTIMATE, { parentId: oneOne, nodeKind: 'PART' });
+  for (let sibling = 0; sibling < 4; sibling += 1) await service.addPart(arjun, ESTIMATE, { parentId: one, nodeKind: 'PART' });
+  const last = await service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
   expect(numbers(last.nodes)).toEqual(['1', '1.1', '1.1.1', '1.1.2', '1.2', '1.3', '1.4', '1.5', '2']);
   expect(deep.nodes.length).toBe(4);
   return [...last.nodes];
@@ -88,34 +87,39 @@ describe('AC-1: adding a part', () => {
   it('"New item" adds a top-level part with empty inputs, last, and the Sl. No is read from the tree and never stored', async () => {
     const setUpped = setUp();
     const { service, world } = setUpped;
-    await service.addPart(arjun, ESTIMATE, { kind: 'item' });
-    const added = await service.addPart(arjun, ESTIMATE, { kind: 'item' });
+    await service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
+    const added = await service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     expect(numbers(added.nodes)).toEqual(['1', '2']);
     expect(world.nodes).toHaveLength(2);
     for (const node of world.nodes) {
       expect(node.inputs).toEqual({});
       expect(node.revision).toBe(1);
-      expect(Object.keys(node).sort()).toEqual(['estimateId', 'id', 'inputs', 'parentId', 'revision', 'sortIndex']);
+      expect(Object.keys(node).sort()).toEqual(['estimateId', 'id', 'inputs', 'nodeKind', 'parentId', 'revision', 'sortIndex']);
     }
   });
 
-  it('"Sub-part" adds a part last under the one named, and "Part beside" adds one right after it, whatever the depth', async () => {
+  it('AQP-403 AC-3: adds a row of the kind asked for LAST under the parent named, whatever the depth, and stores that kind', async () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
-    const { service } = setUpped;
+    const { service, world } = setUpped;
     const deepest = idOf(tree, '1.1.2');
-    const sub = await service.addPart(arjun, ESTIMATE, { kind: 'sub-part', nodeId: deepest });
-    expect(numbers(sub.nodes)).toContain('1.1.2.1');
-    const beside = await service.addPart(arjun, ESTIMATE, { kind: 'beside', nodeId: idOf(sub.nodes, '1.1.1') });
-    expect(beside.nodes.find((node) => node.id === beside.nodeId)?.slNo).toBe('1.1.2');
-    expect(beside.nodes.find((node) => node.id === deepest)?.slNo).toBe('1.1.3');
+    const fastener = await service.addPart(arjun, ESTIMATE, { parentId: deepest, nodeKind: 'FASTENER' });
+    expect(numbers(fastener.nodes)).toContain('1.1.2.1');
+    expect(world.nodes.find((node) => node.id === fastener.nodeId)?.nodeKind).toBe('FASTENER');
+    // Last, not right after a sibling: a Part under the Sub-Assembly goes after 1.1.2 whichever row was in the person's hand.
+    const last = await service.addPart(arjun, ESTIMATE, { parentId: idOf(tree, '1.1'), nodeKind: 'PART' });
+    expect(last.nodes.find((node) => node.id === last.nodeId)?.slNo).toBe('1.1.3');
+    expect(last.nodes.find((node) => node.id === deepest)?.slNo).toBe('1.1.2');
+    // And at the top level, parent null.
+    const top = await service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
+    expect(top.nodes.find((node) => node.id === top.nodeId)?.slNo).toBe('3');
   });
 
-  it('answers each node with the same six facts and no figure: ID, parent, Sl. No, label, completeness and revision', async () => {
+  it('AQP-403 AC-7: answers each node with the same seven facts and no figure: ID, parent, Sl. No, label, kind, completeness and revision', async () => {
     const setUpped = setUp();
-    const { nodes } = await setUpped.service.addPart(arjun, ESTIMATE, { kind: 'item' });
-    expect(Object.keys(nodes[0] ?? {}).sort()).toEqual(['completeness', 'id', 'label', 'parentId', 'revision', 'slNo']);
-    expect(nodes[0]).toMatchObject({ parentId: null, slNo: '1', label: '', completeness: 'EMPTY', revision: 1 });
+    const { nodes } = await setUpped.service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
+    expect(Object.keys(nodes[0] ?? {}).sort()).toEqual(['completeness', 'id', 'label', 'nodeKind', 'parentId', 'revision', 'slNo']);
+    expect(nodes[0]).toMatchObject({ parentId: null, slNo: '1', label: '', nodeKind: 'MAIN_ASSEMBLY', completeness: 'EMPTY', revision: 1 });
   });
 
   it('a target part that does not exist in this estimate is 404, also when it is a real part of another estimate', async () => {
@@ -123,8 +127,8 @@ describe('AC-1: adding a part', () => {
     const { service, world } = setUpped;
     const foreign: FakeNode = { id: FOREIGN_NODE, estimateId: OTHER_ESTIMATE, parentId: null, sortIndex: 0, revision: 1, inputs: {} };
     world.nodes.push(foreign);
-    await expect(service.addPart(arjun, ESTIMATE, { kind: 'sub-part', nodeId: foreign.id })).rejects.toBeInstanceOf(NotFoundError);
-    await expect(service.addPart(arjun, ESTIMATE, { kind: 'beside', nodeId: MISSING })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.addPart(arjun, ESTIMATE, { parentId: foreign.id, nodeKind: 'PART' })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.addPart(arjun, ESTIMATE, { parentId: MISSING, nodeKind: 'PART' })).rejects.toBeInstanceOf(NotFoundError);
     expect(world.nodes.filter((node) => node.estimateId === ESTIMATE)).toHaveLength(0);
   });
 });
@@ -141,21 +145,22 @@ describe('AC-2: Sl. No renumbers after every change', () => {
     expect(numbers(down)).toEqual(numbers(tree));
   });
 
-  it('moves a part to another parent with its sub-parts, and leaves no gap behind', async () => {
+  it('moves a part to another place under its own parent with its sub-parts, and leaves no gap behind', async () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
-    const moved = await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.1'), revision: 1, parentId: idOf(tree, '2'), index: 0 });
-    expect(moved.find((node) => node.id === idOf(tree, '1.1'))?.slNo).toBe('2.1');
-    expect(moved.find((node) => node.id === idOf(tree, '1.1.2'))?.slNo).toBe('2.1.2');
+    const moved = await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.1'), revision: 1, parentId: idOf(tree, '1'), index: 2 });
+    expect(moved.find((node) => node.id === idOf(tree, '1.1'))?.slNo).toBe('1.3');
+    expect(moved.find((node) => node.id === idOf(tree, '1.1.2'))?.slNo).toBe('1.3.2');
     expect(moved.find((node) => node.id === idOf(tree, '1.2'))?.slNo).toBe('1.1');
-    expect(numbers(moved)).toEqual(['1', '1.1', '1.2', '1.3', '1.4', '2', '2.1', '2.1.1', '2.1.2']);
+    expect(numbers(moved)).toEqual(['1', '1.1', '1.2', '1.3', '1.3.1', '1.3.2', '1.4', '1.5', '2']);
   });
 
-  it('a part moved to the top level (parent null) takes a top-level number', async () => {
+  it('a top-level part moved first among the top-level parts (parent null) takes number 1', async () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
-    const moved = await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.1.2'), revision: 1, parentId: null, index: 1 });
-    expect(moved.find((node) => node.id === idOf(tree, '1.1.2'))?.slNo).toBe('2');
+    const moved = await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parentId: null, index: 0 });
+    expect(moved.find((node) => node.id === idOf(tree, '2'))?.slNo).toBe('1');
+    expect(moved.find((node) => node.id === idOf(tree, '1'))?.slNo).toBe('2');
   });
 
   it('after a delete the next sibling takes the number of the one that went', async () => {
@@ -169,7 +174,7 @@ describe('AC-2: Sl. No renumbers after every change', () => {
   it('keeps the stored places 0, 1, 2, ... in every sibling group after any change, so the numbering never drifts', async () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
-    await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.1'), revision: 1, parentId: idOf(tree, '2'), index: 0 });
+    await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.1'), revision: 1, parentId: idOf(tree, '1'), index: 3 });
     await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.4'), revision: 1, parts: 1, subtree: seen(setUpped.world, idOf(tree, '1.4')) });
     const groups = new Map<string | null, number[]>();
     for (const node of setUpped.world.nodes) groups.set(node.parentId, [...(groups.get(node.parentId) ?? []), node.sortIndex]);
@@ -197,7 +202,7 @@ describe('AC-3: deleting a part deletes its sub-parts, and only the person who s
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
     const shown = seen(setUpped.world, idOf(tree, '1.2'));
-    await setUpped.service.addPart(lead, ESTIMATE, { kind: 'sub-part', nodeId: idOf(tree, '1.2') });
+    await setUpped.service.addPart(lead, ESTIMATE, { parentId: idOf(tree, '1.2'), nodeKind: 'FASTENER' });
     const refused = await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.2'), revision: 1, parts: 1, subtree: shown }).catch((error: unknown) => error);
     expect(refused).toBeInstanceOf(TreeChangedError);
     expect(refused).toBeInstanceOf(ConflictError);
@@ -212,9 +217,9 @@ describe('AC-3: deleting a part deletes its sub-parts, and only the person who s
     // The person looks at 1.1: it holds 1.1.1 and 1.1.2, so "Delete 3 parts".
     const target = idOf(tree, '1.1');
     const shown = seen(setUpped.world, target);
-    // A Lead moves 1.1.2 away to the top and moves 1.5 under 1.1: still 3 parts, but not the same three.
-    await setUpped.service.moveNode(lead, ESTIMATE, { nodeId: idOf(tree, '1.1.2'), revision: 1, parentId: null, index: 0 });
-    await setUpped.service.moveNode(lead, ESTIMATE, { nodeId: idOf(tree, '1.5'), revision: 1, parentId: target, index: 0 });
+    // A Lead deletes 1.1.2 and adds another Part under 1.1: still 3 parts, but not the same three.
+    await setUpped.service.deleteNode(lead, ESTIMATE, { nodeId: idOf(tree, '1.1.2'), revision: 1, parts: 1, subtree: seen(setUpped.world, idOf(tree, '1.1.2')) });
+    await setUpped.service.addPart(lead, ESTIMATE, { parentId: target, nodeKind: 'PART' });
     expect(setUpped.world.nodes.find((node) => node.id === target)?.revision).toBe(1);
     expect(descendantIds(setUpped.world.nodes, target)).toHaveLength(2);
     const before = JSON.stringify(setUpped.world.nodes);
@@ -241,9 +246,9 @@ describe('AC-3: deleting a part deletes its sub-parts, and only the person who s
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
     const target = idOf(tree, '1.1');
-    await setUpped.service.moveNode(lead, ESTIMATE, { nodeId: idOf(tree, '1.5'), revision: 1, parentId: target, index: 0 });
+    await setUpped.service.addPart(lead, ESTIMATE, { parentId: target, nodeKind: 'PART' });
     const left = await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: target, revision: 1, parts: 4, subtree: seen(setUpped.world, target) });
-    expect(left).toHaveLength(5);
+    expect(left).toHaveLength(6);
   });
 
   it('refuses with 409 when the part itself was changed after the person looked', async () => {
@@ -268,7 +273,7 @@ describe('AC-3: deleting a part deletes its sub-parts, and only the person who s
 });
 
 describe('AC-4: a move cannot cut a part off, and changes no input', () => {
-  it('refuses 422 under parentId for a move under itself, under a child and under a deep descendant, and changes nothing', async () => {
+  it('refuses 422 under parentId (MOVE_ACROSS_PARENTS) for a move under itself, under a child and under a deep descendant, and changes nothing', async () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
     const before = JSON.stringify(setUpped.world.nodes);
@@ -276,6 +281,7 @@ describe('AC-4: a move cannot cut a part off, and changes no input', () => {
       const refused = await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1'), revision: 1, parentId: idOf(tree, under), index: 0 }).catch((error: unknown) => error);
       expect(refused, `under ${under}`).toBeInstanceOf(FieldValidationError);
       expect((refused as FieldValidationError).fields[0]?.field).toBe('parentId');
+      expect(refused).toMatchObject({ code: MOVE_ACROSS_PARENTS_CODE, httpStatus: 422 });
     }
     expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
   });
@@ -302,7 +308,7 @@ describe('AC-4: a move cannot cut a part off, and changes no input', () => {
     const tree = await storyTree(setUpped);
     for (const node of setUpped.world.nodes) node.inputs = { typed: `value of ${node.id}` };
     const before = setUpped.world.nodes.map((node) => ({ id: node.id, inputs: node.inputs, revision: node.revision }));
-    await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.4'), revision: 1, parentId: idOf(tree, '2'), index: 0 });
+    await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '1.4'), revision: 1, parentId: idOf(tree, '1'), index: 0 });
     for (const was of before) {
       const now = setUpped.world.nodes.find((node) => node.id === was.id);
       expect(now?.inputs).toEqual(was.inputs);
@@ -328,23 +334,23 @@ describe('SQR-02: an estimate holds at most MAX_PARTS_PER_ESTIMATE parts', () =>
 
   it('adds the last part that fits (limit - 1 parts before) and refuses the next with 422 TREE_FULL, in plain words, writing nothing', async () => {
     const setUpped = setUp([estimate()], full(MAX_PARTS_PER_ESTIMATE - 1));
-    const added = await setUpped.service.addPart(arjun, ESTIMATE, { kind: 'item' });
+    const added = await setUpped.service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     expect(added.nodes).toHaveLength(MAX_PARTS_PER_ESTIMATE);
     const revision = setUpped.revision();
-    const refused = await setUpped.service.addPart(arjun, ESTIMATE, { kind: 'item' }).catch((error: unknown) => error);
+    const refused = await setUpped.service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' }).catch((error: unknown) => error);
     expect(refused).toMatchObject({ code: TREE_FULL_CODE, httpStatus: 422 });
     expect((refused as Error).message).toBe('This estimate already has 2,000 parts, the most it can hold. Delete a part before adding another.');
     expect(setUpped.world.nodes).toHaveLength(MAX_PARTS_PER_ESTIMATE);
     expect(setUpped.revision()).toBe(revision);
   });
 
-  it('refuses a sub-part and a part beside at the limit as well, and a delete then makes room for one more', async () => {
+  it('refuses an add under a part and an add at the top at the limit as well, and a delete then makes room for one more', async () => {
     const setUpped = setUp([estimate()], full(MAX_PARTS_PER_ESTIMATE));
     const first = defined(setUpped.world.nodes[0]).id;
-    await expect(setUpped.service.addPart(arjun, ESTIMATE, { kind: 'sub-part', nodeId: first })).rejects.toMatchObject({ code: TREE_FULL_CODE });
-    await expect(setUpped.service.addPart(arjun, ESTIMATE, { kind: 'beside', nodeId: first })).rejects.toMatchObject({ code: TREE_FULL_CODE });
+    await expect(setUpped.service.addPart(arjun, ESTIMATE, { parentId: first, nodeKind: 'PART' })).rejects.toMatchObject({ code: TREE_FULL_CODE });
+    await expect(setUpped.service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toMatchObject({ code: TREE_FULL_CODE });
     await setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: first, revision: 1, parts: 1, subtree: seen(setUpped.world, first) });
-    expect((await setUpped.service.addPart(arjun, ESTIMATE, { kind: 'item' })).nodes).toHaveLength(MAX_PARTS_PER_ESTIMATE);
+    expect((await setUpped.service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodes).toHaveLength(MAX_PARTS_PER_ESTIMATE);
   });
 });
 
@@ -352,13 +358,13 @@ describe('AC-5: every change to the tree raises the inputs revision by one, in t
   it('an add, a move and a delete each raise it by exactly one', async () => {
     const setUpped = setUp();
     const { service, revision } = setUpped;
-    const first = await service.addPart(arjun, ESTIMATE, { kind: 'item' });
+    const first = await service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     expect(revision()).toBe(1);
-    const second = await service.addPart(arjun, ESTIMATE, { kind: 'beside', nodeId: first.nodeId });
+    const second = await service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     expect(revision()).toBe(2);
-    await service.moveNode(arjun, ESTIMATE, { nodeId: second.nodeId, revision: 1, parentId: first.nodeId, index: 0 });
+    await service.moveNode(arjun, ESTIMATE, { nodeId: second.nodeId, revision: 1, parentId: null, index: 0 });
     expect(revision()).toBe(3);
-    await service.deleteNode(arjun, ESTIMATE, { nodeId: first.nodeId, revision: 1, parts: 2, subtree: seen(setUpped.world, first.nodeId) });
+    await service.deleteNode(arjun, ESTIMATE, { nodeId: first.nodeId, revision: 1, parts: 1, subtree: seen(setUpped.world, first.nodeId) });
     expect(revision()).toBe(4);
   });
 
@@ -376,7 +382,7 @@ describe('AC-5: every change to the tree raises the inputs revision by one, in t
   it('an add that fails when the revision is raised leaves no part behind (the part and the revision commit together)', async () => {
     const setUpped = setUp();
     vi.spyOn(setUpped.world.repository, 'bumpInputsRevision').mockRejectedValueOnce(new Error('the revision write failed'));
-    await expect(setUpped.service.addPart(arjun, ESTIMATE, { kind: 'item' })).rejects.toThrow('the revision write failed');
+    await expect(setUpped.service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toThrow('the revision write failed');
     expect(setUpped.world.nodes).toHaveLength(0);
     expect(setUpped.revision()).toBe(0);
   });
@@ -387,12 +393,12 @@ describe('AC-6: two edits with a stale revision', () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
     const target = idOf(tree, '1.2');
-    await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: target, revision: 1, parentId: idOf(tree, '2'), index: 0 });
+    await setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: target, revision: 1, parentId: idOf(tree, '1'), index: 3 });
     const second = await setUpped.service.moveNode(lead, ESTIMATE, { nodeId: target, revision: 1, parentId: idOf(tree, '1'), index: 0 }).catch((error: unknown) => error);
     expect(second).toBeInstanceOf(TreeChangedError);
     const fresh = (second as TreeChangedError).tree;
-    expect(fresh.find((node) => node.id === target)).toMatchObject({ slNo: '2.1', revision: 2 });
-    expect(setUpped.world.nodes.find((node) => node.id === target)?.parentId).toBe(idOf(tree, '2'));
+    expect(fresh.find((node) => node.id === target)).toMatchObject({ slNo: '1.4', revision: 2 });
+    expect(setUpped.world.nodes.find((node) => node.id === target)?.parentId).toBe(idOf(tree, '1'));
   });
 
   it('a request that names the current revision goes through, and the revision it answers with is one higher', async () => {
@@ -414,7 +420,7 @@ describe('AC-7: who may write, and when', () => {
       estimateRow.status = status;
       const before = JSON.stringify(setUpped.world.nodes);
       const requests = [
-        () => setUpped.service.addPart(arjun, ESTIMATE, { kind: 'item' }),
+        () => setUpped.service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' }),
         () => setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parentId: null, index: 0 }),
         () => setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parts: 1, subtree: seen(setUpped.world, idOf(tree, '2')) }),
       ];
@@ -428,13 +434,13 @@ describe('AC-7: who may write, and when', () => {
     const tree = await storyTree(setUpped);
     const estimateRow = defined(setUpped.world.estimates[0]);
     estimateRow.status = 'SUBMITTED';
-    const added = await setUpped.service.addPart(lead, ESTIMATE, { kind: 'item' });
+    const added = await setUpped.service.addPart(lead, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     expect(numbers(added.nodes)).toContain('3');
     expect(numbers(await setUpped.service.moveNode(admin, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parentId: null, index: 0 }))[0]).toBe('1');
     estimateRow.status = 'APPROVED';
     const before = JSON.stringify(setUpped.world.nodes);
     for (const viewer of [lead, admin]) {
-      await expect(setUpped.service.addPart(viewer, ESTIMATE, { kind: 'item' })).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE });
+      await expect(setUpped.service.addPart(viewer, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE });
       await expect(setUpped.service.deleteNode(viewer, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 9, parts: 1, subtree: seen(setUpped.world, idOf(tree, '2')) })).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE });
     }
     expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
@@ -443,7 +449,7 @@ describe('AC-7: who may write, and when', () => {
   it('another Engineer, and an estimate that does not exist, are the same 404 for every write and for the reads, even when the estimate is submitted', async () => {
     const setUpped = setUp([estimate({ status: 'SUBMITTED' })]);
     const attempts = (viewer: EstimateViewer, estimateId: string) => [
-      () => setUpped.service.addPart(viewer, estimateId, { kind: 'item' }),
+      () => setUpped.service.addPart(viewer, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' }),
       () => setUpped.service.moveNode(viewer, estimateId, { nodeId: MISSING, revision: 1, parentId: null, index: 0 }),
       () => setUpped.service.deleteNode(viewer, estimateId, { nodeId: MISSING, revision: 1, parts: 1, subtree: seen(setUpped.world, MISSING) }),
       () => setUpped.service.getTree(viewer, estimateId),
@@ -454,10 +460,10 @@ describe('AC-7: who may write, and when', () => {
 
   it('a Lead and an Admin may change any draft, and an Engineer only their own', async () => {
     const setUpped = setUp();
-    await setUpped.service.addPart(lead, ESTIMATE, { kind: 'item' });
-    await setUpped.service.addPart(admin, ESTIMATE, { kind: 'item' });
+    await setUpped.service.addPart(lead, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
+    await setUpped.service.addPart(admin, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     expect(setUpped.world.nodes).toHaveLength(2);
-    await expect(setUpped.service.addPart(priya, ESTIMATE, { kind: 'item' })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(setUpped.service.addPart(priya, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it('a part that does not exist is 404 for a move and a delete, after the estimate checks (so a submitted estimate says 409 first)', async () => {
@@ -478,13 +484,13 @@ describe('AC-7: who may write, and when', () => {
 });
 
 describe('AC-8: one schema for every role, and a 500-node tree', () => {
-  it('gives the same answer to an Engineer, a Lead and an Admin, with no key beyond the six', async () => {
+  it('gives the same answer to an Engineer, a Lead and an Admin, with no key beyond the seven (the kind holds no figure)', async () => {
     const setUpped = setUp();
     await storyTree(setUpped);
     const asEngineer = await setUpped.service.getTree(arjun, ESTIMATE);
     expect(await setUpped.service.getTree(lead, ESTIMATE)).toEqual(asEngineer);
     expect(await setUpped.service.getTree(admin, ESTIMATE)).toEqual(asEngineer);
-    for (const node of asEngineer) expect(Object.keys(node).sort()).toEqual(['completeness', 'id', 'label', 'parentId', 'revision', 'slNo']);
+    for (const node of asEngineer) expect(Object.keys(node).sort()).toEqual(['completeness', 'id', 'label', 'nodeKind', 'parentId', 'revision', 'slNo']);
   });
 
   it('reads one part with its typed inputs, and the same for every role', async () => {

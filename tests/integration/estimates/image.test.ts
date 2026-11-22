@@ -78,8 +78,8 @@ async function setUpEstimate(status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' = 'DRAFT
   );
   const estimate = await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id) VALUES ($1::uuid) RETURNING id::text AS id', [defined(task.rows[0]).id]);
   const estimateId = defined(estimate.rows[0]).id;
-  const first = (await service.addPart(arjun(), estimateId, { kind: 'item' })).nodeId;
-  const second = (await service.addPart(arjun(), estimateId, { kind: 'item' })).nodeId;
+  const first = (await service.addPart(arjun(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
+  const second = (await service.addPart(arjun(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
   if (status !== 'DRAFT') await db.owner.query('UPDATE estimates SET status = $2::estimate_status WHERE id = $1::uuid', [estimateId, status]);
   return { estimateId, first, second };
 }
@@ -495,7 +495,7 @@ describe('ADR-013, FR-065: the table is immutable', () => {
 
   it('refuses a part inserted with the picture of another estimate', async () => {
     const other = await setUpEstimate();
-    await expect(db.owner.query('INSERT INTO estimate_nodes (estimate_id, sort_index, image_id) VALUES ($1::uuid, 9, $2::uuid)', [other.estimateId, pictureId])).rejects.toMatchObject({ code: '23514' });
+    await expect(db.owner.query('INSERT INTO estimate_nodes (estimate_id, sort_index, node_kind, image_id) VALUES ($1::uuid, 9, \'MAIN_ASSEMBLY\', $2::uuid)', [other.estimateId, pictureId])).rejects.toMatchObject({ code: '23514' });
   });
 
   it('the picture a part points at cannot be deleted: the part keeps it, and no row can be deleted anyway', async () => {

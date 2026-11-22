@@ -97,7 +97,7 @@ const WRITERS: ReadonlyArray<readonly [string, (world: World) => Promise<unknown
   ['a typed number', async (world) => db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.child, revision: await revisionOf(world.child), values: { [idOf('J')]: '91' } })],
   ['Remarks', async (world) => db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.top, revision: await revisionOf(world.top), values: { [idOf('AJ')]: 'Deburr the edge.' } })],
   ['the customer', async (world) => db.estimateService.setCustomer(lead(), changeContext(lead()), world.estimateId, await newCustomer())],
-  ['a part added', async (world) => db.estimateService.addPart(lead(), world.estimateId, { kind: 'beside', nodeId: world.top })],
+  ['a part added', async (world) => db.estimateService.addPart(lead(), world.estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })],
   [
     'a part deleted',
     async (world) =>
@@ -108,9 +108,8 @@ const WRITERS: ReadonlyArray<readonly [string, (world: World) => Promise<unknown
         subtree: subtreeFingerprint([{ id: world.child, revision: await revisionOf(world.child) }]),
       }),
   ],
-  ['a part moved', async (world) => db.estimateService.moveNode(lead(), world.estimateId, { nodeId: world.child, revision: await revisionOf(world.child), parentId: null, index: 0 })],
   ['a part reordered among its siblings', async (world) => {
-    const beside = await db.estimateService.addPart(lead(), world.estimateId, { kind: 'beside', nodeId: world.top });
+    const beside = await db.estimateService.addPart(lead(), world.estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     return db.estimateService.moveNode(lead(), world.estimateId, { nodeId: beside.nodeId, revision: await revisionOf(beside.nodeId), parentId: null, index: 0 });
   }],
   ['a picture added', async (world) => db.estimateService.putPicture(lead(), world.estimateId, world.top, { name: 'cabinet.png', bytes: smallPng() })],

@@ -35,7 +35,7 @@ const countId = defined(seedConfig.fields.find((field) => field.systemRole === '
 const materialId = seedFieldAt('E').id;
 const unitPriceId = seedFieldAt('BG').id;
 
-const node = (id: string, parentId: string | null, sortIndex: number, inputs: Record<string, unknown> = {}, imageId: string | null = null): NodeRecord => ({ id, parentId, sortIndex, revision: 1, inputs, imageId });
+const node = (id: string, parentId: string | null, sortIndex: number, inputs: Record<string, unknown> = {}, imageId: string | null = null): NodeRecord => ({ id, parentId, sortIndex, nodeKind: parentId === null ? 'MAIN_ASSEMBLY' : 'PART', revision: 1, inputs, imageId });
 
 const STEEL = { materialInDrawing: 'Invented steel', pricePerKg: '82.5' };
 const row = (n: number, slNo: string, parentId: string | null, sortIndex: number, imageId: string | null = null, name = `Part ${slNo}`) => ({

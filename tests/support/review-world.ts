@@ -49,6 +49,7 @@ export function nodesOfCase(rows: ReadonlyArray<CaseRow>, names: Readonly<Record
       id: nodeIdOf(index),
       parentId: parts.length === 1 ? null : (idBySl.get(parentSl) ?? null),
       sortIndex: Number(parts[parts.length - 1]) - 1,
+      nodeKind: parts.length === 1 ? 'MAIN_ASSEMBLY' : 'PART',
       revision: 1,
       imageId: null,
       inputs: { [COUNT]: row.h, ...(name === undefined ? {} : { [DESCRIPTION]: name }) },

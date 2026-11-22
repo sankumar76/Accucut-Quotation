@@ -1,5 +1,7 @@
+import type { NodeKind } from './node-kinds';
+
 /**
- * One part of the parts tree as it leaves the server (STORY-05.02; architecture section 6 "Tree"): the same six facts for every role, and no figure of any kind
+ * One part of the parts tree as it leaves the server (STORY-05.02; architecture section 6 "Tree"): the same seven facts for every role, and no figure of any kind
  * (NFR-002). It is a plain type so the error that carries a tree (`TreeChangedError`) and the service that builds one agree on it without importing each other.
  */
 
@@ -27,6 +29,8 @@ export interface PartView {
   readonly parentId: string | null;
   readonly slNo: string;
   readonly label: string;
+  /** The row's stored kind (CR-01 item 3A). No figure, so it is in every role's tree. "Sub-part" is derived from the siblings and is not here (`nodeKindLabel`). */
+  readonly nodeKind: NodeKind;
   readonly completeness: Completeness;
   readonly revision: number;
 }

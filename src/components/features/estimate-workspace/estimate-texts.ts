@@ -89,6 +89,8 @@ export const TREE_FAILED_TITLE = 'The change was not made';
 export const treeButtonLabel = (slNo: string | null): string => (slNo === null ? TREE_TITLE : `${TREE_TITLE}, part ${slNo}`);
 
 export const addedMessage = (slNo: string): string => `Part ${slNo} added`;
+/** The interim "Add sub-part" on a row that holds nothing (a Fastener, `ALLOWED_CHILDREN`): said at once, no request is sent. Replaced by the "+" menu of CR-01 3C. */
+export const noSubPartMessage = (kindName: string): string => `A ${kindName} cannot hold other parts.`;
 export const renumberedMessage = (slNo: string): string => `Part renumbered to ${slNo}`;
 export const deletedMessage = (parts: number): string => (parts === 1 ? 'Part deleted' : `${parts} parts deleted`);
 

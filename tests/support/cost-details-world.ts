@@ -57,8 +57,8 @@ export interface CostWorld {
 export function createCostWorld(options: CostWorldOptions = {}): CostWorld {
   const calculated = options.calculated ?? true;
   const nodes: NodeRecord[] = [
-    { id: COST_FIRST_NODE_ID, parentId: null, sortIndex: 0, revision: 1, imageId: null, inputs: { [defined(findFieldByKey(seedConfig, 'description')).id]: 'Invented Bracket', [seedFieldAt('H').id]: '3' } },
-    { id: COST_SECOND_NODE_ID, parentId: null, sortIndex: 1, revision: 1, imageId: null, inputs: { [defined(findFieldByKey(seedConfig, 'part-no')).id]: 'INV-0002' } },
+    { id: COST_FIRST_NODE_ID, parentId: null, sortIndex: 0, nodeKind: 'MAIN_ASSEMBLY', revision: 1, imageId: null, inputs: { [defined(findFieldByKey(seedConfig, 'description')).id]: 'Invented Bracket', [seedFieldAt('H').id]: '3' } },
+    { id: COST_SECOND_NODE_ID, parentId: null, sortIndex: 1, nodeKind: 'MAIN_ASSEMBLY', revision: 1, imageId: null, inputs: { [defined(findFieldByKey(seedConfig, 'part-no')).id]: 'INV-0002' } },
   ];
   const rows = new Map<string, RowWorkingRecord>();
   for (const [nodeId, stored] of [
