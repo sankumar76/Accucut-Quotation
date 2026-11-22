@@ -90,7 +90,7 @@ test.describe('persistent side menu (1024 px and wider)', () => {
     await page.goto(PAGE);
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Home' }).click();
     await expect(page).toHaveURL(HOME);
-    await expect(page.getByRole('heading', { level: 1, name: 'Accucut Quotation Portal' })).toBeFocused();
+    await expect(page.getByRole('heading', { level: 1, name: 'Accucut RFQ Portal' })).toBeFocused();
   });
 });
 
@@ -158,7 +158,7 @@ test.describe('menu drawer (below 1024 px)', () => {
     await drawer.getByRole('link', { name: 'Home' }).click();
     await expect(page).toHaveURL(HOME);
     await expect(drawer).toBeHidden();
-    await expect(page.getByRole('heading', { level: 1, name: 'Accucut Quotation Portal' })).toBeFocused();
+    await expect(page.getByRole('heading', { level: 1, name: 'Accucut RFQ Portal' })).toBeFocused();
   });
 
   test('QLT-01: the menu button in the top bar has a visible border', async ({ page }) => {

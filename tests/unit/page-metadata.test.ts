@@ -51,7 +51,7 @@ describe('pageMetadata (AC-1)', () => {
   });
 
   it('AC-1: the Open Graph title is the title as the root template renders it, so a shared link reads like the tab', () => {
-    expect(renderedTitle('Users')).toBe('Users · Accucut Quotation Portal');
+    expect(renderedTitle('Users')).toBe('Users · Accucut RFQ Portal');
     expect(pageMetadata('Users', DESCRIPTION).openGraph).toMatchObject({ title: renderedTitle('Users') });
   });
 
@@ -136,8 +136,8 @@ describe('the rules on HTML (AC-1 to AC-4), each shown red on a plant', () => {
   });
 
   it('AC-1: reads the tags wherever they are, and decodes the entities Next.js writes', () => {
-    const tags = parseHeadTags('<body><div hidden><title>Users &amp; roles · Accucut Quotation Portal</title><meta name="description" content="It&#x27;s fine"/></div></body>');
-    expect(tags.title).toBe('Users & roles · Accucut Quotation Portal');
+    const tags = parseHeadTags('<body><div hidden><title>Users &amp; roles · Accucut RFQ Portal</title><meta name="description" content="It&#x27;s fine"/></div></body>');
+    expect(tags.title).toBe('Users & roles · Accucut RFQ Portal');
     expect(tags.metas.get('description')).toEqual(["It's fine"]);
   });
 

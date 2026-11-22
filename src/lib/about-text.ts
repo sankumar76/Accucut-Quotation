@@ -8,11 +8,12 @@
  * The copyright sign below is U+00A9.
  */
 
+import { COMPANY_AND_PRODUCT_NAME } from './product-name';
+
 export const ABOUT_TITLE = 'About';
 /** The description of the page in a tab and a link preview (STORY-10.03): generic words, no name, no figure. */
-export const ABOUT_META_DESCRIPTION = 'About the Accucut Quotation Portal, version and copyright.';
+export const ABOUT_META_DESCRIPTION = `About the ${COMPANY_AND_PRODUCT_NAME}, version and copyright.`;
 
-export const ABOUT_DESCRIPTION =
-  'The Accucut Quotation Portal helps Accucut Lasers prepare, review and approve manufacturing cost estimates. Engineers enter part details, the portal does the calculation, and a Lead or Admin reviews and approves the estimate.';
+export const ABOUT_DESCRIPTION = `The ${COMPANY_AND_PRODUCT_NAME} helps Accucut Lasers prepare, review and approve manufacturing cost estimates. Engineers enter part details, the portal does the calculation, and a Lead or Admin reviews and approves the estimate.`;
 export const ABOUT_VERSION = 'Version No: 1.0';
 export const ABOUT_COPYRIGHT = '\u00a9 Accucut Lasers Pvt Ltd. All rights reserved.';
