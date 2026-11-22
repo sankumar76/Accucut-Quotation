@@ -5,7 +5,7 @@ import { deleteNodeQuerySchema, moveNodeBodySchema, nodeDetailSchema, nodeParams
 
 /**
  * `GET`, `PUT` and `DELETE /api/v1/estimates/{id}/nodes/{nodeId}` (STORY-05.02 AC-1 to AC-8; architecture section 6 "Node"). An Admin and a Lead may use any
- * estimate, an Engineer only their own, and a change is allowed while this person may change its inputs (`assertEditable`: a draft for an Engineer, their own only; a draft or a submitted estimate for a Lead or an Admin; never an approved one); and an estimate or a part that is not theirs answers exactly as one that does not exist (404, CR-33).
+ * estimate, an Engineer only their own, and a change is allowed while this person may change its inputs (`assertEditable`: a draft for an Engineer, their own only; a draft or a prepared estimate for a Lead or an Admin; never an approved one); and an estimate or a part that is not theirs answers exactly as one that does not exist (404, CR-33).
  * The order of the refusals of a change is: 404, 409 (not editable by this person, or the part changed since the person looked, with the tree), 422 under `parentId`.
  */
 

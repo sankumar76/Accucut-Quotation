@@ -11,7 +11,7 @@ export const CALCULATE_BLOCKED_CODE = 'CALCULATE_BLOCKED';
 export const CALCULATE_MESSAGE = 'Cost will be calculated based on the input fields and sent for review/approval.';
 
 /** What the Engineer's answer says the estimate is now. Calculate takes a draft to this and to nothing else. */
-export const CALCULATE_SUBMITTED_STATUS = 'SUBMITTED';
+export const CALCULATE_PREPARED_STATUS = 'PREPARED';
 
 /** The 409s of a Calculate that cannot go ahead although every input is there (AC-4), each with its code. */
 export const CUSTOMER_NOT_CHOSEN_CODE = 'CUSTOMER_NOT_CHOSEN';

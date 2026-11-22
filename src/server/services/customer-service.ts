@@ -55,7 +55,7 @@ import type { AuditContext, AuditService } from './audit-service';
  *   - **Reset to defaults** (AC-3) sets every rate that differs back to the item's current default and answers with the count; a customer that already
  *     has every default is a count of 0 and writes nothing. It is idempotent.
  *   - **A save or a reset that changes nothing writes no change and no entry** (AC-2, AC-6).
- *   - **Delete is soft and guarded** (STORY-02.07; A-13, BR-053): a customer that a Draft or Submitted estimate has is refused with a 409 that names those estimates
+ *   - **Delete is soft and guarded** (STORY-02.07; A-13, BR-053): a customer that a Draft or Prepared estimate has is refused with a 409 that names those estimates
  *     (the first ten and the count), and nothing changes. An Approved estimate does not count: it keeps the customer's name and its own figures (NFR-026). The
  *     customer's row is locked `FOR UPDATE` and **then** the estimates are read, so a request that is choosing this very customer (it holds the row `FOR SHARE`,
  *     `estimate-repository.ts`) and the delete serialise: either the delete waits and then sees the estimate, or the choice waits and then finds no customer. Both
@@ -100,7 +100,7 @@ export interface CustomerOperations {
   resetCustomerRates(context: AuditContext, id: string): Promise<CustomerResetResult>;
   /**
    * Soft-deletes the customer and writes one `master.deleted` entry in the same transaction. Refused with `MasterInUseError` (409, naming the estimates) while a
-   * Draft or Submitted estimate has the customer; 404 for an unknown or already deleted ID. Nothing is written when it is refused.
+   * Draft or Prepared estimate has the customer; 404 for an unknown or already deleted ID. Nothing is written when it is refused.
    */
   deleteCustomer(context: AuditContext, id: string): Promise<void>;
 }

@@ -24,7 +24,7 @@ import { createImageService, type ImageService } from './image-service';
  *
  *   - **An Engineer sees and changes only their own task.** An estimate that is not theirs and one that does not exist are the same answer (`null` for the
  *     page, `NotFoundError` for the route), so the answer never says that a code or an ID is real (CR-33). A Lead and an Admin may open any.
- *   - **Inputs change only when the state machine says so** (STORY-06.01; FR-064, BR-012). A DRAFT may be changed by whoever has it open; a SUBMITTED estimate
+ *   - **Inputs change only when the state machine says so** (STORY-06.01; FR-064, BR-012). A DRAFT may be changed by whoever has it open; a PREPARED estimate
  *     only by a Lead or an Admin, so the Engineer's inputs are read-only from the first calculation on; an APPROVED one by nobody. The check is
  *     `assertEditable`, the one every write of an input shares, and it is made after the estimate is locked, so it cannot pass while a Calculate or an
  *     approval is changing the status. The order of the refusals is: not found (404), not editable (409), unknown customer (422).
@@ -42,7 +42,7 @@ import { createImageService, type ImageService } from './image-service';
  *
  * **The parts tree (STORY-05.02; FR-043, FR-044; architecture sections 4.8, 5.1 and 6).** Reading the tree is open to whoever may open the estimate. Every write
  * (add, move, delete) follows one order, so the answer depends on the estimate before it depends on what was sent: the estimate is locked (404 when it is not the
- * person's or does not exist), this person must still be allowed to change its inputs (409, `assertEditable`: a draft for an Engineer, a draft or a submitted estimate for a Lead or an Admin, never an approved one), the part named must be in it (404), the part's `revision` and, for a delete, the count and the
+ * person's or does not exist), this person must still be allowed to change its inputs (409, `assertEditable`: a draft for an Engineer, a draft or a prepared estimate for a Lead or an Admin, never an approved one), the part named must be in it (404), the part's `revision` and, for a delete, the count and the
  * fingerprint of the parts the person was shown must still be right (409, with the fresh tree), and only then does the content of a move count (422). All of it is one transaction with the
  * estimate's row lock, so two changes to one tree are serialised and `inputs_revision` rises by one with the change or not at all. A change that moves nothing
  * writes nothing. **The Sl. No is never stored**; it is read from the layout each time (`lib/estimate/tree.ts`). No answer carries a rate, a cost or a formula.
@@ -263,7 +263,7 @@ async function applyTransition(
     const refusal = TRANSITION_REFUSALS[decision.reason];
     throw new ConflictError(refusal.message, { code: refusal.code });
   }
-  // A transition that keeps the status (Recalculate of a submitted estimate, an edit, an export) writes nothing here; what it does is its own story's.
+  // A transition that keeps the status (Recalculate of a prepared estimate, an edit, an export) writes nothing here; what it does is its own story's.
   if (decision.to !== decision.from) {
     const moved = await estimates.setStatus(estimate.id, decision.from, decision.to, tx);
     if (!moved) throw new ConflictError(STATUS_CHANGED_MESSAGE, { code: ESTIMATE_STATUS_CHANGED_CODE });
@@ -291,7 +291,7 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
   /**
    * The registry the form of this estimate is built from (STORY-08.05; FR-065, FR-077, SPEC section 8.4). **An APPROVED estimate keeps the fields it was approved with**: its form is the document of the version of its current
    * calculation, so a field inserted later does not appear on it and a field deleted later is still shown with its stored value. Every other estimate (a new Draft, an unlocked one, one whose approval was cancelled, a
-   * Submitted one that was never approved) uses the latest version. The status and the version are read in one statement, each time, so an unlock is seen at once. The version is never part of an answer (NFR-002).
+   * Prepared one that was never approved) uses the latest version. The status and the version are read in one statement, each time, so an unlock is seen at once. The version is never part of an answer (NFR-002).
    */
   async function configurationFor(estimateId: string): Promise<ConfigDocument> {
     const basis = await estimates.findConfigurationBasis(estimateId);

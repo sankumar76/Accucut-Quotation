@@ -17,7 +17,7 @@ interface StatusBadge {
 
 const STATUS_BADGES: ReadonlyArray<StatusBadge> = [
   { label: 'Draft', tone: 'neutral', icon: FilePen },
-  { label: 'Submitted', tone: 'info', icon: Send },
+  { label: 'Prepared', tone: 'info', icon: Send },
   { label: 'Overdue', tone: 'warn', icon: Clock },
   { label: 'Approved', tone: 'success', icon: CircleCheck },
   { label: 'Calculation blocked', tone: 'danger', icon: TriangleAlert },

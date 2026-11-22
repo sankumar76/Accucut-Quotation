@@ -33,7 +33,7 @@ export interface QueuePageData {
 }
 
 const TASKS_PATH = '/api/v1/tasks';
-const STATUSES: ReadonlyArray<TaskEstimateStatus> = ['DRAFT', 'SUBMITTED', 'APPROVED'];
+const STATUSES: ReadonlyArray<TaskEstimateStatus> = ['DRAFT', 'PREPARED', 'APPROVED'];
 
 function isCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0;

@@ -16,8 +16,8 @@ export interface CancelApprovalInput {
   readonly password: string;
 }
 
-/** `true` when the answer says the estimate is DRAFT or SUBMITTED; `null` for anything else (a failure, never a crash). */
-const toCancelled = (body: unknown): true | null => (isRecord(body) && (body['status'] === 'DRAFT' || body['status'] === 'SUBMITTED') ? true : null);
+/** `true` when the answer says the estimate is DRAFT or PREPARED; `null` for anything else (a failure, never a crash). */
+const toCancelled = (body: unknown): true | null => (isRecord(body) && (body['status'] === 'DRAFT' || body['status'] === 'PREPARED') ? true : null);
 
 /** `POST /api/v1/estimates/{id}/approval/cancel`. */
 export function cancelApproval(estimateId: string, input: CancelApprovalInput, doFetch: Fetch = fetch): Promise<Outcome<true>> {
