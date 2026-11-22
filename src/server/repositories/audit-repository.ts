@@ -80,10 +80,23 @@ export interface AuditRowPage {
 export interface AuditRepository {
   /** Adds one entry in the caller's transaction. Rolled back with it. */
   append(row: NewAuditRow, tx: Transaction): Promise<void>;
+  /**
+   * Adds many entries in the caller's transaction, one multi-row `INSERT` for each `MAX_ROWS_PER_STATEMENT` rows (more rows go in further statements of the same
+   * transaction). The rows are not checked here: `AuditService.recordMany` checks every one first. An empty list sends no query.
+   */
+  appendMany(rows: ReadonlyArray<NewAuditRow>, tx: Transaction): Promise<void>;
   /** A page of entries, newest first, that match the filter. */
   list(filter: AuditRowFilter, page: AuditPageRequest): Promise<AuditRowPage>;
   /** How many entries match the filter, however many pages that is. */
   count(filter: AuditRowFilter): Promise<number>;
+}
+
+/** The most rows one `INSERT` of `appendMany` carries: 9 bound values a row, so 9,000 bound values, well under PostgreSQL's 65,535 per statement (ADR-018). */
+export const MAX_ROWS_PER_STATEMENT = 1_000;
+
+/** The text of a JSON value for a `::jsonb` bind; null stays SQL NULL (as `jsonColumn` does for `append`), not the JSON text "null". */
+function jsonText(value: JsonValue): string | null {
+  return value === null ? null : JSON.stringify(value);
 }
 
 /** SQL NULL, not the JSON value `null`, so a creation's missing `before` is a null column and not the text "null". */
@@ -135,6 +148,22 @@ export function createAuditRepository(db: PrismaClient): AuditRepository {
           },
           select: { id: true },
         });
+      });
+    },
+
+    appendMany(rows, tx) {
+      return withDatabaseErrors(async () => {
+        const client = clientFor(db, tx);
+        for (let start = 0; start < rows.length; start += MAX_ROWS_PER_STATEMENT) {
+          const values = rows
+            .slice(start, start + MAX_ROWS_PER_STATEMENT)
+            .map(
+              (row) =>
+                Prisma.sql`(${row.actorId}::uuid, ${row.actorLabel}, ${row.event}, ${row.objectType}, ${row.objectId}::uuid, ${row.objectLabel}, ${jsonText(row.before)}::jsonb, ${jsonText(row.after)}::jsonb, ${row.requestId})`,
+            );
+          // Values only ever reach the statement as bound parameters; the time is the column's own default, stamped by the database.
+          await client.$executeRaw`INSERT INTO audit_log (actor_id, actor_label, event, object_type, object_id, object_label, before, after, request_id) VALUES ${Prisma.join(values)}`;
+        }
       });
     },
 

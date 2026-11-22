@@ -1,4 +1,4 @@
-import { PLACEHOLDER_PREFIX } from '@/lib/env';
+import { EXPORT_TIMEOUT_DEFAULT_SECONDS, PLACEHOLDER_PREFIX } from '@/lib/env';
 
 /**
  * What a value in `.env.example` may be (STD-05, STD-21, QLT-19, NFR-006). The repository is public, so a
@@ -14,6 +14,8 @@ export const SAFE_LITERALS: Readonly<Record<string, string>> = {
   SMTP_PORT: '1025',
   SMTP_AUTH_MODE: 'none',
   FEATURE_EMAIL: 'off',
+  // Not a secret: the ADR-017 export timeout, shown at its default so the template and the code agree.
+  EXPORT_TIMEOUT_SECONDS: String(EXPORT_TIMEOUT_DEFAULT_SECONDS),
 };
 
 const DATABASE_URL_VARIABLES: ReadonlyArray<string> = ['DATABASE_URL', 'MIGRATE_DATABASE_URL'];

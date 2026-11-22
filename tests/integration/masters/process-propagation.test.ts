@@ -85,13 +85,17 @@ interface EntryRow {
   readonly request_id: string;
 }
 
-/** The entries written after the first `skip` of the log, in the order they were written. */
+/**
+ * The entries written after the first `skip` of the log: the rate's own first, then the customers' by name. That order is this helper's, not the log's: the customers' entries of one request are one batch
+ * (ADR-018) and may share a millisecond, so no test asserts the order they are stored or listed in, only which entries there are.
+ */
 async function entriesAfter(skip: number): Promise<ReadonlyArray<EntryRow>> {
   const { rows } = await db.owner.query<EntryRow>(
     'SELECT event, object_type, object_id, object_label, before, after, request_id FROM audit_log ORDER BY created_at, id OFFSET $1',
     [skip],
   );
-  return rows;
+  const rank = (entry: EntryRow): number => (entry.object_type === 'process_item' ? 0 : 1);
+  return [...rows].sort((a, b) => rank(a) - rank(b) || a.object_label.toLowerCase().localeCompare(b.object_label.toLowerCase()));
 }
 
 describe('AC-1, AC-2: a save that changes the default', () => {
@@ -174,7 +178,7 @@ describe('AC-6: a save that changes no default touches no customer', () => {
 });
 
 describe('AC-9: the audit log names every customer that changed, in the save', () => {
-  it('writes the rate\'s own entry first, then one master.edited per moved customer in name order, all with one request ID, and none for the others', async () => {
+  it('writes the rate\'s own entry and one master.edited per moved customer, all with one request ID, and none for the others', async () => {
     const [bravo, alpha] = await Promise.all([customer('Bravo Works'), customer('alpha works')]);
     const [other, already, gone] = await Promise.all([customer('Charlie Works', '1.40'), customer('Delta Works', NEW), customer('Echo Works')]);
     await db.owner.query('UPDATE customers SET deleted_at = now() WHERE id = $1::uuid', [gone]);

@@ -51,6 +51,7 @@ declare const audit: AuditService;
 declare const maybeAudit: AuditService | undefined;
 declare const untyped: any;
 declare const entry: Parameters<AuditService['record']>[1];
+declare const entries: Parameters<AuditService['recordMany']>[1];
 declare const stray: Transaction;
 `;
 
@@ -80,6 +81,17 @@ export const PASSING: readonly Case[] = [
       await transactions.run(async (tx) => {
         await things.add('a', tx);
         await audit.record(tx, entry);
+      });
+    }`,
+    records: 1,
+    findings: [],
+  },
+  {
+    name: 'a recordMany after a repository call, in the .run( callback (ADR-018)',
+    code: `export async function batch() {
+      await transactions.run(async (tx) => {
+        await things.add('a', tx);
+        await audit.recordMany(tx, entries);
       });
     }`,
     records: 1,

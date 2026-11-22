@@ -186,7 +186,7 @@ describe('AQP-122 AC-5 atomicity: the change and its entry commit together or no
     return createMastersService({
       masters: db.masterRepository,
       transactions: db.transactions,
-      audit: { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), list: db.audit.list },
+      audit: { record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list },
       currentConfiguration: () => Promise.resolve(seedConfig),
     });
   }

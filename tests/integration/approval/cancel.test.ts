@@ -245,7 +245,7 @@ describe('AC-3: the cancel of an approved estimate is written in one piece', () 
   it('an audit entry that cannot be written takes the status and the cancel with it', async () => {
     const { estimateId } = await approvedEstimate();
     const before = await storedOf(db, estimateId);
-    const failing = cancelOver({ audit: { record: () => Promise.reject(new Error(INVENTED_FAILURE)), list: db.audit.list } });
+    const failing = cancelOver({ audit: { record: () => Promise.reject(new Error(INVENTED_FAILURE)), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list } });
     await expect(failing.cancel(admin(), estimateId, await requestOf(estimateId))).rejects.toThrow(INVENTED_FAILURE);
     expect(await storedOf(db, estimateId)).toEqual(before);
     expect(await statusOf(db, estimateId)).toBe('APPROVED');
@@ -569,7 +569,7 @@ describe('AC-7: the password is in no audit row and no error', () => {
   it('after a good cancel, a wrong password and every refusal above, no audit row of the database names either password', async () => {
     const { estimateId } = await approvedEstimate();
     await refusalOf(cancelling().cancel(admin(), estimateId, await requestOf(estimateId, { password: WRONG_PASSWORD })));
-    const failing = cancelOver({ audit: { record: () => Promise.reject(new Error(INVENTED_FAILURE)), list: db.audit.list } });
+    const failing = cancelOver({ audit: { record: () => Promise.reject(new Error(INVENTED_FAILURE)), recordMany: () => Promise.reject(new Error('Invented: the batch write is not used by this test.')), list: db.audit.list } });
     const refusal = await refusalOf(failing.cancel(admin(), estimateId, await requestOf(estimateId)));
     expect(String((refusal as Error).message)).not.toContain(RIGHT_PASSWORD);
     await cancelling().cancel(admin(), estimateId, await requestOf(estimateId));
