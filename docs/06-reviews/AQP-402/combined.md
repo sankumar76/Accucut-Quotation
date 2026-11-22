@@ -121,3 +121,36 @@ I checked these cases against DL-300 (3), "the current approval is not the appro
 
 - The chrome-devtools and playwright MCP servers failed to connect, so I did no live UI check. AC-7 rests on CI's E2E at three widths.
 - No local PostgreSQL, so the integration suite was not run by me. CI "Stages 1 to 11b" passed it on `ef8683f6`.
+
+---
+
+## Addendum: re-review round 2 (head `4bc8dbdd`, 2026-11-22)
+
+| Item | Value |
+|---|---|
+| Head reviewed | `4bc8dbdd82fdfef352ccc3e73915ab308318aec4`. Since `ef8683f6` there are two commits: `500ae74d`, which merges `origin/master` 5b006268 (not reviewed: master's own content), and `4bc8dbdd`, "fix(export): review findings QLT-01 to QLT-05" (14 files, +130 / -22, reviewed in full) |
+| CI | Run 45038764977 on `4bc8dbdd` **succeeded**: Stages 1 to 11b, Stages 1 to 11, and E2E shards 1 to 4 |
+| Run by me | `npx vitest run` on 10 unit and security files in the developer's worktree at `4bc8dbdd` (clean tree; read-only): **10 files, 1,881 tests passed**. These were download-chip, estimate-page, estimate-review-screen, download-marker, download-markers-route, download-marker-service, export-service, export-route, download-marker-restricted and engineer-import-rule. I did not run the integration tests locally (no database here); CI passed them |
+| **Verdict** | **APPROVE WITH COMMENTS.** QLT-01 to QLT-05 and QLT-07 are fixed. I accept the deferral of QLT-06 to follow-up #626. QLT-08 is resolved by architecture v0.62. The new diff raises no Blocker, Critical, Major or Minor. |
+| Counts (open) | Blocker 0 · Critical 0 · Major 0 · Minor 1 (QLT-06, deferred to #626) · Info 7 (QLT-09 to QLT-13, plus QLT-14 and QLT-15 below) |
+
+### Prior findings
+
+| ID | Prior severity | Status | Note |
+|---|---|---|---|
+| QLT-01 | Major | **Fixed** | `grants.test.ts` now expects `stringContaining('Table "approvals" is immutable: TRUNCATE is not allowed')` for `TRUNCATE approvals, estimate_downloads`. With `approvals` listed first, a missing approvals trigger would let `estimate_downloads`' trigger answer with its own table name, and the test would fail. That is exactly the regression the test must catch. The new table's own trigger stays proved in `download-log.test.ts`. |
+| QLT-02 | Minor | **Fixed** | Four integration cases cover the marker SQL over real rows: download then cancel gives `changed`; a download after the cancel records `approval_id = null` and gives `downloaded`; cancel then price removed gives `changed` with no earlier row coming back; and the Closed tab's by-task statement gives `changed`. The cancel and removal are written as owner UPDATEs of the columns the services set, because the services need a step-up. That is enough here, since the SQL under test reads those columns. |
+| QLT-03 | Minor | **Fixed** | `review-page.tsx` `markerOf` catches the marker read alone and returns `'unavailable'`. `DownloadChip` accepts `'unavailable'` and draws "Download status unavailable." with no badge and no state. The text moved to `download-chip-texts.ts`, so the Closed tab and SCR-06 say the same words. `estimate-page.test.ts`: a rejecting marker service still renders the review with the code and never "Not downloaded"; the Engineer's page holds none of the marker words. |
+| QLT-04 | Minor | **Fixed** | Both catches log `{ errorName, errorCode }` at `warn` and never the cause, so no host name or task ID appears. The test asserts that the invented host never appears in the logged arguments. |
+| QLT-05 | Minor | **Fixed (my suggestion was wrong)** | The note now runs `DROP TABLE` and `DELETE FROM "_prisma_migrations" WHERE "migration_name" = '20261123130000_estimate_downloads'` in one transaction, then `migrate status`. This follows architecture v0.62 §5.6 case 2. I had suggested `migrate resolve --rolled-back`, but that only applies to a failed migration (P3009); Prisma does not mark an applied migration rolled back that way. The developer's note is right. |
+| QLT-06 | Minor | **Deferral accepted** | Follow-up #626 is open, labelled `follow-up` and `ai-delivery`. Reasons: (1) it is a Minor, and §9 item 3 requires only Blocker, Critical and Major to be fixed before G8; (2) the chip never shows wrong data, only data as of when the page was opened; (3) the clean fixes need either `router.refresh()`, whose browser noise is DEF-036, or a client wrapper, which is a design choice for the hardening window. The final full review should re-check #626. |
+| QLT-07 | Minor | **Fixed** | PR body, from run 45038764977's js-budget log: `/estimates/[code]` 182,452 B (headroom 17,548); `/estimates/[code]/export` 169,609 B (headroom 30,391); `/queue` 191,330 B (headroom 8,670). Under 9 KB of headroom on `/queue` is worth watching (cross-reference reviewer-performance). |
+| QLT-08 | Info | **Resolved** | Architecture v0.62 §4.12 b and d now say "the approval that stands" (commit `a71f32d8` on records-u). The product-owner still aligns AQP-402 AC-2's wording. |
+| QLT-09 to QLT-13 | Info | Unchanged | QLT-12: `summaryWithoutMarker` now replaces `download` with `null` instead of omitting it. The meaning is the same, and every other field is still compared. |
+
+### New diff: notes
+
+| ID | Severity | File:line | Note |
+|---|---|---|---|
+| QLT-14 | Info | `src/app/(portal)/estimates/[code]/review-page.tsx` (`markerOf`), `src/app/(portal)/queue/page.tsx` (`closedMarkers`) | The catch-all also turns a `NotFoundError` or `ForbiddenError` into `'unavailable'`. No caller is exposed: SCR-06's `getCosts` throws first for a missing estimate, the page's role switch never sends an Engineer here, and the queue page asks only for a manager. Faults are logged at `warn`, not `error`. That is acceptable for a degraded, non-essential chip, but whoever owns the alerting should know a database fault here does not log at `error`. |
+| QLT-15 | Info | `tests/security/download-marker-restricted.test.ts` | The import guard now lists `review-page.tsx` as an importer of `download-marker-view`. That is correct: the file is loaded only on the Lead and Admin branch of `estimates/[code]/page.tsx`. |
