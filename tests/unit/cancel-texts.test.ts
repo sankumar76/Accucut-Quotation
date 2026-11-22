@@ -44,6 +44,10 @@ describe('the dialog (AC-2)', () => {
     );
   });
 
+  it('AQP-399 (A-CR01-1): a quoted estimate is worded as an approved one, because Cancel takes it back to Draft the same way', () => {
+    expect(cancelIntro('QUOTED', 'Priya Nair')).toBe(cancelIntro('APPROVED', 'Priya Nair'));
+  });
+
   it('AC-10: a Draft or a Prepared estimate keeps its status and its task, in the ux-expert\'s words (v0.29)', () => {
     expect(cancelIntro('DRAFT', 'Priya Nair')).toBe(
       'The estimate stays a Draft and its task does not change. The approved price stays on screen, marked "Approval cancelled", until you remove it. Neither step can be undone. A new approval brings a price back.',

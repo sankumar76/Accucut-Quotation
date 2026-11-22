@@ -29,8 +29,8 @@ function filesUnder(directory: string): string[] {
 /** The source without block and line comments (and without the text of a string that only says `//`, which these files do not have). */
 const withoutComments = (source: string): string => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-/** A comparison with, or a filter on, the status that closes a task: `=== 'APPROVED'`, `!== 'APPROVED'`, `status: 'APPROVED'`, `not: 'APPROVED'`, `case 'APPROVED'`. */
-const APPROVED_TEST = /(?:[!=]==?\s*'APPROVED'|'APPROVED'\s*[!=]==?|\bnot:\s*'APPROVED'|\bstatus:\s*'APPROVED'|\bcase\s+'APPROVED')/;
+/** A comparison with, or a filter on, a status that closes a task: `=== 'APPROVED'`, `!== 'APPROVED'`, `status: 'APPROVED'`, `not: 'APPROVED'`, `case 'APPROVED'`, and the same for `'QUOTED'` (CR-01 item 7B). */
+const APPROVED_TEST = /(?:[!=]==?\s*'(?:APPROVED|QUOTED)'|'(?:APPROVED|QUOTED)'\s*[!=]==?|\bnot:\s*'(?:APPROVED|QUOTED)'|\bstatus:\s*'(?:APPROVED|QUOTED)'|\bcase\s+'(?:APPROVED|QUOTED)')/;
 
 const TAB_DECIDING_CODE = [
   ...filesUnder('src/lib/tasks'),
@@ -49,15 +49,19 @@ describe('AC-4: no second implementation of "is closed"', () => {
     expect(withoutComments(read(path))).not.toMatch(APPROVED_TEST);
   });
 
-  it("the repository names APPROVED only in `tabFilter`, the SQL form of the one rule", () => {
+  it("the repository decides the tabs only in `tabFilter`, the SQL form of the one rule, from `LOCKED_STATUSES` (derived from `isLocked`), and compares no status to APPROVED or QUOTED", () => {
     const source = withoutComments(read('src/server/repositories/task-repository.ts'));
     const start = source.indexOf('function tabFilter(');
     const end = source.indexOf('\nfunction afterFilter(');
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
+    expect(source).not.toMatch(APPROVED_TEST);
+    const tabFilter = source.slice(start, end);
+    expect(tabFilter).toContain('LOCKED_STATUSES');
+    // The layer is part of the rule: Open, Closed and Overdue are never an ignored estimate.
+    expect(tabFilter.match(/ignoredAt:\s*null/g)).toHaveLength(3);
     const outside = source.slice(0, start) + source.slice(end);
-    expect(outside).not.toMatch(APPROVED_TEST);
-    expect(source.slice(start, end)).toMatch(APPROVED_TEST);
+    expect(outside.replace(/import[^;]*LOCKED_STATUSES[^;]*;/, '')).not.toContain('LOCKED_STATUSES');
   });
 
   it('writes `isTaskClosed` once under src, and `taskTab` builds on it', () => {

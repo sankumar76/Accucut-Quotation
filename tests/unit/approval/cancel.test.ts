@@ -99,6 +99,29 @@ describe('AC-7: where the password goes', () => {
 });
 
 describe('a status that is not one of the two the machine leads to is a fault', () => {
+  it.each(['APPROVED', 'QUOTED'] as const)('a transition that would leave the estimate %s is refused too: locked is APPROVED or QUOTED', async (locked) => {
+    const world = harness.calculationWorld;
+    const estimate = defined(harness.estimateWorld.estimates[0]);
+    const entries = harness.calculationAudit.rows.length;
+    const service = createCancelApprovalService({
+      estimates: world.estimates,
+      approvals: world.approvalRepository,
+      transactions: world.transactions,
+      stepUp: steppingUp(),
+      workflow: { transition: (_viewer, id) => Promise.resolve({ id, from: locked, to: locked }), audit: harness.calculationAudit.service },
+    });
+    const approval = await world.approvalRepository.insertApproval(
+      { estimateId: estimate.id, calculationId: ESTIMATE, approvedPrice: '1.00', calculatedTotal: '1.00', approvedById: ADMIN.id, isOverride: false, overrideReason: null },
+      {} as Transaction,
+    );
+    try {
+      await expect(service.cancel(ADMIN, estimate.id, { ...REQUEST, approvalId: approval.id })).rejects.toThrow('would leave the estimate APPROVED or QUOTED');
+      expect(harness.calculationAudit.rows).toHaveLength(entries);
+    } finally {
+      world.approvals.length = 0;
+    }
+  });
+
   it('a transition that would leave the estimate APPROVED is refused before anything is stored or recorded', async () => {
     const world = harness.calculationWorld;
     const estimate = defined(harness.estimateWorld.estimates[0]);

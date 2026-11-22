@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { PRICE_MESSAGE, PRICE_PATTERN, validateReason } from '../../../lib/estimate/approve-price';
 import { CALCULATE_MESSAGE, CALCULATE_PREPARED_STATUS } from '../../../lib/estimate/calculate-words';
+import { ESTIMATE_STATUSES } from '../../../lib/estimate/state-machine';
 import { CALCULATE_ACK_REQUIRED_CODE, QTY_ZERO_CODE } from '../../../lib/estimate/warning-copy';
 
 /**
@@ -28,7 +29,7 @@ const customerChoiceSchema = z.strictObject({ id: z.string().min(1), name: z.str
 /** The estimate and the customer it is now for. */
 export const estimateCustomerSchema = z.strictObject({
   id: z.string().min(1),
-  status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
+  status: z.enum(ESTIMATE_STATUSES),
   customer: customerChoiceSchema,
 });
 

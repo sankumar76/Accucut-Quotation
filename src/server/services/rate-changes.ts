@@ -1,6 +1,7 @@
 import { ConflictError, NotFoundError } from '../../lib/errors';
 import { CUSTOMER_DELETED_CODE, MATERIAL_DELETED_CODE } from '../../lib/estimate/calculate-words';
 import { diffRates, nothingChanged, type RateChangeCounts } from '../../lib/estimate/rate-diff';
+import { isLocked } from '../../lib/estimate/state-machine';
 import type { PlanCache } from '../../lib/formula';
 import type { CalculationRepository, MasterSnapshot } from '../repositories/calculation-repository';
 import type { EstimateRepository } from '../repositories/estimate-repository';
@@ -49,7 +50,7 @@ export interface RatesChangedReads extends RateChangeReads {
 }
 
 /**
- * The counts for the Lead's "Rates changed" notice (STORY-06.11 AC-1, AC-3, AC-4, AC-6), or `null` when there is nothing to tell: the estimate is APPROVED (its figures stand), nothing changed in the masters the
+ * The counts for the Lead's "Rates changed" notice (STORY-06.11 AC-1, AC-3, AC-4, AC-6), or `null` when there is nothing to tell: the estimate is locked, approved or quoted (its figures stand), nothing changed in the masters the
  * calculation used, or one of them was deleted since or is missing. The caller asks only while the figures are `current`.
  *
  * **The only place the review of an estimate reads the masters, and never for an approved one.** The status is read first and an APPROVED estimate returns before the snapshot or any master is read (STORY-06.09,
@@ -59,7 +60,7 @@ export interface RatesChangedReads extends RateChangeReads {
 export async function ratesChangedSince(reads: RatesChangedReads, estimateId: string, calculationId: string, version: Pick<ConfigVersion, 'id' | 'document'>): Promise<RateChangeCounts | null> {
   const access = await reads.estimates.findEstimateAccess(estimateId);
   // An estimate that is not there any more is the caller's 404, not this notice's.
-  if (access === null || access.status === 'APPROVED') return null;
+  if (access === null || isLocked(access.status)) return null;
   const stored = await reads.calculations.findMasterSnapshot(calculationId);
   if (stored === null) throw new Error('The calculation linked to the estimate could not be read.');
   try {

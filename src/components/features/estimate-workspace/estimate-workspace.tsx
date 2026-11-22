@@ -6,7 +6,7 @@ import { Notice } from '@/components/shared/notice';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { blockedSummary, CALCULATE_MESSAGE } from '@/lib/estimate/calculate-words';
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
-import type { EstimateStatus } from '@/lib/estimate/state-machine';
+import { isLocked, type EstimateStatus } from '@/lib/estimate/state-machine';
 import { askToLeave } from '@/lib/estimates/leave-registry';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
@@ -64,7 +64,8 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
   // The status is the server's: it starts as the page was rendered and becomes PREPARED when Calculate says it did.
   const [status, setStatus] = useState<EstimateStatus>(header.status);
   // This page is the Engineer's (a Lead or an Admin sees the short header until SCR-06), so the Engineer's rule is the one asked.
-  const editable = canEditInputs(status, 'ENGINEER');
+  // The page carries no Ignored layer until story 7D adds it to the view, so the state read here is never ignored; the server asks the full state again on every write.
+  const editable = canEditInputs({ status, ignored: false }, 'ENGINEER');
   // The tree lives here: the form beside it is for the part chosen in it, and a save of the form gives the tree the part's new revision.
   const tree = usePartsTree(estimateId);
   const selected = tree.selected === null ? null : { id: tree.selected.id, slNo: tree.selected.slNo, revision: tree.selected.revision };
@@ -129,7 +130,7 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
           </Notice>
         </div>
       ) : null}
-      {status === 'APPROVED' ? (
+      {isLocked(status) ? (
         // The state "Approved": the words of the G3 screen and nothing else, so no price and no figure is anywhere (NFR-002). Inputs are read-only because `canEditInputs` says so, and the server refuses a write.
         <Notice tone="success" title={APPROVED_LOCKED_TITLE}>
           {APPROVED_LOCKED_BODY}
@@ -145,7 +146,7 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
           <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />
         </CardContent>
       </Card>
-      {status === 'APPROVED' ? null : Bar !== null ? (
+      {isLocked(status) ? null : Bar !== null ? (
         <Bar prepared={status === 'PREPARED'} calculation={calculation} gate={saves} onChoosePart={guardedTree.select} />
       ) : bar.failed ? (
         // The button's code could not be fetched: the person is told so and what to do, never left with no button and no word (review SQR-06 of AQP-317).

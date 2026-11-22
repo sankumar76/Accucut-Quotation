@@ -4,6 +4,7 @@ import { Notice } from '@/components/shared/notice';
 import { warnedNodeIds } from '@/components/shared/quantity-tag';
 import { WarningNotice } from '@/components/shared/warning-notice';
 import type { RoleName } from '@/lib/auth/roles';
+import { isLocked } from '@/lib/estimate/state-machine';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
@@ -87,7 +88,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         view={header}
         noCustomerText={REVIEW_NO_CUSTOMER}
         // Change customer (CR-01 item 6, AC-12): on an estimate that is not approved only; the review is the Lead's and the Admin's, and the server refuses anyone else all the same.
-        customerAction={header.status === 'APPROVED' ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} />}
+        customerAction={isLocked(header.status) ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} />}
       />
       {state === 'none' ? (
         <Notice tone="info" role="status">
@@ -99,7 +100,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           {CLEARED_NOTICE_BODY}
         </Notice>
       ) : null}
-      {header.status === 'APPROVED' ? <ApprovedNotice approval={approval} /> : null}
+      {isLocked(header.status) ? <ApprovedNotice approval={approval} /> : null}
       <UnlockedNotice state={state} unlock={costs.approval === null || costs.approval.cancel !== null ? null : costs.approval.unlock} isDraft={header.status === 'DRAFT'} />
       <CancelledNotice cancel={costs.approval?.cancel ?? null} wasUnlocked={costs.approval !== null && costs.approval.unlock !== null} status={header.status} viewedByAdmin={viewerRole === 'ADMIN'} />
       <PriceRemovedNotice removed={costs.priceRemoved} />
