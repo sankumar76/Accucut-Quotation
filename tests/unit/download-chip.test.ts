@@ -19,7 +19,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined
 
 const LAST = { byName: 'Invented Lead', at: '2026-11-23T04:30:00.000Z' };
 const WHEN = '23 Nov 2026, 10:00 IST';
-const chip = (marker: DownloadChipData, explain = false): string => renderToStaticMarkup(createElement(DownloadChip, { marker, explain }));
+const chip = (marker: DownloadChipData | 'unavailable', explain = false): string => renderToStaticMarkup(createElement(DownloadChip, { marker, explain }));
 
 describe('the chip', () => {
   it('says "Not downloaded" and nothing else when there is no download', () => {
@@ -27,6 +27,13 @@ describe('the chip', () => {
     expect(html).toContain('Not downloaded');
     expect(html).toContain('data-marker="none"');
     expect(html).not.toContain('Last downloaded');
+  });
+
+  it('says "Download status unavailable." for a marker that could not be read, and draws no state (QLT-03)', () => {
+    const html = chip('unavailable');
+    expect(html).toContain('Download status unavailable.');
+    expect(html).toContain('data-marker="unavailable"');
+    expect(html).not.toMatch(/Not downloaded|Downloaded \d|badge/);
   });
 
   it('says "Downloaded 3×" with the last person and the time in IST', () => {

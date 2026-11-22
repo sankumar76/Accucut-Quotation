@@ -3,6 +3,9 @@ import type { ReactElement } from 'react';
 import { EstimateReview } from '@/components/features/estimate-review/estimate-review';
 import type { WorkspaceHeaderView } from '@/components/features/estimate-workspace/workspace-header';
 import { formatIst } from '@/lib/time';
+import type { DownloadChipData } from '@/lib/export/download-marker-view';
+import { isAppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { getDownloadMarkerService, getEstimateReviewService } from '@/server/composition';
 import type { EstimateViewer } from '@/server/services/estimate-service';
 
@@ -26,8 +29,21 @@ export interface ReviewPageArgs {
   readonly customer: { readonly id: string; readonly name: string; readonly shortName: string } | null;
 }
 
+/**
+ * The marker for the header, or `'unavailable'` when it could not be read (QLT-03): a marker is a convenience beside the figures, so a fault in its read must not take SCR-06 down. The kind of the fault is
+ * logged, never its cause or the estimate (no personal data); the header then says "Download status unavailable." and never "Not downloaded".
+ */
+async function markerOf(viewer: EstimateViewer, estimateId: string): Promise<DownloadChipData | 'unavailable'> {
+  try {
+    return await getDownloadMarkerService().getMarker(viewer, estimateId);
+  } catch (error) {
+    logger.warn({ errorName: error instanceof Error ? error.name : 'unknown', errorCode: isAppError(error) ? error.code : undefined }, 'The download marker could not be read.');
+    return 'unavailable';
+  }
+}
+
 export async function renderReview({ viewer, estimateId, header, customer }: ReviewPageArgs): Promise<ReactElement> {
-  const [costs, download] = await Promise.all([getEstimateReviewService().getCosts(viewer, estimateId), getDownloadMarkerService().getMarker(viewer, estimateId)]);
+  const [costs, download] = await Promise.all([getEstimateReviewService().getCosts(viewer, estimateId), markerOf(viewer, estimateId)]);
   return (
     <EstimateReview
       header={header}

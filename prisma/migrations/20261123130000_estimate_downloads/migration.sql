@@ -2,8 +2,13 @@
 -- "Downloaded N times" and "Changed since download" that a Lead and an Admin see.
 --
 -- Additive only (one new table, its index, foreign keys, triggers and grants): the previous image keeps running during a rollback, because it neither reads nor writes the table.
--- Rollback note: the table holds the download history of every estimate, so dropping it loses that history (the marker then reads "Not downloaded" everywhere, which is harmless):
+-- Rollback note (a release rollback of this applied migration): the table holds the download history of every estimate, so dropping it loses that history (the marker then reads "Not downloaded" everywhere, which is
+-- harmless). In ONE transaction, with the reversing SQL, remove the migration's own row from Prisma's history, so the next `migrate deploy` of the older release does not find a history that disagrees with the database:
+--   BEGIN;
 --   DROP TABLE "estimate_downloads";   -- also drops its index, its foreign keys and its triggers
+--   DELETE FROM "_prisma_migrations" WHERE "migration_name" = '20261123130000_estimate_downloads';
+--   COMMIT;
+-- then check `npx prisma migrate status` (architecture section 5.6). `prisma migrate resolve --rolled-back` is only for the FAILED-deploy case (P3009), not for a migration that was applied.
 --
 -- One row per download that the server handed over: the estimate, the calculation the file was made from, the approval whose price the file carries in BO2 (null when the file holds no price: the
 -- estimate had no approval, or its approval was cancelled or its price removed), who downloaded and when. The row is written once, after the file was built and before its bytes are returned, so a

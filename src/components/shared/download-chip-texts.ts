@@ -4,6 +4,9 @@
  */
 
 export const NOT_DOWNLOADED = 'Not downloaded';
+
+/** What a screen says when the marker could not be read (STORY-CR01.7E, QLT-03): never "Not downloaded" for a marker it does not have. */
+export const DOWNLOAD_STATUS_UNAVAILABLE = 'Download status unavailable.';
 export const CHANGED_SINCE_DOWNLOAD = 'Changed since download';
 
 /** "Downloaded 3×": the number of files handed over so far. */

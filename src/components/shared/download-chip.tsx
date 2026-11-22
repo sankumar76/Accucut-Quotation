@@ -6,7 +6,7 @@ import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 
 import { BREAK_LONG_NAMES } from './break-long-names';
-import { CHANGED_EXPLANATION, CHANGED_SINCE_DOWNLOAD, downloadedLabel, lastDownloadLine, NOT_DOWNLOADED } from './download-chip-texts';
+import { CHANGED_EXPLANATION, CHANGED_SINCE_DOWNLOAD, DOWNLOAD_STATUS_UNAVAILABLE, downloadedLabel, lastDownloadLine, NOT_DOWNLOADED } from './download-chip-texts';
 import { Icon } from './icon';
 
 /**
@@ -19,7 +19,8 @@ import { Icon } from './icon';
  */
 
 export interface DownloadChipProps {
-  readonly marker: DownloadChipData;
+  /** The marker, or `'unavailable'` when it could not be read: the chip then says so in words and draws no state (a screen never says "Not downloaded" for a marker it does not have). */
+  readonly marker: DownloadChipData | 'unavailable';
   /** The sentence that says why an amber chip is amber (SCR-10). Left out in a list, where the words of the chip are enough. */
   readonly explain?: boolean;
   readonly className?: string;
@@ -43,6 +44,13 @@ function labelOf(marker: DownloadChipData): string {
 }
 
 export function DownloadChip({ marker, explain = false, className }: DownloadChipProps) {
+  if (marker === 'unavailable') {
+    return (
+      <span data-slot="download-chip" data-marker="unavailable" className={cn('text-label text-ink-2', className)}>
+        {DOWNLOAD_STATUS_UNAVAILABLE}
+      </span>
+    );
+  }
   const { tone, icon } = LOOK[marker.kind];
   return (
     <span data-slot="download-chip" data-marker={marker.kind} className={cn('inline-flex max-w-full flex-wrap items-center gap-x-s-2 gap-y-s-1', className)}>

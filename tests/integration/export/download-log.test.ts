@@ -184,6 +184,48 @@ describe('AC-4, AC-8: the marker over the real rows', () => {
     expect(await markers.getMarker(leadOf(db), estimateId)).toMatchObject({ kind: 'changed', count: 1 });
   });
 
+  describe('QLT-02: an approval that no longer stands (cancelled, then its price removed) is the marker SQL\'s "no approval"', () => {
+    /** The act as the owner stores it: the columns of the cancel (and of the removal) are the ones the services set, and the SQL of the marker reads them. */
+    const cancel = (estimateId: string): Promise<unknown> =>
+      db.owner.query('UPDATE approvals SET cancelled_by = $2::uuid, cancelled_at = now(), cancel_reason = $3 WHERE estimate_id = $1::uuid AND cancelled_at IS NULL', [estimateId, db.personId, 'Invented reason to cancel.']);
+
+    it('a file downloaded with the approval, then the approval cancelled: "Changed since download", because the price in the file no longer stands', async () => {
+      const { estimateId, calculationId } = await calculated();
+      await db.approvalService.approve(leadOf(db), estimateId, requestFor(db, calculationId));
+      await world.exporter.getFile(leadOf(db), estimateId);
+      expect((await markers.getMarker(leadOf(db), estimateId)).kind).toBe('downloaded');
+      await cancel(estimateId);
+      expect(await markers.getMarker(leadOf(db), estimateId)).toMatchObject({ kind: 'changed', count: 1 });
+    });
+
+    it('a file downloaded after the cancel carries no price, so it records no approval and the marker is "Downloaded" again', async () => {
+      const { estimateId, calculationId } = await calculated();
+      await db.approvalService.approve(leadOf(db), estimateId, requestFor(db, calculationId));
+      await cancel(estimateId);
+      await world.exporter.getFile(leadOf(db), estimateId);
+      expect(defined((await rowsOf(estimateId))[0]).approval_id).toBeNull();
+      expect(await markers.getMarker(leadOf(db), estimateId)).toMatchObject({ kind: 'downloaded', count: 1 });
+    });
+
+    it('the same for a cancelled approval whose price was then removed: it does not stand, and an earlier approval does not come back in its place', async () => {
+      const { estimateId, calculationId } = await calculated();
+      await db.approvalService.approve(leadOf(db), estimateId, requestFor(db, calculationId));
+      await world.exporter.getFile(leadOf(db), estimateId);
+      await cancel(estimateId);
+      await db.owner.query('UPDATE approvals SET removed_by = $2::uuid, removed_at = now() WHERE estimate_id = $1::uuid AND removed_at IS NULL', [estimateId, db.personId]);
+      expect(await markers.getMarker(leadOf(db), estimateId)).toMatchObject({ kind: 'changed', count: 1 });
+    });
+
+    it('the Closed tab\'s statement reads the same: a cancelled approval is "Changed since download" by task ID', async () => {
+      const { estimateId, calculationId } = await calculated();
+      await db.approvalService.approve(leadOf(db), estimateId, requestFor(db, calculationId));
+      await world.exporter.getFile(leadOf(db), estimateId);
+      await cancel(estimateId);
+      const taskId = defined((await db.owner.query<{ task_id: string }>('SELECT task_id FROM estimates WHERE id = $1::uuid', [estimateId])).rows[0]).task_id;
+      expect((await markers.getMarkersOfTasks(leadOf(db), [taskId])).markers).toEqual([{ taskId, marker: expect.objectContaining({ kind: 'changed', count: 1 }) }]);
+    });
+  });
+
   it('an unlock alone does not turn it amber: the earlier price is still the one in the file until a new approval replaces it (D-29)', async () => {
     const { estimateId, calculationId } = await calculated();
     await db.approvalService.approve(leadOf(db), estimateId, requestFor(db, calculationId));

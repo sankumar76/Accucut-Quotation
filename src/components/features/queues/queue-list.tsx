@@ -19,7 +19,6 @@ import {
   CLOSED_ROW_WORD,
   COLUMNS,
   DEADLINE_COLUMN,
-  DOWNLOAD_STATUS_UNAVAILABLE,
   LIST_LABEL,
   NOT_CHOSEN_YET,
   REASSIGN_ACTION,
@@ -108,9 +107,8 @@ function RowAction({ task }: { readonly task: QueueRowData }) {
 /** The download chip under "Closed" for a Lead and an Admin (never drawn without `markers`, which an Engineer's list never has). */
 function DownloadMarker({ task, markers }: { readonly task: QueueRowData; readonly markers: QueueListProps['markers'] }) {
   if (markers === undefined || !isTaskClosed(task.status)) return null;
-  const marker = markers === 'unavailable' ? undefined : markers[task.id];
-  if (marker === undefined) return <p className="text-label text-ink-2">{DOWNLOAD_STATUS_UNAVAILABLE}</p>;
-  return <DownloadChip marker={marker} className="mt-s-1" />;
+  // A marker that is not in the answer reads as unavailable, never as "Not downloaded".
+  return <DownloadChip marker={markers === 'unavailable' ? 'unavailable' : (markers[task.id] ?? 'unavailable')} className="mt-s-1" />;
 }
 
 function TaskTable({ role, tasks, asOf, markers }: QueueListProps) {

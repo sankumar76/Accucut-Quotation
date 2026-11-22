@@ -52,9 +52,6 @@ export const CARD_DEADLINE_LABEL = 'Due';
 export const COLUMNS = { task: 'Task', engineer: 'Engineer', customer: 'Customer', folder: 'Folder', status: 'Status', assignedBy: 'Assigned by', actions: 'Actions' } as const;
 /** What a Lead and an Admin read in the action column of a closed task in place of the row actions (UX-20; STORY-04.05 AC-5). It is not a status badge. */
 export const CLOSED_ROW_WORD = 'Closed';
-
-/** What a Closed row says when its download marker could not be read (STORY-CR01.7E): never "Not downloaded" for a marker it does not have. */
-export const DOWNLOAD_STATUS_UNAVAILABLE = 'Download status unavailable.';
 /** The action of an open row for a Lead and an Admin (STORY-04.07 AC-1, UX spec SCR-03 "Interactions"). It opens SCR-04 in edit mode. */
 export const REASSIGN_ACTION = 'Reassign or change deadline';
 

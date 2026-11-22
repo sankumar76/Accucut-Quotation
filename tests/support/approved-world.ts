@@ -88,8 +88,8 @@ export async function openApprovedWorld(): Promise<ApprovedWorld> {
  * shows and holds is the rest of the summary, which a change of the masters must leave as it was.
  */
 export async function summaryWithoutMarker(world: ApprovedWorld, estimateId: string) {
-  const { download: _marker, ...rest } = await world.exporter.getSummary(world.lead, estimateId);
-  return rest;
+  // The marker is replaced by a constant, so two summaries are equal whatever was downloaded in between.
+  return { ...(await world.exporter.getSummary(world.lead, estimateId)), download: null };
 }
 
 let sequence = 0;

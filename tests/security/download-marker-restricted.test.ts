@@ -106,6 +106,7 @@ const IMPORTERS: ReadonlyArray<readonly [module: RegExp, allowed: ReadonlyArray<
   [
     /from '[^']*[/]download-marker-view'/,
     [
+      'src/app/(portal)/estimates/[code]/review-page.tsx',
       'src/components/features/estimate-review/estimate-review.tsx',
       'src/components/shared/download-chip.tsx',
       'src/lib/tasks/download-markers-client.ts',

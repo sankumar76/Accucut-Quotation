@@ -1,6 +1,8 @@
 import { QueueScreen } from '@/components/features/queues/queue-screen';
 import { QUEUE_META_DESCRIPTION } from '@/components/features/queues/queue-texts';
 import type { RoleName } from '@/lib/auth/roles';
+import { isAppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { readDownloadMarkers, type DownloadMarkers } from '@/lib/tasks/download-markers-client';
 import { readQueuePage } from '@/lib/tasks/queue-client';
 import { readQueueAddress, type QueueFilters } from '@/lib/tasks/queue-filters';
@@ -33,7 +35,9 @@ async function closedMarkers(user: { readonly id: string; readonly role: RoleNam
   try {
     const answer = await getDownloadMarkerService().getMarkersOfTasks({ id: user.id, role: user.role }, taskIds);
     return readDownloadMarkers(answer) ?? 'unavailable';
-  } catch {
+  } catch (error) {
+    // The kind of the fault only, never its cause (it may name a host) or a task: the rows say the status is unavailable (QLT-04).
+    logger.warn({ errorName: error instanceof Error ? error.name : 'unknown', errorCode: isAppError(error) ? error.code : undefined }, 'The download markers of the Closed tab could not be read.');
     return 'unavailable';
   }
 }

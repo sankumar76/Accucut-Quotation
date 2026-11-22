@@ -53,7 +53,7 @@ export interface EstimateReviewProps {
   /** Who is looking: the Admin alone has the Cancel approval button (STORY-06.12 AC-1). A Lead sees the state and the line that says who can. */
   readonly viewerRole: RoleName;
   /** The marker of the estimate's Excel downloads (STORY-CR01.7E AC-5), in the header beside the status: the review is the Lead's and the Admin's, so it is never drawn for an Engineer. */
-  readonly download: DownloadChipData;
+  readonly download: DownloadChipData | 'unavailable';
 }
 
 /** The approved notice of SCR-06 (STORY-06.06 AC-5): the approver and the time, and what approval means. It holds focus when an approval has just worked (`tabIndex` -1). */
