@@ -275,6 +275,28 @@ export async function setCanaryCustomer(ownerId: string, customerId: string): Pr
 }
 
 /**
+ * Sets the subject of the task of the canary estimate of a person made by `createDisposableUser('scan', ...)` (CR-01 items 6 and 9, AQP-391: the subject is part of the Excel file name), and returns the
+ * short name of the customer chosen on the estimate, which is the other part of that name. The task has the ID of its owner (`estimate-recipe.ts`). The subject is not an input of the calculation, so
+ * the state of the estimate does not change. Throwaway database only (guarded by `connectToTestDatabase`).
+ */
+export async function setCanarySubject(ownerId: string, subject: string): Promise<string> {
+  const client = await connectToTestDatabase();
+  try {
+    const result = await client.query('UPDATE tasks SET subject = $2 WHERE id = $1::uuid', [ownerId, subject]);
+    if (result.rowCount !== 1) throw new Error('The canary task was not found: set it up first.');
+    const { rows } = await client.query<{ shortName: string | null }>(
+      'SELECT c.short_name AS "shortName" FROM estimates e LEFT JOIN customers c ON c.id = e.customer_id WHERE e.id = $1::uuid',
+      [ownerId],
+    );
+    const shortName = rows[0]?.shortName;
+    if (shortName === null || shortName === undefined) throw new Error('The canary estimate has no customer: make it calculable first.');
+    return shortName;
+  } finally {
+    await client.end();
+  }
+}
+
+/**
  * Makes the canary estimate of a person made by `createDisposableUser('scan', ...)` ready to Calculate (STORY-05.09): its one part holds every input Calculate needs
  * (`tests/support/complete-part-inputs.ts`, with the material given), beside the planted Restricted price and unknown key of `fillCanaryPart` (Calculate must ignore both), and the customer is
  * chosen. Only the scan's own person has such an estimate. The statements replace the inputs and set the customer, and are repeatable.
