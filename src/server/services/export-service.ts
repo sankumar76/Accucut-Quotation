@@ -146,7 +146,7 @@ export function createExportService({ header, nodes, calculations, approvals, im
   async function nameOf(estimateId: string): Promise<string> {
     const found = await header.findHeader(estimateId);
     if (found === null) throw new NotFoundError();
-    return exportFileName({ customerName: found.customerName, taskCode: found.code, now: clock.now() });
+    return exportFileName({ customerShortName: found.customerShortName, subject: found.subject, taskCode: found.code, now: clock.now() });
   }
 
   /** The calculation's rows, read **only through the figure state** and in this one place: in any other state `read` is not called. */
