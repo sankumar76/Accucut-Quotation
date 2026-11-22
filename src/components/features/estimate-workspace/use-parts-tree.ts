@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 
 import type { Outcome } from '@/lib/api-client';
-import { addPart, deletePart, loadTree, movePart, treeFromRefusal, type AddRequest, type PartItem, type TreeAnswer } from '@/lib/estimates/tree-client';
+import { NODE_KIND_NAMES } from '@/lib/estimate/node-kinds';
+import { addRequestOf, type AddButton } from '@/lib/estimates/tree-add';
+import { addPart, deletePart, loadTree, movePart, treeFromRefusal, type PartItem, type TreeAnswer } from '@/lib/estimates/tree-client';
 import { deleteGuardOf, stepOf } from '@/lib/estimates/tree-moves';
 
-import { addedMessage, deletedMessage, renumberedMessage } from './estimate-texts';
+import { addedMessage, deletedMessage, noSubPartMessage, renumberedMessage } from './estimate-texts';
 
 /** Why the last change did not go through: the tree changed under the person (the fresh one is shown), a refusal in the server's words, or nothing but "it failed". */
 export type TreeProblem =
@@ -88,9 +90,12 @@ export function usePartsTree(estimateId: string) {
     return false;
   }
 
-  function add(kind: AddRequest['kind']): void {
-    const request: AddRequest | null = kind === 'item' ? { kind } : selected === null ? null : { kind, nodeId: selected.id };
-    if (request === null) return;
+  function add(button: AddButton): void {
+    const request = addRequestOf(button, selected);
+    if (request === null) {
+      if (button === 'sub-part' && selected !== null) setProblem({ kind: 'refused', message: noSubPartMessage(NODE_KIND_NAMES[selected.nodeKind]) });
+      return;
+    }
     void change(
       () => addPart(estimateId, request),
       (answer) => {

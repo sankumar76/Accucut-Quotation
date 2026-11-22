@@ -115,6 +115,7 @@ async function seedTree500Estimate(
   const base = { ...completePartInputs(undefined, input.materialId) };
   const tree = buildTree500();
   const ids: string[] = [];
+  const parents = new Set(tree.nodes.map((node) => node.parentIndex));
   const nextPlace = new Map<number | null, number>();
   await client.$transaction(async (tx) => {
     await tx.$executeRaw`INSERT INTO tasks (id, code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes)
@@ -127,8 +128,10 @@ async function seedTree500Estimate(
       const id = randomUUID();
       const parentId = node.parentIndex === null ? null : (ids[node.parentIndex] ?? null);
       ids.push(id);
-      await tx.$executeRaw`INSERT INTO estimate_nodes (id, estimate_id, parent_id, sort_index, inputs)
-        VALUES (${id}::uuid, ${estimateId}::uuid, ${parentId}::uuid, ${sortIndex}::int, ${JSON.stringify({ ...base, ...typed })}::jsonb)`;
+      // The kind a migrated tree of this shape would have (the backfill rule of CR-01 3A): depth 1 a Main Assembly, depth 2 with a child a Sub-Assembly, every other node a Part. The fixture is six levels deep, which the add rule no longer allows, so it is written here, as a legacy tree.
+      const kind = node.depth === 1 ? 'MAIN_ASSEMBLY' : node.depth === 2 && parents.has(node.index) ? 'SUB_ASSEMBLY' : 'PART';
+      await tx.$executeRaw`INSERT INTO estimate_nodes (id, estimate_id, parent_id, sort_index, node_kind, inputs)
+        VALUES (${id}::uuid, ${estimateId}::uuid, ${parentId}::uuid, ${sortIndex}::int, ${kind}::estimate_node_kind, ${JSON.stringify({ ...base, ...typed })}::jsonb)`;
     }
   });
   return estimateId;

@@ -82,7 +82,7 @@ describe('the records made for the dynamic routes of the JS budget check', () =>
     expect(recordPaths[COSTS_PAGE_ROUTE]).toBe('/estimates/Q-2026-0007/costs/1');
     const part = post(seen, '/api/v1/estimates/invented-estimate-id/nodes');
     expect(part?.method).toBe('POST');
-    expect(JSON.parse(part?.body ?? '{}')).toEqual({ kind: 'item' });
+    expect(JSON.parse(part?.body ?? '{}')).toEqual({ parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     expect(part?.headers['cookie']).toContain('next-auth.session-token=invented-session');
     expect(part?.headers['origin']).toBe(BASE);
     expect(seen.filter((request) => request.url === `${BASE}/api/v1/tasks`)).toHaveLength(1);
