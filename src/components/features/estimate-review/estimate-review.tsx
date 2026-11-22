@@ -1,9 +1,11 @@
 import { APPROVED_NOTICE_ID } from '@/components/features/estimate-approve/approve-ids';
 import { ChangeCustomerButton } from '@/components/features/estimate-customer/change-customer-button';
+import { DownloadChip } from '@/components/shared/download-chip';
 import { Notice } from '@/components/shared/notice';
 import { warnedNodeIds } from '@/components/shared/quantity-tag';
 import { WarningNotice } from '@/components/shared/warning-notice';
 import type { RoleName } from '@/lib/auth/roles';
+import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
@@ -50,6 +52,8 @@ export interface EstimateReviewProps {
   readonly calculatedAt: string | null;
   /** Who is looking: the Admin alone has the Cancel approval button (STORY-06.12 AC-1). A Lead sees the state and the line that says who can. */
   readonly viewerRole: RoleName;
+  /** The marker of the estimate's Excel downloads (STORY-CR01.7E AC-5), in the header beside the status: the review is the Lead's and the Admin's, so it is never drawn for an Engineer. */
+  readonly download: DownloadChipData;
 }
 
 /** The approved notice of SCR-06 (STORY-06.06 AC-5): the approver and the time, and what approval means. It holds focus when an approval has just worked (`tabIndex` -1). */
@@ -63,7 +67,7 @@ function ApprovedNotice({ approval }: { readonly approval: ApprovedTileView | nu
   );
 }
 
-export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole }: EstimateReviewProps) {
+export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole, download }: EstimateReviewProps) {
   const { state, letters, nodes, totals } = costs;
   // The rows of the calculation's quantity warning, which the costs view holds only while the figures are current (STORY-06.10 AC-3, AC-4).
   const warned = warnedNodeIds(state === 'current' ? costs.warning : null);
@@ -86,6 +90,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
       <WorkspaceHeader
         view={header}
         noCustomerText={REVIEW_NO_CUSTOMER}
+        downloadMarker={<DownloadChip marker={download} />}
         // Change customer (CR-01 item 6, AC-12): on an estimate that is not approved only; the review is the Lead's and the Admin's, and the server refuses anyone else all the same.
         customerAction={header.status === 'APPROVED' ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} />}
       />

@@ -54,6 +54,7 @@ const render = (costs: CostsView, status: EstimateStatus): string =>
       costs,
       calculatedAt: costs.calculatedAt === null ? null : AT,
       viewerRole: 'LEAD',
+      download: { kind: 'none' },
     }),
   );
 

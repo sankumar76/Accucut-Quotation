@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { EstimateReview } from '@/components/features/estimate-review/estimate-review';
 import type { WorkspaceHeaderView } from '@/components/features/estimate-workspace/workspace-header';
+import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import type { CostsView } from '@/server/views/schemas/costs';
 
 import { defined } from '../support/defined';
@@ -49,8 +50,9 @@ const render = (
   customer: { id: string; name: string; shortName: string } | null = { id: 'c1', name: 'Invented Customer', shortName: 'INV' },
   header: WorkspaceHeaderView = HEADER,
   viewerRole: 'ADMIN' | 'LEAD' = 'LEAD',
+  download: DownloadChipData = { kind: 'none' },
 ): string =>
-  renderToStaticMarkup(createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST', viewerRole }));
+  renderToStaticMarkup(createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST', viewerRole, download }));
 
 const countOf = (html: string, text: string): number => html.split(text).length - 1;
 
@@ -874,5 +876,19 @@ describe('STORY-07.07: Download .xlsx on SCR-06 is the way to SCR-10 while the f
       expect(source, file).not.toContain('DOWNLOAD_NOT_YET_REASON');
       expect(source, file).not.toContain("STORY-07.03's");
     }
+  });
+});
+
+describe('STORY-CR01.7E AC-5: the download marker in the header', () => {
+  const OPTIONS: ReviewWorldOptions = { rows: [{ sl: '1', h: '1', cost: '1', bg: '12' }], bl: '12' };
+  const LAST = { byName: 'Invented Lead', at: '2026-11-23T04:30:00.000Z' };
+
+  it('shows the chip once, beside the status, in each of its three states', async () => {
+    const costs = await costsOf(OPTIONS);
+    expect(countOf(render(costs), 'Not downloaded')).toBe(1);
+    expect(countOf(render(costs, undefined, undefined, 'LEAD', { kind: 'downloaded', count: 2, last: LAST }), 'Downloaded 2×')).toBe(1);
+    const amber = render(costs, undefined, undefined, 'ADMIN', { kind: 'changed', count: 2, last: LAST });
+    expect(countOf(amber, 'Changed since download')).toBe(1);
+    expect(amber).toContain('Last downloaded by Invented Lead, 23 Nov 2026, 10:00 IST');
   });
 });
