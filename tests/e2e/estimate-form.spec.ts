@@ -75,8 +75,17 @@ test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
     await openForm(page, testInfo);
     // The compact layout (AQP-388) gives a card a share of its row by its number of fields: 01 and 02 (six each) fill a row of their own, so from a tablet the pair that shares a row is 03 and 04 (two each).
     const [firstName, secondName] = isPhone(page) ? ['01 Part Details', '02 Material and Dimensions'] : ['03 Cutting Process', '04 Bending'];
-    const first = defined(await page.getByRole('region', { name: firstName }).boundingBox());
-    const second = defined(await page.getByRole('region', { name: secondName }).boundingBox());
+    // The picture field arrives after the form, in a file of its own (`PictureSlot`), and card 01 changes height when it does (AQP-395, DEF-061): wait for its box (`data-picture-zone`, the group named
+    // "Part Model", `part-picture.tsx`) so the page is in its final state. Both cards are then read in one `evaluate`, one frame, and not by two `boundingBox()` calls that a move of the page can fall between.
+    await expect(page.getByRole('region', { name: '01 Part Details' }).getByRole('group', { name: /Part Model/ })).toBeVisible();
+    const secondCard = defined(await page.getByRole('region', { name: secondName }).elementHandle());
+    const { first, second } = await page.getByRole('region', { name: firstName }).evaluate((left, right) => {
+      const rect = (element: Element) => {
+        const { x, y, width, height } = element.getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      return { first: rect(left), second: rect(right) };
+    }, secondCard);
     // What the layout is, so a failure says why: the width of the form and the columns the grid made.
     const layout = await partForm(page).evaluate((form) => ({
       formWidth: form.getBoundingClientRect().width,
