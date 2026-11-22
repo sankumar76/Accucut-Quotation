@@ -29,6 +29,23 @@ const PHONE_MAX = 767;
 const tree = (page: Page): Locator => page.getByRole('navigation', { name: 'Parts tree' });
 const part = (page: Page, slNo: string): Locator => tree(page).getByRole('link').filter({ has: page.locator('[data-sl-no]', { hasText: new RegExp(`^${slNo.replaceAll('.', '\\.')}$`) }) });
 const action = (page: Page, name: string): Locator => page.getByRole('button', { name, exact: true });
+/**
+ * A button of one row (CR-01 item 3C): its name starts with the words and the number of its row ("Add under 1 ", "Add fastener under 1.1.1 ", "Delete 1.1 "). The toolbar shows on hover, on focus and on the open row
+ * (on a touch screen on the open row only), so a test chooses the row first, as a person does.
+ */
+const rowButton = (page: Page, words: string, slNo: string): Locator => tree(page).getByRole('button', { name: new RegExp(`^${words} ${slNo.replaceAll('.', '\\.')} `) });
+/** Adds a row of this kind under the row with this Sl. No by its "+": a menu for a Main Assembly or a Sub-Assembly (the code of the menu loads on the first open), the Fastener at once for a Part. */
+async function addUnder(page: Page, slNo: string, kind: 'Sub-Assembly' | 'Part' | 'Fastener'): Promise<void> {
+  await part(page, slNo).click();
+  if (kind === 'Fastener' && (await rowButton(page, 'Add fastener under', slNo).count()) === 1) {
+    await rowButton(page, 'Add fastener under', slNo).click();
+    return;
+  }
+  await rowButton(page, 'Add under', slNo).click();
+  await page.getByRole('menuitem', { name: kind, exact: true }).click();
+}
+/** "Add main assembly" at the foot of the tree. */
+const addMain = (page: Page): Promise<void> => page.getByRole('button', { name: 'Add main assembly' }).click();
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 
 /** The Sl. No of every part on screen, in order. */
@@ -48,7 +65,7 @@ async function slNumbers(page: Page): Promise<string[]> {
  *  A `200` that came after the 15 s and an announcement that is there by now is the duration tail (#467), not the trigger. `busy` is not in the page: it is read from the requests.
  */
 const MOVE_ROUTE = /\/tree\/move$/;
-const TOOLBAR_ACTIONS = ['New item', 'Sub-part', 'Part beside', 'Move up', 'Move down', 'Delete'] as const;
+const TOOLBAR_ACTIONS = ['Add main assembly', 'Move up', 'Move down'] as const;
 /** What the report waits for the page: it must never hold up the test's own failure for long. */
 const REPORT_PATIENCE_MS = 5_000;
 const KEPT_PAGE_ERRORS = 20;
@@ -262,7 +279,7 @@ async function openTreeWithTwoSubParts(page: Page, testInfo: TestInfo): Promise<
 }
 
 test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
-  test('AC-1, AC-2: New item, Sub-part and Part beside add parts and number them 1, 1.1, 1.2, 2; Move up renumbers and says so', async ({ page }, testInfo) => {
+  test('AC-1, AC-2: the "+" of a row and "Add main assembly" add rows and number them 1, 1.1, 1.2, 2; Move up renumbers and says so', async ({ page }, testInfo) => {
     // The second of two tests that are slow by what they do (AQP-340): four additions and two moves, each a request and a re-read of the tree. Measured: 22.8 s on a mobile shard of a green run
     // (44021154191), and it ran out of its 30 s on the tablet shard in runs 43905784789, 44025795508 and 44045571667. Three times the default, for this test only.
     test.slow();
@@ -270,12 +287,11 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     const moves = watchMoves(page);
     expect(await slNumbers(page)).toEqual(['1']);
 
-    await part(page, '1').click();
-    await action(page, 'Sub-part').click();
+    await addUnder(page, '1', 'Sub-Assembly');
     await expect(page.getByText('Part 1.1 added')).toHaveCount(1);
-    await action(page, 'Part beside').click();
+    await addUnder(page, '1', 'Part');
     await expect(page.getByText('Part 1.2 added')).toHaveCount(1);
-    await action(page, 'New item').click();
+    await addMain(page);
     await expect(page.getByText('Part 2 added')).toHaveCount(1);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2', '2']);
 
@@ -301,11 +317,10 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
 
   test('AQP-404 AC-1, AC-4: the tree is a nav of nested lists of links: no tree roles or counts, the open row is aria-current, each kind has its icon with its name, and a legend names the four', async ({ page }, testInfo) => {
     await openTree(page, testInfo);
-    await part(page, '1').click();
-    await action(page, 'Sub-part').click();
+    await addUnder(page, '1', 'Sub-Assembly');
     // One change at a time: a second press while the first is out is ignored, so wait for the part to appear.
     await expect(part(page, '1.1')).toBeVisible();
-    await action(page, 'New item').click();
+    await addMain(page);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '2']);
 
     // A list of links, not a tree: no role, no level, no place, no count.
@@ -337,14 +352,13 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
 
   test('AQP-404 AC-1, AC-5: an arrow opens and closes its branch, a leaf keeps the space, Tab moves from a row to the next and to each arrow (no arrow-key navigation), and Enter opens the row', async ({ page }, testInfo) => {
     await openTree(page, testInfo);
-    await part(page, '1').click();
-    await action(page, 'Sub-part').click();
+    await addUnder(page, '1', 'Sub-Assembly');
     await expect(part(page, '1.1')).toBeVisible();
-    await action(page, 'New item').click();
+    await addMain(page);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '2']);
 
-    // Only a branch has an arrow button; the leaf rows have the same space and no button.
-    const arrows = tree(page).getByRole('button');
+    // Only a branch has an arrow button; the leaf rows have the same space and no arrow button.
+    const arrows = tree(page).getByRole('button', { name: /^(Close|Open) branch / });
     await expect(arrows).toHaveCount(1);
     const arrow = tree(page).getByRole('button', { name: 'Close branch 1' });
     await expect(arrow).toHaveAttribute('aria-expanded', 'true');
@@ -390,7 +404,7 @@ test.describe('AC-3: delete asks first and names the count', () => {
     await openTreeWithTwoSubParts(page, testInfo);
 
     await part(page, '1').click();
-    await action(page, 'Delete').click();
+    await rowButton(page, 'Delete', '1').click();
     const dialog = page.getByRole('alertdialog', { name: 'Delete part 1?' });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('This also deletes its 2 sub-parts, and everything typed into them. This cannot be undone.');
@@ -407,29 +421,31 @@ test.describe('AC-3: delete asks first and names the count', () => {
     await openTreeWithTwoSubParts(page, testInfo);
 
     await part(page, '1').click();
-    await action(page, 'Delete').click();
+    await rowButton(page, 'Delete', '1').click();
     const dialog = page.getByRole('alertdialog', { name: 'Delete part 1?' });
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Delete 3 parts' }).click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByText('3 parts deleted')).toHaveCount(1);
-    await expect(page.getByText('No parts yet. Choose "New item" to add the first one.')).toBeVisible();
+    await expect(page.getByText('No parts yet. Choose "Add main assembly" to add the first one.')).toBeVisible();
+    // The foot of an empty tree still offers the one action that can start it again.
+    await expect(page.getByRole('button', { name: 'Add main assembly' })).toBeVisible();
     await page.reload();
     // With no part there is no tree element, only the words; on a phone they are in the drawer.
     if (isPhone(page)) await page.getByRole('button', { name: /^Parts tree/ }).click();
-    await expect(page.getByText('No parts yet. Choose "New item" to add the first one.')).toBeVisible();
+    await expect(page.getByText('No parts yet. Choose "Add main assembly" to add the first one.')).toBeVisible();
   });
 
   test('AC-3: a part with no sub-parts is a plain confirm, and Escape closes the dialog with nothing sent', async ({ page }, testInfo) => {
     await openTree(page, testInfo);
-    await action(page, 'New item').click();
+    await addMain(page);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '2']);
     const deletes: string[] = [];
     page.on('request', (request) => {
       if (request.method() === 'DELETE') deletes.push(request.url());
     });
 
-    await action(page, 'Delete').click();
+    await rowButton(page, 'Delete', '2').click();
     const dialog = page.getByRole('alertdialog', { name: 'Delete part 2?' });
     await expect(dialog).toContainText('Part 2 and everything typed into it will be deleted. This cannot be undone.');
     await page.keyboard.press('Escape');
@@ -437,7 +453,7 @@ test.describe('AC-3: delete asks first and names the count', () => {
     expect(deletes).toEqual([]);
     expect(await slNumbers(page)).toEqual(['1', '2']);
 
-    await action(page, 'Delete').click();
+    await rowButton(page, 'Delete', '2').click();
     await dialog.getByRole('button', { name: 'Delete part' }).click();
     await expect(dialog).toHaveCount(0);
     await expect.poll(() => slNumbers(page)).toEqual(['1']);
@@ -445,10 +461,80 @@ test.describe('AC-3: delete asks first and names the count', () => {
   });
 });
 
+test.describe('AQP-405: the row actions', () => {
+  test('AQP-405 AC-1, AC-2, AC-3: the "+" menu offers only the kinds the row allows, a Part gets its Fastener at once, a Fastener has no "+", and the row that was added is open and has the focus', async ({ page }, testInfo) => {
+    // Five additions, each a request and a re-read of the tree, as the AC-1, AC-2 test above (AQP-340).
+    test.slow();
+    await openTree(page, testInfo);
+    await part(page, '1').click();
+
+    // Under a Main Assembly: a Sub-Assembly, a Part or a Fastener. Escape closes the menu and gives the focus back to its "+".
+    const plus = rowButton(page, 'Add under', '1');
+    await expect(plus).toHaveAttribute('aria-haspopup', 'menu');
+    await plus.click();
+    await expect(page.getByRole('menuitem')).toHaveText(['Sub-Assembly', 'Part', 'Fastener']);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menuitem')).toHaveCount(0);
+    await expect(plus).toBeFocused();
+    await plus.click();
+    await page.getByRole('menuitem', { name: 'Sub-Assembly', exact: true }).click();
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1']);
+    // The added row is the open one and takes the focus.
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    await expect(part(page, '1.1')).toBeFocused();
+
+    // Under a Sub-Assembly: a Part or a Fastener, and by the keyboard the first item has the focus.
+    await rowButton(page, 'Add under', '1.1').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('menuitem')).toHaveText(['Part', 'Fastener']);
+    await expect(page.getByRole('menuitem').first()).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.1.1']);
+    await expect(part(page, '1.1.1')).toBeFocused();
+
+    // Under a Part there is one kind allowed, so it is added at once, with no menu; the "+" says so in its name.
+    await part(page, '1.1.1').click();
+    const fastener = rowButton(page, 'Add fastener under', '1.1.1');
+    await expect(fastener).not.toHaveAttribute('aria-haspopup', 'menu');
+    await fastener.click();
+    await expect(page.getByRole('menuitem')).toHaveCount(0);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.1.1', '1.1.1.1']);
+    await expect(tree(page).getByRole('img', { name: 'Fastener' })).toHaveCount(1);
+
+    // A Fastener holds nothing: no "+", only its "-".
+    await part(page, '1.1.1.1').click();
+    await expect(tree(page).getByRole('button', { name: /^Add (under|fastener under) 1\.1\.1\.1 / })).toHaveCount(0);
+    await expect(rowButton(page, 'Delete', '1.1.1.1')).toHaveCount(1);
+
+    // "Add main assembly" at the foot adds another top-level one, last, and opens it.
+    await addMain(page);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.1.1', '1.1.1.1', '2']);
+    await expect(part(page, '2')).toHaveAttribute('aria-current', 'true');
+    await expect(part(page, '2')).toBeFocused();
+    await expectNoAxeViolations(page);
+  });
+
+  test('AQP-405 AC-4: the "-" of a row that is not the open one deletes that row after the confirmation, and the open row stays open and is renumbered', async ({ page }, testInfo) => {
+    // The toolbar of a row that is not open shows on hover: a pointer is needed, so this is for the desktop width (a touch screen shows it on the open row only).
+    test.skip(isPhone(page) || (page.viewportSize()?.width ?? 0) < 1024, 'the toolbar of a row that is not open is shown by a pointer');
+    await openTreeWithTwoSubParts(page, testInfo);
+    await part(page, '1.2').click();
+    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+
+    await rowButton(page, 'Delete', '1.1').click();
+    const dialog = page.getByRole('alertdialog', { name: 'Delete part 1.1?' });
+    await expect(dialog).toContainText('Part 1.1 and everything typed into it will be deleted. This cannot be undone.');
+    await dialog.getByRole('button', { name: 'Delete part' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1']);
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+  });
+});
+
 test.describe('AC-6: a change made under the person', () => {
   test('AC-6: a move with a stale revision gets the fresh tree and a notice, and the first change stands', async ({ page }, testInfo) => {
     const { estimateId } = await openTree(page, testInfo);
-    await action(page, 'New item').click();
+    await addMain(page);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '2']);
     await part(page, '2').click();
 
@@ -477,8 +563,7 @@ test.describe('AC-6: a change made under the person', () => {
 test.describe('AC-9: the screen', () => {
   test('AC-9: a drawer below 768 px and a panel from it; every action is 44 px high, there is no sideways scroll and axe finds nothing, with the tree open', async ({ page }, testInfo) => {
     await openTree(page, testInfo);
-    await part(page, '1').click();
-    await action(page, 'Sub-part').click();
+    await addUnder(page, '1', 'Sub-Assembly');
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1']);
 
     if (isPhone(page)) {
@@ -486,8 +571,13 @@ test.describe('AC-9: the screen', () => {
     } else {
       await expect(page.getByRole('dialog')).toHaveCount(0);
     }
-    for (const name of ['New item', 'Sub-part', 'Part beside', 'Move up', 'Move down', 'Delete']) {
+    for (const name of ['Add main assembly', 'Move up', 'Move down']) {
       expect((await action(page, name).boundingBox())?.height ?? 0, name).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    }
+    // The row buttons are 44 px, and 36 px from 1024 px with a fine pointer (UX row 3, NFR-017). The open row's toolbar is the one on screen on a touch screen.
+    const rowButtonHeight = (page.viewportSize()?.width ?? 0) >= 1024 ? 36 : TOUCH_TARGET;
+    for (const [words, slNo] of [['Add under', '1'], ['Delete', '1']] as const) {
+      expect((await rowButton(page, words, slNo).boundingBox())?.height ?? 0, `${words} ${slNo}`).toBeGreaterThanOrEqual(rowButtonHeight);
     }
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);

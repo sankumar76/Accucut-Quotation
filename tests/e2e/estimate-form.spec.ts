@@ -194,7 +194,7 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
     await expect(control(page, 'L')).toHaveValue('3.00');
 
     await showTree(page);
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await tree(page).getByRole('button', { name: /^Delete 1 / }).click();
     const dialog = page.getByRole('alertdialog', { name: 'Delete part 1?' });
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Delete part' }).click();
