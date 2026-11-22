@@ -574,9 +574,9 @@ test.describe('AC-9: the screen', () => {
     for (const name of ['Add main assembly', 'Move up', 'Move down']) {
       expect((await action(page, name).boundingBox())?.height ?? 0, name).toBeGreaterThanOrEqual(TOUCH_TARGET);
     }
-    // The row buttons are 44 px, and 36 px from 1024 px with a fine pointer (UX row 3, NFR-017). The open row's toolbar is the one on screen on a touch screen.
+    // The row buttons are 44 px, and 36 px from 1024 px with a fine pointer (UX row 3, NFR-017). The open row (1.1, the one just added) is the one whose toolbar is on screen on a touch screen: the toolbar of another row is not drawn there.
     const rowButtonHeight = (page.viewportSize()?.width ?? 0) >= 1024 ? 36 : TOUCH_TARGET;
-    for (const [words, slNo] of [['Add under', '1'], ['Delete', '1']] as const) {
+    for (const [words, slNo] of [['Add under', '1.1'], ['Delete', '1.1']] as const) {
       expect((await rowButton(page, words, slNo).boundingBox())?.height ?? 0, `${words} ${slNo}`).toBeGreaterThanOrEqual(rowButtonHeight);
     }
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
