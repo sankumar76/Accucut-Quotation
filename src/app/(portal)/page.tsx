@@ -3,11 +3,12 @@ import Link from 'next/link';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { COMPANY_AND_PRODUCT_NAME, PRODUCT_NAME_IN_A_SENTENCE } from '@/lib/product-name';
 import { isDesignSystemAvailable } from '@/lib/design-system-gate';
 import { pageMetadata } from '@/lib/page-metadata';
 import { authorizePage } from '@/server/http/page-access';
 
-export const metadata = pageMetadata('Home', 'Accucut Lasers quotation portal: assign, prepare, review and approve estimates.');
+export const metadata = pageMetadata('Home', `Accucut Lasers ${PRODUCT_NAME_IN_A_SENTENCE}: assign, prepare, review and approve estimates.`);
 
 // Placeholder home page (signed-in only). People land on /queue after sign-in; this page goes when the role-specific homes
 // arrive. It checks the person itself and does not rely on the portal layout (STD-09).
@@ -15,7 +16,7 @@ export default async function HomePage() {
   await authorizePage('/');
   return (
     <>
-      <PageHeader title="Accucut Quotation Portal" description="The portal is being built one screen at a time." />
+      <PageHeader title={COMPANY_AND_PRODUCT_NAME}description="The portal is being built one screen at a time." />
       {isDesignSystemAvailable() ? (
         <Card>
           <CardContent className="flex flex-wrap items-center gap-s-4">
