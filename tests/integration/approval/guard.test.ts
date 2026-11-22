@@ -66,7 +66,7 @@ describe('AC-2: every way an input can change makes the approval a 409 TOTALS_OU
   it('the customer changed', async () => {
     const { estimateId } = await calculatedEstimate(db);
     const seen = await currentCalculationOf(db, estimateId);
-    const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Approval Guard Customer') RETURNING id::text AS id");
+    const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Approval Guard Customer', left(md5('Approval Guard Customer'), 10)) RETURNING id::text AS id");
     await db.estimateService.setCustomer(lead(), estimateId, defined(rows[0]).id);
     await expect(db.approvalService.approve(lead(), estimateId, request(seen))).rejects.toMatchObject({ code: TOTALS_OUT_OF_DATE_CODE });
   });

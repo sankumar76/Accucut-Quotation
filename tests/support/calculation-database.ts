@@ -72,7 +72,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
   ]);
   const configVersionId = defined(version.rows[0]).id;
 
-  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Invented calculation customer') RETURNING id::text");
+  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Invented calculation customer', left(md5('Invented calculation customer'), 10)) RETURNING id::text");
   const customerId = defined(customer.rows[0]).id;
   for (const item of SEED_PROCESS_ITEMS) {
     await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) VALUES ($1::uuid, $2::uuid, $3)', [customerId, item.id, defined(TYPED_RATES[item.name], item.name)]);
@@ -132,7 +132,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
   const addEstimate: CalculationDatabase['addEstimate'] = async (options = {}) => {
     taskNumber += 1;
     const task = await db.owner.query<{ id: string }>(
-      `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at) VALUES ($1, $2::uuid, $2::uuid, $3, now() + interval '3 days') RETURNING id::text`,
+      `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $2::uuid, $3, now() + interval '3 days', 'Invented task', 'Invented subject') RETURNING id::text`,
       [`Q-2026-${String(9000 + taskNumber)}`, options.engineer === true ? engineerId : personId, UNC_PATH],
     );
     const { rows } = await db.owner.query<{ id: string }>(

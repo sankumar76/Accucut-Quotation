@@ -29,7 +29,7 @@ beforeAll(async () => {
   adminId = await insertPersonAsOwner(db, 'Admin', 'ADMIN');
   await db.users.list();
   await openCustomerDefaults(db);
-  await db.owner.query(`INSERT INTO customers (name) SELECT 'Invented volume customer ' || lpad(n::text, 4, '0') FROM generate_series(1, ${String(CUSTOMERS)}) AS n`);
+  await db.owner.query(`INSERT INTO customers (name, short_name) SELECT 'Invented volume customer ' || lpad(n::text, 4, '0'), 'V' || lpad(n::text, 4, '0') FROM generate_series(1, ${String(CUSTOMERS)}) AS n`);
   await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) SELECT c.id, pi.id, pi.default_value FROM customers c CROSS JOIN process_items pi');
 }, 120_000);
 

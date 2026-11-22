@@ -99,7 +99,7 @@ async function approvedEstimate(price = '1000.00'): Promise<{ readonly estimateI
 /** A customer of its own, with the rates of the shared one, so it can be deleted without touching the other tests' estimates. */
 async function ownCustomer(): Promise<string> {
   ownCount += 1;
-  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text', [`Invented unlock customer ${String(ownCount)}`]);
+  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text', [`Invented unlock customer ${String(ownCount)}`]);
   const id = defined(rows[0]).id;
   await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) SELECT $1::uuid, process_item_id, value FROM customer_rates WHERE customer_id = $2::uuid', [id, db.customerId]);
   return id;

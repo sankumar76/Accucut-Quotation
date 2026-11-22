@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   canonicalCustomerName,
+  canonicalShortName,
   changedContactFields,
+  CUSTOMER_SHORT_NAME_MAX_LENGTH,
   contactValue,
   customerFormProblems,
   detailChangesFrom,
@@ -11,6 +13,11 @@ import {
   emailProblem,
   rateProblem,
   rateText,
+  shortNameProblem,
+  SHORT_NAME_CONTROL_MESSAGE,
+  SHORT_NAME_REQUIRED_MESSAGE,
+  SHORT_NAME_TAKEN_MESSAGE,
+  SHORT_NAME_TOO_LONG_MESSAGE,
   type CustomerRate,
 } from '@/lib/masters/customers';
 import {
@@ -32,8 +39,55 @@ import type { CustomerRow } from '@/lib/masters/customers-client';
 
 const CUTTING: CustomerRate = { processItemId: '00000000-0000-4000-8000-000400000001', name: 'Cutting-Rate-per-Sec', unit: 'per second', defaultValue: '1.37', value: '1.37' };
 const OH_PROFIT: CustomerRate = { processItemId: '00000000-0000-4000-8000-000400000013', name: 'OH Profit %', unit: '%', defaultValue: '11.00', value: '11.00' };
-const CUSTOMER: CustomerRow = { id: 'c1', name: 'Invented Works', phone: '+99 555 0142', email: null, address: null, rates: [CUTTING, OH_PROFIT] };
-const VALUES = { name: 'Invented Works', phone: '+99 555 0142', email: '', address: '' };
+const CUSTOMER: CustomerRow = { id: 'c1', name: 'Invented Works', shortName: 'INVWORKS', phone: '+99 555 0142', email: null, address: null, rates: [CUTTING, OH_PROFIT] };
+const VALUES = { name: 'Invented Works', shortName: 'INVWORKS', phone: '+99 555 0142', email: '', address: '' };
+
+describe('CR-01 item 6 (AQP-390), AC-14: the short name', () => {
+  it('says what to do in the words of the story, and the number in the sentence is the constant', () => {
+    expect(SHORT_NAME_REQUIRED_MESSAGE).toBe('Enter a short name.');
+    expect(SHORT_NAME_TOO_LONG_MESSAGE).toBe('Keep the short name under 10 characters.');
+    expect(SHORT_NAME_TOO_LONG_MESSAGE).toContain(String(CUSTOMER_SHORT_NAME_MAX_LENGTH));
+    expect(SHORT_NAME_TAKEN_MESSAGE).toBe('A customer with this short name already exists.');
+    expect(SHORT_NAME_CONTROL_MESSAGE).toBe('Enter the short name without line breaks or other control characters.');
+  });
+
+  it('is required, trimmed first: empty and spaces-only are refused', () => {
+    expect(shortNameProblem('')).toBe(SHORT_NAME_REQUIRED_MESSAGE);
+    expect(shortNameProblem('   ')).toBe(SHORT_NAME_REQUIRED_MESSAGE);
+    expect(customerFormProblems({ ...VALUES, shortName: '' })).toEqual({ shortName: SHORT_NAME_REQUIRED_MESSAGE });
+  });
+
+  it('accepts exactly CUSTOMER_SHORT_NAME_MAX_LENGTH characters and refuses one more, counted after trimming and with a letter outside the basic plane as one', () => {
+    expect(CUSTOMER_SHORT_NAME_MAX_LENGTH).toBe(10);
+    expect(shortNameProblem('S'.repeat(CUSTOMER_SHORT_NAME_MAX_LENGTH))).toBeNull();
+    expect(shortNameProblem(`  ${'S'.repeat(CUSTOMER_SHORT_NAME_MAX_LENGTH)}  `)).toBeNull();
+    expect(shortNameProblem('S'.repeat(CUSTOMER_SHORT_NAME_MAX_LENGTH + 1))).toBe(SHORT_NAME_TOO_LONG_MESSAGE);
+    expect(shortNameProblem('\u{1F600}'.repeat(CUSTOMER_SHORT_NAME_MAX_LENGTH))).toBeNull();
+    expect(shortNameProblem('\u{1F600}'.repeat(CUSTOMER_SHORT_NAME_MAX_LENGTH + 1))).toBe(SHORT_NAME_TOO_LONG_MESSAGE);
+  });
+
+  it.each(['BWC', 'bwc-2', 'A B', 'Ac/me', 'M&M', '\u0905\u0928\u0941', 'Caf\u00e9'])('accepts any printable text (assumption A-CR01-A2): %j', (shortName) => {
+    expect(shortNameProblem(shortName)).toBeNull();
+  });
+
+  it.each(['A\nB', 'A\tB', 'A\rB', 'A\u0000B', 'A\u001bB'])('refuses a control character: %j', (shortName) => {
+    expect(shortNameProblem(shortName)).toBe(SHORT_NAME_CONTROL_MESSAGE);
+  });
+
+  it('keeps the short name as typed, trimmed, and nothing else changed: letter case and inner spaces stay', () => {
+    expect(canonicalShortName('  Bwc 2  ')).toBe('Bwc 2');
+  });
+
+  it('is part of the details form, between the name and the phone, and of the body a save sends', () => {
+    expect(customerFormProblems({ ...VALUES, shortName: 'S'.repeat(11) })).toEqual({ shortName: SHORT_NAME_TOO_LONG_MESSAGE });
+    expect(customerEditChanges(CUSTOMER, { ...VALUES, shortName: ' NEW ' }, {})).toEqual({ shortName: 'NEW' });
+  });
+
+  it('counts a change of letter case as a change, and the same short name as none', () => {
+    expect(detailChangesFrom(CUSTOMER, { shortName: 'invworks' })).toEqual({ shortName: 'invworks' });
+    expect(detailChangesFrom(CUSTOMER, { shortName: ' INVWORKS ' })).toEqual({});
+  });
+});
 
 describe('the details (AC-1)', () => {
   it('asks for the name in the words of the ux-spec, and refuses one over 100 characters', () => {
@@ -54,7 +108,7 @@ describe('the details (AC-1)', () => {
   );
 
   it('does not ask for the optional fields: an empty phone, e-mail address or address is fine', () => {
-    expect(customerFormProblems({ name: 'Invented Works', phone: '', email: '  ', address: '' })).toEqual({});
+    expect(customerFormProblems({ name: 'Invented Works', shortName: 'INVWORKS', phone: '', email: '  ', address: '' })).toEqual({});
   });
 
   it('keeps a name in one canonical form: full-width letters folded, spaces trimmed and collapsed; and a contact field as null when it is empty', () => {
@@ -109,7 +163,7 @@ describe("the edit page's map of messages and changes (AC-1, AC-2, AC-8)", () =>
 
   it('starts from the server\'s values (a percent rate without its trailing .00: "11" for "11.00", "12.50" stays) and lists the controls in the order of the page: the four details, then the rates in table order', () => {
     expect(inputs).toEqual({ [CUTTING.processItemId]: '1.37', [OH_PROFIT.processItemId]: '11' });
-    expect(editFieldOrder(CUSTOMER.rates)).toEqual(['name', 'phone', 'email', 'address', rateErrorKey(CUTTING.processItemId), rateErrorKey(OH_PROFIT.processItemId)]);
+    expect(editFieldOrder(CUSTOMER.rates)).toEqual(['name', 'shortName', 'phone', 'email', 'address', rateErrorKey(CUTTING.processItemId), rateErrorKey(OH_PROFIT.processItemId)]);
   });
 
   it('finds a message for each control that has one, a rate judged against its own unit', () => {

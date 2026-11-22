@@ -264,10 +264,12 @@ const customerRateState = z.strictObject({
 /**
  * A customer as the log keeps it. `contact` names the contact fields that were given (a create) or changed (an edit), the same list on both sides, and
  * **never their values**: the log is append-only, a phone number or an address is personal data, and erasure waits on Q-26 (data minimisation, as for the
- * user events). The ID and the name label the entry; `name` is kept in the state as well, so an edit shows the old name and the new one.
+ * user events). The ID and the name label the entry; `name` is kept in the state as well, so an edit shows the old name and the new one. `shortName` (CR-01 item 6, AQP-390) is kept beside it: it is
+ * class Internal and not contact data, so its value may be logged. It reads as null from an entry written before CR-01 (the key is absent there), so such an entry still reads; every entry written now has it.
  */
 const customerState = z.strictObject({
   name: z.string().min(1),
+  shortName: z.string().min(1).nullable().default(null),
   contact: z.array(z.enum(CONTACT_FIELD_NAMES)),
   rates: z.array(customerRateState),
 });
@@ -279,10 +281,11 @@ function describeCustomerRate(rate: z.output<typeof customerRateState>): string 
   return `${rate.name} ${rate.unit === PERCENT_UNIT ? formatDefaultValue(rate.value, rate.unit) : `${RUPEE} ${rate.value}`}`;
 }
 
-/** "Brightwater Controls; Contact: Phone, E-mail; Cutting-Rate-per-Sec ₹ 0.50": the name, the contact fields, and the rates the entry lists. */
+/** "Brightwater Controls (BWC); Contact: Phone, E-mail; Cutting-Rate-per-Sec ₹ 0.50": the name and short name, the contact fields, and the rates the entry lists. */
 function describeCustomer(state: z.output<typeof customerState>): string {
   const contact = state.contact.length === 0 ? [] : [`Contact: ${state.contact.map((field) => CONTACT_WORDS[field]).join(', ')}`];
-  return [state.name, ...contact, ...state.rates.map(describeCustomerRate)].join('; ');
+  const label = state.shortName === null ? state.name : `${state.name} (${state.shortName})`;
+  return [label, ...contact, ...state.rates.map(describeCustomerRate)].join('; ');
 }
 
 // ---- Shape of the Exchange Rate Master events (SCR-16 "Master data edit"; STORY-02.04) ------------------------------------------

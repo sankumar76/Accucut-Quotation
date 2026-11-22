@@ -8,6 +8,7 @@ import { createLateFailingRunner } from '../../support/late-failure-runner';
 import { SEED_PROCESS_ITEMS } from '../../support/seed-config';
 
 import { itemIds, openCustomerDefaults, resetCustomerTables } from './customers-support';
+import { shortNameOf } from '../../support/customer-short-name';
 
 /**
  * STORY-02.08 AC-1 to AC-4, AC-6, AC-9 against real PostgreSQL in a throwaway database: a changed default reaches the customers that held the old one
@@ -48,14 +49,14 @@ afterEach(() => resetCustomerTables(db));
 
 /** A customer at the item's default (1.37), then at `value` when one is given. The owner writes it, so no entry is made. */
 async function customer(name: string, value?: string): Promise<string> {
-  const { id } = await db.mastersService.createCustomer(by(), { name, phone: null, email: null, address: null });
+  const { id } = await db.mastersService.createCustomer(by(), { name, shortName: shortNameOf(name), phone: null, email: null, address: null });
   if (value !== undefined) await setValue(id, value);
   return id;
 }
 
 /** `count` customers at every default, made in two statements by the owner (a customer made through the service takes the table lock one by one, so 17 of them are slow), and their IDs. */
 async function bulkCustomers(count: number): Promise<ReadonlyArray<string>> {
-  const { rows } = await db.owner.query<{ id: string }>(`INSERT INTO customers (name) SELECT 'Equal ' || lpad(n::text, 3, '0') || ' Works' FROM generate_series(1, ${String(count)}) AS n RETURNING id::text`);
+  const { rows } = await db.owner.query<{ id: string }>(`INSERT INTO customers (name, short_name) SELECT 'Equal ' || lpad(n::text, 3, '0') || ' Works', 'E' || lpad(n::text, 3, '0') FROM generate_series(1, ${String(count)}) AS n RETURNING id::text`);
   const ids = rows.map((row) => row.id);
   await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) SELECT c.id, pi.id, pi.default_value FROM customers c CROSS JOIN process_items pi WHERE c.id = ANY($1::uuid[])', [ids]);
   return ids;

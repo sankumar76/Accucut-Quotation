@@ -7,7 +7,10 @@ import {
   CUSTOMER_NAME_REQUIRED_MESSAGE,
   emailProblem,
   NOTHING_TO_CHANGE_CUSTOMER_MESSAGE,
+  SHORT_NAME_REQUIRED_MESSAGE,
   phoneProblem,
+  shortNameProblem,
+  canonicalShortName,
 } from '../../../lib/masters/customers';
 import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, NAME_TOO_LONG_MESSAGE } from '../../../lib/masters/master-rules';
 
@@ -27,6 +30,18 @@ const name = z
   .string({ error: CUSTOMER_NAME_REQUIRED_MESSAGE })
   .transform(canonicalCustomerName)
   .pipe(z.string().min(1, CUSTOMER_NAME_REQUIRED_MESSAGE).max(CUSTOMER_NAME_MAX_LENGTH, NAME_TOO_LONG_MESSAGE));
+
+/**
+ * The short name as stored (trimmed, as typed), checked by the screen's own rule (`shortNameProblem`): required, at most `CUSTOMER_SHORT_NAME_MAX_LENGTH` characters, no control character
+ * (CR-01 item 6). The schema and the form say the same words because it is one function; the number is in one constant. Whether it is free is the service's, from the database's index.
+ */
+const shortName = z
+  .string({ error: SHORT_NAME_REQUIRED_MESSAGE })
+  .transform(canonicalShortName)
+  .superRefine((value, context) => {
+    const problem = shortNameProblem(value);
+    if (problem !== null) context.addIssue({ code: 'custom', message: problem });
+  });
 
 /** A check of the screen's (`phoneProblem`, `emailProblem`, `addressProblem`) as a zod refinement, so the schema and the form say the same words. */
 function contactField(problemOf: (value: string) => string | null) {
@@ -69,6 +84,7 @@ const rateRow = z.strictObject({
 export const customerSummarySchema = z.strictObject({
   id: z.string().min(1),
   name: z.string().min(1),
+  shortName: z.string().min(1),
   phone: z.string().nullable(),
   email: z.string().nullable(),
   address: z.string().nullable(),
@@ -81,6 +97,7 @@ export const customersResponseSchema = z.strictObject({ customers: z.array(custo
 export const customerSchema = z.strictObject({
   id: z.string().min(1),
   name: z.string().min(1),
+  shortName: z.string().min(1),
   phone: z.string().nullable(),
   email: z.string().nullable(),
   address: z.string().nullable(),
@@ -90,12 +107,12 @@ export const customerSchema = z.strictObject({
 /** `POST /api/v1/customers/{id}/reset-rates` (AC-3): the customer as it is now, and how many rates were replaced. */
 export const resetCustomerResponseSchema = z.strictObject({ customer: customerSchema, count: z.number().int().nonnegative() });
 
-/** `POST /api/v1/customers` (AC-1): the name is required; a contact field may be left out or null. */
-export const createCustomerBodySchema = z.strictObject({ name, phone: phone.optional(), email: email.optional(), address: address.optional() });
+/** `POST /api/v1/customers` (AC-1): the name and the short name are required; a contact field may be left out or null. */
+export const createCustomerBodySchema = z.strictObject({ name, shortName, phone: phone.optional(), email: email.optional(), address: address.optional() });
 
 /** `PATCH /api/v1/customers/{id}` (AC-2): any of the details and the rates to set; at least one field. */
 export const updateCustomerBodySchema = z
-  .strictObject({ name, phone, email, address, rates })
+  .strictObject({ name, shortName, phone, email, address, rates })
   .partial()
   .refine((body) => Object.keys(body).length > 0, { message: NOTHING_TO_CHANGE_CUSTOMER_MESSAGE });
 

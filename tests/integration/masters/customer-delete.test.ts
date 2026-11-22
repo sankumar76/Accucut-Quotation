@@ -15,6 +15,7 @@ import { createHoldingRunner, createServiceHoldingBeforeCommit } from '../../sup
 import { createLateFailingRunner } from '../../support/late-failure-runner';
 
 import { openCustomerDefaults, resetCustomerTables } from './customers-support';
+import { shortNameOf } from '../../support/customer-short-name';
 
 /**
  * STORY-02.07 (AC-1, AC-2, AC-4, AC-5, AC-8) against real PostgreSQL in a throwaway database: the delete of a customer over the real repositories. It is soft
@@ -66,15 +67,15 @@ afterEach(async () => {
   await resetCustomerTables(db);
 });
 
-const customerNamed = (name: string) => db.mastersService.createCustomer(by(), { name, phone: '+99 555 0142', email: null, address: null });
+const customerNamed = (name: string) => db.mastersService.createCustomer(by(), { name, shortName: shortNameOf(name), phone: '+99 555 0142', email: null, address: null });
 
 /** A task with its estimate, in this status, for this customer (or none). Returns the estimate's ID and the task's code. */
 async function estimateFor(customerId: string | null, status: 'DRAFT' | 'SUBMITTED' | 'APPROVED'): Promise<{ readonly estimateId: string; readonly code: string }> {
   codes += 1;
   const code = `Q-2026-${String(9000 + codes).padStart(4, '0')}`;
   const task = await db.owner.query<{ id: string }>(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, notes)
-     VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented hopper cover', NULL) RETURNING id::text AS id`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes)
+     VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented hopper cover', 'Invented subject', NULL) RETURNING id::text AS id`,
     [code, engineerId, leadId, PATH],
   );
   const estimate = await db.owner.query<{ id: string }>(

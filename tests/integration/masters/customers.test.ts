@@ -9,6 +9,7 @@ import { defined } from '../../support/defined';
 import { refusal } from '../../support/user-service-fixture';
 
 import { itemIds, openCustomerDefaults, resetCustomerTables, seedDefaultValue, type CustomerRateRow } from './customers-support';
+import { shortNameOf } from '../../support/customer-short-name';
 
 /**
  * STORY-02.02 T1, T2 and T3 (AC-1, AC-2, AC-3, AC-5, AC-6) against real PostgreSQL in a throwaway database: the rules the two tables keep
@@ -52,7 +53,7 @@ const SECOND_ITEM = defined(ids[1]);
 const PERCENT_ITEM = defined(ids[12]);
 
 describe('AC-1 (T1): what the tables keep, whoever writes to them', () => {
-  const insert = 'INSERT INTO customers (name) VALUES ($1) RETURNING id::text';
+  const insert = 'INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text';
 
   it('refuses a name another customer has ignoring letter case, even to the owner (the unique index), and a blank name (the CHECK)', async () => {
     await db.owner.query(insert, ['Invented Works']);
@@ -73,7 +74,7 @@ describe('AC-1 (T1): what the tables keep, whoever writes to them', () => {
   });
 
   it('refuses to delete a Process Master item that a customer still has a rate for: no cascade hides a forgotten sync (AC-4)', async () => {
-    const created = await db.mastersService.createCustomer(by(), { name: 'Invented Works', phone: null, email: null, address: null });
+    const created = await db.mastersService.createCustomer(by(), { name: 'Invented Works', shortName: shortNameOf('Invented Works'), phone: null, email: null, address: null });
     expect(created.rates).toHaveLength(15);
     await expect(db.owner.query('DELETE FROM process_items WHERE id = $1::uuid', [FIRST_ITEM])).rejects.toMatchObject({ constraint: 'fk_customer_rates_process_item_id' });
   });
@@ -89,9 +90,9 @@ describe('AC-1 (T1): what the tables keep, whoever writes to them', () => {
   });
 
   it('reports a repeated name as the customers rule, whatever the spelling: the exact twin and the lower-case twin both map to customer-name', async () => {
-    await db.transactions.run((tx) => db.masterRepository.createCustomer({ name: 'Invented Works', phone: null, email: null, address: null }, tx));
+    await db.transactions.run((tx) => db.masterRepository.createCustomer({ name: 'Invented Works', shortName: shortNameOf('Invented Works'), phone: null, email: null, address: null }, tx));
     for (const name of ['Invented Works', 'INVENTED WORKS']) {
-      const error = await refusal(db.transactions.run((tx) => db.masterRepository.createCustomer({ name, phone: null, email: null, address: null }, tx)));
+      const error = await refusal(db.transactions.run((tx) => db.masterRepository.createCustomer({ name, shortName: shortNameOf(name), phone: null, email: null, address: null }, tx)));
       expect(error).toBeInstanceOf(MasterConstraintError);
       expect(error).toMatchObject({ constraint: 'customer-name' });
     }
@@ -101,7 +102,7 @@ describe('AC-1 (T1): what the tables keep, whoever writes to them', () => {
 describe('AC-1, AC-6 (T2): adding a customer', () => {
   it('stores a customer with a name only, copies every current default into 15 rate rows, and writes exactly one master.created entry', async () => {
     const entries = await entryCount(db);
-    const created = await db.mastersService.createCustomer(by(), { name: '  Invented   Works ', phone: null, email: null, address: null });
+    const created = await db.mastersService.createCustomer(by(), { name: '  Invented   Works ', shortName: shortNameOf('  Invented   Works '), phone: null, email: null, address: null });
     expect(created).toMatchObject({ name: 'Invented Works', phone: null, email: null, address: null });
     const defaults = await seedDefaultValue(db);
     expect(created.rates).toHaveLength(15);
@@ -116,7 +117,7 @@ describe('AC-1, AC-6 (T2): adding a customer', () => {
   });
 
   it('keeps the contact details given and names only the fields given in the entry, never their values', async () => {
-    const created = await db.mastersService.createCustomer(by(), { name: 'Invented Works', phone: ' +99 555 0142 ', email: 'buying@invented.example.test', address: null });
+    const created = await db.mastersService.createCustomer(by(), { name: 'Invented Works', shortName: shortNameOf('Invented Works'), phone: ' +99 555 0142 ', email: 'buying@invented.example.test', address: null });
     expect(created).toMatchObject({ phone: '+99 555 0142', email: 'buying@invented.example.test', address: null });
     const entry = defined((await entriesFor(db, created.id))[0]);
     expect(entry.after).toMatchObject({ contact: ['phone', 'email'] });
@@ -125,23 +126,94 @@ describe('AC-1, AC-6 (T2): adding a customer', () => {
   });
 
   it('refuses a blank name, a name that is taken ignoring letter case, and an e-mail address that does not look like one, and stores and writes nothing', async () => {
-    await db.mastersService.createCustomer(by(), { name: 'Invented Works', phone: null, email: null, address: null });
+    await db.mastersService.createCustomer(by(), { name: 'Invented Works', shortName: shortNameOf('Invented Works'), phone: null, email: null, address: null });
     const entries = await entryCount(db);
-    const blank = await refusal(db.mastersService.createCustomer(by(), { name: '   ', phone: null, email: null, address: null }));
+    const blank = await refusal(db.mastersService.createCustomer(by(), { name: '   ', shortName: shortNameOf('   '), phone: null, email: null, address: null }));
     expect(blank).toMatchObject({ fields: [{ field: 'name', message: 'Enter the customer name.' }] });
-    const taken = await refusal(db.mastersService.createCustomer(by(), { name: 'invented WORKS', phone: null, email: null, address: null }));
+    const taken = await refusal(db.mastersService.createCustomer(by(), { name: 'invented WORKS', shortName: shortNameOf('invented WORKS'), phone: null, email: null, address: null }));
     expect(taken).toBeInstanceOf(FieldValidationError);
     expect(taken).toMatchObject({ code: NAME_TAKEN_CODE, fields: [{ field: 'name', message: 'A customer with this name already exists.' }] });
-    const email = await refusal(db.mastersService.createCustomer(by(), { name: 'Other Works', phone: null, email: 'not-an-address', address: null }));
+    const email = await refusal(db.mastersService.createCustomer(by(), { name: 'Other Works', shortName: shortNameOf('Other Works'), phone: null, email: 'not-an-address', address: null }));
     expect(email).toMatchObject({ fields: [{ field: 'email', message: 'Enter an e-mail address like name@company.com.' }] });
     expect(await entryCount(db)).toBe(entries);
     expect((await db.mastersService.listCustomers()).map((customer) => customer.name)).toEqual(['Invented Works']);
   });
 });
 
+describe('CR-01 item 6 (AQP-390), AC-14 and AC-17: the short name, over the real repositories', () => {
+  const make = (name: string, shortName: string) => db.mastersService.createCustomer(by(), { name, shortName, phone: null, email: null, address: null });
+
+  it('stores the short name trimmed and as typed, lists it, and keeps it in the one master.created entry beside the name', async () => {
+    const created = await make('Invented Works', '  Bwc-2  ');
+    expect(created.shortName).toBe('Bwc-2');
+    expect((await db.mastersService.listCustomers()).map((customer) => [customer.name, customer.shortName])).toEqual([['Invented Works', 'Bwc-2']]);
+    const [entry, ...others] = await entriesFor(db, created.id);
+    expect(others).toEqual([]);
+    expect(customerSide(entry?.after)).toMatchObject({ name: 'Invented Works', shortName: 'Bwc-2', contact: [] });
+  });
+
+  it('refuses a short name another customer has, ignoring letter case, under shortName with a message that names no customer, and stores and writes nothing', async () => {
+    await make('Invented Works', 'BWC');
+    const entries = await entryCount(db);
+    const taken = await refusal(make('Second Works', 'bwc'));
+    expect(taken).toBeInstanceOf(FieldValidationError);
+    expect(taken).toMatchObject({ code: NAME_TAKEN_CODE, fields: [{ field: 'shortName', message: 'A customer with this short name already exists.' }] });
+    expect(JSON.stringify(taken)).not.toContain('Invented Works');
+    expect(await entryCount(db)).toBe(entries);
+    expect(await db.mastersService.listCustomers()).toHaveLength(1);
+  });
+
+  it('keeps the short name of a deleted customer reserved: the index covers every row, so a new customer cannot take it', async () => {
+    const gone = await make('Invented Works', 'GONE');
+    await db.mastersService.deleteCustomer(by(), gone.id);
+    expect(await db.mastersService.listCustomers()).toEqual([]);
+    expect(await refusal(make('Second Works', 'gone'))).toMatchObject({ code: NAME_TAKEN_CODE, fields: [{ field: 'shortName' }] });
+  });
+
+  it('is matched by the index name, so a name that is taken still says name and a short name that is taken says shortName', async () => {
+    await make('Invented Works', 'BWC');
+    expect(await refusal(make('invented works', 'OTHER'))).toMatchObject({ fields: [{ field: 'name' }] });
+    expect(await refusal(make('Other Works', 'BWC'))).toMatchObject({ fields: [{ field: 'shortName' }] });
+  });
+
+  it('changes it on an edit with one master.edited entry holding the short name before and after, and writes nothing when it is the same again', async () => {
+    const customer = await make('Invented Works', 'OLD');
+    const updated = await db.mastersService.updateCustomer(by(), customer.id, { shortName: ' NEW ' });
+    expect(updated.shortName).toBe('NEW');
+    const [, edit, ...others] = await entriesFor(db, customer.id);
+    expect(others).toEqual([]);
+    expect(edit).toMatchObject({ event: 'master.edited' });
+    expect([customerSide(edit?.before).shortName, customerSide(edit?.after).shortName]).toEqual(['OLD', 'NEW']);
+    expect(customerSide(edit?.after).contact).toEqual([]);
+    const entries = await entryCount(db);
+    await db.mastersService.updateCustomer(by(), customer.id, { shortName: 'NEW' });
+    expect(await entryCount(db)).toBe(entries);
+  });
+
+  it('refuses an edit to a short name another customer has, ignoring letter case, and leaves the customer as it was', async () => {
+    await make('Invented Works', 'TAKEN');
+    const other = await make('Other Works', 'MINE');
+    expect(await refusal(db.mastersService.updateCustomer(by(), other.id, { shortName: 'taken' }))).toMatchObject({ code: NAME_TAKEN_CODE, fields: [{ field: 'shortName' }] });
+    expect((await db.mastersService.getCustomer(other.id)).shortName).toBe('MINE');
+  });
+
+  it('lets exactly one of two creates that race for one short name win, and refuses the other under shortName', async () => {
+    const results = await Promise.allSettled([make('Race One', 'RACE'), make('Race Two', 'race')]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const lost = results.find((result) => result.status === 'rejected');
+    expect(lost?.status === 'rejected' && lost.reason).toMatchObject({ code: NAME_TAKEN_CODE, fields: [{ field: 'shortName' }] });
+  });
+
+  it('refuses a short name of 21 characters in the database whoever writes it, and accepts 20: the ceiling that lets the code limit be raised without a migration', async () => {
+    const insert = 'INSERT INTO customers (name, short_name) VALUES ($1, $2)';
+    await db.owner.query(insert, ['Twenty Works', 'T'.repeat(20)]);
+    await expect(db.owner.query(insert, ['Twenty-one Works', 'U'.repeat(21)])).rejects.toMatchObject({ constraint: 'ck_customers_short_name_length' });
+  });
+});
+
 describe('AC-2, AC-6 (T2): editing a customer', () => {
   async function created(name = 'Invented Works') {
-    return db.mastersService.createCustomer(by(), { name, phone: '+99 555 0142', email: null, address: null });
+    return db.mastersService.createCustomer(by(), { name, shortName: shortNameOf(name), phone: '+99 555 0142', email: null, address: null });
   }
 
   it('sets a rate and writes one master.edited entry holding the name, no contact field and only the rate that changed, old value before and new value after', async () => {
@@ -239,7 +311,7 @@ describe('AC-2, AC-6 (T2): editing a customer', () => {
 
 describe('AC-3, AC-6 (T3): reset to defaults', () => {
   it('sets every rate that differs back to the current default, answers with the count and writes one master.edited entry with no contact and only those rates', async () => {
-    const customer = await db.mastersService.createCustomer(by(), { name: 'Invented Works', phone: null, email: null, address: null });
+    const customer = await db.mastersService.createCustomer(by(), { name: 'Invented Works', shortName: shortNameOf('Invented Works'), phone: null, email: null, address: null });
     await db.mastersService.updateCustomer(by(), customer.id, {
       rates: [
         { processItemId: FIRST_ITEM, value: '9.5' },
@@ -265,7 +337,7 @@ describe('AC-3, AC-6 (T3): reset to defaults', () => {
   });
 
   it('follows a changed default: a reset after the Admin changed an item\'s default sets the rate to the new default', async () => {
-    const customer = await db.mastersService.createCustomer(by(), { name: 'Invented Works', phone: null, email: null, address: null });
+    const customer = await db.mastersService.createCustomer(by(), { name: 'Invented Works', shortName: shortNameOf('Invented Works'), phone: null, email: null, address: null });
     await db.owner.query('UPDATE process_items SET default_value = 41.37 WHERE id = $1::uuid', [FIRST_ITEM]);
     const result = await db.mastersService.resetCustomerRates(by(), customer.id);
     expect(result.count).toBe(1);
@@ -273,7 +345,7 @@ describe('AC-3, AC-6 (T3): reset to defaults', () => {
   });
 
   it('is idempotent: a customer with every default is a count of 0, and a second reset writes no entry', async () => {
-    const customer = await db.mastersService.createCustomer(by(), { name: 'Invented Works', phone: null, email: null, address: null });
+    const customer = await db.mastersService.createCustomer(by(), { name: 'Invented Works', shortName: shortNameOf('Invented Works'), phone: null, email: null, address: null });
     const entries = await entryCount(db);
     expect((await db.mastersService.resetCustomerRates(by(), customer.id)).count).toBe(0);
     await db.mastersService.updateCustomer(by(), customer.id, { rates: [{ processItemId: FIRST_ITEM, value: '3.5' }] });
@@ -291,8 +363,8 @@ describe('AC-3, AC-6 (T3): reset to defaults', () => {
 
 describe('AC-1, AC-5 (T1): the lists', () => {
   it('lists customers by name ignoring letter case with how many rates differ, in one read, and offers the same as options with an ID and a name only', async () => {
-    const bravo = await db.mastersService.createCustomer(by(), { name: 'bravo Works', phone: null, email: null, address: null });
-    await db.mastersService.createCustomer(by(), { name: 'Alpha Works', phone: '+99 555 0142', email: null, address: null });
+    const bravo = await db.mastersService.createCustomer(by(), { name: 'bravo Works', shortName: shortNameOf('bravo Works'), phone: null, email: null, address: null });
+    await db.mastersService.createCustomer(by(), { name: 'Alpha Works', shortName: shortNameOf('Alpha Works'), phone: '+99 555 0142', email: null, address: null });
     await db.mastersService.updateCustomer(by(), bravo.id, { rates: [{ processItemId: FIRST_ITEM, value: '5.5' }, { processItemId: SECOND_ITEM, value: '6.5' }] });
     const list = await db.mastersService.listCustomers();
     expect(list.map((customer) => [customer.name, customer.differ])).toEqual([['Alpha Works', 0], ['bravo Works', 2]]);
@@ -302,7 +374,7 @@ describe('AC-1, AC-5 (T1): the lists', () => {
   });
 
   it('never lists a deleted customer and never finds one by ID (A-13)', async () => {
-    const customer = await db.mastersService.createCustomer(by(), { name: 'Invented Works', phone: null, email: null, address: null });
+    const customer = await db.mastersService.createCustomer(by(), { name: 'Invented Works', shortName: shortNameOf('Invented Works'), phone: null, email: null, address: null });
     await db.owner.query('UPDATE customers SET deleted_at = now() WHERE id = $1::uuid', [customer.id]);
     expect(await db.mastersService.listCustomers()).toEqual([]);
     expect(await db.mastersService.listCustomerOptions()).toEqual([]);
