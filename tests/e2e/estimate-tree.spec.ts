@@ -405,11 +405,11 @@ test.describe('AC-3: delete asks first and names the count', () => {
 
     await part(page, '1').click();
     await rowButton(page, 'Delete', '1').click();
-    const dialog = page.getByRole('alertdialog', { name: 'Delete part 1?' });
+    const dialog = page.getByRole('alertdialog', { name: 'Delete row 1?' });
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText('This also deletes its 2 sub-parts, and everything typed into them. This cannot be undone.');
+    await expect(dialog).toContainText('This also deletes the 2 rows under it, and everything typed into them. This cannot be undone.');
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
-    await expect(dialog.getByRole('button', { name: 'Delete 3 parts' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Delete 3 rows' })).toBeVisible();
     await expectNoAxeViolations(page);
 
     await dialog.getByRole('button', { name: 'Cancel' }).click();
@@ -422,11 +422,11 @@ test.describe('AC-3: delete asks first and names the count', () => {
 
     await part(page, '1').click();
     await rowButton(page, 'Delete', '1').click();
-    const dialog = page.getByRole('alertdialog', { name: 'Delete part 1?' });
+    const dialog = page.getByRole('alertdialog', { name: 'Delete row 1?' });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Delete 3 parts' }).click();
+    await dialog.getByRole('button', { name: 'Delete 3 rows' }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByText('3 parts deleted')).toHaveCount(1);
+    await expect(page.getByText('3 rows deleted')).toHaveCount(1);
     await expect(page.getByText('No parts yet. Choose "Add main assembly" to add the first one.')).toBeVisible();
     // The foot of an empty tree still offers the one action that can start it again.
     await expect(page.getByRole('button', { name: 'Add main assembly' })).toBeVisible();
@@ -446,15 +446,15 @@ test.describe('AC-3: delete asks first and names the count', () => {
     });
 
     await rowButton(page, 'Delete', '2').click();
-    const dialog = page.getByRole('alertdialog', { name: 'Delete part 2?' });
-    await expect(dialog).toContainText('Part 2 and everything typed into it will be deleted. This cannot be undone.');
+    const dialog = page.getByRole('alertdialog', { name: 'Delete row 2?' });
+    await expect(dialog).toContainText('Row 2 and everything typed into it will be deleted. This cannot be undone.');
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     expect(deletes).toEqual([]);
     expect(await slNumbers(page)).toEqual(['1', '2']);
 
     await rowButton(page, 'Delete', '2').click();
-    await dialog.getByRole('button', { name: 'Delete part' }).click();
+    await dialog.getByRole('button', { name: 'Delete row' }).click();
     await expect(dialog).toHaveCount(0);
     await expect.poll(() => slNumbers(page)).toEqual(['1']);
     expect(deletes).toHaveLength(1);
@@ -522,9 +522,9 @@ test.describe('AQP-405: the row actions', () => {
     await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
 
     await rowButton(page, 'Delete', '1.1').click();
-    const dialog = page.getByRole('alertdialog', { name: 'Delete part 1.1?' });
-    await expect(dialog).toContainText('Part 1.1 and everything typed into it will be deleted. This cannot be undone.');
-    await dialog.getByRole('button', { name: 'Delete part' }).click();
+    const dialog = page.getByRole('alertdialog', { name: 'Delete row 1.1?' });
+    await expect(dialog).toContainText('Row 1.1 and everything typed into it will be deleted. This cannot be undone.');
+    await dialog.getByRole('button', { name: 'Delete row' }).click();
     await expect(dialog).toHaveCount(0);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1']);
     await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');

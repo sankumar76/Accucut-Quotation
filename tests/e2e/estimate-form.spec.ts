@@ -195,11 +195,11 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
 
     await showTree(page);
     await tree(page).getByRole('button', { name: /^Delete 1 / }).click();
-    const dialog = page.getByRole('alertdialog', { name: 'Delete part 1?' });
+    const dialog = page.getByRole('alertdialog', { name: 'Delete row 1?' });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Delete part' }).click();
+    await dialog.getByRole('button', { name: 'Delete row' }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByText('Part deleted')).toHaveCount(1);
+    await expect(page.getByText('Row deleted')).toHaveCount(1);
     await expect(page.getByText('The parts were changed by someone else.')).toHaveCount(0);
   });
 });

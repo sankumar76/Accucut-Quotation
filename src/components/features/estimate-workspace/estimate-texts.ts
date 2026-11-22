@@ -88,7 +88,7 @@ export const treeButtonLabel = (slNo: string | null): string => (slNo === null ?
 
 export const addedMessage = (slNo: string): string => `Part ${slNo} added`;
 export const renumberedMessage = (slNo: string): string => `Part renumbered to ${slNo}`;
-export const deletedMessage = (parts: number): string => (parts === 1 ? 'Part deleted' : `${parts} parts deleted`);
+export const deletedMessage = (parts: number): string => (parts === 1 ? 'Row deleted' : `${parts} rows deleted`);
 
 
 /**
