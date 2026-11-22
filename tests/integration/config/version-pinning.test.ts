@@ -12,7 +12,7 @@ import { createEstimateService, type EstimateService, type EstimateViewer } from
 import { createStepUpService } from '@/server/services/step-up-service';
 
 import { adminOf, auditOf, currentCalculationOf, engineerOf, leadOf, PRICE, requestFor } from '../../support/approval-helpers';
-import { approvedValuesOf, calculatedEstimateOf, exportCellsOf, openApprovedWorld, type ApprovedWorld } from '../../support/approved-world';
+import { approvedValuesOf, calculatedEstimateOf, exportCellsOf, openApprovedWorld, summaryWithoutMarker, type ApprovedWorld } from '../../support/approved-world';
 import { KEY_SECRET } from '../../support/audit-database';
 import { createTestHasher } from '../../support/builders/user';
 import { defined } from '../../support/defined';
@@ -122,14 +122,14 @@ beforeAll(async () => {
   made.submitted = (await calculatedEstimateOf(world)).estimateId;
   made.fresh = await db.addEstimate({ engineer: true });
   before = await approvedValuesOf(world, made.approved);
-  summaryBefore = await world.exporter.getSummary(world.lead, made.approved);
+  summaryBefore = await summaryWithoutMarker(world, made.approved);
   formBefore = await estimates.getForm(lead(), made.approved);
   await unlock(made.unlocked);
   await cancelApproval(made.cancelled);
   unlockedBefore = {
     costs: await world.review.getCosts(world.lead, made.unlocked),
     nodeCosts: await world.details.getNodeCosts(world.lead, made.unlocked, defined((await db.nodes.listNodes(made.unlocked))[0]).id),
-    summary: await world.exporter.getSummary(world.lead, made.unlocked),
+    summary: await summaryWithoutMarker(world, made.unlocked),
   };
 
   // Versions 2, 3 and 4, made by the Admin's services: a formula saved, an input inserted before BL, a field deleted.
@@ -194,7 +194,7 @@ describe('AC-4 (FR-077, SPEC section 14 item 8): an approved estimate does not c
     expect(after.costs.configurationNumber).toBe(1);
     expect(after).toEqual(before);
     // SCR-10: the summary (the columns and the cell addresses it names) is the one of version 1 too.
-    expect(await world.exporter.getSummary(world.lead, made.approved)).toEqual(summaryBefore);
+    expect(await summaryWithoutMarker(world, made.approved)).toEqual(summaryBefore);
     // The file is not empty and is the one of version 1: header, two parts, an empty row and the footer, BL2 and BO2 in version 1's columns.
     expect((await exportCellsOf(world, made.approved)).rows).toHaveLength(5);
   });
@@ -255,7 +255,7 @@ describe('AC-6 (SPEC section 8.4): a new or unlocked estimate uses the latest ve
     expect(costsBefore.configurationNumber).toBe(1);
     expect(costsBefore.state).toBe('current');
     expect(costsBefore).toEqual(unlockedBefore.costs);
-    expect(await world.exporter.getSummary(world.lead, made.unlocked)).toEqual(unlockedBefore.summary);
+    expect(await summaryWithoutMarker(world, made.unlocked)).toEqual(unlockedBefore.summary);
     expect(await world.details.getNodeCosts(world.lead, made.unlocked, defined((await db.nodes.listNodes(made.unlocked))[0]).id)).toEqual(unlockedBefore.nodeCosts);
 
     const inUseBefore = (await configurations().readVersionUse(firstVersionId)).estimatesInUse;

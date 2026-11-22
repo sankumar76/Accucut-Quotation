@@ -83,6 +83,15 @@ export async function openApprovedWorld(): Promise<ApprovedWorld> {
   };
 }
 
+/**
+ * The summary of SCR-10 **without the download marker** (STORY-CR01.7E): the marker is the log of the downloads, and reading the file (`exportCellsOf`) is a download, so it changes with every read. What an approved estimate
+ * shows and holds is the rest of the summary, which a change of the masters must leave as it was.
+ */
+export async function summaryWithoutMarker(world: ApprovedWorld, estimateId: string) {
+  const { download: _marker, ...rest } = await world.exporter.getSummary(world.lead, estimateId);
+  return rest;
+}
+
 let sequence = 0;
 
 export interface CalculatedEstimate {
