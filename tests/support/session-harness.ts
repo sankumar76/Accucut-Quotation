@@ -28,7 +28,9 @@ import { createCostDetailsService, type CostDetailsService } from '../../src/ser
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
 import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
 import { buildWorkbook } from '../../src/server/export/build-workbook';
+import type { DownloadRepository } from '../../src/server/repositories/download-repository';
 import type { ExportRepository } from '../../src/server/repositories/export-repository';
+import { createDownloadMarkerService, type DownloadMarkerService } from '../../src/server/services/download-marker-service';
 import { createExportService, type ExportService } from '../../src/server/services/export-service';
 import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
@@ -171,6 +173,10 @@ export interface SessionHarness {
   readonly costDetailsService: CostDetailsService;
   /** The Excel export (STORY-07.01) over the same estimates and parts, building the file in process (`getExportService` in the composition mock). */
   readonly exportService: ExportService;
+  /** The download marker (STORY-CR01.7E) over a log that holds no download, for the Lead's review and the Closed tab (`getDownloadMarkerService` in the composition mock). */
+  readonly downloadMarkerService: DownloadMarkerService;
+  /** The log behind both: a test spies on `insertDownload` to see a file recorded or to make the write fail (STORY-CR01.7E AC-2). */
+  readonly exportDownloads: DownloadRepository;
   /** The pieces `exportService` reads through, for a test that spies on what a refused caller causes to be read. */
   readonly exportReads: ExportRepository & Pick<EstimateNodeRepository, 'listNodes'>;
   /** The in-memory estimates behind `estimateService`: one draft with no customer, the harness Engineer's, with the ID `targetId` (`estimate-recipe.ts`). */
@@ -381,11 +387,20 @@ export function createSessionHarness(): SessionHarness {
     },
     listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
   };
+  // The download log (STORY-CR01.7E) is the real database's: the harness records nothing and every estimate reads "Not downloaded".
+  const noDownload = { count: 0, last: null, latestApprovalId: null } as const;
+  const downloads: DownloadRepository = {
+    insertDownload: () => Promise.resolve(),
+    findMarkerFacts: () => Promise.resolve(noDownload),
+    findMarkerFactsOfTasks: (taskIds: ReadonlyArray<string>) => Promise.resolve(taskIds.map((taskId) => ({ taskId, facts: noDownload }))),
+  };
+  const downloadMarkerService = createDownloadMarkerService({ downloads });
   const exportService = createExportService({
     header: exportReads,
     nodes: exportReads,
     calculations: reviewReads,
     approvals: reviewReads,
+    downloads,
     images: estimateWorld.imageRepository,
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
     transactions: calculationWorld.transactions,
@@ -397,6 +412,8 @@ export function createSessionHarness(): SessionHarness {
     estimateReviewService,
     costDetailsService,
     exportService,
+    downloadMarkerService,
+    exportDownloads: downloads,
     exportReads,
     reviewReads,
     calculationAudit,

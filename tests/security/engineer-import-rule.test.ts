@@ -65,6 +65,8 @@ const REPOSITORIES = {
     // STORY-09.07 (NFR-002): the reset links (a hash of a secret token and a person), for the reset service only. Holds no cost data, but nothing an Engineer view has a use for.
     'password-reset-repository',
     'decimal-text',
+    // STORY-CR01.7E (NFR-002): the download log of the Excel export, and the facts of the marker "Not downloaded" / "Downloaded N times" / "Changed since download", for the Lead and the Admin only. No Engineer view reads it.
+    'download-repository',
     // STORY-09.01 (TB-4): the e-mail outbox holds names and task details in bodies, and the settings row of the mail sender. Confidential; no Engineer view reads or writes it.
     'email-outbox-repository',
     'estimate-node-repository',
@@ -124,6 +126,8 @@ const SERVICES = {
     'customer-service',
     // STORY-02.08 (NFR-002): the changed default's reach into the customers' rates, for the Process Master's Admin routes only.
     'default-propagation-service',
+    // STORY-CR01.7E (NFR-002): the marker of an estimate's Excel downloads, for the Lead's and the Admin's review and the Closed tab; it refuses an Engineer by name and no Engineer view imports it.
+    'download-marker-service',
     // STORY-06.08 and STORY-06.12: the check of a customer or a material deleted after the approval, shared by unlock and cancel approval. It reads the estimate's customer and materials, for the Lead's and the Admin's services only.
     'deleted-masters',
     // STORY-05.03: the inputs half of the estimate service (the part form and the save of what was typed). It reads the Material Master and the field registry, so an Engineer view has no use for it.

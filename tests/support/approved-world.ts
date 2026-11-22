@@ -4,6 +4,7 @@ import { SHEET_NAME } from '../../src/server/export/export-columns';
 import type { CostsView } from '../../src/server/views/schemas/costs';
 import type { NodeCostsView } from '../../src/server/views/schemas/node-costs';
 import { createConfigRepository } from '../../src/server/repositories/config-repository';
+import { createDownloadRepository } from '../../src/server/repositories/download-repository';
 import { createExportRepository } from '../../src/server/repositories/export-repository';
 import { createImageRepository } from '../../src/server/repositories/image-repository';
 import type { AuditContext } from '../../src/server/services/audit-service';
@@ -56,6 +57,7 @@ export async function openApprovedWorld(): Promise<ApprovedWorld> {
     db,
     exporter: createExportService({
       header: createExportRepository(db.prisma),
+      downloads: createDownloadRepository(db.prisma),
       nodes: db.nodes,
       calculations: db.calculations,
       approvals: db.approvals,

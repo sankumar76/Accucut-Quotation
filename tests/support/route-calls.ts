@@ -286,6 +286,9 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
       return { id, status: 409 };
     case 'GET /api/v1/estimates/[id]/export-summary':
       return { id, status: 200 };
+    // STORY-CR01.7E: the download marker of the rows of the Closed tab. The query names one task ID that is none of the harness's: the allowed role is answered 200 with no entry, and a refused role is sent the same query.
+    case 'GET /api/v1/download-markers':
+      return { id, query: '?ids=00000000-0000-4000-8000-0000000d0e01', status: 200 };
     // STORY-08.02: the formula editor. The valid call of the Admin is the check of a formula and the read of the sample rows (they store nothing), and the save of the formula Cutting Cost already has,
     // which is the decision on "edit to its own text": 200, no new version, no audit entry and no password asked for, so the call repeats at any state of the harness. A save that really writes, the
     // password step and the 409 are `config-edit-routes.test.ts`'s and `tests/integration/config/save-formula.test.ts`'s. The answers hold formulas and rate names: Admin only, and the scan reads the refusals.

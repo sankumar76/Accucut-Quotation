@@ -12,6 +12,7 @@ import { createAuditRepository } from './repositories/audit-repository';
 import { createCalculationRepository } from './repositories/calculation-repository';
 import { createConfigCheckpointRepository } from './repositories/config-checkpoint-repository';
 import { createConfigRepository } from './repositories/config-repository';
+import { createDownloadRepository } from './repositories/download-repository';
 import { createEstimateNodeRepository } from './repositories/estimate-node-repository';
 import { createEstimateRepository } from './repositories/estimate-repository';
 import { createExportRepository } from './repositories/export-repository';
@@ -44,6 +45,7 @@ import { createEstimateService, type EstimateService } from './services/estimate
 import { createMailService, type MailService } from './mail/mail-service';
 import { createMailer } from './mail/send';
 import { createMailTransport } from './mail/transport';
+import { createDownloadMarkerService, type DownloadMarkerService } from './services/download-marker-service';
 import { createExportService, type ExportService } from './services/export-service';
 import { createMastersService, type MastersService } from './services/masters-service';
 import { createPasswordResetService, type PasswordResetService } from './services/password-reset-service';
@@ -87,6 +89,7 @@ let cancelApprovalService: CancelApprovalService | undefined;
 let removePriceService: RemovePriceService | undefined;
 let costDetailsService: CostDetailsService | undefined;
 let exportService: ExportService | undefined;
+let downloadMarkerService: DownloadMarkerService | undefined;
 let settingsService: SettingsService | undefined;
 let mailService: MailService | undefined;
 let heartbeatRepository: HeartbeatRepository | undefined;
@@ -501,6 +504,7 @@ export function getExportService(): ExportService {
       nodes: createEstimateNodeRepository(runtimeClient()),
       calculations: createCalculationRepository(runtimeClient()),
       approvals: createApprovalRepository(runtimeClient()),
+      downloads: createDownloadRepository(runtimeClient()),
       images: createImageRepository(runtimeClient()),
       configuration: { current: () => getCurrentVersion(configurations), byId: (id) => getVersionById(configurations, id) },
       transactions: createTransactionRunner(runtimeClient()),
@@ -509,6 +513,15 @@ export function getExportService(): ExportService {
     });
   }
   return exportService;
+}
+
+/**
+ * The marker of an estimate's Excel downloads (STORY-CR01.7E): "Not downloaded", "Downloaded N times" or "Changed since download", for SCR-06's header and the rows of the Closed tab. Restricted (NFR-002): only the Lead's and
+ * the Admin's review and the one `download-markers` route ask for it here, and the service refuses an Engineer again.
+ */
+export function getDownloadMarkerService(): DownloadMarkerService {
+  downloadMarkerService ??= createDownloadMarkerService({ downloads: createDownloadRepository(runtimeClient()) });
+  return downloadMarkerService;
 }
 
 /**
