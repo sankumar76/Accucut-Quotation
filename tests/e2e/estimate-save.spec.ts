@@ -246,7 +246,7 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
     await keepEditing(page).click();
     await expect(leaveDialog(page)).toHaveCount(0);
     await expect(control(page, 'J')).toHaveValue('7.00');
-    await expect(page.getByRole('treeitem')).toHaveCount(1);
+    await expect(page.getByRole('navigation', { name: 'Parts tree' }).getByRole('link')).toHaveCount(1);
   });
 
   test('AC-4: closing the tab shows the browser prompt only while something is unsaved', async ({ page }, testInfo) => {
