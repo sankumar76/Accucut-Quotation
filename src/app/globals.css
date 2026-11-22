@@ -275,6 +275,13 @@
   }
 }
 
+/* From 1024 px with a fine pointer, on any screen (not only the compact ones): the rows of the parts tree are 36 px high there and 44 px for a finger and below 1024 px (CR-01 item 3B; NFR-017; OQ-PM-12). */
+@custom-variant fine-wide {
+  @media (min-width: 1024px) and (pointer: fine) {
+    @slot;
+  }
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;

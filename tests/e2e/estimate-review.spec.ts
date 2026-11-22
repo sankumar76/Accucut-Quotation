@@ -101,7 +101,7 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await calculateAsEngineer(page, owner, code);
     await openAsLead(page, testInfo, code);
 
-    const rows = treePanel(page).locator('li');
+    const rows = treePanel(page).locator('[data-part-row]');
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText(/\d+(\.\d+)? nos/);
     await expect(rows.first().locator('span').filter({ hasText: FIGURE }).last()).toBeVisible();
@@ -225,7 +225,7 @@ test.describe('AC-9: layout and accessibility', () => {
       expect(Math.abs(third.y - first.y)).toBeLessThanOrEqual(1);
     }
 
-    const rows = treePanel(page).locator('li');
+    const rows = treePanel(page).locator('[data-part-row]');
     await expect(rows.first()).toBeVisible();
     await treePanel(page).locator('summary').click();
     await expect(rows.first()).toBeHidden();

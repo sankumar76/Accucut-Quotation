@@ -105,7 +105,7 @@ test.describe('AC-1: a blank input blocks, and the page says where', () => {
     // The part's triangle (spoken as words) and the words under each blank.
     // On a phone the tree is in a drawer that stays shut until it is opened.
     await showTree(page);
-    await expect(tree(page).getByRole('treeitem').first()).toContainText('Missing inputs');
+    await expect(tree(page).getByRole('link').first()).toContainText('Missing inputs');
     if (isPhone(page)) await page.keyboard.press('Escape');
     await expect(partForm(page)).toContainText(NUMBER_MISSING);
     await expect(partForm(page)).toContainText(CHOICE_MISSING);
