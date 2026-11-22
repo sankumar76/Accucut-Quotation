@@ -98,7 +98,7 @@ const probes = new WeakMap<TestInfo, RecalculateProbe>();
 function watchRecalculate(page: Page, ownerId: string, testInfo: TestInfo): void {
   const probe: RecalculateProbe = { ownerId, seen: [], pressedAt: Date.now(), calculateAnswer: null, calculateSentAfterMs: null };
   const sinceThePress = (): number => Date.now() - probe.pressedAt;
-  const isCalculate = (request: Request): boolean => request.method() === 'POST' && new URL(request.url()).pathname === `/api/v1/estimates/${ownerId}/calculate`;
+  const isCalculate = (request: Request): boolean => request.method() === 'POST' && ['calculate', 'recalculate'].some((name) => new URL(request.url()).pathname === `/api/v1/estimates/${ownerId}/${name}`);
   const note = (what: string, request: Request, extra: string): void => {
     if (probe.seen.length >= NOTED_REQUESTS_AT_MOST || !NOTED_RESOURCES.has(request.resourceType())) return;
     const url = new URL(request.url());
