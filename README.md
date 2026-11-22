@@ -229,6 +229,7 @@ shows that it can fail: the Admin is sent the canary rates by the same routes an
 | Hidden routes in the build (CI stage 9, after the build) | `npx tsx scripts/check-production-routes.ts` |
 | First-load JavaScript budget (CI stage 11b; needs the build and the database above; see "Performance checks") | `npx tsx scripts/check-js-budget.ts` |
 | End-to-end, three screen sizes (needs the database above; builds and serves the production build for the sign-in spec) | `npx playwright install chromium` once, then `npx playwright test` |
+| Sweep, keyboard-only flows and browser matrix (STORY-10.08; the nightly job `browsers`, or by hand; heavy, so not on a developer's PC; needs the database above) | `npx playwright install chromium firefox webkit` once, then `npx playwright test --config playwright.sweep.config.ts` (`npm run test:e2e:sweep`) |
 | Cost confidentiality scan (CI stage 12; see "Cost confidentiality scan") | `npx playwright test canary-scan`; its Vitest parts are in `tests/security` (`npx vitest run tests/security`) |
 | First Admin (AC-7 of STORY-01.01) | `npx tsx scripts/bootstrap-admin.ts` (reads `ADMIN_EMAIL` and `ADMIN_INITIAL_PASSWORD`) |
 | Data-file allow-list | `npx tsx scripts/check-data-files.ts` |
@@ -294,7 +295,8 @@ what it downloaded. It makes up to three tries; tries 2 and 3 use `archive.ubunt
 fails and names the mirrors. Each try has a temporary apt view (a copy of the image's `ubuntu.sources` that names only that
 try's mirror, with `Signed-By` kept, and its own package-list directory), so `apt-get update --error-on=any` fails exactly
 when that mirror is dead and the runner's own apt sources and lists are never changed. If the dry run cannot be read, it warns and takes the older bounded install (`apt` with a
-20 s stall timeout and 3 retries). The step stops after 8 minutes in every case. The nightly workflow
+20 s stall timeout and 3 retries). The step stops after 8 minutes in every case. The script installs `chromium` unless `PLAYWRIGHT_BROWSERS` names others; the nightly job `browsers` sets it to `chromium firefox webkit` and uses cache keys that end in `-matrix`, so its
+package set never meets the required check's. The nightly workflow
 (`warm-playwright-cache`) runs this stage on `master` with the same keys, so every branch can restore them after a runner
 image change; `CACHE_EPOCH` in `nightly.yml` must be raised together with the one in `ci.yml`. A bad cache entry never turns a run red, but it costs the bounded
 `apt` install on every run: a cache key never changes after it is saved, and a hit is not saved again. When that happens
