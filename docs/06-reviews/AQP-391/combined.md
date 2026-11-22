@@ -90,3 +90,42 @@
 - **product-owner:** whether AQP-390's input rule should also refuse default-ignorable characters (QLT-01), and whether a leading dot in a short name should be refused at input (QLT-02).
 - **solution-architect:** §8 "Input validation" sentence (QLT-06).
 - **orchestrator:** merge condition on OQ-PM-11 (QLT-07). The Minor findings can be fixed in this PR, or recorded for §9 item 3's end review.
+
+---
+
+## Addendum 1: re-review at head `e13150c1` (2026-11-22)
+
+| Item | Value |
+|---|---|
+| Head reviewed | `e13150c10ef44fca14d062b486a61813d21ffc35`. New since `b9bc893e`: the developer's commit `e13150c1` (3 files: `src/lib/export/file-name.ts`, `tests/unit/export/file-name.test.ts`, `tests/unit/limits-single-source.test.ts`) and merge `a0ad4fdf` of `master` `eb4137f4` (#611, DEF-061). The merge is clean: `git show --cc` has no conflict hunk, and it brings only `picture-slot.tsx`, `estimate-form.spec.ts` and `estimate-picture.spec.ts`. Only `e13150c1` was reviewed |
+| CI | Run 45014203487 (CI) on `e13150c1`: **completed, success**. That covers "Stages 1 to 11b", E2E shards 1 to 4 and "Stages 1 to 11". Nightly 45014203461 is green except "CI feedback time" (does not count before G8, DL-286) |
+| **Verdict** | **APPROVE WITH COMMENTS.** QLT-01, QLT-02 and QLT-03 are fixed. The header-injection path is unchanged and only got stricter. No Blocker, Critical, Major or Minor is open |
+| Counts now open | Blocker 0 · Critical 0 · Major 0 · Minor 0 · Info 10 (QLT-04 to QLT-10 as before, plus QLT-11 to QLT-13 below) |
+
+### Prior findings
+
+| ID | Was | Now | Evidence |
+|---|---|---|---|
+| QLT-01 | Minor | **Fixed** | `REMOVED` and `REFUSED_IN_STEM` both gain `\p{Default_Ignorable_Code_Point}`, so the builder and the check stay in step. Tests: a part made only of U+3164, U+FFA0, U+034F, U+FE0F or U+00AD falls back (`Customer` or the task code); such characters are removed from inside a part; `isExportFileName` refuses them |
+| QLT-02 | Minor | **Fixed** | `LEADING_DOTS = /^\.+/u`. Each leading dot of the cleaned short name becomes one hyphen. This runs after `cleanPart`, so `​.MAS` also gives `-MAS`. `isExportFileName` refuses a stem that starts with a dot. A dot inside the short name, or at the start of the subject (after `_`), is kept and pinned. **The browser check matches:** `download-client.ts` is unchanged and calls the same `isExportFileName` on the decoded `filename*` and on the plain `filename`, so a leading-dot name from either parameter is refused and the summary's name is used. The seeded property check's alphabet includes `.`, so random short names starting with a dot are now covered too |
+| QLT-03 | Minor | **Fixed** | Every edge in the length tests derives from `EXPORT_FILE_NAME_STEM_MAX_LENGTH` (`LIMIT`, `FIXED = 12`, `ROOM`), and one `toBe(100)` pin remains (AC-10). The 99/100/101, room+2, emoji, ceiling-20 and over-long cases are all kept. `limits-single-source.test.ts` adds a behaviour test (N accepted, N+1 refused, built stem = N), a scan of the five name-path files for a stray `100` beside "stem" or "file name", and a definition pin. The definition pin follows AQP-390's precedent for its own limits |
+| QLT-04 to QLT-10 | Info | Unchanged | QLT-07 (OQ-PM-11, "needed before merge") still stands for the orchestrator |
+
+### Header-injection path
+
+**Not reopened.** `content-disposition.ts`, `file-response.ts`, `schemas/export.ts` and `download-client.ts` are byte-identical to `b9bc893e` (`git diff b9bc893e e13150c1 -- src/server src/lib/export/download-client.ts` is empty). The only source change removes more characters and refuses more names. The header is still checked first and still ASCII-only by construction.
+
+### New diff: findings
+
+| ID | Severity | Where | Issue and why | Fix |
+|---|---|---|---|---|
+| QLT-11 | Info | `src/server/http/content-disposition.ts` `asciiFallbackOf` (unchanged) | The ASCII fallback `filename=` can still start with a dot when the short name starts with non-ASCII letters followed by a dot. The probe showed `工.` gives the full name `工._x_….xlsx` (valid) and the fallback `._x_22-11-2026.xlsx`. This is not reachable in practice: the portal button and every current browser use `filename*`, and `fileNameFrom` would refuse the plain value anyway. Only a client without RFC 8187 support would see it | Optional: apply the same leading-dot replacement to the fallback's stem |
+| QLT-12 | Info | `src/lib/export/file-name.ts` `cleanPart` | NFC runs before the removal, so removing a combining grapheme joiner between a letter and a combining mark leaves a non-NFC sequence (probe: `a` U+034F U+0308 gives `a` U+0308, where NFC is `ä`). The card, the header and the saved name are the same string, so nothing breaks. AC-3 states NFC as step 1, and the code follows that order | Optional: `.normalize('NFC')` once more at the end of `cleanPart` |
+| QLT-13 | Info (style; reviewer-standards) | `tests/unit/limits-single-source.test.ts:7` | `CUSTOMER_SHORT_NAME_MAX_LENGTH,SHORT_NAME_TOO_LONG_MESSAGE` is missing a space after the comma. Lint passed; this is cosmetic | Add the space next time the file is touched |
+
+### Checks run (addendum)
+
+- `git log --first-parent b9bc893e..e13150c1`; `git diff e13150c1^ e13150c1` (source and tests read in full); `git show --cc a0ad4fdf` (no conflict hunk) and its stat; `git diff b9bc893e e13150c1 -- src/server src/lib/export/download-client.ts` (empty).
+- Probe (Node 24, scratchpad): the ASCII fallback for `工._x_…` (QLT-11); NFC after CGJ removal (QLT-12).
+- CI: `gh run list --commit e13150c1`; I watched run 45014203487 until it completed (success, all 6 jobs) and read Nightly 45014203461.
+- No local run; everything was read with `git show`/`git diff` in the records worktree.
