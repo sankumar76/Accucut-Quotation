@@ -280,6 +280,17 @@ enum EstimateStatus {
   @@map("estimate_status")
 }
 
+/// The kind of a parts-tree row (CR-01 item 3A, ADR-020 K1). **Four kinds are stored; "Sub-part" is not one**: it is how a PART is named when its parent holds two or more
+/// PARTs, derived on read (`nodeKindLabel`). Which kind may sit under which is the service's rule (`ALLOWED_CHILDREN`), not a CHECK, because it spans rows.
+enum EstimateNodeKind {
+  MAIN_ASSEMBLY
+  SUB_ASSEMBLY
+  PART
+  FASTENER
+
+  @@map("estimate_node_kind")
+}
+
 /// The last number issued for each year, so a task code is `Q-<year>-<4 digits>` (STORY-04.01, FR-041; architecture section 5.1). The year is taken in IST.
 /// The number is taken with one `INSERT ... ON CONFLICT DO UPDATE` inside the assigning transaction, which locks the year's row until that transaction ends,
 /// so two requests at once get different numbers and a task that fails to save gives its number back. Departs from the SQL conventions (section 10) on purpose,
@@ -370,6 +381,8 @@ model EstimateNode {
   estimateId String   @map("estimate_id") @db.Uuid
   parentId   String?  @map("parent_id") @db.Uuid
   sortIndex  Int      @map("sort_index")
+  /// The row's kind (CR-01 item 3A): set when the row is added and never changed. No default: every insert names it. Existing rows were given one from the tree's shape by migration 20261123140000.
+  nodeKind   EstimateNodeKind @map("node_kind")
   inputs     Json     @default("{}") @db.JsonB
   imageId    String?  @map("image_id") @db.Uuid
   revision   Int      @default(1)

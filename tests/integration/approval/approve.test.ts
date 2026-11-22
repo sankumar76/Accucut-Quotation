@@ -258,7 +258,7 @@ describe('AC-4: once approved, every writer of an input is refused and nothing c
     const writers: ReadonlyArray<readonly [string, () => Promise<unknown>, string]> = [
       ['a save by a Lead', () => db.estimateService.saveInputs(lead(), estimateId, { nodeId: top, revision: topRevision, values: { [idOf('J')]: '95' } }), ESTIMATE_NOT_EDITABLE_CODE],
       ['a save by the Engineer', () => db.estimateService.saveInputs(engineer, estimateId, { nodeId: top, revision: topRevision, values: { [idOf('J')]: '95' } }), ESTIMATE_NOT_EDITABLE_CODE],
-      ['a part added', () => db.estimateService.addPart(lead(), estimateId, { kind: 'item' }), ESTIMATE_NOT_EDITABLE_CODE],
+      ['a part added', () => db.estimateService.addPart(lead(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' }), ESTIMATE_NOT_EDITABLE_CODE],
       ['a part moved', () => db.estimateService.moveNode(lead(), estimateId, { nodeId: top, revision: topRevision, parentId: null, index: 0 }), ESTIMATE_NOT_EDITABLE_CODE],
       ['a part deleted', () => db.estimateService.deleteNode(lead(), estimateId, { nodeId: top, revision: topRevision, parts: 1, subtree: 'unused' }), ESTIMATE_NOT_EDITABLE_CODE],
       ['the customer changed', () => db.estimateService.setCustomer(lead(), changeContext(lead()), estimateId, customerId), ESTIMATE_NOT_EDITABLE_CODE],

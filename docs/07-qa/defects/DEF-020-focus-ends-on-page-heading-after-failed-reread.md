@@ -6,7 +6,7 @@
 | Severity | Sev-4 Minor |
 | Priority | P3 |
 | Type | Product |
-| Status | New |
+| Status | **Closed** (Jira AQP-235 Done; fixed with DEF-021 in PR #135, squash `eed733ba`, AQP-234; GitHub #128 closed 2026-11-21 on QA reconciliation, DL-276) |
 | Found by / date | qa-engineer, 2026-11-09 |
 | Build / commit | `b02955bb07e176f834477aeb08dc3713d563bd37` on `feat/AQP-122-material-master` (PR #120) |
 | Environment | Windows 11, Node v24.19.0, Chromium (Playwright 1.64.1) at 360, 768 and 1366 px, throwaway PostgreSQL 17, development server |

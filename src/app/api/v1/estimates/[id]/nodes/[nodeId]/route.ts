@@ -23,7 +23,7 @@ export const GET = withRoute({
   },
 });
 
-/** Move the part to another parent or place: the same move as `POST /tree/move`, with the part in the path. Answers with the tree. */
+/** Move the part to another place among the rows under its own parent: the same move as `POST /tree/move` (a different parent is 422 `MOVE_ACROSS_PARENTS`), with the part in the path. Answers with the tree. */
 export const PUT = withRoute({
   route: '/api/v1/estimates/[id]/nodes/[nodeId]',
   method: 'PUT',

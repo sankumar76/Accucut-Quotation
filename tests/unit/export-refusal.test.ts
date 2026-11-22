@@ -24,7 +24,7 @@ const ESTIMATE_ID = '00000000-0000-4000-8000-0000000e5701';
 const CODE = 'Q-2026-0701';
 
 const summary = (state: ExportSummaryView['state']): ExportSummaryView => ({
-  fileName: 'Quotation_Acme_Tools_Q-2026-0701_2026-11-14.xlsx',
+  fileName: 'MAS_Feed-hopper_14-11-2026.xlsx',
   partCount: 3,
   pictureCount: 1,
   columns: { first: 'A', last: 'BO', count: 67 },
@@ -65,7 +65,7 @@ describe('AC-5: SCR-10 in a refused state shows no file card and no table', () =
 
   it.each(['none', 'out-of-date'] as const)('%s: no file card, no file name, no Download button, no table, no rows region, no part name, no figure', (state) => {
     const html = render(summary(state));
-    for (const absent of ['The file<', 'File name', 'Quotation_Acme', 'Download .xlsx', 'export-download', '<table', 'The rows in the file', 'Base frame', 'Pipe', 'Lid', '₹', 'A to BO']) {
+    for (const absent of ['The file<', 'File name', 'MAS_Feed-hopper', 'Download .xlsx', 'export-download', '<table', 'The rows in the file', 'Base frame', 'Pipe', 'Lid', '₹', 'A to BO']) {
       expect(html, absent).not.toContain(absent);
     }
   });

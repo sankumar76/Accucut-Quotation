@@ -637,7 +637,7 @@ test('AC-6 (positive control, STORY-07.02, review QS-07 of AQP-331): a Lead down
 
   expect(file.status).toBe(200);
   expect(file.headers['content-type']).toBe(XLSX_MIME);
-  expect(file.headers['content-disposition']).toMatch(/^attachment; filename="Quotation_/);
+  expect(file.headers['content-disposition']).toMatch(/^attachment; filename="[A-Za-z0-9._-]+\.xlsx"; filename\*=UTF-8''/);
   // The recorded body is the inflated text of the workbook's parts: the sheet is in it, so the scan read the file and not an empty body.
   expect(file.body ?? '', 'the workbook was inflated and read').toContain('xl/worksheets/sheet1.xml');
   await recorder.settled();

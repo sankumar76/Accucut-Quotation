@@ -9,7 +9,7 @@ import { addPart, deletePart, loadTree, movePart, treeFromRefusal } from '@/lib/
 
 const ESTIMATE = '00000000-0000-4000-8000-0000000000e1';
 const NODE = '00000000-0000-4000-8000-0000000000d1';
-const PART = { id: NODE, parentId: null, slNo: '1', label: '', completeness: 'EMPTY', revision: 1 };
+const PART = { id: NODE, parentId: null, slNo: '1', label: '', nodeKind: 'MAIN_ASSEMBLY', completeness: 'EMPTY', revision: 1 };
 
 function answer(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': status >= 400 ? 'application/problem+json' : 'application/json' } });
@@ -33,6 +33,8 @@ describe('loadTree', () => {
   it.each([
     ['a body that is not the tree', answer({ nope: true })],
     ['a part with no Sl. No', answer({ nodes: [{ ...PART, slNo: '' }] })],
+    ['a part with no kind (AQP-403)', answer({ nodes: [{ id: NODE, parentId: null, slNo: '1', label: '', completeness: 'EMPTY', revision: 1 }] })],
+    ['a part with an unknown kind, and Sub-part, which is never stored', answer({ nodes: [{ ...PART, nodeKind: 'SUB_PART' }] })],
     ['a part with an unknown completeness', answer({ nodes: [{ ...PART, completeness: 'DONE' }] })],
     ['a part with a revision that is not a number', answer({ nodes: [{ ...PART, revision: '1' }] })],
     ['a part that is not an object', answer({ nodes: ['1'] })],
@@ -50,9 +52,9 @@ describe('loadTree', () => {
 describe('addPart', () => {
   it('posts the kind and the part it is for, and reads the part added', async () => {
     const doFetch = fetching(answer({ nodeId: NODE, nodes: [PART] }, 201));
-    expect(await addPart(ESTIMATE, { kind: 'sub-part', nodeId: NODE }, doFetch)).toEqual({ status: 'ok', value: { nodes: [PART], nodeId: NODE } });
+    expect(await addPart(ESTIMATE, { parentId: NODE, nodeKind: 'PART' }, doFetch)).toEqual({ status: 'ok', value: { nodes: [PART], nodeId: NODE } });
     expect(doFetch.mock.calls[0]?.[0]).toBe(`/api/v1/estimates/${ESTIMATE}/nodes`);
-    expect(doFetch.mock.calls[0]?.[1]).toMatchObject({ method: 'POST', body: JSON.stringify({ kind: 'sub-part', nodeId: NODE }) });
+    expect(doFetch.mock.calls[0]?.[1]).toMatchObject({ method: 'POST', body: JSON.stringify({ parentId: NODE, nodeKind: 'PART' }) });
   });
 });
 

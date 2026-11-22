@@ -1,12 +1,13 @@
 import type { RoleName } from '../../lib/auth/roles';
 import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError, TreeChangedError, ValidationError } from '../../lib/errors';
 import { canEditInputs } from '../../lib/estimate/can-edit-inputs';
+import { isAllowedChild, NODE_KIND_NAMES, type NodeKind } from '../../lib/estimate/node-kinds';
 import { createCompletenessReader, type CompletenessReader } from '../../lib/estimate/part-completeness';
 import type { PartView } from '../../lib/estimate/part-view';
 import { decideTransition, isLocked, stateOf, TRANSITION_REFUSALS, type EstimateEvent } from '../../lib/estimate/state-machine';
 import { subtreeFingerprint } from '../../lib/estimate/subtree-fingerprint';
 import type { ConfigDocument } from '../../lib/fields/schema';
-import { buildTree, canMove, changedPlacements, childCount, descendantIds, insertNode, moveNode, removeNodes, siblingIndex, type PlacedNode } from '../../lib/estimate/tree';
+import { buildTree, changedPlacements, childCount, descendantIds, insertNode, moveNode, removeNodes, type PlacedNode } from '../../lib/estimate/tree';
 import { folderUrlOf } from '../../lib/tasks/folder-path';
 import type { EstimateNodeRepository, NodeRecord } from '../repositories/estimate-node-repository';
 import type { CustomerChoice, EstimateRepository } from '../repositories/estimate-repository';
@@ -88,8 +89,14 @@ export interface PartDetail extends PartView {
 /** The tree in reading order, depth first. */
 export type PartsTree = ReadonlyArray<PartView>;
 
-/** What a person asks to add: a new top-level item, a sub-part (last under the part named) or a part beside (right after the part named). */
-export type AddPartRequest = { readonly kind: 'item' } | { readonly kind: 'sub-part' | 'beside'; readonly nodeId: string };
+/**
+ * What a person asks to add (CR-01 item 3A; SPEC 6.1): a row of this kind, **last** under `parentId` (null: the top level, where only a MAIN_ASSEMBLY may go). The kind must be one the parent's kind
+ * allows (`ALLOWED_CHILDREN`). It replaces the `item`, `sub-part` and `beside` union, whose `kind` would clash with the node kind.
+ */
+export interface AddPartRequest {
+  readonly parentId: string | null;
+  readonly nodeKind: NodeKind;
+}
 
 /** Move a part (with its sub-parts) under `parentId` (null: the top) so that it ends up at place `index` (0 is first) among its new siblings. */
 export interface MovePartRequest {
@@ -126,8 +133,11 @@ export interface AddedPart {
   readonly nodes: PartsTree;
 }
 
-export const CANNOT_MOVE_MESSAGE = 'A part cannot be moved under itself or under one of its own sub-parts.';
-export const MOVE_PARENT_UNKNOWN_MESSAGE = 'Choose a part of this estimate.';
+/** The `code` of the 422 of an add whose kind the parent's kind does not allow (`ALLOWED_CHILDREN`), under `nodeKind`. */
+export const NODE_KIND_NOT_ALLOWED_CODE = 'NODE_KIND_NOT_ALLOWED';
+/** The `code` of the 422 of a move to a parent other than the part's own (A-CR01-5: a row is reordered only among rows with the same parent), under `parentId`. */
+export const MOVE_ACROSS_PARENTS_CODE = 'MOVE_ACROSS_PARENTS';
+export const MOVE_ACROSS_PARENTS_MESSAGE = 'A part can only be moved among the parts under the same parent.';
 
 /** The `code` of the 409 of a change to an estimate that is no longer a draft. */
 export const ESTIMATE_NOT_EDITABLE_CODE = 'ESTIMATE_NOT_EDITABLE';
@@ -222,7 +232,7 @@ const mayOpen = (viewer: EstimateViewer, engineerId: string): boolean => viewer.
 
 /** The parts in reading order, each with its Sl. No read from the layout and how complete it is by the rule of Calculate (`completenessOf`, built once for the answer: no query per part). */
 function viewsOf(records: ReadonlyArray<NodeRecord>, completenessOf: CompletenessReader): PartView[] {
-  return buildTree(records).map(({ node, slNo }) => ({ id: node.id, parentId: node.parentId, slNo, label: '', completeness: completenessOf(node.inputs), revision: node.revision }));
+  return buildTree(records).map(({ node, slNo }) => ({ id: node.id, parentId: node.parentId, slNo, label: '', nodeKind: node.nodeKind, completeness: completenessOf(node.inputs), revision: node.revision }));
 }
 
 /** The part with this ID in a list read from the estimate (never a part of another estimate), or a 404. An ID is compared in lower case, as the database writes it. */
@@ -234,19 +244,17 @@ function partIn(records: ReadonlyArray<NodeRecord>, nodeId: string): NodeRecord 
 
 const placedOf = (records: ReadonlyArray<NodeRecord>): PlacedNode[] => records.map(({ id, parentId, sortIndex }) => ({ id, parentId, sortIndex }));
 
-/** Where a new part goes: a new item last at the top, a sub-part last under the part named, a part beside right after it. */
+/**
+ * Where a new row goes and whether its kind may go there (AC-3): **last** under the parent named (404 for a parent that is not in this estimate; null is the top level), and 422 under
+ * `nodeKind` with `NODE_KIND_NOT_ALLOWED` when `ALLOWED_CHILDREN` does not allow the kind under the parent's kind. Only a new add is checked: a legacy tree deeper than the table allows stays as it is (AC-6).
+ */
 function placeForAdd(records: ReadonlyArray<NodeRecord>, request: AddPartRequest): { readonly parentId: string | null; readonly index: number } {
-  if (request.kind === 'item') return { parentId: null, index: childCount(records, null) };
-  const target = partIn(records, request.nodeId);
-  return request.kind === 'sub-part' ? { parentId: target.id, index: childCount(records, target.id) } : { parentId: target.parentId, index: siblingIndex(records, target.id) + 1 };
-}
-
-/** The 422 of a parent that cannot be: not in this estimate, or the part itself or one of its own descendants. */
-function movableParent(records: ReadonlyArray<NodeRecord>, id: string, parentId: string | null): string | null {
-  const parent = parentId === null ? null : records.find((record) => record.id === parentId.toLowerCase());
-  if (parent === undefined) throw new FieldValidationError([{ field: 'parentId', message: MOVE_PARENT_UNKNOWN_MESSAGE }]);
-  if (!canMove(records, id, parent?.id ?? null)) throw new FieldValidationError([{ field: 'parentId', message: CANNOT_MOVE_MESSAGE }]);
-  return parent?.id ?? null;
+  const parent = request.parentId === null ? null : partIn(records, request.parentId);
+  if (!isAllowedChild(parent?.nodeKind ?? null, request.nodeKind)) {
+    const under = parent === null ? 'at the top of the tree' : `under a ${NODE_KIND_NAMES[parent.nodeKind]}`;
+    throw new FieldValidationError([{ field: 'nodeKind', message: `A ${NODE_KIND_NAMES[request.nodeKind]} cannot be added ${under}.` }], { code: NODE_KIND_NOT_ALLOWED_CODE });
+  }
+  return { parentId: parent?.id ?? null, index: childCount(records, parent?.id ?? null) };
 }
 
 /** Locks the estimate, lets the state machine decide, and writes the new status, all in `tx`. The caller owns the transaction. */
@@ -402,7 +410,7 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
         // Under the lock, so two adds at once cannot both pass the limit.
         if (before.length >= MAX_PARTS_PER_ESTIMATE) throw new ValidationError(TREE_FULL_MESSAGE, { code: TREE_FULL_CODE });
         const { parentId, index } = placeForAdd(before, request);
-        const created = await nodes.insertNode(id, parentId, index, tx);
+        const created = await nodes.insertNode(id, parentId, request.nodeKind, index, tx);
         const after = insertNode(placedOf(before), { id: created.id, parentId, index });
         const shifted = changedPlacements([...placedOf(before), { id: created.id, parentId, sortIndex: index }], after);
         return { nodeId: created.id, nodes: await finishChange(id, shifted, completenessOf, tx) };
@@ -416,9 +424,12 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
         const before = await nodes.listNodes(id, tx);
         const part = partIn(before, request.nodeId);
         if (part.revision !== request.revision) throw new TreeChangedError(viewsOf(before, completenessOf));
-        const parentId = movableParent(before, part.id, request.parentId);
+        // One refusal, one place (A-CR01-5): a row is reordered only among rows with the same parent. This also keeps a row out of its own subtree and out of another estimate, because the
+        // only parent allowed is the one it already has. If the customer answers "allow other parents", this line goes and, instead, the parent must exist in this estimate, must not be the row
+        // or one of its descendants (`canMove` in `lib/estimate/tree.ts` is that check, unused until then) and must allow the moving row's kind (`isAllowedChild`).
+        if ((request.parentId?.toLowerCase() ?? null) !== part.parentId) throw new FieldValidationError([{ field: 'parentId', message: MOVE_ACROSS_PARENTS_MESSAGE }], { code: MOVE_ACROSS_PARENTS_CODE });
         const placed = placedOf(before);
-        const changed = changedPlacements(placed, moveNode(placed, part.id, parentId, request.index));
+        const changed = changedPlacements(placed, moveNode(placed, part.id, part.parentId, request.index));
         // A part that is already where it was asked to go changes nothing: no write, no new revision, and the figures are not cleared for it.
         if (!changed.some((place) => place.id === part.id)) return viewsOf(before, completenessOf);
         await nodes.placeNodes(

@@ -14,7 +14,7 @@ import { harness, holdSessionClock, releaseSessionClock } from '../support/sessi
 /**
  * STORY-05.02 T5 (AC-1 to AC-8), through the real `withRoute`, the real session and the real estimate service over in-memory storage: what each body, query and
  * path must look like, what each refusal answers (404 the same for an estimate or a part that is not the Engineer's and one that does not exist, 409 with the tree,
- * 422 under `parentId`), and that every answer is one strict shape, with the same six facts per part for every role and no figure. Who may call is `tests/security`.
+ * 422 under `parentId`), and that every answer is one strict shape, with the same seven facts per part for every role (the kind holds no figure) and no figure. Who may call is `tests/security`.
  * Every name and ID is invented.
  */
 
@@ -41,7 +41,7 @@ const { GET: getNode, PUT: putNode, DELETE: deleteNode } = await import('@/app/a
 
 const record = z.record(z.string(), z.unknown());
 const treeBody = z.strictObject({ nodes: z.array(record) });
-const SIX_KEYS = ['completeness', 'id', 'label', 'parentId', 'revision', 'slNo'];
+const SEVEN_KEYS = ['completeness', 'id', 'label', 'nodeKind', 'parentId', 'revision', 'slNo'];
 
 const estimate = () => defined(harness.estimateWorld.estimates[0]);
 const owned = (): string => estimate().id;
@@ -93,31 +93,43 @@ afterEach(() => {
   held.status = 'DRAFT';
   held.inputsRevision = 0;
   held.engineerId = harness.idOf.ENGINEER;
-  harness.estimateWorld.nodes.splice(0, harness.estimateWorld.nodes.length, { id: held.id, estimateId: held.id, parentId: null, sortIndex: 0, revision: 1, inputs: {} });
+  harness.estimateWorld.nodes.splice(0, harness.estimateWorld.nodes.length, { id: held.id, estimateId: held.id, parentId: null, sortIndex: 0, nodeKind: 'MAIN_ASSEMBLY', revision: 1, inputs: {} });
 });
 
 describe('AC-1: the Engineer adds a part to their own tree', () => {
   it('"New item" answers 201 with the new part and the tree: the part is last at the top, with empty inputs', async () => {
-    const answer = await added({ kind: 'item' });
+    const answer = await added({ parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     expect(answer.nodes.map((node) => node['slNo'])).toEqual(['1', '2']);
     expect(slOf(answer.nodes, answer.nodeId)).toBe('2');
     expect(harness.estimateWorld.nodes.find((node) => node.id === answer.nodeId)?.inputs).toEqual({});
   });
 
-  it('"Sub-part" and "Part beside" name the part they are for, and number the new part from the tree', async () => {
-    const sub = await added({ kind: 'sub-part', nodeId: canary() });
+  it('AQP-403 AC-3: a row of a kind the parent allows names its parent and goes last, numbered from the tree', async () => {
+    const sub = await added({ parentId: canary(), nodeKind: 'SUB_ASSEMBLY' });
     expect(slOf(sub.nodes, sub.nodeId)).toBe('1.1');
-    const beside = await added({ kind: 'beside', nodeId: sub.nodeId });
-    expect(slOf(beside.nodes, beside.nodeId)).toBe('1.2');
+    const last = await added({ parentId: canary(), nodeKind: 'PART' });
+    expect(slOf(last.nodes, last.nodeId)).toBe('1.2');
+    expect(last.nodes.find((node) => node['id'] === last.nodeId)).toMatchObject({ nodeKind: 'PART', parentId: canary() });
+  });
+
+  it('AQP-403 AC-3: a kind the parent does not allow is 422 NODE_KIND_NOT_ALLOWED under nodeKind, in words a person can read, and nothing is added', async () => {
+    const revision = estimate().inputsRevision;
+    const refused = await add({ parentId: canary(), nodeKind: 'MAIN_ASSEMBLY' });
+    expect(refused.status).toBe(422);
+    expect(record.parse(await refused.json())).toMatchObject({ code: 'NODE_KIND_NOT_ALLOWED', errors: [{ field: 'nodeKind', message: 'A Main Assembly cannot be added under a Main Assembly.' }] });
+    expect(harness.estimateWorld.nodes).toHaveLength(1);
+    expect(estimate().inputsRevision).toBe(revision);
   });
 
   it.each([
-    ['a kind that is not offered', { kind: 'cousin', nodeId: 'x' }],
-    ['no kind', {}],
-    ['a sub-part with no part named', { kind: 'sub-part' }],
-    ['a part named for a new item', { kind: 'item', nodeId: 'x' }],
-    ['a key the route does not offer', { kind: 'item', inputs: { typed: '1' } }],
-    ['a part ID that is too long', { kind: 'beside', nodeId: 'x'.repeat(101) }],
+    ['a kind that is not offered', { parentId: null, nodeKind: 'COUSIN' }],
+    ['Sub-part, which is never a stored kind', { parentId: canary(), nodeKind: 'SUB_PART' }],
+    ['no kind and no parent', {}],
+    ['a parent but no kind', { parentId: canary() }],
+    ['a kind but no parent (null is the top level)', { nodeKind: 'MAIN_ASSEMBLY' }],
+    ['the old union of item, sub-part and beside', { kind: 'item' }],
+    ['a key the route does not offer', { parentId: null, nodeKind: 'MAIN_ASSEMBLY', inputs: { typed: '1' } }],
+    ['a parent ID that is too long', { parentId: 'x'.repeat(101), nodeKind: 'PART' }],
   ])('%s is 422 and nothing is added', async (_name, body) => {
     expect((await add(body)).status).toBe(422);
     expect(harness.estimateWorld.nodes).toHaveLength(1);
@@ -130,7 +142,7 @@ describe('AC-1: the Engineer adds a part to their own tree', () => {
     for (let place = start; place < MAX_PARTS_PER_ESTIMATE; place += 1) {
       held.push({ id: `00000000-0000-4000-8000-${String(place).padStart(12, '0')}`, estimateId: owned(), parentId: null, sortIndex: place, revision: 1, inputs: {} });
     }
-    const refused = await add({ kind: 'item' });
+    const refused = await add({ parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     expect(refused.status).toBe(422);
     expect(record.parse(await refused.json())).toMatchObject({ code: 'TREE_FULL', title: 'This estimate already has 2,000 parts, the most it can hold. Delete a part before adding another.' });
     expect(held).toHaveLength(MAX_PARTS_PER_ESTIMATE);
@@ -145,7 +157,7 @@ describe('AC-1: the Engineer adds a part to their own tree', () => {
 
 describe('AC-2 and AC-4: moves', () => {
   it('PUT and POST /tree/move move the same way: 1.2 up is 1.1, and the answer is the tree', async () => {
-    const second = await added({ kind: 'item' });
+    const second = await added({ parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     const moved = await putNode(request('PUT', `${base()}/nodes/${second.nodeId}`, { revision: 1, parentId: null, index: 0 }), forNode(owned(), second.nodeId));
     expect(moved.status).toBe(200);
     expect(slOf(treeBody.parse(await moved.json()).nodes, second.nodeId)).toBe('1');
@@ -154,13 +166,15 @@ describe('AC-2 and AC-4: moves', () => {
     expect(slOf(treeBody.parse(await back.json()).nodes, second.nodeId)).toBe('2');
   });
 
-  it('a move under itself or its own sub-part is 422 under parentId, in words a person can read, and changes nothing', async () => {
-    const sub = await added({ kind: 'sub-part', nodeId: canary() });
+  it('AQP-403 AC-5: a move to a parent other than its own (itself, its own sub-part, the top level) is 422 MOVE_ACROSS_PARENTS under parentId, in words a person can read, and changes nothing', async () => {
+    const sub = await added({ parentId: canary(), nodeKind: 'SUB_ASSEMBLY' });
     const revision = estimate().inputsRevision;
-    for (const parentId of [canary(), sub.nodeId]) {
-      const refused = await moveTree(request('POST', `${base()}/tree/move`, { nodeId: canary(), revision: 1, parentId, index: 0 }), forEstimate(owned()));
+    for (const [nodeId, parentId] of [[canary(), canary()], [canary(), sub.nodeId], [sub.nodeId, null]] as const) {
+      const refused = await moveTree(request('POST', `${base()}/tree/move`, { nodeId, revision: 1, parentId, index: 0 }), forEstimate(owned()));
       expect(refused.status).toBe(422);
-      expect(record.parse(await refused.json())['errors']).toEqual([{ field: 'parentId', message: 'A part cannot be moved under itself or under one of its own sub-parts.' }]);
+      const problem = record.parse(await refused.json());
+      expect(problem['code']).toBe('MOVE_ACROSS_PARENTS');
+      expect(problem['errors']).toEqual([{ field: 'parentId', message: 'A part can only be moved among the parts under the same parent.' }]);
     }
     expect(estimate().inputsRevision).toBe(revision);
   });
@@ -188,23 +202,23 @@ describe('AC-3: delete', () => {
   });
 
   it('deletes the part with its sub-parts when the count is right, and answers with the tree that is left', async () => {
-    const sub = await added({ kind: 'sub-part', nodeId: canary() });
-    await added({ kind: 'sub-part', nodeId: sub.nodeId });
+    const sub = await added({ parentId: canary(), nodeKind: 'PART' });
+    await added({ parentId: sub.nodeId, nodeKind: 'FASTENER' });
     const answer = await deleteNode(request('DELETE', `${base()}/nodes/${canary()}?revision=1&parts=3&subtree=${seen(canary())}`), forNode(owned(), canary()));
     expect(answer.status).toBe(200);
     expect(treeBody.parse(await answer.json()).nodes).toEqual([]);
     expect(harness.estimateWorld.nodes).toHaveLength(0);
   });
 
-  it('a count that is no longer right is 409 TREE_CHANGED with the tree in the body, in the same six facts per part, and deletes nothing (AC-6)', async () => {
-    await added({ kind: 'sub-part', nodeId: canary() });
+  it('a count that is no longer right is 409 TREE_CHANGED with the tree in the body, in the same seven facts per part, and deletes nothing (AC-6)', async () => {
+    await added({ parentId: canary(), nodeKind: 'PART' });
     const answer = await deleteNode(request('DELETE', `${base()}/nodes/${canary()}?revision=1&parts=1&subtree=${seen(canary())}`), forNode(owned(), canary()));
     expect(answer.status).toBe(409);
     const problem = record.parse(await answer.json());
     expect(problem).toMatchObject({ code: 'TREE_CHANGED', status: 409 });
     const tree = z.array(record).parse(problem['tree']);
     expect(tree.map((part) => part['slNo'])).toEqual(['1', '1.1']);
-    for (const part of tree) expect(Object.keys(part).sort()).toEqual(SIX_KEYS);
+    for (const part of tree) expect(Object.keys(part).sort()).toEqual(SEVEN_KEYS);
     expect(harness.estimateWorld.nodes).toHaveLength(2);
   });
 
@@ -216,15 +230,15 @@ describe('AC-3: delete', () => {
 
 describe('AC-6: two edits with a stale revision', () => {
   it('the second move gets 409 with the fresh tree in the body, and the first stands', async () => {
-    const second = await added({ kind: 'item' });
-    const first = await moveTree(request('POST', `${base()}/tree/move`, { nodeId: second.nodeId, revision: 1, parentId: canary(), index: 0 }), forEstimate(owned()));
+    const second = await added({ parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
+    const first = await moveTree(request('POST', `${base()}/tree/move`, { nodeId: second.nodeId, revision: 1, parentId: null, index: 0 }), forEstimate(owned()));
     expect(first.status).toBe(200);
     const stale = await moveTree(request('POST', `${base()}/tree/move`, { nodeId: second.nodeId, revision: 1, parentId: null, index: 0 }), forEstimate(owned()));
     expect(stale.status).toBe(409);
     const problem = record.parse(await stale.json());
     expect(problem['code']).toBe('TREE_CHANGED');
-    expect(z.array(record).parse(problem['tree']).find((part) => part['id'] === second.nodeId)?.['slNo']).toBe('1.1');
-    expect(harness.estimateWorld.nodes.find((node) => node.id === second.nodeId)?.parentId).toBe(canary());
+    expect(z.array(record).parse(problem['tree']).find((part) => part['id'] === second.nodeId)?.['slNo']).toBe('1');
+    expect(harness.estimateWorld.nodes.find((node) => node.id === second.nodeId)?.sortIndex).toBe(0);
   });
 });
 
@@ -232,7 +246,7 @@ describe('AC-7: who may write, and when', () => {
   it.each(['PREPARED', 'APPROVED'] as const)('a %s estimate is 409 ESTIMATE_NOT_EDITABLE for an add, a move and a delete, and nothing changes', async (status) => {
     estimate().status = status;
     const answers = [
-      await add({ kind: 'item' }),
+      await add({ parentId: null, nodeKind: 'MAIN_ASSEMBLY' }),
       await putNode(request('PUT', `${base()}/nodes/${canary()}`, { revision: 1, parentId: null, index: 0 }), forNode(owned(), canary())),
       await deleteNode(request('DELETE', `${base()}/nodes/${canary()}?revision=1&parts=1&subtree=${seen(canary())}`), forNode(owned(), canary())),
     ];
@@ -254,7 +268,7 @@ describe('AC-7: who may write, and when', () => {
     for (const attempt of [
       (id: string) => getTree(request('GET', `${base(id)}/tree`), forEstimate(id)),
       (id: string) => getNode(request('GET', `${base(id)}/nodes/${canary()}`), forNode(id, canary())),
-      (id: string) => add({ kind: 'item' }, id),
+      (id: string) => add({ parentId: null, nodeKind: 'MAIN_ASSEMBLY' }, id),
       (id: string) => moveTree(request('POST', `${base(id)}/tree/move`, { nodeId: canary(), revision: 1, parentId: null, index: 0 }), forEstimate(id)),
       (id: string) => putNode(request('PUT', `${base(id)}/nodes/${canary()}`, { revision: 1, parentId: null, index: 0 }), forNode(id, canary())),
       (id: string) => deleteNode(request('DELETE', `${base(id)}/nodes/${canary()}?revision=1&parts=1&subtree=${seen(canary())}`), forNode(id, canary())),
@@ -272,9 +286,9 @@ describe('AC-7: who may write, and when', () => {
   it('a Lead may still change a PREPARED estimate and nobody an APPROVED one (STORY-06.01)', async () => {
     harness.signInAs('LEAD');
     estimate().status = 'PREPARED';
-    expect((await add({ kind: 'item' })).status).toBe(201);
+    expect((await add({ parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).status).toBe(201);
     estimate().status = 'APPROVED';
-    const refused = await add({ kind: 'item' });
+    const refused = await add({ parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     expect(refused.status).toBe(409);
     expect(record.parse(await refused.json())).toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
   });
@@ -282,22 +296,22 @@ describe('AC-7: who may write, and when', () => {
   it('a Lead and an Admin may change any draft, the Engineer\'s included', async () => {
     for (const role of ['LEAD', 'ADMIN'] as const) {
       harness.signInAs(role);
-      expect((await add({ kind: 'item' })).status).toBe(201);
+      expect((await add({ parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).status).toBe(201);
     }
   });
 });
 
 describe('AC-8 (NFR-002): one strict shape for every role, with no figure', () => {
-  it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('as %s the tree is the same: six facts per part and nothing else', async (role) => {
-    await added({ kind: 'sub-part', nodeId: canary() });
+  it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('as %s the tree is the same: seven facts per part and nothing else', async (role) => {
+    await added({ parentId: canary(), nodeKind: 'PART' });
     harness.signInAs(role);
     const response = await getTree(request('GET', `${base()}/tree`), forEstimate(owned()));
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     const { nodes } = treeBody.parse(await response.json());
     expect(nodes).toHaveLength(2);
-    for (const part of nodes) expect(Object.keys(part).sort()).toEqual(SIX_KEYS);
-    expect(nodes[1]).toMatchObject({ slNo: '1.1', parentId: canary(), label: '', completeness: 'EMPTY', revision: 1 });
+    for (const part of nodes) expect(Object.keys(part).sort()).toEqual(SEVEN_KEYS);
+    expect(nodes[1]).toMatchObject({ slNo: '1.1', parentId: canary(), label: '', nodeKind: 'PART', completeness: 'EMPTY', revision: 1 });
   });
 
   it('one part is read with its inputs, the same for every role, and an empty list', async () => {
@@ -310,7 +324,7 @@ describe('AC-8 (NFR-002): one strict shape for every role, with no figure', () =
     }
     expect(answers[1]).toEqual(answers[0]);
     expect(answers[2]).toEqual(answers[0]);
-    expect(answers[0]).toEqual({ id: canary(), parentId: null, slNo: '1', label: '', completeness: 'EMPTY', revision: 1, inputs: [], picture: null });
+    expect(answers[0]).toEqual({ id: canary(), parentId: null, slNo: '1', label: '', nodeKind: 'MAIN_ASSEMBLY', completeness: 'EMPTY', revision: 1, inputs: [], picture: null });
   });
 
   it('only the values of fields of the form leave, by field ID: a stored value that is not one (an unknown key, Material Rate / Kg) is dropped (review SQR-09, STORY-05.03)', async () => {

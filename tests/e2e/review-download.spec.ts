@@ -19,7 +19,7 @@ test.beforeEach(async ({ context }) => {
 });
 
 const PHONE_MAX = 767;
-const FILE_NAME = /^Quotation_[A-Za-z0-9_-]+_Q-\d{4}-\d{4,}_\d{4}-\d{2}-\d{2}\.xlsx$/;
+const FILE_NAME = /^[^\s/\\:*?"<>|]+_\d{2}-\d{2}-\d{4}\.xlsx$/u;
 /** Any other count than the one the part holds, so the input really changes and the figures are cleared (the recipe of `export-refusal.spec.ts`). */
 const CHANGED_COUNT = '7';
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
@@ -115,7 +115,7 @@ test.describe('AC-3: the figures are cleared after SCR-06 was drawn', () => {
 
 test.describe('AC-6: the journey from the review to the file', () => {
   for (const role of ['LEAD', 'ADMIN'] as const) {
-    test(`a ${role === 'LEAD' ? 'Lead' : 'Admin'} presses Download on SCR-06, lands on SCR-10, and the file downloads under the customer, task and date name`, async ({ page }, testInfo) => {
+    test(`a ${role === 'LEAD' ? 'Lead' : 'Admin'} presses Download on SCR-06, lands on SCR-10, and the file downloads under the short name, subject and date name`, async ({ page }, testInfo) => {
       const { code } = await openReview(page, testInfo, role);
 
       await reviewDownload(page).click();
@@ -124,7 +124,7 @@ test.describe('AC-6: the journey from the review to the file', () => {
 
       const [download] = await withExportTurn(() => Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download .xlsx' }).click()]));
       expect(download.suggestedFilename()).toMatch(FILE_NAME);
-      expect(download.suggestedFilename()).toContain(`_${code}_`);
+      expect(download.suggestedFilename()).toContain('_Canary-subject_');
     });
   }
 });

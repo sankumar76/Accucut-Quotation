@@ -78,8 +78,8 @@ async function setUpEstimate(): Promise<World> {
   );
   const estimate = await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id) VALUES ($1::uuid) RETURNING id::text AS id', [defined(task.rows[0]).id]);
   const estimateId = defined(estimate.rows[0]).id;
-  const first = (await service.addPart(arjun(), estimateId, { kind: 'item' })).nodeId;
-  const second = (await service.addPart(arjun(), estimateId, { kind: 'item' })).nodeId;
+  const first = (await service.addPart(arjun(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
+  const second = (await service.addPart(arjun(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
   return { estimateId, first, second };
 }
 
@@ -179,7 +179,7 @@ describe('AC-3: the parts tree', () => {
   it('adding a part is a change; moving a part to where it already is changes nothing; a real move is a change, and moving back is a second one', async () => {
     const world = await setUpEstimate();
     const start = (await counts(world, world.first)).estimate;
-    await service.addPart(arjun(), world.estimateId, { kind: 'beside', nodeId: world.second });
+    await service.addPart(arjun(), world.estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     expect((await counts(world, world.first)).estimate).toBe(start + 1);
 
     const before = await counts(world, world.first);

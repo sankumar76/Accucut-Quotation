@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { NODE_KINDS } from '../../../lib/estimate/node-kinds';
 import { FINGERPRINT_PATTERN } from '../../../lib/estimate/subtree-fingerprint';
 
 import { pictureSchema } from './images';
@@ -9,7 +10,7 @@ import { pictureSchema } from './images';
  * a key that is not named is an error, so nothing is sent that is not meant to be and a client cannot set a field the route does not offer.
  *
  * The routes are open to every role, an Engineer included (their own estimate, while they may change it), so there is **one response schema for every caller, with no
- * rate, cost, formula or figure in it** (NFR-002, ADR-008): a part is its ID, its parent, its Sl. No, its label, how complete it is and its revision. The Sl. No is
+ * rate, cost, formula or figure in it** (NFR-002, ADR-008): a part is its ID, its parent, its Sl. No, its label, its kind (CR-01 item 3A: a stored enum that holds no figure), how complete it is and its revision. The Sl. No is
  * derived from the tree and is never stored. A part's `inputs` is an empty object until the part form (STORY-05.03) names the fields a person may type; it is strict,
  * so a value that nothing declared cannot leave through this route.
  *
@@ -29,12 +30,13 @@ export const revisionSchema = z.number().int().min(1).max(MAX_INTEGER);
 const indexSchema = z.number().int().min(0).max(MAX_INTEGER);
 const parentIdSchema = z.string().max(MAX_ID_LENGTH).nullable();
 
-/** `POST /api/v1/estimates/{id}/nodes`: a new item at the top, a sub-part under a part, or a part beside a part. */
-export const addNodeBodySchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('item') }),
-  z.strictObject({ kind: z.literal('sub-part'), nodeId: z.string().max(MAX_ID_LENGTH) }),
-  z.strictObject({ kind: z.literal('beside'), nodeId: z.string().max(MAX_ID_LENGTH) }),
-]);
+export const nodeKindSchema = z.enum(NODE_KINDS);
+
+/**
+ * `POST /api/v1/estimates/{id}/nodes`: a row of this kind, added last under `parentId` (null: the top level). Whether the parent's kind allows it is the service's to say (422
+ * `NODE_KIND_NOT_ALLOWED` under `nodeKind`); this only bounds the shape.
+ */
+export const addNodeBodySchema = z.strictObject({ parentId: parentIdSchema, nodeKind: nodeKindSchema });
 
 /** `PUT /api/v1/estimates/{id}/nodes/{nodeId}`: move this part, as it was when the person looked (`revision`). */
 export const moveNodeBodySchema = z.strictObject({ revision: revisionSchema, parentId: parentIdSchema, index: indexSchema });
@@ -62,6 +64,7 @@ const partShape = {
   parentId: z.string().min(1).nullable(),
   slNo: z.string().min(1),
   label: z.string(),
+  nodeKind: nodeKindSchema,
   completeness: completenessSchema,
   revision: z.number().int(),
 };
