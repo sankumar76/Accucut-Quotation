@@ -59,12 +59,12 @@ describe('AQP-399 AC-6: displayStatusOf', () => {
 
 describe('SQR-02 and AQP-399 AC-6: one rule for "closed" and one for "open"', () => {
   it('isTaskClosed is true for APPROVED and QUOTED and for no other status, and `closed` is always derived from it', () => {
-    expect(ESTIMATE_STATUSES.filter((status) => isTaskClosed(status))).toEqual(['APPROVED', 'QUOTED']);
-    for (const status of ESTIMATE_STATUSES) expect(taskStatusOf(status).closed, status).toBe(isTaskClosed(status));
+    expect(ESTIMATE_STATUSES.filter((status) => isTaskClosed(status, false))).toEqual(['APPROVED', 'QUOTED']);
+    for (const status of ESTIMATE_STATUSES) expect(taskStatusOf(status).closed, status).toBe(isTaskClosed(status, false));
   });
 
   it('closed is the same set as locked: the lock helper and the tab agree', () => {
-    for (const status of ESTIMATE_STATUSES) expect(isTaskClosed(status), status).toBe(isLocked(status));
+    for (const status of ESTIMATE_STATUSES) expect(isTaskClosed(status, false), status).toBe(isLocked(status));
   });
 
   it('an ignored task is never closed, and never open: it is in the Ignored tab alone', () => {
@@ -75,8 +75,8 @@ describe('SQR-02 and AQP-399 AC-6: one rule for "closed" and one for "open"', ()
   });
 
   it('isTaskOpen is true for DRAFT and PREPARED that are not ignored, and for no other', () => {
-    expect(ESTIMATE_STATUSES.filter((status) => isTaskOpen(status))).toEqual(['DRAFT', 'PREPARED']);
-    for (const status of ESTIMATE_STATUSES) expect(isTaskOpen(status) !== isTaskClosed(status), status).toBe(true);
+    expect(ESTIMATE_STATUSES.filter((status) => isTaskOpen(status, false))).toEqual(['DRAFT', 'PREPARED']);
+    for (const status of ESTIMATE_STATUSES) expect(isTaskOpen(status, false) !== isTaskClosed(status, false), status).toBe(true);
   });
 });
 

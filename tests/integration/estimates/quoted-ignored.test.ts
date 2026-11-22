@@ -51,6 +51,7 @@ afterAll(async () => {
 });
 
 afterEach(async () => {
+  await db.owner.query('DELETE FROM estimate_nodes');
   await db.owner.query('DELETE FROM estimates');
   await db.owner.query('DELETE FROM tasks');
   await db.owner.query("DELETE FROM customers c WHERE c.name LIKE 'Quoted %'");
@@ -230,6 +231,46 @@ describe('AQP-399 AC-6: an ignored estimate is read-only, and says why', () => {
     expect(refusal).not.toBeInstanceOf(ConflictError);
     expect((refusal as Error).message).toBe('Ignore and Restore are not written by the status transition.');
     expect((await stored()).ignoredAtSet).toBe(false);
+  });
+});
+
+describe('QLT-B1 (review of #624): the tree actions of 3A reach assertEditable with the full state', () => {
+  const MISSING_PART = '00000000-0000-4000-8000-0000000000fd';
+  const nodeCount = async (): Promise<number> => Number((await db.owner.query<{ n: string }>('SELECT count(*)::text AS n FROM estimate_nodes WHERE estimate_id = $1::uuid', [estimateId])).rows[0]?.n);
+
+  /** Add, reorder and delete, as a Lead: each is asked under the estimate's lock, before any part is looked up, so a part that does not exist makes no difference to the refusal. */
+  const treeActions = (): Array<[string, () => Promise<unknown>]> => [
+    ['add', () => service.addPart(lead(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })],
+    ['move', () => service.moveNode(lead(), estimateId, { nodeId: MISSING_PART, revision: 1, parentId: null, index: 0 })],
+    ['delete', () => service.deleteNode(lead(), estimateId, { nodeId: MISSING_PART, revision: 1, parts: 1, subtree: 'none' })],
+  ];
+
+  it.each(['DRAFT', 'PREPARED', 'APPROVED'] as const)('an ignored %s estimate refuses add, move and delete with the 409 ESTIMATE_IGNORED, and stores no part (DL-300 (1))', async (status) => {
+    await setUpEstimate(status);
+    await ignore();
+    for (const [name, act] of treeActions()) {
+      const refusal = await caught(act());
+      expect(refusal, `${status} ${name}`).toBeInstanceOf(ConflictError);
+      expect(refusal).toMatchObject({ httpStatus: 409, code: 'ESTIMATE_IGNORED' });
+    }
+    expect(await nodeCount()).toBe(0);
+  });
+
+  it('the same estimate once restored takes an add again, so the refusal was the layer and nothing else', async () => {
+    await setUpEstimate('DRAFT');
+    await ignore();
+    expect(await caught(service.addPart(lead(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' }))).toMatchObject({ code: 'ESTIMATE_IGNORED' });
+    await restore();
+    await expect(service.addPart(lead(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).resolves.toMatchObject({ nodeId: expect.any(String) });
+    expect(await nodeCount()).toBe(1);
+  });
+
+  it('a QUOTED estimate refuses add, move and delete with the 409 ESTIMATE_NOT_EDITABLE, like an approved one', async () => {
+    await setUpEstimate('QUOTED');
+    for (const [name, act] of treeActions()) {
+      expect(await caught(act()), name).toMatchObject({ httpStatus: 409, code: 'ESTIMATE_NOT_EDITABLE' });
+    }
+    expect(await nodeCount()).toBe(0);
   });
 });
 

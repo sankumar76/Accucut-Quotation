@@ -37,7 +37,7 @@ export function useReassignForm(task: ReassignTaskData) {
   const [errors, setErrors] = useState<AssignErrors>({});
   const [failed, setFailed] = useState(false);
   const [unchanged, setUnchanged] = useState(false);
-  const [closed, setClosed] = useState(isTaskClosed(task.status));
+  const [closed, setClosed] = useState(isTaskClosed(task.status, false)); // no Ignored layer in the row until story 7D
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<ReassignedTaskView | null>(null);
   const showErrors = useFocusOnRefusal(LIVE_FIELDS, (field) => document.getElementById(ASSIGN_FIELD_IDS[field])?.focus(), setErrors);

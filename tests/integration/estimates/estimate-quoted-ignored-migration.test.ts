@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { defined } from '../../support/defined';
 import { createMigratedScratchDatabase, type ScratchDatabase } from '../../support/scratch-database';
 
 /**
@@ -14,10 +15,15 @@ import { createMigratedScratchDatabase, type ScratchDatabase } from '../../suppo
 const migrationDirectory = (name: string): string => fileURLToPath(new URL(`../../../prisma/migrations/${name}/migration.sql`, import.meta.url));
 const addValue = readFileSync(migrationDirectory('20261123110000_estimate_status_quoted'), 'utf8');
 const columns = readFileSync(migrationDirectory('20261123120000_estimate_quoted_ignored'), 'utf8');
-const ROLLBACK_STATEMENTS = columns
-  .split(/\r?\n/)
-  .filter((line) => /^--   (?:ALTER|UPDATE) .*;$/.test(line))
-  .map((line) => line.slice('--   '.length));
+/** The statements a header gives as its rollback note (the lines that begin with three spaces after the comment mark), read from the file and never copied. */
+const statementsOf = (sql: string): string[] =>
+  sql
+    .split(/\r?\n/)
+    .filter((line) => /^--   (?:ALTER|UPDATE) .*;$/.test(line))
+    .map((line) => line.slice('--   '.length));
+const ROLLBACK_STATEMENTS = statementsOf(columns);
+/** File 1's rollback step: QUOTED back to APPROVED, run before file 2 is rolled back. */
+const QUOTED_TO_APPROVED = statementsOf(addValue);
 
 let scratch: ScratchDatabase;
 let owner: Client;
@@ -193,17 +199,29 @@ describe('AC-7: each CHECK refuses its row, by name', () => {
 });
 
 describe('the rollback note in the header of the second file', () => {
-  it('has three statements, in reverse order: the CHECKs, the foreign keys, the columns', () => {
-    expect(ROLLBACK_STATEMENTS).toHaveLength(3);
-    expect(ROLLBACK_STATEMENTS[0]).toMatch(/^ALTER TABLE "estimates" DROP CONSTRAINT "ck_estimates_quoted_not_ignored", .*DROP CONSTRAINT "ck_estimates_quoted";$/);
-    expect(ROLLBACK_STATEMENTS[1]).toBe('ALTER TABLE "estimates" DROP CONSTRAINT "fk_estimates_ignored_by", DROP CONSTRAINT "fk_estimates_quoted_by";');
-    expect(ROLLBACK_STATEMENTS[2]).toMatch(/^ALTER TABLE "estimates" DROP COLUMN "ignore_remarks", .*DROP COLUMN "quoted_at";$/);
+  it('has the Restore in SQL first (the layer cleared, the status never touched), then, in reverse order, the CHECKs, the foreign keys and the columns; file 1 has the QUOTED step that clears the quote columns', () => {
+    expect(QUOTED_TO_APPROVED).toEqual(['UPDATE "estimates" SET "status" = \'APPROVED\', "quoted_at" = NULL, "quoted_by" = NULL WHERE "status" = \'QUOTED\';']);
+    expect(ROLLBACK_STATEMENTS).toHaveLength(4);
+    expect(ROLLBACK_STATEMENTS[0]).toBe('UPDATE "estimates" SET "ignored_at" = NULL, "ignored_by" = NULL, "ignore_remarks" = NULL WHERE "ignored_at" IS NOT NULL;');
+    expect(ROLLBACK_STATEMENTS[0]).not.toMatch(/"status"/);
+    expect(ROLLBACK_STATEMENTS[1]).toMatch(/^ALTER TABLE "estimates" DROP CONSTRAINT "ck_estimates_quoted_not_ignored", .*DROP CONSTRAINT "ck_estimates_quoted";$/);
+    expect(ROLLBACK_STATEMENTS[2]).toBe('ALTER TABLE "estimates" DROP CONSTRAINT "fk_estimates_ignored_by", DROP CONSTRAINT "fk_estimates_quoted_by";');
+    expect(ROLLBACK_STATEMENTS[3]).toMatch(/^ALTER TABLE "estimates" DROP COLUMN "ignore_remarks", .*DROP COLUMN "quoted_at";$/);
   });
 
-  it('gives back the schema as it was once QUOTED rows are set back to APPROVED, and the file then runs again over the same rows', async () => {
-    await owner.query("UPDATE estimates SET status = 'APPROVED', quoted_at = NULL, quoted_by = NULL, ignored_at = NULL, ignored_by = NULL, ignore_remarks = NULL WHERE status = 'QUOTED' OR ignored_at IS NOT NULL");
+  it('gives back the schema as it was once the header steps are run, with an ignored Draft still a Draft and an ignored Prepared still Prepared, and the file then runs again over the same rows', async () => {
+    const ignoredDraft = await insertEstimate({ status: 'DRAFT', ignored_at: NOW, ignored_by: PERSON, ignore_remarks: 'Rolled back while ignored.' });
+    const ignoredPrepared = await insertEstimate({ status: 'PREPARED', ignored_at: NOW, ignored_by: PERSON, ignore_remarks: 'Rolled back while ignored.' });
+    const quoted = await insertEstimate({ status: 'QUOTED', quoted_at: NOW, quoted_by: PERSON });
+    // The steps of the two headers, in the order the notes give them. The first would be refused by ck_estimates_quoted if it did not clear the quote columns.
+    for (const statement of QUOTED_TO_APPROVED) await owner.query(statement);
+    const statusOf = async (id: string): Promise<string | undefined> => (await owner.query<{ status: string }>('SELECT status::text FROM estimates WHERE id = $1::uuid', [id])).rows[0]?.status;
+    expect(await statusOf(quoted)).toBe('APPROVED');
+    await owner.query(defined(ROLLBACK_STATEMENTS[0]));
+    expect(await statusOf(ignoredDraft)).toBe('DRAFT');
+    expect(await statusOf(ignoredPrepared)).toBe('PREPARED');
     const { rows: before } = await owner.query<{ id: string; status: string }>('SELECT id::text, status::text FROM estimates ORDER BY id');
-    for (const statement of ROLLBACK_STATEMENTS) await owner.query(statement);
+    for (const statement of ROLLBACK_STATEMENTS.slice(1)) await owner.query(statement);
     const { rows: gone } = await owner.query("SELECT 1 FROM information_schema.columns WHERE table_name = 'estimates' AND column_name IN ('quoted_at', 'quoted_by', 'ignored_at', 'ignored_by', 'ignore_remarks')");
     expect(gone).toHaveLength(0);
     const { rows: checks } = await owner.query("SELECT 1 FROM pg_constraint WHERE conname LIKE 'ck_estimates_quoted%' OR conname LIKE 'ck_estimates_ignore%'");

@@ -325,7 +325,7 @@ export function createCalculationService(dependencies: CalculationServiceDepende
   ): Promise<StoredCalculation> {
     const estimate = await estimates.lockEstimate(request.estimateId, tx);
     if (estimate === null) throw new NotFoundError(ESTIMATE_NOT_FOUND_MESSAGE);
-    // One code and one sentence for "approved" on this path: the state machine's (review SQR-06 of STORY-06.01), so a client and a test learn one.
+    // One code and one sentence for "ignored" and for "approved or quoted" on this path: the state machine's (review SQR-06 of STORY-06.01), so a client and a test learn one.
     if (estimate.ignoredAt !== null) throw new ConflictError(TRANSITION_REFUSALS.IGNORED.message, { code: TRANSITION_REFUSALS.IGNORED.code });
     if (isLocked(estimate.status)) throw new ConflictError(TRANSITION_REFUSALS.APPROVED_IS_LOCKED.message, { code: TRANSITION_REFUSALS.APPROVED_IS_LOCKED.code });
     if (estimate.customerId === null) throw new ConflictError(CUSTOMER_NOT_CHOSEN_MESSAGE, { code: CUSTOMER_NOT_CHOSEN_CODE });

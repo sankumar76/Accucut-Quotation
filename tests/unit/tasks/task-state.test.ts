@@ -32,7 +32,7 @@ describe('AC-1, AC-2: the status x deadline matrix', () => {
     ['QUOTED', 'ahead', AHEAD, 'closed', ['closed']],
   ] as const)('%s, deadline %s: the tab is %s and it is listed in %j', (status, _when, deadlineAt, tab, tabs) => {
     expect(taskTab(status)).toBe(tab);
-    expect(tabsOf(status, deadlineAt, NOW)).toEqual(tabs);
+    expect(tabsOf(status, deadlineAt, NOW, false)).toEqual(tabs);
   });
 
   it('covers every status the machine has, so a new status fails here until its tab is decided', () => {
@@ -55,8 +55,8 @@ describe("AC-3: an unlock or the Admin's cancel puts an approved or a quoted tas
     if (!decision.allowed) throw new Error('The state machine should allow this event.');
     expect(taskTab(from)).toBe('closed');
     expect(taskTab(decision.to)).toBe('open');
-    expect(tabsOf(decision.to, PAST, NOW)).toEqual(['open', 'overdue']);
-    expect(tabsOf(decision.to, AHEAD, NOW)).toEqual(['open']);
+    expect(tabsOf(decision.to, PAST, NOW, false)).toEqual(['open', 'overdue']);
+    expect(tabsOf(decision.to, AHEAD, NOW, false)).toEqual(['open']);
   });
 });
 
@@ -74,13 +74,13 @@ describe('AQP-399 AC-6: an ignored task is in none of Open, Closed and Overdue',
 describe('AC-4: one rule', () => {
   it('takes its answer from isTaskClosed for every status', () => {
     for (const status of ESTIMATE_STATUSES) {
-      expect(taskTab(status) === 'closed').toBe(isTaskClosed(status));
+      expect(taskTab(status) === 'closed').toBe(isTaskClosed(status, false));
     }
   });
 
   it('counts consistently: open + closed is the number of tasks, and every overdue task is also an open one', () => {
     const tasks = ESTIMATE_STATUSES.flatMap((status) => [PAST, NOW, AHEAD].map((deadlineAt) => ({ status, deadlineAt })));
-    const inTab = (tab: 'open' | 'closed' | 'overdue') => tasks.filter((task) => tabsOf(task.status, task.deadlineAt, NOW).includes(tab));
+    const inTab = (tab: 'open' | 'closed' | 'overdue') => tasks.filter((task) => tabsOf(task.status, task.deadlineAt, NOW, false).includes(tab));
     expect(inTab('open').length + inTab('closed').length).toBe(tasks.length);
     expect(inTab('overdue')).toHaveLength(2);
     expect(inTab('overdue').every((task) => inTab('open').includes(task))).toBe(true);

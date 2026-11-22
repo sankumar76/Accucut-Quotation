@@ -20,8 +20,11 @@
 --
 -- One transaction (Prisma runs the file in one): a failure anywhere rolls the whole file back.
 --
--- Rollback note (reverse order of the CR-01 migrations; run with the previous release). First, because the columns are about to go: set every QUOTED row back to APPROVED with an
--- UPDATE, and have the Admin Restore every ignored estimate. The state is lost from the row but kept in the audit log (the 7C and 7D events).
+-- Rollback note (reverse order of the CR-01 migrations; run with the previous release). First, because the columns are about to go: run the UPDATE in the header of
+-- 20261123110000_estimate_status_quoted (QUOTED back to APPROVED, quote columns cleared), and Restore every ignored estimate, here in SQL: the layer is cleared and **the status
+-- underneath is not touched**, so an ignored Draft stays a Draft (never set a status to make a row pass a CHECK: that would forge an Approved estimate with no approval behind it). The
+-- state is lost from the row but kept in the audit log (the 7C and 7D events).
+--   UPDATE "estimates" SET "ignored_at" = NULL, "ignored_by" = NULL, "ignore_remarks" = NULL WHERE "ignored_at" IS NOT NULL;
 --   ALTER TABLE "estimates" DROP CONSTRAINT "ck_estimates_quoted_not_ignored", DROP CONSTRAINT "ck_estimates_ignore_remarks_length", DROP CONSTRAINT "ck_estimates_ignore_remarks_not_blank", DROP CONSTRAINT "ck_estimates_ignored_all_or_none", DROP CONSTRAINT "ck_estimates_quoted";
 --   ALTER TABLE "estimates" DROP CONSTRAINT "fk_estimates_ignored_by", DROP CONSTRAINT "fk_estimates_quoted_by";
 --   ALTER TABLE "estimates" DROP COLUMN "ignore_remarks", DROP COLUMN "ignored_by", DROP COLUMN "ignored_at", DROP COLUMN "quoted_by", DROP COLUMN "quoted_at";

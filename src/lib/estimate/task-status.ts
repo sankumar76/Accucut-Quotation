@@ -46,22 +46,22 @@ export function displayStatusOf(row: { readonly status: EstimateStatus; readonly
  * The one rule for "this task is closed": its estimate is locked (approved or quoted) and not ignored (architecture section 4.12 a, FR-038). Every `closed` value is derived from it, and
  * STORY-04.05 reuses it for the list, the counts, the bell and the detail, so there is no second rule to drift from it. `ignored` is true when the layer over the status is set.
  */
-export const isTaskClosed = (status: EstimateStatus, ignored = false): boolean => !ignored && isLocked(status);
+export const isTaskClosed = (status: EstimateStatus, ignored: boolean): boolean => !ignored && isLocked(status);
 
 /** The one rule for "this task is open": its estimate is a Draft or a Prepared one and not ignored. Overdue is open and past its deadline (`tabsOf`). */
-export const isTaskOpen = (status: EstimateStatus, ignored = false): boolean => !ignored && !isLocked(status);
+export const isTaskOpen = (status: EstimateStatus, ignored: boolean): boolean => !ignored && !isLocked(status);
 
 /** An exhaustive `switch`: a new status does not type-check until its word is decided, and bad data at run time throws and does not get a guessed word. */
 export function taskStatusOf(status: DisplayStatus): TaskStatusView {
   switch (status) {
     case 'DRAFT':
-      return { label: 'Draft', closed: isTaskClosed(status) };
+      return { label: 'Draft', closed: isTaskClosed(status, false) };
     case 'PREPARED':
-      return { label: 'Prepared', closed: isTaskClosed(status) };
+      return { label: 'Prepared', closed: isTaskClosed(status, false) };
     case 'APPROVED':
-      return { label: 'Approved', closed: isTaskClosed(status) };
+      return { label: 'Approved', closed: isTaskClosed(status, false) };
     case 'QUOTED':
-      return { label: 'Quoted', closed: isTaskClosed(status) };
+      return { label: 'Quoted', closed: isTaskClosed(status, false) };
     case 'IGNORED':
       return { label: 'Ignored', closed: false };
     default:

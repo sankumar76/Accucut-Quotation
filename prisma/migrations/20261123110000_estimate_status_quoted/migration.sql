@@ -7,8 +7,9 @@
 -- Nothing is rewritten and no row changes status: no existing row can be QUOTED. The new value sorts after APPROVED.
 --
 -- Rollback note: PostgreSQL cannot drop an enum value, so QUOTED stays in the type after a rollback, unused, which is harmless. Before rolling the next file back, set every QUOTED row
--- back to APPROVED (the quote marker is the only thing lost; the audit log keeps the entry of 7C):
---   UPDATE "estimates" SET "status" = 'APPROVED' WHERE "status" = 'QUOTED';
+-- back to APPROVED, **clearing the quote columns in the same statement** (ck_estimates_quoted, still in place at that point, refuses any other form). An approval stands behind a QUOTED
+-- estimate, so APPROVED is the status it had. The quote marker is the only thing lost; the audit log keeps the entry of 7C:
+--   UPDATE "estimates" SET "status" = 'APPROVED', "quoted_at" = NULL, "quoted_by" = NULL WHERE "status" = 'QUOTED';
 -- Restore from the pre-update backup is the fallback.
 
 -- AlterEnum

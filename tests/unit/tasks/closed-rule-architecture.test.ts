@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { ESTIMATE_STATUSES, isLocked, LOCKED_STATUSES } from '@/lib/estimate/state-machine';
+
 /**
  * STORY-04.05 AC-4 (architecture section 4.4; review SQR-02): there is one rule for "this task is closed", `isTaskClosed` in `src/lib/estimate/task-status.ts`, and no stored
  * open/closed column. This is the grep the story asks for:
@@ -62,6 +64,17 @@ describe('AC-4: no second implementation of "is closed"', () => {
     expect(tabFilter.match(/ignoredAt:\s*null/g)).toHaveLength(3);
     const outside = source.slice(0, start) + source.slice(end);
     expect(outside.replace(/import[^;]*LOCKED_STATUSES[^;]*;/, '')).not.toContain('LOCKED_STATUSES');
+  });
+
+  it('QLT-B3: the overdue repository\'s SQL names exactly the locked statuses, in both reads, and `LOCKED_STATUSES` is what `isLocked` says', () => {
+    const source = read('src/server/repositories/overdue-repository.ts');
+    const lists = [...source.matchAll(/e\.status::text NOT IN \(([^)]*)\)/g)].map((match) => (match[1] ?? '').split(',').map((word) => word.trim().replace(/^'|'$/g, '')).sort());
+    // The candidate read and the digest read: both must exclude every locked status and nothing else.
+    expect(lists).toHaveLength(2);
+    for (const list of lists) expect(list).toEqual([...LOCKED_STATUSES].sort());
+    expect([...LOCKED_STATUSES]).toEqual(ESTIMATE_STATUSES.filter(isLocked));
+    // Nothing else in the file compares a status, so a third list cannot hide.
+    expect(source.match(/e\.status::text/g)).toHaveLength(2);
   });
 
   it('writes `isTaskClosed` once under src, and `taskTab` builds on it', () => {

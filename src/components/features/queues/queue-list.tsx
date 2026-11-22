@@ -84,7 +84,8 @@ const reassignHref = (task: QueueRowData): string => `/assign?task=${encodeURICo
  * the overdue cue, so a task is offered the action exactly when it is in the Open tab.
  */
 function RowAction({ task }: { readonly task: QueueRowData }) {
-  return isTaskClosed(task.status) ? (
+  // A row carries no Ignored layer until story 7D adds it to the view (7D passes the row's own flag).
+  return isTaskClosed(task.status, false) ? (
     <span data-closed-action="" className="font-semibold text-ink-2">
       {CLOSED_ROW_WORD}
     </span>

@@ -15,7 +15,8 @@ import type { QueueTab } from './queue';
 
 /** The tab a task is in by its status alone: Closed for an approved or a quoted estimate, Open for any other. Overdue is a part of Open, see `tabsOf`. The Ignored layer is `tabsOf`'s. */
 export function taskTab(status: EstimateStatus): Extract<QueueTab, 'open' | 'closed'> {
-  return isTaskClosed(status) ? 'closed' : 'open';
+  // By the status alone: the layer is `tabsOf`'s (it is passed there, and is required), so this is the tab of a task that is not ignored.
+  return isTaskClosed(status, false) ? 'closed' : 'open';
 }
 
 /**
@@ -23,7 +24,7 @@ export function taskTab(status: EstimateStatus): Extract<QueueTab, 'open' | 'clo
  * stays in Open). A closed task is never overdue, however late its deadline was (AC-2). An ignored task (`ignored`: the layer over the status is set) is in none of them, and so never
  * overdue: the bell counts Overdue only, so an ignored task never rings (architecture section 4.12 a).
  */
-export function tabsOf(status: EstimateStatus, deadlineAt: Date, now: Date, ignored = false): ReadonlyArray<QueueTab> {
+export function tabsOf(status: EstimateStatus, deadlineAt: Date, now: Date, ignored: boolean): ReadonlyArray<QueueTab> {
   if (ignored) return [];
   const tab = taskTab(status);
   return tab === 'open' && isOverdue(deadlineAt, now) ? [tab, 'overdue'] : [tab];
