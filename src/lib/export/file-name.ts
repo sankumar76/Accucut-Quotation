@@ -52,8 +52,9 @@ export function exportFileName({ customerShortName, subject, taskCode, now }: Ex
 
 /**
  * Whether a name is one the export could have made: ends `.xlsx`, a non-empty stem that does not start with a dot, and no whitespace, control, format, invisible or reserved character in it.
- * There is no length limit (OQ-PM-11: "Don't limit the characters"); the stem is bounded only by the fields it is made of: the short name (10 in code, 20 in the database), the subject (80 in code, 200 in the database), 12 characters of
- * separators and date, so at most about 232 code points, inside the 255 of Windows. The one check for the server's schemas, the header builder and the browser's reading of the header.
+ * There is no length limit (OQ-PM-11: "Don't limit the characters"); the name is bounded only by the form limits of the fields it is made of: the short name (10) and the subject (80) plus 17 characters
+ * (two separators, the date and `.xlsx`), so at most 107 characters, inside the 255 of Windows (`tests/unit/limits-single-source.test.ts` keeps that true, in the UTF-16 worst case as well). The one check
+ * for the server's schemas, the header builder and the browser's reading of the header.
  */
 export function isExportFileName(name: string): boolean {
   if (!name.endsWith(FILE_NAME_EXTENSION)) return false;

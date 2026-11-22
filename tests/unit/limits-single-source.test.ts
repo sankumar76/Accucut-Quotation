@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { CUSTOMER_SHORT_NAME_MAX_LENGTH,SHORT_NAME_TOO_LONG_MESSAGE, shortNameProblem } from '@/lib/masters/customers';
+import { exportFileName } from '@/lib/export/file-name';
+import { CUSTOMER_SHORT_NAME_MAX_LENGTH, SHORT_NAME_TOO_LONG_MESSAGE, shortNameProblem } from '@/lib/masters/customers';
 import { checkAssign, SUBJECT_MAX_LENGTH, SUBJECT_MESSAGE } from '@/lib/tasks/assign';
 
 import { SHORT_NAME_HINT } from '@/components/features/masters/customer-texts';
@@ -35,6 +36,28 @@ describe('the limits are constants that the checks, the messages and the hints f
     expect(shortNameProblem('S'.repeat(CUSTOMER_SHORT_NAME_MAX_LENGTH + 1))).toBe(SHORT_NAME_TOO_LONG_MESSAGE);
     expect(SHORT_NAME_TOO_LONG_MESSAGE).toContain(String(CUSTOMER_SHORT_NAME_MAX_LENGTH));
     expect(SHORT_NAME_HINT).toContain(String(CUSTOMER_SHORT_NAME_MAX_LENGTH));
+  });
+});
+
+/**
+ * AQP-391 (CR-01 item 9; PRD NFR-032, DL-297 (4)): the Excel file name is never cut (OQ-PM-11), so it is bounded only by the two field limits. The rest of the name is 17 characters: two separators, the
+ * 10-character date `DD-MM-YYYY` and the 5 of `.xlsx`. The whole name must stay under the 255 of a Windows path component, at the limits of the forms, and in the worst case where every character is
+ * outside the BMP and takes two UTF-16 units. A raised limit that broke this fails here.
+ */
+describe('the longest file name stays inside the 255 of Windows (NFR-032)', () => {
+  const NAME_PART_CHARACTERS = 17;
+
+  it('in characters: short name + subject + 17 is under 255', () => {
+    expect(CUSTOMER_SHORT_NAME_MAX_LENGTH + SUBJECT_MAX_LENGTH + NAME_PART_CHARACTERS).toBeLessThan(255);
+  });
+
+  it('in UTF-16 units, every character of the two parts outside the BMP: 2 x (short name + subject) + 17 is under 255', () => {
+    expect(2 * (CUSTOMER_SHORT_NAME_MAX_LENGTH + SUBJECT_MAX_LENGTH) + NAME_PART_CHARACTERS).toBeLessThan(255);
+  });
+
+  it('the 17 is what the builder adds: the longest names have exactly that many characters beyond the two parts', () => {
+    const name = exportFileName({ customerShortName: 'S'.repeat(CUSTOMER_SHORT_NAME_MAX_LENGTH), subject: 'x'.repeat(SUBJECT_MAX_LENGTH), taskCode: 'Q-2026-0001', now: new Date('2026-11-21T12:00:00Z') });
+    expect(name).toHaveLength(CUSTOMER_SHORT_NAME_MAX_LENGTH + SUBJECT_MAX_LENGTH + NAME_PART_CHARACTERS);
   });
 });
 
