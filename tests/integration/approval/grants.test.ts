@@ -97,12 +97,14 @@ describe('a change as the owner is refused by the triggers (AC-3)', () => {
     expect(await snapshotOfTable()).toEqual(before);
   });
 
+  // `estimate_downloads` (STORY-CR01.7E) has a foreign key to `approvals`, so PostgreSQL refuses a TRUNCATE of `approvals` alone for that reason, before any trigger runs. The statement names both tables, so the check of the
+  // foreign key passes and the triggers of the two append-only tables are what refuse it: whichever table's trigger is reached first, the answer is the same immutable-table refusal.
   it.each([
-    ['DELETE', 'DELETE FROM approvals'],
-    ['TRUNCATE', 'TRUNCATE approvals'],
-  ])('%s', async (operation, statement) => {
+    ['DELETE', 'DELETE FROM approvals', 'approvals'],
+    ['TRUNCATE', 'TRUNCATE approvals, estimate_downloads', '(approvals|estimate_downloads)'],
+  ])('%s', async (operation, statement, table) => {
     const before = await snapshotOfTable();
-    await expect(db.owner.query(statement)).rejects.toMatchObject({ code: '23000', message: expect.stringContaining(`Table "approvals" is immutable: ${operation} is not allowed`) });
+    await expect(db.owner.query(statement)).rejects.toMatchObject({ code: '23000', message: expect.stringMatching(new RegExp(`Table "${table}" is immutable: ${operation} is not allowed`)) });
     expect(await snapshotOfTable()).toEqual(before);
   });
 });
