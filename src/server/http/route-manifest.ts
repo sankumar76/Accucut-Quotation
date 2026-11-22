@@ -248,10 +248,10 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/tasks/[id]', kind: 'api', methods: ['PATCH'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R2' },
   { path: '/api/v1/options/assign-context', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   // STORY-05.01 (SCR-05). Every role opens the address and the server decides what it shows (UX spec section 4): an Engineer the workspace of their own task and SCR-26
-  // for any other, a Lead and an Admin the estimate review SCR-06 (STORY-06.02, loaded only for them). The customer is chosen through `PUT /estimates/{id}/customer`: an Admin and a Lead on any
-  // draft, an Engineer on their own while it is a draft (architecture section 6 "Set customer"), so it is in the Engineer's list and the cost scan calls it.
+  // for any other, a Lead and an Admin the estimate review SCR-06 (STORY-06.02, loaded only for them). The customer is set when the task is assigned and changed through `PUT /estimates/{id}/customer`:
+  // an Admin and a Lead only (CR-01 item 6, AQP-390; architecture section 4.11 b). The Engineer sees it read-only, so the route is not in the Engineer's list: an Engineer's PUT is the fixed 403 before the ID is read.
   { path: '/estimates/[code]', kind: 'page', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1', screen: 'SCR-05' },
-  { path: '/api/v1/estimates/[id]/customer', kind: 'api', methods: ['PUT'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },
+  { path: '/api/v1/estimates/[id]/customer', kind: 'api', methods: ['PUT'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   // STORY-05.02 (SCR-05's parts tree; architecture section 6 "Tree", "Node", "Reorder"): A L, and an Engineer on their own estimate; a write only while this person may change its inputs (`assertEditable`, STORY-06.01). One response
   // schema per route for every role, with no figure in it, so every one is in the Engineer's list and the cost scan calls it.
   { path: '/api/v1/estimates/[id]/tree', kind: 'api', methods: ['GET'], roles: ALL_ROLES, status: 'implemented', stage: 'R1' },

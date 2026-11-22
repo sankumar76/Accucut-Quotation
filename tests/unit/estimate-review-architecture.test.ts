@@ -111,6 +111,8 @@ describe('AC-5: no review code reaches the Engineer', () => {
   const CANCEL_BUTTON = `${CANCEL_FOLDER}cancel-button.tsx`;
   const REMOVE_FOLDER = 'src/components/features/estimate-remove-price/';
   const REMOVE_BUTTON = `${REMOVE_FOLDER}remove-button.tsx`;
+  const CUSTOMER_FOLDER = 'src/components/features/estimate-customer/';
+  const CUSTOMER_BUTTON = `${CUSTOMER_FOLDER}change-customer-button.tsx`;
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -128,6 +130,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     clientFiles.delete(UNLOCK_BUTTON);
     clientFiles.delete(CANCEL_BUTTON);
     clientFiles.delete(REMOVE_BUTTON);
+    clientFiles.delete(CUSTOMER_BUTTON);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
       const base = specifier.startsWith('@/') ? `src/${specifier.slice(2)}` : join(from, '..', specifier).replaceAll('\\', '/');
@@ -246,6 +249,28 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(dialog).toMatch(/@\/lib\/estimates\/remove-price-client/);
     const importers = ALL.filter((file) => !file.path.startsWith(REMOVE_FOLDER) && /estimate-remove-price\//.test(file.text)).map((file) => file.path);
     expect(importers).toEqual(['src/components/features/estimate-review/price-removed-notice.tsx', 'src/components/features/estimate-review/review-actions.tsx']);
+  });
+
+  it('CR-01 item 6, ADR-016: the Change customer button and its dialog are the only client files of their folder, are imported by the review alone (never the Engineer\'s page), import no figure, schema, service or repository, and the dialog is fetched on the first press', () => {
+    const folder = ALL.filter((file) => file.path.startsWith(CUSTOMER_FOLDER));
+    expect(folder.map((file) => file.path).sort()).toEqual([CUSTOMER_BUTTON, `${CUSTOMER_FOLDER}change-customer-dialog.tsx`, `${CUSTOMER_FOLDER}customer-ids.ts`, `${CUSTOMER_FOLDER}customer-texts.ts`]);
+    for (const name of ['customer-ids.ts', 'customer-texts.ts']) expect(folder.find((file) => file.path.endsWith(name))?.text ?? '').not.toMatch(/use client/);
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const button = strip(folder.find((file) => file.path === CUSTOMER_BUTTON)?.text ?? '');
+    const dialog = strip(folder.find((file) => file.path.endsWith('change-customer-dialog.tsx'))?.text ?? '');
+    expect(folder.find((file) => file.path === CUSTOMER_BUTTON)?.text ?? '').toMatch(/^\s*['"]use client['"]/m);
+    expect(folder.find((file) => file.path.endsWith('change-customer-dialog.tsx'))?.text ?? '').toMatch(/^\s*['"]use client['"]/m);
+    // No restricted module in either: not the costs schema, not the review, not a service, a repository or a calculation's own code.
+    for (const code of [button, dialog]) expect(code).not.toMatch(/schemas\/|estimate-review|@\/server\/|calculation-|row-outputs|product-totals|figure-state/);
+    // The dialog is a bare dynamic `import()` behind a type-only import, so the page's first load does not carry it; its words and its requests belong to the dialog.
+    expect(button).toMatch(/import\('\.\/change-customer-dialog'\)/);
+    expect(button).toMatch(/^import type \{ ChangeCustomerDialogProps \} from '\.\/change-customer-dialog';/m);
+    expect(button).not.toMatch(/^import (?!type).*change-customer-dialog/m);
+    // The button holds no request: the client of the routes is imported by the dialog alone (the button takes its type only).
+    expect(button).not.toMatch(/^import (?!type).*estimates-client/m);
+    expect(dialog).toMatch(/@\/lib\/estimates\/estimates-client/);
+    const importers = ALL.filter((file) => !file.path.startsWith(CUSTOMER_FOLDER) && /estimate-customer\//.test(file.text)).map((file) => file.path);
+    expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
   });
 
   it('nothing outside the review imports a file of its folder except the review page', () => {

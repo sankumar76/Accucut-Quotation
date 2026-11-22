@@ -6,7 +6,7 @@ import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 
-import { connectToTestDatabase, ensureCanaryCustomers, ensureCanaryMaterials, useFreshAddress } from './support/auth';
+import { connectToTestDatabase, ensureCanaryCustomers, ensureCanaryMaterials, setCanaryCustomer, useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET } from './support/design-system';
 import { control, expectFormAccessible, leastFieldHeight, nextSave, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
@@ -71,8 +71,7 @@ async function openFormWithEveryTreatmentStored(page: Page, testInfo: TestInfo):
   await ensureCanaryCustomers();
   await ensureCanaryMaterials();
   const owner = await signInAsNewEngineer(page, testInfo);
-  const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers: { origin: DEVELOPMENT_URL }, data: { customerId: defined(CUSTOMER_CANARIES[0]).id } });
-  expect(chosen.status(), 'the customer is chosen').toBe(200);
+  await setCanaryCustomer(owner.id, defined(CUSTOMER_CANARIES[0]).id);
   const client = await connectToTestDatabase();
   try {
     await client.query('UPDATE estimate_nodes SET inputs = inputs || $2::jsonb WHERE id = $1::uuid', [owner.id, JSON.stringify(EVERY_TREATMENT_STORED)]);

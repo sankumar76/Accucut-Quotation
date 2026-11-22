@@ -73,7 +73,7 @@ const admin = (): EstimateViewer => ({ id: adminId, role: 'ADMIN' });
 async function setUpEstimate(status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' = 'DRAFT'): Promise<{ readonly estimateId: string; readonly first: string; readonly second: string }> {
   taskCounter += 1;
   const task = await db.owner.query<{ id: string }>(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at) VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z') RETURNING id::text AS id`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented task', 'Invented subject') RETURNING id::text AS id`,
     [`Q-2026-${String(3000 + taskCounter)}`, arjunId, leadId, PATH],
   );
   const estimate = await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id) VALUES ($1::uuid) RETURNING id::text AS id', [defined(task.rows[0]).id]);

@@ -103,9 +103,10 @@ describe('AC-7: the scope is set on SCR-05, SCR-06 and SCR-07 and on no other sc
     named = filesSettingTheScope(join(ROOT, 'src')).sort();
   });
 
-  it('is set as a class by the part form, the review and the cost details, and by nothing else under src', () => {
+  it('is set as a class by the part form, the review (and its Change customer dialog, which is drawn outside the root of the review) and the cost details, and by nothing else under src', () => {
     expect(named).toEqual([
       'src/components/features/cost-details/cost-details.tsx',
+      'src/components/features/estimate-customer/change-customer-dialog.tsx',
       'src/components/features/estimate-review/estimate-review.tsx',
       'src/components/features/estimate-workspace/part-fields.tsx',
     ]);

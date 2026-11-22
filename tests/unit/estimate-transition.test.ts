@@ -13,6 +13,8 @@ import {
 
 import { inputsDependencies } from '../support/estimate-inputs-deps';
 import { createFakeEstimateWorld, type FakeEstimate } from '../support/fake-estimates';
+import { changeContext } from '../support/customer-change';
+import { createAuditSink } from '../support/fake-audit-sink';
 
 /**
  * STORY-06.01 T2 to T4 (AC-2, AC-3, AC-4, AC-5, AC-6): the estimate service's `transition` and the shared `assertEditable`, over in-memory storage whose
@@ -49,7 +51,7 @@ const admin: EstimateViewer = { id: ADMIN, role: 'ADMIN' };
 
 function setUp(initial: ReadonlyArray<FakeEstimate> = [estimate()]) {
   const world = createFakeEstimateWorld(() => [{ id: CUSTOMER, name: 'Brightwater Controls', deleted: false }], initial);
-  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies() });
+  const service = createEstimateService({ estimates: world.repository, audit: createAuditSink().service, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies() });
   const stored = (): FakeEstimate => {
     const found = world.estimates[0];
     if (found === undefined) throw new Error('no estimate');
@@ -227,7 +229,7 @@ describe('AC-4: two transitions at once are serialised', () => {
 
   it('an approval and a customer change at once: the change that comes second sees the status the first left, so no input changes after approval', async () => {
     const { service, stored } = setUp([estimate({ status: 'SUBMITTED' })]);
-    const results = await Promise.allSettled([service.transition(lead, ESTIMATE, 'APPROVE'), service.setCustomer(lead, ESTIMATE, CUSTOMER)]);
+    const results = await Promise.allSettled([service.transition(lead, ESTIMATE, 'APPROVE'), service.setCustomer(lead, changeContext(lead), ESTIMATE, CUSTOMER)]);
     expect(results[0].status).toBe('fulfilled');
     expect(results[1].status).toBe('rejected');
     expect(stored().status).toBe('APPROVED');
@@ -294,22 +296,22 @@ describe('AC-2: assertEditable, the one check every input write shares', () => {
 });
 
 describe('AC-2: the customer is an input, so setCustomer follows the same rule', () => {
-  it.each(['SUBMITTED', 'APPROVED'] as const)('the Engineer cannot change the customer of a %s estimate: 409, and the estimate is as it was', async (status) => {
+  it.each(['DRAFT', 'SUBMITTED', 'APPROVED'] as const)('the Engineer cannot change the customer of a %s estimate (CR-01 item 6, a Lead and an Admin set it): 403, and the estimate is as it was', async (status) => {
     const { service, stored } = setUp([estimate({ status, inputsRevision: 2 })]);
-    const refusal = await caught(service.setCustomer(arjun, ESTIMATE, CUSTOMER));
-    expect(refusal).toBeInstanceOf(ConflictError);
-    expect((refusal as ConflictError).code).toBe(ESTIMATE_NOT_EDITABLE_CODE);
+    const refusal = await caught(service.setCustomer(arjun, changeContext(arjun), ESTIMATE, CUSTOMER));
+    expect(refusal).toBeInstanceOf(ForbiddenError);
+    expect((refusal as ForbiddenError).httpStatus).toBe(403);
     expect(stored().customerId).toBeNull();
     expect(stored().inputsRevision).toBe(2);
   });
 
   it('a Lead may change the customer of a submitted estimate (FR-064), which raises the revision, and nobody may on an approved one', async () => {
     const { service, stored } = setUp([estimate({ status: 'SUBMITTED', inputsRevision: 2 })]);
-    await service.setCustomer(lead, ESTIMATE, CUSTOMER);
+    await service.setCustomer(lead, changeContext(lead), ESTIMATE, CUSTOMER);
     expect(stored().customerId).toBe(CUSTOMER);
     expect(stored().inputsRevision).toBe(3);
     stored().status = 'APPROVED';
-    await expect(service.setCustomer(admin, ESTIMATE, CUSTOMER)).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.setCustomer(admin, changeContext(admin), ESTIMATE, CUSTOMER)).rejects.toBeInstanceOf(ConflictError);
   });
 });
 
@@ -334,7 +336,7 @@ describe('SQR-01: transition joins the transaction its caller gives it', () => {
   function setUpStrict(initial: ReadonlyArray<FakeEstimate>) {
     const world = createFakeEstimateWorld(() => [{ id: CUSTOMER, name: 'Brightwater Controls', deleted: false }], initial);
     const strict = strictRunner(world.transactions);
-    const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: strict.runner, ...inputsDependencies() });
+    const service = createEstimateService({ estimates: world.repository, audit: createAuditSink().service, nodes: world.nodeRepository, images: world.imageRepository, transactions: strict.runner, ...inputsDependencies() });
     const stored = (): FakeEstimate => {
       const found = world.estimates[0];
       if (found === undefined) throw new Error('no estimate');

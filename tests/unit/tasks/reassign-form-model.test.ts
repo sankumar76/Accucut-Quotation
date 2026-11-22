@@ -35,7 +35,7 @@ const TASK: ReassignTaskData = {
 
 describe('AC-2: the form is filled with what the task holds', () => {
   it('has the Engineer selected, and the deadline as the IST date and time of two controls', () => {
-    expect(reassignValuesOf(TASK)).toEqual({ engineerId: ARJUN.id, folderPath: '', deadlineDate: '2026-11-12', deadlineTime: '17:00', title: '', notes: '' });
+    expect(reassignValuesOf(TASK)).toEqual({ engineerId: ARJUN.id, customerId: '', folderPath: '', deadlineDate: '2026-11-12', deadlineTime: '17:00', title: '', subject: '', notes: '' });
   });
 
   it('keeps a 23:30 IST deadline on its own IST day, where UTC is 18:00', () => {

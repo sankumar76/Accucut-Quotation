@@ -4,10 +4,11 @@ import { FIELD_ID_NAMESPACE, seedId } from '../../prisma/seed/config/seed-sectio
 import { columnLetterToIndex } from '../../src/lib/columns';
 import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
+import { canaryTaskCodeFor } from '../support/estimate-recipe';
 
-import { makeCanaryEstimateCalculable, useFreshAddress } from './support/auth';
+import { ensureCanaryCustomers, ensureCanaryMaterials, makeCanaryEstimateCalculable, useFreshAddress } from './support/auth';
 import { horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, leastFieldHeight, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree, waitForForm } from './support/part-form';
+import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, leastFieldHeight, NUMBER_RULE, nextSave, openForm, partForm, showTree, signInAsNewEngineer, tree, waitForForm } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
@@ -327,30 +328,42 @@ test.describe('AC-7: what an Engineer is sent', () => {
   });
 });
 
+/**
+ * What every AC-8 screen case ends on: the page does not scroll sideways, and axe finds nothing in the state the case has put it in. Each case opens the page once and scans once
+ * (AQP-392, DEF-058): the three states one case used to scan one after the other, on one page open, are three cases now, so none of them runs near the 30 s budget.
+ */
+async function expectFitsAndAccessible(page: Page): Promise<void> {
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  await expectFormAccessible(page);
+}
+
 test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
-  test('AC-8: no sideways scroll, axe finds nothing (with a message showing and with values saved), every control is 44 px high and the strip links too', async ({ page }, testInfo) => {
+  test('AC-8: no sideways scroll, axe finds nothing (first paint), every control is 44 px high and the strip links too', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
-    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectFormAccessible(page);
+    await expectFitsAndAccessible(page);
 
     const fieldHeight = await leastFieldHeight(page);
     for (const letter of FORM_ORDER) expect((await control(page, letter).boundingBox())?.height ?? 0, letter).toBeGreaterThanOrEqual(fieldHeight);
     for (const link of await strip(page).getByRole('link').all()) expect((await link.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
+  });
 
+  test('AC-8: no sideways scroll, axe finds nothing (with a message showing)', async ({ page }, testInfo) => {
+    await openForm(page, testInfo);
     await control(page, 'P').fill('-1');
     await control(page, 'P').blur();
     await control(page, 'AJ').fill('x'.repeat(1001));
     await expect(partForm(page).getByText(REMARKS_TOO_LONG)).toBeVisible();
-    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectFormAccessible(page);
+    await expectFitsAndAccessible(page);
+  });
 
+  test('AC-8: no sideways scroll, axe finds nothing (with values saved)', async ({ page }, testInfo) => {
+    await openForm(page, testInfo);
     await control(page, 'AJ').fill('Invented remark');
     await control(page, 'AJ').blur();
     await control(page, 'P').fill('7');
     await control(page, 'P').blur();
     await expect(control(page, 'P')).toHaveValue('7.00');
-    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectFormAccessible(page);
+    await expectFitsAndAccessible(page);
   });
 
   test('AC-8: tabbing through the whole form, a focused field is never behind the sticky strip or the top bar (WCAG 2.4.11)', async ({ page }, testInfo) => {
@@ -430,8 +443,11 @@ test.describe('STORY-05.11 AC-1, AC-4, AC-7, AC-8: the completion line, the tree
   });
 
   test('AC-4, AC-8: the save that completes a part changes its icon in the tree with no reload, and says "Part 1 is complete." once, politely', async ({ page }, testInfo) => {
-    const owner = await openForm(page, testInfo);
-    // The part is complete in the database except for Remarks, and the page is read again as the database has it.
+    // One page load (AQP-392, DEF-058): the part is made complete in the database except for Remarks BEFORE the page is opened, so the page opens on it as the database has it and no reload is
+    // needed. This is `openForm` without its customer call (`makeCanaryEstimateCalculable` sets the customer too) and without its page load, which the reload used to repeat.
+    await ensureCanaryCustomers();
+    await ensureCanaryMaterials();
+    const owner = await signInAsNewEngineer(page, testInfo);
     await makeCanaryEstimateCalculable(owner.id, ALPHA_MATERIAL.id, ALPHA_CUSTOMER_ID);
     const held = await page.request.get(`/api/v1/estimates/${owner.id}/nodes/${owner.id}`);
     const revision = ((await held.json()) as { revision: number }).revision;
@@ -441,7 +457,7 @@ test.describe('STORY-05.11 AC-1, AC-4, AC-7, AC-8: the completion line, the tree
     });
     expect(cleared.status()).toBe(200);
     expect(((await cleared.json()) as { completeness: string }).completeness).toBe('PARTIAL');
-    await page.reload();
+    await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
     await waitForForm(page);
     await expect(progressLine(page)).toContainText('20 of 21 inputs complete');
     // On a phone the tree is a drawer over the form, so it is opened once the typing is done.

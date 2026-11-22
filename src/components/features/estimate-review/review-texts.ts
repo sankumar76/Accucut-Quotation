@@ -4,8 +4,8 @@
  * sentence (BL, BG, H) is always a parameter, taken from the configuration version the figures belong to (FR-021, UX-26), never typed.
  */
 
-export const REVIEW_CUSTOMER_LABEL = 'Customer';
-export const REVIEW_NO_CUSTOMER = 'Not chosen yet';
+/** What the customer's name field says on an estimate that has none (made before CR-01 item 6): the Change customer action sits beside it. */
+export const REVIEW_NO_CUSTOMER = 'Not set';
 
 /** The three tiles: the plain name, and the letter tag and file cell beside it. */
 export const TILES_LABEL = 'Totals';

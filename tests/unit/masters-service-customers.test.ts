@@ -61,7 +61,7 @@ describe('a Process Master item added or deleted reaches the customers (AC-4)', 
 describe('every change takes the Process Master\'s lock first (PRF-01)', () => {
   it('on a create, an edit and a reset, so a customer added while an item is added cannot miss its rate', async () => {
     const { masters, service } = build();
-    const created = await service.createCustomer(CONTEXT, { name: 'Invented Works', phone: null, email: null, address: null });
+    const created = await service.createCustomer(CONTEXT, { name: 'Invented Works', shortName: 'IW', phone: null, email: null, address: null });
     expect(masters.lockCount()).toBe(1);
     await service.updateCustomer(CONTEXT, created.id, { name: 'Renamed Works' });
     expect(masters.lockCount()).toBe(2);
@@ -71,7 +71,7 @@ describe('every change takes the Process Master\'s lock first (PRF-01)', () => {
 
   it('and reads nothing before the transaction: a refused name opens none', async () => {
     const { masters, service } = build();
-    await refusal(service.createCustomer(CONTEXT, { name: '  ', phone: null, email: null, address: null }));
+    await refusal(service.createCustomer(CONTEXT, { name: '  ', shortName: 'IW', phone: null, email: null, address: null }));
     expect(masters.lockCount()).toBe(0);
   });
 });
@@ -79,7 +79,7 @@ describe('every change takes the Process Master\'s lock first (PRF-01)', () => {
 describe('the audit entry of a change (AC-6)', () => {
   it('lists the rates of an edit in the order of the table on both sides, with the name and unit each had', async () => {
     const { world, masters, service } = build();
-    const created = await service.createCustomer(CONTEXT, { name: 'Invented Works', phone: null, email: null, address: null });
+    const created = await service.createCustomer(CONTEXT, { name: 'Invented Works', shortName: 'IW', phone: null, email: null, address: null });
     const entries = world.audit.committed.length;
     await service.updateCustomer(CONTEXT, created.id, {
       rates: [
@@ -96,8 +96,8 @@ describe('the audit entry of a change (AC-6)', () => {
 
   it('is exactly one entry for a create, an edit and a reset, and none for a save or a reset that changes nothing', async () => {
     const { world, service } = build();
-    const created = await service.createCustomer(CONTEXT, { name: 'Invented Works', phone: '+99 555 0142', email: null, address: null });
-    await service.updateCustomer(CONTEXT, created.id, { phone: '+99 555 0142', name: 'Invented Works' });
+    const created = await service.createCustomer(CONTEXT, { name: 'Invented Works', shortName: 'IW', phone: '+99 555 0142', email: null, address: null });
+    await service.updateCustomer(CONTEXT, created.id, { phone: '+99 555 0142', name: 'Invented Works', shortName: 'IW' });
     await service.resetCustomerRates(CONTEXT, created.id);
     await service.updateCustomer(CONTEXT, created.id, { rates: [{ processItemId: FIRST_ITEM, value: '9.5' }] });
     await service.resetCustomerRates(CONTEXT, created.id);
@@ -108,15 +108,41 @@ describe('the audit entry of a change (AC-6)', () => {
 describe('the name (AC-1)', () => {
   it('is refused when another customer has it ignoring letter case, on a create and on a rename, with NAME_TAKEN and the words of AC-1', async () => {
     const { service } = build();
-    const first = await service.createCustomer(CONTEXT, { name: 'Invented Works', phone: null, email: null, address: null });
-    const second = await service.createCustomer(CONTEXT, { name: 'Second Works', phone: null, email: null, address: null });
+    const first = await service.createCustomer(CONTEXT, { name: 'Invented Works', shortName: 'IW', phone: null, email: null, address: null });
+    const second = await service.createCustomer(CONTEXT, { name: 'Second Works', shortName: 'SW', phone: null, email: null, address: null });
     for (const attempt of [
-      service.createCustomer(CONTEXT, { name: 'INVENTED WORKS', phone: null, email: null, address: null }),
+      service.createCustomer(CONTEXT, { name: 'INVENTED WORKS', shortName: 'IW3', phone: null, email: null, address: null }),
       service.updateCustomer(CONTEXT, second.id, { name: 'invented works' }),
     ]) {
       expect(await refusal(attempt)).toMatchObject({ code: NAME_TAKEN_CODE, fields: [{ field: 'name', message: 'A customer with this name already exists.' }] });
     }
     expect((await service.getCustomer(first.id)).name).toBe('Invented Works');
+  });
+
+  it('keeps the short name in the audit entry of a create and of an edit, before and after, and a short name taken is refused under shortName on a create and on an edit (CR-01 item 6)', async () => {
+    const { world, service } = build();
+    const first = await service.createCustomer(CONTEXT, { name: 'Invented Works', shortName: 'IW', phone: null, email: null, address: null });
+    const second = await service.createCustomer(CONTEXT, { name: 'Second Works', shortName: 'SW', phone: null, email: null, address: null });
+    expect(customerSide(defined(world.audit.committed[0]).after).shortName).toBe('IW');
+    await service.updateCustomer(CONTEXT, second.id, { shortName: 'S2' });
+    const edit = defined(world.audit.committed[2]);
+    expect([customerSide(edit.before).shortName, customerSide(edit.after).shortName]).toEqual(['SW', 'S2']);
+    for (const attempt of [
+      service.createCustomer(CONTEXT, { name: 'Third Works', shortName: 'iw', phone: null, email: null, address: null }),
+      service.updateCustomer(CONTEXT, second.id, { shortName: 'Iw' }),
+    ]) {
+      expect(await refusal(attempt)).toMatchObject({ code: NAME_TAKEN_CODE, fields: [{ field: 'shortName', message: 'A customer with this short name already exists.' }] });
+    }
+    expect((await service.getCustomer(first.id)).shortName).toBe('IW');
+    expect(world.audit.committed).toHaveLength(3);
+  });
+
+  it('refuses a blank or too long short name on the server too, whatever the schema said, naming shortName', async () => {
+    const { service } = build();
+    expect(await refusal(service.createCustomer(CONTEXT, { name: 'Invented Works', shortName: ' ', phone: null, email: null, address: null }))).toMatchObject({ fields: [{ field: 'shortName', message: 'Enter a short name.' }] });
+    expect(await refusal(service.createCustomer(CONTEXT, { name: 'Invented Works', shortName: 'S'.repeat(11), phone: null, email: null, address: null }))).toMatchObject({
+      fields: [{ field: 'shortName', message: 'Keep the short name under 10 characters.' }],
+    });
   });
 
   it('answers not found for an ID that is no listed customer', async () => {

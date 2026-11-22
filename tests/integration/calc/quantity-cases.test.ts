@@ -40,7 +40,7 @@ afterAll(async () => {
 
 /** A customer whose 15 rates are all 0, and a material (the row's dimensions are 0, so the material cost is 0 too). */
 beforeEach(async () => {
-  const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Invented quantity customer') RETURNING id::text");
+  const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Invented quantity customer', left(md5('Invented quantity customer'), 10)) RETURNING id::text");
   customerId = defined(rows[0]).id;
   for (const item of SEED_PROCESS_ITEMS) {
     await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) VALUES ($1::uuid, $2::uuid, 0)', [customerId, item.id]);

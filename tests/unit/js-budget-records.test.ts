@@ -54,7 +54,7 @@ describe('the records made for the dynamic routes of the JS budget check', () =>
     expect(request?.method).toBe('POST');
     expect(request?.headers['cookie']).toContain('next-auth.session-token=invented-session');
     expect(request?.headers['origin']).toBe(BASE);
-    expect(JSON.parse(request?.body ?? '{}')).toEqual({ name: expect.stringMatching(/^Budget check customer [0-9a-f-]{36}$/) });
+    expect(JSON.parse(request?.body ?? '{}')).toEqual({ name: expect.stringMatching(/^Budget check customer [0-9a-f-]{36}$/), shortName: expect.stringMatching(/^[0-9a-f-]{10}$/) });
   });
 
   it('adds an Engineer, assigns them one task, and returns the path of the workspace under the route pattern (STORY-05.01)', async () => {
@@ -69,7 +69,7 @@ describe('the records made for the dynamic routes of the JS budget check', () =>
       password: expect.stringMatching(/^[0-9a-f-]{36}-Aa1!$/),
     });
     const task = JSON.parse(post(seen, '/api/v1/tasks')?.body ?? '{}');
-    expect(task).toEqual({ engineerId: 'invented-engineer-id', folderPath: '\\\\budget-check-server\\budget-check-share\\RFQ-budget', deadline: '2099-01-01T10:00', title: 'Budget check task', notes: 'Invented.' });
+    expect(task).toEqual({ engineerId: 'invented-engineer-id', folderPath: '\\\\budget-check-server\\budget-check-share\\RFQ-budget', deadline: '2099-01-01T10:00', customerId: 'a b/1', title: 'Budget check task', subject: 'Budget check subject', notes: 'Invented.' });
     for (const path of ['/api/v1/users', '/api/v1/tasks']) {
       expect(post(seen, path)?.headers['cookie']).toContain('next-auth.session-token=invented-session');
       expect(post(seen, path)?.headers['origin']).toBe(BASE);
@@ -140,13 +140,14 @@ describe('the records made for the dynamic routes of the JS budget check', () =>
     const lines: string[] = [];
     const recordPaths = await makeRecordPaths({ baseUrl: BASE, credentialsFor: () => CREDENTIALS, fetchImpl: portal({ [path]: answer }), warn: (line) => lines.push(line) });
     expect(recordPaths[route]).toBeUndefined();
-    expect(Object.keys(recordPaths)).toHaveLength(route === CUSTOMER_PAGE_ROUTE ? 4 : 2);
+    // A task is assigned for the customer (CR-01 item 6): when the customer cannot be made, the three estimate pages cannot be either, and only the formula page is left.
+    expect(Object.keys(recordPaths)).toHaveLength(route === CUSTOMER_PAGE_ROUTE ? 1 : 2);
     // The estimate serves three pages (STORY-06.03, STORY-07.01): when it cannot be made, all three say so, each with the same reason.
-    expect(lines).toHaveLength(route === CUSTOMER_PAGE_ROUTE ? 1 : 3);
+    expect(lines).toHaveLength(route === CUSTOMER_PAGE_ROUTE ? 4 : 3);
     expect(lines.every((line) => message.test(line))).toBe(true);
     expect(lines.some((line) => line.includes(route))).toBe(true);
     if (route === ESTIMATE_PAGE_ROUTE) expect(lines.some((line) => line.includes(COSTS_PAGE_ROUTE))).toBe(true);
-    if (route !== CUSTOMER_PAGE_ROUTE) expect(recordPaths[COSTS_PAGE_ROUTE]).toBeUndefined();
+    expect(recordPaths[COSTS_PAGE_ROUTE]).toBeUndefined();
     expect(lines[0]).toMatch(message);
     expect(lines[0]).toContain(route);
     expect(lines[0]).not.toContain(CREDENTIALS.password);

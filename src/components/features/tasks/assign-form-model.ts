@@ -7,26 +7,33 @@ import { joinDeadline, type AssignErrors, type AssignFieldName, type AssignInput
 
 export interface AssignFormValues {
   readonly engineerId: string;
+  readonly customerId: string;
   readonly folderPath: string;
   readonly deadlineDate: string;
   readonly deadlineTime: string;
   readonly title: string;
+  readonly subject: string;
   readonly notes: string;
 }
 
 export type AssignValueKey = keyof AssignFormValues;
 
-export const EMPTY_ASSIGN_VALUES: AssignFormValues = { engineerId: '', folderPath: '', deadlineDate: '', deadlineTime: '', title: '', notes: '' };
+export const EMPTY_ASSIGN_VALUES: AssignFormValues = { engineerId: '', customerId: '', folderPath: '', deadlineDate: '', deadlineTime: '', title: '', subject: '', notes: '' };
 
 /** The element id of each field: unique on the page, so a label and a message are tied to their own control and a link in the summary can reach it. */
 export const ASSIGN_FIELD_IDS: Readonly<Record<AssignFieldName, string>> = {
   engineerId: 'assign-engineer',
+  customerId: 'assign-customer',
   folderPath: 'assign-path',
   // The date control is where the deadline message sits and where focus goes; the time control has its own id below.
   deadline: 'assign-date',
   title: 'assign-title',
+  subject: 'assign-subject',
   notes: 'assign-notes',
 };
+
+/** The id of the read-only output that shows the chosen customer's short name (it is never sent: the server reads it from the master). */
+export const ASSIGN_SHORT_NAME_ID = 'assign-short-name';
 
 export const ASSIGN_TIME_ID = 'assign-time';
 export const ASSIGN_TIME_ADDON_ID = 'assign-time-ist';
@@ -40,9 +47,11 @@ export function errorFieldOf(key: AssignValueKey): AssignFieldName {
 export function inputOf(values: AssignFormValues): AssignInput {
   return {
     engineerId: values.engineerId,
+    customerId: values.customerId,
     folderPath: values.folderPath,
     deadline: joinDeadline(values.deadlineDate, values.deadlineTime),
     title: values.title,
+    subject: values.subject,
     notes: values.notes,
   };
 }

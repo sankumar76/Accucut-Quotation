@@ -7,9 +7,9 @@ import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { harness, holdSessionClock, NOT_FOUND_SIGNAL, REDIRECT_PREFIX, releaseSessionClock } from '../support/session-harness';
 
 /**
- * STORY-05.01 T6 (AC-1, AC-4 as drawn, AC-5, AC-6): `/estimates/<code>` as each role, through the real page guard, the real session and the real estimate service
- * over in-memory storage, drawn on the server the way the first paint is. What a browser does with the customer field (the list, the choice, the dialog) is the
- * E2E spec's. Every name, path and date is invented.
+ * STORY-05.01 T6 (AC-1, AC-5, AC-6), changed by CR-01 item 6 (AQP-390, AC-9 to AC-12): `/estimates/<code>` as each role, through the real page guard, the real session and the real estimate service
+ * over in-memory storage, drawn on the server the way the first paint is. The Engineer sees the customer, its short name and the subject as read-only text and has no picker, no notice and no
+ * change action; a Lead and an Admin see the Change customer action on an estimate that is not approved. What a browser does with the dialog is the E2E spec's. Every name, path and date is invented.
  */
 
 vi.mock('next-auth', async () => ({ getServerSession: (await import('../support/session-harness')).harness.getServerSession }));
@@ -65,23 +65,41 @@ describe('AC-1: the Engineer opens their task with no customer', () => {
     expect(html).toContain('Invented notes.');
   });
 
-  it('shows the notice "Choose the customer to start." and disables the tree and form area until a customer is chosen', async () => {
+  it('AC-11: an estimate with no customer says so in one neutral sentence, keeps the tree and the form open (no inert area), and shows no notice to choose one', async () => {
     const html = await open(CODE);
-    expect(html).toContain('Choose the customer to start.');
-    expect(html).toContain('The form opens as soon as you pick one.');
-    expect(html).toMatch(/<div[^>]*aria-disabled="true"[^>]*inert=""[^>]*>|<div[^>]*inert=""[^>]*aria-disabled="true"[^>]*>/);
+    expect(html).toContain('No customer is set for this estimate. A Lead or an Admin can set one.');
+    expect(html).not.toContain('Choose the customer to start.');
+    expect(html).not.toContain('The form opens as soon as you pick one.');
+    expect(html).not.toMatch(/inert=""/);
+    expect(html).toContain('Parts and inputs');
   });
 
-  it('draws the Customer field with "Choose this first" and the hint that changing it later asks to confirm, with the list still to come from the server', async () => {
+  it('AC-9: shows Customer Name, Customer Short Name and Subject (project name) as labelled text, before and after a customer is set', async () => {
+    const without = await open(CODE);
+    for (const label of ['Customer Name', 'Customer Short Name', 'Subject (project name)']) expect(without, label).toContain(label);
+    expect(without).toContain('Invented subject');
+    estimate().customerId = CUSTOMER_RECIPE_ID;
     const html = await open(CODE);
-    expect(html).toContain('Customer');
-    expect(html).toContain('Choose this first');
-    expect(html).toContain('Changing it later asks you to confirm.');
-    expect(html).toContain('Loading customers');
-    expect(html).not.toContain('Canary-Customer-Alpha');
+    expect(html).toContain('Canary-Customer-Alpha');
+    const shortName = defined(harness.masters.customers.find((customer) => customer.id === CUSTOMER_RECIPE_ID)).shortName;
+    expect(html).toContain(`>${shortName}<`);
   });
 
-  it('with a customer already chosen the notice is gone, the area is open and the field is for the list to fill', async () => {
+  it('AC-10: there is no customer picker, no "Choose this first", no hint about changing it, no list to load and no control to change the customer, in any state', async () => {
+    for (const customerId of [null, CUSTOMER_RECIPE_ID]) {
+      estimate().customerId = customerId;
+      const html = await open(CODE);
+      for (const gone of ['Choose this first', 'Changing it later asks you to confirm.', 'Loading customers', 'estimate-customer', 'Choose the customer to start.', 'Customer saved.']) {
+        expect(html, gone).not.toContain(gone);
+      }
+      expect(html).not.toContain('<select');
+      expect(html).not.toContain('Change customer');
+      expect(html).not.toContain('Set customer');
+      expect(html).not.toContain('review-change-customer');
+    }
+  });
+
+  it('with a customer set the area is open and the customer is named', async () => {
     estimate().customerId = CUSTOMER_RECIPE_ID;
     const html = await open(CODE);
     expect(html).not.toContain('Choose the customer to start.');
@@ -94,12 +112,12 @@ describe('AC-1: the Engineer opens their task with no customer', () => {
     expect(await open(CODE)).not.toContain('Notes from');
   });
 
-  it('a submitted estimate is shown read-only: its status, the customer it has, and no list to choose from', async () => {
+  it('a submitted estimate is shown read-only: its status, the customer it has, and no control to change it', async () => {
     estimate().status = 'SUBMITTED';
     estimate().customerId = CUSTOMER_RECIPE_ID;
     const html = await open(CODE);
     expect(html).toContain('Submitted');
-    expect(html).toContain('This estimate can no longer be changed.');
+    // The customer field and its locked hint are gone with the picker: the status and the customer are read-only text.
     expect(html).toContain('Canary-Customer-Alpha');
     expect(html).not.toContain('Choose the customer to start.');
   });
@@ -114,12 +132,13 @@ describe('AC-5: who may open it', () => {
     await expect(open('Q-2026-9999')).rejects.toThrow(NOT_FOUND_SIGNAL);
   });
 
-  it('a Lead and an Admin may open any task, and see the review (STORY-06.02): the header, the customer as text and the tiles, with no customer form', async () => {
+  it('a Lead and an Admin may open any task, and see the review (STORY-06.02): the header, the customer as text with the Change customer action and the tiles, with no customer form on the page', async () => {
     for (const role of ['LEAD', 'ADMIN'] as const) {
       harness.signInAs(role);
       const html = await open(CODE);
       expect(html).toContain(CODE);
-      expect(html).toContain('Not chosen yet');
+      expect(html).toContain('Not set');
+      expect(html).toContain('Set customer');
       expect(html).toContain('Total Unit Production Price');
       expect(html).not.toContain('Choose the customer to start.');
       expect(html).not.toContain('<select');
@@ -127,10 +146,30 @@ describe('AC-5: who may open it', () => {
     }
   });
 
-  it('the Lead sees the customer chosen, by name', async () => {
+  it('the Lead sees the customer by name and short name, with "Change customer" while the estimate is a draft or submitted, and none once it is approved (AC-12)', async () => {
     estimate().customerId = CUSTOMER_RECIPE_ID;
     harness.signInAs('LEAD');
-    expect(await open(CODE)).toContain('Canary-Customer-Alpha');
+    for (const status of ['DRAFT', 'SUBMITTED'] as const) {
+      estimate().status = status;
+      const html = await open(CODE);
+      expect(html).toContain('Canary-Customer-Alpha');
+      expect(html).toContain('id="review-change-customer"');
+      expect(html).toContain('Change customer');
+    }
+    estimate().status = 'APPROVED';
+    const approved = await open(CODE);
+    expect(approved).toContain('Canary-Customer-Alpha');
+    expect(approved).not.toContain('review-change-customer');
+  });
+
+  it('an Engineer\'s page never carries the dialog\'s words or the action, whatever the state', async () => {
+    estimate().customerId = CUSTOMER_RECIPE_ID;
+    harness.signInAs('ENGINEER');
+    for (const status of ['DRAFT', 'SUBMITTED', 'APPROVED'] as const) {
+      estimate().status = status;
+      const html = await open(CODE);
+      for (const word of ['Change the customer?', 'New customer', 'Change customer', 'review-change-customer']) expect(html, word).not.toContain(word);
+    }
   });
 
   it('an unknown code is "not found" for a Lead too', async () => {

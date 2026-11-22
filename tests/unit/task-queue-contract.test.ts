@@ -131,9 +131,9 @@ describe('AC-8: the answer is strict and names no cost', () => {
     expect(taskQueueSchema.parse(answer)).toEqual(answer);
   });
 
-  it('accepts a row with no title, no customer and no link', () => {
+  it('accepts a row with no customer and no link (an estimate made before CR-01 item 6 has no customer; the title is required now)', () => {
     const [task] = queue.tasks;
-    const bare = queueAnswer({ ...queue, tasks: [{ ...(task as NonNullable<typeof task>), title: null, folderUrl: null }] });
+    const bare = queueAnswer({ ...queue, tasks: [{ ...(task as NonNullable<typeof task>), customerName: null, folderUrl: null }] });
     expect(taskQueueSchema.safeParse(bare).success).toBe(true);
   });
 
