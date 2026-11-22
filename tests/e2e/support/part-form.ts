@@ -8,7 +8,7 @@ import { FIELD_ID_NAMESPACE, seedId } from '../../../prisma/seed/config/seed-sec
 import { columnLetterToIndex } from '../../../src/lib/columns';
 
 import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, setCanaryCustomer, signInWithoutThePage, type E2eUser } from './auth';
-import { expectNoAxeViolations } from './design-system';
+import { expectNoAxeViolations, widthOf } from './design-system';
 
 /**
  * What the part-form specs (`estimate-form.spec.ts`, STORY-05.03, and `estimate-form-sections.spec.ts`, STORY-05.04) share: a person of the test's own who owns a task with an empty draft
@@ -43,6 +43,14 @@ export async function signInAsNewEngineer(page: Page, testInfo: TestInfo): Promi
   const person = await createDisposableUser('scan', testInfo);
   await signInWithoutThePage(page, person.email, E2E_PASSWORD);
   return person;
+}
+
+/**
+ * The least height of a field of the part form: 36 px from 1024 px with a fine pointer (the compact layout, AQP-388; UX ruling OQ-PM-12), and 44 px below that width and for a finger (NFR-017). The desktop project is
+ * the only one with a mouse at 1024 px or wider, so it is the one that reads 36.
+ */
+export async function leastFieldHeight(page: Page): Promise<number> {
+  return (await widthOf(page)) >= 1024 && (await page.evaluate(() => window.matchMedia('(pointer: fine)').matches)) ? 36 : 44;
 }
 
 export async function waitForForm(page: Page): Promise<void> {

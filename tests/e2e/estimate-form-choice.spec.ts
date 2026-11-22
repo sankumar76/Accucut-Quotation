@@ -5,8 +5,8 @@ import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 
 import { ensureCanaryCustomers, ensureCanaryMaterials, setCanaryCustomer, useFreshAddress } from './support/auth';
-import { horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
-import { expectFormAccessible, isPatchOfInputs, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
+import { horizontalOverflow, waitUntilHydrated } from './support/design-system';
+import { expectFormAccessible, isPatchOfInputs, leastFieldHeight, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
 
 /**
  * STORY-08.08 AC-1, AC-4, AC-8, AC-9 (FR-074; NFR-016 to NFR-018): the part form of SCR-05 draws a **choice input in a new section** the Admin added, at 360x800, 768x1024 and 1366x768 on the development server,
@@ -100,7 +100,7 @@ test.describe('AC-1, AC-4, AC-9: the new card and the choice', () => {
     await expect(list).toHaveCount(1);
     await expect(list).toBeEnabled();
     expect(await choice(page).locator('option').allTextContents()).toEqual([PLACEHOLDER, ...OPTIONS]);
-    expect(defined(await choice(page).boundingBox()).height).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    expect(defined(await choice(page).boundingBox()).height).toBeGreaterThanOrEqual(await leastFieldHeight(page));
 
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);

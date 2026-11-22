@@ -16,7 +16,7 @@ export function NativeSelect({ className, children, ...props }: ComponentProps<'
       <select
         data-slot="native-select"
         className={cn(
-          'h-(--control-h) w-full min-w-0 appearance-none truncate rounded-md border border-border-strong bg-surface pr-s-7 pl-s-3 text-body text-ink hover:border-ink-2',
+          'h-(--control-h) w-full min-w-0 appearance-none truncate rounded-md border border-border-strong bg-surface pr-s-7 pl-s-3 text-body text-ink hover:border-ink-2 compact-fine:h-(--compact-field-h)',
           'disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-2 disabled:text-ink-3',
           'aria-invalid:border-2 aria-invalid:border-danger aria-invalid:bg-danger-soft',
           className,

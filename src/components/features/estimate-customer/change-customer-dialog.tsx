@@ -138,7 +138,8 @@ export function ChangeCustomerDialog({ open, onOpenChange, estimateId, current, 
         onOpenChange(next);
       }}
     >
-      <AlertDialogContent onCloseAutoFocus={onCloseAutoFocus}>
+      {/* The dialog is a part of SCR-06 but is drawn in a portal, outside the review's root: it sets the compact scope itself, so its select has the same 36 px / 44 px rule as the fields of the screen (AQP-388). */}
+      <AlertDialogContent className="is-compact" onCloseAutoFocus={onCloseAutoFocus}>
         <AlertDialogHeader>
           <AlertDialogTitle>{current === null ? SET_TITLE : CHANGE_TITLE}</AlertDialogTitle>
           <AlertDialogDescription className={BREAK_LONG_NAMES}>
