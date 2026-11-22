@@ -13,8 +13,24 @@
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target about 4 Dec 2026, range 3 to 5 Dec, freeze about 1 Dec (DL-298, delivery lead); provisional: CR-01 items 3 and 7 now before G8 (OQ-PM-13), so a new forecast follows the architect's sizing for the delivery lead to accept** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-22 by orchestrator (daily update) |
+| Last updated       | 2026-11-22 (evening) by orchestrator (daily update) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-22, evening, orchestrator)
+
+> This section wins over everything below it.
+
+**`master` = 8ff2fa0.** Merged since the morning update: #616 (DEF-062), #613 (DEF-059), #617 (DEF-063), #494 (records t, with the DL-247 settings line, delivery lead's authorisation; records-t retired, records continue on `docs/AQP-1-records-u`), #604 (**AQP-391**, CR-01 item 9). **CR-01 items 1, 2, 6 and 9 are all on `master`.** Defects closed today: DEF-058, DEF-059, DEF-060, DEF-061, DEF-062, DEF-063. Only open G8 blocker: **DEF-057** (Sev-2; observer merged in #612; re-rule by 26 Nov). RISK-031 closed again (DL-296); 22 Nov trigger (b) 0 of 2 since the restart.
+
+**Delivery lead's answers today:** OQ-PM-11 "Don't limit the characters" (DL-297: no file-name cut); G8 about 4 Dec accepted (DL-298, now provisional); #494 merge authorised; STD-F-03 (#577) waived until after G8 (DL-298); **OQ-PM-13: CR-01 items 3, 7 and 7c before G8** (DL-299). Product rulings DL-300, reviewed by master DL-302 (none needs the delivery lead before build; downloads kept in the download log only, as information). DL-301 (#618, approve.spec:101 watch, DEF-063 probe rule).
+
+**CR-01 items 3, 7, 7c:** architecture v0.61 §4.12, ADR-019, ADR-020 (records-u 00f53b77); SPEC 1.18; PRD v0.36. Nine stories AQP-398 to AQP-406 (14.5 developer-days; 7C, 7D, 3D held for the customer's Monday answers A-CR01-1/2/3/5). Lanes: AQP-403 (3A, critical path), AQP-398 #620 green + AQP-399 (7B) stacked (one combined review for both), AQP-402 (7E). Combined reviews: 7A+7B, 7C, 7D, 7E, 3A, 3C.
+
+**New G8 forecast (for the delivery lead to accept):** recommendation about **6 Dec (range 5 to 8 Dec)**, freeze about **3 Dec**; items 3/7 code complete about 29 to 30 Nov with three lanes; +1.5 d if the customer answers "no" on A-CR01-5 or A-CR01-3; about 8 to 9 Dec with two lanes; DEF-057 can cost a day.
+
+**Queue:** #618 (UX spec v0.35, CI), #581 (docs, green, needs update after #618), then the CR-01 code PRs. #476 waits for the delivery lead.
+
+**For the delivery lead:** the new G8 date; D2, D3, D4, D6, D7 (D5, D8, D9 closed); #476; A-CR01-1/2/3/5 and A-CR01-8 with the customer on Monday 23 Nov; QLT-08 (short-name backfill on a demo copy before the demo runs CR-01 code); the full :224 rate count was denied by the permission system (narrow count used); a stale "relates to AQP-303" link on AQP-395.
 
 ## Daily update (2026-11-22, orchestrator)
 
