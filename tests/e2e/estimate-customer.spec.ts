@@ -157,6 +157,10 @@ test.describe('AC-12, AC-13: SCR-06, a Lead changes the customer', () => {
     await expect(identity).toContainText(ALPHA);
     await expect(identity).toContainText(ALPHA_SHORT_NAME);
     await expect(identity).toContainText('Canary subject');
+    // The page with the action, at every width (AC-18; QLT-14: the action once sat where the sticky top bar covered it after a scroll and axe read it as a target too small and too close).
+    await expect(changeButton(page)).toBeVisible();
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoAxeViolations(page);
 
     await changeButton(page).click();
     const dialog = dialogOf(page);

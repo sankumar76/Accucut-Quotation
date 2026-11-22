@@ -16,8 +16,8 @@ import { CUSTOMER_NAME_LABEL, CUSTOMER_SHORT_NAME_LABEL, FOLDER_TITLE, IDENTITY_
 /**
  * The top of SCR-05 and of SCR-06 (STORY-05.01 AC-1; UX-15; CR-01 item 6): the task code, its status, the deadline, the customer, its short name and the subject (read-only, as labelled text, for every
  * role: they are set when the task is assigned and an Engineer cannot change them), the folder and the notes typed when the task was assigned. It holds no state and needs no script of its own; the folder's
- * "Copy path" is `FolderPath`. The customer is a name and a short name and nothing else (NFR-002), so it is the same for every role that may open the task. SCR-06 passes a Change customer action to sit beside
- * the name (`customerAction`); SCR-05 passes none, so an Engineer has no control to change it.
+ * "Copy path" is `FolderPath`. The customer is a name and a short name and nothing else (NFR-002), so it is the same for every role that may open the task. SCR-06 passes a Change customer action to sit among the
+ * header actions (`customerAction`); SCR-05 passes none, so an Engineer has no control to change it.
  */
 
 export interface WorkspaceHeaderView {
@@ -41,7 +41,7 @@ export interface WorkspaceHeaderProps {
   readonly view: WorkspaceHeaderView;
   /** What the name field says while there is no customer: the Engineer's neutral sentence by default, "Not set" on SCR-06. */
   readonly noCustomerText?: string;
-  /** SCR-06's Change customer action, drawn beside the customer's name. */
+  /** SCR-06's Change customer action, drawn first among the actions of the page header (at the top of the screen: a control inside the identity card sat under the sticky top bar once the page was scrolled to the end of a short review, and axe read it as a target too small and too close, AQP-390). */
   readonly customerAction?: ReactNode;
 }
 
@@ -63,6 +63,7 @@ export function WorkspaceHeader({ view, noCustomerText = NO_CUSTOMER_SET_MESSAGE
         description={view.title}
         actions={
           <div className="flex flex-wrap items-center gap-s-3">
+            {customerAction}
             <StatusBadge status={view.status} variant="header" />
             <span className="inline-flex items-center gap-s-1 text-body font-semibold text-ink">
               <Icon icon={CalendarClock} size="small" />
@@ -75,10 +76,7 @@ export function WorkspaceHeader({ view, noCustomerText = NO_CUSTOMER_SET_MESSAGE
         <CardContent>
           <dl className="grid gap-s-4 sm:grid-cols-3">
             <Identity label={CUSTOMER_NAME_LABEL}>
-              <span className="inline-flex flex-wrap items-center gap-s-2">
-                <span>{view.customer === null ? noCustomerText : view.customer.name}</span>
-                {customerAction}
-              </span>
+              {view.customer === null ? noCustomerText : view.customer.name}
             </Identity>
             <Identity label={CUSTOMER_SHORT_NAME_LABEL}>{view.customer === null ? SHORT_NAME_NOT_SET : <span className="font-mono">{view.customer.shortName}</span>}</Identity>
             <Identity label={SUBJECT_LABEL}>{view.subject}</Identity>
