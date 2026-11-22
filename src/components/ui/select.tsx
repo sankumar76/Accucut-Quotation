@@ -22,7 +22,7 @@ export function SelectTrigger({ className, children, ...props }: ComponentProps<
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        'flex h-(--control-h) w-full min-w-0 items-center justify-between gap-s-2 rounded-md border border-border-strong bg-surface px-s-3 text-left text-body text-ink hover:border-ink-2',
+        'flex h-(--control-h) w-full min-w-0 items-center justify-between gap-s-2 rounded-md border border-border-strong bg-surface px-s-3 text-left text-body text-ink hover:border-ink-2 compact-fine:h-(--compact-field-h)',
         'data-[placeholder]:text-ink-3 disabled:cursor-not-allowed disabled:border-border disabled:bg-surface-2 disabled:text-ink-3',
         'aria-invalid:border-2 aria-invalid:border-danger aria-invalid:bg-danger-soft',
         className,

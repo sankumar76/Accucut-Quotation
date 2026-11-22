@@ -40,11 +40,11 @@ export function StagePanel({ stage, unitPriceLetter }: StagePanelProps) {
   const { total } = stage;
   return (
     <details open data-stage={stage.number} className="rounded-md border border-border bg-surface-2">
-      <summary className="flex min-h-(--control-h) cursor-pointer flex-wrap items-center justify-between gap-x-s-4 gap-y-s-1 px-s-4 py-s-2 text-body font-semibold text-ink">
+      <summary className="flex min-h-(--control-h) cursor-pointer flex-wrap items-center justify-between gap-x-s-4 gap-y-s-1 px-s-3 py-s-2 text-body font-semibold text-ink">
         <span>{`${stage.number}. ${stage.name}`}</span>
         {total === null ? null : <span className="tabular-nums">{`${STAGE_TOTAL_LABEL}: ${formatFigure(total.value)}`}</span>}
       </summary>
-      <div className="flex flex-col gap-s-3 px-s-4 pb-s-4">
+      <div className="flex flex-col gap-s-3 px-s-3 pb-s-3">
         {groupsOf(stage, shown).map((group) => (
           <section key={group.heading ?? 'lines'} className="flex flex-col gap-s-2">
             {group.heading === null ? null : <h3 className="text-label font-semibold text-ink-2">{group.heading}</h3>}
