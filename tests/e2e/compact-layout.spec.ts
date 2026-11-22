@@ -1,9 +1,9 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
 import { useFreshAddress } from './support/auth';
 import { calculateWithoutThePage, engineerWithEstimate, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow, widthOf } from './support/design-system';
-import { control, expectFormAccessible, openForm, partForm } from './support/part-form';
+import { control, expectFormAccessible, leastFieldHeight, openForm, partForm } from './support/part-form';
 
 /**
  * AQP-388 (CR-01 item 1; UX spec section 0.9 row 1): the compact input and output screens, SCR-05 (the part form), SCR-06 (the review) and SCR-07 (the cost details), measured at the three widths of
@@ -23,7 +23,6 @@ test.beforeEach(async ({ context }) => {
 
 const FINE_POINTER_MIN_WIDTH = 1024;
 const SIDE_BY_SIDE_MIN_WIDTH = 768;
-const COMPACT_FIELD = 36;
 const TOUCH_FIELD = 44;
 const COLUMN_MINIMUM = 140;
 const PADDING_STEP = 12;
@@ -48,11 +47,6 @@ async function paddingOf(target: Locator): Promise<Sides> {
 
 async function heightOf(target: Locator): Promise<number> {
   return target.evaluate((element) => element.getBoundingClientRect().height);
-}
-
-/** The field height the page must have: 36 px from 1024 px with a fine pointer (the desktop project), 44 px otherwise. */
-async function expectedFieldHeight(page: Page): Promise<number> {
-  return (await widthOf(page)) >= FINE_POINTER_MIN_WIDTH && (await page.evaluate(() => window.matchMedia('(pointer: fine)').matches)) ? COMPACT_FIELD : TOUCH_FIELD;
 }
 
 function expectSides(actual: Sides, expected: { readonly vertical: number; readonly horizontal: number }, why: string): void {
@@ -105,7 +99,7 @@ test.describe('AC-1 to AC-5, AC-8, AC-9: SCR-05, the part form', () => {
     for (const column of columns) expect(column).toBeGreaterThanOrEqual(COLUMN_MINIMUM - TOLERANCE);
 
     // AC-5: a typed box, a list and a read-only output; a multi-line box is 60 px at least.
-    const fieldHeight = await expectedFieldHeight(page);
+    const fieldHeight = await leastFieldHeight(page);
     for (const letter of ['B', 'E', 'A']) expect(await heightOf(control(page, letter)), `field ${letter}`).toBeCloseTo(fieldHeight, 0);
     expect(await partForm(page).locator('textarea').first().evaluate((box) => parseFloat(getComputedStyle(box).minHeight))).toBeCloseTo(60, 0);
 

@@ -7,7 +7,7 @@ import { defined } from '../support/defined';
 
 import { makeCanaryEstimateCalculable, useFreshAddress } from './support/auth';
 import { horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree, waitForForm } from './support/part-form';
+import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, leastFieldHeight, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree, waitForForm } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
@@ -209,8 +209,8 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
     const remarks = control(page, 'AJ');
     await expect(remarks).toHaveAccessibleDescription(REMARKS_HINT);
     expect(await remarks.evaluate((element) => element.tagName)).toBe('TEXTAREA');
-    // The box is at least three lines tall, from its token and not a size of the default scale.
-    expect((await remarks.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(90);
+    // The box is at least two lines tall in the compact layout (60 px, `--compact-textarea-min-h`; it was 90 px, three lines, before AQP-388), from its token and not a size of the default scale.
+    expect((await remarks.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(60);
     await remarks.focus();
     await page.keyboard.type('Line one');
     await page.keyboard.press('Shift+Enter');
@@ -333,7 +333,8 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);
 
-    for (const letter of FORM_ORDER) expect((await control(page, letter).boundingBox())?.height ?? 0, letter).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    const fieldHeight = await leastFieldHeight(page);
+    for (const letter of FORM_ORDER) expect((await control(page, letter).boundingBox())?.height ?? 0, letter).toBeGreaterThanOrEqual(fieldHeight);
     for (const link of await strip(page).getByRole('link').all()) expect((await link.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
 
     await control(page, 'P').fill('-1');
