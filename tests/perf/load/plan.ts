@@ -20,6 +20,8 @@ export const CUSTOMER_CHANGE_EVERY = 5;
 const pad = (n: number, width: number): string => String(n).padStart(width, '0');
 
 export const customerName = (n: number): string => `Volume customer ${pad(n, 3)}`;
+/** The customer's short name (CR-01 item 6): unique, and at most 10 characters. */
+export const customerShortName = (n: number): string => `VOL${pad(n, 3)}`;
 export const processItemName = (n: number): string => `Volume process item ${pad(n, 2)}`;
 export const materialName = (n: number): string => `Volume material ${pad(n, 3)}`;
 export const treatmentName = (n: number): string => `Volume treatment ${pad(n, 2)}`;

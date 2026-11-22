@@ -75,9 +75,9 @@ async function makeEngineer(admin: Session, config: LoadConfig, mark: string): P
   return { id, user };
 }
 
-async function assign(admin: Session, engineerId: string, title: string, deadline: string): Promise<z.infer<typeof assigned>> {
+async function assign(admin: Session, engineerId: string, customerId: string, title: string, deadline: string): Promise<z.infer<typeof assigned>> {
   const reply = await mustCall(admin, 'assigning a task', 'POST', '/api/v1/tasks', CREATED, {
-    json: { engineerId, folderPath: FOLDER_PATH, deadline, title, notes: 'Invented notes.' },
+    json: { engineerId, customerId, folderPath: FOLDER_PATH, deadline, title, subject: 'Invented subject', notes: 'Invented notes.' },
   });
   return parse('assigning a task', reply, assigned);
 }
@@ -99,8 +99,8 @@ async function partRefs(admin: Session, estimateId: string, ids: ReadonlyArray<s
   return ids.map((id) => ({ id, revision: revisions.get(id) ?? 1 }));
 }
 
-async function makeEstimate(admin: Session, engineerId: string, config: LoadConfig, title: string): Promise<{ readonly estimateId: string; readonly parts: ReadonlyArray<PartRef> }> {
-  const task = await assign(admin, engineerId, title, deadlineText(new Date()));
+async function makeEstimate(admin: Session, engineerId: string, customerId: string, config: LoadConfig, title: string): Promise<{ readonly estimateId: string; readonly parts: ReadonlyArray<PartRef> }> {
+  const task = await assign(admin, engineerId, customerId, title, deadlineText(new Date()));
   const ids = await addParts(admin, task.estimate.id, config.parts);
   return { estimateId: task.estimate.id, parts: await partRefs(admin, task.estimate.id, ids) };
 }
@@ -128,15 +128,12 @@ export async function seedEstimates(admin: Session, config: LoadConfig, masters:
   if (customerId === undefined) throw new Error('there is no customer for the estimates');
   const deadline = deadlineText(new Date());
   await mapLimit(Array.from({ length: config.queueTasks }, (_, n) => n + 1), SEED_CONCURRENCY, async (n) => {
-    await assign(admin, engineer.id, taskTitle(n), deadline);
+    await assign(admin, engineer.id, customerId, taskTitle(n), deadline);
   });
   const [a, ...saves] = await Promise.all([
-    makeEstimate(admin, engineer.id, config, 'Invented estimate A'),
-    ...Array.from({ length: config.saveEstimates }, (_, n) => makeEstimate(admin, engineer.id, config, `Invented estimate B${n + 1}`)),
+    makeEstimate(admin, engineer.id, customerId, config, 'Invented estimate A'),
+    ...Array.from({ length: config.saveEstimates }, (_, n) => makeEstimate(admin, engineer.id, customerId, config, `Invented estimate B${n + 1}`)),
   ]);
-  for (const estimateId of [a.estimateId, ...saves.map((save) => save.estimateId)]) {
-    await mustCall(admin, 'choosing the customer', 'PUT', `/api/v1/estimates/${estimateId}/customer`, OK, { json: { customerId } });
-  }
   await completeParts(admin, a.estimateId, a.parts, masters.firstMaterialId);
   await addPictures(admin, a.estimateId, a.parts, config.exportPictures);
   // Typing into a part raises its revision, so A's parts are read again by the load: only the ids are used by the cost reads, and the saves go to B.
