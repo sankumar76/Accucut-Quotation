@@ -52,7 +52,7 @@ interface World {
   readonly child: string;
 }
 
-/** A calculated estimate of the Engineer's: two parts, one under the other, calculated, so it is SUBMITTED and the figures are current. */
+/** A calculated estimate of the Engineer's: two parts, one under the other, calculated, so it is PREPARED and the figures are current. */
 async function calculatedWorld(): Promise<World> {
   const estimateId = await db.addCompleteEstimate({ parts: 2 });
   await db.service.calculate(engineer(), estimateId);
@@ -92,7 +92,7 @@ function expectCleared(costs: CostsView): void {
 /** The writers that leave an empty part behind, which Recalculate then refuses until it is filled in. */
 const ADDS_AN_EMPTY_PART: ReadonlySet<string> = new Set(['a part added', 'a part reordered among its siblings']);
 
-/** Every way an input can change, each as a Lead (who may edit a submitted estimate) would make it. */
+/** Every way an input can change, each as a Lead (who may edit a prepared estimate) would make it. */
 const WRITERS: ReadonlyArray<readonly [string, (world: World) => Promise<unknown>]> = [
   ['a typed number', async (world) => db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.child, revision: await revisionOf(world.child), values: { [idOf('J')]: '91' } })],
   ['Remarks', async (world) => db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.top, revision: await revisionOf(world.top), values: { [idOf('AJ')]: 'Deburr the edge.' } })],
@@ -193,7 +193,7 @@ describe('AC-2: a save with no real change, and a change that is changed back', 
 });
 
 describe('AC-3: Recalculate stores a new calculation with the Lead\'s name and changes the status as the machine says', () => {
-  it('a cleared Submitted estimate stays SUBMITTED, gets a second record made by the Lead, and its link moves to it', async () => {
+  it('a cleared Prepared estimate stays PREPARED, gets a second record made by the Lead, and its link moves to it', async () => {
     const world = await calculatedWorld();
     await WRITERS[0]?.[1](world);
     await db.service.recalculate(lead(), world.estimateId);
@@ -205,16 +205,16 @@ describe('AC-3: Recalculate stores a new calculation with the Lead\'s name and c
          FROM estimates e JOIN calculations c ON c.id = e.current_calculation_id WHERE e.id = $1::uuid`,
       [world.estimateId],
     );
-    expect(defined(rows[0])).toMatchObject({ status: 'SUBMITTED', made_by: db.personId, calculations: '2' });
+    expect(defined(rows[0])).toMatchObject({ status: 'PREPARED', made_by: db.personId, calculations: '2' });
     expect(defined(rows[0]).linked).toBe(defined(rows[0]).newest);
     expect((await revisions(world.estimateId)).calculation).toBe((await revisions(world.estimateId)).inputs);
   });
 
-  it('an unlocked estimate (a Draft with a record) becomes SUBMITTED on a press; one that was never calculated is calculated for the first time', async () => {
+  it('an unlocked estimate (a Draft with a record) becomes PREPARED on a press; one that was never calculated is calculated for the first time', async () => {
     const world = await calculatedWorld();
     await db.owner.query("UPDATE estimates SET status = 'DRAFT' WHERE id = $1::uuid", [world.estimateId]);
     await db.service.recalculate(lead(), world.estimateId);
-    expect((await db.owner.query<{ status: string }>('SELECT status::text FROM estimates WHERE id = $1::uuid', [world.estimateId])).rows[0]?.status).toBe('SUBMITTED');
+    expect((await db.owner.query<{ status: string }>('SELECT status::text FROM estimates WHERE id = $1::uuid', [world.estimateId])).rows[0]?.status).toBe('PREPARED');
 
     const fresh = await db.addCompleteEstimate({ parts: 1 });
     await db.service.recalculate(lead(), fresh);
@@ -226,7 +226,7 @@ describe('AC-3: Recalculate stores a new calculation with the Lead\'s name and c
     const world = await calculatedWorld();
     await db.owner.query("UPDATE estimates SET status = 'APPROVED' WHERE id = $1::uuid", [world.estimateId]);
     await expect(db.service.recalculate(lead(), world.estimateId)).rejects.toMatchObject({ code: 'ESTIMATE_APPROVED_IS_LOCKED' });
-    await db.owner.query("UPDATE estimates SET status = 'SUBMITTED' WHERE id = $1::uuid", [world.estimateId]);
+    await db.owner.query("UPDATE estimates SET status = 'PREPARED' WHERE id = $1::uuid", [world.estimateId]);
     await expect(db.service.recalculate(engineer(), world.estimateId)).rejects.toMatchObject({ httpStatus: 404 });
     expect(Number((await db.owner.query<{ n: string }>('SELECT count(*) AS n FROM calculations WHERE estimate_id = $1::uuid', [world.estimateId])).rows[0]?.n)).toBe(1);
   });

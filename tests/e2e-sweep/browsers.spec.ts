@@ -60,7 +60,7 @@ test.describe('AC-6: the five journeys', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
   });
 
-  test('estimate form and Calculate: a field is saved when it is left, and Calculate submits the estimate', async ({ page, browserName }, testInfo) => {
+  test('estimate form and Calculate: a field is saved when it is left, and Calculate prepares the estimate', async ({ page, browserName }, testInfo) => {
     skipWhenKnownFault('estimate-form', browserName);
     const owner = await openForm(page, testInfo);
     await makeCalculable(owner);
@@ -76,8 +76,8 @@ test.describe('AC-6: the five journeys', () => {
     const answered = page.waitForResponse(isCalculate);
     await calculateButton(page).click();
     expect((await answered).status(), 'the Calculate of the Engineer').toBe(200);
-    await expect(calculateButton(page)).toHaveText('Submitted');
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    await expect(calculateButton(page)).toHaveText('Prepared');
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 
   test('review and approve: a Lead opens the calculated estimate, approves and locks it', async ({ page, browserName }, testInfo) => {

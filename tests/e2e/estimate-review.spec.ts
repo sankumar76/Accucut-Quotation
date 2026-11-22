@@ -57,13 +57,13 @@ async function engineerWithEstimate(testInfo: TestInfo) {
   return { owner, code: canaryTaskCodeFor(owner.id) };
 }
 
-/** The Engineer presses Calculate through the portal (the same request the button sends), and the estimate is Submitted. */
+/** The Engineer presses Calculate through the portal (the same request the button sends), and the estimate is Prepared. */
 async function calculateAsEngineer(page: Page, owner: E2eUser & { readonly id: string }, code: string): Promise<void> {
   await signInAs(page, owner);
   await page.goto(`/estimates/${code}`);
   const status = await page.evaluate(async (id) => (await fetch(`/api/v1/estimates/${id}/calculate`, { method: 'POST' })).status, owner.id);
   expect(status).toBe(200);
-  expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+  expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
 }
 
 async function openAsLead(page: Page, testInfo: TestInfo, code: string, role: 'LEAD' | 'ADMIN' = 'LEAD'): Promise<void> {

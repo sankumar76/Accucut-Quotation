@@ -22,7 +22,7 @@ import { SEED_PROCESS_ITEMS, seedConfig } from '../support/seed-config';
 /**
  * STORY-05.09 (FR-055, FR-056, FR-031; NFR-002; architecture sections 4.2 and 6 "Calculate"): the Engineer's Calculate, over in-memory storage. The same code is run against PostgreSQL in
  * `tests/integration/calc/calculate.test.ts`. One transaction under the estimate's lock: the state machine decides role, ownership and status; every part is checked; the customer must be
- * chosen; the masters are read; the record is stored and the status is SUBMITTED; the answer is `{status, message}` and nothing else. Every name, number and ID here is invented.
+ * chosen; the masters are read; the record is stored and the status is PREPARED; the answer is `{status, message}` and nothing else. Every name, number and ID here is invented.
  */
 
 const CONFIG_VERSION_ID = '00000000-0000-4000-8000-0aaa00000001';
@@ -143,11 +143,11 @@ function expectNothingWritten(f: Fixture, status: FakeEstimate['status'] = 'DRAF
   expect(f.estimate().inputsRevision).toBe(6);
 }
 
-describe('AC-2: a complete estimate is calculated, stored and submitted in one transaction', () => {
+describe('AC-2: a complete estimate is calculated, stored and prepared in one transaction', () => {
   it('answers exactly {status, message} with the fixed sentence, and nothing else', async () => {
     const f = fixture();
     const answer = await f.service.calculate(ENGINEER, ESTIMATE_ID);
-    expect(answer).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(answer).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
     expect(Object.keys(answer).sort()).toEqual(['message', 'status']);
     expect(CALCULATE_MESSAGE).toBe('Cost will be calculated based on the input fields and sent for review/approval.');
   });
@@ -162,13 +162,13 @@ describe('AC-2: a complete estimate is calculated, stored and submitted in one t
       [PART_ONE, null, 0, '1'],
       [PART_TWO, PART_ONE, 0, '1.1'],
     ]);
-    expect(f.estimate()).toMatchObject({ status: 'SUBMITTED', currentCalculationId: record.id, inputsRevision: 6 });
+    expect(f.estimate()).toMatchObject({ status: 'PREPARED', currentCalculationId: record.id, inputsRevision: 6 });
   });
 
   it('records each part with the picture it has (STORY-05.07, #401): its ID on the row, and null for a part with none, which calculates all the same (D-31)', async () => {
     const PICTURE_ID = '00000000-0000-4000-8000-0f0f00000001';
     const f = fixture({ nodes: [{ ...partNode(PART_ONE, null, 0), imageId: PICTURE_ID }, partNode(PART_TWO, PART_ONE, 0)] });
-    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID)).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID)).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
     expect(defined(f.world.calculations[0]).rows.map((row) => [row.nodeId, row.imageId])).toEqual([
       [PART_ONE, PICTURE_ID],
       [PART_TWO, null],
@@ -215,13 +215,13 @@ describe('AC-2: a complete estimate is calculated, stored and submitted in one t
 });
 
 describe('AC-3: a 0 in a number field is accepted', () => {
-  it('every number is 0, QTY per Assy included, and the estimate is submitted once the warning for the 0 of QTY per Assy is acknowledged (STORY-05.12)', async () => {
+  it('every number is 0, QTY per Assy included, and the estimate is prepared once the warning for the 0 of QTY per Assy is acknowledged (STORY-05.12)', async () => {
     const zeros = Object.fromEntries(Object.entries(completePartInputs()).map(([id, value]) => [id, typeof value === 'string' && /^\d+\.\d+$/.test(value) ? '0' : value]));
     const f = fixture({ nodes: [partNode(PART_ONE, null, 0, zeros)] });
     expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID))).toBeInstanceOf(CalculateAckRequiredError);
     expectNothingWritten(f);
-    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID, { acknowledge: { inputsRevision: 6 }, audit: AUDIT })).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
-    expect(f.estimate().status).toBe('SUBMITTED');
+    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID, { acknowledge: { inputsRevision: 6 }, audit: AUDIT })).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
+    expect(f.estimate().status).toBe('PREPARED');
   });
 });
 
@@ -275,9 +275,9 @@ describe('AC-5 (order): blank inputs come first, then the rest', () => {
     expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID))).toBeInstanceOf(CalculateBlockedError);
   });
 
-  it('the status comes before the blanks: a submitted estimate with a blank is the 409, not the 422', async () => {
-    const f = fixture({ status: 'SUBMITTED', nodes: [partNode(PART_ONE, null, 0, {})] });
-    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID))).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED', httpStatus: 409 });
+  it('the status comes before the blanks: a prepared estimate with a blank is the 409, not the 422', async () => {
+    const f = fixture({ status: 'PREPARED', nodes: [partNode(PART_ONE, null, 0, {})] });
+    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID))).toMatchObject({ code: 'ESTIMATE_ALREADY_PREPARED', httpStatus: 409 });
   });
 
   it('the owner comes before everything: another Engineer\'s estimate with blanks is a 404, and says nothing of the blanks', async () => {
@@ -293,10 +293,10 @@ describe('AC-4: what cannot be calculated is a named 409, a 404, and never a par
     expectNothingWritten(f);
   });
 
-  it('a submitted estimate is the 409 ESTIMATE_ALREADY_SUBMITTED', async () => {
-    const f = fixture({ status: 'SUBMITTED' });
-    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID))).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED', httpStatus: 409 });
-    expectNothingWritten(f, 'SUBMITTED');
+  it('a prepared estimate is the 409 ESTIMATE_ALREADY_PREPARED', async () => {
+    const f = fixture({ status: 'PREPARED' });
+    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID))).toMatchObject({ code: 'ESTIMATE_ALREADY_PREPARED', httpStatus: 409 });
+    expectNothingWritten(f, 'PREPARED');
   });
 
   it('an approved estimate is the 409 ESTIMATE_APPROVED_IS_LOCKED: one code for "approved" on this path (SQR-06 of STORY-06.01)', async () => {
@@ -363,10 +363,10 @@ describe('AC-4: what cannot be calculated is a named 409, a 404, and never a par
 });
 
 describe('AC-7: a second press is a 409 and makes no second calculation', () => {
-  it('the second call is ESTIMATE_ALREADY_SUBMITTED and the one record stays the only one', async () => {
+  it('the second call is ESTIMATE_ALREADY_PREPARED and the one record stays the only one', async () => {
     const f = fixture();
     await f.service.calculate(ENGINEER, ESTIMATE_ID);
-    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID))).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED', httpStatus: 409 });
+    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID))).toMatchObject({ code: 'ESTIMATE_ALREADY_PREPARED', httpStatus: 409 });
     expect(f.world.calculations).toHaveLength(1);
   });
 
@@ -464,13 +464,13 @@ describe('STORY-05.12 AC-2: a first press with a warning due is the 409, and wri
 describe('STORY-05.12 AC-3: the acknowledged press calculates, records the warnings and writes one audit entry', () => {
   it('answers exactly {status, message}, and the calculation holds each warning as text, with the person who pressed as its creator', async () => {
     const f = fixture({ nodes: warnedTree() });
-    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED)).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED)).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
     expect(f.world.calculations).toHaveLength(1);
     const record = defined(f.world.calculations[0]);
     expect(record.warnings).toEqual(WARNED_ROWS);
     expect(record.createdById).toBe(ENGINEER_ID);
     expect(record.inputsRevision).toBe(6);
-    expect(f.estimate()).toMatchObject({ status: 'SUBMITTED', currentCalculationId: record.id, inputsRevision: 6 });
+    expect(f.estimate()).toMatchObject({ status: 'PREPARED', currentCalculationId: record.id, inputsRevision: 6 });
   });
 
   it('writes one `calculation.warning_acknowledged` entry in the same transaction, naming the rows and holding no figure', async () => {
@@ -535,7 +535,7 @@ describe('STORY-05.12 AC-4: a stale acknowledgement never passes', () => {
     const f = fixture({ nodes: warnedTree() });
     f.estimate().inputsRevision = 7;
     expect((await askedToConfirm(f, ACKNOWLEDGED)).warnings).toEqual(WARNED_ROWS);
-    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID, { acknowledge: { inputsRevision: 7 }, audit: AUDIT })).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID, { acknowledge: { inputsRevision: 7 }, audit: AUDIT })).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
   });
 
   it.each([5, 7, 0])('an acknowledgement for revision %i, which is not the estimate\'s 6, is the 409', async (revision) => {
@@ -548,7 +548,7 @@ describe('STORY-05.12 AC-4: a stale acknowledgement never passes', () => {
 describe('STORY-05.12 AC-5: an acknowledgement with nothing to warn is ignored', () => {
   it('calculates as a press with none: warnings stay empty and no audit entry is written', async () => {
     const f = fixture();
-    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED)).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(await f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED)).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
     expect(defined(f.world.calculations[0]).warnings).toEqual([]);
     expect(f.audit.rows).toEqual([]);
   });
@@ -573,17 +573,17 @@ describe('STORY-05.12 (order): the 409 about the quantity comes after everything
     expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID))).toMatchObject({ code: 'CUSTOMER_NOT_CHOSEN' });
   });
 
-  it('a submitted estimate with a 0 is ESTIMATE_ALREADY_SUBMITTED, and another Engineer\'s is a 404 that says nothing of the 0', async () => {
-    expect(await rejection(fixture({ status: 'SUBMITTED', nodes: warnedTree() }).service.calculate(ENGINEER, ESTIMATE_ID))).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED' });
+  it('a prepared estimate with a 0 is ESTIMATE_ALREADY_PREPARED, and another Engineer\'s is a 404 that says nothing of the 0', async () => {
+    expect(await rejection(fixture({ status: 'PREPARED', nodes: warnedTree() }).service.calculate(ENGINEER, ESTIMATE_ID))).toMatchObject({ code: 'ESTIMATE_ALREADY_PREPARED' });
     expect(await rejection(fixture({ engineerId: OTHER_ENGINEER_ID, nodes: warnedTree() }).service.calculate(ENGINEER, ESTIMATE_ID))).toBeInstanceOf(NotFoundError);
   });
 });
 
 describe('STORY-05.12 (each press stands alone)', () => {
-  it('after an acknowledged calculation the estimate is submitted, and a second press is the 409 for that; a press on a draft again asks again, even for the 0 acknowledged before', async () => {
+  it('after an acknowledged calculation the estimate is prepared, and a second press is the 409 for that; a press on a draft again asks again, even for the 0 acknowledged before', async () => {
     const f = fixture({ nodes: warnedTree() });
     await f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED);
-    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED))).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED' });
+    expect(await rejection(f.service.calculate(ENGINEER, ESTIMATE_ID, ACKNOWLEDGED))).toMatchObject({ code: 'ESTIMATE_ALREADY_PREPARED' });
     // The estimate is a draft again (a Lead's unlock, a later story): the earlier acknowledgement is not remembered.
     f.estimate().status = 'DRAFT';
     await askedToConfirm(f);

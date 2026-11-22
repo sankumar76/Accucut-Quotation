@@ -273,8 +273,8 @@ describe('AC-4, AC-7: PATCH /estimates/{id}/nodes/{nodeId}/inputs', () => {
     expect(withoutRequestId(await notTheirs.json())).toEqual(withoutRequestId(await unknownEstimate.json()));
   });
 
-  it('is 409 ESTIMATE_NOT_EDITABLE for an Engineer once the estimate is submitted, and a Lead may still save', async () => {
-    estimate().status = 'SUBMITTED';
+  it('is 409 ESTIMATE_NOT_EDITABLE for an Engineer once the estimate is prepared, and a Lead may still save', async () => {
+    estimate().status = 'PREPARED';
     const refused = await save({ revision: 1, values: { [LENGTH]: '1' } });
     expect(refused.status).toBe(409);
     expect(record.parse(await refused.json())).toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });

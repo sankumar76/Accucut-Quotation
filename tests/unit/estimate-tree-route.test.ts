@@ -229,7 +229,7 @@ describe('AC-6: two edits with a stale revision', () => {
 });
 
 describe('AC-7: who may write, and when', () => {
-  it.each(['SUBMITTED', 'APPROVED'] as const)('a %s estimate is 409 ESTIMATE_NOT_EDITABLE for an add, a move and a delete, and nothing changes', async (status) => {
+  it.each(['PREPARED', 'APPROVED'] as const)('a %s estimate is 409 ESTIMATE_NOT_EDITABLE for an add, a move and a delete, and nothing changes', async (status) => {
     estimate().status = status;
     const answers = [
       await add({ kind: 'item' }),
@@ -269,9 +269,9 @@ describe('AC-7: who may write, and when', () => {
     expect(estimate().inputsRevision).toBe(0);
   });
 
-  it('a Lead may still change a SUBMITTED estimate and nobody an APPROVED one (STORY-06.01)', async () => {
+  it('a Lead may still change a PREPARED estimate and nobody an APPROVED one (STORY-06.01)', async () => {
     harness.signInAs('LEAD');
-    estimate().status = 'SUBMITTED';
+    estimate().status = 'PREPARED';
     expect((await add({ kind: 'item' })).status).toBe(201);
     estimate().status = 'APPROVED';
     const refused = await add({ kind: 'item' });

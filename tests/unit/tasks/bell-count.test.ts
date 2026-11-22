@@ -73,7 +73,7 @@ beforeEach(() => {
     engineerId: ARJUN.id,
     assignedById: SECOND_LEAD.id,
     deadlineAt: at(-DAY),
-    status: 'SUBMITTED',
+    status: 'PREPARED',
   });
   world.seed({
     code: 'Q-2026-0003',

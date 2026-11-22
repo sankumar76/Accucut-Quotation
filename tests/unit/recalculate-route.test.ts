@@ -94,7 +94,7 @@ afterEach(() => {
 });
 
 describe('AC-3: a Lead\'s Recalculate stores a new calculation and answers the costs view', () => {
-  it('on a cleared Submitted estimate: 200, a second record in the Lead\'s name, the status still SUBMITTED, the state `current`, and an answer that passes the strict costs schema', async () => {
+  it('on a cleared Prepared estimate: 200, a second record in the Lead\'s name, the status still PREPARED, the state `current`, and an answer that passes the strict costs schema', async () => {
     await calculatedThenChanged();
     expect(await readCosts()).toMatchObject({ state: 'out-of-date', totals: null });
     const response = await POST(request(), withId(owned()));
@@ -108,7 +108,7 @@ describe('AC-3: a Lead\'s Recalculate stores a new calculation and answers the c
     const stored = defined(harness.calculationWorld.calculations[1]);
     expect(stored.createdById).toBe(harness.idOf.LEAD);
     expect(stored.inputsRevision).toBe(estimate().inputsRevision);
-    expect(estimate()).toMatchObject({ status: 'SUBMITTED', currentCalculationId: stored.id });
+    expect(estimate()).toMatchObject({ status: 'PREPARED', currentCalculationId: stored.id });
   });
 
   it('an Admin may press it too, and the answer is the same view `GET /costs` gives afterwards', async () => {
@@ -119,20 +119,20 @@ describe('AC-3: a Lead\'s Recalculate stores a new calculation and answers the c
     expect(answer).toEqual(await readCosts());
   });
 
-  it('on a Draft (an unlocked estimate that has a record): the status becomes SUBMITTED', async () => {
+  it('on a Draft (an unlocked estimate that has a record): the status becomes PREPARED', async () => {
     await calculatedThenChanged();
     estimate().status = 'DRAFT';
     expect((await POST(request(), withId(owned()))).status).toBe(200);
-    expect(estimate().status).toBe('SUBMITTED');
+    expect(estimate().status).toBe('PREPARED');
   });
 
-  it('on a Draft that was never calculated: the first calculation, the status becomes SUBMITTED, in the Lead\'s name (a Lead may calculate, A-08)', async () => {
+  it('on a Draft that was never calculated: the first calculation, the status becomes PREPARED, in the Lead\'s name (a Lead may calculate, A-08)', async () => {
     makeComplete();
     expect((await readCosts())['state']).toBe('none');
     const response = await POST(request(), withId(owned()));
     expect(response.status).toBe(200);
     expect(await bodyOf(response)).toMatchObject({ state: 'current' });
-    expect(estimate().status).toBe('SUBMITTED');
+    expect(estimate().status).toBe('PREPARED');
     expect(defined(harness.calculationWorld.calculations[0]).createdById).toBe(harness.idOf.LEAD);
   });
 

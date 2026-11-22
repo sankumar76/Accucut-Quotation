@@ -225,7 +225,7 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
       return { id, body: stay, status: 200 };
     case 'DELETE /api/v1/estimates/[id]/nodes/[nodeId]':
       return { id, query: '?revision=999&parts=1&subtree=0000000000000000', status: 409 };
-    // STORY-05.09: a good Calculate would submit the canary estimate and every later call would be the 409 "already submitted", so its valid call is the one that cannot change anything: the
+    // STORY-05.09: a good Calculate would submit the canary estimate and every later call would be the 409 "already prepared", so its valid call is the one that cannot change anything: the
     // canary part is never complete (its material is not stored; the registry's treatment is not on the form), so Calculate is refused 422 `CALCULATE_BLOCKED` with the parts and fields
     // missing, and writes nothing, at any state of the customer, for the one role that may call it. The 422 body is read by the confidentiality scan; the success body is held by
     // `calculate-route.test.ts` and the strict-schema planted-key check of the route's own schema.
@@ -239,7 +239,7 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     case 'POST /api/v1/estimates/[id]/recalculate':
       return { id, body: { acknowledge: { inputsRevision: 1 } }, status: 422 };
     // STORY-06.05: an approval that passes the guard is, until STORY-06.06, the fixed 501 and writes nothing; a call that names a calculation the estimate does not have is refused 409 at every state the canary
-    // estimate can be in (a Draft is "not submitted", a Submitted estimate whose figures are cleared or never made is `TOTALS_OUT_OF_DATE` or `NOT_CALCULATED`, and a current one is `CALCULATION_CHANGED`),
+    // estimate can be in (a Draft is "not prepared", a Prepared estimate whose figures are cleared or never made is `TOTALS_OUT_OF_DATE` or `NOT_CALCULATED`, and a current one is `CALCULATION_CHANGED`),
     // writes nothing and repeats, for the two roles that may call it. The refusals hold the words of the step and no figure, so the scan reads them. The rest of the order is `approve-route.test.ts`'s.
     case 'POST /api/v1/estimates/[id]/approve':
       return { id, body: { calculationId: UNKNOWN_CALCULATION_ID, price: '1.00' }, status: 409 };

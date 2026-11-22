@@ -205,7 +205,7 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
 });
 
 test.describe('AC-6: Enter moves to the next field', () => {
-  test('AC-6: Enter goes through Part No., Description, Treatment / Color, QTY per Assy, Material in Drawing, Length, Width, Thickness, Part Weight and on into section 03, skips the read-only fields, and never submits', async ({ page }, testInfo) => {
+  test('AC-6: Enter goes through Part No., Description, Treatment / Color, QTY per Assy, Material in Drawing, Length, Width, Thickness, Part Weight and on into section 03, skips the read-only fields, and never prepares', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
     const address = page.url();
     await control(page, 'B').focus();

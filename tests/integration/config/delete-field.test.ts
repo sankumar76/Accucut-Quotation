@@ -201,7 +201,7 @@ describe('AC-7: what a delete does to the estimates', () => {
 
   it('calculates a Draft that holds a value in the deleted input: the value is ignored, not an error, and it stays in the part', async () => {
     const answer = await db.service.calculate(engineer(), draft);
-    expect(answer.status).toBe('SUBMITTED');
+    expect(answer.status).toBe('PREPARED');
     const stored = await db.owner.query<{ number: number; has: boolean }>(
       'SELECT v.number, r.inputs ? $2 AS has FROM calculations c JOIN config_versions v ON v.id = c.config_version_id JOIN calculation_rows r ON r.calculation_id = c.id WHERE c.estimate_id = $1::uuid',
       [draft, PART_NO.id],

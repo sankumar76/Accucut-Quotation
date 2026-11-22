@@ -157,7 +157,7 @@ describe('AC-4: a reason of 501 characters is refused, and 500 is kept whatever 
     expect(refusal).toBeInstanceOf(FieldValidationError);
     expect((refusal as FieldValidationError).fields).toEqual([{ field: 'reason', message: REASON_TOO_LONG_MESSAGE }]);
     expect(await storedOf(db, estimate.estimateId)).toEqual(before);
-    expect(await statusOf(db, estimate.estimateId)).toBe('SUBMITTED');
+    expect(await statusOf(db, estimate.estimateId)).toBe('PREPARED');
   });
 
   it('500 characters is kept, and so are 500 emoji (1,000 UTF-16 units): the column\'s CHECK and the audit entry count characters, as the rule does', async () => {
@@ -236,7 +236,7 @@ describe('AC-2 (NFR-007): the approval and its entries are one commit or none', 
     const before = await storedOf(db, estimate.estimateId);
     await expect(failing.approve(lead(), estimate.estimateId, { ...requestFor(db, estimate.calculationId, PRICE_LOWER), reason: REASON })).rejects.toThrow('Invented audit failure.');
     expect(await storedOf(db, estimate.estimateId)).toEqual(before);
-    expect(await statusOf(db, estimate.estimateId)).toBe('SUBMITTED');
+    expect(await statusOf(db, estimate.estimateId)).toBe('PREPARED');
     expect(await approvalEntries(db, estimate.estimateId)).toEqual([]);
   });
 

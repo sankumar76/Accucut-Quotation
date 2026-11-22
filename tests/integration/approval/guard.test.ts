@@ -42,8 +42,8 @@ afterAll(async () => {
 });
 
 describe('AC-1: a never-calculated estimate is the 409 NOT_CALCULATED', () => {
-  it('a Submitted estimate with no calculation is refused, and nothing changes', async () => {
-    const estimateId = await db.addEstimate({ status: 'SUBMITTED', engineer: true });
+  it('a Prepared estimate with no calculation is refused, and nothing changes', async () => {
+    const estimateId = await db.addEstimate({ status: 'PREPARED', engineer: true });
     const before = await storedOf(db, estimateId);
     await expect(db.approvalService.approve(lead(), estimateId, request(UNKNOWN_CALCULATION_ID))).rejects.toMatchObject({ httpStatus: 409, code: NOT_CALCULATED_CODE });
     expect(await storedOf(db, estimateId)).toEqual(before);
@@ -92,9 +92,9 @@ describe('AC-3: the calculationId must be the current calculation', () => {
   });
 });
 
-describe("AC-4: a status that is not SUBMITTED is the state machine's 409", () => {
+describe("AC-4: a status that is not PREPARED is the state machine's 409", () => {
   it.each([
-    ['DRAFT', 'NOT_SUBMITTED'],
+    ['DRAFT', 'NOT_PREPARED'],
     ['APPROVED', 'ALREADY_APPROVED'],
   ] as const)('%s', async (status, reason) => {
     const { estimateId } = await calculatedEstimate(db);
@@ -150,7 +150,7 @@ describe("AC-5: the order of the checks, under the estimate's lock", () => {
       // The save took the lock first: it landed, the figures are out of date, and the approval was refused and wrote nothing.
       expect(saveRefusal).toBeUndefined();
       expect(approvalRefusal).toMatchObject({ httpStatus: 409, code: TOTALS_OUT_OF_DATE_CODE });
-      expect(after).toEqual({ revision: before + 1, status: 'SUBMITTED' });
+      expect(after).toEqual({ revision: before + 1, status: 'PREPARED' });
     }
   });
 });

@@ -424,14 +424,14 @@ test('AC-4 (negative control): a sentinel planted in a script chunk and in a res
 });
 
 /**
- * STORY-04.04 AC-6: the queue and the task page with tasks in each state. The Engineer owns a task in DRAFT, one in SUBMITTED, one APPROVED, and one that was approved and
+ * STORY-04.04 AC-6: the queue and the task page with tasks in each state. The Engineer owns a task in DRAFT, one in PREPARED, one APPROVED, and one that was approved and
  * then unlocked (DRAFT again), and the scan opens the queue (every tab, as a page and as the API behind it), each task's page and `GET /api/v1/tasks/{id}`, and looks for
  * every Restricted value in what comes back. "Approved" is a word and shows no amount. The scan above (AC-3) already opens these routes for the Engineer who owns the canary
  * task; this one adds the states, so a status that carried a figure would be found.
  */
 interface StatedTasks {
   readonly draft: SeededQueueTask;
-  readonly submitted: SeededQueueTask;
+  readonly prepared: SeededQueueTask;
   readonly approved: SeededQueueTask;
   readonly unlocked: SeededQueueTask;
 }
@@ -445,7 +445,7 @@ async function seedAllStates(engineerId: string): Promise<StatedTasks> {
   await setEstimateStatus(unlocked.id, 'DRAFT');
   return {
     draft: await seedQueueTask(engineerId, later, 'DRAFT', 'Scan draft'),
-    submitted: await seedQueueTask(engineerId, later, 'SUBMITTED', 'Scan submitted'),
+    prepared: await seedQueueTask(engineerId, later, 'PREPARED', 'Scan prepared'),
     approved: await seedQueueTask(engineerId, earlier, 'APPROVED', 'Scan approved'),
     unlocked,
   };
@@ -482,7 +482,7 @@ test('AC-6 (STORY-04.04): the queue, the task page and the task route, with a ta
   // The scan looked at something: the page of each state was read with its words, and the status the route sent is the one stored.
   for (const [name, word] of [
     ['draft', 'Draft'],
-    ['submitted', 'Submitted'],
+    ['prepared', 'Prepared'],
     ['approved', 'Approved'],
     ['unlocked', 'Draft'],
   ] as const) {
@@ -526,7 +526,7 @@ test('AC-6 (negative control, STORY-04.04): a sentinel planted in the task route
  * Engineer was sent. The answer to the press is exactly `{status, message}`, and a second press is the 409 and sends nothing either. The part also holds a planted price under Material Rate / Kg
  * and an unknown key (`fillCanaryPart`), which Calculate must ignore.
  */
-const CALCULATE_ANSWER = { status: 'SUBMITTED', message: 'Cost will be calculated based on the input fields and sent for review/approval.' };
+const CALCULATE_ANSWER = { status: 'PREPARED', message: 'Cost will be calculated based on the input fields and sent for review/approval.' };
 
 /**
  * Opens the estimate page as the signed-in Engineer, presses Calculate in the browser and waits until the page is quiet, checking the answer is exactly `{status, message}`. `mark` is how many
@@ -542,7 +542,7 @@ async function pressCalculate(page: Page, recorder: ScanRecorder, estimateId: st
   const response = await answered;
   expect(response.status()).toBe(200);
   expect(await response.json()).toEqual(CALCULATE_ANSWER);
-  await expect(page.locator('#calculate-button')).toHaveText('Submitted');
+  await expect(page.locator('#calculate-button')).toHaveText('Prepared');
   await page.waitForLoadState('networkidle');
   await recorder.settled();
   return { mark };
@@ -573,13 +573,13 @@ test('AC-6 (STORY-05.09): the Calculate journey sends an Engineer no Restricted 
   // After the press: the page, the routes that read the estimate, and a second press.
   const after = await recorder.recordNavigation(`GET /estimates/${code} (page, after Calculate)`, await page.goto(`/estimates/${code}`));
   expect(after.status).toBe(200);
-  expect(after.body ?? '').toContain('Submitted');
+  expect(after.body ?? '').toContain('Prepared');
   for (const path of [`/api/v1/estimates/${engineer.id}/form`, `/api/v1/estimates/${engineer.id}/tree`, `/api/v1/estimates/${engineer.id}/nodes/${engineer.id}`, `/api/v1/tasks/${engineer.id}`]) {
     expect((await callInBrowser(recorder, page, `GET ${path} (API, after Calculate)`, path)).status, path).toBe(200);
   }
   const again = await callInBrowser(recorder, page, 'POST calculate (API, second press)', `/api/v1/estimates/${engineer.id}/calculate`, { method: 'POST' });
   expect(again.status).toBe(409);
-  expect(JSON.parse(again.body ?? '{}')).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED' });
+  expect(JSON.parse(again.body ?? '{}')).toMatchObject({ code: 'ESTIMATE_ALREADY_PREPARED' });
   // STORY-06.02 AC-5: now that a current calculation exists, the route that carries its figures is still the fixed 403 for the Engineer, and the same address of the page is still their own workspace.
   const costs = await callInBrowser(recorder, page, 'GET costs (API, after Calculate)', `/api/v1/estimates/${engineer.id}/costs`);
   expect(costs.status).toBe(403);
@@ -606,7 +606,7 @@ test('AC-6 (STORY-05.09): the Calculate journey sends an Engineer no Restricted 
   await recorder.settled();
 
   // The scan looked at something: the estimate really was calculated, once.
-  expect(await readEstimateState(engineer.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+  expect(await readEstimateState(engineer.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   expect(recorder.unreadable, 'responses the scan could not read').toEqual([]);
   expect(sentences(recorder, forbidden)).toEqual([]);
   // Review SQR-02 of AQP-317: the figures the calculation itself produced (the record this press wrote) are looked for in everything the Engineer was sent from the press on.
@@ -711,8 +711,8 @@ test('AC-6 (STORY-05.09): the same estimate calculated under two sets of masters
   }
   expect(bodies[0]).toBe(JSON.stringify(CALCULATE_ANSWER));
   expect(bodies[1]).toBe(bodies[0]);
-  expect(await readEstimateState(first.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
-  expect(await readEstimateState(second.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+  expect(await readEstimateState(first.id)).toEqual({ status: 'PREPARED', calculations: 1 });
+  expect(await readEstimateState(second.id)).toEqual({ status: 'PREPARED', calculations: 1 });
 });
 
 /**
@@ -1018,13 +1018,13 @@ test('AC-7 (STORY-05.12): the quantity-warning journey sends an Engineer no Rest
   const response = await answered;
   expect(response.status()).toBe(200);
   expect(await response.json()).toEqual(CALCULATE_ANSWER);
-  await expect(page.locator('#calculate-button')).toHaveText('Submitted');
+  await expect(page.locator('#calculate-button')).toHaveText('Prepared');
   await page.waitForLoadState('networkidle');
   await recorder.settled();
 
   const after = await recorder.recordNavigation(`GET /estimates/${code} (page, after Calculate anyway)`, await page.goto(`/estimates/${code}`));
   expect(after.status).toBe(200);
-  expect(await readEstimateState(engineer.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+  expect(await readEstimateState(engineer.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   const record = await readWarningRecord(engineer.id);
   expect(record.warnings).toHaveLength(1);
   expect(record.audit).toEqual([{ event: 'calculation.warning_acknowledged', actorId: engineer.id }]);

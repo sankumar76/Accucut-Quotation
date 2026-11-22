@@ -287,7 +287,7 @@ test.describe('AC-1, AC-9: the notice', () => {
 
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
-    expect(await readEstimateState(subject.ownerId)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(subject.ownerId)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 });
 
@@ -322,7 +322,7 @@ test.describe('AC-10: an unlocked Draft with current figures', () => {
     await reportRecalculateOutcome(page, testInfo);
   });
 
-  test('shows the notice, its link reaches a Recalculate button that is on the screen, and pressing it calculates again: the notice goes and the estimate is Submitted', async ({ page }, testInfo) => {
+  test('shows the notice, its link reaches a Recalculate button that is on the screen, and pressing it calculates again: the notice goes and the estimate is Prepared', async ({ page }, testInfo) => {
     const subject = await calculatedThenRepriced(page, testInfo);
     // The Lead of the test approves and unlocks through the API; the price moved after the calculation, so the Draft that comes back has current figures and changed rates.
     await signInAsNewLead(page, testInfo);
@@ -345,7 +345,7 @@ test.describe('AC-10: an unlocked Draft with current figures', () => {
     await recalculateButton(page).click();
     await expect(noticeOf(page)).toHaveCount(0);
     await expect(approveButton(page)).toBeEnabled();
-    expect(await readEstimateState(subject.ownerId)).toEqual({ status: 'SUBMITTED', calculations: 2 });
+    expect(await readEstimateState(subject.ownerId)).toEqual({ status: 'PREPARED', calculations: 2 });
   });
 });
 

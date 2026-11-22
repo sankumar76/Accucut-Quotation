@@ -405,8 +405,8 @@ describe('AC-6: two edits with a stale revision', () => {
 });
 
 describe('AC-7: who may write, and when', () => {
-  it('refuses the Engineer on a SUBMITTED and an APPROVED estimate with 409 ESTIMATE_NOT_EDITABLE for an add, a move and a delete, and changes nothing', async () => {
-    for (const status of ['SUBMITTED', 'APPROVED'] as const) {
+  it('refuses the Engineer on a PREPARED and an APPROVED estimate with 409 ESTIMATE_NOT_EDITABLE for an add, a move and a delete, and changes nothing', async () => {
+    for (const status of ['PREPARED', 'APPROVED'] as const) {
       const setUpped = setUp();
       const tree = await storyTree(setUpped);
       const estimateRow = setUpped.world.estimates[0];
@@ -423,11 +423,11 @@ describe('AC-7: who may write, and when', () => {
     }
   });
 
-  it('a Lead and an Admin may still change a SUBMITTED estimate (the shared rule, STORY-06.01), and nobody may change an APPROVED one', async () => {
+  it('a Lead and an Admin may still change a PREPARED estimate (the shared rule, STORY-06.01), and nobody may change an APPROVED one', async () => {
     const setUpped = setUp();
     const tree = await storyTree(setUpped);
     const estimateRow = defined(setUpped.world.estimates[0]);
-    estimateRow.status = 'SUBMITTED';
+    estimateRow.status = 'PREPARED';
     const added = await setUpped.service.addPart(lead, ESTIMATE, { kind: 'item' });
     expect(numbers(added.nodes)).toContain('3');
     expect(numbers(await setUpped.service.moveNode(admin, ESTIMATE, { nodeId: idOf(tree, '2'), revision: 1, parentId: null, index: 0 }))[0]).toBe('1');
@@ -440,8 +440,8 @@ describe('AC-7: who may write, and when', () => {
     expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
   });
 
-  it('another Engineer, and an estimate that does not exist, are the same 404 for every write and for the reads, even when the estimate is submitted', async () => {
-    const setUpped = setUp([estimate({ status: 'SUBMITTED' })]);
+  it('another Engineer, and an estimate that does not exist, are the same 404 for every write and for the reads, even when the estimate is prepared', async () => {
+    const setUpped = setUp([estimate({ status: 'PREPARED' })]);
     const attempts = (viewer: EstimateViewer, estimateId: string) => [
       () => setUpped.service.addPart(viewer, estimateId, { kind: 'item' }),
       () => setUpped.service.moveNode(viewer, estimateId, { nodeId: MISSING, revision: 1, parentId: null, index: 0 }),
@@ -460,18 +460,18 @@ describe('AC-7: who may write, and when', () => {
     await expect(setUpped.service.addPart(priya, ESTIMATE, { kind: 'item' })).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('a part that does not exist is 404 for a move and a delete, after the estimate checks (so a submitted estimate says 409 first)', async () => {
+  it('a part that does not exist is 404 for a move and a delete, after the estimate checks (so a prepared estimate says 409 first)', async () => {
     const setUpped = setUp();
     await expect(setUpped.service.moveNode(arjun, ESTIMATE, { nodeId: MISSING, revision: 1, parentId: null, index: 0 })).rejects.toBeInstanceOf(NotFoundError);
     await expect(setUpped.service.deleteNode(arjun, ESTIMATE, { nodeId: MISSING, revision: 1, parts: 1, subtree: seen(setUpped.world, MISSING) })).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it('reads of a submitted tree are allowed to its owner and to a Lead', async () => {
+  it('reads of a prepared tree are allowed to its owner and to a Lead', async () => {
     const setUpped = setUp();
     await storyTree(setUpped);
     const estimateRow = setUpped.world.estimates[0];
     if (estimateRow === undefined) throw new Error('no estimate');
-    estimateRow.status = 'SUBMITTED';
+    estimateRow.status = 'PREPARED';
     expect((await setUpped.service.getTree(arjun, ESTIMATE)).length).toBe(9);
     expect((await setUpped.service.getTree(lead, ESTIMATE)).length).toBe(9);
   });

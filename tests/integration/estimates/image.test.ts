@@ -70,7 +70,7 @@ const lead = (): EstimateViewer => ({ id: leadId, role: 'LEAD' });
 const admin = (): EstimateViewer => ({ id: adminId, role: 'ADMIN' });
 
 /** A new draft estimate of Arjun's, with two parts. Returns the estimate and its parts. */
-async function setUpEstimate(status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' = 'DRAFT'): Promise<{ readonly estimateId: string; readonly first: string; readonly second: string }> {
+async function setUpEstimate(status: 'DRAFT' | 'PREPARED' | 'APPROVED' = 'DRAFT'): Promise<{ readonly estimateId: string; readonly first: string; readonly second: string }> {
   taskCounter += 1;
   const task = await db.owner.query<{ id: string }>(
     `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented task', 'Invented subject') RETURNING id::text AS id`,
@@ -262,21 +262,21 @@ describe('AC-2: a refusal stores nothing', () => {
 });
 
 describe('AC-6: who may change a picture, and when (FR-064)', () => {
-  it('lets an Engineer change a draft, and a Lead and an Admin change a draft or a submitted estimate', async () => {
+  it('lets an Engineer change a draft, and a Lead and an Admin change a draft or a prepared estimate', async () => {
     const draft = await setUpEstimate();
     expect((await put(draft.estimateId, draft.first, smallPng())).revision).toBe(2);
     for (const viewer of [lead(), admin()]) {
-      const submitted = await setUpEstimate('SUBMITTED');
-      expect((await put(submitted.estimateId, submitted.first, smallPng(), 'a.png', viewer)).revision).toBe(2);
+      const prepared = await setUpEstimate('PREPARED');
+      expect((await put(prepared.estimateId, prepared.first, smallPng(), 'a.png', viewer)).revision).toBe(2);
     }
   });
 
-  it('refuses an Engineer on a submitted estimate with 409, and everyone on an approved one, and stores nothing', async () => {
-    const submitted = await setUpEstimate('SUBMITTED');
-    const error = await refusal(put(submitted.estimateId, submitted.first, smallPng()));
+  it('refuses an Engineer on a prepared estimate with 409, and everyone on an approved one, and stores nothing', async () => {
+    const prepared = await setUpEstimate('PREPARED');
+    const error = await refusal(put(prepared.estimateId, prepared.first, smallPng()));
     expect(error).toBeInstanceOf(ConflictError);
     expect(error).toMatchObject({ httpStatus: 409, code: ESTIMATE_NOT_EDITABLE_CODE });
-    expect(await imageCount(submitted.estimateId)).toBe(0);
+    expect(await imageCount(prepared.estimateId)).toBe(0);
     const approved = await setUpEstimate('APPROVED');
     for (const viewer of [arjun(), lead(), admin()]) {
       expect(await refusal(put(approved.estimateId, approved.first, smallPng(), 'a.png', viewer)), viewer.role).toMatchObject({ httpStatus: 409 });
@@ -366,11 +366,11 @@ describe('AC-5: a picture is read only by the people who may open its estimate',
     for (const attempt of attempts) expect(await refusal(attempt())).toBeInstanceOf(NotFoundError);
   });
 
-  it('still serves a submitted estimate\'s picture and one that was replaced (a read is not a change)', async () => {
+  it('still serves a prepared estimate\'s picture and one that was replaced (a read is not a change)', async () => {
     const { estimateId, first } = await setUpEstimate();
     const one = defined((await put(estimateId, first, smallPng())).picture);
     await put(estimateId, first, jpegOfSize(500));
-    await db.owner.query("UPDATE estimates SET status = 'SUBMITTED' WHERE id = $1::uuid", [estimateId]);
+    await db.owner.query("UPDATE estimates SET status = 'PREPARED' WHERE id = $1::uuid", [estimateId]);
     expect((await service.getPicture(arjun(), one.id)).mime).toBe('image/png');
   });
 });

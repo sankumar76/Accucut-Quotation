@@ -146,8 +146,8 @@ test.describe('AC-4: five flows by keyboard alone', () => {
     const answered = page.waitForResponse(isCalculate);
     await page.keyboard.press('Enter');
     expect((await answered).status(), 'the Calculate of the Engineer').toBe(200);
-    await expect(calculateButton(page)).toHaveText('Submitted');
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    await expect(calculateButton(page)).toHaveText('Prepared');
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
     await expect(partForm(page)).toBeVisible();
   });
 

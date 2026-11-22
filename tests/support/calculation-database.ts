@@ -52,7 +52,7 @@ export interface CalculationDatabase extends AuditDatabase {
   readonly materialOneId: string;
   readonly materialTwoId: string;
   /** A new task and estimate for the customer, in this state. */
-  addEstimate(options?: { status?: 'DRAFT' | 'SUBMITTED' | 'APPROVED'; withCustomer?: boolean; revision?: number; engineer?: boolean; customerId?: string }): Promise<string>;
+  addEstimate(options?: { status?: 'DRAFT' | 'PREPARED' | 'APPROVED'; withCustomer?: boolean; revision?: number; engineer?: boolean; customerId?: string }): Promise<string>;
   /** Adds a part to an estimate, as the part form stores it (`inputs` by field ID), and returns its ID. The estimate's own lock is not taken: a test builds an estimate before anyone calculates it. */
   addPart(estimateId: string, options?: { parentId?: string | null; sortIndex?: number; inputs?: Readonly<Record<string, unknown>> }): Promise<string>;
   /** A DRAFT of the Engineer's with the customer chosen and one part holding every needed input and the first material. */
