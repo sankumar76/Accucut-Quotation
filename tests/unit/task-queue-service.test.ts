@@ -126,7 +126,7 @@ describe('AC-3: what a row carries', () => {
       {
         id: expect.any(String),
         code: 'Q-2026-0003',
-        title: null,
+        title: 'Invented task',
         engineer: { id: ARJUN.id, name: ARJUN.name },
         customerName: 'Invented Customer Ltd',
         folderPath: '\\\\invented-server\\invented-share\\RFQ-1',

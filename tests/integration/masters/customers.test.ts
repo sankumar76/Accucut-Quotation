@@ -224,8 +224,8 @@ describe('AC-2, AC-6 (T2): editing a customer', () => {
     const entry = defined((await entriesFor(db, customer.id)).at(-1));
     const old = defined(customer.rates.find((rate) => rate.processItemId === FIRST_ITEM));
     expect(entry).toMatchObject({ event: 'master.edited', object_type: 'customer', object_label: 'Invented Works' });
-    expect(entry.before).toEqual({ name: 'Invented Works', contact: [], rates: [{ processItemId: FIRST_ITEM, name: old.name, unit: old.unit, value: old.value }] });
-    expect(entry.after).toEqual({ name: 'Invented Works', contact: [], rates: [{ processItemId: FIRST_ITEM, name: old.name, unit: old.unit, value: '7.50' }] });
+    expect(entry.before).toEqual({ name: 'Invented Works', shortName: shortNameOf('Invented Works'), contact: [], rates: [{ processItemId: FIRST_ITEM, name: old.name, unit: old.unit, value: old.value }] });
+    expect(entry.after).toEqual({ name: 'Invented Works', shortName: shortNameOf('Invented Works'), contact: [], rates: [{ processItemId: FIRST_ITEM, name: old.name, unit: old.unit, value: '7.50' }] });
   });
 
   it('lists the same items on both sides, in the order of the table, when several rates change', async () => {
@@ -248,8 +248,8 @@ describe('AC-2, AC-6 (T2): editing a customer', () => {
     expect(updated).toMatchObject({ name: 'Renamed Works', phone: null, email: 'new@invented.example.test', address: '1 Invented Road' });
     const entry = defined((await entriesFor(db, customer.id)).at(-1));
     expect(entry).toMatchObject({ event: 'master.edited', object_label: 'Renamed Works' });
-    expect(entry.before).toEqual({ name: 'Invented Works', contact: ['phone', 'email', 'address'], rates: [] });
-    expect(entry.after).toEqual({ name: 'Renamed Works', contact: ['phone', 'email', 'address'], rates: [] });
+    expect(entry.before).toEqual({ name: 'Invented Works', shortName: shortNameOf('Invented Works'), contact: ['phone', 'email', 'address'], rates: [] });
+    expect(entry.after).toEqual({ name: 'Renamed Works', shortName: shortNameOf('Invented Works'), contact: ['phone', 'email', 'address'], rates: [] });
     expect(`${entry.before_text}${entry.after_text}`).not.toMatch(/invented\.example|Invented Road|555 0142/);
   });
 

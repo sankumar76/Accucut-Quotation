@@ -167,7 +167,7 @@ export async function ensureAuditCanaryEntry(): Promise<void> {
 
 /**
  * Gives the Engineer with this ID a task and its estimate for the confidentiality scan (STORY-05.01; `tests/support/estimate-recipe.ts`): both have the Engineer's own ID,
- * and the task a code made from it in a year no real task has, so the scan's recipes (`/estimates/<code>`, `PUT /api/v1/estimates/<id>/customer`) name a record the
+ * and the task a code made from it in a year no real task has, so the scan's recipes (`/estimates/<code>`, `PUT /api/v1/estimates/<id>/customer`, which an Engineer is refused) name a record the
  * signed-in Engineer really owns. Assigned by the E2E Lead. Inserts that do nothing on any conflict, so a repeat is safe. Invented values; the database is thrown away.
  */
 async function insertCanaryEstimate(client: Client, ownerId: string): Promise<void> {
@@ -254,6 +254,20 @@ export async function fillCanaryPart(ownerId: string): Promise<void> {
     const snapshot = registryShape.parse(rows[0]?.snapshot);
     const inputs = canaryPartInputs(snapshot as unknown as ConfigDocument);
     await client.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [ownerId, JSON.stringify(inputs)]);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Sets the customer of the canary estimate of a person made by `createDisposableUser('scan', ...)` directly in the throwaway database (CR-01 item 6, AQP-390). An Engineer can no longer set the customer
+ * through the API (only a Lead and an Admin can, `estimate-customer.spec.ts`), and a task is assigned with one in the product; the canary estimate is inserted without one, so a spec that needs a
+ * customer on it states it with this. The estimate has the ID of its owner (`estimate-recipe.ts`). Repeatable. Throwaway database only (guarded by `connectToTestDatabase`).
+ */
+export async function setCanaryCustomer(ownerId: string, customerId: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    await client.query('UPDATE estimates SET customer_id = $2::uuid WHERE id = $1::uuid', [ownerId, customerId]);
   } finally {
     await client.end();
   }

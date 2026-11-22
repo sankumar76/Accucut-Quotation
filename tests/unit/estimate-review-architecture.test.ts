@@ -266,7 +266,8 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(button).toMatch(/import\('\.\/change-customer-dialog'\)/);
     expect(button).toMatch(/^import type \{ ChangeCustomerDialogProps \} from '\.\/change-customer-dialog';/m);
     expect(button).not.toMatch(/^import (?!type).*change-customer-dialog/m);
-    expect(button).not.toMatch(/estimates-client|customer-texts'/);
+    // The button holds no request: the client of the routes is imported by the dialog alone (the button takes its type only).
+    expect(button).not.toMatch(/^import (?!type).*estimates-client/m);
     expect(dialog).toMatch(/@\/lib\/estimates\/estimates-client/);
     const importers = ALL.filter((file) => !file.path.startsWith(CUSTOMER_FOLDER) && /estimate-customer\//.test(file.text)).map((file) => file.path);
     expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);

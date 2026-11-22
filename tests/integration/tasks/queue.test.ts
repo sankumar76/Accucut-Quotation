@@ -53,7 +53,7 @@ afterEach(async () => {
 });
 
 /** A task and its estimate, in any state: the assignment would refuse a deadline that is not later than now. */
-async function seed(code: string, engineerId: string, deadlineAt: Date, status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' = 'DRAFT', chosenCustomerId: string | null = null, title: string | null = null): Promise<void> {
+async function seed(code: string, engineerId: string, deadlineAt: Date, status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' = 'DRAFT', chosenCustomerId: string | null = null, title = 'Invented task'): Promise<void> {
   const task = await db.owner.query<{ id: string }>(
     'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, \'Invented subject\') RETURNING id::text',
     [code, engineerId, leadId, PATH, deadlineAt, title],

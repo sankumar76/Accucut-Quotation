@@ -1,11 +1,11 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
 
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
 
 import { ensureCanaryCustomers, ensureCanaryMaterials, useFreshAddress } from './support/auth';
 import { waitUntilHydrated } from './support/design-system';
-import { ScriptGate, SLOW_OPEN_WAIT_MILLISECONDS } from './support/lazy-load';
-import { ALPHA_CUSTOMER, isPhone, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
+import { ScriptGate, SLOW_OPEN_WAIT_MILLISECONDS, SLOW_REQUEST_MILLISECONDS } from './support/lazy-load';
+import { isPhone, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
 
 /**
  * STORY-05.13 (AQP-339, ADR-016 E1): what `/estimates/[code]` fetches after the first load, at 360x800, 768x1024 and 1366x768 on the development server. The phone's tree drawer is fetched
@@ -38,42 +38,33 @@ async function openFormOnAPhone(page: Page, gate: ScriptGate, testInfo: Paramete
 }
 
 test.describe('AC-4: the part form fetches its fields', () => {
+  // Since CR-01 item 6 (AQP-390) there is no "choose the customer first" step: the part form is on the page from the first paint, so it asks for its fields at once. The failed and the slow
+  // paths are reached through the one request that decides them, the form's definition, which is answered here the way a failing and a slow network would answer it.
   test('AC-4: when the fields cannot be fetched the notice offers "Try again", and pressing it brings the fields', async ({ page }, testInfo) => {
-    const gate = new ScriptGate();
-    await gate.install(page);
     await ensureCanaryCustomers();
     await ensureCanaryMaterials();
     const owner = await signInAsNewEngineer(page, testInfo);
+    const refuse = (route: Route) => route.abort('failed');
+    await page.route('**/api/v1/estimates/*/form', refuse);
     await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
-    await waitUntilHydrated(page, '#estimate-customer', 'onChange');
-    await expect(page.locator('#estimate-customer')).toBeEnabled();
-
-    // The form is not on the page until a customer is chosen, so its fields' code has not been asked for yet: refuse it, then choose.
-    gate.mode = 'fail';
-    await page.locator('#estimate-customer').selectOption({ label: ALPHA_CUSTOMER });
-    await expect(page.getByText('Customer saved.')).toBeVisible();
     await expect(page.getByText(FORM_FAILURE_TITLE)).toBeVisible();
     await expect(partForm(page)).toHaveCount(0);
 
-    gate.mode = 'pass';
+    await page.unroute('**/api/v1/estimates/*/form', refuse);
     await page.getByRole('button', { name: 'Try again' }).click();
     await waitForForm(page);
     await expect(page.getByText(FORM_FAILURE_TITLE)).toHaveCount(0);
   });
 
   test('AC-4: while the fields are on their way the skeleton shows as a status, then the fields take its place', async ({ page }, testInfo) => {
-    const gate = new ScriptGate();
-    await gate.install(page);
     await ensureCanaryCustomers();
     await ensureCanaryMaterials();
     const owner = await signInAsNewEngineer(page, testInfo);
+    await page.route('**/api/v1/estimates/*/form', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, SLOW_REQUEST_MILLISECONDS));
+      await route.continue();
+    });
     await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
-    await waitUntilHydrated(page, '#estimate-customer', 'onChange');
-    await expect(page.locator('#estimate-customer')).toBeEnabled();
-
-    gate.mode = 'slow';
-    await page.locator('#estimate-customer').selectOption({ label: ALPHA_CUSTOMER });
-    await expect(page.getByText('Customer saved.')).toBeVisible();
     await expect(page.getByRole('status', { name: 'Loading the form' })).toBeVisible();
     await expect(partForm(page)).toBeVisible({ timeout: SLOW_OPEN_WAIT_MILLISECONDS });
     await expect(page.getByRole('status', { name: 'Loading the form' })).toHaveCount(0);

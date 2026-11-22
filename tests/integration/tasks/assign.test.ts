@@ -74,7 +74,7 @@ const count = async (table: 'tasks' | 'estimates' | 'task_sequences'): Promise<n
   return Number(rows[0]?.n);
 };
 
-const insertTask = (code: string, folderPath: string, title: string | null = null, notes: string | null = null) =>
+const insertTask = (code: string, folderPath: string, title = 'Invented task', notes: string | null = null) =>
   db.owner.query(
     `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes) VALUES ($1, $2::uuid, $3::uuid, $4, now(), $5, 'Invented subject', $6) RETURNING id::text`,
     [code, arjunId, leadId, folderPath, title, notes],
@@ -92,7 +92,7 @@ describe('AC-1 (T1): what the tables keep, whoever writes to them', () => {
   it('refuses a title over 120 characters, notes over 1,000, a path over 500, and keeps the limits themselves', async () => {
     await insertTask('Q-2026-9003', PATH, 'T'.repeat(120), 'N'.repeat(1_000));
     await expect(insertTask('Q-2026-9004', PATH, 'T'.repeat(121))).rejects.toMatchObject({ constraint: 'ck_tasks_title_length' });
-    await expect(insertTask('Q-2026-9005', PATH, null, 'N'.repeat(1_001))).rejects.toMatchObject({ constraint: 'ck_tasks_notes_length' });
+    await expect(insertTask('Q-2026-9005', PATH, undefined, 'N'.repeat(1_001))).rejects.toMatchObject({ constraint: 'ck_tasks_notes_length' });
     await expect(insertTask('Q-2026-9006', `\\\\server\\share\\${'a'.repeat(500)}`)).rejects.toMatchObject({ constraint: 'ck_tasks_folder_path_length' });
   });
 
@@ -144,14 +144,38 @@ describe('AC-1 (T1): what the tables keep, whoever writes to them', () => {
 describe('AC-1 (T3, T7): a task and its empty estimate are one transaction', () => {
   it('stores the task for the Engineer, assigned by the caller, with the deadline in UTC, and an empty DRAFT estimate', async () => {
     const assigned = await service.assignTask(leadId, input());
-    expect(assigned).toMatchObject({ code: 'Q-2026-0001', engineer: { id: arjunId, name: 'Invented Task Arjun' }, estimate: { status: 'DRAFT', customerId: null } });
+    expect(assigned).toMatchObject({ code: 'Q-2026-0001', engineer: { id: arjunId, name: 'Invented Task Arjun' }, estimate: { status: 'DRAFT', customerId } });
     const { rows } = await db.owner.query<{ engineer_id: string; assigned_by: string; deadline_at: Date; folder_path: string; title: string; estimate_status: string; customer_id: string | null }>(
       `SELECT t.engineer_id::text, t.assigned_by::text, t.deadline_at, t.folder_path, t.title, e.status::text AS estimate_status, e.customer_id::text
        FROM tasks t JOIN estimates e ON e.task_id = t.id WHERE t.code = 'Q-2026-0001'`,
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ engineer_id: arjunId, assigned_by: leadId, folder_path: PATH, title: 'Hopper cover', estimate_status: 'DRAFT', customer_id: null });
+    expect(rows[0]).toMatchObject({ engineer_id: arjunId, assigned_by: leadId, folder_path: PATH, title: 'Hopper cover', estimate_status: 'DRAFT', customer_id: customerId });
     expect(rows[0]?.deadline_at.toISOString()).toBe('2026-11-12T11:30:00.000Z');
+  });
+
+  it('CR-01 item 6, AC-6: writes the subject on the task and the customer on the estimate in the same transaction, and answers with the short name the master holds', async () => {
+    const assigned = await service.assignTask(leadId, input({ subject: '  Feed hopper  ' }));
+    const { rows } = await db.owner.query<{ subject: string; customer_id: string; short_name: string }>(
+      `SELECT t.subject, e.customer_id::text AS customer_id, c.short_name FROM tasks t JOIN estimates e ON e.task_id = t.id JOIN customers c ON c.id = e.customer_id WHERE t.code = 'Q-2026-0001'`,
+    );
+    expect(rows).toEqual([{ subject: 'Feed hopper', customer_id: customerId, short_name: assigned.customer.shortName }]);
+    expect(assigned).toMatchObject({ subject: 'Feed hopper', customer: { id: customerId, name: 'Task Customer' } });
+    // The short name is read through the join each time, never copied: an edit of the master is what the next read shows.
+    await db.owner.query('UPDATE customers SET short_name = $2 WHERE id = $1::uuid', [customerId, 'RENAMED']);
+    expect((await service.assignTask(leadId, input())).customer.shortName).toBe('RENAMED');
+    await db.owner.query("UPDATE customers SET short_name = left(md5('Task Customer'), 10) WHERE id = $1::uuid", [customerId]);
+  });
+
+  it('CR-01 item 6, AC-5: a customer that does not exist, one that was deleted and text that is no ID are refused with 422 under customerId (together with a wrong Engineer), and nothing is written', async () => {
+    const gone = await insertAssignCustomer(db.owner, 'Task Gone Customer');
+    await db.owner.query('UPDATE customers SET deleted_at = now() WHERE id = $1::uuid', [gone]);
+    for (const wrong of [gone, '00000000-0000-4000-8000-00000000dead', 'not-an-id']) {
+      const refusal = await service.assignTask(leadId, input({ customerId: wrong, engineerId: inactiveId })).catch((error: unknown) => error);
+      expect(refusal).toBeInstanceOf(FieldValidationError);
+      expect(refusal instanceof FieldValidationError ? refusal.fields.map((problem) => problem.field).sort() : []).toEqual(['customerId', 'engineerId']);
+    }
+    expect([await count('tasks'), await count('estimates'), await count('task_sequences')]).toEqual([0, 0, 0]);
   });
 
   it('records an Admin as the one who assigned', async () => {

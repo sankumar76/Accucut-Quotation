@@ -117,7 +117,7 @@ describe('AC-4 (BR-040): alerts OFF', () => {
     settings.current = { ...settings.current, alertsEnabled: false };
     const assigned = await service.assignTask(LEAD.id, input());
     expect(queued).toEqual([]);
-    expect(assigned).toMatchObject({ code: 'Q-2026-0001', engineer: { id: ARJUN.id }, estimate: { status: 'DRAFT', customerId: null } });
+    expect(assigned).toMatchObject({ code: 'Q-2026-0001', engineer: { id: ARJUN.id }, estimate: { status: 'DRAFT', customerId: CUSTOMER_ID } });
     expect(world.tasks).toHaveLength(1);
     expect(world.estimates).toHaveLength(1);
   });
@@ -167,7 +167,7 @@ describe('AC-6: the assign context says whether alerts are on, and nothing else 
   it('answers alertsEnabled true or false with the Engineers, and no other key', async () => {
     const on = await service.getAssignContext();
     expect(on.alertsEnabled).toBe(true);
-    expect(Object.keys(on).sort()).toEqual(['alertsEnabled', 'engineers']);
+    expect(Object.keys(on).sort()).toEqual(['alertsEnabled', 'customers', 'engineers']);
     settings.current = { ...settings.current, alertsEnabled: false };
     expect((await service.getAssignContext()).alertsEnabled).toBe(false);
   });

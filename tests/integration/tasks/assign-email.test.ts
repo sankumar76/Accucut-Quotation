@@ -226,7 +226,7 @@ describe('AC-4 (BR-040): alerts OFF', () => {
     await setAlerts(false);
     const assigned = await service.assignTask(leadId, input());
     expect(await outboxRows()).toEqual([]);
-    expect(assigned).toMatchObject({ code: expect.stringMatching(/^Q-2026-\d{4}$/), engineer: { id: arjunId }, estimate: { status: 'DRAFT', customerId: null } });
+    expect(assigned).toMatchObject({ code: expect.stringMatching(/^Q-2026-\d{4}$/), engineer: { id: arjunId }, estimate: { status: 'DRAFT', customerId } });
     expect(await taskCount()).toBe(1);
     expect(await runOutboxSend(sendDependencies)).toMatchObject({ claimed: 0, sent: 0 });
     expect(await messagesFor(assigned.code)).toEqual([]);
@@ -461,7 +461,7 @@ describe('AC-3 (NFR-002): no cost, rate, formula or customer value in any messag
   it('finds none of the forbidden canary strings of the masters, the rate names or the formula markers in any captured message', async () => {
     const codes: string[] = [];
     codes.push((await service.assignTask(leadId, input())).code);
-    codes.push((await service.assignTask(adminId, input({ title: '', notes: '' }))).code);
+    codes.push((await service.assignTask(adminId, input({ title: 'Second hopper cover', notes: '' }))).code);
     await runOutboxSend(sendDependencies);
     const forbidden = forbiddenStrings();
     expect(forbidden.length).toBeGreaterThan(0);

@@ -5,7 +5,10 @@ import { createEstimateNodeRepository } from '@/server/repositories/estimate-nod
 import { createImageRepository } from '@/server/repositories/image-repository';
 import { createEstimateRepository } from '@/server/repositories/estimate-repository';
 import { createTransactionRunner, type TransactionRunner } from '@/server/repositories/transaction';
+import { createTaskRepository } from '@/server/repositories/task-repository';
 import { createEstimateService } from '@/server/services/estimate-service';
+import { createTaskService } from '@/server/services/task-service';
+import { createFixedClock } from '@/lib/time';
 
 import { contextOf, entriesFor, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { customerSide } from '../../support/customer-audit-side';
@@ -204,7 +207,7 @@ describe('AC-4: a customer used only by Approved estimates may be deleted, and t
     const kept = await db.owner.query<{ customer_id: string; status: string }>('SELECT customer_id::text, status::text FROM estimates WHERE id = $1::uuid', [estimateId]);
     expect(kept.rows).toEqual([{ customer_id: alpha.id, status: 'APPROVED' }]);
     const estimates = estimateServiceOver(createTransactionRunner(db.prisma));
-    expect((await estimates.getWorkspace({ id: adminId, role: 'ADMIN' }, code))?.customer).toEqual({ id: alpha.id, name: 'Alpha Works' });
+    expect((await estimates.getWorkspace({ id: adminId, role: 'ADMIN' }, code))?.customer).toEqual({ id: alpha.id, name: 'Alpha Works', shortName: shortNameOf('Alpha Works') });
   });
 });
 
@@ -255,6 +258,49 @@ describe('AC-5: the delete and a request choosing the same customer serialise, i
     const { rows } = await db.owner.query<{ customer_id: string | null }>('SELECT customer_id::text FROM estimates WHERE id = $1::uuid', [estimateId]);
     expect(rows).toEqual([{ customer_id: alpha.id }]);
     expect(await deletedEntries(alpha.id)).toEqual([]);
+  });
+
+  it('CR-01 item 6, AC-6 (BR-053): an assignment that holds the customer first: the delete waits, then sees the open estimate and is refused; the new task keeps its customer', async () => {
+    const alpha = await customerNamed('Alpha Works');
+    let release: () => void = () => undefined;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reachedHolding: () => void = () => undefined;
+    const isHolding = new Promise<void>((resolve) => {
+      reachedHolding = resolve;
+    });
+    const assigning = createTaskService({
+      tasks: createTaskRepository(db.prisma),
+      transactions: createHoldingRunner(db, hold, reachedHolding),
+      clock: createFixedClock(new Date('2026-11-09T04:00:00.000Z')),
+    });
+    const assignment = assigning.assignTask(leadId, {
+      engineerId,
+      customerId: alpha.id,
+      folderPath: PATH,
+      deadline: '2026-11-12T17:00',
+      title: 'Hopper cover',
+      subject: 'Feed hopper',
+      notes: '',
+    });
+    await Promise.race([isHolding, assignment]);
+
+    let deleteDone = false;
+    const deletion = db.mastersService.deleteCustomer(by(), alpha.id).finally(() => {
+      deleteDone = true;
+    });
+    // The customer row is read FOR SHARE by the assignment, so the delete (a FOR UPDATE) waits for it, and then sees the estimate that has the customer (DEF-039: the refusal is handled before the release).
+    await expect.poll(async () => deleteDone || (await someoneIsWaitingForALock()), { message: 'the delete waits for the customer\'s lock, or has finished' }).toBe(true);
+    expect(deleteDone, 'the delete did not wait for the assignment').toBe(false);
+    const refused = expect(deletion).rejects.toBeInstanceOf(MasterInUseError);
+    release();
+    await assignment;
+    await refused;
+
+    expect(await stored(alpha.id)).toEqual({ deleted: false, rates: 15 });
+    const { rows } = await db.owner.query<{ customer_id: string | null; status: string }>('SELECT customer_id::text, status::text FROM estimates');
+    expect(rows).toEqual([{ customer_id: alpha.id, status: 'DRAFT' }]);
   });
 
   it('a delete that holds the customer first: the choice waits, then finds no customer and is refused; the estimate keeps no customer', async () => {

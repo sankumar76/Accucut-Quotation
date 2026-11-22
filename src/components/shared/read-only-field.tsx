@@ -10,8 +10,8 @@ export interface ReadOnlyFieldProps {
   readonly id: string;
   readonly label: string;
   readonly hint?: string;
-  /** The value shown. Empty while there is nothing to show. */
-  readonly children: ReactNode;
+  /** The value shown. Left out while there is nothing to show. */
+  readonly children?: ReactNode;
   /** The value is code-like (a short name): the monospace face. */
   readonly mono?: boolean;
 }

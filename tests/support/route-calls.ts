@@ -150,7 +150,7 @@ function treatmentCall(method: HttpMethod, path: string): ValidCall | undefined 
 function customerCall(method: HttpMethod, path: string): ValidCall | undefined {
   switch (`${method} ${path}`) {
     case 'POST /api/v1/customers':
-      return { id: NO_RECIPE_ID, body: { name: 'Invented-customer-Z' }, status: 201 };
+      return { id: NO_RECIPE_ID, body: { name: 'Invented-customer-Z', shortName: 'INVZ' }, status: 201 };
     case 'PATCH /api/v1/customers/[id]':
       return { id: CUSTOMER_RECIPE_ID, body: { phone: '+99 555 0142' }, status: 200 };
     case 'POST /api/v1/customers/[id]/reset-rates':
@@ -172,7 +172,15 @@ function taskCall(method: HttpMethod, path: string, context: CallContext): Valid
     case 'POST /api/v1/tasks':
       return {
         id: NO_RECIPE_ID,
-        body: { engineerId: context.targetId, folderPath: '\\\\invented-server\\invented-share\\RFQ-0', deadline: '2099-01-01T10:00', title: 'Invented task', notes: 'Invented notes.' },
+        body: {
+          engineerId: context.targetId,
+          customerId: CUSTOMER_RECIPE_ID,
+          folderPath: '\\\\invented-server\\invented-share\\RFQ-0',
+          deadline: '2099-01-01T10:00',
+          title: 'Invented task',
+          subject: 'Invented subject',
+          notes: 'Invented notes.',
+        },
         status: 201,
       };
     // STORY-04.04: the canary task of the signed-in Engineer, whose task ID is the same as its estimate's (`estimate-recipe.ts`), so the scan opens a task that really exists.
