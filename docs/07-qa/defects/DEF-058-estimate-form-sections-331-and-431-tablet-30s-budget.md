@@ -72,6 +72,17 @@ R8's clauses (a), (c) and (e) and the multi-rule sentence apply as written, with
 
 What the readings show: neither case failed on any of the 24 readings added here (4 runs x 3 widths x 2 cases). The longest are **28.3 s on 6087e8b8 [tablet] (:432, 94 % of the 30 s budget, over the 25 s P2 line)**, 26.4 s on 08394110 [mobile] (:432) and 24.5 s on 08394110 [desktop] (:331). So the margin reading of DL-290 (A2) stands: a case that passes at 28 s on a normal draw is one slow draw from a cut. These readings are evidence on the unfixed cases, not the DEF-058 proof; **P1 and P2 are still open** until the fix PR exists.
 
+**#605 (AQP-392, the DEF-058 fix PR, test-only, one file) run 44999981920, head 9f54429d, read 2026-11-22 (qa-engineer, DL-293 request 4).** Required checks green (`Stages 1 to 11` success). Stage 12 shard summaries: shard 1 `538 passed (15.3m)`, shard 2 `532 passed (21.3m)`, shard 3 `2 flaky, 532 passed (14.5m)`, shard 4 `517 passed (17.6m)`. **The flaky lines are not these cases:** `process-propagation.spec.ts:109` [tablet] and `rates-changed.spec.ts:224` [tablet] (the DEF-057 case), both on a PR run (not a `master` push, so not on RISK-031 trigger (b)), both with "Test timeout of 30000ms exceeded." in the log. The fix split the old :331 case into three cases at the same widths, by title: "AC-8: no sideways scroll, axe finds nothing (first paint), every control is 44 px high and the strip links too" (:341), "... (with a message showing)" (:350) and "... (with values saved)" (:359); the second case moved to :445. Seconds, attempt 1, mobile / tablet / desktop, all green, no retry line for any of them:
+
+| Case (title, #605 head) | mobile | tablet | desktop |
+|---|---|---|---|
+| AC-8 first paint (:341) | 11.1 | 19.8 | 15.6 |
+| AC-8 with a message showing (:350) | 10.0 | 21.4 | 13.8 |
+| AC-8 with values saved (:359) | 11.0 | 20.0 | 13.5 |
+| AC-4, AC-8 the save that completes a part (:445) | 12.7 | 16.4 | 16.0 |
+
+Worst 21.4 s (tablet, "with a message showing"), under the 25 s P2 line, so **P1's attempt-1 and under-25 s clauses read met on this run of record** for #605's head; P1 is for master and QA to read on the run of record, and P2 (the first `master` push after the squash) is still to come. The first-load case by title read 12.0 / 14.8 / 14.5 s (mobile / tablet / desktop) on the same run. Shard 2 (tablet) ran 21.3 minutes, the longest of the four.
+
 ## Proof still to come (DL-290 (7), reported on the PR, not a further condition)
 On the run of record of #599's updated head (after #600 squashes and "Update branch"): the shard summaries with every flaky line named, and the :331 and :431 readings at the three widths. **Done 2026-11-22:** run of record 44990897082 (95d882cc) is read above (0 flaky, both cases attempt-1 green at all three widths, worst 20.6 s).
 
