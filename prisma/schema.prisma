@@ -227,10 +227,12 @@ model Treatment {
 /// phone, e-mail and address are optional text. `deletedAt` is for the soft delete of story 02.07 (A-13); the customer repository lists only rows where it is
 /// null. The unique index on `lower(name)` (names differ by more than letter case, AC-1) and the CHECK that a name is not blank are hand-written in the
 /// migration: Prisma cannot express them. `uq_customers_name` (below) is implied by `uq_customers_name_lower` and mirrors this `@@unique`: do not drop it as a
-/// duplicate. Class Confidential: contact details are personal data and never reach an Engineer; `/options/customers` sends the ID and the name only.
+/// duplicate. CR-01 item 6 (AQP-390): `shortName` is required, at most 20 characters in the database (the code limit is lower), and unique ignoring letter case over every row,
+/// soft-deleted included (`uq_customers_short_name_lower` and the two CHECKs are hand-written in the migration). Class Internal, not contact data. Class Confidential: contact details are personal data and never reach an Engineer; `/options/customers` sends the ID and the name only.
 model Customer {
   id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name      String
+  shortName String    @map("short_name")
   phone     String?
   email     String?
   address   String?
@@ -291,7 +293,7 @@ model TaskSequence {
 /// `Q-YYYY-NNNN` of the page addresses. `folderPath` is a UNC path kept as text (the portal never reads the share; the `file:` link is built from it on the
 /// server). `deadlineAt` is the instant in UTC; the screens show it in IST. `assignmentRevision` is raised by a reassign (STORY-04.07) and is part of the key
 /// of the "task assigned" e-mail (architecture section 4.7). The CHECKs (the path starts with two backslashes, the title and notes lengths, the revision is
-/// at least 1) are hand-written in the migration: Prisma cannot express them. A task is never deleted, so the runtime role has no DELETE. Class Internal.
+/// at least 1) are hand-written in the migration: Prisma cannot express them. CR-01 item 6 (AQP-390): `title` and `subject` (the project name, at most 200 in the database, a lower limit in code) are required. A task is never deleted, so the runtime role has no DELETE. Class Internal.
 model Task {
   id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   code               String
@@ -299,7 +301,8 @@ model Task {
   assignedById       String   @map("assigned_by") @db.Uuid
   folderPath         String   @map("folder_path")
   deadlineAt         DateTime @map("deadline_at") @db.Timestamptz(6)
-  title              String?
+  title              String
+  subject            String
   notes              String?
   assignmentRevision Int      @default(1) @map("assignment_revision")
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
