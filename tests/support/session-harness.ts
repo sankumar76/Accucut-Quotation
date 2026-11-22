@@ -377,7 +377,7 @@ export function createSessionHarness(): SessionHarness {
       const estimate = estimateWorld.estimates.find((candidate) => candidate.id.toLowerCase() === estimateId.toLowerCase());
       if (estimate === undefined) return Promise.resolve(null);
       const customer = masters.customers.find((candidate) => candidate.id === estimate.customerId);
-      return Promise.resolve({ code: estimate.code, customerName: customer?.name ?? null });
+      return Promise.resolve({ code: estimate.code, customerShortName: customer?.shortName ?? null, subject: estimate.subject ?? 'Invented subject' });
     },
     listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
   };

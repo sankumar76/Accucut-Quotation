@@ -54,7 +54,7 @@ describe('AC-2: every way an input can change makes the approval a 409 TOTALS_OU
   it.each([
     ['a typed number', async (estimateId: string, top: string) => db.estimateService.saveInputs(lead(), estimateId, { nodeId: top, revision: await revisionOf(db, top), values: { [idOf('J')]: '91' } })],
     ['Remarks', async (estimateId: string, top: string) => db.estimateService.saveInputs(lead(), estimateId, { nodeId: top, revision: await revisionOf(db, top), values: { [idOf('AJ')]: 'Deburr the edge.' } })],
-    ['a part added', async (estimateId: string, top: string) => db.estimateService.addPart(lead(), estimateId, { kind: 'beside', nodeId: top })],
+    ['a part added', async (estimateId: string) => db.estimateService.addPart(lead(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })],
   ])('%s', async (_name, change) => {
     const { estimateId, top } = await calculatedEstimate(db);
     const seen = await currentCalculationOf(db, estimateId);

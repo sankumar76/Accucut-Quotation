@@ -1,5 +1,6 @@
 import { isRecord, type Fetch } from '../api-client';
 import { handleSessionEnded } from '../auth/session-ended';
+import { isExportFileName } from './file-name';
 
 /**
  * The browser's side of the export download (STORY-07.01 AC-2, AC-6; architecture section 6 "Export"): ask for the file, and hand it to the browser as a download. Nothing here decides anything: who may
@@ -19,10 +20,27 @@ export type DownloadOutcome =
 /** Offers the bytes to the browser under a name. Replaced in a test. */
 export type SaveFile = (blob: Blob, fileName: string) => void;
 
-/** The name inside `Content-Disposition: attachment; filename="..."`, only when it is made of what the export makes (`lib/export/file-name.ts`); otherwise `null`. */
+const ENCODED_NAME = /(?:^|[;\s])filename\*=UTF-8''([^;\s]*)/i;
+const PLAIN_NAME = /(?:^|[;\s])filename="([^"]*)"/i;
+
+function decoded(encodedName: string): string | null {
+  try {
+    return decodeURIComponent(encodedName);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The name in `Content-Disposition: attachment; filename="<ASCII>"; filename*=UTF-8''<encoded>` (AQP-391 AC-6): `filename*` first (decoded), then `filename`, each only when it is a name the export makes
+ * (`isExportFileName`, `lib/export/file-name.ts`); otherwise `null`. The save goes through `link.download`, so this reading decides the name on disk, and it must equal the name on the card.
+ */
 export function fileNameFrom(contentDisposition: string | null): string | null {
-  const found = /filename="([A-Za-z0-9_-]{1,200}\.xlsx)"/.exec(contentDisposition ?? '');
-  return found?.[1] ?? null;
+  const header = contentDisposition ?? '';
+  const fromEncoded = decoded(ENCODED_NAME.exec(header)?.[1] ?? '');
+  if (fromEncoded !== null && isExportFileName(fromEncoded)) return fromEncoded;
+  const plain = PLAIN_NAME.exec(header)?.[1] ?? '';
+  return isExportFileName(plain) ? plain : null;
 }
 
 const REVOKE_AFTER_MS = 10_000;

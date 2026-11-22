@@ -29,7 +29,8 @@
       "Bash(git merge origin/master)",
       "Bash(git remote -v*)",
       "Bash(ls*)",
-      "Bash(tree*)"
+      "Bash(tree*)",
+      "Bash(git -C \"C:/Users/sanku/Documents/Accucut - Quotation App/.claude/worktrees/*\" merge origin/master)"
     ],
     "deny": [
       "Bash(git push --force*)",

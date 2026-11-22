@@ -6,7 +6,7 @@
 | Severity | Sev-3 Moderate |
 | Priority | P2 |
 | Type | Product (design) |
-| Status | New |
+| Status | **Closed** (Jira AQP-234 Done; fixed in PR #135, squash `eed733ba`, AQP-234; GitHub #127 closed 2026-11-21 on QA reconciliation, DL-276) |
 | Found by / date | qa-engineer, 2026-11-09 |
 | Build / commit | `b02955bb07e176f834477aeb08dc3713d563bd37` on `feat/AQP-122-material-master` (PR #120) |
 | Environment | Windows 11, Node v24.19.0, Chromium (Playwright 1.64.1), throwaway PostgreSQL 17 with invented credentials, invented data, development server |

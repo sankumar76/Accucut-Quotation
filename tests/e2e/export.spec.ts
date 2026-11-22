@@ -2,9 +2,10 @@ import { readFile } from 'node:fs/promises';
 
 import { expect, test, type Page } from '@playwright/test';
 
+import { istDayMonthYearOf } from '../../src/lib/time';
 import { loadWorkbook, readXlsxParts } from '../support/xlsx-parts';
 
-import { createDisposableUser, putPictureOnCanaryPart, useFreshAddress } from './support/auth';
+import { createDisposableUser, putPictureOnCanaryPart, setCanarySubject, useFreshAddress } from './support/auth';
 import { calculateWithoutThePage, engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
 import { withExportTurn } from './support/export-slot';
@@ -26,7 +27,7 @@ test.beforeEach(async ({ context }) => {
 
 const PHONE_MAX = 767;
 const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-const FILE_NAME = /^Quotation_[A-Za-z0-9_-]+_Q-\d{4}-\d{4,}_\d{4}-\d{2}-\d{2}\.xlsx$/;
+const FILE_NAME = /^[^\s/\\:*?"<>|]+_\d{2}-\d{2}-\d{4}\.xlsx$/u;
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 const downloadButton = (page: Page) => page.getByRole('button', { name: 'Download .xlsx' });
 
@@ -37,7 +38,7 @@ async function openExport(page: Page, code: string): Promise<void> {
 }
 
 test.describe('AC-2, AC-4, AC-6: a Lead downloads the file', () => {
-  test('the page shows the file card and the rows, and the button downloads a workbook named after the customer, the task and the IST date, with columns A to BO', async ({ page }, testInfo) => {
+  test('the page shows the file card and the rows, and the button downloads a workbook named <short name>_<subject>_<date>, with columns A to BO', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
     // The file is of the calculation, so the Engineer presses Calculate first (without the pages), then the Lead opens the export. The part has its picture (AC-4).
     await putPictureOnCanaryPart(owner.id);
@@ -53,7 +54,9 @@ test.describe('AC-2, AC-4, AC-6: a Lead downloads the file', () => {
 
     const [download] = await withExportTurn(() => Promise.all([page.waitForEvent('download'), downloadButton(page).click()]));
     expect(download.suggestedFilename()).toMatch(FILE_NAME);
-    expect(download.suggestedFilename()).toContain(`_${code}_`);
+    // CR-01 item 9: the short name of the customer, the subject of the task (`Canary subject`), the IST date; the task code is no longer in the name.
+    expect(download.suggestedFilename()).toContain('_Canary-subject_');
+    expect(download.suggestedFilename()).not.toContain(code);
     const path = await download.path();
     const bytes = new Uint8Array(await readFile(path));
     // The zip is a workbook, and ExcelJS reads it back with the registry's 67 columns, A to BO, in row 1.
@@ -76,6 +79,28 @@ test.describe('AC-2, AC-4, AC-6: a Lead downloads the file', () => {
     expect([...readXlsxParts(bytes).keys()].filter((name) => name.startsWith('xl/media/') && !name.endsWith('/'))).toHaveLength(1);
   });
 
+  test('AQP-391 AC-1, AC-5, AC-6: a subject with a space, a slash and a non-ASCII letter is cleaned, the header carries both name parameters, and the saved name equals the name on the card', async ({ page }, testInfo) => {
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    const shortName = await setCanarySubject(owner.id, 'Kühler 40/B 工场');
+    await calculateWithoutThePage(page, owner);
+    await signInAsLead(page, testInfo);
+    // The date is the IST date of the download: either side of the call, in case it runs over IST midnight.
+    const before = istDayMonthYearOf(new Date());
+    await openExport(page, code);
+    const card = page.locator('[data-slot="card"]').filter({ hasText: 'File name' });
+    const nameOnCard = await card.getByText(FILE_NAME).innerText();
+    expect(nameOnCard).toMatch(new RegExp(`^${shortName}_Kühler-40-B-工场_\\d{2}-\\d{2}-\\d{4}\\.xlsx$`, 'u'));
+
+    const [download] = await withExportTurn(() => Promise.all([page.waitForEvent('download'), downloadButton(page).click()]));
+    const after = istDayMonthYearOf(new Date());
+    expect(download.suggestedFilename()).toBe(nameOnCard);
+    expect([before, after].map((date) => `${shortName}_Kühler-40-B-工场_${date}.xlsx`)).toContain(download.suggestedFilename());
+
+    const header = await withExportTurn(async () => (await page.request.get(`/api/v1/estimates/${owner.id}/export`)).headers()['content-disposition']);
+    expect(header).toMatch(/^attachment; filename="[A-Za-z0-9._-]+\.xlsx"; filename\*=UTF-8''[A-Za-z0-9._%-]+\.xlsx$/);
+    expect(header).toContain('K%C3%BChler-40-B-%E5%B7%A5%E5%9C%BA');
+  });
+
   test('the route answers an attachment of the right type with `no-store`, and an Admin gets the same', async ({ page }, testInfo) => {
     const { owner } = await engineerWithEstimate(testInfo);
     await calculateWithoutThePage(page, owner);
@@ -89,7 +114,7 @@ test.describe('AC-2, AC-4, AC-6: a Lead downloads the file', () => {
     );
     expect(answer.status).toBe(200);
     expect(answer.type).toBe(XLSX_TYPE);
-    expect(answer.disposition).toMatch(/^attachment; filename="Quotation_[A-Za-z0-9_-]+\.xlsx"$/);
+    expect(answer.disposition).toMatch(/^attachment; filename="[A-Za-z0-9._-]+\.xlsx"; filename\*=UTF-8''[A-Za-z0-9._%-]+\.xlsx$/);
     expect(answer.cache).toContain('no-store');
     expect(answer.size).toBeGreaterThan(1_000);
   });

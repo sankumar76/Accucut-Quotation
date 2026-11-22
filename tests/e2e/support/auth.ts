@@ -181,7 +181,7 @@ async function insertCanaryEstimate(client: Client, ownerId: string): Promise<vo
   );
   await client.query('INSERT INTO estimates (id, task_id) VALUES ($1::uuid, $1::uuid) ON CONFLICT DO NOTHING', [ownerId]);
   // The one part the node routes of STORY-05.02 open: its ID is the estimate's too (`estimate-recipe.ts`), first at the top.
-  await client.query('INSERT INTO estimate_nodes (id, estimate_id, sort_index) VALUES ($1::uuid, $1::uuid, 0) ON CONFLICT DO NOTHING', [ownerId]);
+  await client.query('INSERT INTO estimate_nodes (id, estimate_id, sort_index, node_kind) VALUES ($1::uuid, $1::uuid, 0, \'MAIN_ASSEMBLY\') ON CONFLICT DO NOTHING', [ownerId]);
   // The one picture `GET /api/v1/images/{id}` opens (STORY-05.07): its ID and its estimate's are the owner's too. It is not the part's picture, so the node's recipes are unchanged. A tiny
   // invented PNG; the table is append-only and the insert does nothing on a repeat.
   const picture = smallPng();
@@ -269,6 +269,28 @@ export async function setCanaryCustomer(ownerId: string, customerId: string): Pr
   try {
     const result = await client.query('UPDATE estimates SET customer_id = $2::uuid WHERE id = $1::uuid', [ownerId, customerId]);
     if (result.rowCount !== 1) throw new Error('The canary estimate was not found: set it up first.');
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Sets the subject of the task of the canary estimate of a person made by `createDisposableUser('scan', ...)` (CR-01 items 6 and 9, AQP-391: the subject is part of the Excel file name), and returns the
+ * short name of the customer chosen on the estimate, which is the other part of that name. The task has the ID of its owner (`estimate-recipe.ts`). The subject is not an input of the calculation, so
+ * the state of the estimate does not change. Throwaway database only (guarded by `connectToTestDatabase`).
+ */
+export async function setCanarySubject(ownerId: string, subject: string): Promise<string> {
+  const client = await connectToTestDatabase();
+  try {
+    const result = await client.query('UPDATE tasks SET subject = $2 WHERE id = $1::uuid', [ownerId, subject]);
+    if (result.rowCount !== 1) throw new Error('The canary task was not found: set it up first.');
+    const { rows } = await client.query<{ shortName: string | null }>(
+      'SELECT c.short_name AS "shortName" FROM estimates e LEFT JOIN customers c ON c.id = e.customer_id WHERE e.id = $1::uuid',
+      [ownerId],
+    );
+    const shortName = rows[0]?.shortName;
+    if (shortName === null || shortName === undefined) throw new Error('The canary estimate has no customer: make it calculable first.');
+    return shortName;
   } finally {
     await client.end();
   }

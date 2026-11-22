@@ -6,7 +6,7 @@ import { deleteGuardOf, partsRemoved, rowsOf, siblingsOf, stepOf } from '@/lib/e
 
 /** STORY-05.02 AC-2, AC-3: what the screen works out from its tree to ask for a move or a delete. Every ID is invented. */
 
-const part = (id: string, parentId: string | null, slNo: string): PartItem => ({ id, parentId, slNo, label: '', completeness: 'EMPTY', revision: 1 });
+const part = (id: string, parentId: string | null, slNo: string): PartItem => ({ id, parentId, slNo, label: '', nodeKind: parentId === null ? 'MAIN_ASSEMBLY' : 'PART', completeness: 'EMPTY', revision: 1 });
 
 /** 1, 1.1, 1.1.1, 1.1.2, 1.2, 2 in reading order. */
 const TREE: ReadonlyArray<PartItem> = [part('a', null, '1'), part('b', 'a', '1.1'), part('c', 'b', '1.1.1'), part('d', 'b', '1.1.2'), part('e', 'a', '1.2'), part('f', null, '2')];

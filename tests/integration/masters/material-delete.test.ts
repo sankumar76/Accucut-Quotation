@@ -88,7 +88,7 @@ async function estimateWith(status: Status, parts: ReadonlyArray<Record<string, 
   const nodeIds: string[] = [];
   for (const [index, inputs] of parts.entries()) {
     const node = await db.owner.query<{ id: string }>(
-      'INSERT INTO estimate_nodes (estimate_id, sort_index, inputs) VALUES ($1::uuid, $2::int, $3::jsonb) RETURNING id::text AS id',
+      'INSERT INTO estimate_nodes (estimate_id, sort_index, node_kind, inputs) VALUES ($1::uuid, $2::int, \'MAIN_ASSEMBLY\', $3::jsonb) RETURNING id::text AS id',
       [estimateId, index, JSON.stringify(inputs)],
     );
     nodeIds.push(defined(node.rows[0]).id);
