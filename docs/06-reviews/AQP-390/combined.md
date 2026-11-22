@@ -90,3 +90,55 @@
 - **ux-expert:** the legacy no-customer sentence for SCR-05 and Calculate; the SCR-12 short-name hint ("letters, numbers or hyphens" in the mock-up against "any printable text" in A-CR01-A2; Dev Record decision 2).
 - **solution-architect:** §5.1 / §6 rows for customers, tasks and Set customer to be rewritten from §4.11; ADR-016 line 39 names the old dialog; §4.11 b "Audit ... not added here" is now superseded by `estimate.customer_changed`.
 - **orchestrator:** raise the follow-ups (Reassign changes the customer; queue/My tasks columns; create-task audit; drop `customerName` from task detail).
+
+---
+
+## Addendum 2: re-review at head `247e286d` (2026-11-22)
+
+| Item | Value |
+|---|---|
+| Head reviewed | `247e286dda23bc8dd6152994bf682f596cec941f`. New since `1c436762`: the developer's commits `e6372c8d` (QLT-01 to QLT-04, QLT-06, QLT-07), `96c4640d` (QLT-14) and `247e286d` (AQP-371 load seeds), plus merge `1a25460c` of `master` `62ff83c4` (AQP-388, AQP-389, AQP-371). The merge is clean: `git show --cc` shows no conflict hunk. The PR's net change is now 160 files (`git diff origin/master...247e286d`); the 4 new ones are the load seeds and their unit test. Only the new diff was reviewed |
+| CI | Run 44995940002 on `247e286d`, **attempt 2: every required check green**. That covers "Stages 1 to 11b" (job 137131576581), "Stages 1 to 11" (137133151272), E2E shards 1 to 4 (137131613627, 137131577946, 137131578109, 137131610171), Windows package run 44995939896, and the Nightly Lighthouse, capacity and sweep jobs. "CI feedback time" is red; it does not count before G8 (DL-286). **Attempt 1 failed** in Stage 6 (job 137126865094; E2E shards all passed in that attempt), see "The re-run" below |
+| **Verdict** | **APPROVE WITH COMMENTS.** No Blocker, Critical or Major remains |
+| Counts now open | Blocker 0 · Critical 0 · Major 0 · Minor 2 (QLT-05 deferred to a follow-up, QLT-08 a process action) · Info 7 (QLT-09 to QLT-13 as before, plus QLT-15 and QLT-16 below) |
+
+### Prior findings
+
+| ID | Was | Now | Evidence |
+|---|---|---|---|
+| QLT-14 | Blocker | **Fixed** | The action is the first of the page header's actions (`workspace-header.tsx`, `actions` of `PageHeader`) and no longer sits in the identity card. The developer's root cause, reproduced locally, was that at 768 px a short review scrolled to its end left the button under the sticky top bar, and axe read it as a target too small and too close. That fits the failing test (`rates-changed.spec.ts:162` presses a link that scrolls to `#review-calculate`). `estimate-customer.spec.ts` AC-12 now runs `expectNoAxeViolations` and the overflow check with the action visible at every width. The previously failing test passed in both CI attempts on this head |
+| QLT-01 | Critical | **Fixed** | `CUSTOMER_NOT_CHOSEN_MESSAGE = 'Choose the customer before calculating.'`, master's words (AC-11). The neutral `NO_CUSTOMER_SET_MESSAGE` is kept for the SCR-05 header only, which AC-11 leaves open, with a note that the ux-expert rules on it |
+| QLT-02 | Major | **Fixed** | `HIDDEN_OR_CONTROL = /[\p{Cc}\p{Cf}]/u` in `lib/masters/customers.ts` and `lib/tasks/assign.ts`. `NOTHING_VISIBLE = /^[\s\p{Cc}\p{Cf}]*$/u` makes invisible-only text "required". Messages are updated. Tests: `customers-lib` (U+200B, U+200D, U+202E, U+2060, U+FEFF refused; invisible-only is "required"), `tasks-lib` (the same for the subject), and both route tests (422 under `shortName` and `subject`). The zod schemas call the same functions, so browser and server agree |
+| QLT-03 | Minor | **Fixed** | Allow-list `role !== 'LEAD' && role !== 'ADMIN'` before any read |
+| QLT-04 | Minor | **Fixed** | `setCanaryCustomer` throws unless `rowCount === 1` |
+| QLT-05 | Minor | **Not fixed: deferred to a follow-up, accepted** | See "QLT-05 as a follow-up" below |
+| QLT-06 | Minor | **Fixed** | `SHORT_NAME_NOT_SET = 'Not set'` in the short-name `<dd>` |
+| QLT-07 | Minor | **Fixed** | The effect depends on `[attempt, open]` and returns early while the dialog is closed, so the list is read on every open. The last list stays shown while the new one loads; the selection is cleared on close |
+| QLT-08 | Minor | **Open (process, not code)** | No run on a copy of the demo database is recorded yet. It does not block the merge; the orchestrator or developer runs it before the demo copy runs this code |
+| QLT-09 to QLT-13 | Info | Unchanged | none |
+
+### New diff: findings
+
+| ID | Severity | Where | Issue and why | Fix |
+|---|---|---|---|---|
+| QLT-15 | Info | `lib/masters/customers.ts`, `lib/tasks/assign.ts` (`\p{Cf}`) | Refusing every format character also refuses legitimate ones: U+200C/U+200D inside some Indic spellings and emoji sequences, and U+00AD (soft hyphen) pasted from a word processor. The person gets a clear message and can retype, and this matches the project's earlier hidden-character rule (UX 0.29). For a file-name component this is the right default | None now. If Accucut's customers need ZWJ/ZWNJ in a subject, allow U+200C and U+200D between letters only (a code-only change) |
+| QLT-16 | Info | `workspace-header.tsx` | "Change customer" now sits among the page header's actions, not beside the customer's name. It is still in the SCR-06 header, as AC-12 asks, and its label says what it changes | ux-expert: confirm the placement at the end review |
+| none | none | `tests/perf/load/*` (`247e286d`) | **No finding.** The load seeds post `shortName` (`VOL###`, unique, at most 10 characters for n under 10^7) and assign with `customerId` and `subject`. The removed Engineer `PUT .../customer` loop is replaced by the customer set at assignment. `load-plan.test.ts` gains two expectations; nothing is removed | none |
+
+### QLT-05 as a follow-up
+
+**Acceptable.** The trigger was lost because the customer step it relied on was removed by design, not to make a build pass. The assertions of the data-request path are intact. The gap is the part form's lazy-chunk failure path in E2E, which needs a new `ScriptGate` case that aborts one chunk URL. That is a test-harness addition outside this story's scope, it is Minor, and §9 item 3's final review is where such gaps are collected. **Condition:** the GitHub `follow-up` issue is opened, and linked on the PR and AQP-390, before the merge.
+
+### The re-run (for master)
+
+- **What happened.** Run 44995940002 attempt 1, job 137126865094 ("Stages 1 to 11b", step "Stage 6: unit tests with coverage of pure code"): `tests/unit/load-plan.test.ts` › "AC-4: the pictures of the export are accepted ... is a PNG of 199 KB that checkPicture accepts for 300 indexes" failed with `Test timed out in 5000ms` (5706 ms; 1 failed, 10,136 passed). The developer re-ran the failed jobs (`gh run rerun --failed`). In attempt 2 (job 137131576581) the same test passed in 3191 ms and 3613 ms.
+- **Not caused by this PR.** The test is AQP-371's (merged in `62ff83c4`), and this PR adds only two unrelated expectations to that file. **The same test failed the same way on `master`'s own push run 44995772811 for `62ff83c4`** (job 137126360326, 5676 ms). So `master` is red on that commit for this reason.
+- **Within a rule? No.** The re-run rules on record are signature-exact: DL-240 R2 covers `estimate-save.spec.ts:240` and DL-245 R3 covers `image.test.ts:423`, each until its fix merges. Neither covers `load-plan.test.ts`. Test strategy §10 says retries are off for unit tests and a flaky test is quarantined with a ticket within a day. This is the DEF-003 / DL-057 class: a wall-clock limit in a unit test, here Vitest's 5 s default under coverage.
+- **Asks master** to rule on the re-run of #601, and to have a defect raised (qa-engineer) and a fix lane given for `load-plan.test.ts`. The DL-057 fix is to count work rather than time, or to give the test its own explicit timeout with a reason. Master's own push run should get the same ruling.
+
+### Checks run (addendum)
+
+- Read `git show` of `e6372c8d`, `96c4640d`, `247e286d` and `git show --cc 1a25460c`.
+- CI read: `gh pr checks 601`, `gh run list --commit 247e286d`, the jobs of attempts 1 and 2, the failing and passing job logs, and the `master` CI list and the failing job of push run 44995772811.
+- Rules read: decision log DL-057, DL-240, DL-245 and DL-286; test strategy §10 flaky-test policy.
+- No local run.
