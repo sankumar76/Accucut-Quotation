@@ -39,7 +39,7 @@ const withId = (id: string) => ({ params: Promise.resolve({ id }) });
 const owned = (): string => harness.targetId;
 const task = () => defined(harness.taskWorld.tasks.find((candidate) => candidate.id === owned()));
 
-const ANSWER_KEYS = ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'title'];
+const ANSWER_KEYS = ['assignedByName', 'code', 'customer', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'subject', 'title'];
 
 beforeAll(holdSessionClock);
 afterAll(releaseSessionClock);
@@ -57,7 +57,7 @@ describe('AC-1: the Engineer is told the status of their own task, in every stat
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     const body = record.parse(await response.json());
-    expect(body).toMatchObject({ id: owned(), code: task().code, status, title: 'Invented task', notes: 'Invented notes.', customerName: null });
+    expect(body).toMatchObject({ id: owned(), code: task().code, status, title: 'Invented task', subject: 'Invented subject', notes: 'Invented notes.', customer: null, customerName: null });
     expect(body['deadlineAt']).toBe('2099-01-01T04:30:00.000Z');
   });
 

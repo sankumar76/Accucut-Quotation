@@ -1,33 +1,34 @@
 import { ACCEPT_JSON, isRecord, JSON_HEADERS, sendJson, type Fetch, type Outcome } from '../api-client';
 
 /**
- * The browser's side of the two routes behind choosing the customer (SCR-05; architecture section 6 "Safe options" and "Set customer"): read the list of
- * customers, and send the choice. Nothing here decides anything: whether the estimate is the person's, whether it is still a draft and whether the customer
- * exists are the server's, and this file only reads its answer (an answer of the wrong shape is a failure, not a crash). A customer is an ID and a name.
+ * The browser's side of the two routes behind changing the customer of an estimate (SCR-06; architecture sections 4.11 b and 6 "Assign context" and "Set customer"): read the customers to choose from, and
+ * send the choice. Only a Lead or an Admin changes the customer (CR-01 item 6, AQP-390), so only the review's dialog calls these. Nothing here decides anything: whether the estimate is still open to a change and
+ * whether the customer exists are the server's, and this file only reads its answer (an answer of the wrong shape is a failure, not a crash). A customer is an ID, a name and a short name.
  */
 
 export interface CustomerView {
   readonly id: string;
   readonly name: string;
+  readonly shortName: string;
 }
 
-const CUSTOMER_OPTIONS_PATH = '/api/v1/options/customers';
+const ASSIGN_CONTEXT_PATH = '/api/v1/options/assign-context';
 
 function toCustomer(value: unknown): CustomerView | null {
   if (!isRecord(value)) return null;
-  const { id, name } = value;
-  return typeof id === 'string' && id !== '' && typeof name === 'string' && name !== '' ? { id, name } : null;
+  const { id, name, shortName } = value;
+  return typeof id === 'string' && id !== '' && typeof name === 'string' && name !== '' && typeof shortName === 'string' && shortName !== '' ? { id, name, shortName } : null;
 }
 
-function toCustomerOptions(body: unknown): ReadonlyArray<CustomerView> | null {
-  if (!isRecord(body) || !Array.isArray(body['options'])) return null;
-  const customers = body['options'].map(toCustomer);
+function toCustomerChoices(body: unknown): ReadonlyArray<CustomerView> | null {
+  if (!isRecord(body) || !Array.isArray(body['customers'])) return null;
+  const customers = body['customers'].map(toCustomer);
   return customers.every((customer) => customer !== null) ? customers : null;
 }
 
-/** `GET /api/v1/options/customers`: the customers to choose from, by name. */
-export function loadCustomerOptions(doFetch: Fetch = fetch): Promise<Outcome<ReadonlyArray<CustomerView>>> {
-  return sendJson(doFetch, CUSTOMER_OPTIONS_PATH, { method: 'GET', headers: ACCEPT_JSON }, toCustomerOptions);
+/** `GET /api/v1/options/assign-context` (a Lead and an Admin only): the customers that are not deleted, by name, with their short names. */
+export function loadCustomerChoices(doFetch: Fetch = fetch): Promise<Outcome<ReadonlyArray<CustomerView>>> {
+  return sendJson(doFetch, ASSIGN_CONTEXT_PATH, { method: 'GET', headers: ACCEPT_JSON }, toCustomerChoices);
 }
 
 /** `PUT /api/v1/estimates/{id}/customer`: the answer is the customer the estimate is now for. */

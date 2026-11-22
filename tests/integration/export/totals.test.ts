@@ -62,7 +62,7 @@ beforeAll(async () => {
     configuration: { current: () => getCurrentVersion(configurations, cache), byId: (id) => getVersionById(configurations, id, cache) },
   });
   // A customer whose 15 rates are all 0 (the calculation test's own recipe), so the cost of a row is the one typed in AP.
-  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Invented zero-rate customer') RETURNING id::text");
+  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Invented zero-rate customer', left(md5('Invented zero-rate customer'), 10)) RETURNING id::text");
   zeroCustomerId = defined(customer.rows[0]).id;
   for (const item of SEED_PROCESS_ITEMS) await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) VALUES ($1::uuid, $2::uuid, 0)', [zeroCustomerId, item.id]);
 }, 120_000);

@@ -79,7 +79,7 @@ describe('AC-1, AC-2, AC-4: one row and one message per Engineer with an open ov
   it('queues digest:<engineerId>:<istDate>, To the Engineer, Cc the distinct active assigners (Lead and Admin), by user ID, and nothing for a task that is not open and overdue', async () => {
     const oldestByAdmin = await seed({ deadline: hoursBefore(30), assigner: adminId, title: 'Gearbox lid' });
     const byLeadOlder = await seed({ deadline: hoursBefore(10) });
-    const byLeadNewer = await seed({ deadline: hoursBefore(3), title: null });
+    const byLeadNewer = await seed({ deadline: hoursBefore(3), title: 'Pump base' });
     const meeras = await seed({ deadline: hoursBefore(1), engineer: otherEngineerId });
     const notYet = await seed({ deadline: new Date(AT_ELEVEN.getTime() + MILLISECONDS_PER_MINUTE) });
     const exactlyNow = await seed({ deadline: AT_ELEVEN });
@@ -164,7 +164,7 @@ describe('AC-1, AC-2, AC-4: one row and one message per Engineer with an open ov
   });
 
   it('finds none of the forbidden canary strings of the masters, the rate names or the formula markers in any captured message or outbox row', async () => {
-    const codes = [(await seed({ deadline: hoursBefore(1) })).code, (await seed({ deadline: hoursBefore(2), title: null, engineer: otherEngineerId })).code];
+    const codes = [(await seed({ deadline: hoursBefore(1) })).code, (await seed({ deadline: hoursBefore(2), title: 'Shaft guard', engineer: otherEngineerId })).code];
     await performDailyDigest(deps);
     await send();
     const forbidden = forbiddenStrings();

@@ -26,6 +26,8 @@ import type { EstimateUse } from '../../src/lib/errors';
 export interface FakeCustomer {
   id: string;
   name: string;
+  /** Unique ignoring letter case over every customer, a deleted one's included (CR-01 item 6). */
+  shortName: string;
   phone: string | null;
   email: string | null;
   address: string | null;
@@ -37,6 +39,11 @@ export interface FakeCustomer {
 }
 
 const duplicate = (): MasterConstraintError => new MasterConstraintError('customer-name', { cause: new Error('duplicate') });
+const duplicateShortName = (): MasterConstraintError => new MasterConstraintError('customer-short-name', { cause: new Error('duplicate') });
+
+let shortNameCounter = 0;
+/** A short name no other fake customer has: the fakes of one test file never repeat one, so a test that does not care about it needs not pass one. */
+const nextShortName = (): string => `FK${String((shortNameCounter += 1))}`;
 
 const sameId = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
 
@@ -45,11 +52,11 @@ export function fakeCustomer(
   records: ReadonlyArray<ProcessItemRecord>,
   name: string,
   values: Readonly<Record<string, string>> = {},
-  contact: Partial<Pick<FakeCustomer, 'phone' | 'email' | 'address'>> = {},
+  contact: Partial<Pick<FakeCustomer, 'phone' | 'email' | 'address' | 'shortName'>> = {},
 ): FakeCustomer {
   const own = new Map(records.map((record) => [record.id, record.defaultValue]));
   for (const [itemId, value] of Object.entries(values)) own.set(itemId, value);
-  return { id: randomUUID(), name, phone: contact.phone ?? null, email: contact.email ?? null, address: contact.address ?? null, deleted: false, openEstimates: [], values: own };
+  return { id: randomUUID(), name, shortName: contact.shortName ?? nextShortName(), phone: contact.phone ?? null, email: contact.email ?? null, address: contact.address ?? null, deleted: false, openEstimates: [], values: own };
 }
 
 export function createFakeCustomerMethods(records: ReadonlyArray<ProcessItemRecord>, customers: FakeCustomer[]): CustomerMethods {
@@ -57,6 +64,8 @@ export function createFakeCustomerMethods(records: ReadonlyArray<ProcessItemReco
   const find = (id: string): FakeCustomer | undefined => listed().find((customer) => sameId(customer.id, id));
   const taken = (name: string, exceptId?: string): boolean =>
     customers.some((customer) => customer.name.toLowerCase() === name.toLowerCase() && (exceptId === undefined || !sameId(customer.id, exceptId)));
+  const shortNameTaken = (shortName: string, exceptId?: string): boolean =>
+    customers.some((customer) => customer.shortName.toLowerCase() === shortName.toLowerCase() && (exceptId === undefined || !sameId(customer.id, exceptId)));
   const ratesOf = (customer: FakeCustomer): CustomerRateRecord[] =>
     records.flatMap((record) => {
       const value = customer.values.get(record.id);
@@ -65,6 +74,7 @@ export function createFakeCustomerMethods(records: ReadonlyArray<ProcessItemReco
   const record = (customer: FakeCustomer): CustomerRecord => ({
     id: customer.id,
     name: customer.name,
+    shortName: customer.shortName,
     phone: customer.phone,
     email: customer.email,
     address: customer.address,
@@ -89,6 +99,7 @@ export function createFakeCustomerMethods(records: ReadonlyArray<ProcessItemReco
 
     createCustomer(input: NewCustomer) {
       if (taken(input.name)) return Promise.reject(duplicate());
+      if (shortNameTaken(input.shortName)) return Promise.reject(duplicateShortName());
       const created = fakeCustomer(records, input.name, {}, input);
       customers.push(created);
       return Promise.resolve(detail(created));
@@ -98,7 +109,9 @@ export function createFakeCustomerMethods(records: ReadonlyArray<ProcessItemReco
       const found = find(id);
       if (found === undefined) return Promise.resolve(false);
       if (changes.name !== undefined && taken(changes.name, found.id)) return Promise.reject(duplicate());
+      if (changes.shortName !== undefined && shortNameTaken(changes.shortName, found.id)) return Promise.reject(duplicateShortName());
       if (changes.name !== undefined) found.name = changes.name;
+      if (changes.shortName !== undefined) found.shortName = changes.shortName;
       if (changes.phone !== undefined) found.phone = changes.phone;
       if (changes.email !== undefined) found.email = changes.email;
       if (changes.address !== undefined) found.address = changes.address;

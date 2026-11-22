@@ -23,7 +23,7 @@ export const estimateIdParamsSchema = z.strictObject({ id: z.string().max(MAX_ID
 /** `PUT /api/v1/estimates/{id}/customer`: the customer chosen. A field that is left out is read as empty, and the service names it. */
 export const setCustomerBodySchema = z.strictObject({ customerId: z.string().max(MAX_ID_LENGTH).default('') });
 
-const customerChoiceSchema = z.strictObject({ id: z.string().min(1), name: z.string().min(1) });
+const customerChoiceSchema = z.strictObject({ id: z.string().min(1), name: z.string().min(1), shortName: z.string().min(1) });
 
 /** The estimate and the customer it is now for. */
 export const estimateCustomerSchema = z.strictObject({

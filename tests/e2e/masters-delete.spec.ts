@@ -2,8 +2,8 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
 
-import { createDisposableUser } from './support/auth';
-import { API, JSON_HEADERS, makeCustomer, newCustomerName, openCustomers, rowOf, type MadeCustomer } from './support/customers';
+import { createDisposableUser, setCanaryCustomer } from './support/auth';
+import { API, makeCustomer, newCustomerName, openCustomers, rowOf, type MadeCustomer } from './support/customers';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
 import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
 
@@ -26,8 +26,7 @@ const deleteButton = (page: Page, name: string) => rowOf(page, name).getByRole('
 /** Puts the customer on the draft estimate of a person made for this test (the estimate has the ID of its owner, `estimate-recipe.ts`). Returns the task code. */
 async function putOnADraftEstimate(page: Page, customer: MadeCustomer, testInfo: TestInfo): Promise<string> {
   const owner = await createDisposableUser('scan', testInfo);
-  const response = await page.request.put(`${DEVELOPMENT_URL}/api/v1/estimates/${owner.id}/customer`, { headers: JSON_HEADERS, data: { customerId: customer.id } });
-  expect(response.status()).toBe(200);
+  await setCanaryCustomer(owner.id, customer.id);
   return canaryTaskCodeFor(owner.id);
 }
 

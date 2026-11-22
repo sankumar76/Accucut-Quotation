@@ -10,6 +10,7 @@ import {
   INVENTED_MATERIAL,
   INVENTED_RATE,
   customerName,
+  customerShortName,
   mapLimit,
   materialName,
   processItemName,
@@ -70,7 +71,7 @@ async function ensureCustomers(admin: Session, config: LoadConfig): Promise<Read
   const missing = Array.from({ length: Math.max(0, config.customers - have) }, (_, n) => have + n + 1);
   const created = new Map<number, string>();
   await mapLimit(missing, SEED_CONCURRENCY, async (n) => {
-    const reply = await mustCall(admin, 'adding a customer', 'POST', '/api/v1/customers', CREATED, { json: { name: customerName(n) } });
+    const reply = await mustCall(admin, 'adding a customer', 'POST', '/api/v1/customers', CREATED, { json: { name: customerName(n), shortName: customerShortName(n) } });
     const parsed = idOnly.safeParse(jsonOf(reply));
     if (!parsed.success) throw new Error('adding a customer answered in a shape the script does not know');
     created.set(n, parsed.data.id);

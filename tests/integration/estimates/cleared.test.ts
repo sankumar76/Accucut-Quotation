@@ -10,6 +10,7 @@ import { costsSchema, type CostsView } from '@/server/views/schemas/costs';
 import { type CalculationDatabase, idOf, openCalculationDatabase } from '../../support/calculation-database';
 import { defined } from '../../support/defined';
 import { pngOfSize, smallPng } from '../../support/pictures';
+import { changeContext } from '../../support/customer-change';
 
 /**
  * STORY-06.04 AC-1, AC-2, AC-3 and AC-6 (FR-100, FR-101, FR-061; architecture sections 4.4 and 4.8) against real PostgreSQL in a throwaway database, as the **runtime role**: the matrix of every writer of an
@@ -65,7 +66,7 @@ async function revisionOf(nodeId: string): Promise<number> {
 
 async function newCustomer(): Promise<string> {
   customerCounter += 1;
-  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text AS id', [`Cleared Customer ${String(customerCounter)}`]);
+  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text AS id', [`Cleared Customer ${String(customerCounter)}`]);
   return defined(rows[0]).id;
 }
 
@@ -95,7 +96,7 @@ const ADDS_AN_EMPTY_PART: ReadonlySet<string> = new Set(['a part added', 'a part
 const WRITERS: ReadonlyArray<readonly [string, (world: World) => Promise<unknown>]> = [
   ['a typed number', async (world) => db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.child, revision: await revisionOf(world.child), values: { [idOf('J')]: '91' } })],
   ['Remarks', async (world) => db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.top, revision: await revisionOf(world.top), values: { [idOf('AJ')]: 'Deburr the edge.' } })],
-  ['the customer', async (world) => db.estimateService.setCustomer(lead(), world.estimateId, await newCustomer())],
+  ['the customer', async (world) => db.estimateService.setCustomer(lead(), changeContext(lead()), world.estimateId, await newCustomer())],
   ['a part added', async (world) => db.estimateService.addPart(lead(), world.estimateId, { kind: 'beside', nodeId: world.top })],
   [
     'a part deleted',
@@ -176,7 +177,7 @@ describe('AC-2: a save with no real change, and a change that is changed back', 
     const before = await revisions(world.estimateId);
     await db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.child, revision: await revisionOf(world.child), values: { [idOf('AJ')]: '  Same note  ' } });
     await db.estimateService.saveInputs(lead(), world.estimateId, { nodeId: world.child, revision: await revisionOf(world.child), values: { [idOf('AJ')]: 'Same note' } });
-    await db.estimateService.setCustomer(lead(), world.estimateId, db.customerId);
+    await db.estimateService.setCustomer(lead(), changeContext(lead()), world.estimateId, db.customerId);
     expect(await revisions(world.estimateId)).toEqual(before);
     expect((await costsOf(world.estimateId)).state).toBe('current');
   });
