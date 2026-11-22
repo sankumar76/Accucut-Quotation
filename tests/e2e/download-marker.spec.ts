@@ -52,6 +52,8 @@ async function expectFitsAndAccessible(page: Page): Promise<void> {
 
 test.describe('AC-5, AC-7, AC-8: the marker for a Lead', () => {
   test('"Not downloaded" before a download, "Downloaded 1×" with the last person and time after it, on SCR-10, SCR-06 and the Closed tab', async ({ page }, testInfo) => {
+    // Five page loads, each scanned by axe, on the development server: the budget of one test is not enough for them (AQP-340).
+    test.slow();
     const estimate = await approvedEstimate(page, testInfo);
 
     await page.goto(`/estimates/${estimate.code}/export`);
@@ -78,6 +80,8 @@ test.describe('AC-5, AC-7, AC-8: the marker for a Lead', () => {
   });
 
   test('a Lead who downloads, unlocks and approves again sees amber "Changed since download", in words and an icon, on every screen; a new download makes it "Downloaded 2×"', async ({ page }, testInfo) => {
+    // Setup by the API (download, unlock, recalculate, approve) and four scanned page loads (AQP-340).
+    test.slow();
     const estimate = await approvedEstimate(page, testInfo);
     await download(page, estimate.owner.id);
     await approveAgain(page, estimate);
