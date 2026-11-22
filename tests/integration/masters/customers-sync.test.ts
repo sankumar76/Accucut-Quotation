@@ -8,6 +8,7 @@ import { defined } from '../../support/defined';
 import { createLateFailingRunner } from '../../support/late-failure-runner';
 
 import { itemIds, openCustomerDefaults, resetCustomerTables } from './customers-support';
+import { shortNameOf } from '../../support/customer-short-name';
 
 /**
  * STORY-02.02 T3, T6 (AC-4, AC-6) against real PostgreSQL in a throwaway database: the synchronisation of SPEC section 4.2 rules 3 and 5 (a Process
@@ -44,7 +45,7 @@ beforeEach(() => openCustomerDefaults(db));
 afterEach(() => resetCustomerTables(db));
 
 async function customerNamed(name: string) {
-  return db.mastersService.createCustomer(by(), { name, phone: null, email: null, address: null });
+  return db.mastersService.createCustomer(by(), { name, shortName: shortNameOf(name), phone: null, email: null, address: null });
 }
 
 async function ratesCount(customerId: string): Promise<number> {
@@ -89,7 +90,7 @@ describe('AC-4 (T3): a Process Master item added or deleted reaches every custom
   });
 
   it('adds the rate for 100 customers with one statement: 100 rows at the default, in a read that does not grow with the customers', async () => {
-    await db.owner.query(`INSERT INTO customers (name) SELECT 'Invented bulk customer ' || n FROM generate_series(1, 100) AS n`);
+    await db.owner.query(`INSERT INTO customers (name, short_name) SELECT 'Invented bulk customer ' || n, 'BLK' || n FROM generate_series(1, 100) AS n`);
     await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) SELECT c.id, pi.id, pi.default_value FROM customers c CROSS JOIN process_items pi');
     const item = await db.mastersService.createProcessItem(by(), NEW_RATE);
     const { rows } = await db.owner.query<{ count: string; distinct: string }>(
@@ -133,7 +134,7 @@ describe('AC-4, AC-6 (DEF-017): an item\'s change and its sync commit together o
   it('create: no customer, no rate row and no entry is left', async () => {
     const entries = await entryCount(db);
     const service = db.buildMastersService({ transactions: failingAfterTheLastStep() });
-    await expect(service.createCustomer(by(), { name: 'Late-failure-create', phone: null, email: null, address: null })).rejects.toThrow(LATE_FAILURE);
+    await expect(service.createCustomer(by(), { name: 'Late-failure-create', shortName: shortNameOf('Late-failure-create'), phone: null, email: null, address: null })).rejects.toThrow(LATE_FAILURE);
     expect((await db.mastersService.listCustomers()).map((customer) => customer.name)).toEqual([]);
     const { rows } = await db.owner.query('SELECT 1 FROM customer_rates');
     expect(rows).toEqual([]);
@@ -166,7 +167,7 @@ describe('AC-4, AC-6 (DEF-017): an item\'s change and its sync commit together o
     const before = await db.mastersService.getCustomer(customer.id);
     const entries = await entryCount(db);
     const unrecorded = { ...by(), actorLabel: '' };
-    await expect(db.mastersService.createCustomer(unrecorded, { name: 'Refused-create', phone: null, email: null, address: null })).rejects.toMatchObject({ reason: 'shape' });
+    await expect(db.mastersService.createCustomer(unrecorded, { name: 'Refused-create', shortName: shortNameOf('Refused-create'), phone: null, email: null, address: null })).rejects.toMatchObject({ reason: 'shape' });
     await expect(db.mastersService.updateCustomer(unrecorded, customer.id, { name: 'Refused-edit' })).rejects.toMatchObject({ reason: 'shape' });
     await expect(db.mastersService.resetCustomerRates(unrecorded, customer.id)).rejects.toMatchObject({ reason: 'shape' });
     expect(await db.mastersService.getCustomer(customer.id)).toEqual(before);

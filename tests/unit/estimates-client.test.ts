@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { chooseCustomer, loadCustomerOptions } from '@/lib/estimates/estimates-client';
+import { chooseCustomer, loadCustomerChoices } from '@/lib/estimates/estimates-client';
 
 /**
- * STORY-05.01 T4 (AC-2, AC-3, AC-5): the browser's calls to the customer list and to "Set customer", and the reading of their answers. `fetch` is replaced, so the
- * test answers for the server. Every name and ID is invented.
+ * STORY-05.01 T4 (AC-2, AC-3, AC-5), moved to SCR-06 by CR-01 item 6 (AQP-390): the browser's calls to the customers a Lead or an Admin chooses from (the assign context) and to "Set customer", and the
+ * reading of their answers. `fetch` is replaced, so the test answers for the server. Every name and ID is invented.
  */
 
-const ALPHA = { id: '00000000-0000-4000-8000-000000000c01', name: 'Brightwater Controls' };
-const BETA = { id: '00000000-0000-4000-8000-000000000c02', name: 'Marlow Agro Systems' };
+const ALPHA = { id: '00000000-0000-4000-8000-000000000c01', name: 'Brightwater Controls', shortName: 'BWC' };
+const BETA = { id: '00000000-0000-4000-8000-000000000c02', name: 'Marlow Agro Systems', shortName: 'MAS' };
 const ESTIMATE = '00000000-0000-4000-8000-0000000000e1';
 
 function answer(body: unknown, status = 200): Response {
@@ -22,31 +22,33 @@ function fetching(response: Response | Error) {
   });
 }
 
-describe('loadCustomerOptions (AC-2)', () => {
-  it('reads the list of customers from GET /api/v1/options/customers, as an ID and a name each', async () => {
-    const doFetch = fetching(answer({ options: [ALPHA, BETA] }));
-    expect(await loadCustomerOptions(doFetch)).toEqual({ status: 'ok', value: [ALPHA, BETA] });
-    expect(doFetch.mock.calls[0]?.[0]).toBe('/api/v1/options/customers');
+describe('loadCustomerChoices (AC-2)', () => {
+  it('reads the customers from GET /api/v1/options/assign-context, as an ID, a name and a short name each, and nothing else of the answer', async () => {
+    const doFetch = fetching(answer({ engineers: [{ id: 'e1', name: 'Invented Engineer' }], customers: [ALPHA, BETA], alertsEnabled: true }));
+    expect(await loadCustomerChoices(doFetch)).toEqual({ status: 'ok', value: [ALPHA, BETA] });
+    expect(doFetch.mock.calls[0]?.[0]).toBe('/api/v1/options/assign-context');
     expect(doFetch.mock.calls[0]?.[1]).toMatchObject({ method: 'GET', credentials: 'same-origin' });
   });
 
   it('an empty list is a list', async () => {
-    expect(await loadCustomerOptions(fetching(answer({ options: [] })))).toEqual({ status: 'ok', value: [] });
+    expect(await loadCustomerChoices(fetching(answer({ engineers: [], customers: [], alertsEnabled: false })))).toEqual({ status: 'ok', value: [] });
   });
 
   it.each([
-    ['a body that is not the list', answer({ nope: true })],
-    ['a customer without a name', answer({ options: [{ id: ALPHA.id }] })],
-    ['a customer with an empty ID', answer({ options: [{ id: '', name: 'x' }] })],
-    ['an entry that is not an object', answer({ options: ['Brightwater'] })],
+    ['a body that is not the answer', answer({ nope: true })],
+    ['a customer without a name', answer({ customers: [{ id: ALPHA.id, shortName: 'BWC' }] })],
+    ['a customer without a short name', answer({ customers: [{ id: ALPHA.id, name: ALPHA.name }] })],
+    ['a customer with an empty ID', answer({ customers: [{ id: '', name: 'x', shortName: 'X' }] })],
+    ['an entry that is not an object', answer({ customers: ['Brightwater'] })],
+    ['the old list of the customers route', answer({ options: [{ id: ALPHA.id, name: ALPHA.name }] })],
     ['a body that is not JSON', new Response('<html>', { status: 200 })],
   ])('is "failed" for %s, never a list that might be wrong', async (_name, response) => {
-    expect(await loadCustomerOptions(fetching(response))).toEqual({ status: 'failed' });
+    expect(await loadCustomerChoices(fetching(response))).toEqual({ status: 'failed' });
   });
 
   it('is "failed" when the network fails or the server faults', async () => {
-    expect(await loadCustomerOptions(fetching(new Error('offline')))).toEqual({ status: 'failed' });
-    expect(await loadCustomerOptions(fetching(answer({ code: 'INTERNAL_ERROR', title: 'x' }, 500)))).toEqual({ status: 'failed' });
+    expect(await loadCustomerChoices(fetching(new Error('offline')))).toEqual({ status: 'failed' });
+    expect(await loadCustomerChoices(fetching(answer({ code: 'INTERNAL_ERROR', title: 'x' }, 500)))).toEqual({ status: 'failed' });
   });
 });
 

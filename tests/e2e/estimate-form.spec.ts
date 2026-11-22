@@ -3,8 +3,8 @@ import { expect, test } from '@playwright/test';
 import { defined } from '../support/defined';
 
 import { useFreshAddress } from './support/auth';
-import { horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree, waitForForm } from './support/part-form';
+import { horizontalOverflow } from './support/design-system';
+import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, leastFieldHeight, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree, waitForForm } from './support/part-form';
 
 /**
  * STORY-05.03 T8 (AC-1 to AC-6, AC-8, AC-9; review SQR-11): the part form of SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server. Each test
@@ -73,8 +73,10 @@ test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
 
   test('AC-1: the cards sit one above the other on a phone and side by side from a tablet', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
-    const first = defined(await page.getByRole('region', { name: '01 Part Details' }).boundingBox());
-    const second = defined(await page.getByRole('region', { name: '02 Material and Dimensions' }).boundingBox());
+    // The compact layout (AQP-388) gives a card a share of its row by its number of fields: 01 and 02 (six each) fill a row of their own, so from a tablet the pair that shares a row is 03 and 04 (two each).
+    const [firstName, secondName] = isPhone(page) ? ['01 Part Details', '02 Material and Dimensions'] : ['03 Cutting Process', '04 Bending'];
+    const first = defined(await page.getByRole('region', { name: firstName }).boundingBox());
+    const second = defined(await page.getByRole('region', { name: secondName }).boundingBox());
     // What the layout is, so a failure says why: the width of the form and the columns the grid made.
     const layout = await partForm(page).evaluate((form) => ({
       formWidth: form.getBoundingClientRect().width,
@@ -230,8 +232,9 @@ test.describe('AC-9: the screen', () => {
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectFormAccessible(page);
 
+    const fieldHeight = await leastFieldHeight(page);
     for (const letter of ['A', 'B', 'D', 'H', 'E', 'F', 'J', 'K', 'L', 'N']) {
-      expect((await control(page, letter).boundingBox())?.height ?? 0, letter).toBeGreaterThanOrEqual(TOUCH_TARGET);
+      expect((await control(page, letter).boundingBox())?.height ?? 0, letter).toBeGreaterThanOrEqual(fieldHeight);
     }
     for (const label of ['Sl. No', 'Part No.', 'Description', 'QTY per Assy', 'Material in Drawing', 'Material Considered', 'Length', 'Width', 'Thickness', 'Part Weight']) {
       await expect(partForm(page).locator('label', { hasText: label }).first(), label).toBeVisible();

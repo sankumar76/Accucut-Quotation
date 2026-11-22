@@ -14,7 +14,8 @@ export const GET = withRoute({
 
 /**
  * `POST /api/v1/customers` (AC-1, AC-6): adds a customer with a rate for every Process Master item at its current default, and records who did it. A name that
- * is blank, too long or taken, or an e-mail address that does not look like one, is 422 with the field named; nothing is stored.
+ * is blank, too long or taken, a short name (CR-01 item 6) that is blank, too long, has a control character or is taken, or an e-mail address that does not look like one, is 422 with the
+ * field named; nothing is stored.
  */
 export const POST = withRoute({
   route: '/api/v1/customers',
@@ -25,6 +26,6 @@ export const POST = withRoute({
   handler: ({ user, requestId, body }) =>
     getMastersService().createCustomer(
       { actorId: user.id, actorLabel: user.name, requestId },
-      { name: body.name, phone: body.phone ?? null, email: body.email ?? null, address: body.address ?? null },
+      { name: body.name, shortName: body.shortName, phone: body.phone ?? null, email: body.email ?? null, address: body.address ?? null },
     ),
 });

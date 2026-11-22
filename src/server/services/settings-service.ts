@@ -5,7 +5,7 @@ import { mailFailureSince } from '../../lib/mail/failure-window';
 import { deriveBackupStatus } from '../../lib/settings/backup-status';
 import { senderProblems, trimmedSender, type AlertSettingsInput } from '../../lib/settings/validation';
 import type { Clock } from '../../lib/time';
-import { renderMail } from '../mail/layout';
+import { PORTAL_NAME, renderMail } from '../mail/layout';
 import type { MailService } from '../mail/mail-service';
 import type { EmailOutboxRepository } from '../repositories/email-outbox-repository';
 import type { JobRunRepository } from '../repositories/job-run-repository';
@@ -85,13 +85,13 @@ export interface SettingsServiceDependencies {
   readonly clock: Clock;
 }
 
-const TEST_SUBJECT = 'Accucut Quotation Portal: test e-mail';
+const TEST_SUBJECT = `${PORTAL_NAME}: test e-mail`;
 const NO_SENDER_MESSAGE = 'Save a sender e-mail address first. The test e-mail is sent from it.';
 
 function testMessage(to: string) {
   const { html, text } = renderMail({
     heading: 'Test e-mail',
-    paragraphs: ['This is a test e-mail from the Accucut Quotation Portal.', 'If you can read it, the mail server accepted the sender saved in Settings. You do not need to reply.'],
+    paragraphs: [`This is a test e-mail from the ${PORTAL_NAME}.`,'If you can read it, the mail server accepted the sender saved in Settings. You do not need to reply.'],
   });
   return { to, subject: TEST_SUBJECT, bodyHtml: html, bodyText: text };
 }

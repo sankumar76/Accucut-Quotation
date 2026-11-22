@@ -16,7 +16,7 @@ import { DEVELOPMENT_URL } from './support/servers';
 const DAY_MS = 86_400_000;
 const PRICE_WORDS = /₹|\$|€|price|approved by|override|reason|formula/i;
 const APPROVAL_WORDS = /₹|\$|€|approved by|override|reason|formula/i;
-const ANSWER_KEYS = ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'title'];
+const ANSWER_KEYS = ['assignedByName', 'code', 'customer', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'subject', 'title'];
 
 const tab = (page: Page, name: string): Locator => page.getByRole('tab', { name: new RegExp(`^${name}`) });
 const rowOf = (page: Page, code: string): Locator => page.locator('[data-task-code]:visible', { hasText: code });

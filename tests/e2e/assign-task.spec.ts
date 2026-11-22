@@ -1,7 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 import { z } from 'zod';
 
-import { E2E_ENGINEER } from './support/auth';
+import { CUSTOMER_CANARIES } from '../support/customer-canary';
+import { shortNameOf } from '../support/customer-short-name';
+import { defined } from '../support/defined';
+
+import { E2E_ENGINEER, ensureCanaryCustomers } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
 import { DEVELOPMENT_URL } from './support/servers';
 
@@ -15,12 +19,22 @@ import { DEVELOPMENT_URL } from './support/servers';
  */
 
 const HEADERS = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
+/** The customer of the Customer master that the specs choose (CR-01 item 6): the canary customer, whose short name the E2E database makes from its name. */
+const CUSTOMER = defined(CUSTOMER_CANARIES[0]);
+const CUSTOMER_SHORT_NAME = shortNameOf(CUSTOMER.name);
+const CUSTOMER_MESSAGE = 'Choose a customer.';
+const TITLE_MESSAGE = 'Enter a title.';
+const SUBJECT_MESSAGE = 'Enter the subject.';
 const FUTURE_DATE = '2099-12-31';
 const FUTURE_TIME = '10:00';
 const PATH_MESSAGE = 'Enter the network folder path. It starts with two backslashes, like \\\\server\\share\\RFQ-123.';
 const DEADLINE_MESSAGE = 'Choose a deadline later than now.';
 const ENGINEER_MESSAGE = 'Choose an Engineer.';
 const LINK_NOTE = 'Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer.';
+
+test.beforeAll(async () => {
+  await ensureCanaryCustomers();
+});
 
 function pathFor(testInfo: { readonly project: { readonly name: string }; readonly workerIndex: number }): string {
   return `\\\\e2e-server\\e2e-share\\RFQ-${testInfo.project.name}-${testInfo.workerIndex}-${Date.now()}`;
@@ -35,10 +49,12 @@ async function openAssign(page: Page): Promise<void> {
 
 async function fillValid(page: Page, folderPath: string): Promise<void> {
   await page.getByLabel('Engineer').selectOption({ label: E2E_ENGINEER.name });
+  await page.getByLabel('Customer Name').selectOption({ label: CUSTOMER.name });
   await page.getByLabel('Network folder path').fill(folderPath);
   await page.getByLabel('Deadline date').fill(FUTURE_DATE);
   await page.getByLabel('Deadline time').fill(FUTURE_TIME);
   await page.getByLabel('Title').fill('E2E hopper cover');
+  await page.getByLabel('Subject (project name)').fill('E2E feed hopper');
   await page.getByLabel('Notes').fill('E2E notes for the Engineer.');
 }
 
@@ -48,8 +64,18 @@ test.describe('the screen (AC-7)', () => {
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
 
-    for (const label of ['Engineer', 'Network folder path', 'Deadline date', 'Deadline time', 'Title', 'Notes']) await expect(page.getByLabel(label).first()).toBeVisible();
-    for (const control of [page.getByLabel('Engineer'), page.getByLabel('Network folder path'), page.getByLabel('Deadline date'), page.getByLabel('Deadline time'), page.getByLabel('Title')]) {
+    for (const label of ['Engineer', 'Customer Name', 'Customer Short Name', 'Network folder path', 'Deadline date', 'Deadline time', 'Title', 'Subject (project name)', 'Notes']) {
+      await expect(page.getByLabel(label).first()).toBeVisible();
+    }
+    for (const control of [
+      page.getByLabel('Engineer'),
+      page.getByLabel('Customer Name'),
+      page.getByLabel('Network folder path'),
+      page.getByLabel('Deadline date'),
+      page.getByLabel('Deadline time'),
+      page.getByLabel('Title'),
+      page.getByLabel('Subject (project name)'),
+    ]) {
       expect((await control.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     }
     for (const name of ['Assign task', 'Cancel']) {
@@ -66,6 +92,47 @@ test.describe('the screen (AC-7)', () => {
     const width = page.viewportSize()?.width ?? 0;
     if (form !== null && side !== null && width < 1024) expect(side.y).toBeGreaterThanOrEqual(form.y + form.height - 1);
     if (form !== null && side !== null && width >= 1024) expect(side.x).toBeGreaterThan(form.x + form.width - 1);
+  });
+});
+
+test.describe('the customer, its short name and the subject (CR-01 item 6, AQP-390 AC-1, AC-2, AC-3)', () => {
+  test('AC-2: Customer Short Name is a read-only output with its label, empty until a customer is chosen, then the master\'s short name at once, and empty again when the choice is taken back', async ({ page }) => {
+    await openAssign(page);
+    const shortName = page.getByLabel('Customer Short Name');
+    await expect(shortName).toHaveText('');
+    expect(await shortName.evaluate((element) => element.tagName)).toBe('OUTPUT');
+
+    await page.getByLabel('Customer Name').selectOption({ label: CUSTOMER.name });
+    await expect(shortName).toHaveText(CUSTOMER_SHORT_NAME);
+    await page.getByLabel('Customer Name').selectOption({ label: 'Choose the customer' });
+    await expect(shortName).toHaveText('');
+  });
+
+  test('AC-1: Customer Name lists the customers that are not deleted by name, with a placeholder first', async ({ page }) => {
+    await openAssign(page);
+    const names = await page.getByLabel('Customer Name').locator('option').allTextContents();
+    expect(names[0]).toBe('Choose the customer');
+    expect(names).toContain(CUSTOMER.name);
+    // The database's collation sets the order (it ignores spaces and hyphens at the first level), so the order is checked on the letters and digits alone.
+    const letters = names.slice(1).map((name) => name.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    expect(letters).toEqual([...letters].sort());
+  });
+
+  test('AC-3: a subject of exactly 80 characters is accepted and one more is refused with the number from the limit; a title is required', async ({ page }, testInfo) => {
+    await openAssign(page);
+    await fillValid(page, pathFor(testInfo));
+    await page.getByLabel('Subject (project name)').fill('S'.repeat(81));
+    await page.getByLabel('Title').fill('');
+    await page.getByRole('button', { name: 'Assign task' }).click();
+    const summary = page.getByRole('alert').filter({ hasText: '2 things need fixing before this task can be assigned.' });
+    await expect(summary.getByRole('link', { name: 'Keep the subject under 80 characters.' })).toBeVisible();
+    await expect(summary.getByRole('link', { name: TITLE_MESSAGE })).toBeVisible();
+    await expect(page.getByLabel('Title')).toBeFocused();
+
+    await page.getByLabel('Title').fill('E2E title');
+    await page.getByLabel('Subject (project name)').fill('S'.repeat(80));
+    await page.getByRole('button', { name: 'Assign task' }).click();
+    await expect(page.getByRole('status').filter({ hasText: `assigned to ${E2E_ENGINEER.name}.` })).toBeVisible();
   });
 });
 
@@ -165,9 +232,9 @@ test.describe('a form that cannot be assigned (AC-3)', () => {
     await openAssign(page);
     await page.getByRole('button', { name: 'Assign task' }).click();
 
-    const summary = page.getByRole('alert').filter({ hasText: '3 things need fixing before this task can be assigned.' });
+    const summary = page.getByRole('alert').filter({ hasText: '6 things need fixing before this task can be assigned.' });
     await expect(summary).toBeVisible();
-    for (const message of [ENGINEER_MESSAGE, PATH_MESSAGE, DEADLINE_MESSAGE]) {
+    for (const message of [ENGINEER_MESSAGE, CUSTOMER_MESSAGE, PATH_MESSAGE, DEADLINE_MESSAGE, TITLE_MESSAGE, SUBJECT_MESSAGE]) {
       await expect(summary.getByRole('link', { name: message })).toBeVisible();
       await expect(page.getByRole('main').getByText(message).first()).toBeVisible();
     }
@@ -185,6 +252,8 @@ test.describe('a form that cannot be assigned (AC-3)', () => {
   test('AC-3: a path that is not a UNC path, a deadline in the past and a long title and notes are refused with the spec’s words, and what was typed is kept', async ({ page }) => {
     await openAssign(page);
     await page.getByLabel('Engineer').selectOption({ label: E2E_ENGINEER.name });
+    await page.getByLabel('Customer Name').selectOption({ label: CUSTOMER.name });
+    await page.getByLabel('Subject (project name)').fill('E2E feed hopper');
     await page.getByLabel('Network folder path').fill('C:\\not\\a\\network\\path');
     await page.getByLabel('Deadline date').fill('2020-01-01');
     await page.getByLabel('Deadline time').fill('09:00');
@@ -205,6 +274,9 @@ test.describe('a form that cannot be assigned (AC-3)', () => {
   test('AC-3: a message goes when the field is changed, and the summary counts one thing in the singular', async ({ page }) => {
     await openAssign(page);
     await page.getByLabel('Engineer').selectOption({ label: E2E_ENGINEER.name });
+    await page.getByLabel('Customer Name').selectOption({ label: CUSTOMER.name });
+    await page.getByLabel('Title').fill('E2E hopper cover');
+    await page.getByLabel('Subject (project name)').fill('E2E feed hopper');
     await page.getByLabel('Deadline date').fill(FUTURE_DATE);
     await page.getByLabel('Deadline time').fill(FUTURE_TIME);
     await page.getByRole('button', { name: 'Assign task' }).click();
@@ -228,31 +300,67 @@ test.describe('the routes (AC-3, AC-5, AC-6)', () => {
   test('AC-3, AC-6: the API refuses an unknown Engineer and a javascript: path with 422, and keeps script text in the notes as text', async ({ page }, testInfo) => {
     const unknownEngineer = await page.request.post(`${DEVELOPMENT_URL}/api/v1/tasks`, {
       headers: HEADERS,
-      data: { engineerId: '00000000-0000-4000-8000-00000000dead', folderPath: pathFor(testInfo), deadline: `${FUTURE_DATE}T${FUTURE_TIME}` },
+      data: { engineerId: '00000000-0000-4000-8000-00000000dead', customerId: CUSTOMER.id, folderPath: pathFor(testInfo), deadline: `${FUTURE_DATE}T${FUTURE_TIME}`, title: 'E2E title', subject: 'E2E subject' },
     });
     expect(unknownEngineer.status()).toBe(422);
     expect(JSON.stringify(await unknownEngineer.json())).toContain(ENGINEER_MESSAGE);
 
+    // AC-5: a customer that does not exist is a 422 under customerId, together with the unknown Engineer (a body the schema accepts reaches the service, which reports both).
+    const unknownCustomer = await page.request.post(`${DEVELOPMENT_URL}/api/v1/tasks`, {
+      headers: HEADERS,
+      data: { engineerId: '00000000-0000-4000-8000-00000000dead', customerId: '00000000-0000-4000-8000-00000000dead', folderPath: pathFor(testInfo), deadline: `${FUTURE_DATE}T${FUTURE_TIME}`, title: 'E2E title', subject: 'E2E subject' },
+    });
+    expect(unknownCustomer.status()).toBe(422);
+    const refused = JSON.stringify(await unknownCustomer.json());
+    for (const message of [ENGINEER_MESSAGE, CUSTOMER_MESSAGE]) expect(refused).toContain(message);
+
     const scriptPath = await page.request.post(`${DEVELOPMENT_URL}/api/v1/tasks`, {
       headers: HEADERS,
-      data: { engineerId: '00000000-0000-4000-8000-00000000dead', folderPath: 'javascript:alert(1)', deadline: `${FUTURE_DATE}T${FUTURE_TIME}` },
+      data: { engineerId: '00000000-0000-4000-8000-00000000dead', customerId: CUSTOMER.id, folderPath: 'javascript:alert(1)', deadline: `${FUTURE_DATE}T${FUTURE_TIME}`, title: 'E2E title', subject: 'E2E subject' },
     });
     expect(scriptPath.status()).toBe(422);
     expect(JSON.stringify(await scriptPath.json())).toContain('Enter the network folder path.');
 
     const options = z
       // The one boolean of the settings a Lead may see (STORY-09.03 AC-6), and nothing else of them: no sender, no address.
-      .strictObject({ engineers: z.array(z.strictObject({ id: z.string(), name: z.string() })), alertsEnabled: z.boolean() })
+      .strictObject({
+        engineers: z.array(z.strictObject({ id: z.string(), name: z.string() })),
+        // The customers that are not deleted, with their short names and nothing else of them (CR-01 item 6, NFR-002).
+        customers: z.array(z.strictObject({ id: z.string(), name: z.string(), shortName: z.string() })),
+        alertsEnabled: z.boolean(),
+      })
       .parse(await (await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/assign-context`)).json());
     const ours = options.engineers.find((engineer) => engineer.name === E2E_ENGINEER.name);
     expect(ours).toBeDefined();
+    expect(options.customers.find((customer) => customer.id === CUSTOMER.id)).toEqual({ id: CUSTOMER.id, name: CUSTOMER.name, shortName: CUSTOMER_SHORT_NAME });
 
     const created = await page.request.post(`${DEVELOPMENT_URL}/api/v1/tasks`, {
       headers: HEADERS,
-      data: { engineerId: ours?.id, folderPath: pathFor(testInfo), deadline: `${FUTURE_DATE}T${FUTURE_TIME}`, title: '<script>alert(1)</script>', notes: '<img src=x onerror=alert(1)>' },
+      data: {
+        engineerId: ours?.id,
+        customerId: CUSTOMER.id,
+        folderPath: pathFor(testInfo),
+        deadline: `${FUTURE_DATE}T${FUTURE_TIME}`,
+        title: '<script>alert(1)</script>',
+        subject: '<b>E2E</b> subject',
+        notes: '<img src=x onerror=alert(1)>',
+      },
     });
     expect(created.status()).toBe(201);
-    expect(await created.json()).toMatchObject({ title: '<script>alert(1)</script>', notes: '<img src=x onerror=alert(1)>', estimate: { status: 'DRAFT', customerId: null } });
+    expect(await created.json()).toMatchObject({
+      title: '<script>alert(1)</script>',
+      subject: '<b>E2E</b> subject',
+      customer: { id: CUSTOMER.id, name: CUSTOMER.name, shortName: CUSTOMER_SHORT_NAME },
+      notes: '<img src=x onerror=alert(1)>',
+      estimate: { status: 'DRAFT', customerId: CUSTOMER.id },
+    });
+
+    // AC-5: the short name has no key in the body: a request that tries to send one is refused, and nothing is stored.
+    const typedShortName = await page.request.post(`${DEVELOPMENT_URL}/api/v1/tasks`, {
+      headers: HEADERS,
+      data: { engineerId: ours?.id, customerId: CUSTOMER.id, shortName: 'FAKE', folderPath: pathFor(testInfo), deadline: `${FUTURE_DATE}T${FUTURE_TIME}`, title: 'E2E title', subject: 'E2E subject' },
+    });
+    expect(typedShortName.status()).toBe(422);
   });
 
   test('AC-5: a signed-out caller gets 401 from both routes and no page', async ({ browser }) => {

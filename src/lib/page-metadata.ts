@@ -12,7 +12,9 @@
  * `tests/unit/metadata-coverage.test.ts` reads every page, and `tests/e2e/metadata.spec.ts` reads the HTML of the built app.
  */
 
-export const SITE_NAME = 'Accucut Quotation Portal';
+import { COMPANY_AND_PRODUCT_NAME } from './product-name';
+
+export const SITE_NAME = COMPANY_AND_PRODUCT_NAME;
 
 /** The root layout's title template: `%s` is the page's own title. Kept next to `renderedTitle`, which must say the same. */
 export const TITLE_TEMPLATE = `%s · ${SITE_NAME}`;

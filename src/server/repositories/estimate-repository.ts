@@ -19,23 +19,26 @@ import { clientFor, type Transaction } from './transaction';
  * **What leaves.** A customer is an ID and a name here, and nothing else: no contact detail and no rate is ever selected (BR-003, NFR-002).
  */
 
-/** A customer as a choice: the ID and the name. */
+/** A customer as a choice: the ID, the name and the short name (class Internal, CR-01 item 6). No contact detail and no rate. */
 export interface CustomerChoice {
   readonly id: string;
   readonly name: string;
+  readonly shortName: string;
 }
 
 /** What the workspace page needs of a task and its estimate. `engineerId` stays on the server: it decides who may open the page and is never sent on. */
 export interface WorkspaceRecord {
   readonly estimateId: string;
   readonly status: EstimateStatus;
-  /** Null until the Engineer chooses. A customer that was deleted after it was chosen is still named here. */
+  /** Null only for an estimate made before CR-01 item 6. A customer that was deleted after it was chosen is still named here. */
   readonly customer: CustomerChoice | null;
   readonly code: string;
   readonly engineerId: string;
   readonly folderPath: string;
   readonly deadlineAt: Date;
-  readonly title: string | null;
+  readonly title: string;
+  /** The project name (CR-01 item 6). */
+  readonly subject: string;
   readonly notes: string | null;
   /** The name of the Lead or Admin who assigned the task ("Notes from Kiran Bose: ...", UX-15). */
   readonly assignedByName: string;
@@ -89,6 +92,8 @@ export interface EstimateRepository {
   lockEstimate(id: string, tx: Transaction): Promise<EstimateLock | null>;
   /** The customer with this ID, locked for share; null for an unknown ID, a deleted customer or an ID that is not a UUID. */
   findActiveCustomer(id: string, tx: Transaction): Promise<CustomerChoice | null>;
+  /** The customer with this ID **whether or not it was deleted** (an estimate keeps naming a customer deleted since), without a lock; null for an unknown ID. The audit entry of a change names the customer it replaced. */
+  findCustomerChoice(id: string, tx: Transaction): Promise<CustomerChoice | null>;
   /**
    * The materials the estimate's parts name, **each locked for share in ascending ID order** until the transaction ends, with whether it was deleted (STORY-06.08 AC-10). The lock order is the estimate, then
    * the task, then the customer, then these, as the writers of a part's material take it (`lockMaterialForUse`), so there is no cycle with a material delete, which takes no estimate lock. A material is found by
@@ -152,11 +157,13 @@ const WORKSPACE_ROWS = z.array(
     status: STATUS,
     customerId: z.string().nullable(),
     customerName: z.string().nullable(),
+    customerShortName: z.string().nullable(),
     code: z.string(),
     engineerId: z.string(),
     folderPath: z.string(),
     deadlineAt: z.date(),
-    title: z.string().nullable(),
+    title: z.string(),
+    subject: z.string(),
     notes: z.string().nullable(),
     assignedByName: z.string(),
   }),
@@ -164,7 +171,7 @@ const WORKSPACE_ROWS = z.array(
 const LOCK_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, customerId: z.string().nullable(), inputsRevision: z.number().int(), taskCode: z.string() }));
 const BASIS_ROWS = z.array(z.strictObject({ status: STATUS, configVersionId: z.string().nullable() }));
 const ACCESS_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS }));
-const CUSTOMER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string() }));
+const CUSTOMER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string(), shortName: z.string() }));
 const MATERIAL_ROWS = z.array(z.strictObject({ id: z.string(), deleted: z.boolean() }));
 
 const isUuid = (id: string): boolean => z.uuid().safeParse(id).success;
@@ -175,9 +182,9 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
     findWorkspaceByCode: (code) =>
       withDatabaseErrors(async () => {
         const rows = await db.$queryRaw`
-          SELECT e.id::text AS "estimateId", e.status::text AS "status", c.id::text AS "customerId", c.name AS "customerName",
+          SELECT e.id::text AS "estimateId", e.status::text AS "status", c.id::text AS "customerId", c.name AS "customerName", c.short_name AS "customerShortName",
                  t.code AS "code", t.engineer_id::text AS "engineerId", t.folder_path AS "folderPath", t.deadline_at AS "deadlineAt",
-                 t.title AS "title", t.notes AS "notes", u.name AS "assignedByName"
+                 t.title AS "title", t.subject AS "subject", t.notes AS "notes", u.name AS "assignedByName"
           FROM tasks t
           JOIN estimates e ON e.task_id = t.id
           JOIN users u ON u.id = t.assigned_by
@@ -185,8 +192,9 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
           WHERE t.code = ${code}`;
         const [row] = WORKSPACE_ROWS.parse(rows);
         if (row === undefined) return null;
-        const { customerId, customerName, ...rest } = row;
-        return { ...rest, customer: customerId === null || customerName === null ? null : { id: customerId, name: customerName } };
+        const { customerId, customerName, customerShortName, ...rest } = row;
+        const customer = customerId === null || customerName === null || customerShortName === null ? null : { id: customerId, name: customerName, shortName: customerShortName };
+        return { ...rest, customer };
       }),
 
     findEstimateAccess: (id) =>
@@ -227,7 +235,14 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
       withDatabaseErrors(async () => {
         if (!isUuid(id)) return null;
         const rows = await clientFor(db, tx).$queryRaw`
-          SELECT id::text AS "id", name FROM customers WHERE id = ${id}::uuid AND deleted_at IS NULL FOR SHARE`;
+          SELECT id::text AS "id", name, short_name AS "shortName" FROM customers WHERE id = ${id}::uuid AND deleted_at IS NULL FOR SHARE`;
+        return CUSTOMER_ROWS.parse(rows)[0] ?? null;
+      }),
+
+    findCustomerChoice: (id, tx) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(id)) return null;
+        const rows = await clientFor(db, tx).$queryRaw`SELECT id::text AS "id", name, short_name AS "shortName" FROM customers WHERE id = ${id}::uuid`;
         return CUSTOMER_ROWS.parse(rows)[0] ?? null;
       }),
 

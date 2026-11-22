@@ -12,10 +12,12 @@
  * pixel font size in `src` outside `globals.css`. The brand colours of SCR-22 can replace the names when the design system gives e-mail its own palette.
  */
 
+import { COMPANY_AND_PRODUCT_NAME } from '../../lib/product-name';
+
 /** The content ID the HTML refers to the logo by (`<img src="cid:...">`). */
 export const LOGO_CONTENT_ID = 'accucut-logo@portal.invalid';
 
-export const PORTAL_NAME = 'Accucut Quotation Portal';
+export const PORTAL_NAME = COMPANY_AND_PRODUCT_NAME;
 
 export interface MailAction {
   /** The words of the button and of the plain-text line, for example "Open the task". */

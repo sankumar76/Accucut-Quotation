@@ -7,11 +7,12 @@ import { ButtonsSection, FormControlsSection } from '@/components/features/desig
 import { BadgesNoticesSection, NodeIconsSection, StatesSection } from '@/components/features/design-system/feedback-sections';
 import { SpacingSection, TypeSection } from '@/components/features/design-system/type-spacing-sections';
 import { PageHeader } from '@/components/shared/page-header';
+import { COMPANY_AND_PRODUCT_NAME } from '@/lib/product-name';
 import { isDesignSystemAvailable } from '@/lib/design-system-gate';
 import { authorizePage } from '@/server/http/page-access';
 import { pageMetadata } from '@/lib/page-metadata';
 
-const DESCRIPTION = 'Design tokens, brand, components and states used on every screen of the Accucut Quotation Portal.';
+const DESCRIPTION = `Design tokens, brand, components and states used on every screen of the ${COMPANY_AND_PRODUCT_NAME}.`;
 
 export const metadata = pageMetadata('Design system', DESCRIPTION);
 

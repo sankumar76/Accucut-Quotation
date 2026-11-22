@@ -1,5 +1,5 @@
 import { RESET_LINK_LIFETIME_MINUTES } from '../../../lib/auth/password-reset';
-import { renderMail } from '../layout';
+import { PORTAL_NAME, renderMail } from '../layout';
 
 /**
  * The reset-link message (STORY-09.07 AC-2, AC-9; architecture section 4.7): a pure function from a fixed DTO to the subject, the HTML and the plain text.
@@ -32,7 +32,7 @@ export function renderPasswordReset(message: PasswordResetMessage): RenderedPass
     heading: PASSWORD_RESET_HEADING,
     paragraphs: [
       `Hello ${name},`,
-      `Someone asked to reset the password of your Accucut Quotation Portal account. Use the button below to choose a new password. The link works once and for ${RESET_LINK_LIFETIME_MINUTES} minutes.`,
+      `Someone asked to reset the password of your ${PORTAL_NAME} account. Use the button below to choose a new password. The link works once and for ${RESET_LINK_LIFETIME_MINUTES} minutes.`,
       'If you did not ask for this, ignore this message. Your password stays as it is.',
     ],
     action: { label: CHOOSE_A_PASSWORD, url: resetLink },

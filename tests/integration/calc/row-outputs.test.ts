@@ -44,7 +44,7 @@ afterEach(async () => {
 
 /** A customer with the invented rates (the Process Master's own defaults are left alone, so a default read instead of a rate would show). */
 async function addCustomer(): Promise<string> {
-  const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Invented calculation customer') RETURNING id::text");
+  const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Invented calculation customer', left(md5('Invented calculation customer'), 10)) RETURNING id::text");
   const customerId = defined(rows[0]).id;
   for (const item of SEED_PROCESS_ITEMS) {
     await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) VALUES ($1::uuid, $2::uuid, $3)', [

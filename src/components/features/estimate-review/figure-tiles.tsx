@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { ColumnTag } from '@/components/shared/column-tag';
+import { COMPACT_TILE_PADDING } from '@/components/shared/compact-padding';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
@@ -55,7 +56,7 @@ interface TileProps {
 function Tile({ name, letter, children, note, fileCellLine = true }: TileProps) {
   return (
     <Card className="min-w-0">
-      <CardContent className="flex flex-col gap-s-2">
+      <CardContent className={cn('flex flex-col gap-s-2', COMPACT_TILE_PADDING)}>
         <p className="flex flex-wrap items-center gap-s-2 text-label font-semibold text-ink-2">
           <span>{name}</span>
           <ColumnTag letter={letter} kind="output" />
@@ -123,7 +124,7 @@ export function FigureTiles({ state, letters, totals, approval = null }: FigureT
   // BN is a dash with the sentence when no Tool Cost was entered; the sentence names the file cell, so the tile's own line would name it twice.
   const noToolCostEntered = current && totals.pricePerToolCost === null;
   return (
-    <section aria-label={TILES_LABEL} className="grid grid-cols-1 gap-s-4 md:grid-cols-3">
+    <section aria-label={TILES_LABEL} className="grid grid-cols-1 gap-s-3 md:grid-cols-3">
       <Tile name={BL_NAME} letter={letters.totalPrice} note={state === 'out-of-date' ? BL_CLEARED_HINT : undefined}>
         {current ? formatRupees(totals.totalPrice) : word(withheld)}
       </Tile>

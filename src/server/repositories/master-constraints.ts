@@ -10,7 +10,7 @@ import { uniqueViolationOf } from './database-errors';
  */
 
 /** Which of the rules of the database a write broke. */
-export type MasterConstraint = 'process-item-name' | 'material-name' | 'customer-name';
+export type MasterConstraint = 'process-item-name' | 'material-name' | 'customer-name' | 'customer-short-name';
 
 /** A write that the database refused because it would repeat a rate's, a material's or a customer's name. */
 export class MasterConstraintError extends Error {
@@ -27,12 +27,15 @@ const PROCESS_NAME_CONSTRAINTS: ReadonlyArray<string> = ['name', 'uq_process_ite
 const MATERIAL_NAME_CONSTRAINTS: ReadonlyArray<string> = ['material_in_drawing', 'uq_materials_material_in_drawing', 'uq_materials_material_in_drawing_lower'];
 /** The customers' own index names, and only those: the bare column `name` is the Process rule's (`PROCESS_NAME_CONSTRAINTS`), so it cannot say it is a customer. */
 const CUSTOMER_NAME_CONSTRAINTS: ReadonlyArray<string> = ['uq_customers_name', 'uq_customers_name_lower'];
+/** The customers' short-name index (CR-01 item 6, AQP-390), matched **by its index name first**: the violation names no column that tells it apart from the name's (the `constraintOf` trap of architecture v0.36). */
+const CUSTOMER_SHORT_NAME_CONSTRAINTS: ReadonlyArray<string> = ['uq_customers_short_name_lower'];
 
 /** The constraint a unique violation names, from the column or the index it names; null for anything else. */
 function constraintOf(error: unknown): MasterConstraint | null {
   const names = uniqueViolationOf(error);
   if (names === null) return null;
-  // The customers' index names first (STORY-02.02): a violation that names `name` as well as a customers index is a customer's, not a rate's.
+  // The short name's own index first (CR-01 item 6), then the customers' name indexes (STORY-02.02): a violation that names `name` as well as a customers index is a customer's, not a rate's.
+  if (names.some((name) => CUSTOMER_SHORT_NAME_CONSTRAINTS.includes(name))) return 'customer-short-name';
   if (names.some((name) => CUSTOMER_NAME_CONSTRAINTS.includes(name))) return 'customer-name';
   if (names.some((name) => PROCESS_NAME_CONSTRAINTS.includes(name))) return 'process-item-name';
   return names.some((name) => MATERIAL_NAME_CONSTRAINTS.includes(name)) ? 'material-name' : null;

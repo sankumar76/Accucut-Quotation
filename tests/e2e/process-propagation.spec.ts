@@ -4,6 +4,7 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 
 import { expectNoAxeViolations, horizontalOverflow, TABLET_MIN_WIDTH } from './support/design-system';
 import { openProcessMaster, pressWithKeyboard, rowButton } from './support/masters';
+import { shortNameOf } from '../support/customer-short-name';
 import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
 import { JSON_HEADERS } from './support/treatments';
 
@@ -55,7 +56,7 @@ async function post(page: Page, url: string, data: unknown): Promise<string> {
 }
 
 async function makeCustomer(page: Page, name: string): Promise<Customer> {
-  return { id: await post(page, CUSTOMERS_API, { name }), name };
+  return { id: await post(page, CUSTOMERS_API, { name, shortName: shortNameOf(name) }), name };
 }
 
 /** A rate at 1.37, and three customers: alpha on its default, bravo at 1.50 and charlie at 1.45. Named so that the window lists bravo before charlie. */

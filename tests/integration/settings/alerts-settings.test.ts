@@ -150,7 +150,7 @@ describe('AC-4: the test e-mail', () => {
     expect(mail?.to).toEqual([ADMIN_ADDRESS]);
     expect(mail?.cc).toEqual([]);
     expect(mail?.from).toEqual({ name: 'Accucut Portal', address: 'portal@example.com' });
-    expect(mail?.subject).toBe('Accucut Quotation Portal: test e-mail');
+    expect(mail?.subject).toBe('Accucut RFQ Portal: test e-mail');
     expect(mail?.html).toContain('test e-mail');
     expect(mail?.text).toContain('test e-mail');
     // Nothing went to the Engineer's address or anyone else's.

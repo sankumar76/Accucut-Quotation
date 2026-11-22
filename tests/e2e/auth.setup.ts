@@ -146,7 +146,7 @@ async function warmCustomerRoutes(page: Page, headers: Record<string, string>): 
   await expect(page.getByRole('dialog', { name: 'Add customer' })).toBeVisible({ timeout: COMPILE_TIMEOUT });
   await page.keyboard.press('Escape');
   expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/customers`, { headers, data: {} })).status()).toBe(422);
-  expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/customers`, { headers, data: { name: 'E2E set-up customer' } })).status()).toBeLessThan(500);
+  expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/customers`, { headers, data: { name: 'E2E set-up customer', shortName: 'E2ESETUP' } })).status()).toBeLessThan(500);
   const list: unknown = await (await page.request.get(`${DEVELOPMENT_URL}/api/v1/customers`)).json();
   const customers = z.object({ customers: z.array(z.object({ id: z.string(), name: z.string() })) }).parse(list).customers;
   const ours = customers.find((customer) => customer.name === 'E2E set-up customer');
