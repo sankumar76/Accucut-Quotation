@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { EXPORT_FILE_NAME_STEM_MAX_LENGTH, exportFileName, isExportFileName } from '@/lib/export/file-name';
+import { exportFileName, isExportFileName } from '@/lib/export/file-name';
+import { CUSTOMER_SHORT_NAME_MAX_LENGTH } from '@/lib/masters/customers';
+import { SUBJECT_MAX_LENGTH } from '@/lib/tasks/assign';
 import { istDayMonthYearOf, istIsoDateOf } from '@/lib/time';
 
 /**
- * The name of the exported workbook (CR-01 item 9, AQP-391): `<Short Name>_<Subject>_<DD-MM-YYYY>.xlsx`. Every value is invented. The cut reading (the end of the subject goes; A-CR01-A3) is pinned here.
+ * The name of the exported workbook (CR-01 item 9, AQP-391): `<Short Name>_<Subject>_<DD-MM-YYYY>.xlsx`. Every value is invented. There is no length cut (OQ-PM-11 answered by the delivery lead: "Don't limit the characters"); the field limits of AQP-390 bound the name.
  */
 
 const TASK_CODE = 'Q-2026-0001';
@@ -56,8 +58,8 @@ describe('exportFileName sanitising (AQP-391 AC-3)', () => {
 
   it('removes control characters and format characters, including a bidirectional override that could turn xlsx.exe into exe.xlsx', () => {
     expect(nameOf('MAS', 'a\u0000b\u0007c\u007fd')).toBe(`MAS_abcd_${DATE}.xlsx`);
-    expect(nameOf('MAS', 'ab‮xcl.exe')).toBe(`MAS_abxcl.exe_${DATE}.xlsx`);
-    expect(nameOf('MAS', 'a​b⁠c‍d')).toBe(`MAS_abcd_${DATE}.xlsx`);
+    expect(nameOf('MAS', 'ab\u202Excl.exe')).toBe(`MAS_abxcl.exe_${DATE}.xlsx`);
+    expect(nameOf('MAS', 'a\u200Bb\u2060c\u200Dd')).toBe(`MAS_abcd_${DATE}.xlsx`);
   });
 
   it('removes a lone surrogate, so a header builder can always encode the name', () => {
@@ -87,99 +89,61 @@ describe('exportFileName sanitising (AQP-391 AC-3)', () => {
   });
 });
 
-describe('exportFileName length (AQP-391 AC-4, AC-10; NFR-032: every edge is read from the constant)', () => {
-  /** The two separators and the date, which the subject's budget leaves room for (AC-4). */
-  const FIXED = 12;
-  const LIMIT = EXPORT_FILE_NAME_STEM_MAX_LENGTH;
-  const SHORT = 10;
-  /** What a subject may hold under a short name of `SHORT`. */
-  const ROOM = LIMIT - FIXED - SHORT;
-
-  it('has the one limit of 100 for the stem (the one pinned value; every other test follows the constant)', () => {
-    expect(EXPORT_FILE_NAME_STEM_MAX_LENGTH).toBe(100);
-  });
-
-  it('keeps a stem of exactly the limit whole', () => {
-    const name = nameOf('S'.repeat(SHORT), 'x'.repeat(ROOM));
-    expect(lengthOf(stemOf(name))).toBe(LIMIT);
-    expect(name).toBe(`${'S'.repeat(SHORT)}_${'x'.repeat(ROOM)}_${DATE}.xlsx`);
-  });
-
-  it('cuts the end of the subject when the stem would be one over the limit, and the date survives', () => {
-    const name = nameOf('S'.repeat(SHORT), 'x'.repeat(ROOM + 1));
-    expect(lengthOf(stemOf(name))).toBe(LIMIT);
-    expect(name).toBe(`${'S'.repeat(SHORT)}_${'x'.repeat(ROOM)}_${DATE}.xlsx`);
-  });
-
-  it('cuts 2 characters of a subject of the room plus 2 (the story: 80 under a short name of 10 loses 2)', () => {
-    const name = nameOf('S'.repeat(SHORT), 'y'.repeat(ROOM + 2));
-    expect(name).toBe(`${'S'.repeat(SHORT)}_${'y'.repeat(ROOM)}_${DATE}.xlsx`);
-  });
-
-  it('leaves a stem one under the limit alone', () => {
-    expect(nameOf('S'.repeat(SHORT), 'x'.repeat(ROOM - 1))).toBe(`${'S'.repeat(SHORT)}_${'x'.repeat(ROOM - 1)}_${DATE}.xlsx`);
-    expect(nameOf('MAS', 'x'.repeat(50))).toBe(`MAS_${'x'.repeat(50)}_${DATE}.xlsx`);
-  });
-
-  it('keeps the short name and the date of a very long subject', () => {
-    const name = nameOf('MAS', 'z'.repeat(LIMIT * 50));
-    expect(name.startsWith('MAS_')).toBe(true);
-    expect(name.endsWith(`_${DATE}.xlsx`)).toBe(true);
-    expect(lengthOf(stemOf(name))).toBe(LIMIT);
-  });
-
-  it('counts code points: it never splits a character outside the BMP at the cut', () => {
-    const room = LIMIT - FIXED - 'MAS'.length;
-    const name = nameOf('MAS', '🔧'.repeat(room + 5));
-    expect(name).toBe(`MAS_${'🔧'.repeat(room)}_${DATE}.xlsx`);
-    expect(lengthOf(stemOf(name))).toBe(LIMIT);
-    expect(name).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/);
-  });
-
-  it('measures the short name in code points as well', () => {
-    const name = nameOf('🔧'.repeat(SHORT), 'x'.repeat(LIMIT * 2));
-    expect(lengthOf(stemOf(name))).toBe(LIMIT);
-    expect(name).toBe(`${'🔧'.repeat(SHORT)}_${'x'.repeat(ROOM)}_${DATE}.xlsx`);
-  });
-
-  it('gives a smaller subject to a longer short name (the database ceiling of 20)', () => {
-    const ceiling = 20;
-    const name = nameOf('S'.repeat(ceiling), 'x'.repeat(LIMIT * 2));
-    expect(name).toBe(`${'S'.repeat(ceiling)}_${'x'.repeat(LIMIT - FIXED - ceiling)}_${DATE}.xlsx`);
-  });
-
-  it('still gives a valid name, with one character of subject, when the short name alone would use the whole stem', () => {
-    const name = nameOf('S'.repeat(LIMIT * 5), 'subject');
+describe('exportFileName is never cut (OQ-PM-11 answered: "Don\'t limit the characters"; AQP-391)', () => {
+  it('keeps every character of the longest short name and the longest subject the forms allow', () => {
+    const shortName = 'S'.repeat(CUSTOMER_SHORT_NAME_MAX_LENGTH);
+    const subject = 'x'.repeat(SUBJECT_MAX_LENGTH);
+    const name = nameOf(shortName, subject);
+    expect(name).toBe(`${shortName}_${subject}_${DATE}.xlsx`);
+    // The two parts, the two separators and the date: nothing is cut, and the date is whole.
+    expect(lengthOf(stemOf(name))).toBe(CUSTOMER_SHORT_NAME_MAX_LENGTH + SUBJECT_MAX_LENGTH + 2 + DATE.length);
     expect(isExportFileName(name)).toBe(true);
-    expect(lengthOf(stemOf(name))).toBe(LIMIT);
-    expect(name).toBe(`${'S'.repeat(LIMIT - FIXED - 1)}_s_${DATE}.xlsx`);
-    expect(name.endsWith(`_${DATE}.xlsx`)).toBe(true);
   });
 
-  it('counts the two separators and the 10-character date in the budget (FIXED is 12)', () => {
-    expect(DATE).toHaveLength(10);
-    expect(FIXED).toBe(2 + DATE.length);
+  it('keeps every character at the database ceilings as well (a short name of 20, a subject of 200)', () => {
+    const name = nameOf('S'.repeat(20), 'y'.repeat(200));
+    expect(name).toBe(`${'S'.repeat(20)}_${'y'.repeat(200)}_${DATE}.xlsx`);
+    expect(isExportFileName(name)).toBe(true);
+  });
+
+  it('keeps every code point outside the BMP of both parts', () => {
+    const name = nameOf('🔧'.repeat(CUSTOMER_SHORT_NAME_MAX_LENGTH), '🔩'.repeat(SUBJECT_MAX_LENGTH));
+    expect(name).toBe(`${'🔧'.repeat(CUSTOMER_SHORT_NAME_MAX_LENGTH)}_${'🔩'.repeat(SUBJECT_MAX_LENGTH)}_${DATE}.xlsx`);
+  });
+
+  it('does not cut a text longer than any form allows: the builder holds no limit, the fields do (the name is the parts, the separators and the date)', () => {
+    const subject = 'z'.repeat(5000);
+    expect(nameOf('MAS', subject)).toBe(`MAS_${subject}_${DATE}.xlsx`);
+  });
+
+  it('does not cut the task code that stands in for a missing subject', () => {
+    const code = `Q-${'9'.repeat(150)}`;
+    expect(nameOf('MAS', null, NOON_UTC, code)).toBe(`MAS_${code}_${DATE}.xlsx`);
+  });
+
+  it('keeps the date whole at the end whatever the parts', () => {
+    expect(nameOf('S'.repeat(300), 'y'.repeat(300)).endsWith(`_${DATE}.xlsx`)).toBe(true);
   });
 });
 
 describe('exportFileName invisible characters (AQP-391 review QLT-01)', () => {
   it.each([
-    ['a Hangul filler (U+3164)', 'ㅤ'],
-    ['a halfwidth Hangul filler (U+FFA0)', 'ﾠ'],
-    ['a combining grapheme joiner (U+034F)', '͏'],
-    ['a variation selector (U+FE0F)', '️'],
-    ['a soft hyphen (U+00AD)', '­'],
+    ['a Hangul filler (U+3164)', '\u3164'],
+    ['a halfwidth Hangul filler (U+FFA0)', '\uFFA0'],
+    ['a combining grapheme joiner (U+034F)', '\u034F'],
+    ['a variation selector (U+FE0F)', '\uFE0F'],
+    ['a soft hyphen (U+00AD)', '\u00AD'],
   ])('a subject of only %s falls back to the task code, so no part looks empty', (_label, character) => {
     expect(nameOf('MAS', character)).toBe(`MAS_${TASK_CODE}_${DATE}.xlsx`);
     expect(nameOf(character, 'Feed')).toBe(`Customer_Feed_${DATE}.xlsx`);
   });
 
   it('removes such a character from inside a part', () => {
-    expect(nameOf('MAS', 'a️bㅤc')).toBe(`MAS_abc_${DATE}.xlsx`);
+    expect(nameOf('MAS', 'a\uFE0Fb\u3164c')).toBe(`MAS_abc_${DATE}.xlsx`);
   });
 
   it('is refused by isExportFileName', () => {
-    for (const character of ['ㅤ', '͏', '️', 'ﾠ']) expect(isExportFileName(`M${character}_x_${DATE}.xlsx`), character).toBe(false);
+    for (const character of ['\u3164', '\u034F', '\uFE0F', '\uFFA0']) expect(isExportFileName(`M${character}_x_${DATE}.xlsx`), character).toBe(false);
   });
 });
 
@@ -207,12 +171,12 @@ describe('exportFileName fallbacks (AQP-391 AC-7)', () => {
   });
 
   it('uses "Customer" for a short name that is empty after clean-up (only invisible characters)', () => {
-    expect(nameOf('​\u0000', 'Feed')).toBe('Customer_Feed_21-11-2026.xlsx');
+    expect(nameOf('\u200B\u0000', 'Feed')).toBe('Customer_Feed_21-11-2026.xlsx');
     expect(nameOf('', 'Feed')).toBe('Customer_Feed_21-11-2026.xlsx');
   });
 
   it('uses the task code for a subject that is empty after clean-up', () => {
-    expect(nameOf('MAS', '​‮')).toBe('MAS_Q-2026-0001_21-11-2026.xlsx');
+    expect(nameOf('MAS', '\u200B\u202E')).toBe('MAS_Q-2026-0001_21-11-2026.xlsx');
     expect(nameOf('MAS', '')).toBe('MAS_Q-2026-0001_21-11-2026.xlsx');
   });
 
@@ -221,7 +185,7 @@ describe('exportFileName fallbacks (AQP-391 AC-7)', () => {
   });
 
   it('never holds "null", "undefined" or an empty part', () => {
-    for (const name of [nameOf(null, null), nameOf('', ''), nameOf('​', '​')]) {
+    for (const name of [nameOf(null, null), nameOf('', ''), nameOf('\u200B', '\u200B')]) {
       expect(name).not.toMatch(/null|undefined|__|^_|_\./);
     }
   });
@@ -231,13 +195,7 @@ describe('exportFileName fallbacks (AQP-391 AC-7)', () => {
   });
 
   it('refuses a task code with nothing usable in it when it has to stand in (a mistake in the code)', () => {
-    expect(() => nameOf('MAS', null, NOON_UTC, '​')).toThrow(RangeError);
-  });
-
-  it('fits a long task code in the budget as well', () => {
-    const name = nameOf('MAS', null, NOON_UTC, 'Q'.repeat(300));
-    expect(isExportFileName(name)).toBe(true);
-    expect(lengthOf(stemOf(name))).toBe(EXPORT_FILE_NAME_STEM_MAX_LENGTH);
+    expect(() => nameOf('MAS', null, NOON_UTC, '\u200B')).toThrow(RangeError);
   });
 });
 
@@ -263,14 +221,12 @@ describe('isExportFileName (AQP-391 AC-8)', () => {
   it('accepts the names the builder makes, including non-ASCII ones and hyphens and dots', () => {
     expect(isExportFileName('MAS_Feed-hopper_21-11-2026.xlsx')).toBe(true);
     expect(isExportFileName('M_Kühler-Ø-40.5-工场_21-11-2026.xlsx')).toBe(true);
-    expect(isExportFileName(`${'a'.repeat(EXPORT_FILE_NAME_STEM_MAX_LENGTH)}.xlsx`)).toBe(true);
     expect(isExportFileName('a.xlsx')).toBe(true);
   });
 
-  it('refuses a stem longer than the limit in code points, and counts a character outside the BMP as one', () => {
-    expect(isExportFileName(`${'a'.repeat(EXPORT_FILE_NAME_STEM_MAX_LENGTH + 1)}.xlsx`)).toBe(false);
-    expect(isExportFileName(`${'🔧'.repeat(EXPORT_FILE_NAME_STEM_MAX_LENGTH)}.xlsx`)).toBe(true);
-    expect(isExportFileName(`${'🔧'.repeat(EXPORT_FILE_NAME_STEM_MAX_LENGTH + 1)}.xlsx`)).toBe(false);
+  it('holds no length limit: a long name is a name (the fields bound it, not the check)', () => {
+    expect(isExportFileName(`${'a'.repeat(5000)}.xlsx`)).toBe(true);
+    expect(isExportFileName(`${'🔧'.repeat(300)}.xlsx`)).toBe(true);
   });
 
   it.each([
@@ -285,8 +241,8 @@ describe('isExportFileName (AQP-391 AC-8)', () => {
     ['a line feed', 'MAS\nx.xlsx'],
     ['a carriage return', 'MAS\rx.xlsx'],
     ['a NUL', 'MAS\u0000x.xlsx'],
-    ['a bidirectional override', 'MAS‮x.xlsx'],
-    ['a zero-width space', 'MAS​x.xlsx'],
+    ['a bidirectional override', 'MAS\u202Ex.xlsx'],
+    ['a zero-width space', 'MAS\u200Bx.xlsx'],
     ['a lone surrogate', 'MAS\ud800x.xlsx'],
     ['a slash', 'MAS/x.xlsx'],
     ['a backslash', 'MAS\\x.xlsx'],
@@ -315,15 +271,14 @@ describe('property: any text a person types gives a valid name (AQP-391 Testing 
       return state / 0x100000000;
     };
   }
-  const ALPHABET = ['a', 'Z', '0', '_', '-', '.', ' ', '/', '\\', ':', '*', '?', '"', '<', '>', '|', ';', '\r', '\n', '\t', '\u0000', '‮', '​', ' ', 'ü', 'Ø', '工', '🔧', '\ud800', '\udc00', 'ü'];
+  const ALPHABET = ['a', 'Z', '0', '_', '-', '.', ' ', '/', '\\', ':', '*', '?', '"', '<', '>', '|', ';', '\r', '\n', '\t', '\u0000', '\u202E', '\u200B', ' ', 'ü', 'Ø', '工', '🔧', '\ud800', '\udc00', 'ü'];
 
-  it('is a name that passes isExportFileName, with a stem of at most the limit in code points', () => {
+  it('is a name that passes isExportFileName, whatever the length', () => {
     const next = random(391);
     const text = (): string => Array.from({ length: Math.floor(next() * 140) }, () => ALPHABET[Math.floor(next() * ALPHABET.length)]).join('');
     for (let index = 0; index < 500; index += 1) {
       const name = nameOf(next() < 0.2 ? null : text().slice(0, 25), next() < 0.2 ? null : text());
       expect(isExportFileName(name), JSON.stringify(name)).toBe(true);
-      expect(lengthOf(stemOf(name))).toBeLessThanOrEqual(EXPORT_FILE_NAME_STEM_MAX_LENGTH);
       expect(name.endsWith(`_${istDayMonthYearOf(NOON_UTC)}.xlsx`)).toBe(true);
     }
   });

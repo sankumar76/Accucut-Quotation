@@ -3,7 +3,6 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { EXPORT_FILE_NAME_STEM_MAX_LENGTH, exportFileName, isExportFileName } from '@/lib/export/file-name';
 import { CUSTOMER_SHORT_NAME_MAX_LENGTH,SHORT_NAME_TOO_LONG_MESSAGE, shortNameProblem } from '@/lib/masters/customers';
 import { checkAssign, SUBJECT_MAX_LENGTH, SUBJECT_MESSAGE } from '@/lib/tasks/assign';
 
@@ -82,28 +81,5 @@ describe('no second copy of the number sits next to the words of the field', () 
   it('each constant is defined once, in the file the architecture names', () => {
     expect(read('src/lib/tasks/assign.ts')).toMatch(/export const SUBJECT_MAX_LENGTH = 80;/);
     expect(read('src/lib/masters/customers.ts')).toMatch(/export const CUSTOMER_SHORT_NAME_MAX_LENGTH = 10;/);
-  });
-});
-
-/**
- * AQP-391 (CR-01 item 9, AC-10; NFR-032): the longest stem of the Excel file name is `EXPORT_FILE_NAME_STEM_MAX_LENGTH`, one exported constant. The check and the builder follow it (the edge is the
- * constant), and no other file of the name's path repeats the number next to the words "stem" or "file name".
- */
-describe('EXPORT_FILE_NAME_STEM_MAX_LENGTH is the one place the length of the file name is set', () => {
-  const NAME_FILES = ['src/lib/export/file-name.ts', 'src/server/http/content-disposition.ts', 'src/server/views/schemas/export.ts', 'src/lib/export/download-client.ts', 'src/server/http/file-response.ts'];
-
-  it('is the edge of isExportFileName and of the stem the builder makes', () => {
-    expect(isExportFileName(`${'a'.repeat(EXPORT_FILE_NAME_STEM_MAX_LENGTH)}.xlsx`)).toBe(true);
-    expect(isExportFileName(`${'a'.repeat(EXPORT_FILE_NAME_STEM_MAX_LENGTH + 1)}.xlsx`)).toBe(false);
-    const name = exportFileName({ customerShortName: 'MAS', subject: 'x'.repeat(EXPORT_FILE_NAME_STEM_MAX_LENGTH * 2), taskCode: 'Q-2026-0001', now: new Date('2026-11-21T12:00:00Z') });
-    expect(Array.from(name.slice(0, -'.xlsx'.length))).toHaveLength(EXPORT_FILE_NAME_STEM_MAX_LENGTH);
-  });
-
-  it.each(NAME_FILES)('%s repeats no 100 beside "stem" or "file name"', (path) => {
-    expect(copiesOf(read(path), /stem|file[ _-]?name/i, 100, /export const EXPORT_FILE_NAME_STEM_MAX_LENGTH/)).toEqual([]);
-  });
-
-  it('is defined once, in the builder', () => {
-    expect(read('src/lib/export/file-name.ts')).toMatch(/export const EXPORT_FILE_NAME_STEM_MAX_LENGTH = 100;/);
   });
 });

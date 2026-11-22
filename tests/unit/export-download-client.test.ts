@@ -51,7 +51,7 @@ describe('fileNameFrom (AQP-391 AC-6)', () => {
 
   it('falls back to the plain parameter when the decoded name is not one the export makes', () => {
     const plain = 'filename="MAS_x_21-11-2026.xlsx"';
-    for (const bad of ['..%2Fevil.xlsx', 'a%22b.xlsx', 'a%0D%0Ab.xlsx', 'a%00b.xlsx', 'a%E2%80%AEb.xlsx', 'a%20b.xlsx', 'a.exe', `${'a'.repeat(101)}.xlsx`]) {
+    for (const bad of ['..%2Fevil.xlsx', 'a%22b.xlsx', 'a%0D%0Ab.xlsx', 'a%00b.xlsx', 'a%E2%80%AEb.xlsx', 'a%20b.xlsx', 'a.exe', '.hidden.xlsx', 'a%E3%85%A4b.xlsx']) {
       expect(fileNameFrom(`attachment; ${plain}; filename*=UTF-8''${bad}`), bad).toBe('MAS_x_21-11-2026.xlsx');
     }
   });

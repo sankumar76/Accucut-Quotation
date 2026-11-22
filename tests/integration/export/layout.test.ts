@@ -140,15 +140,15 @@ describe('AQP-391 AC-1, AC-3, AC-7, AC-8: the file name is <short name>_<subject
 
   it('is "Customer" while no customer is chosen, and the task code for a subject that is empty once cleaned (a legacy-shaped estimate)', async () => {
     const estimateId = await db.addEstimate({ engineer: true, withCustomer: false });
-    await setNameParts(estimateId, { subject: '​' });
+    await setNameParts(estimateId, { subject: '\u200B' });
     const header = await headerAsStored(estimateId);
     expect(exportSummarySchema.parse(await exporter.getSummary(lead(), estimateId)).fileName).toBe(`Customer_${header.code}_14-11-2026.xlsx`);
   });
 
-  it('cuts the end of a subject of 80 under a short name of 10, so the date stays', async () => {
+  it('keeps every character of a subject of 80 under a short name of 10: the name is not cut (OQ-PM-11)', async () => {
     const estimateId = await db.addEstimate({ engineer: true, withCustomer: false });
     await setNameParts(estimateId, { shortName: 'ABCDEFGHIJ', subject: 'y'.repeat(80) });
-    expect(exportSummarySchema.parse(await exporter.getSummary(lead(), estimateId)).fileName).toBe(`ABCDEFGHIJ_${'y'.repeat(78)}_14-11-2026.xlsx`);
+    expect(exportSummarySchema.parse(await exporter.getSummary(lead(), estimateId)).fileName).toBe(`ABCDEFGHIJ_${'y'.repeat(80)}_14-11-2026.xlsx`);
   });
 });
 

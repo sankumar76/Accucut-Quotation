@@ -54,7 +54,7 @@ describe('attachmentDisposition', () => {
     ['a quote', 'a"b.xlsx'],
     ['a line break', 'a\r\nX: y.xlsx'],
     ['a NUL', 'a\u0000b.xlsx'],
-    ['a bidirectional override', 'a‮b.xlsx'],
+    ['a bidirectional override', 'a\u202Eb.xlsx'],
     ['a path', '../a.xlsx'],
     ['another extension', 'a.exe'],
     ['no name', ''],
