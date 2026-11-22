@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate, CONFIRMED by master (DL-291 (1))**: the rule of DL-285 (3) fired on the second occurrence. A loading state the UX spec requires is not painted at desktop widths, there is a workaround (the values arrive), and nothing is lost or exposed |
 | Priority | P3. **Lane (DL-291 (3)(b)):** a separate PR, after DEF-058's fix PR (or the next lane that frees after #601 merges, whichever comes first), branched from a `master` that contains #601 (AQP-390) |
 | Type | **Product (layout), probable** (master's DL-291 (1), from the code; not yet measured), with the test catching it only sometimes. **If the measurement shows a width over 0, the type stays Test, product not excluded, and the case comes back to master** |
-| Status | **New**; type moved to Product (layout) by DL-291 (logged 2026-11-22, type updated 2026-11-22) |
+| Status | **Closed** (logged 2026-11-22; type Product (layout) confirmed by the measurement; #613 squashed as `de4799ae`; P1 and P2 met; closed by QA 2026-11-22) |
 | Jira / GitHub | [AQP-393](https://sankumar76.atlassian.net/browse/AQP-393) / [#603](https://github.com/sankumar76/Accucut-Quotation/issues/603). Jira "relates to" AQP-1 (Intake) and AQP-339 (STORY-05.13). Labels `ai-delivery`, `aiid-DEF-059`, `agent-qa-engineer`, `final-review`, `sev-3`; priority Medium |
 | Risk / rule | RISK-031: **not counted on trigger (b)**. (DL-291: not counted.) Each failed attempt is an `expect` that ran out on its own 15 s (the failed attempts ended at 26.2 s and 25.6 s, under the 30 s budget), which DL-264 (4)(d), DL-267 (3) and DL-285 (4) exclude. **No re-run rule** has been ordered; a red run on this case (both attempts) comes to master |
 | Found by / date | CI. First occurrence read by master in DL-290 (4) as "not counted" with no further ruling; the second occurrence made this a Bug under DL-285 (3). Logged by qa-engineer, 2026-11-22 |
@@ -72,6 +72,24 @@ Separate PR, **not combined with DEF-058** (a different spec and type, a probabl
 ### Closure rule (DL-291 (2))
 **DEF-059 does not close on #601, on a run of passes, or on a watch count.** #601 does not touch `part-fields.tsx`, so its rewritten case will probably stop catching the fault without fixing it. It closes only on the fix and its proof above, or on the measurement plus a master ruling (for example a width over 0, which returns the type to Test).
 
+## Measurement, fix, proof and close-out (qa-engineer, 2026-11-22; DL-291 (3)(b), DL-296)
+**Measured (PR #613 body, commit 1, 2c404e1a, run 45014618697, shard 4 job 137184153496):** the new case (it holds the stored-values read, `GET /api/v1/estimates/{id}/nodes/{id}`, by `page.route` so the `part-fields.tsx` status is on screen, attaches the status box and asserts width and visibility) failed at **desktop only**, attempt 1 and the retry, on its width assertion with the box `{"viewportWidth":1366,"box":{"x":609,"y":651,"width":0,"height":204}}`: **0 px wide at 1366 px**, as master read it from the code. Mobile (360 px) and tablet (768 px) passed. **Type confirmed: Product (layout).**
+
+**Fix:** #613 (squashed as `de4799ae`): `min-w-0 flex-1` added to the class list of the loading status at `part-fields.tsx:124`, as at `part-form.tsx:68`; nothing else under `src/`; the existing AC-4 case unchanged; the new case in `estimate-first-load.spec.ts`. Not a section 9 item 2 area (DL-291 (3)(b)(iii)).
+
+**Proof** (attempt 1, seconds, all passed, mobile / tablet / desktop; cases by title):
+
+| Run | New case "AC-4: while the stored values of the part are on their way the skeleton has a width and shows as a status" (:75) | Existing "AC-4: while the fields are on their way the skeleton shows as a status, then the fields take its place" (:59) |
+|---|---|---|
+| **P1: PR #613 run of record 45020577093** (head 3128b5ff; `Stages 1 to 11` success; shards 543 / 539 / 537 / 523 passed, 0 flaky, 0 failed) | 7.6 / 7.2 / 5.7 | 8.6 / 11.0 / 8.4 |
+| **P2: first `master` push after the squash, 45022375651** (de4799ae; `Stages 1 to 11` success, job 137212454425; shards `543 passed (16.1m)`, `537 passed (15.1m)`, `539 passed (13.6m)`, `523 passed (11.2m)`: **0 flaky, 0 failed**) | 7.1 / 5.9 / 5.1 | 8.5 / 7.4 / 8.1 |
+| next `master` push 45025620716 (2ff31d2b; 0 flaky, 0 failed) | 4.4 / 9.6 / 5.4 | 8.1 / 9.5 / 8.6 |
+
+An earlier PR run of the fixed head, 45016832555 (f70067fe): 7.3 / 6.5 / 4.8 and 10.3 / 7.7 / 6.8.
+- **Met:** the new check green at all three widths on attempt 1 on the PR run of record and on the first `master` push after the merge, each under 25 s, and the rewritten AC-4 case attempt-1 green at all three widths. The closure rule (DL-291 (2)) is satisfied by the fix and its proof, not by a run of passes. **Desktop "hidden" failures of the case since the second occurrence (22 Nov 04:10Z): none** in any `master` push read.
+- **DEF-063's question (DL-296 (4)):** the measured 0 px skeleton does not explain DEF-063 (the fasteners cases wait for `form[data-part-form]`, which is absent while any skeleton shows); DEF-063 was measured separately as a cold first compile (see its file).
+- **Closed by QA 2026-11-22.** Jira AQP-393 Done; GitHub #603 closed.
+
 ## Re-run rule
 None. Master may rule one. A red run on this case (both attempts) comes to master and is not re-run.
 
@@ -79,7 +97,7 @@ None. Master may rule one. A red run on this case (both attempts) comes to maste
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
 | Logged | qa-engineer | 2026-11-22 | AQP-393, #603 |
-| Measured | developer | | the red-first check in the fix PR's first commit (DL-291 (3)(b)(i)), after #601 merges |
-| Fixed | developer | | `fix/AQP-393-<slug>`, from a `master` that contains #601; class list at `part-fields.tsx:124` only, if confirmed |
-| Regression test added | developer | | the new red-first check, plus the AC-4 case with every assertion kept |
-| Verified | qa-engineer | | PR run of record and the first `master` push after the merge: the new check and the AC-4 case, each first attempt at all three widths, under 25 s. **Not closed by passes alone** (closure rule) |
+| Measured | developer | 2026-11-22 | #613 commit 1 (2c404e1a), run 45014618697: red at desktop only, box width 0 |
+| Fixed | developer | 2026-11-22 | #613, `fix/AQP-393-part-fields-skeleton-width`, squashed as `de4799ae`; class list at `part-fields.tsx:124` only |
+| Regression test added | developer | 2026-11-22 | the new case in `estimate-first-load.spec.ts` (the skeleton has a width), plus the AC-4 case with every assertion kept |
+| Verified | qa-engineer | 2026-11-22 | P1 (run 45020577093) and P2 (`master` push 45022375651): the new case and the AC-4 case attempt-1 green at all three widths, each under 25 s; closed on the fix and its proof (closure rule) |
