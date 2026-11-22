@@ -202,17 +202,17 @@ describe('AC-1: a stored calculation is one record and one row per node', () => 
     expect(Object.keys(inputs)).not.toContain(idOf('F'));
   });
 
-  it('a first Calculate submits the estimate and links it to the record, under the estimate lock; the revision is untouched', async () => {
+  it('a first Calculate prepares the estimate and links it to the record, under the estimate lock; the revision is untouched', async () => {
     const { service, world, estimate, request } = fixture();
     const stored = await service.storeCalculation(request());
     expect(world.lockCount()).toBe(1);
-    expect(estimate()).toMatchObject({ status: 'SUBMITTED', currentCalculationId: stored.id, inputsRevision: 4 });
+    expect(estimate()).toMatchObject({ status: 'PREPARED', currentCalculationId: stored.id, inputsRevision: 4 });
   });
 
-  it('a later Calculate leaves a submitted estimate submitted', async () => {
-    const { service, estimate, request } = fixture({ status: 'SUBMITTED' });
+  it('a later Calculate leaves a prepared estimate prepared', async () => {
+    const { service, estimate, request } = fixture({ status: 'PREPARED' });
     const stored = await service.storeCalculation(request());
-    expect(estimate()).toMatchObject({ status: 'SUBMITTED', currentCalculationId: stored.id });
+    expect(estimate()).toMatchObject({ status: 'PREPARED', currentCalculationId: stored.id });
   });
 
   it('answers with the record\'s ID and time and no figure at all', async () => {

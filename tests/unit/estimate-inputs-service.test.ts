@@ -405,12 +405,12 @@ describe('AC-7: who may save, and in what order the refusals come', () => {
     expect(setup.stored(FOREIGN_PART).inputs).toEqual({});
   });
 
-  it('an Engineer may not save once the estimate is submitted, and nobody once it is approved; a Lead and an Admin may while it is submitted', async () => {
-    const submitted = setUp([estimate({ status: 'SUBMITTED' })]);
-    await expect(save(submitted, { [LENGTH]: '1' })).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE });
-    await save(submitted, { [LENGTH]: '1' }, { viewer: lead });
-    await save(submitted, { [WIDTH]: '1' }, { viewer: admin, revision: 2 });
-    expect(submitted.inputsRevision()).toBe(2);
+  it('an Engineer may not save once the estimate is prepared, and nobody once it is approved; a Lead and an Admin may while it is prepared', async () => {
+    const prepared = setUp([estimate({ status: 'PREPARED' })]);
+    await expect(save(prepared, { [LENGTH]: '1' })).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE });
+    await save(prepared, { [LENGTH]: '1' }, { viewer: lead });
+    await save(prepared, { [WIDTH]: '1' }, { viewer: admin, revision: 2 });
+    expect(prepared.inputsRevision()).toBe(2);
     const approved = setUp([estimate({ status: 'APPROVED' })]);
     for (const viewer of [arjun, lead, admin]) await expect(save(approved, { [LENGTH]: '1' }, { viewer })).rejects.toMatchObject({ code: ESTIMATE_NOT_EDITABLE_CODE });
     expect(approved.stored().inputs).toEqual({});

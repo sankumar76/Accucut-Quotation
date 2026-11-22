@@ -102,7 +102,7 @@ describe('AC-7: when it runs', () => {
     expect(modes).toEqual([]);
   });
 
-  it('stops the timer when the estimate stops being editable (Calculate submitted it) and starts it again when it is', async () => {
+  it('stops the timer when the estimate stops being editable (Calculate prepared it) and starts it again when it is', async () => {
     const gate = createSaveGate();
     const modes: FlushMode[] = [];
     gate.offerFlush((mode) => modes.push(mode));
@@ -207,7 +207,7 @@ describe('AC-4, AC-5: the one status line says when it was saved, that it saves 
     expect(saveStatusText('Nothing saved yet', true, null)).toBe('Nothing saved yet. Auto-save every 30 s.');
   });
 
-  it('does not promise an automatic save when the person may not edit (a submitted estimate saves nothing)', () => {
+  it('does not promise an automatic save when the person may not edit (a prepared estimate saves nothing)', () => {
     expect(saveStatusText(LAST_SAVED, false, null)).toBe(LAST_SAVED);
     expect(saveStatusText(LAST_SAVED, false, FAILED_AT)).toBe(LAST_SAVED);
   });

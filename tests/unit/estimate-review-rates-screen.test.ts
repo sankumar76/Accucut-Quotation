@@ -66,11 +66,11 @@ const BUTTON = /<button[^>]*\bid="review-calculate"[^>]*>/;
 const tagOf = (html: string, id: string): string => new RegExp(`<button[^>]*\\bid="${id}"[^>]*>`).exec(html)?.[0] ?? '';
 const ANCHOR =/<a href="#review-calculate"[^>]*>Recalculate<\/a>/;
 
-describe('AC-1, AC-9: a Submitted estimate with current figures and changed rates', () => {
+describe('AC-1, AC-9: a Prepared estimate with current figures and changed rates', () => {
   it('says what changed, by kind, with the time, in a live region, with a link to Recalculate and the sentence that approving is not blocked', async () => {
     const costs = await costsOf({ mastersNow: ONE_OF_EACH });
     expect(costs.ratesChanged).toEqual(ONE_OF_EACH_COUNTS);
-    const html = render(costs, 'SUBMITTED');
+    const html = render(costs, 'PREPARED');
     const text = textOf(html);
     expect(text).toContain(`${NOTICE_TITLE} ${NOTICE_TEXT.replace(' Recalculate ', ' Recalculate ')}`);
     expect(countOf(html, NOTICE_TITLE)).toBe(1);
@@ -81,14 +81,14 @@ describe('AC-1, AC-9: a Submitted estimate with current figures and changed rate
   });
 
   it('shows no old or new value, no ID and no rate name: the counts and the time are the only numbers of the notice', async () => {
-    const html = render(await costsOf({ mastersNow: ONE_OF_EACH }), 'SUBMITTED');
+    const html = render(await costsOf({ mastersNow: ONE_OF_EACH }), 'PREPARED');
     const notice = textOf(html).slice(textOf(html).indexOf(NOTICE_TITLE), textOf(html).indexOf('Approving is not blocked.') + 'Approving is not blocked.'.length);
     expect([...notice.replaceAll(AT, '').matchAll(/\d+(?:\.\d+)?/g)].map((match) => match[0])).toEqual(['2', '1']);
     expect(html).not.toMatch(/Invented rate|Invented plate|"12\.00"|"84"/);
   });
 
   it('the link never points at a missing button: the Recalculate button is on the bar, and Approve and lock is still on (approving is not blocked)', async () => {
-    const html = render(await costsOf({ mastersNow: ONE_OF_EACH }), 'SUBMITTED');
+    const html = render(await costsOf({ mastersNow: ONE_OF_EACH }), 'PREPARED');
     expect(html).toMatch(BUTTON);
     expect(html).toMatch(/<button[^>]*\bid="review-calculate"[^>]*>(?:(?!<\/button>)[\s\S])*Recalculate/);
     // Approve and lock is the enabled button of the one script, never the disabled stand-in.
@@ -100,8 +100,8 @@ describe('AC-1, AC-9: a Submitted estimate with current figures and changed rate
     expect(html.indexOf(NOTICE_TITLE)).toBeLessThan(html.indexOf('id="review-calculate"'));
   });
 
-  it('nothing changed: no notice, and a Submitted estimate with current figures still has no Recalculate button (its way on is Approve and lock)', async () => {
-    const html = render(await costsOf(), 'SUBMITTED');
+  it('nothing changed: no notice, and a Prepared estimate with current figures still has no Recalculate button (its way on is Approve and lock)', async () => {
+    const html = render(await costsOf(), 'PREPARED');
     expect(html).not.toContain(NOTICE_TITLE);
     expect(html).not.toMatch(BUTTON);
     expect(html).not.toMatch(ANCHOR);
@@ -109,7 +109,7 @@ describe('AC-1, AC-9: a Submitted estimate with current figures and changed rate
 
   it('the Admin sees the same notice (AC-5): it is drawn from the answer, not from the role', async () => {
     const costs = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl, mastersNow: ONE_OF_EACH }).service.getCosts({ id: LEAD.id, role: 'ADMIN' }, REVIEW_ESTIMATE_ID);
-    expect(textOf(render(costs, 'SUBMITTED'))).toContain(NOTICE_TEXT);
+    expect(textOf(render(costs, 'PREPARED'))).toContain(NOTICE_TEXT);
   });
 });
 
@@ -144,13 +144,13 @@ describe('AC-3, AC-4: an approved estimate, and the states without a current fig
     expect(render(approved, 'APPROVED')).not.toContain(NOTICE_TITLE);
     const cleared = { ...(await costsOf({ inputsRevision: 4 })), ratesChanged: ONE_OF_EACH_COUNTS };
     expect(cleared.state).toBe('out-of-date');
-    expect(render(cleared, 'SUBMITTED')).not.toContain(NOTICE_TITLE);
+    expect(render(cleared, 'PREPARED')).not.toContain(NOTICE_TITLE);
     const none = { ...(await costsOf({ calculated: false })), ratesChanged: ONE_OF_EACH_COUNTS };
     expect(render(none, 'DRAFT')).not.toContain(NOTICE_TITLE);
   });
 
   it('the cleared estimate keeps its own notice and its Recalculate button, and no rates notice', async () => {
-    const html = render(await costsOf({ inputsRevision: 4, mastersNow: ONE_OF_EACH }), 'SUBMITTED');
+    const html = render(await costsOf({ inputsRevision: 4, mastersNow: ONE_OF_EACH }), 'PREPARED');
     expect(html).toMatch(BUTTON);
     expect(html).not.toContain(NOTICE_TITLE);
     expect(textOf(html)).toContain('The total is cleared because an input changed.');
@@ -160,13 +160,13 @@ describe('AC-3, AC-4: an approved estimate, and the states without a current fig
 describe('AC-2: the approval dialog is offered the same counts, in one line', () => {
   it('the offer carries the line of the UX spec for SCR-08, made from the counts', async () => {
     const costs = await costsOf({ mastersNow: ONE_OF_EACH });
-    const offer = approveOffer('SUBMITTED', costs);
+    const offer = approveOffer('PREPARED', costs);
     expect(offer?.ratesLine).toBe('2 rates and 1 material price changed since this was calculated. Approving is not blocked. Close this window and Recalculate first if you want them used.');
     expect(offer?.ratesLine).toBe(approveRatesLine(ONE_OF_EACH_COUNTS));
   });
 
   it('there is no line when nothing changed, and the offer is the same otherwise', async () => {
-    const offer = approveOffer('SUBMITTED', await costsOf());
+    const offer = approveOffer('PREPARED', await costsOf());
     expect(offer).not.toBeNull();
     expect(offer?.ratesLine).toBeNull();
   });

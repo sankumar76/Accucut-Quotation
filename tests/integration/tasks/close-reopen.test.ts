@@ -16,7 +16,7 @@ import { defined } from '../../support/defined';
  * STORY-04.05 T3 (AC-1 to AC-4, AC-6; FR-038, FR-107, architecture section 4.4) against real PostgreSQL in a throwaway database. The status of an estimate is set directly by
  * the fixture (the approve, unlock and cancel actions are STORY-06.06, 06.08 and 06.12), and the queue, its counts and the bell are read through the real task service and
  * repository after each change:
- *   - DRAFT and SUBMITTED are in Open (AC-1); APPROVED leaves Open and Overdue for Closed, even past its deadline, and the bell count drops by one (AC-2);
+ *   - DRAFT and PREPARED are in Open (AC-1); APPROVED leaves Open and Overdue for Closed, even past its deadline, and the bell count drops by one (AC-2);
  *   - APPROVED back to DRAFT, by the unlock or by the Admin's cancel (the state machine says where each leads), is in Open again, and Overdue again if late (AC-3);
  *   - the SQL `tabFilter` of the repository gives, for every status and three deadlines, the answer of `tabsOf` in TypeScript (AC-4: one rule, two forms, held together);
  *   - an Engineer's Closed tab holds their own closed tasks only, with the status APPROVED and exactly the named fields, no price (AC-6).
@@ -76,8 +76,8 @@ async function codesIn(viewer: QueueViewer, tab: QueueTab): Promise<string[]> {
   return (await service.listQueue(viewer, { tab })).tasks.map((task) => task.code);
 }
 
-describe('AC-1: a task whose estimate is DRAFT or SUBMITTED is in Open', () => {
-  it.each(['DRAFT', 'SUBMITTED'] as const)('%s: in Open, not in Closed, for the Engineer, the Lead and the Admin', async (status) => {
+describe('AC-1: a task whose estimate is DRAFT or PREPARED is in Open', () => {
+  it.each(['DRAFT', 'PREPARED'] as const)('%s: in Open, not in Closed, for the Engineer, the Lead and the Admin', async (status) => {
     await seed('Q-2026-0001', arjunId, at(DAY), status);
     for (const viewer of [asEngineer(arjunId), asLead(), asAdmin()]) {
       expect(await codesIn(viewer, 'open')).toEqual(['Q-2026-0001']);
@@ -88,7 +88,7 @@ describe('AC-1: a task whose estimate is DRAFT or SUBMITTED is in Open', () => {
 
 describe('AC-2: the estimate becomes APPROVED, and the task is Closed', () => {
   it('leaves Open and Overdue for Closed, even past its deadline, and the bell count drops by one', async () => {
-    const late = await seed('Q-2026-0001', arjunId, at(-2 * DAY), 'SUBMITTED');
+    const late = await seed('Q-2026-0001', arjunId, at(-2 * DAY), 'PREPARED');
     await seed('Q-2026-0002', arjunId, at(-DAY), 'DRAFT');
     const viewer = asEngineer(arjunId);
     expect(await service.countOverdue(viewer)).toBe(2);
@@ -108,8 +108,8 @@ describe('AC-2: the estimate becomes APPROVED, and the task is Closed', () => {
   it('the tab counts and the bell agree after the change: open, closed and overdue add up, and the bell is the overdue count', async () => {
     const first = await seed('Q-2026-0001', arjunId, at(-DAY));
     await seed('Q-2026-0002', arjunId, at(DAY));
-    await seed('Q-2026-0003', priyaId, at(-3 * DAY), 'SUBMITTED');
-    for (const status of ['SUBMITTED', 'APPROVED'] as const) {
+    await seed('Q-2026-0003', priyaId, at(-3 * DAY), 'PREPARED');
+    for (const status of ['PREPARED', 'APPROVED'] as const) {
       await setStatus(first, status);
       for (const viewer of [asLead(), asAdmin(), asEngineer(arjunId)]) {
         const queue = await service.listQueue(viewer, { tab: 'open' });
@@ -150,10 +150,10 @@ describe('AC-3: an unlock or the Admin\'s cancel puts the task back in Open', ()
     const id = await seed('Q-2026-0001', arjunId, at(-DAY));
     const viewer = asEngineer(arjunId);
     for (const [status, tab] of [
-      ['SUBMITTED', 'open'],
+      ['PREPARED', 'open'],
       ['APPROVED', 'closed'],
       ['DRAFT', 'open'],
-      ['SUBMITTED', 'open'],
+      ['PREPARED', 'open'],
       ['APPROVED', 'closed'],
     ] as const) {
       await setStatus(id, status);
@@ -184,7 +184,7 @@ describe('AC-4: the SQL form of the rule gives the answer of the TypeScript rule
 describe('AC-6: an Engineer opens the Closed tab', () => {
   it('sees their own closed tasks only, with the status APPROVED, and no price or other field beyond the named ones', async () => {
     await seed('Q-2026-0001', arjunId, at(-DAY), 'APPROVED');
-    await seed('Q-2026-0002', arjunId, at(DAY), 'SUBMITTED');
+    await seed('Q-2026-0002', arjunId, at(DAY), 'PREPARED');
     await seed('Q-2026-0003', priyaId, at(DAY), 'APPROVED');
     const closed = await service.listQueue(asEngineer(arjunId), { tab: 'closed' });
     expect(closed.tasks.map((task) => [task.code, task.status])).toEqual([['Q-2026-0001', 'APPROVED']]);

@@ -17,7 +17,7 @@ import {
 /**
  * The notice of an unlocked Draft (STORY-06.08 AC-3; UX spec SCR-06 states "Draft after unlock" and "Unlocked and changed"): who unlocked and when (IST), the reason the Lead gave, what the figures are (still the
  * ones from the approval, or cleared because an input changed since), that the price approved earlier stays, and whose Open queue the task is back in. It is drawn from the approval's own unlock, which the costs
- * view carries whatever the state of the figures, and only while the estimate is a Draft: the sentence about the queue stops being true once the estimate is Submitted again. It holds focus when an unlock has
+ * view carries whatever the state of the figures, and only while the estimate is a Draft: the sentence about the queue stops being true once the estimate is Prepared again. It holds focus when an unlock has
  * just worked (`tabIndex` -1). A Server Component with no script. The reason is typed text, drawn as text: its line breaks are kept and a long word wraps.
  */
 

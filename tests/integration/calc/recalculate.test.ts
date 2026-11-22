@@ -8,7 +8,7 @@ import { formatReport, summarise } from '../../support/perf-stats';
 
 /**
  * STORY-06.04 AC-3 and AC-8 (NFR-008; FR-061; architecture sections 4.2 and 4.8) against real PostgreSQL in a throwaway database, as the **runtime role**: a Lead's Recalculate of the `tree500` estimate runs
- * through the SAME path as the Engineer's Calculate (one service, one transaction, the masters and the configuration read inside it), stores 500 rows made by the Lead, and keeps the estimate SUBMITTED. This
+ * through the SAME path as the Engineer's Calculate (one service, one transaction, the masters and the configuration read inside it), stores 500 rows made by the Lead, and keeps the estimate PREPARED. This
  * test is in the pull-request path, so it asserts the stored rows, **prints the measure** and holds only a loose bound (5 s: a regression catcher on a shared runner, not the NFR); the p95 line of NFR-008
  * (under 2 s) is `tests/perf/calc-500-nodes.test.ts`'s, which runs on demand on a quiet machine (STORY-03.06 AC-4). The cleared-state matrix of every writer is `tests/integration/estimates/cleared.test.ts`.
  * Every value is invented.
@@ -28,7 +28,7 @@ afterAll(async () => {
 });
 
 describe('AC-8: a Recalculate of 500 parts, through the whole path', () => {
-  it('stores 500 rows in the Lead\'s name, keeps the estimate SUBMITTED, and takes well under the loose bound (the measure is printed)', { timeout: 120_000 }, async () => {
+  it('stores 500 rows in the Lead\'s name, keeps the estimate PREPARED, and takes well under the loose bound (the measure is printed)', { timeout: 120_000 }, async () => {
     const engineer = { id: db.engineerId, role: 'ENGINEER' as const };
     const lead = { id: db.personId, role: 'LEAD' as const };
     const samples: number[] = [];
@@ -46,7 +46,7 @@ describe('AC-8: a Recalculate of 500 parts, through the whole path', () => {
            FROM estimates e JOIN calculations c ON c.id = e.current_calculation_id WHERE e.id = $1::uuid`,
         [estimateId],
       );
-      expect(defined(stored.rows[0])).toEqual({ rows: String(TREE500_NODE_COUNT), status: 'SUBMITTED', made_by: db.personId, revisions_match: true });
+      expect(defined(stored.rows[0])).toEqual({ rows: String(TREE500_NODE_COUNT), status: 'PREPARED', made_by: db.personId, revisions_match: true });
     }
     process.stdout.write(`\n${formatReport(`AC-8 Recalculate of ${TREE500_NODE_COUNT} parts through calculation-service.recalculate (PostgreSQL), ${RUNS} runs`, summarise(samples))}`);
     expect(summarise(samples).maxMs).toBeLessThan(LOOSE_BOUND_MS);

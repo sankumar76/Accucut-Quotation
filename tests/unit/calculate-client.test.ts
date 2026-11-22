@@ -26,8 +26,8 @@ const blocked = (parts: unknown): Response => answer({ type: 'about:blank', titl
 
 describe('calculateEstimate (AC-2)', () => {
   it('sends POST /api/v1/estimates/{id}/calculate with no body and reads the status and the sentence', async () => {
-    const doFetch = fetching(answer({ status: 'SUBMITTED', message: CALCULATE_MESSAGE }));
-    expect(await calculateEstimate(ESTIMATE, doFetch)).toEqual({ status: 'ok', value: { status: 'SUBMITTED', message: CALCULATE_MESSAGE } });
+    const doFetch = fetching(answer({ status: 'PREPARED', message: CALCULATE_MESSAGE }));
+    expect(await calculateEstimate(ESTIMATE, doFetch)).toEqual({ status: 'ok', value: { status: 'PREPARED', message: CALCULATE_MESSAGE } });
     expect(doFetch.mock.calls[0]?.[0]).toBe(`/api/v1/estimates/${ESTIMATE}/calculate`);
     const init = doFetch.mock.calls[0]?.[1];
     expect(init).toMatchObject({ method: 'POST', credentials: 'same-origin' });
@@ -35,17 +35,17 @@ describe('calculateEstimate (AC-2)', () => {
   });
 
   it('encodes the estimate ID into the path', async () => {
-    const doFetch = fetching(answer({ status: 'SUBMITTED', message: CALCULATE_MESSAGE }));
+    const doFetch = fetching(answer({ status: 'PREPARED', message: CALCULATE_MESSAGE }));
     await calculateEstimate('a/b c', doFetch);
     expect(doFetch.mock.calls[0]?.[0]).toBe('/api/v1/estimates/a%2Fb%20c/calculate');
   });
 
   it.each([
     ['another status', answer({ status: 'DRAFT', message: CALCULATE_MESSAGE })],
-    ['no message', answer({ status: 'SUBMITTED' })],
-    ['an empty message', answer({ status: 'SUBMITTED', message: '' })],
-    ['a message that is not text', answer({ status: 'SUBMITTED', message: 12 })],
-    ['a body that is not an object', answer('SUBMITTED')],
+    ['no message', answer({ status: 'PREPARED' })],
+    ['an empty message', answer({ status: 'PREPARED', message: '' })],
+    ['a message that is not text', answer({ status: 'PREPARED', message: 12 })],
+    ['a body that is not an object', answer('PREPARED')],
     ['a body that is not JSON', new Response('<html>', { status: 200 })],
   ])('is "failed" for %s', async (_name, response) => {
     expect(await calculateEstimate(ESTIMATE, fetching(response))).toEqual({ status: 'failed' });
@@ -123,8 +123,8 @@ const asked = (overrides: Record<string, unknown> = {}): Response =>
 
 describe('calculateAnyway (STORY-05.12 AC-3)', () => {
   it('sends the same POST with a JSON body holding the revision from the 409, and reads the good answer as before', async () => {
-    const doFetch = fetching(answer({ status: 'SUBMITTED', message: CALCULATE_MESSAGE }));
-    expect(await calculateAnyway(ESTIMATE, 7, doFetch)).toEqual({ status: 'ok', value: { status: 'SUBMITTED', message: CALCULATE_MESSAGE } });
+    const doFetch = fetching(answer({ status: 'PREPARED', message: CALCULATE_MESSAGE }));
+    expect(await calculateAnyway(ESTIMATE, 7, doFetch)).toEqual({ status: 'ok', value: { status: 'PREPARED', message: CALCULATE_MESSAGE } });
     expect(doFetch.mock.calls[0]?.[0]).toBe(`/api/v1/estimates/${ESTIMATE}/calculate`);
     const init = doFetch.mock.calls[0]?.[1];
     expect(init).toMatchObject({ method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } });
@@ -132,7 +132,7 @@ describe('calculateAnyway (STORY-05.12 AC-3)', () => {
   });
 
   it('a first press sends no body at all', async () => {
-    const doFetch = fetching(answer({ status: 'SUBMITTED', message: CALCULATE_MESSAGE }));
+    const doFetch = fetching(answer({ status: 'PREPARED', message: CALCULATE_MESSAGE }));
     await calculateEstimate(ESTIMATE, doFetch);
     expect(doFetch.mock.calls[0]?.[1]?.body).toBeUndefined();
   });
@@ -142,7 +142,7 @@ describe('calculateAnyway (STORY-05.12 AC-3)', () => {
     const original = globalThis.fetch;
     globalThis.fetch = ((url: string, init?: RequestInit) => {
       calls.push({ url, body: init?.body });
-      return Promise.resolve(answer({ status: 'SUBMITTED', message: CALCULATE_MESSAGE }));
+      return Promise.resolve(answer({ status: 'PREPARED', message: CALCULATE_MESSAGE }));
     }) as typeof fetch;
     try {
       await press(ESTIMATE);

@@ -24,7 +24,7 @@ export function isQueueTab(value: string): value is QueueTab {
 }
 
 /** The status of an estimate, which is what a row shows until story 04.04 words it for the Engineer. */
-export type TaskEstimateStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED';
+export type TaskEstimateStatus = 'DRAFT' | 'PREPARED' | 'APPROVED';
 
 /** How many tasks each tab holds for the person asking (an Engineer's own, or every task for a Lead and an Admin). */
 export interface QueueCounts {

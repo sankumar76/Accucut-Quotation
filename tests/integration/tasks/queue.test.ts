@@ -53,7 +53,7 @@ afterEach(async () => {
 });
 
 /** A task and its estimate, in any state: the assignment would refuse a deadline that is not later than now. */
-async function seed(code: string, engineerId: string, deadlineAt: Date, status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' = 'DRAFT', chosenCustomerId: string | null = null, title = 'Invented task'): Promise<void> {
+async function seed(code: string, engineerId: string, deadlineAt: Date, status: 'DRAFT' | 'PREPARED' | 'APPROVED' = 'DRAFT', chosenCustomerId: string | null = null, title = 'Invented task'): Promise<void> {
   const task = await db.owner.query<{ id: string }>(
     'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, \'Invented subject\') RETURNING id::text',
     [code, engineerId, leadId, PATH, deadlineAt, title],
@@ -64,7 +64,7 @@ async function seed(code: string, engineerId: string, deadlineAt: Date, status: 
 /** The same six tasks as the unit test: three of Arjun's and three of Priya's, in every state. */
 async function seedSix(): Promise<void> {
   await seed('Q-2026-0001', arjunId, at(-2 * DAY), 'DRAFT', null, 'Overdue hopper');
-  await seed('Q-2026-0002', arjunId, at(DAY), 'SUBMITTED');
+  await seed('Q-2026-0002', arjunId, at(DAY), 'PREPARED');
   await seed('Q-2026-0003', arjunId, at(-5 * DAY), 'APPROVED', customerId);
   await seed('Q-2026-0004', priyaId, at(0));
   await seed('Q-2026-0005', priyaId, at(-1));

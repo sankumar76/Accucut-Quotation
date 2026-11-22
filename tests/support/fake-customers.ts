@@ -33,7 +33,7 @@ export interface FakeCustomer {
   address: string | null;
   /** Set by story 02.07's delete; the fake lists no deleted customer. */
   deleted: boolean;
-  /** The Draft and Submitted estimates that have this customer, in the order of their task code (STORY-02.07). A test pushes to it to make the customer "in use". */
+  /** The Draft and Prepared estimates that have this customer, in the order of their task code (STORY-02.07). A test pushes to it to make the customer "in use". */
   readonly openEstimates: EstimateUse[];
   readonly values: Map<string, string>;
 }

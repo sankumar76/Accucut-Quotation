@@ -99,7 +99,7 @@ test.describe('AC-1: the Lead is asked again, even though the Engineer already w
     // The warning says nothing about rates, prices or formulas.
     expect((await dialog(page).innerText()).toLowerCase()).not.toMatch(/\brates?\b|\bprice\b|formula/);
 
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 
   test('AC-1: focus starts on "Go back"; "Go back" closes the dialog, changes nothing and puts focus back on Recalculate', async ({ page }, testInfo) => {
@@ -110,7 +110,7 @@ test.describe('AC-1: the Lead is asked again, even though the Engineer already w
     await expect(dialog(page)).toHaveCount(0);
     await expect(recalculateButton(page)).toBeFocused();
     await expect(recalculateButton(page)).toHaveText('Recalculate');
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 
   test('AC-1: on an estimate nobody calculated, the first press of the Lead is "Calculate" and the way on is "Calculate anyway"', async ({ page }, testInfo) => {
@@ -128,7 +128,7 @@ test.describe('AC-1: the Lead is asked again, even though the Engineer already w
     await goAhead(page, 'Calculate anyway').click();
     expect((await answered).status()).toBe(200);
     await expect(dialog(page)).toHaveCount(0);
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 
   test('AC-1 (AC-4 of AQP-318): when something changed after the 409, "Recalculate anyway" shows the new list with the words that say so, and nothing is calculated', async ({ page }, testInfo) => {
@@ -143,7 +143,7 @@ test.describe('AC-1: the Lead is asked again, even though the Engineer already w
     await expect(dialog(page)).toContainText(CHANGED);
     await expect(dialog(page).getByRole('alert')).toContainText(CHANGED);
     await expect(goBack(page)).toBeFocused();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 
   test('AC-1: when the acknowledged press fails, the dialog closes, the page says so and focus is on Recalculate', async ({ page }, testInfo) => {
@@ -154,7 +154,7 @@ test.describe('AC-1: the Lead is asked again, even though the Engineer already w
     await expect(dialog(page)).toHaveCount(0);
     await expect(page.getByRole('alert').filter({ hasText: 'We could not calculate this estimate.' })).toBeVisible();
     await expect(recalculateButton(page)).toBeFocused();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 });
 
@@ -182,7 +182,7 @@ test.describe('AC-2, AC-3: "Recalculate anyway" makes the Lead\'s own calculatio
     await expect(marks(page).first()).toContainText('Quantity 0');
     await expect(marks(page).first()).toBeVisible();
 
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 2 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 2 });
     const record = await readWarningRecord(owner.id);
     expect(record.warnings).toHaveLength(2);
     expect(record.audit.map((entry) => entry.event)).toEqual(['calculation.warning_acknowledged', 'calculation.warning_acknowledged']);
@@ -255,7 +255,7 @@ test.describe('AC-8: keyboard, focus and accessibility at this width', () => {
     await page.keyboard.press('Escape');
     await expect(dialog(page)).toHaveCount(0);
     await expect(recalculateButton(page)).toBeFocused();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
 
     const askedAgain = page.waitForResponse(isRecalculate);
     await page.keyboard.press('Enter');
@@ -267,7 +267,7 @@ test.describe('AC-8: keyboard, focus and accessibility at this width', () => {
     await page.keyboard.press('Enter');
     expect((await answered).status()).toBe(200);
     await expect(page.locator('#review-calculated')).toBeFocused();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 2 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 2 });
   });
 
   test('AC-8: no sideways scroll and no axe violation with the dialog open', async ({ page }, testInfo) => {

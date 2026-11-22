@@ -61,7 +61,7 @@ async function seedLead(lead: E2eUser, testInfo: TestInfo): Promise<LeadSet> {
     engineers: [first, second],
     hopper: await seedQueueTask(first.id, FIRST_DEADLINE, 'DRAFT', 'E2E alpha hopper', lead.email),
     bracket: await seedQueueTask(first.id, SECOND_DEADLINE, 'DRAFT', 'E2E bravo bracket', lead.email),
-    plate: await seedQueueTask(second.id, THIRD_DEADLINE, 'SUBMITTED', 'E2E charlie plate', lead.email),
+    plate: await seedQueueTask(second.id, THIRD_DEADLINE, 'PREPARED', 'E2E charlie plate', lead.email),
     strangers: await seedQueueTask(second.id, THIRD_DEADLINE, 'DRAFT', 'E2E someone else assigned'),
   };
 }

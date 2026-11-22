@@ -8,7 +8,7 @@ import type { EstimateStatus } from './state-machine';
  * a task) and every role takes its words from here, so the Engineer, the Lead and the Admin read the same ones (AC-5).
  *
  *   DRAFT      -> "Draft"      (the task is open)
- *   SUBMITTED  -> "Submitted"  (the task is open)
+ *   PREPARED  -> "Prepared"  (the task is open)
  *   APPROVED   -> "Approved"   (the task is **closed**: Closed is the approved estimate, FR-038)
  *
  * One badge for each status, as the G3 screens draw it: the queue says "Approved" with a lock, the task header says "Approved and locked" (`APPROVED_LOCKED_LABEL`). "Closed"
@@ -18,7 +18,7 @@ import type { EstimateStatus } from './state-machine';
  * type, so an Engineer's page may import it.
  */
 
-export type TaskStatusLabel = 'Draft' | 'Submitted' | 'Approved';
+export type TaskStatusLabel = 'Draft' | 'Prepared' | 'Approved';
 
 export interface TaskStatusView {
   readonly label: TaskStatusLabel;
@@ -41,8 +41,8 @@ export function taskStatusOf(status: EstimateStatus): TaskStatusView {
   switch (status) {
     case 'DRAFT':
       return { label: 'Draft', closed };
-    case 'SUBMITTED':
-      return { label: 'Submitted', closed };
+    case 'PREPARED':
+      return { label: 'Prepared', closed };
     case 'APPROVED':
       return { label: 'Approved', closed };
     default:

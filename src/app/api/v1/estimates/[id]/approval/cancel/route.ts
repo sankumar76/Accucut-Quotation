@@ -9,7 +9,7 @@ import { estimateIdParamsSchema } from '@/server/views/schemas/estimates';
  * that. Then: 422 (the reason is empty or over 500 characters; the body is not the shape), 422 `STEP_UP_FAILED` or 429 `STEP_UP_LOCKED` (the password is checked **in this request**, before anything is read; the session
  * stays valid), then, under the estimate's row lock in **one transaction**: 404 (no such estimate), 409 `CUSTOMER_DELETED` or `MATERIAL_DELETED` (a customer or a material the estimate names was deleted, AC-9), 409
  * `NO_APPROVAL_TO_CANCEL`, 409 `APPROVAL_CHANGED` (the `approvalId` is not the latest), 409 `APPROVAL_ALREADY_CANCELLED`. A refusal writes nothing, not even an audit entry. A request that passes every check stores the
- * cancel on the approval (who, when, why), moves an APPROVED estimate to DRAFT (a DRAFT or SUBMITTED one keeps its status, AC-10) and records the audit entry `approval.cancelled`, together or not at all.
+ * cancel on the approval (who, when, why), moves an APPROVED estimate to DRAFT (a DRAFT or PREPARED one keeps its status, AC-10) and records the audit entry `approval.cancelled`, together or not at all.
  *
  * **The answer** is `{status, cancelledAt}` and nothing else (NFR-002): no price, no calculated figure, no master value, no ID, and never the password (AC-7), which only `verifyStepUp` reads.
  */

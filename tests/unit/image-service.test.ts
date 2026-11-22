@@ -284,21 +284,21 @@ describe('AC-4: a picture is stored once for each estimate', () => {
 });
 
 describe('AC-6 and FR-064: who may change a picture, and when', () => {
-  it('lets an Engineer change a draft, and a Lead or an Admin change a draft and a submitted estimate', async () => {
+  it('lets an Engineer change a draft, and a Lead or an Admin change a draft and a prepared estimate', async () => {
     for (const viewer of [arjun, lead, admin]) {
       const setup = setUp();
       await setup.put(smallPng(), 'a.png', { viewer });
       expect(setup.stored().imageId).not.toBeNull();
     }
     for (const viewer of [lead, admin]) {
-      const setup = setUp([estimate({ status: 'SUBMITTED' })]);
+      const setup = setUp([estimate({ status: 'PREPARED' })]);
       await setup.put(smallPng(), 'a.png', { viewer });
       expect(setup.stored().imageId).not.toBeNull();
     }
   });
 
-  it.each(['put', 'remove'] as const)('refuses an Engineer on a submitted estimate with 409 and the not-editable code, and changes nothing (%s)', async (action) => {
-    const setup = setUp([estimate({ status: 'SUBMITTED' })]);
+  it.each(['put', 'remove'] as const)('refuses an Engineer on a prepared estimate with 409 and the not-editable code, and changes nothing (%s)', async (action) => {
+    const setup = setUp([estimate({ status: 'PREPARED' })]);
     const error = await refusal(action === 'put' ? setup.put(smallPng()) : setup.remove());
     expect(error).toBeInstanceOf(ConflictError);
     expect(error).toMatchObject({ httpStatus: 409, code: ESTIMATE_NOT_EDITABLE_CODE });
@@ -337,13 +337,13 @@ describe('AC-6 and FR-064: who may change a picture, and when', () => {
     expect(setup.world.images).toHaveLength(0);
   });
 
-  it('answers in the order 404, 409, then the content: a stranger is not told the file is wrong, nor is an Engineer on a submitted estimate', async () => {
+  it('answers in the order 404, 409, then the content: a stranger is not told the file is wrong, nor is an Engineer on a prepared estimate', async () => {
     const stranger = setUp();
     expect(await refusal(stranger.put(PLAIN_TEXT, 'a.png', { viewer: priya }))).toBeInstanceOf(NotFoundError);
     expect(await refusal(stranger.put(pngOfSize(201 * KB), 'a.png', { viewer: priya }))).toBeInstanceOf(NotFoundError);
-    const submitted = setUp([estimate({ status: 'SUBMITTED' })]);
-    expect(await refusal(submitted.put(PLAIN_TEXT))).toMatchObject({ httpStatus: 409 });
-    expect(await refusal(submitted.put(pngOfSize(201 * KB)))).toMatchObject({ httpStatus: 409 });
+    const prepared = setUp([estimate({ status: 'PREPARED' })]);
+    expect(await refusal(prepared.put(PLAIN_TEXT))).toMatchObject({ httpStatus: 409 });
+    expect(await refusal(prepared.put(pngOfSize(201 * KB)))).toMatchObject({ httpStatus: 409 });
   });
 });
 
@@ -406,9 +406,9 @@ describe('AC-5: reading a picture', () => {
     expect(new Set(answers.map((answer) => JSON.stringify({ status: (answer as NotFoundError).httpStatus, message: (answer as NotFoundError).message, code: (answer as NotFoundError).code }))).size).toBe(1);
   });
 
-  it('still serves the picture of an estimate that is submitted or approved (a read is not a change)', async () => {
+  it('still serves the picture of an estimate that is prepared or approved (a read is not a change)', async () => {
     const { setup, id } = await withPicture();
-    for (const status of ['SUBMITTED', 'APPROVED'] as const) {
+    for (const status of ['PREPARED', 'APPROVED'] as const) {
       defined(setup.world.estimates[0]).status = status;
       expect((await setup.service.getPicture(arjun, id)).mime).toBe('image/png');
     }

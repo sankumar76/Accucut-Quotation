@@ -159,7 +159,7 @@ async function run(): Promise<void> {
     const common = { engineerId: people.measurementEngineerId, leadId: people.leadId, customerId, materialId };
     await seedTree500Estimate(client, { ...common, code: WORKSPACE_CODE });
     const costEstimateId = await seedTree500Estimate(client, { ...common, code: COST_CODE });
-    // Calculate takes the whole path for 500 parts, as the Engineer's button does; the estimate is then Submitted and its cost details open for the Lead and the Admin.
+    // Calculate takes the whole path for 500 parts, as the Engineer's button does; the estimate is then Prepared and its cost details open for the Lead and the Admin.
     await calculateOverHttp(origin, await signInOverHttp(origin, engineer.email, engineer.password), costEstimateId);
     process.stdout.write('seed-lighthouse-data: the data was made (500 customers, 25,000 rates, 200 materials, 300 queue tasks, two estimates of 500 parts, one calculated).\n');
   } finally {
