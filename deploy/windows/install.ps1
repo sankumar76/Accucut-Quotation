@@ -753,7 +753,8 @@ function Get-AccucutInstallSettings {
         [Parameter(Mandatory)][int]$Port,
         [Parameter(Mandatory)][string]$PgHost,
         [Parameter(Mandatory)][int]$PgPort,
-        [Parameter(Mandatory)][string]$DatabaseName
+        [Parameter(Mandatory)][string]$DatabaseName,
+        [switch]$WithProxy
     )
 
     $supplied = [ordered]@{}
@@ -788,6 +789,8 @@ function Get-AccucutInstallSettings {
     $hostName = [System.Net.Dns]::GetHostName().ToLowerInvariant()
     $values['APP_ORIGIN'] = Get-AccucutInstallValue -Name 'APP_ORIGIN' -Prompt 'The address people will type to open the portal, for example https://quotes.example.com' -Supplied $supplied -Default "http://${hostName}:$Port" -NonInteractive:$ni
     if ($values['APP_ORIGIN'] -notmatch '^https?://[^/\s?#]+$') { throw 'APP_ORIGIN must look like https://quotes.example.com or http://server:3000: a scheme and a host, no path.' }
+    # With a proxy in front, the address people type is the proxy's https address (architecture section 8 P1, #576): refused here, before anything is created.
+    if ($WithProxy) { Assert-AccucutProxyOrigin -Origin $values['APP_ORIGIN'] }
     $values['ADMIN_EMAIL'] = Get-AccucutInstallValue -Name 'ADMIN_EMAIL' -Prompt 'E-mail address of the first Admin' -Supplied $supplied -Required -NonInteractive:$ni
     if ($values['ADMIN_EMAIL'] -notmatch '^[^@\s]+@[^@\s]+\.[^@\s]+$') { throw 'ADMIN_EMAIL is not an e-mail address.' }
     $adminPassword = Get-AccucutInstallValue -Name 'ADMIN_INITIAL_PASSWORD' -Prompt 'A first password for the Admin (10 to 128 characters, with a digit and a symbol; they change it at first sign-in)' -Supplied $supplied -Secret -Required -NonInteractive:$ni
@@ -1000,7 +1003,7 @@ function Invoke-AccucutInstall {
 
         # The values. Asked for before anything is created, so a typing slip costs nothing.
         $template = Read-AccucutEnvTemplate -Path ([System.IO.Path]::Combine($Release, '.env.example'))
-        $settings = Get-AccucutInstallSettings -Template $template -ValuesFile $ValuesFile -NonInteractive:$NonInteractive -Port $Port -PgHost $PgHost -PgPort $PgPort -DatabaseName $script:DatabaseName
+        $settings = Get-AccucutInstallSettings -Template $template -ValuesFile $ValuesFile -NonInteractive:$NonInteractive -Port $Port -PgHost $PgHost -PgPort $PgPort -DatabaseName $script:DatabaseName -WithProxy:$WithProxy
         Register-AccucutSecret -Value $settings.PgSuperuserPassword
         $envLines = Split-AccucutEnvValues -Template $template -Values $settings.Values
         # The folder the worker's log-prune job prunes (an absolute path; forward slashes, so that no backslash can be read as an escape in .env).
@@ -1127,6 +1130,17 @@ function Invoke-AccucutInstall {
             New-AccucutAdminShortcut -EndpointName 'AccucutAdmin' -PowerShellPath $powershellExe
             Write-AccucutLog -Message "The Admin can now open the shortcut 'Accucut Admin' on the desktop (as $AdminAccount) and type Restore-AccucutBackup or Clear-AccucutCopies." -LogFile $logFile
         }
+
+        # With a proxy: checks C2, C3 and C5 of the install guide ("Reverse proxy") against the address people will type, as this server sees it (#576). They never stop the install: the portal is running,
+        # and the proxy may not be installed yet, so a check that fails is said loudly at the end and the IT person runs the checklist again after installing the proxy.
+        $proxyFailed = @()
+        if ($WithProxy) {
+            try { $proxyFailed = @(Invoke-AccucutProxyChecks -Origin $settings.Values['APP_ORIGIN'] -LogFile $logFile) }
+            catch {
+                Write-AccucutLog -Message "The proxy checks could not run: $($_.Exception.Message)" -Level Warning -LogFile $logFile
+                $proxyFailed = @('C2', 'C3', 'C5')
+            }
+        }
     }
     catch {
         Write-AccucutLog -Message "INSTALL FAILED: $($_.Exception.Message)" -Level Error -LogFile $logFile
@@ -1141,6 +1155,9 @@ function Invoke-AccucutInstall {
             Remove-AccucutInstallRoot -Root $Root -LogFile $logFile
         }
         throw
+    }
+    if ($proxyFailed.Count -gt 0) {
+        Write-AccucutLog -Message "The portal is running, but proxy check(s) $($proxyFailed -join ', ') did not pass. Install or fix the reverse proxy as the README says (section 'Reverse proxy'), then tick C1 to C10 again before anyone uses the portal." -Level Warning -LogFile $logFile
     }
     Write-AccucutLog -Message "Done. Open $($settings.Values['APP_ORIGIN']) and sign in as $($settings.Values['ADMIN_EMAIL']) with the first password; you will be asked to choose a new one." -LogFile $logFile
     Write-AccucutLog -Message "Install log: $logFile. If you used a values file, delete it now: it holds the first password." -LogFile $logFile

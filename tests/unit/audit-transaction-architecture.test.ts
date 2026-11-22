@@ -26,7 +26,7 @@ const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 /** The slow part (building the program, then asking the type checker about the real services) runs once, in the hook (DL-057). */
 const PROGRAM_BUILD_TIMEOUT = 120_000;
 
-/** Uses of `AuditService.record` in the services at master 2891457: 15 calls (AQP-123 and AQP-130 added to the 11 that AC-4 counted at 023e17d). */
+/** Uses of `AuditService.record` and `recordMany` in the services: 15 `record` calls at master 2891457 (AQP-123 and AQP-130 added to the 11 that AC-4 counted at 023e17d); `recordMany` joined in ADR-018 and replaced a loop of `record`, so the count of both is the same or higher. */
 const RECORD_CALLS_AT_BASE = 15;
 
 const ALL_CASES: readonly Case[] = [...PASSING, ...FAILING, ...OPEN_LIMITS];

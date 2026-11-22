@@ -77,3 +77,48 @@ describe('GET /api/health', () => {
     expect((await GET()).headers.get('Cache-Control')).toBe('private, no-store');
   });
 });
+
+/**
+ * #576, check C5 of the install guide (architecture section 8, P2): the answer says which address the portal worked out for the caller, in `X-Client-Address-Seen`, so the install can see that
+ * the reverse proxy writes the real address as the last entry of `X-Forwarded-For`. It is the same rule the sign-in limit uses (`clientAddressFrom`: the last entry, only a well-formed
+ * address, no port), so the check shows what the limit sees. `none` when there is no usable address. The address is the caller's own, so it discloses nothing.
+ */
+describe('GET /api/health: X-Client-Address-Seen (#576, check C5)', () => {
+  const ask = (forwardedFor?: string): Promise<Response> =>
+    GET(new Request('http://127.0.0.1:3000/api/health', forwardedFor === undefined ? {} : { headers: { 'x-forwarded-for': forwardedFor } }));
+
+  beforeEach(() => latestHeartbeatAt.mockResolvedValue(new Date()));
+  afterEach(() => latestHeartbeatAt.mockReset());
+
+  it.each([
+    ['one address', '198.51.100.4', '198.51.100.4'],
+    ['the last of several, which the proxy wrote, not the first, which a browser can send', '203.0.113.7, 198.51.100.4', '198.51.100.4'],
+    ['an IPv6 address, in lower case', '2001:DB8::1', '2001:db8::1'],
+  ])('shows %s', async (_name, header, seen) => {
+    expect((await ask(header)).headers.get('X-Client-Address-Seen')).toBe(seen);
+  });
+
+  it.each([
+    ['no header at all', undefined],
+    ['an address with a port, which is not an address (the proxy must not add one)', '198.51.100.4:51234'],
+    ['text that is not an address', 'not-an-address'],
+    ['an empty last entry', '198.51.100.4,'],
+  ])('shows none for %s', async (_name, header) => {
+    expect((await ask(header)).headers.get('X-Client-Address-Seen')).toBe('none');
+  });
+
+  it('is on a 503 as well, so a proxy can be checked while the worker is down', async () => {
+    latestHeartbeatAt.mockResolvedValue(null);
+    const response = await ask('198.51.100.4');
+    expect(response.status).toBe(503);
+    expect(response.headers.get('X-Client-Address-Seen')).toBe('198.51.100.4');
+    latestHeartbeatAt.mockRejectedValue(new Error('down'));
+    expect((await ask('198.51.100.5')).headers.get('X-Client-Address-Seen')).toBe('198.51.100.5');
+  });
+
+  it('keeps the body at the one word and the answer uncached', async () => {
+    const response = await ask('198.51.100.4');
+    expect(await response.json()).toEqual({ status: 'ok' });
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+  });
+});

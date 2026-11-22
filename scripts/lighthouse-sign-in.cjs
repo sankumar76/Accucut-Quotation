@@ -31,6 +31,9 @@ module.exports = async (browser, context) => {
   const { email, password } = credentialsOf(roleOf(context.url));
   const page = await browser.newPage();
   try {
+    // One browser measures every page, and a page is measured as its own role: the session of the page before (another role, or the same one) is dropped, or the sign-in page
+    // would send a person who is already signed in away, and the form would never be there.
+    await (await page.createCDPSession()).send('Network.clearBrowserCookies');
     await page.goto(new URL('/sign-in', context.url).href, { waitUntil: 'networkidle0', timeout: SIGN_IN_TIMEOUT_MS });
     await page.type('input[name="email"]', email);
     await page.type('input[name="password"]', password);

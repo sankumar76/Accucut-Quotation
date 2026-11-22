@@ -115,6 +115,6 @@ describe('AC-7: a record, not a control', () => {
   });
 
   it('has no method of the audit service that changes or removes an entry', () => {
-    expect(Object.keys(harness.auditService).sort()).toEqual(['list', 'record']);
+    expect(Object.keys(harness.auditService).sort()).toEqual(['list', 'record', 'recordMany']);
   });
 });

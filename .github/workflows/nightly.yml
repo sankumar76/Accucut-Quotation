@@ -1,8 +1,9 @@
 # Nightly checks for NFR-009 (test strategy sections 10.2 and 10.3; STORY-10.10 AC-7 and AC-8).
 #
 #   lighthouse   The Lighthouse reference run on a GitHub-hosted ubuntu-24.04 runner: the production build served by
-#                `next start` with invented data, `/` measured signed in on the Wi-Fi profile (pass or fail, on the key
-#                screens as they come into being) and on the Slow 4G profile (report only), 5 runs each. The reports are
+#                `next start` with invented data at the NFR-011 planning volume (scripts/seed-lighthouse-data.ts: 500
+#                customers, 300 tasks, two estimates of 500 parts), the five key screens and `/` measured signed in on the
+#                Wi-Fi profile (pass or fail on the key screens) and on the Slow 4G profile (report only), 5 runs each. The reports are
 #                kept as an artefact for 30 days and the summary table (LCP, TBT, benchmarkIndex, Chromium version) goes
 #                in the job summary. Nothing is uploaded to a public server.
 #   capacity     The load, capacity and volume run of NFR-010 and NFR-011 (STORY-10.09, test strategy 8.2): the production build
@@ -17,6 +18,10 @@
 #                that run stage 12a. A scheduled run belongs to master, so what it saves is readable from every branch;
 #                a pull request's own save is visible to that pull request only. Without it, after a runner-image change
 #                every pull request would miss in each shard until a merge to master saved the new key.
+#
+#   browsers    The sweep, the keyboard-only flows and the browser matrix of STORY-10.08 (AQP-370): `playwright.sweep.config.ts` over `tests/e2e-sweep`, on the
+#                production build and a database of its own. Chromium at 360, 768 and 1366 px and at the other sizes of NFR-016; Chromium, Firefox and
+#                WebKit for the five main journeys at 360 and 1366 px (NFR-019). The report and the traces of failures are kept for 30 days.
 #
 # It never blocks a merge: it is not a required check. A failure is reported and the orchestrator raises the issue.
 #
@@ -49,8 +54,27 @@ on:
       - scripts/lib/ci-feedback-time.ts
       - scripts/ensure-measurement-user.ts
       - scripts/lib/measurement-user.ts
+      - scripts/ensure-seed-version.ts
+      - scripts/seed-lighthouse-data.ts
+      - scripts/lib/lighthouse-data.ts
+      - scripts/lib/portal-calculate.ts
       - scripts/ci/playwright-system-deps.sh
       - scripts/ci/playwright-deps-packages.sh
+      - playwright.sweep.config.ts
+      - scripts/summarise-sweep.ts
+      - scripts/lib/sweep-summary.ts
+      - scripts/sweep-tls-front.ts
+      - scripts/lib/tls-front.ts
+      - tests/e2e-sweep/browsers.spec.ts
+      - tests/e2e-sweep/keyboard-flows.spec.ts
+      - tests/e2e-sweep/no-access.spec.ts
+      - tests/e2e-sweep/screens-table.ts
+      - tests/e2e-sweep/screens.spec.ts
+      - tests/e2e-sweep/sizes.spec.ts
+      - tests/e2e-sweep/support/keyboard.ts
+      - tests/e2e-sweep/support/https-origin.ts
+      - tests/e2e-sweep/support/sweep.ts
+      - tests/e2e-sweep/sweep.setup.ts
 
 permissions:
   contents: read
@@ -187,6 +211,10 @@ jobs:
           MEASUREMENT_ADMIN_EMAIL="perf-admin@example.test" MEASUREMENT_ADMIN_PASSWORD="${password}" \
             npx tsx scripts/ensure-measurement-user.ts
 
+      # The estimate screens read the configuration (the field registry) that every install stores once; it is stored with the owner role, as the migrate one-shot does.
+      - name: Store the seed configuration version
+        run: node --conditions=react-server --import tsx scripts/ensure-seed-version.ts
+
       - name: Start the production server
         run: |
           secret="$(openssl rand -hex 32)"
@@ -200,6 +228,18 @@ jobs:
           echo "The server did not answer within 2 minutes. Its output:"
           cat "${RUNNER_TEMP}/next-start.log"
           exit 1
+
+      # The data of the key screens (NFR-011 planning volume) and the Engineer whose workspace is measured. Calculate is pressed through the running server, so this follows it.
+      - name: Make the planning-volume data and the invented measurement Engineer
+        run: |
+          password="p$(openssl rand -hex 16)"
+          echo "::add-mask::${password}"
+          {
+            echo "MEASUREMENT_ENGINEER_EMAIL=perf-engineer@example.test"
+            echo "MEASUREMENT_ENGINEER_PASSWORD=${password}"
+          } >> "${GITHUB_ENV}"
+          MEASUREMENT_ENGINEER_EMAIL="perf-engineer@example.test" MEASUREMENT_ENGINEER_PASSWORD="${password}" \
+            node --conditions=react-server --import tsx scripts/seed-lighthouse-data.ts
 
       # Wi-Fi first. A failed assertion on a key screen fails this step and the run; the Slow 4G step still runs.
       - name: Lighthouse, Wi-Fi profile (pass or fail)
@@ -448,3 +488,140 @@ jobs:
           PLAYWRIGHT_DEBS_CACHE_KEY: ${{ steps.versions.outputs.debs_key }}
           PLAYWRIGHT_DEBS_DIR: ${{ runner.temp }}/playwright-debs
         run: bash scripts/ci/playwright-system-deps.sh "${PLAYWRIGHT_DEBS_DIR}"
+
+  # STORY-10.08 (AQP-370; NFR-016, NFR-018, NFR-019; test strategy 4, 9 and 10.9): the sweep, the keyboard-only flows and the browser matrix, from
+  # `playwright.sweep.config.ts` and the folder `tests/e2e-sweep`. Chromium sweeps every implemented page of the route manifest as every role it allows at
+  # 360, 768 and 1366 px (no sideways scroll, declared primary actions, axe) and at the other sizes of NFR-016; Chromium runs the five key flows by keyboard
+  # alone; Chromium, Firefox and WebKit run the five main journeys at 360 and 1366 px. The production build, a database of this job's own, one server
+  # (the config starts it). It is not part of the required check (the fan-in job of ci.yml) and not a stage of the pull-request CI: the required check and its four
+  # shards run `playwright.config.ts`, which lists `tests/e2e` only, and nothing here is in their `needs`. It runs by schedule and by hand, and on a pull
+  # request that changes the files that define it, so a change to the matrix is run on its own pull request. A red test is reported by name in the job summary
+  # (`scripts/summarise-sweep.ts`) and the report and the traces of failures are kept for 30 days. The browsers come through the bounded stage 12a script
+  # with its browser list set (AQP-216, test strategy 10.6), under their own cache keys because the package set differs from the required check's.
+  browsers:
+    name: Sweep, keyboard flows and browsers (NFR-016, NFR-018, NFR-019)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    services:
+      # The same PostgreSQL 17 image as the other jobs here, pinned by digest (change them together). Its own database: never stage 12's.
+      postgres:
+        image: postgres:17@sha256:3b0cda93be7c8dba2ed484d19393d93845dc3dafb88973e248ba8e6d99d784e1
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-bootstrap-only
+          POSTGRES_DB: accucut
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --host 127.0.0.1 --username postgres --dbname accucut"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Use the pinned npm
+        run: npm install --global "npm@${NPM_VERSION}"
+
+      - name: Install
+        run: |
+          npm ci
+          npx prisma generate
+
+      - name: Create the database roles and migrate (throwaway passwords)
+        run: |
+          owner="o$(openssl rand -hex 16)"
+          app="a$(openssl rand -hex 16)"
+          echo "::add-mask::${owner}"
+          echo "::add-mask::${app}"
+          {
+            echo "DB_OWNER_PASSWORD=${owner}"
+            echo "DB_APP_PASSWORD=${app}"
+            echo "MIGRATE_DATABASE_URL=postgresql://accucut_owner:${owner}@localhost:5432/accucut"
+            echo "DATABASE_URL=postgresql://accucut_app:${app}@localhost:5432/accucut"
+          } >> "${GITHUB_ENV}"
+          PGHOST=localhost PGPASSWORD=ci-bootstrap-only POSTGRES_USER=postgres POSTGRES_DB=accucut \
+            DB_OWNER_PASSWORD="${owner}" DB_APP_PASSWORD="${app}" \
+            bash docker/postgres-init/01-create-roles.sh
+          MIGRATE_DATABASE_URL="postgresql://accucut_owner:${owner}@localhost:5432/accucut" npx prisma migrate deploy
+
+      # Every page that reads the field registry answers 500 until the configuration has a version (STORY-03.01 AC-6).
+      - name: Store the seed configuration version
+        run: node --conditions=react-server --import tsx scripts/ensure-seed-version.ts
+
+      - name: Cache the Next.js build cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', 'next.config.ts', 'postcss.config.mjs') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      # `npm run build` is `prisma generate`, `next build` and the export thread's bundle: the export journey needs the thread's file.
+      - name: Build
+        run: npm run build
+
+      - name: "Read the Playwright and runner image versions"
+        id: versions
+        run: |
+          playwright="$(node --print "require('@playwright/test/package.json').version")"
+          {
+            echo "playwright=${playwright}"
+            echo "debs_key=playwright-debs-e${CACHE_EPOCH}-${ImageOS}-${ImageVersion}-${playwright}-matrix"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: "Cache the Playwright browsers (the three of the matrix)"
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.versions.outputs.playwright }}-matrix
+
+      - name: "Cache the Playwright system packages (the three of the matrix)"
+        id: debs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/playwright-debs
+          key: ${{ steps.versions.outputs.debs_key }}
+
+      - name: "Install Chromium, Firefox and WebKit with the bounded stage 12a script"
+        timeout-minutes: 12
+        env:
+          PLAYWRIGHT_BROWSERS: chromium firefox webkit
+          PLAYWRIGHT_DEBS_CACHE_HIT: ${{ steps.debs.outputs.cache-hit }}
+          PLAYWRIGHT_DEBS_CACHE_KEY: ${{ steps.versions.outputs.debs_key }}
+          PLAYWRIGHT_DEBS_DIR: ${{ runner.temp }}/playwright-debs
+        run: bash scripts/ci/playwright-system-deps.sh "${PLAYWRIGHT_DEBS_DIR}"
+
+      # One run of every project. A failed test fails this step, and the summary and the artefacts below still run (`!cancelled()`). The one retry of the
+      # configuration is the only retry (AC-8); a test that passes on it is listed in the summary.
+      - name: "Sweep, keyboard flows and browsers (Playwright, three engines)"
+        run: |
+          echo "Runner: $(nproc) vCPU, $(awk '/MemTotal/ {printf "%d", $2 / 1024}' /proc/meminfo) MB memory"
+          npx playwright test --config playwright.sweep.config.ts
+
+      - name: "Summary (passed, failed, flaky and skipped by engine and by project)"
+        if: ${{ !cancelled() }}
+        run: npx tsx scripts/summarise-sweep.ts test-results/sweep-results.json
+
+      - name: Keep the report and the traces for 30 days
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sweep-report
+          path: |
+            playwright-report/sweep
+            test-results/sweep
+            test-results/sweep-results.json
+          retention-days: 30
+          if-no-files-found: warn

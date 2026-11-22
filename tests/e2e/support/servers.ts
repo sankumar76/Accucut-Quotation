@@ -31,7 +31,7 @@ export const PRODUCTION_PORT = portFrom('E2E_PRODUCTION_PORT', 3101);
 /** The server built with `next build`: the sign-in spec runs here (deferred issue #17). */
 export const PRODUCTION_URL = `http://localhost:${PRODUCTION_PORT}`;
 /** The development server: the design-system and page-frame specs run here, signed in. */
-export const DEVELOPMENT_URL = `http://localhost:${DEV_PORT}`;
+export const DEVELOPMENT_URL = `${process.env['E2E_DEV_SCHEME'] === 'https' ? 'https' : 'http'}://localhost:${DEV_PORT}`; // `https` only in the sweep (`playwright.sweep.config.ts`: WebKit refuses a Secure cookie over plain http)
 /** Where the set-up project saves the signed-in browser state that the other specs start from. */
 export const SIGNED_IN_STATE = 'test-results/auth/lead.json';
 /** Where the set-up project saves the signed-in Admin's browser state, for the Users spec (STORY-01.04). */
