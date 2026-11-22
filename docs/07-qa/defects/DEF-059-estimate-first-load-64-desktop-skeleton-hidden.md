@@ -1,14 +1,14 @@
-# DEF-059: `estimate-first-load.spec.ts:64` [desktop] AC-4: the "Loading the form" skeleton is found but stays hidden for the 15 s expect (attempt 1 on two `master` pushes on 22 Nov; Test, product not excluded)
+# DEF-059: `estimate-first-load.spec.ts:64` [desktop] AC-4: the "Loading the form" skeleton is found but stays hidden for the 15 s expect (attempt 1 on two `master` pushes on 22 Nov; Product (layout), probable, DL-291)
 
 | Field | Value |
 |-------|-------|
 | Story / AC | STORY-05.13 (AQP-339, Done; ADR-016 E1), AC-4: "the part form fetches its fields; while the fields are on their way the skeleton shows as a status, then the fields take its place". The failing step is the skeleton being visible (`:77`); the later steps (the form shows, the skeleton goes) are not reached on the failed attempt. AC-4 is not shown to regress: the retry passes, and the same case passes on attempt 1 at mobile and tablet |
-| Severity | **Sev-3 Moderate** (qa-engineer, by the rule of DL-285 (3) read for this case; master is told and may rule otherwise): a Test-type defect, fails closed only if both attempts fail, workaround is the retry, no product behaviour shown to be affected |
-| Priority | P3. Lane: hardening window, a Minor-class test-only item behind the Sev-2, Major and DEF-058 items (an assumption for master to confirm) |
-| Type | **Test**, **product not excluded** (the element is on the page and "hidden" for the whole 15 s; no trace of the failed attempt, so a product cause such as a hidden or zero-size skeleton is not ruled out) |
-| Status | **New** (logged 2026-11-22) |
+| Severity | **Sev-3 Moderate, CONFIRMED by master (DL-291 (1))**: the rule of DL-285 (3) fired on the second occurrence. A loading state the UX spec requires is not painted at desktop widths, there is a workaround (the values arrive), and nothing is lost or exposed |
+| Priority | P3. **Lane (DL-291 (3)(b)):** a separate PR, after DEF-058's fix PR (or the next lane that frees after #601 merges, whichever comes first), branched from a `master` that contains #601 (AQP-390) |
+| Type | **Product (layout), probable** (master's DL-291 (1), from the code; not yet measured), with the test catching it only sometimes. **If the measurement shows a width over 0, the type stays Test, product not excluded, and the case comes back to master** |
+| Status | **New**; type moved to Product (layout) by DL-291 (logged 2026-11-22, type updated 2026-11-22) |
 | Jira / GitHub | [AQP-393](https://sankumar76.atlassian.net/browse/AQP-393) / [#603](https://github.com/sankumar76/Accucut-Quotation/issues/603). Jira "relates to" AQP-1 (Intake) and AQP-339 (STORY-05.13). Labels `ai-delivery`, `aiid-DEF-059`, `agent-qa-engineer`, `final-review`, `sev-3`; priority Medium |
-| Risk / rule | RISK-031: **not counted on trigger (b)**. Each failed attempt is an `expect` that ran out on its own 15 s (the failed attempts ended at 26.2 s and 25.6 s, under the 30 s budget), which DL-264 (4)(d), DL-267 (3) and DL-285 (4) exclude. **No re-run rule** has been ordered; a red run on this case (both attempts) comes to master |
+| Risk / rule | RISK-031: **not counted on trigger (b)**. (DL-291: not counted.) Each failed attempt is an `expect` that ran out on its own 15 s (the failed attempts ended at 26.2 s and 25.6 s, under the 30 s budget), which DL-264 (4)(d), DL-267 (3) and DL-285 (4) exclude. **No re-run rule** has been ordered; a red run on this case (both attempts) comes to master |
 | Found by / date | CI. First occurrence read by master in DL-290 (4) as "not counted" with no further ruling; the second occurrence made this a Bug under DL-285 (3). Logged by qa-engineer, 2026-11-22 |
 | Build / commit | `master` push 44975509844 (616d7e34), shard 4, job 137064401810; `master` push 44983705175 (0381fc5c), shard 4, job 137089551760 |
 | Environment | GitHub Actions ubuntu-latest, Stage 12 shard 4 of 4, project desktop, dev server, 4 workers, test timeout 30 s, expect timeout 15 s, one retry; invented data only |
@@ -41,18 +41,36 @@ Call log:
 ```
 Readings of the case at the other widths and on the next run: `master` push 44988681963 (45512bd4, 0 flaky): 8.9 s mobile, 16.4 s tablet, 13.2 s desktop, all attempt 1. Series read by QA: no failure of `:64` in the six `master` push runs of 21 Nov (44945571540, 44941416105, 44939278781, 44937075594, 44924430846, 44922163960, Stage 12 logs searched for the failed case), so 22 Nov 02:21Z is the first occurrence and 04:10Z the second.
 
+**Readings of this case by title, added 2026-11-22 (qa-engineer, DL-291 request 3). Every one is attempt 1 and green; no "hidden" line and no failed attempt of the case in any of these runs.** Seconds, mobile / tablet / desktop: `master` push 44988681963 (45512bd4) 8.9 / 16.4 / 13.2 (above); `master` push 44990887665 (08394110, #600) 13.5 / 12.7 / 13.7; PR #599 run of record 44990897082 (95d882cc) 10.0 / 10.2 / 10.2; `master` push 44992801362 (6087e8b8) 9.3 / 10.6 / 8.4; `master` push 44995772811 (62ff83c4) 9.4 / 13.6 / 8.9. **Desktop "hidden" failures since the second occurrence (04:10Z): none** in the master pushes read (44988681963, 44990887665, 44992801362, 44995772811). The desktop readings sit at 8 to 14 s, so the case reaches :77 and passes; a pass does not clear the layout reading (closure rule).
+
 ## Evidence
 Stage 12 shard 4 job logs of both runs (error blocks at the end of each log, `Error Context: test-results/estimate-first-load-AC-4-t-80eb5-n-the-fields-take-its-place-desktop/error-context.md`, which CI does not keep for the failed attempt); DL-285 (3) and DL-290 (4) in `docs/00-governance/decision-log.md`.
 
-## What decides it (not collected)
+## Identified element and reading (master, DL-291 (1); code read, not a measurement)
+- **Element:** the failing call log names `<div role="status" aria-label="Loading the form" class="flex flex-col gap-s-3">`. Of the two "Loading the form" statuses, that class list is only the **values-loading skeleton at `src/components/features/estimate-workspace/part-fields.tsx:124`** (inside `values.stored.status === 'loading'`; QA confirmed the markup on `origin/master` on 2026-11-22). The other, `part-form.tsx:68` (fields' code or form definition loading), carries `min-w-0 flex-1`.
+- **Layout:** its parent is the `CardContent` at `estimate-workspace.tsx:176`, `flex flex-col gap-s-4 lg:flex-row`. From 1024 px (the desktop project is 1366 px) the parent is a row. An item with no grow whose children are only empty block `Skeleton` spans (a height, no width, no content) resolves to **0 px wide**, which Playwright reports as hidden. At 360 and 768 px the column layout stretches it to full width. That fits desktop-only failures and passes at mobile and tablet. The element stays in the accessibility tree.
+- **Why the test catches it only sometimes:** the failure needs the `part-form.tsx` skeleton to be gone before :77 looks (the fields' code already in) and the stored-values read to stay pending for the whole 15 s. That read's length is not explained and is for the measurement. A desktop user sees an empty form area, not the skeleton, while a part's values load.
+- **Measurement first (DL-291 (3)(b)(i)):** a red-first check that holds the part's stored-values read (`loadPartInputs`, by `page.route`, the way #601 holds `/form`), so the `part-fields.tsx` status is the one on screen; it asserts the status is visible at all three widths and attaches its bounding box; expected to fail at desktop only.
+
+## What decides it (as first logged; superseded by the section above)
 - **Test or runner (QA's working reading, not proven):** the status element is in the DOM but Playwright counts it as hidden (no box, or not painted) for the whole 15 s on a slow draw, while the held scripts delay the page. Nothing in the logs shows why; the retry passes within 12 s.
 - **Product:** the skeleton in `src/components/features/estimate-workspace/part-form.tsx` (`FORM_LOADING`, `role="status"`) is hidden for the whole wait on some orderings (for example a re-suspended boundary or a zero-size container). A trace or `error-context.md` of attempt 1 would decide it. If the fix attempt shows this, a change under `src/` means stop and go to master.
 
 ## Suspected Area
-`tests/e2e/estimate-first-load.spec.ts:64-80` and `tests/e2e/support/lazy-load.ts` (`ScriptGate`, slow mode); client: `src/components/features/estimate-workspace/part-form.tsx` and `part-fields.tsx` (the skeleton).
+`tests/e2e/estimate-first-load.spec.ts:64-80` and `tests/e2e/support/lazy-load.ts` (`ScriptGate`, slow mode); client: `src/components/features/estimate-workspace/part-fields.tsx:124` (the values-loading skeleton, `flex flex-col gap-s-3`, 0 px wide inside `lg:flex-row` at `estimate-workspace.tsx:176` from 1024 px), compare `part-form.tsx:68` (`min-w-0 flex-1`).
 
-## Binding for the fix (as DL-229 (4)(b), DL-257 (B))
-Test-only unless the measurement shows a product fault. No skip, quarantine, retry, `test.slow()`, timeout change or fixed sleep, and no dropped assertion. First measure why the element is on the page and hidden when "Customer saved." shows (for example a diagnostic attachment in the style of DEF-057's). Proof as DL-257 (A): attempt-1 passes at all three widths on the PR run of record and on the first `master` push run after the merge, each under 25 s.
+## Binding for the fix (DL-291 (3)(b); supersedes the first-logged text)
+Separate PR, **not combined with DEF-058** (a different spec and type, a probable `src/` change, a dependency on #601; DEF-058's R11 (f) excludes `estimate-workspace/**`). It starts only after #601 (AQP-390, CR-01 item 6) has merged and branches from a `master` that contains it.
+1. **Measure first**, from the PR's first commit: the red-first check above, at all three widths, expected to fail at desktop only.
+2. **If confirmed**, the fix may change only the class list of the loading status at `part-fields.tsx:124`, giving it the same `min-w-0 flex-1` as `part-form.tsx:68`. No other `src/` file, no text, role or label change. This is not a section 9 item 2 area, so no combined review is needed while the change stays to that line and the tests. Anything wider comes to master.
+3. The existing AC-4 case keeps every assertion. No skip, quarantine, retry, `test.slow()`, timeout change or fixed sleep.
+4. **Proof:** the new check green at all three widths on attempt 1 on the PR run of record and on the first `master` push after the merge, each under 25 s; and the rewritten AC-4 case attempt-1 green at all three widths.
+
+### Bind the case by title
+#601 rewrites this case (drops the customer step, holds `/api/v1/estimates/*/form` for 3 s), so its line and `:77` move. The case is bound by file and title: `tests/e2e/estimate-first-load.spec.ts`, "AC-4: the part form fetches its fields" > "AC-4: while the fields are on their way the skeleton shows as a status, then the fields take its place" (the title stays; DL-257 (B)). `:64` in this file's name and text is the line on 616d7e34, 0381fc5c and 6087e8b8 only.
+
+### Closure rule (DL-291 (2))
+**DEF-059 does not close on #601, on a run of passes, or on a watch count.** #601 does not touch `part-fields.tsx`, so its rewritten case will probably stop catching the fault without fixing it. It closes only on the fix and its proof above, or on the measurement plus a master ruling (for example a width over 0, which returns the type to Test).
 
 ## Re-run rule
 None. Master may rule one. A red run on this case (both attempts) comes to master and is not re-run.
@@ -61,7 +79,7 @@ None. Master may rule one. A red run on this case (both attempts) comes to maste
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
 | Logged | qa-engineer | 2026-11-22 | AQP-393, #603 |
-| Phases measured | developer | | AQP-393 comment or a diagnostic PR (never merged) |
-| Fixed | developer | | `fix/AQP-393-<slug>` |
-| Regression test added | developer | | the fix is the test change; every assertion kept |
-| Verified | qa-engineer | | PR run of record and the first `master` push run after the merge; the case first attempt at all three widths, under 25 s |
+| Measured | developer | | the red-first check in the fix PR's first commit (DL-291 (3)(b)(i)), after #601 merges |
+| Fixed | developer | | `fix/AQP-393-<slug>`, from a `master` that contains #601; class list at `part-fields.tsx:124` only, if confirmed |
+| Regression test added | developer | | the new red-first check, plus the AC-4 case with every assertion kept |
+| Verified | qa-engineer | | PR run of record and the first `master` push after the merge: the new check and the AC-4 case, each first attempt at all three widths, under 25 s. **Not closed by passes alone** (closure rule) |
