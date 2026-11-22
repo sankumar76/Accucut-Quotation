@@ -181,7 +181,7 @@ async function insertCanaryEstimate(client: Client, ownerId: string): Promise<vo
   );
   await client.query('INSERT INTO estimates (id, task_id) VALUES ($1::uuid, $1::uuid) ON CONFLICT DO NOTHING', [ownerId]);
   // The one part the node routes of STORY-05.02 open: its ID is the estimate's too (`estimate-recipe.ts`), first at the top.
-  await client.query('INSERT INTO estimate_nodes (id, estimate_id, sort_index) VALUES ($1::uuid, $1::uuid, 0) ON CONFLICT DO NOTHING', [ownerId]);
+  await client.query('INSERT INTO estimate_nodes (id, estimate_id, sort_index, node_kind) VALUES ($1::uuid, $1::uuid, 0, \'MAIN_ASSEMBLY\') ON CONFLICT DO NOTHING', [ownerId]);
   // The one picture `GET /api/v1/images/{id}` opens (STORY-05.07): its ID and its estimate's are the owner's too. It is not the part's picture, so the node's recipes are unchanged. A tiny
   // invented PNG; the table is append-only and the insert does nothing on a repeat.
   const picture = smallPng();

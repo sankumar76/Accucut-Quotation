@@ -1,3 +1,4 @@
+import type { NodeKind } from '../../../src/lib/estimate/node-kinds';
 import { encodeTreatment, type TreatmentChoice } from '../../../src/lib/estimate/treatment-value';
 import { incompressiblePicture } from '../../support/builders/export-pictures';
 
@@ -40,18 +41,34 @@ export function deadlineText(now: Date): string {
   return `${ahead.toISOString().slice(0, 10)}T10:00`;
 }
 
-/** One call that adds a part: a new item at the top, or a sub-part under a part made earlier (named by its index in the build order). */
-export type AddCall = { readonly kind: 'item' } | { readonly kind: 'sub-part'; readonly parentIndex: number };
+/** One call that adds a part: a Main Assembly at the top, or a row of `nodeKind` last under a part made earlier (named by its index in the build order). */
+export type AddCall = { readonly kind: 'item' } | { readonly kind: 'sub-part'; readonly parentIndex: number; readonly nodeKind: NodeKind };
+
+/** The kind of a row at each level of a tree the API accepts (CR-01 item 3A): Main Assembly, Sub-Assembly, Part, Fastener. Nothing can sit under a Fastener, so the tree has four levels. */
+const KIND_BY_LEVEL: ReadonlyArray<NodeKind> = ['MAIN_ASSEMBLY', 'SUB_ASSEMBLY', 'PART', 'FASTENER'];
 
 /**
- * The calls that build a tree from the `tree500` fixture's shape. A parent always comes before its children in the fixture, so building in order puts every sub-part under a part that
- * exists; a sub-part is added last under its parent, and the fixture numbers its children in the same order, so the Sl. Nos of the result are the fixture's.
+ * The calls that build a tree from the `tree500` fixture's shape, in the four levels the add rule allows (`ALLOWED_CHILDREN`). A parent always comes before its children in the fixture, so
+ * building in order puts every row under one that exists, and a row is added last under its parent. The fixture is six levels deep, which the API no longer accepts (a Fastener holds nothing):
+ * a node below the fourth level goes under its ancestor at the third, as a Fastener. So the tree built has the fixture's 500 parts and its shape down to four levels; the Sl. No of a
+ * row after a re-parented one can differ from the fixture's.
  */
 export function addCallsFor(nodes: ReadonlyArray<{ readonly parentIndex: number | null }>): ReadonlyArray<AddCall> {
+  const placed: Array<{ readonly parent: number | null; readonly level: number }> = [];
   return nodes.map((node, index) => {
-    if (node.parentIndex === null) return { kind: 'item' };
+    if (node.parentIndex === null) {
+      placed.push({ parent: null, level: 1 });
+      return { kind: 'item' };
+    }
     if (node.parentIndex >= index) throw new Error(`Node ${index} names a parent (${node.parentIndex}) that is not made yet.`);
-    return { kind: 'sub-part', parentIndex: node.parentIndex };
+    let parent = node.parentIndex;
+    let level = (placed[parent]?.level ?? 0) + 1;
+    while (level > KIND_BY_LEVEL.length) {
+      parent = placed[parent]?.parent ?? parent;
+      level -= 1;
+    }
+    placed.push({ parent, level });
+    return { kind: 'sub-part', parentIndex: parent, nodeKind: KIND_BY_LEVEL[level - 1] ?? 'FASTENER' };
   });
 }
 
