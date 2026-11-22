@@ -1,3 +1,4 @@
+| Status | **Closed** (logged 2026-11-22; #616 squashed as `f02c3b54`; P1, P2 and P3 met; closed by QA 2026-11-22) |
 # DEF-062: `estimate-calculate.spec.ts` :143, :202 and :238 [tablet] cut by the 30 s budget on both attempts (PR #611 run 45009385390); tablet readings 17 to 28 s (Test)
 
 | Field | Value |
@@ -59,6 +60,21 @@ Job 137168093516 log (the error blocks at the end of the log, `Error Context: te
 ## Binding for the fix (as DL-229 (4)(b), DL-257 (B); master rules the lane)
 Test-only, `tests/e2e/estimate-calculate.spec.ts` only; no budget, retry, timeout, `test.slow()`, skip or fixed-sleep change; every assertion and the axe scans kept; a spec-local warm-up as in DL-272 (B) is allowed. Proof as DL-257 (A): **P1** (the PR run of record) and **P2** (the first `master` push after the merge): each case first attempt at all three widths and under 25 s; **P3** one page open and at most one scan per case; 15 s reported, not gated. A change under `src/` means stop and go to master.
 
+## Proof and close-out (qa-engineer, 2026-11-22; DL-296 (3), DL-257 (A))
+The fix is #616 (AQP-396, squashed as `f02c3b54`; test-only, `tests/e2e/estimate-calculate.spec.ts` only): a local helper `openCalculable` (the Engineer's estimate is made complete in the database before the page is opened, so the case loads the page once before the press instead of twice, `openForm` then `makeComplete`); every assertion and the axe scans kept; the cases moved from :143, :202 and :238 to **:155, :213 and :248** (bound by title). Seconds, attempt 1, all passed, mobile / tablet / desktop:
+
+| Case (by title) | **P1: PR #616 run of record 45017915849** (head 58850c30) | **P2: first `master` push after the squash, 45020428761** (f02c3b54) |
+|---|---|---|
+| AC-2: Calculate answers exactly {status, message}, the page turns to "Submitted" (was :143) | 12.6 / 11.1 / 10.8 | 13.8 / 12.8 / 9.7 |
+| AC-2: a value typed just before the press is saved first (was :202) | 10.6 / 13.4 / 11.0 | 12.3 / 14.5 / 15.7 |
+| AC-2: nothing is sent while a field shows a value that is not saved (was :238) | 12.2 / 12.1 / 12.8 | 11.4 / 14.1 / 14.2 |
+
+Run results: P1 `Stages 1 to 11` success, shards `543 passed (15.6m)`, `536 passed (18.3m)`, `538 passed (13.9m)`, `522 passed (15.4m)`, 0 flaky, 0 failed. P2 `Stages 1 to 11` success (job 137207378449), shards `543 passed (15.4m)`, `536 passed (19.5m)`, `538 passed (13.9m)`, `522 passed (11.6m)`, **0 flaky, 0 failed**. For comparison the same cases read 16 to 28 s on tablet before the fix.
+- **P1:** each case attempt-1 at all three widths under 25 s: **met** (worst 13.4 s). **P2:** the same on the first `master` push: **met** (worst 15.7 s, desktop; 15 s is the report line, not gated).
+- **P3 (structural floor):** one page open before the press per case. QA read the diff of #616: the helper makes one `page.goto` and `waitForForm`; the :155 case keeps the reload after the submit (its "still Submitted after a reload" check, an assertion kept as written); no axe scan was added or removed. **Met.**
+- **R12 ends with this Bug** (DL-296 (3)). W1 and R10 stay.
+- **Closed by QA 2026-11-22.** Jira AQP-396 Done; GitHub #614 closed. The AC-10 observer line (O5) of the same `master` push read: tablet 17,230 ms, desktop 10,259 ms, mobile 10,607 ms, all passed.
+
 ## Re-run rule
 None (master may rule one). A red run (both attempts) comes to master and is not re-run.
 
@@ -66,6 +82,6 @@ None (master may rule one). A red run (both attempts) comes to master and is not
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
 | Logged | qa-engineer | 2026-11-22 | AQP-396, #614 |
-| Fixed | developer | | `fix/AQP-396-<slug>` |
-| Regression test added | developer | | the fix is the test change; every assertion kept |
-| Verified | qa-engineer | | P1 on the PR run of record and P2 on the first `master` push after the merge: each case first attempt at all three widths, under 25 s |
+| Fixed | developer | 2026-11-22 | #616, `fix/AQP-396-calculate-ready-before-open`, squashed as `f02c3b54`; test-only, `tests/e2e/estimate-calculate.spec.ts` |
+| Regression test added | developer | 2026-11-22 | the fix is the test change (`openCalculable`: one page open before the press); every assertion kept |
+| Verified | qa-engineer | 2026-11-22 | P1 (run 45017915849, worst 13.4 s), P2 (`master` push 45020428761, worst 15.7 s), P3 (one page open before the press): all met |
