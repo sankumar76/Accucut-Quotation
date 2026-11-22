@@ -327,6 +327,36 @@ On the `master` run the four cases read 12.9 to 17.2 s (43 to 57 % of the budget
 
 - **DEF-061 closed, 2026-11-22.** The failure also read 102 px at desktop (1366 px) on PR #604 run 45011363827 before the fix. #611 squashed as eb4137f4. P1 (PR run of record 45011895045) and P2 (first `master` push after the squash, 45013997495, 0 flaky, 0 failed): the red-first case (`estimate-picture.spec.ts:406`) and `estimate-form.spec.ts:74` attempt-1 green at all three widths, worst 10.3 s; the red-first case was red at all three widths in the PR body (run 45007584457).
 
+- **Trigger (b) daily ledger (DL-296 process rule: each UTC day's count, from every `master` push run of the day; QA writes it, master quotes it in the daily update). 22 Nov 2026 (UTC), read 2026-11-22 from the Stage 12 job logs of every `master` push CI run.** Trigger (b) counts a time-out-mode attempt-1 failure (a 30 s budget cut) outside a ruled wave on a `master` push run. Not counted: an own-15 s `expect` (DL-264 (4)(d), DL-285 (4)) and a failure with a received value.
+
+| Run (sha) | Result | Stage 12 flaky or failed (attempt 1) | Counted on (b) |
+|---|---|---|---|
+| 44972676346 (c9cc3ba5) | green | none | - |
+| 44975509844 (616d7e34) | green | `estimate-fasteners.spec.ts:207`, `:234`, `estimate-first-load.spec.ts:64`, all [desktop] | no: own 15 s expects |
+| 44983705175 (0381fc5c) | green | `estimate-first-load.spec.ts:64` [desktop] | no: own 15 s expect |
+| **44985240147 (60ac0d18)** | green | `rates-changed.spec.ts:224` [tablet], 33.1 s | **yes (1)** |
+| 44986816755 (d2382217) | green | none | - |
+| 44988681963 (45512bd4) | green | none | - |
+| 44990887665 (08394110) | green | none | - |
+| **44992801362 (6087e8b8)** | green | `estimate-calculate.spec.ts:238` [tablet], 30.3 s | **yes (2)** |
+| 44995772811 (62ff83c4) | red at Stage 6 (`load-plan.test.ts` 5 s, DEF-060; trigger (a) now reads Stage 6, 11 or 12) | `estimate-form.spec.ts:74` [tablet], a received value (DEF-061) | no |
+| 45006794087 (ea915150) | green | none | - |
+| 45008501202 (d959e8f7) | green; **RISK-031 closed again after this run (DL-296)** | none | - |
+| 45010599354 (d119ae39) | green | none | **0** after the restart |
+| 45013997495 (eb4137f4) | green | none | **0** |
+| 45016574514 (50cb1150, #612, the first with the observer) | green; `Stages 1 to 11` success (job 137194437864); shards `543 passed (14.9m)`, `536 passed (16.3m)`, `538 passed (10.5m)`, `522 passed (14.1m)` | none (0 flaky, 0 failed) | **0** |
+
+**22 Nov count, UTC: 2 of 2 before the restart at 45008501202 (44985240147 and 44992801362; DL-293 (2)); 0 of 2 after it, through 45016574514.** 21 Nov: 2 of 2 as master recorded it in DL-296 (44941416105 counted, recorded late; QA did not recount 21 Nov here). The ledger is extended on each later `master` push run.
+- **Observer lines (O5) of the AC-10 case, `rates-changed.spec.ts:224`, read on every width from the first `master` push with the observer (DL-295 q3). Shard 3 = [tablet], shard 1 = [mobile], shard 4 = [desktop]; milliseconds after the press; "headers" is Playwright's `response` event, "body end" is `requestfinished`.**
+
+| Run | Width | Attempt | Result | Test | POST /recalculate sent / headers / body end | refresh (rsc) sent / headers / body end |
+|---|---|---|---|---|---|---|
+| 45016574514 (50cb1150) | mobile | 1 | passed | 10,836 | +351 / +1,204 (200) / +1,204 | +1,268 / +1,798 (200) / +3,305 |
+| 45016574514 (50cb1150) | tablet | 1 | passed | 13,708 | +73 / +612 (200) / +612 | +635 / +953 (200) / +1,414 |
+| 45016574514 (50cb1150) | desktop | 1 | passed | 14,420 | +323 / +877 (200) / +884 | +922 / +1,656 (200) / +2,338 |
+
+  Reading: on a passing run the POST answers in 0.5 to 1.2 s (the failures had 5.2, 5.9, 8.1 and 12.5 s) and the refresh body ends 0.5 to 2.1 s after its headers. Every later run's O5 line goes into this table, and the first failure with its O1 to O5 report goes to master the same day.
+
 **Regression result in a report** states the command, the count passed, failed and skipped, and the commit. A skipped test is explained or it is a failure. `quantity-cases-complete` (strategy 5.4) must be among the passing tests.
 
 ---
@@ -945,6 +975,7 @@ No new register entry is proposed. Two restate existing ones from the testing si
 
 | Version | Date | Change |
 |---------|------|--------|
+| 0.3.7 | 2026-11-22 | DL-296 process rule: the trigger (b) daily ledger for 22 Nov (every `master` push run, 2 of 2 before the restart, 0 of 2 after) and the first O5 observer lines (`master` push 45016574514, all three widths, passed). |
 | 0.3.6 | 2026-11-22 | The :224 rate count (narrow route) and its result in section 7 (the sixth DEF-057 occurrence, `master` push 44941416105); DEF-061 closed with its proofs (P1, P2). Section 7.1 defect table: DEF-061 closed. |
 | 0.3.5 | 2026-11-22 | PR runs read at the orchestrator's request. Section 7 dated note: DEF-062 (`estimate-calculate.spec.ts` :143, :202, :238 [tablet]) and DEF-063 (`estimate-fasteners.spec.ts` :93, :104, :127 [desktop], shard 4 start) logged; DEF-061 seen at desktop on PR #604 run 45011363827. Section 7.1 defect table: DEF-062 and DEF-063 rows. |
 | 0.3.4 | 2026-11-22 | DL-295 and the closure reads. Section 7 dated note: DEF-057 fifth occurrence (PR #612 run 45008203701) and its route; the open q2 (rate count) and q3 (O5 lines) tasks; DEF-058 and DEF-060 closed with their proofs; QA's read of RISK-031's close-out conditions. Section 7.1 defect table: DEF-058 and DEF-060 closed, DEF-057 route. |
