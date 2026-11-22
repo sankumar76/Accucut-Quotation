@@ -653,7 +653,7 @@ html[data-overlay="drag"] .tree-row[data-dragging] > .tree-item { outline: 1px d
 .add-opt-hint { display: block; font-size: var(--fs-label); line-height: var(--lh-label); color: var(--ink-3); }
 
 /* Compact input and output screens: sections pack side by side by their number of fields (--n, set by the generator) and
-   fields sit several to a row. Touch targets stay 44 px below 1024 px. */
+   fields sit several to a row. Fields are 36 px only at 1024 px and wider with a fine pointer (mouse); touch screens and anything narrower keep the 44 px target (NFR-017, OQ-PM-12). */
 .grid-sections.is-compact { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: stretch; }
 .grid-sections.is-compact > .section-card, .grid-sections.is-compact > .card { flex: var(--n, 2) 1 calc(var(--n, 2) * 150px); min-width: 0; }
 .is-compact .section-card .card-head { padding: var(--s-2) var(--s-3); gap: var(--s-2); }
@@ -665,7 +665,7 @@ html[data-overlay="drag"] .tree-row[data-dragging] > .tree-item { outline: 1px d
 .is-compact .dropzone { padding: var(--s-2) var(--s-3); min-height: 64px; }
 .is-compact .stage-row { padding: var(--s-2) var(--s-3); }
 .is-compact .stage summary { padding-top: var(--s-2); padding-bottom: var(--s-2); }
-@media (min-width: 1024px) {
+@media (min-width: 1024px) and (pointer: fine) {
   .is-compact .input, .is-compact .select, .is-compact .output, .is-compact .input-group .addon { height: 36px; min-height: 36px; }
   .is-compact textarea.textarea { min-height: 60px; }
 }
