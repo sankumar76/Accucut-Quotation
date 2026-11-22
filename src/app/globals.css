@@ -44,7 +44,7 @@
   /* The least height of a multi-line box: about three lines of body text. A named token, as the spacing scale is replaced (`--spacing-*: initial`) and a default size such as `min-h-24` does nothing (#395). */
   --textarea-min-h: 96px;
   /* The compact layout of the input and output screens (CR-01 item 1, UX spec section 0.9; AQP-388). The number of each: a field is 36 px high from 1024 px with a fine pointer (44 px, `--control-h`, stays below it and for a finger,
-     NFR-018); a field never gets narrower than 140 px in a row of fields; each field a card has gives it 150 px of its row (a card of N fields wants N of them); a multi-line box is least 60 px high (`--textarea-min-h` is the default). */
+     NFR-017); a field never gets narrower than 140 px in a row of fields; each field a card has gives it 150 px of its row (a card of N fields wants N of them); a multi-line box is least 60 px high (`--textarea-min-h` is the default). */
   --compact-field-h: 36px;
   --compact-column-min: 140px;
   --compact-weight-unit: 150px;

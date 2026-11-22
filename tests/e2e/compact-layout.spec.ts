@@ -115,6 +115,19 @@ test.describe('AC-1 to AC-5, AC-8, AC-9: SCR-05, the part form', () => {
   });
 });
 
+test.describe('AC-5: a touch screen 1024 px or wider keeps 44 px (NFR-017)', () => {
+  // A landscape tablet: 1280 px wide, a finger for a pointer. The width alone must not make a field 36 px (UX ruling OQ-PM-12, DL-289). It runs once, in the desktop project, which sets no touch of its own.
+  test.use({ hasTouch: true, viewport: { width: 1280, height: 800 } });
+
+  test('AC-5: at 1280 px with a coarse pointer the fields of SCR-05 are 44 px high, not 36 px', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'one width and one pointer: the desktop project sets the viewport, this describe sets the touch');
+    await openForm(page, testInfo);
+    expect(await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches), 'the context has a coarse pointer').toBe(true);
+    expect(await widthOf(page)).toBeGreaterThanOrEqual(FINE_POINTER_MIN_WIDTH);
+    for (const letter of ['B', 'E', 'A']) expect(await heightOf(control(page, letter)), `field ${letter}`).toBeCloseTo(TOUCH_FIELD, 0);
+  });
+});
+
 test.describe('AC-6, AC-8, AC-9: SCR-06 and SCR-07, the review and the cost details', () => {
   test('AC-6: the tiles are 12 px by 16 px and 12 px apart, the figure box 8 px by 12 px, a stage row and a stage summary 8 px by 12 px; no sideways scroll; axe clean', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
