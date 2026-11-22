@@ -106,7 +106,11 @@ describe('AC-7: least privilege, no secret, pinned actions', () => {
     expect(jobText('lighthouse')).toMatch(/^ {4}runs-on: ubuntu-24\.04$/m);
     expect(jobText('ci-time')).toMatch(/^ {4}runs-on: ubuntu-24\.04$/m);
     const labels = LINES.filter((line) => /^\s*runs-on:/.test(line)).map((line) => line.trim());
-    expect(labels).toEqual(['runs-on: ubuntu-24.04', 'runs-on: ubuntu-24.04', 'runs-on: ubuntu-latest']);
+    // Every job but the warm-up one is on the reference image, and the warm-up job is the only floating label. The rule is stated for any number of jobs (the browser matrix of
+    // STORY-10.08 and the capacity run of STORY-10.09 each added one), so a job added later has to choose its label on purpose and not by editing a count.
+    expect(labels.filter((label) => label === 'runs-on: ubuntu-latest')).toEqual(['runs-on: ubuntu-latest']);
+    expect(labels.every((label) => label === 'runs-on: ubuntu-24.04' || label === 'runs-on: ubuntu-latest')).toBe(true);
+    expect(jobText('warm-playwright-cache')).toMatch(/^ {4}runs-on: ubuntu-latest$/m);
   });
 
   it('makes its passwords and its session secret in the job, and masks them', () => {

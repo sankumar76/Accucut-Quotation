@@ -76,6 +76,7 @@ describe('unsafeExampleEntries (STD-05, negative control)', () => {
     ['SMTP_HOST', 'localhost'],
     ['SMTP_PORT', '1025'],
     ['SMTP_AUTH_MODE', 'none'],
+    ['EXPORT_TIMEOUT_SECONDS', '240'],
     ['APP_ORIGIN', 'http://localhost:3000'],
     ['ADMIN_EMAIL', 'admin@example.test'],
     ['SMTP_USER', ''],
@@ -97,6 +98,8 @@ describe('unsafeExampleEntries (STD-05, negative control)', () => {
     ['a different origin', 'APP_ORIGIN', 'https://portal.invented-company.example'],
     ['a different port', 'SMTP_PORT', '587'],
     ['a different mail mode', 'SMTP_AUTH_MODE', 'password'],
+    ['a different export timeout', 'EXPORT_TIMEOUT_SECONDS', '300'],
+    ['a non-numeric export timeout', 'EXPORT_TIMEOUT_SECONDS', 'abc'],
     ['a real secret', 'AUTH_SECRET', 'invented-real-looking-secret-0123456789'],
     ['a real database password', 'DATABASE_URL', 'postgresql://accucut_app:invented-real-password@localhost:55432/accucut'],
     [

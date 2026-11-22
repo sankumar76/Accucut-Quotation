@@ -343,8 +343,11 @@ describe('CI workflow', () => {
     expect(code).toContain('Acquire::http::Timeout "20";');
     expect(code).toContain('Acquire::Retries "3";');
     expect(code).toContain('sudo dpkg -i');
-    expect(code).toContain('npx playwright install-deps chromium');
-    expect(code).toContain('npx playwright install chromium');
+    // AQP-370: the browser list is a setting that defaults to `chromium` (the required check never sets it), so the bounded install and the browser install name it through the list.
+    expect(code).toContain('npx playwright install-deps "${browsers[@]}"');
+    expect(code).toContain('npx playwright install "${browsers[@]}"');
+    expect(code).toContain('browsers_text="${PLAYWRIGHT_BROWSERS:-chromium}"');
+    expect(readFileSync(fileURLToPath(new URL('../../.github/workflows/ci.yml', import.meta.url)), 'utf8')).not.toContain('PLAYWRIGHT_BROWSERS');
     expect(code).not.toContain('--with-deps');
     // AQP-216 AC-3 to AC-5, STD-02: the download is bounded, not the connection. The limits are READ from the script and
     // from the workflow, so a changed limit fails here: 45 s for the update, 90 s for the download, three tries, and the

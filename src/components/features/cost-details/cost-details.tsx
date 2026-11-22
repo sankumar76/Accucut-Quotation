@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { ColumnTag } from '@/components/shared/column-tag';
+import { COMPACT_BOX_PADDING } from '@/components/shared/compact-padding';
 import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
@@ -42,7 +43,7 @@ import { StagePanel } from './stage-panel';
  *
  * **Restricted** (NFR-002): every file in this folder is for the Lead and the Admin and shows formulas, rates and costs. The folder is loaded by `costs/[slNo]/page.tsx` alone, whose manifest row lists
  * no Engineer, and nothing outside it imports it (`tests/unit/cost-details-architecture.test.ts`). The page is read-only: it has no field, no button that changes anything and no edit control for a
- * formula (AC-6). The only script is `PhoneStages`, which closes stages 2 to 6 on a phone and holds no figure.
+ * formula (AC-6). It is one of the three compact screens: the root sets `is-compact` (`globals.css`, AQP-388). The only script is `PhoneStages`, which closes stages 2 to 6 on a phone and holds no figure.
  */
 
 export interface CostDetailsProps {
@@ -67,7 +68,7 @@ function RowHeader({ view }: { readonly view: NodeCostsView }) {
   const { row } = view;
   return (
     <Card>
-      <CardContent className="flex flex-wrap items-baseline gap-x-s-3 gap-y-s-1">
+      <CardContent className={cn('flex flex-wrap items-baseline gap-x-s-3 gap-y-s-1', COMPACT_BOX_PADDING)}>
         <span className="text-label font-semibold text-ink-2">{ROW_LABEL}</span>
         <span className="text-body font-semibold text-ink tabular-nums">{row.slNo}</span>
         <span className={cn('min-w-0 flex-1 text-body text-ink', BREAK_LONG_NAMES)}>{row.name === '' ? PART_NAME_FALLBACK : row.name}</span>
@@ -83,7 +84,7 @@ function RowBox({ view }: { readonly view: NodeCostsView }) {
   const price = details.stages.flatMap((stage) => stage.lines).find((line) => line.letter === details.letters.unitPrice);
   return (
     <Card className="min-w-0">
-      <CardContent className="flex flex-col gap-s-2">
+      <CardContent className={cn('flex flex-col gap-s-2', COMPACT_BOX_PADDING)}>
         <p className="flex flex-wrap items-center gap-s-2 text-label font-semibold text-ink-2">
           <span>{BOX_NAME}</span>
           <ColumnTag letter={details.letters.unitPrice} kind="output" />
@@ -127,7 +128,7 @@ function Stages({ view, calculatedAt }: { readonly view: NodeCostsView; readonly
 export function CostDetails({ view, code, calculatedAt }: CostDetailsProps) {
   const { state } = view;
   return (
-    <>
+    <div className="is-compact contents">
       <PageHeader title={COST_DETAILS_TITLE} actions={<EstimateLink code={code} label={BACK_TO_ESTIMATE} variant="secondary" />} />
       <RowHeader view={view} />
       {state === 'none' ? (
@@ -147,12 +148,12 @@ export function CostDetails({ view, code, calculatedAt }: CostDetailsProps) {
         </Notice>
       ) : null}
       {state === 'current' && view.details !== null ? (
-        <div className="flex flex-col gap-s-4 xl:grid xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] xl:items-start">
+        <div className="flex flex-col gap-s-3 xl:grid xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] xl:items-start">
           <RowBox view={view} />
           <Stages view={view} calculatedAt={calculatedAt} />
           <PhoneStages />
         </div>
       ) : null}
-    </>
+    </div>
   );
 }
