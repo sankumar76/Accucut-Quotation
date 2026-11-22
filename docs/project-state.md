@@ -13,8 +13,26 @@
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target 1 Dec 2026, range 1 to 3 Dec (DL-248)** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-20 by orchestrator (daily update) |
+| Last updated       | 2026-11-21 (late evening) by orchestrator (daily update, CR-01 scope) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update and CR-01 scope (2026-11-21, late evening, orchestrator)
+
+> This section wins over everything below it.
+
+**`master` = c9cc3ba** (#595 advisories #536/#537 merged by the orchestrator with `gh pr merge --squash`; the gh CLI merge works, the GitHub MCP merge still returns 403). Merged since pause 4: #590, #589, #591, #594 (main session), #595 (orchestrator).
+
+**New scope (delivery lead, chat, 2026-11-21; DL-287):** CR-01 items 1, 2, 6 and 9 are built **before G8**; items 3 and 7 after R1; items 4 and 5 with R2 (inside the G8 scope per DL-210; master noted this, PM correcting the wording). A-CR01-1 to 3 are confirmed with the customer on Monday 23 Nov; limits are single constants (NFR-032).
+- UX: docs PR **#596** (UX spec v0.33 §0.9 and 41 screens, 51 files, docs/03-ux only), master **CONDITIONAL GO** (AQP-1 12614): merges when "Stages 1 to 11" is green; 4 conditions (ux-expert follow-up PR stacked on #596 with a schedule column and overrides; scrum-master Dev Context; PM About sentence and R2 wording; architect ADR-011 for the Google Workspace relay before AQP-355). DL entry for the ruling to be recorded by master.
+- PRD v0.31, release plan v0.27, DL-287 (c7dbbf9e). Architecture v0.59 §4.11 CR-01 data model and migrations (b0b70123).
+- Jira stories (Ready for Dev, sprint 37, label `cr-01`): **AQP-388** item 1 compact screens (lane A, worktree aqp-388), **AQP-389** item 2 "RFQ Portal" (lane B, aqp-389), **AQP-390** item 6 assign customer/short name/subject, two migrations, `critical-review` (lane C, aqp-390; combined review before merge), **AQP-391** item 9 file name (blocked by AQP-390; shares the combined review).
+- Orchestrator defaults pending the PM/delivery lead: customer change writes `estimate.customer_changed` audit; Reassign changing the customer is a follow-up; the 100-character cut shortens the Subject so the date stays (OQ-PM-11, A-CR01-A3).
+
+**Merge queue (strict, one at a time):** #592 (.gitignore) and #597 (`.env.example` EXPORT_TIMEOUT_SECONDS=240, delivery lead's PR, closes that decision) and #596 (CI running, all on c9cc3ba), then #593 (10.08; every required check and Sweep green on 7cc2851f; "CI feedback time" red, excluded under DL-286 C1-C4), #588 (10.09), records #494, docs #581, then the CR-01 code PRs. #476 waits for the delivery lead.
+
+**Worktrees (7 of 7, at the cap, + main + demo):** records-t, aqp-383, cr01-ux, env-timeout (delivery lead's; remove after #597 merges), aqp-388, aqp-389, aqp-390. Removed today: aqp-341 (agent memory archived in `.claude/agent-memory/_archive-2026-11-21/aqp-341/`), aqp-410, aqp-cust, aqp-adv, aqp-gitignore (no junctions found). C: about 23 GB free before the three new `npm ci` runs.
+
+**G8 forecast with CR-01:** recommendation about **4 Dec (range 3 to 5 Dec)**, freeze about 1 Dec, against DL-276's 2 to 3 Dec. Basis: items 1 and 2 merge by about 23 Nov; item 6 (migrations, ~40 test files, combined review) by about 25 Nov; item 9 by about 26 Nov; strict serial merges at 25 to 40 min CI each; the final regression then covers CR-01. Delivery lead decision pending.
 
 ## Resume after pause 4 (2026-11-21, night, orchestrator)
 
