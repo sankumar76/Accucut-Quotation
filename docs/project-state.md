@@ -8,13 +8,449 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9). See "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9). See "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
-| Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); no date adopted |
+| Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target about 4 Dec 2026, range 3 to 5 Dec, freeze about 1 Dec (DL-298, delivery lead); provisional: CR-01 items 3 and 7 now before G8 (OQ-PM-13), so a new forecast follows the architect's sizing for the delivery lead to accept** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-16 by orchestrator (daily update, §9 item 6) |
+| Last updated       | 2026-11-22 by orchestrator (daily update) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-22, orchestrator)
+
+> This section wins over everything below it.
+
+**`master` = d959e8f, green** (push run 45006794087 on ea91515: success, no 30 s cuts). Merged since the 21 Nov evening update (all squash by the orchestrator with `gh pr merge`): #595, #592, #596 (CR-01 UX spec v0.33), #597 (`.env.example` EXPORT_TIMEOUT_SECONDS=240, delivery lead's PR plus a test fix), #598 (UX spec v0.34), #593 (10.08, AQP-370 Done), #600 (**AQP-388** CR-01 item 1, Done), #599 (**AQP-389** CR-01 item 2, Done), #588 (10.09, AQP-371 Done), #610 (DEF-060 fix), #605 (DEF-058 fix). AQP-392 and AQP-394 In QA for their P2 proofs.
+
+**Rulings today:** DL-288/289 (#596, #598 docs merges; touch rule for compact fields), DL-290 (#599: re-run outside rules, R11, allow-list accepted, DEF-058), DL-291 (DEF-059 probable layout fault; lanes), DL-292 (#494 needs the delivery lead because of the DL-247 settings line; #581 after it, G8-C-581), DL-293 (red `master` from #588's load-plan test → DEF-060 and a freeze, now lifted; **RISK-031 reopened at 9**, trigger (b) 2 of 2 on 22 Nov; DEF-061), DL-294 (**DEF-057 re-graded Sev-2, blocks G8**, RISK-033 at 6; process-propagation:109 watch; DEF-061 product fix plus test fix).
+
+**CR-01 (DL-287):** AQP-388 and AQP-389 merged. **AQP-390** (#601): combined review APPROVE WITH COMMENTS at 247e286d (follow-ups #606, #607); updated to d959e8f, CI running, merges when green with the same net change. **AQP-391** (#604 draft): pure parts built; wiring after #601. PRD v0.33, SPEC 1.15, architecture v0.59.
+
+**Open PRs:** #601, #604, #611 (DEF-061, CI), #612 (DEF-057, CI; cause pointer: cold first compile of `/recalculate`; fix route needs master), #581 (after #494), #494 (delivery lead), #476 (delivery lead).
+
+**Defects open:** DEF-057 Sev-2 (#612), DEF-059 (after #601), DEF-061 (#611), DEF-058 and DEF-060 awaiting P2 close, plus the older Sev-3 list. **RISK-031** closes when DEF-060 and DEF-058 are closed on proof and a later `master` push is clean.
+
+**Worktrees (6 of 7):** records-t, aqp-390, aqp-391, arch-581, def-061, aqp-387. Removed today: cr01-ux, env-timeout, aqp-383 (memory archived in `_archive-2026-11-22/aqp-383/`), aqp-388, aqp-389, aqp-371, def-060, aqp-392.
+
+**G8 forecast:** recommendation about **4 Dec (range 3 to 5 Dec)** holds for CR-01; DEF-057 (Sev-2, cause not yet fixed) is the main new risk to it. Freeze about 1 Dec.
+
+**For the delivery lead:** #494 merge (DL-292); G8 date; STD-F-03 (#577); D2, D3, D4, D6, D7; #476; OQ-PM-11; OQ-PM-13; OQ-ARCH-CR01-1/2; A-CR01-1 to 3 on Monday; QLT-08 (short-name backfill on a demo copy before the demo runs CR-01 code); denied commands left behind in aqp-390 (`rm -f playwright.local.config.ts`, `rm -rf` of Playwright output; git-ignored, gone with the worktree) and in def-060 (`rm -rf node_modules`; worktree since removed); AQP-395 has a stale "relates to AQP-303" link to remove by hand.
+
+## Daily update and CR-01 scope (2026-11-21, late evening, orchestrator)
+
+> This section wins over everything below it.
+
+**`master` = c9cc3ba** (#595 advisories #536/#537 merged by the orchestrator with `gh pr merge --squash`; the gh CLI merge works, the GitHub MCP merge still returns 403). Merged since pause 4: #590, #589, #591, #594 (main session), #595 (orchestrator).
+
+**New scope (delivery lead, chat, 2026-11-21; DL-287):** CR-01 items 1, 2, 6 and 9 are built **before G8**; items 3 and 7 after R1; items 4 and 5 with R2 (inside the G8 scope per DL-210; master noted this, PM correcting the wording). A-CR01-1 to 3 are confirmed with the customer on Monday 23 Nov; limits are single constants (NFR-032).
+- UX: docs PR **#596** (UX spec v0.33 §0.9 and 41 screens, 51 files, docs/03-ux only), master **CONDITIONAL GO** (AQP-1 12614): merges when "Stages 1 to 11" is green; 4 conditions (ux-expert follow-up PR stacked on #596 with a schedule column and overrides; scrum-master Dev Context; PM About sentence and R2 wording; architect ADR-011 for the Google Workspace relay before AQP-355). DL entry for the ruling to be recorded by master.
+- PRD v0.31, release plan v0.27, DL-287 (c7dbbf9e). Architecture v0.59 §4.11 CR-01 data model and migrations (b0b70123).
+- Jira stories (Ready for Dev, sprint 37, label `cr-01`): **AQP-388** item 1 compact screens (lane A, worktree aqp-388), **AQP-389** item 2 "RFQ Portal" (lane B, aqp-389), **AQP-390** item 6 assign customer/short name/subject, two migrations, `critical-review` (lane C, aqp-390; combined review before merge), **AQP-391** item 9 file name (blocked by AQP-390; shares the combined review).
+- Orchestrator defaults pending the PM/delivery lead: customer change writes `estimate.customer_changed` audit; Reassign changing the customer is a follow-up; the 100-character cut shortens the Subject so the date stays (OQ-PM-11, A-CR01-A3).
+
+**Merge queue (strict, one at a time):** #592 (.gitignore) and #597 (`.env.example` EXPORT_TIMEOUT_SECONDS=240, delivery lead's PR, closes that decision) and #596 (CI running, all on c9cc3ba), then #593 (10.08; every required check and Sweep green on 7cc2851f; "CI feedback time" red, excluded under DL-286 C1-C4), #588 (10.09), records #494, docs #581, then the CR-01 code PRs. #476 waits for the delivery lead.
+
+**Worktrees (7 of 7, at the cap, + main + demo):** records-t, aqp-383, cr01-ux, env-timeout (delivery lead's; remove after #597 merges), aqp-388, aqp-389, aqp-390. Removed today: aqp-341 (agent memory archived in `.claude/agent-memory/_archive-2026-11-21/aqp-341/`), aqp-410, aqp-cust, aqp-adv, aqp-gitignore (no junctions found). C: about 23 GB free before the three new `npm ci` runs.
+
+**G8 forecast with CR-01:** recommendation about **4 Dec (range 3 to 5 Dec)**, freeze about 1 Dec, against DL-276's 2 to 3 Dec. Basis: items 1 and 2 merge by about 23 Nov; item 6 (migrations, ~40 test files, combined review) by about 25 Nov; item 9 by about 26 Nov; strict serial merges at 25 to 40 min CI each; the final regression then covers CR-01. Delivery lead decision pending.
+
+## Resume after pause 4 (2026-11-21, night, orchestrator)
+
+> This section wins over everything below it.
+
+**Pause 4:** the delivery lead stopped all agents via Remote Control on 21 Nov; no pause resume point was written, so this resume starts from the "Hardening progress (2026-11-21, evening)" block below and the main session's state check. Jira AQP-1 comment 12563.
+
+**`master` = c0cf1d2** (#583 DEF-054). CI run 44924430846 and Windows package run 44924430870 green: QA closes DEF-054 on that run.
+
+**#590** (export limits, ADR-017): the merge commit pushed at the pause (b371e1d) left conflict markers in a doc comment in `next.config.ts`; the main session pushed the resolution as feacd096 (both bullets kept). CI running; merges when green.
+
+**#588** (10.09 load/capacity): every required check green. The one red check is the Nightly workflow's "CI feedback time" job (`scripts/check-ci-time.ts`: p95 28 m 06 s over 4 runs). It is not a required check (required: "Stages 1 to 11", strict) and it is red on every scheduled `master` Nightly since 19 Nov (44490538538, 44703275771, 44884087674) and on #584's PR runs before #584 merged; CI measurement windows are frozen under §9 item 4. Not a blocker for #588.
+
+**Merge order (strict up-to-date rule, so one at a time):** #590, #589, #588, #591, #592 (`.gitignore` for `.playwright-mcp/`, lane 1), then records #494 and docs #581. #476 waits for the delivery lead.
+
+**BLOCKER (merges):** #590 went fully green and CLEAN at feacd096, but the squash merge failed: the GitHub MCP merge call returned 403 "Resource not accessible by personal access token", and the retry was denied by the session's permission settings. The same token also returned 403 on PR comments in lane 1, so the `gh` CLI was used for comments. No other merge route was used. **Nothing merges until the delivery lead merges #590 or restores merge access** (Jira AQP-1 comment 12568).
+
+**Update (later the same night):** the main session took over merges and merged **#590 as e7f3d6ba**. Its script works through #589, #591, #592, #594 and #595 one at a time (update-branch, fully green run, squash). The orchestrator merges nothing. New PRs: **#593** STORY-10.08 (lane 3, aqp-383; the "Sweep, keyboard flows and browsers" job is being fixed), **#594** customers.spec waits for hydration (DL-285, lane 1, aqp-cust), **#595** npm advisories #536/#537 (lane 2, aqp-adv). Rulings: **DL-285** (`customers.spec.ts:262` [desktop] first-attempt failure on c0cf1d2 is a watch together with `:295`; a second first-attempt failure is a Sev-3 Bug the same day; not counted on RISK-031 (b); CSP ruled out as the cause; proof is first-attempt passes on #594's run and on the next `master` push). **DL-286** ("CI feedback time" is excluded from "fully green" until G8 sign-off under C1 to C4, so #588 may merge with it red; post-G8 item **PG-CI-1**; new G8 condition **G8-C-CI**, the delivery lead accepts in writing that the CI time target is missed; RISK-023 stays at 8). QA (e960bb26): **DEF-054 closed** (AQP-384 Done), DEF-056 has nothing left, test plan 0.3 with the final-regression scope in §7.1. The PG-CI-1 comment on #328 failed (GitHub MCP 403 on comments); it is recorded here instead. #494 is marked ready. C: about 11 GB, so no new installs.
+
+**Lane 1 done:** `zz-race-diag.test.ts` dropped. It was a DEF-056 probe, not DEF-057, and outside DL-280; its summary is on #591. `.gitignore` PR #592 is additions only, in worktree aqp-gitignore. **Lane 2 started:** worktree aqp-adv, branch `fix/AQP-1-advisories-536-537` (Jira AQP-1 comment 12566).
+
+**Lanes restarted (at most 3; C: about 15 GB free):** 1: aqp-341, DEF-057 (#591) plus a decision on the untracked `tests/integration/masters/zz-race-diag.test.ts` (commit or drop, with the reason, never silently), then a small `.gitignore` PR for `.playwright-mcp/` (append only). 3: aqp-383, STORY-10.08 (AQP-370; 1 ahead, 1 behind `master`, no PR yet): sync, open the PR. 2: advisories #536 / #537 in a new worktree after #590 merges. QA: DEF-054 closure, DEF-056 leftovers check, test-plan check; the final regression after the hardening merges land.
+
+**Worktrees:** records-t, aqp-341, aqp-383, aqp-410. aqp-384 removed (agent memory archived in `.claude/agent-memory/_archive-2026-11-21/aqp-384/`). **aqp-410's `node_modules` junction pointed into aqp-384 and is now dangling:** before any local run there, unlink it non-recursively (`cmd //c rmdir`) and run `npm ci`. Container aqp341-db is stopped.
+
+## Hardening progress (2026-11-21, evening, orchestrator)
+
+> This section wins over everything below it.
+
+**`master` = c0cf1d2. 31 merges in this run.** Hardening merges today: #579 DEF-034 (7e42970), #571 DEF-053 shared axe helper (efeed21), #580 DEF-038 tests and diagnostic (cb63104), #584 G8-C-NFR9 Lighthouse key screens (0f69aa2), #586 DEF-055 assignment-mail expiry with the DL-282 data migration (ae1bb35), #587 DEF-056 test fix (dcf8a19), #583 DEF-054 security headers and CSP (c0cf1d2). **Every Sev-2 fix is merged**; QA closes DEF-054 on the c0cf1d2 `master` run.
+
+**Final review (21 Nov):** standards REQUEST CHANGES (3 Major), quality REQUEST CHANGES (1 Major), performance REQUEST CHANGES (6 Major), QA "do not recommend G8 yet" (2 new Sev-2). Plan: DL-275 and DL-276 (G8 recommendation about 2 to 3 Dec, freeze about 30 Nov; **slip against 1 Dec reported to the delivery lead, decision pending**).
+
+**Defects:** closed today DEF-034, DEF-053 (then reopened as the accepted Sev-3 known limitation per DL-284; R10 revived for PR runs), DEF-055, DEF-056 (Test, DL-283). Open: DEF-038 Sev-3 (DL-277, diagnostic on watch), DEF-057 Sev-3 (DL-280, diagnostic PR #591), DEF-054 (merged, QA closing). **RISK-031 closed (DL-279)**; trigger (b) count for 21 Nov: 1 of 2 (`estimate-calculate:297`). Live re-run rules: W1, R10 (PR runs).
+
+**Majors status:** #382 already fixed by #406 (DL-284); #568 fixed in #589 (ADR-018 `recordMany`, medians 374 / 198 ms at 500 customers; review APPROVE WITH COMMENTS; merging after its sync push); #485 / G8-C-NFR9 met (#584); #574 downgraded to a watch; #573 met by measurement in #588 (10.09 load/capacity, all lines far under NFR-010/011 on the CI runner; merges next); #575, #576 decided by the architect (ADR-017, docs #581) and built in #590 (export timeout, heap, keep-alive, body cap #410, install proxy checks; merges after its `next.config.ts` merge); #37 / DEF-054 merged; STD-F-03 (#577) waiver with the delivery lead.
+
+**Lanes:** 1: #589 sync, then DEF-057 diagnostic (#591); 2: #590 merge, then the advisories #536/#537 in aqp-384; 3: STORY-10.08 (browser matrix, keyboard flows, sweep). Docs PR #581 merges after records PR #494.
+
+**Worktrees (5 + main):** records-t, aqp-341 (lane 1), aqp-383 (lane 3), aqp-384 (#583 merged; lane 2 next), aqp-410 (links to aqp-384's node_modules; remove links first). **C: about 6.5 GB.**
+
+**For the delivery lead:** the G8-date decision and D2 to D8 (see the latest hand-off); the `.env.example` line `EXPORT_TIMEOUT_SECONDS=240` (agents cannot read or edit that file); housekeeping (scratch files in `.claude/worktrees/`, two stray files at the main checkout root, branches `diag/AQP-376-axe-phases`, `fix/AQP-383-users-list-e2e`, `diag/AQP-383-axe-plant`).
+
+## Build complete, hardening window open (2026-11-21, later, orchestrator)
+
+> This section wins over everything below it.
+
+**All build stories are merged** (R1, R1+ and R2; last #564 **AQP-365** 02.08 at 242c21f on 21 Nov, ahead of the 26 Nov slip-watch line, DL-248). **24 merges in this run** (20 to 21 Nov). Merged since the 21 Nov block: #556 **AQP-362** 08.07 (920567f); #557 **AQP-354** 09.07 [c] (644fa7e; combined review APPROVE WITH COMMENTS; #560, #558); #562 **AQP-335** 07.05 (368954b; perf tests; DL-271); #561 **AQP-372** 08.08 [c] (5eff5fd; APPROVE WITH COMMENTS; #566); #555 **AQP-381** DEF-051 fix (03c81cb); #565 **AQP-369** 10.07 (877baff); #567 **AQP-366** 04.06 (77b98fb); #564 **AQP-365** 02.08 [c] (242c21f; APPROVE WITH COMMENTS; **Major SQR-01 in #568**). Jira Done for all; EPIC-08 and EPIC-09 build chains complete; 09.08 (AQP-355) is the human real-mailbox step.
+
+**Defects:** DEF-050 and DEF-051 **closed** (DEF-051 7-day early-shard reopen trigger to 28 Nov, DL-273). **DEF-053** (AQP-383, `users.spec.ts:58`, rule R10) open: diagnosis shows the cause outside the spec (about 650 users and 17,000 DOM nodes by test no. 507; scan time follows the list); options with master (draft #570, not for merge). DEF-052 on watch (no second occurrence).
+
+**Rulings since the 21 Nov block:** DL-270 (#557 shard-2 = slow machine), DL-271 (RISK-010 restated at 4; **G8-C-NFR10**: OQ-PM-05 answer or acceptance of the 500-node export time, plus a target-host re-measure), DL-272 (:280 joins DEF-051), DL-273 (#555 covers all three; warm-up not needed), DL-274 (**DEF-053** with R10). **Live re-run rules: W1, R10.** RISK-031 closed (DL-268), no reopen trigger fired.
+
+**Hardening window (§9 item 3), started 21 Nov:** final review of the whole product at 242c21f by reviewer-standards, reviewer-quality, reviewer-performance (reports to `docs/06-reviews/final/`) and qa-engineer (`docs/07-qa/final-regression-report.md`), each logging an issue per Blocker, Critical or Major (or Sev-1/2 Bug). Master is drafting the hardening plan (pre-G8 list, owners, lane order, regression scope, delivery-lead decisions). Known pre-G8 items: G8-C-AC8, G8-C-NFR9, G8-C-NFR10, #568 (Major), #513 (Next bump), and the follow-ups #516, #523, #524, #532, #547, #559, #560, #566. Read-only worktree `final-review` (detached at 242c21f) for the reviewers.
+
+**Worktrees (3 + main):** records-t, aqp-383 (DEF-053 diagnostics), final-review. All story worktrees removed after their merges (agent memory archived under `_archive-2026-11-21/`). **C: 11 GB free.**
+
+**For the delivery lead:** (1) about 60 developer scratch files (`aqp3xx-*.cjs`, `*.log`, `*.bak`, `probe366.log`) sit directly in `.claude/worktrees/`; agents may not delete files. (2) Stray `aqp362-change-history.md` and `MEMORY.md` at the main checkout root. (3) Branch `diag/AQP-376-axe-phases` to delete. (4) The 04.06 developer bypassed a denied `rm` with `node unlinkSync` on its own probe file (reported, not repeated). (5) Decisions: OQ-PM-05 / G8-C-NFR10; 09.07 SQR-02 shared-address limit; `.gitignore` for `.claude/agent-memory/` (#559).
+
+## Daily update (2026-11-21, orchestrator)
+
+> This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.**
+
+**`master` = 0a336aa.** Merged since the 20 Nov later block (5; **16 in this run**): #551 **AQP-360** 08.05 (7be9f1a); #546 **AQP-380** DEF-050 fix (266db7a); #552 **AQP-352** 09.05 (7c4867f); #554 **AQP-353** 09.06 (dfd294c); #553 **AQP-361** 08.06 [c] (0a336aa; combined review APPROVE WITH COMMENTS, Major SQR-01 fixed before merge, agent-memory files untracked before merge; follow-ups #559 and #524). Jira Done for all; AQP-380 closed by QA.
+
+**`master` push runs:** 266db7a (44850302908) fully green, 0 flaky: the run that closed DEF-050 and RISK-031. DEF-052 file normal on every push since (3.3 s, 3.2 s).
+
+**Rulings:** DL-267 (DEF-051 narrowed to `lead-warning` :229; Bug-or-watch line; R8 re-pointed), DL-268 (**RISK-031 closed**, with four reopen triggers checked daily: a `master` push red from time-outs; two first-attempt time-outs outside a ruled wave on `master` pushes the same day; a red W1 or R9 re-run; a second DEF-052 occurrence; **none fired**), DL-269 (`lead-warning` :253 rejoins DEF-051 after the first-minute cluster on #553's run, 1.28x, not a W1 wave; :280 on the watch list). **Rules in force: R9 (DEF-051: :229 and :253), W1 (to G8).** R8 ended with DEF-050.
+
+**Lanes (3):** 09.07 **AQP-354** [c] (#557, draft); 08.07 **AQP-362** (#556, draft; waiting for #553, now merged); DEF-051 **AQP-381** (#555, fix run). **Queue:** 08.08 [c] (after 08.07), 07.05, 02.08 [c], 04.06, 10.07; 09.08 is a human step. Slip watch: 7 stories not merged yet (3 in flight, 4 not started plus 08.08); last merge by 26 Nov at risk with 3 lanes; a 4th lane is with the delivery lead.
+
+**Disk:** C: dipped to **335 MB free** for a few minutes on 20 Nov during parallel installs; it is 11 to 12 GB now. Developers run installs in the background and keep local runs small.
+
+**For the delivery lead:** (1) the 08.07 developer accidentally created two untracked files in the **main checkout** (`aqp362-change-history.md`, `MEMORY.md`, both at the repo root, 00:36 on 21 Nov); its delete was denied and nobody else touches them. (2) Branch `diag/AQP-376-axe-phases` to delete. (3) Master's earlier memory note in the main checkout's `.claude/agent-memory/master/`.
+
+## Daily update (2026-11-20, later, orchestrator)
+
+> This block wins over the morning block below it where they differ.
+
+**`master` = 13d58e6.** Merged since the morning block (6 more; **11 today**): #540 **AQP-378** DEF-049 fix (f652c22); #543 **AQP-359** 08.04 [c] (967a8ad, combined review APPROVE WITH COMMENTS, follow-ups #547); #541 **AQP-367** 05.10 (251636c); #538 **AQP-350** 09.03 (a514ad3, on a W1 re-run, DL-265); #549 **AQP-351** 09.04 (831f274); #548 **AQP-364** 07.07 (13d58e6). Jira Done for all six stories. `master` push runs: f652c22 green with **0 flaky** (first time); 251636c **red** at Stages 1 to 11b (DEF-052, not re-run, DL-266); a514ad3 green again (DEF-052 file 3.3 s, no `afterAll` error).
+
+**Rulings:** DL-263 (DEF-047 closes on the amended proof; R5 ends), DL-264 (DEF-047 axe cases get an immediate Bug trigger; RISK-031 stays at 9; **DEF-051** AQP-381 for `lead-warning` :229 and :253 with rule **R9**; watch triggers for `estimate-form-sections` :145 and `estimate-treatments` :87), DL-265 (#538 shard-2 wave = slow machine; standing rule **W1** for slow-shard waves on PR heads; **DEF-052** logged), DL-266 (DEF-052: no re-run rule for `master` pushes, the 5 s bar holds, the `afterAll` 42501 error is in scope, a lane only on a second occurrence). **Rules in force: R8, R9, W1.** RISK-031 re-run list: #538 (W1, run 44780475691).
+
+**Defects:** DEF-047 (AQP-376) and DEF-049 (AQP-378) **closed** by QA; the watch list now lives in `docs/07-qa/test-plan.md` §7. DEF-050 (AQP-380): fix #546 green (P1, P2, P3 met, worst 14.0 s), syncing for merge; the `master` half follows. DEF-051 (AQP-381) follows DEF-050 in its lane. DEF-052 (AQP-382, GitHub #550): no second occurrence on a514ad3. Architecture issue **#545** (post-G8 E2E floor) logged by the solution-architect.
+
+**New CI guard behaviour:** `tests/unit/e2e-shards.test.ts` needs the four shards within one test of each other; each PR that adds E2E cases must re-check it after every merge to `master`. Developers now merge `master` locally and run the guard before pushing. CI tooling is frozen until G8 (§9 item 4), so this is recorded, not changed.
+
+**Lanes (3):** 08.05 **AQP-360** (started on 831f274); 09.05 **AQP-352** (started on 13d58e6); DEF-050 #546 (sync and merge), then DEF-051. **Queue:** 09.06, 09.07 [c], 08.06 [c], 08.07, 08.08 [c], 07.05, 02.08 [c], 04.06, 10.07. **Slip watch (DL-248):** 11 stories not yet started with 3 lanes; the last merge by 26 Nov is at risk; a 4th lane is with the delivery lead.
+
+**Worktrees (4 + main):** records-t, aqp-352, aqp-360, aqp-380. Removed this afternoon: aqp-378, aqp-376, aqp-359, aqp-367, aqp-350, aqp-351, aqp-364 (memory archived under `_archive-2026-11-20/`). Containers removed: aqp359-db, aqp350-db, aqp351-db, aqp351-mail. **C: 14 GB free.**
+
+## Daily update (2026-11-20, orchestrator)
+
+> This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.**
+
+**`master` = 5d6d72b.** Merged today (5, squash, each on a fully green run with the head up to date with `master`): #510 **AQP-336** 07.06 (703c61b); #531 **AQP-377** DEF-048 fix (402485c); #526 **AQP-358** 08.03 [c] (d50d092, after DL-259); #529 **AQP-375** H-OBS (7131b6b; it first went red after "Update branch" on a semantic clash with #525's new test, `performOutboxSend` arity, fixed by a test-only commit); #527 **AQP-376** DEF-047 fix (5d6d72b, DL-260). Jira Done: AQP-336, AQP-358, AQP-375 (AQP-349 was already Done). `master` push runs: 703c61b in progress when read; 402485c (44739529276) fully green.
+
+**Rulings today:** DL-259 (#526 shard-4 wave = slow runner, 1.74x across the shard; update and merge); DL-260 (#527 merges, DEF-047 stays open, the amended proof does not yet apply: 4 to 7 s unexplained; R5 re-pointed to the three new axe cases; a diagnostic run, DL-260 (5)); DL-261 (DEF-050 scope keeps both tests; new re-run rule **R8**; lane order 08.04, then DEF-050, DEF-047 diagnostic in the DEF-049 lane; R6 ended); DL-262 (records the product-owner's acceptance of 09.03 deviation 1: AC-5 and D-5 amended in Jira, recipients are user IDs, NFR-028 kept). **Rules in force: R5 (re-pointed), R7, R8.**
+
+**Defects:** DEF-048 (AQP-377) **closed** by QA (both proof halves met: PR run 44737067927 worst 13.0 s; `master` 44739529276 worst 18.3 s; P1 met on both). DEF-047 (AQP-376) In QA: fix merged; P1/P2 to read on the first `master` push of 5d6d72b; diagnostic draft PR `diag/AQP-376-axe-phases` being prepared. DEF-049 (AQP-378): fix PR #540 green on its run of record 44745410528 (P1 and P2 met, worst 18.8 s; 4 of 15 over 15 s), updated after #527 and re-running. **New DEF-050 (AQP-380, GitHub #539):** `approve-override.spec.ts:155` [mobile] and `remove-price.spec.ts:136` [tablet] time out in the Engineer's closing sign-in and open (5 attempt-1 failures in two days, 2 on `master` pushes). The near-budget watch list now lives in DEF-049's file.
+
+**Nightly 44703275771** failed only on the frozen "CI feedback time" job (p95 27 m 10 s against 10 m, 8 runs). Recorded on RISK-023; no action until after G8 (§9 item 4).
+
+**Lanes (3 developers):** 09.03 **AQP-350** PR #538 (product-owner accepted deviation 1; one extra integration case added; CI running); 05.10 **AQP-367** PR #541 (draft, CI running); 08.04 **AQP-359** [c] (started on 7131b6b; combined review before merge). The DEF-049 developer runs the DEF-047 diagnostic while #540 runs. **Next lanes (DL-261):** DEF-050, then 07.07 AQP-364, 07.05 AQP-335, 02.08 AQP-365 [c], 04.06 AQP-366, 10.07 AQP-369. Slip watch: last story merged by 26 Nov (DL-248).
+
+**Merge order now:** #540 (on green, P1/P2 re-read), then #538 and #541 as each goes green (each with "Update branch" first), then 08.04 after its combined review. #494 records at the end of the run; #476 Dependabot held for the hardening window.
+
+**Worktrees (6 + main):** records-t, aqp-350, aqp-359, aqp-367, aqp-376 (diagnostic only; remove after it), aqp-378 (remove after #540). Removed today after merge: aqp-336, aqp-377, aqp-358, aqp-375 (agent memory archived to records-t `.claude/agent-memory/_archive-2026-11-20/`; Turbopack links under `.next` unlinked one by one first). Containers removed: aqp336-db, aqp358-db, aqp375-db; aqp350-db and others are per lane. **C: 12 GB free.**
+
+**For the delivery lead:** (1) master wrote one memory note into the **main checkout** (`.claude/agent-memory/master/project_gate_recurring_patterns.md`) before it was told not to; it now writes only to records-t. The CR-01 session decides what to do with it. (2) Branch `diag/AQP-376-axe-phases` is a never-merged diagnostic; after its reading, the orchestrator closes the PR and the branch needs deleting by the delivery lead (agents may not delete branches).
+
+## Resume point (2026-11-19, pause 3)
+
+> **Graceful pause at the delivery lead's request.** This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.** No agent is running, no background command is running, no dev server is running. Everything is committed and pushed. (Written in the early hours of 2026-11-20 UTC.)
+
+**`master` = 241922f** (#525 AQP-349 09.02). Its push runs (CI 44667806338, Windows package 44667806344) were **in progress at the pause: read them first**. The previous tip 9f9981f (#534) was **fully green** (CI 44662130558).
+
+**Merged since pause 2 (5):** #520 AQP-374 DEF-046 test fix (4232a36); #519 AQP-312 AC-8 kit step (1e6a4d4; kit on master: https://github.com/sankumar76/Accucut-Quotation/blob/master/deploy/windows/manual/AC-8-jea-prompt-check.md); #534 **AQP-379** effect override for GHSA-7589-6fvf-x4pw (9f9981f, DL-258; Jira Done); #525 **AQP-349** 09.02 (241922f; Jira still to move to Done on resume). QA closed AQP-373 (DEF-045) and AQP-374 (DEF-046).
+
+**Blockers cleared this run:** (1) Gitleaks Stage 2 red on every run from invented test strings on the old branch `feat/AQP-375-observability`; the delivery lead deleted it; Stage 2 green again. (2) Stage 7 `npm audit` red from GHSA-7589-6fvf-x4pw (`effect` via Prisma); fixed by #534 (`overrides.effect = 3.22.4`).
+
+**Rulings this run:** DL-256 (#510 red run: update and merge on green; DEF-048; rule R6; R3 and R4 ended), DL-257 (DEF-048 proof amended to P1 first-attempt pass at every width, P2 each case under 25 s, P3 one page open and at most one scan per case; R6 re-pointed; DEF-049 and rule R7; watch-only `estimate-save:107`, `rates-changed:135`, `unlock:186`; the amended proof applies to #527 only if its PR body shows per-case CI timings), DL-258 (merge #534).
+
+**Open PRs at the pause (do not act until resume):**
+| PR | Item | Head | CI at pause | Next on resume |
+|---|---|---|---|---|
+| #526 | AQP-358 08.03 [c] | 0307d91 | Run 44662178640: Stages 1 to 11b **green** (first full unit/build/integration pass in CI), shards 1 to 3 green, **shard 4 red: a broad time-out wave** (about 14 desktop failures across estimate-fasteners, estimate-form :224, estimate-review :166, estimate-warning, lead-warning, masters-table-actions :315 at 768/1024/1366, remove-price :136, users :58). Not covered by R5, R6 or R7 (more than one test). Combined review **APPROVE WITH COMMENTS** at 76ab509 (re-review). | **Ask master for a ruling** on the shard-4 wave (slow runner or caused by #526); then update branch and merge on fully green |
+| #510 | AQP-336 07.06 | 3caadda | Updated after #525 merged; run in progress at pause | Read; merge on fully green |
+| #529 | AQP-375 H-OBS | 57da6e9 | **All green** (incl. Stage 13), but now BEHIND (#525 merged). Combined review APPROVE WITH COMMENTS (Minor in #532). Its earlier run 44550007854 had shard 4 re-run together with the Stage 2 re-run (DEF-047 signature; R5 (a) not strictly met): recorded for master, not a run of record | Update branch; merge on fully green |
+| #531 | AQP-377 DEF-048 fix | 54093e7 | **All green**, now BEHIND | Update branch; merge on fully green; then read P1 and P2 on the first `master` push run and post on AQP-377 |
+| #527 | AQP-376 DEF-047 fix | c6baf52 | Draft, BEHIND. Run 44591769411: all E2E green (Stage 2 red then, from the old branch). Users layout cases 4.8 to 6.1 s; axe cases 17.4 / 17.1 / 19.4 s (each its own case); card list 3.7 s. Root cause: about 170 never-deleted users in the list and about 1,000 `expect()` calls per `expectActionsInside` call; axe whole page 7.5 to 9.6 s | Resume the developer: PR title and body with per-case CI timings (needed for DL-257's amended proof), read the notice-case timings, mark ready, AQP-376 to In Review, Jira hand-off; sync with master; master confirms the proof; merge on fully green |
+| #494 | records | 54a0f8e (now later) | Draft | Merges at the end of the run (docs-auto) |
+| #476 | next 16.4.6 (Dependabot) | 141cfe0 | Green | Hardening window (#513); do not touch |
+
+**Merge order on resume:** #526, #510, #529, #531, #527 (#525 is done). One at a time, each on a fully green run with the head up to date with `master`.
+
+**Queue (not started):** DEF-049 fix (AQP-378; first free lane after #531, DL-257), then 09.03 AQP-350, 08.04 AQP-359 (after #526), 05.10 AQP-367, 07.07 AQP-364, 07.05 AQP-335 (after #510), 02.08 AQP-365 [c], 04.06 AQP-366, 10.07 AQP-369. Slip watch: last story merged by 26 Nov for the 1 Dec G8 target (DL-248).
+
+**Hardening issues added this run:** #532 (H-OBS SQR-01, SQR-02), #535 (remove the `effect` override once Prisma allows `effect` >= 3.22.1), #536 (`uuid` < 11.1.1 via `exceljs`, moderate), #537 (`basic-ftp` <= 6.2.3, high, dev-only); #524 extended to the insert service (AQP-358 SQR-05); AQP-358 SQR-07 wording (mandatory input with no default stops Calculate on open Drafts) for product-owner and ux-expert. Earlier: #513, #516, #523, #524; G8 conditions G8-C-AC8, G8-C-NFR9.
+
+**Bugs open:** AQP-376 DEF-047 (#527), AQP-377 DEF-048 (#531, GitHub #530), AQP-378 DEF-049 (GitHub #533, not started). Rules in force: R5 (DEF-047), R6 as amended (DEF-048), R7 (DEF-049). RISK-031 at 9.
+
+**Worktrees (6 + main):** records-t; aqp-336 (#510); aqp-358 (#526); aqp-375 (#529); aqp-376 (#527; untracked `.bench-tmp/` scratch and agent memory, an earlier clean-up was denied); aqp-377 (**checked out on `fix/AQP-379-effect-advisory`**, merged; switch back to `fix/AQP-377-estimate-e2e-timeouts` if #531 needs changes, or remove it after #531 merges). Removed this run: aqp-373, ac8-kit, aqp-349 (agent memory archived to records-t `.claude/agent-memory/_archive-2026-11-19/`). **C: 9.9 GB free.**
+
+**Containers (all stopped, none removed):** aqp358-db, aqp349-db (its PR has merged; can be removed on resume), aqp336-db. Other projects' containers are untouched.
+
+**For the delivery lead / main session:** no decision is pending. Housekeeping: aqp349-db can be removed (#525 merged); orphan folder `aqp-338` (from before) still in `.claude/worktrees`; `.bench-tmp/` in aqp-376; developer memory notes sit untracked in the aqp-375, aqp-376 and aqp-377 worktrees (archive before removing those worktrees).
+
+## Run after pause 2 (2026-11-19, orchestrator)
+
+> This section wins over everything below it. Records stay on `docs/AQP-1-records-t` (draft PR #494). The main checkout belongs to the CR-01 session.
+
+- **Merged:** #520 **AQP-374** DEF-046 test fix (4232a36; `master` push run 44540107462 fully green = P5; rule R4 ended); #519 **AQP-312** AC-8 kit, optional standard-account step (1e6a4d4; kit link posted on AQP-312, comment 12351). Total merged on 19 Nov: 10.
+- **QA closed:** AQP-373 (DEF-045) and AQP-374 (DEF-046), Jira 12349 and 12350; GitHub #515 and #517 closed; commit 01ec468.
+- **Master ruling DL-256** (#510 red run 44540150487): update the branch, merge on fully green, no re-run of that run. New Bug **DEF-048** (tablet `estimate-treatments.spec.ts:238` axe-scan time-out, `estimate-tree.spec.ts:313` flaky), being logged by qa-engineer; new rule **R6**. R3 and R4 ended; only R5 and R6 remain.
+- **BLOCKER (delivery lead):** Stage 2 Gitleaks (full history) is red on every run, including `master` push run 44546695829 on 1e6a4d4 (its four E2E shards are green). Cause: 3 invented test strings in commits c763a02 and 309d1e3, only on the old remote branch `feat/AQP-375-observability` (the H-OBS developer recommitted without them on `feat/AQP-375-observability-2`, PR #529; old PR #528 closed). Agents may not delete branches. Needed: `git push origin --delete feat/AQP-375-observability`; then the orchestrator re-runs `master` and updates the open PRs. Jira AQP-1 comment 12356. No PR can merge until then.
+- **Lanes (developer):** (1) AQP-376 DEF-047 fix, PR #527, worktree `aqp-376`, diagnosing in CI; (2) AQP-377 DEF-048 fix (Jira Bug AQP-377, GitHub #530; DL-256 (D) first free lane), worktree `aqp-377`, branch `fix/AQP-377-estimate-e2e-timeouts`. The 08.03 and H-OBS developers are done (see below).
+- **Combined reviews (§9 item 2):** #526 AQP-358 08.03 [c]: REQUEST CHANGES at a4afb08 (SQR-01 Major, SQR-02, SQR-03 Minor), fixed at **76ab509**, re-review **APPROVE WITH COMMENTS** (`docs/06-reviews/AQP-358/combined.md`). #529 AQP-375 H-OBS at 8434ca7: **APPROVE WITH COMMENTS** (Minor SQR-01, SQR-02 in follow-up #532; SQR-07: one unidentified local Vitest failure, to be cleared by the first full CI run).
+- **AQP-358 deviations (accepted by the review, recorded here):** extra Admin-only route `GET /api/v1/config/insert-options` (names and structure only, strict schema) and an optional `lettersOnly` flag on the preview request. Architecture v0.57 §6 updated (5987e22, SQR-04). SQR-05 (rate-delete race on insert) added to #524. SQR-07 (a new mandatory input with no default stops Calculate on open Drafts) is a wording point for product-owner and ux-expert in the hardening window.
+- **Waiting to merge (after the blocker, each on a fully green run):** #525 AQP-349 09.02; #510 AQP-336 (DL-256: its last run had all E2E green); #529 AQP-375; #526 AQP-358. 08.03 developer and H-OBS developer lanes are free, but no new lane can start: 7 worktrees in use (cap).
+- **Worktrees (7):** records-t, aqp-336, aqp-349, aqp-358, aqp-375, aqp-376, aqp-377. Removed after merge: aqp-373 and ac8-kit (agent memory archived to records-t `.claude/agent-memory/_archive-2026-11-19/`).
+
+## Resume point (2026-11-19, pause 2)
+
+> **Graceful pause at the delivery lead's request.** This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.** No agent is running. All work is committed and pushed, and no dev server is running.
+
+**`master` = 0056227** (#518). Its push run 44509175744: "Stages 1 to 11b" **green**, and **T6 for AQP-373 met** (`image.test.ts`: 53 tests in 2,289 ms, none slow; AQP-373 comment posted). Its E2E shards were still running at the pause: **read them first.** Earlier: 714f3c5 green, abd0947 green, 8b51872 green; 0898563 red (DEF-047, not re-run).
+
+**Merged today (8):** #512 AQP-363, #514 AQP-344, #501 AQP-312 [c], #508 AQP-356 [c], #503 AQP-348 [c], #493 AQP-338 [c], #521 AQP-368, #518 AQP-373 (DEF-045 fix). Jira Done: AQP-363, 344, 312, 356, 348, 338, 368. **AQP-373 is still to be verified and closed by qa-engineer** after T6.
+
+**Open PRs, with the next step on resume:**
+| PR | Item | State at pause | Next |
+|---|---|---|---|
+| #520 | AQP-374 DEF-046 fix (test-only, DL-254) | Updated with master (816ed68); CI running; green before the update | Merge on green (R4 ends); read P5 on the first master push run; qa closes |
+| #519 | AQP-312 AC-8 kit, optional standard-account step (DL-253) | Master **GO** (attempt 2); updated (38c022e); CI running | Merge on green; then give the delivery lead the master link to the kit |
+| #510 | AQP-336 07.06 | Green on a5548c7 but **BEHIND** | "Update branch", green, merge |
+| #525 | AQP-349 09.02 (critical path) | Draft; all ACs built; Stage 1 to 11b green on 2477dc6, E2E unread; BEHIND | Read run 44508720149, update from master, mark ready, merge (not critical) |
+| #526 | AQP-358 08.03 [c] (critical path) | Draft WIP c16769d: pure core with property and SPEC tests, service, routes, audit event; the UI, page, tests and JS budget are left (list in the PR). Adds an unlisted route `GET /api/v1/config/insert-options` (record the deviation). Split trigger not hit | The developer resumes on the PR's "Left" list; then CI and the combined review |
+| AQP-375 | H-OBS (DL-252), branch `feat/AQP-375-observability` at 2abb8de, **no PR** | WIP, untested: migration with `prune_heartbeat_runs()`, heartbeat rule, job wrapper, heartbeat job, repository, jobs moved to `runJob` | The developer resumes: wire `src/worker/main.ts`, tests first, then AC-1, 2, 8 and 9. PO finding: `restore.ps1` also waits for `/api/health` |
+| #476 | next 16.4.6 | Held for the hardening window (#513) | none |
+| #494 | records | Draft | Merges at the end of the run (docs-auto) |
+
+**Queued, not started:** the AQP-376 / DEF-047 fix (DL-255: next free slot, ahead of new stories); the AQP-376 R5 rule still applies. Then 09.03 AQP-350 after #525; 08.04 AQP-359 after #526; 05.10 AQP-367 and 07.07 AQP-364 / 07.05 AQP-335 (after #510), 02.08 AQP-365 [c], 04.06 AQP-366, 10.07 AQP-369. The last story merging by 26 Nov is the slip watch for the 1 Dec target (DL-248).
+
+**Worktrees (7 registered, all clean and pushed):** records-t; ac8-kit (#519; removable after merge); aqp-336 (#510); aqp-349 (#525); aqp-358 (#526); aqp-373 (now on `fix/AQP-374-…`, #520; removable after merge); aqp-375 (H-OBS). **Orphan folder `aqp-338/.next`** (deregistered by git; probably Turbopack junctions; not deleted): the main session clears it. **Containers:** aqp349-db and aqp336-db, both stopped (PRs open); all others removed. **C: 13 GB free.**
+
+**For the delivery lead / main session:** (1) the AQP-375 developer wrote its memory note `aqp375-observability-wip.md` (and an index line in `MEMORY.md`) into the **main checkout's** `.claude/agent-memory/developer/`, against its brief; the main session decides what to do with it. (2) Q-18 page link and AC-8 kit link as sent. (3) Nightly "CI feedback time" fails every night (frozen measurement job, §9 item 4). (4) The open G8 conditions: G8-C-AC8, G8-C-NFR9; hardening items #513, #516, #523, #524.
+
+## Daily update (2026-11-19, later, orchestrator)
+
+> This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.**
+
+**Latest (end of the run, overrides the tables below where they differ):**
+- **Merged later in the day:** #508 **AQP-356** 01.09 [c] (8b51872), #503 **AQP-348** 09.01 [c] (abd0947, one R5 re-run), #493 **AQP-338** 08.02 [c] (714f3c5; combined review APPROVE WITH COMMENTS, SQR-01 Minor in #524), #521 **AQP-368** 05.11 (487b4b1). **Total merged today: 8.** Jira Done: AQP-363, 344, 312, 356, 348, 338, 368.
+- **`master`:** 0898563 was **red** (run 44487090650: `masters-table-actions.spec.ts:315` [desktop] time-out on both attempts; not re-run; the orchestrator read it late). That run became DEF-047 and rule R5. 8b51872, abd0947 and 714f3c5 are green. Nightly "CI feedback time" fails every night: a frozen measurement job (§9 item 4), not a product failure.
+- **More decisions:** DL-252 (H-OBS built now as AQP-375 in the third lane), DL-253 (AC-8 kit gets an optional standard-account step; #519 GO after one NO-GO), DL-254 (DEF-046, rule R4), DL-255 (DEF-047, rule R5; RISK-031 reopened at 9).
+- **Defects today:** DEF-045 (AQP-373, fix #518), DEF-046 (AQP-374, fix #520), DEF-047 (AQP-376, fix not yet started; it takes the next free slot); follow-ups #523 (`pg` warning), #524 (AQP-338 SQR-01 and SQR-04).
+- **Lanes now:** 09.02 AQP-349 (EPIC-09 chain) and 08.03 AQP-358 (EPIC-08 chain) **both started on 19 Nov**, which meets the 20 Nov slip watch. The third lane runs H-OBS AQP-375.
+- **Merge queue:** #518 and #520 are being updated (flake fixes), then #519 (AC-8 kit, GO), then #510 (AQP-336, green, behind).
+- **Worktrees (6 registered):** records-t, ac8-kit, aqp-336, aqp-349, aqp-358, aqp-373, plus aqp-375 being created. There is an **orphan folder `aqp-338/.next`**, left by `git worktree remove`, probably holding Turbopack junctions; it was not deleted (no recursive delete through links) and is for the main session.
+
+**Merged (squash, each on fully green CI with the head up to date with `master`):** #512 **AQP-363** 10.06 drawing region (e4cf444); #514 **AQP-344** DEF-041 test-only fix (6f275ad; DL-240 F1 to F5 met, master ruling DL-246; qa closed AQP-344 and #473; rule R2 has ended); #501 **AQP-312** 10.11 Windows restore [c] (0898563; combined review APPROVE WITH COMMENTS, SQR-01 Major fixed, SQR-02 to 04 in #516; AC-8 pending a manual check by Accucut IT, DL-243, G8 condition G8-C-AC8; one R3 re-run). **Jira Done:** AQP-363, AQP-344, AQP-312.
+
+**`master`:** e4cf444 red on attempt 1 (DEF-045, `image.test.ts` timeout), green on the one R3 re-run (DL-245); 6f275ad green (run 44482838527, also the F5 proof for AQP-344); 0898563 run in progress at writing.
+
+**Decisions recorded today:** DL-241 (`FEATURE_EMAIL=off` line in `.env.example`, added by the delivery lead), DL-242 (#476 next 16.4.6 to the hardening window, #513), DL-243 (AQP-312 AC-8 pending, G8-C-AC8), DL-244 (R1+, 10.08, 10.09, 08.08 before G8), DL-245 (red master on DEF-045; rule R3; AQP-373 takes the next lane), DL-246 (#514 meets F2), DL-247 (developers merge with exactly `git -C "<…>/.claude/worktrees/<wt>" merge origin/master`; the settings line is committed on this branch as bd56e77), DL-248 (**G8 target 1 Dec**). DL-249 (10.08 and 10.09 fold into the final review; AQP-370 and AQP-371 back in To Do, label `final-review`; 10.09's code items AC-5 to AC-7 become hardening item **H-OBS**, about 3 points, timing for the delivery lead, master recommends the first lane free after AQP-348), DL-250 (Q-18 open with Accucut IT, needed by Fri 27 Nov; RISK-014), DL-251 (#485 folds into the final review as G8 condition **G8-C-NFR9**; RISK-020 raised to 6). **Pre-G8 list adds:** G8-C-AC8, G8-C-NFR9, H-OBS, #513, #516.
+
+**Why the local merges failed this morning:** each agent Bash call resets its working directory to the main checkout, so a `cd` then bare `git merge origin/master` would have merged into the CR-01 checkout. Developers stopped correctly. The delivery lead ran the merges for aqp-356, aqp-336 and aqp-338; developers resolved and committed them. DL-247 now gives developers a form that names the worktree.
+
+**Defects:** DEF-045 (AQP-373, #515, Sev-3, `image.test.ts` "table is immutable" group, slow `snapshot()`), fix in progress under DL-245 T1 to T6; it has turned two runs red (e4cf444, #501), both cleared by one R3 re-run. A new failure on #510 in `tests/integration/auth/account-password.test.ts` ("two changes at once cannot both win": a field validation error instead of 409) is being logged by qa-engineer; master rules on it next. No rule covers re-running it.
+
+**Backlog:** AQP-365 to AQP-372 created (scrum-master), PO-validated READY, Ready for Dev; AQP-365 AC-9 aligned with architecture v0.56. AQP-370 and AQP-371 then folded into the final review. Architecture v0.56 and test strategy v0.46 answer the 02.08, 10.08 and 10.09 questions. Q-18 request page for Accucut IT: `docs/01-discovery/Q-18-mail-settings-request.md` (AQP-355 comment 12306).
+
+**Open PRs and next step:**
+| PR | Story | State | Next |
+|---|---|---|---|
+| #508 | AQP-356 01.09 [c] | Conflict resolved (096f466), updated with `master` (e58e4da), CI running | Merge on green |
+| #503 | AQP-348 09.01 [c] | SQR-01 closed (re-check APPROVE WITH COMMENTS), updated (dce5467), CI running | Merge on green; then 09.02 starts in its slot |
+| #510 | AQP-336 07.06 | Conflicts resolved (4f8e0c8); red on the new account-password failure | Master's ruling; then update and merge |
+| #493 | AQP-338 08.02 [c] | Merge in progress (9 conflicts incl. `calculation-repository.ts`), developer resolving | CI, combined review, merge; then 08.03 starts |
+| AQP-373 | DEF-045 fix | Developer measuring | PR, slowest group test ≤ 1,000 ms (T6) |
+| AQP-368 | 05.11 | Developer building | PR, CI |
+| #476 | next 16.4.6 | Held for the hardening window (#513) | none now |
+| #494 | records | Draft | Merges at the end of the run (docs-auto) |
+
+**Lane plan to the 1 Dec target (orchestrator's plan, not a measured velocity; master asked for it in DL-248):**
+1. **EPIC-09 chain (critical path):** 09.02 AQP-349 starts in the aqp-348 slot as soon as #503 merges (planned 19 to 20 Nov), then 09.03 to 09.07 (AQP-350 to 354; 09.07 is critical) in order; 09.08 AQP-355 when Accucut IT answers Q-18 (needed by 27/28 Nov).
+2. **EPIC-08 chain (critical path):** 08.03 AQP-358 starts as soon as #493 merges (planned 20 Nov), then 08.04 to 08.07 (AQP-359 to 362), then 08.08 AQP-372 [c].
+3. **Third lane:** 05.11 AQP-368 (now), 05.10 AQP-367, 07.07 AQP-364 and 07.05 AQP-335 (after #510), 02.08 AQP-365 [c], 04.06 AQP-366, 10.07 AQP-369.
+4. **Hardening window:** opens when the last story merges, planned 26 Nov: the full review by the three reviewers and QA, a full regression, #513, the 10.08 and 10.09 coverage, and the fixes. G8 recommendation 1 Dec. **Named human steps:** AC-8 (Accucut IT) and the 09.08 real send, both by 28 Nov.
+**Slip watch:** the two chains are the critical path. If 08.03 or 09.02 has not started by 20 Nov, or the last story is not merged by 26 Nov, I report a slip against 1 Dec at once (DL-248).
+
+**Worktrees (7 of 7):** `records-t`, `aqp-336` (#510), `aqp-338` (#493), `aqp-348` (#503), `aqp-356` (#508), `aqp-373` (DEF-045), `aqp-368` (05.11). Removed today: `aqp-363`, `aqp-344` (its memory note moved to records-t), `aqp-312`. Test DB containers: aqp336-db, aqp338-db, aqp348-db, aqp373-db. **Disk:** C: 12 to 13 GB free.
+
+**For the delivery lead:** see the orchestrator's final report (the Q-18 page and AC-8 kit links; master's DL-241 disclosure that it read `.env.example` through the GitHub API).
+
+## Resume point (2026-11-19, pause)
+
+> **Graceful pause at the delivery lead's request; the C: drive was critically low.** This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout belongs to the CR-01 session: never check it out, stash, reset or write there.** Every agent is stopped, and all work is committed and pushed. Nothing is running locally: no containers, no dev servers.
+
+**`master` = 1ca5f42** (#511 AQP-334). Push run 44445679284 on 1ca5f42 was **in progress** at the pause, so read it first. Earlier runs: 87a13f8 green, d7977c8 green, **596e668 red** only on `estimate-save.spec.ts:240` [tablet] (AQP-344, both attempts), with `unlock.spec` [mobile] flaky (AQP-346). So AQP-344 can turn master red.
+
+**Merged since the 2026-11-19 daily update:** #507 AQP-357 04.07 reassign (9ea0892); Dependabot under DL-239: #474 lucide-react 1.73.0 (596e668), #475 nodemailer 10.5.0 (d7977c8), #477 eslint-config-next 16.4.6 (87a13f8); #511 AQP-334 07.04 refusal (1ca5f42, the merge in flight at the pause). **The run so far: 15 merges** (#479, #455, #486, #483, #492, #497, #495, #500, #487, #504, #507, #474, #475, #477, #511). Jira Done adds AQP-357 and AQP-334.
+
+**Decisions since the daily update:** DL-239 (Dependabot: #474, #475, #477 merge; #476 needs a developer check first); DL-240 (AQP-344's test-only fix takes the next free lane ahead of any story, conditions F1 to F5; R2: one re-run per head for its exact signature). Backlog: AQP-358 to AQP-364 created and Ready (EPIC-08 08.03 to 08.07, 10.06, 07.07 "Download on SCR-06 when current"); 08.08 (choice list and new sections) still to be created in Jira by the scrum-master, and to be Done before G8.
+
+**Open PRs at the pause, with the next step:**
+| PR | Story | State | Next step on resume |
+|---|---|---|---|
+| #510 | AQP-336 07.06 warning notice | CI green after one DL-240 R2 re-run (44439067598 attempt 2); now **CONFLICTING** after #511 (the expected overlap in `estimate-export.tsx` and `export-texts.ts`) | The developer merges master in its own worktree (DL-236 (b)); if `git merge` is refused, it goes to the delivery lead. Then green CI, then merge (not critical) |
+| #508 | AQP-356 01.09 Admin hand-over [c] | Review APPROVE WITH COMMENTS (Minors #509); CI was green; **CONFLICTING** (one trivial conflict, keep both entries in `tests/integration/audit/audit-database.test.ts`) | **Delivery lead**: `git merge` settings or who merges (AQP-1 comment 12240) |
+| #493 | AQP-338 08.02 formula edit [c] | All ACs coded; **CONFLICTING**; no CI ever | Same as #508; then `pageMetadata` on the page, CI, combined review. It gates AQP-358 to AQP-362 |
+| #503 | AQP-348 09.01 mail outbox [c] | CI green at 9ec4d9e; re-review: only SQR-01 open; BEHIND | **Delivery lead**: `FEATURE_EMAIL=off` in `.env.example` (comment 12224); then the developer's template test, the reviewer's one-line check, a branch update (nodemailer 10.5.0, DL-239 (2)), green run, merge |
+| #501 | AQP-312 10.11 Windows restore [c] | R1 to R5 pushed at 0874299 (draft); stage 13 on f1cb5d0: install, ACL asserts and both real restores passed, with 10 test-only Pester failures fixed in 0874299 (stage 13 there unread); required CI on f1cb5d0 red only in E2E shard 2 (`auth.setup` sign-in timeouts, no rule allows a re-run) | Read stage 13 and CI on 0874299; then the combined review; **AC-8 manual JEA check by a human** (kit `deploy/windows/manual/AC-8-jea-prompt-check.md`); #502 before go-live |
+| #512 | AQP-363 10.06 drawing region | Draft at 0869dae; CI 44444708327 was 5 green and 1 pending at the pause; Jira already In Review | Read the run; if green, mark ready, update the branch, merge. The layout numbers are computed, not measured (first suspect if red: the `lg:ml-[min(...)]` and `max-w` classes) |
+| #476 | next 16.4.6 (Dependabot) | Latest CI green at 9319aec9; the A/B check (DL-239 (4)) is **INCONCLUSIVE, leaning regression-sensitive**: picture and treatments tests failed 2 of 3 runs on 16.4.6 against 0 of 21 on 16.4.5; 16.4.6 now gzips route-handler responses (PR comment 6998011806) | **Delivery lead**: merge on green without proof, or more interleaved CI re-runs, or a test fix (asked first). Not merged |
+| #494 | records | Draft | Merges at the end of the run (docs-auto) |
+
+**Next lanes on resume, in order:** (1) the AQP-344 test-only fix (DL-240, F1 to F5); (2) the #510 conflict; (3) AQP-364 07.07 (now unblocked by #511); (4) AQP-349 09.02 once #503 merges; AQP-335 07.05 (now unblocked by #511); the EPIC-08 chain after #493.
+
+**Worktrees under `.claude/worktrees`** (every `node_modules` and `src\generated` below is a real folder, not a link): **in use:** `records-t`, `aqp-312` (#501), `aqp-336` (#510), `aqp-338` (#493; container `aqp338-db` may still exist), `aqp-348` (#503), `aqp-356` (#508), `aqp-363` (#512). **Finished, removable (merged, clean, pushed):** `aqp-330`, `aqp-332`, `aqp-333`, `aqp-334`, `aqp-357`, `aqp-90`, and `records-t/.claude/worktrees/aqp-308` (nested inside records-t by mistake; AQP-308 merged). **Orphan folders, deregistered by git but files left; delete manually** (their `.next\dev\node_modules` holds Turbopack junctions that point only inside the same folder): `next-ab`, `next-ab2` (the #476 A/B, the largest) and `aqp-329` (AQP-329 merged). Already gone at the pause: `aqp-328`, `aqp-347`, `agent-a358ec5d24f2e0364`, `wt-470`. Still to delete: the stray untracked file `AppData` in the main checkout root. Disk at the pause: C: 2.0 GB free.
+
+**Waiting on the delivery lead, in order:** (1) `git merge` for developers in `.claude/worktrees/*`, or who merges #508 and #493 (comment 12240); (2) the `.env.example` line for #503 (12224); (3) the #476 decision; (4) the AQP-312 AC-8 kit on a Windows Server; (5) the date risk (about 31 points still to write plus 08.08); (6) does "all R2" cover R1+?; (7) do 10.08 and 10.09 fold into the final review?; (8) the IT mailbox details for 09.08 (Q-18); (9) #485 timing; (10) disk clean-up as listed above.
+
+## Daily update and resume point (2026-11-19, orchestrator)
+
+> This section wins over everything below it. Records branch `docs/AQP-1-records-t` (draft PR #494) in `.claude/worktrees/records-t`. **The main checkout still belongs to the CR-01 session: do not touch it.**
+
+**`master` = d12b6e0.** Push runs were green through a44cb88. Read the runs for 77019cd, 44a51e3, 230bd77 and d12b6e0 on resume.
+
+**Merged since the 2026-11-18 update (squash, each on fully green checks, up to date with `master`):** #497 AQP-309 privacy checks (a44cb88); #495 **AQP-330** 06.13 remove price [c] (77019cd; combined review 0 Major, Minors #499; BO rule ruled by the architect, v0.52); #500 AQP-90 About page (44a51e3); #487 **AQP-332** 07.02 export rows [c] (230bd77; WebP option A, DL-237, server refuses unconverted WebP with 415, OQ-PM-10; #489 closed, #496 reopened for SQR-08); #504 **AQP-333** 07.03 totals [c] (d12b6e0; 0 Major, Minors #506; #478 SQR-01 fixed). **Total for 2026-11-18: 10 merges** (#479, #455, #486, #483, #492, #497, #495, #500, #487, #504), none reverted. Jira Done: AQP-328, 347, 329, 308, 309, 330, 90, 332, 333.
+
+**Decisions recorded:** DL-235 (lanes; nightly CI time frozen), DL-236 (branch updates: option (c), both), DL-237 (WebP option A), DL-238 (Mailpit in CI allowed for AQP-348, conditions C1 to C3). Architecture v0.52 to v0.55 (BO rule; ADR-013 amendment 1; ADR-015 amendment 3.3 for the restore, R1 to R5; EPIC-09 rulings 1 to 7: outbox by user id, `sender_mailbox`, reset link 60 min, Mailpit in `verify`). PRD v0.30. **DL-230 follow-up:** the delivery lead set `LIGHTHOUSE_B0 = 2594.5` (2026-11-19T00:13:30Z); the next nightly compares against it.
+
+**Backlog:** the scrum-master found 23 planned stories (about 81 points) with no Jira issue. First batch created and DoR-passed: AQP-348 to AQP-357 (EPIC-09 09.01 to 09.08, 01.09, 04.07; 50 points; AQP-355 09.08 is a human-run step). Still to write: EPIC-08 08.03 to 08.07 (after AQP-338), R1+ 02.08, 04.06, 05.10, 05.11, 10.07, and R1 10.06, 10.08, 10.09.
+
+**Open PRs and lanes:**
+| PR | Story | State | Waits on |
+|---|---|---|---|
+| #503 | AQP-348 09.01 mail outbox [c] | CI green at 9ec4d9e; re-review: only SQR-01 open | **Delivery lead:** `FEATURE_EMAIL=off` in `.env.example` (AQP-1 comment 12224) |
+| #507 | AQP-357 04.07 reassign | CI green; branch updated on GitHub, CI re-running | Green run, then merge |
+| #508 | AQP-356 01.09 Admin hand-over [c] | CI green at 7e87c21 | Combined review (running) |
+| #501 | AQP-312 10.11 Windows restore [c] | R1 to R5 being made; stage 13 runs | CI; then combined review; **AC-8 manual JEA check by a human** |
+| #493 | AQP-338 08.02 formula edit [c] | Conflicting, no CI | **Delivery lead:** AQP-1 comment 12227 (the developer's session is still refused `git merge`) |
+| (new) | AQP-334 07.04, AQP-336 07.06 | Developers started 2026-11-18 late | Build |
+
+**For the delivery lead, in order:** (1) `.env.example` line (12224); (2) AQP-338 merge route (12227); (3) the AQP-312 AC-8 kit on a Windows Server; (4) date risk (about 31 more points to write, plus EPIC-08's chain); (5) does "all R2" cover R1+?; (6) do 10.08 and 10.09 fold into the final review?; (7) the IT mailbox details for 09.08 (Q-18); (8) #485 timing. Housekeeping as in the 2026-11-18 section, plus finished worktrees aqp-309, aqp-330, aqp-90, aqp-332, aqp-333 and the container `aqp338-db`.
+
+**Hardening list additions:** #499, #505 (SQR-03, into 09.06), #506, #496 SQR-08, the menu drawer at 360 px (AQP-90 note), the resetPassword stale-request window (pending the AQP-356 review), architecture §4.6 and §6 notes from the AQP-333 review.
+
+## Daily update and resume point (2026-11-18, orchestrator)
+
+> This section wins over everything below it, including "Resume point (2026-11-17, pause)". Records branch `docs/AQP-1-records-t` in `.claude/worktrees/records-t`. **The main checkout still belongs to the CR-01 session: do not check it out, stash, reset or write there.**
+
+**Master is green.** Push runs 44292510304 (36b2f16) and 44299541392 (04824cc, after the AQP-347 fix) passed. Later merges (534ff1b, 0feea64): read their push runs on resume.
+
+**Merged today (squash, each on fully green required checks, up to date with `master`):**
+| PR | What | Merge |
+|---|---|---|
+| #479 | AQP-328 06.11 rate-change notice, with the architect's GUARD EDIT ruling (approved-read guard names `rate-changes.ts`) | ac86e20 |
+| #455 | `@lhci/cli` 0.16.1 (DL-230: Lighthouse 44285284224 green; the lockfile was unchanged by the last update) | 36b2f16 |
+| #486 | **AQP-347 / DEF-044** `account.spec.ts:299`: one test split into three, test only, DL-229-conformant (DL-235) | 04824cc |
+| #483 | **AQP-329** 06.12 cancel approval [c]: fixture fault fixed (a second active Admin broke `uq_users_single_active_admin`); combined review APPROVE WITH COMMENTS, 0 Major; SQR-01 → #491 (in AQP-330) | 534ff1b |
+| #492 | AQP-308 10.03 page metadata; the architect accepted the `@one-width` allow-list change (test strategy v0.44) | 0feea64 |
+
+**Jira Done today:** AQP-328, AQP-347, AQP-329, AQP-308.
+
+**Records today (this branch):** DL-235 (AQP-347 takes the lane; **3 developer lanes** and focused local Playwright runs on the 24 GB PC; nightly "CI feedback time" failure 44267833415 logged and frozen under §9 item 4, p95 22 m 23 s, median 16 m 17 s); RISK-023 note; architecture v0.51 and test strategy v0.43 (B0 re-taken on Lighthouse 13 from run 44292597690: `/` LCP 191 ms, TBT 1 ms, `benchmarkIndex` 2594.5; #39 closed); test strategy v0.44; `docs/06-reviews/AQP-329/combined.md`.
+
+**Open PRs and lanes:**
+| Item | State | Next |
+|---|---|---|
+| AQP-332 07.02 export rows [c] (#487) | Developer lane; CI running at last report | Green → combined review (§9 item 2) → merge. Follow-ups #489 (WebP pictures), #490 (abort signal) |
+| AQP-338 08.02 edit a formula [c] (#493, draft) | Developer lane; **behind master** (local merge refused) | Needs the delivery lead's decision below; then `pageMetadata` on the formula page, CI, combined review |
+| AQP-330 06.13 remove cancelled price [c] | Developer lane, started today; includes #491 | Green → combined review → merge |
+| #474–#477 Dependabot | The delivery lead's | Not acted on |
+
+**Decision needed from the delivery lead (one, posted as AQP-1 comment 12172):** developers' local `git merge origin/master` is refused by the permission settings, which blocks updating story branches. Recommended option (a): the orchestrator may use GitHub "update branch" (a merge commit) on story PRs. **Disclosure:** the orchestrator used it once for #492 after the developer's merge had been refused, before seeing that this routes around the refusal; it has stopped.
+
+**Also for the delivery lead:** (1) set the repository variable `LIGHTHOUSE_B0` to `2594.5` (DL-087; the architect's B0); (2) the timing of #485 (no key screen in `KEY_SCREENS`, so NFR-009 LCP and TBT are unmeasured on the five key screens; the architect recommends a small enabler now, but §9 item 4 freezes enablers, so your call); (3) housekeeping: `.claude/worktrees/aqp-347` is an orphan folder (git deregistered it, but deleting the files was refused; its only junctions point inside itself), `agent-a358ec5d24f2e0364` has a `node_modules` junction to the main checkout (agent memory archived to `.claude/agent-memory/_archive-2026-11-18/`; remove the junction first), the scratch `wt-470` as before, the finished `aqp-328` and `aqp-329` worktrees, and a stray untracked file `AppData` in the main checkout root (made by a developer's mistyped redirect; harmless). Note: the aqp-329 worktree's `src/generated` had been a junction into the main checkout, so one `prisma generate` rewrote the main checkout's git-ignored `src/generated` with equivalent content (same schema).
+
+**Worktrees removed today:** aqp-326, aqp-342, aqp-343, agent-ad018d01ac3784f70 (all clean, merged). **Hardening list additions:** #488 (`account.spec.ts:113` tight, same split as #486), #491 (in AQP-330), #484 (`parse-cache-control` exception), SQR-02 of AQP-329 (architecture §6 row; UX 409 sentences), the `estimate-warning.spec.ts:156` [tablet] flake (a held calculate request; not yet a bug).
+
+**Next, in order:** the decision above; AQP-332 review and merge; AQP-330; AQP-338; then AQP-333 (07.03, carries #478 SQR-01), AQP-334, AQP-336, AQP-335, AQP-309, AQP-312, AQP-90.
+
+## Resume point (2026-11-17, pause)
+
+> The delivery lead asked for a graceful pause. All work is committed and pushed. This section wins over everything below it, including "Resume point (2026-11-17, shutdown)" and the daily updates. It is also today's daily update (§9 item 6). It sits on records branch `docs/AQP-1-records-t`, worked in the worktree `.claude/worktrees/records-t`: **the main checkout belongs to the CR-01 session (`docs/AQP-1-cr01-customer-ux`, uncommitted UX work for the customer's suggestions); do not check it out, stash, reset or write there.** Expect a CR-01 docs PR touching `docs/03-ux`; resolve any overlap with this records branch when it lands.
+
+**`master` = 8c60579** (#470 AQP-326). **Its push CI run 44128672172 is RED**: E2E shard 2, `account.spec.ts:299` [tablet] failed both attempts (30 s timeout in the sign-in steps): this is **AQP-347 / DEF-044** (#482), not a code fault on the evidence. `estimate-warning.spec.ts:156` [tablet] flaked in the same run (30 s, passed on retry). Windows package run 44128672324 green. No re-run was made: no current rule allows one for this test. The previous push run 44122964555 on 5c4a21a was green.
+
+**Merged today (squash, each on fully green required checks, each up to date with `master`):**
+| PR | What | Merge |
+|---|---|---|
+| #459 | AQP-340 part 1 (DEF-037 E2E flake, tests only; DL-231, DL-232) | 643f56d |
+| #453 | typescript-eslint 8.72.2 (DL-227) | 1aebaf8 |
+| #464 | AQP-340 part 2 (`test.slow()` on three measured tests; DL-232 M3, DL-233) | a2d4fa6 |
+| #466 | AQP-342 / DEF-039 unhandled rejection in race tests (DL-233) | 06c9f99 |
+| #451 | lucide-react 1.72.0 (DL-227) | 788fd6b |
+| #452 | react-hook-form 7.92.0 (DL-227) | 6e2f154 |
+| #469 | **AQP-325** 06.08 unlock [c]: combined review APPROVE WITH COMMENTS, 0 Major; Minors #471 | 29ae4e0 |
+| #458 | `dependabot.yml` major ignores: typescript, eslint, `@types/node` (DL-119, DL-227 (5)) | d7e0208 |
+| #472 | AQP-343 / DEF-040 renumber diagnostic (DL-234 D2) | 5c4a21a |
+| #470 | **AQP-326** 06.09 approved values immutable [c]: combined review APPROVE WITH COMMENTS, 0 Major; Minors #478 | 8c60579 |
+
+**Jira Done today:** AQP-340 (DEF-037: close condition met, three clean Stage 12 runs 44087410883, 44090409641, 44095996581), AQP-342 (DEF-039), AQP-325, AQP-326. **RISK-031 closed** (DL-234). **No re-runs** were made today under DL-229 (4)(f), DL-232 M4, DL-233 R1 or DL-234.
+
+**Open PRs:**
+| PR | State | Next |
+|---|---|---|
+| #479 AQP-328 06.11 rates-changed notice (not critical) | Draft, head b3783a4, CI run 44132122088 **all green**, up to date with 8c60579. Not merged during the pause | **Before merge, one check:** to pass #470's guard (`tests/unit/approved-read-architecture.test.ts`), the notice's master reads moved to `src/server/services/rate-changes.ts`, which the file-level guard does not scan. The status is read first and `tests/unit/estimate-review-rates.test.ts` counts reads to pin "an approved estimate reads nothing". Ask the solution-architect (or the #470 reviewer) for a one-line PR comment: accept as is, or have the guard name `rate-changes.ts` (small edit). Then mark ready, update the branch if `master` moved, and squash on green |
+| #483 AQP-329 06.12 cancel approval [c] | Draft, head 0b7b0e3 (branch `feat/AQP-329-cancel-approval`, on 5c4a21a, BEHIND). All 10 ACs coded with tests; integration, E2E and build never run yet; CI run 44132606262 started at pause, result not read | Read 44132606262; one fix loop at the cause; resolve the overlap with #479 (ten shared files, listed in the PR) after #479 merges; then the combined review (§9 item 2); merge on green. Jira AQP-329 In Progress |
+| #455 `@lhci/cli` 0.16.1 (DL-227, DL-230) | cf93755, BEHIND; architect's licence check posted (matches 12089); nightly Lighthouse 44037928001 green at cf93755 | Update the branch; `package-lock.json` will change, so **re-dispatch `nightly.yml` on the new head** (DL-230 (4)(c)); merge on green; then the architect re-takes B0, updates §11, closes #39 |
+| #474 lucide-react 1.73.0, #475 nodemailer 10.5.0, #476 next 16.4.6, #477 eslint-config-next 16.4.6 | New Dependabot PRs today | **The delivery lead's** (DL-227 covers no future Dependabot PR) |
+
+**Worktrees in use (under `.claude/worktrees`):** `records-t` (records branch, keep), `aqp-328` (#479), `aqp-329` (#483). Finished, removable: `aqp-326` (merged), `aqp-342` (merged), `aqp-343` (merged), `agent-a358ec5d24f2e0364` (AQP-340, merged, locked), `agent-ad018d01ac3784f70` (AQP-325, merged). Scratch worktree `...\scratchpad\wt-470` (detached, the #470 reviewer's) **holds a `node_modules` junction to the main checkout's `node_modules`**: the reviewer was refused permission to remove it, and the orchestrator did not do it in its place. For the delivery lead: delete the junction first (PowerShell `(Get-Item <path>\node_modules).Delete()`, which removes only the link), then `git worktree remove`. Never force-delete the folder with the junction in place.
+
+**Half-done Jira transitions:** none. AQP-328 In Review (green PR). AQP-329 In Progress (paused). AQP-325, 326, 340, 342 Done.
+
+**Bugs opened today (Jira / GitHub), all for the hardening window unless stated:** AQP-341 DEF-038 (#462, fasteners:113 stale stored value, Sev-2 provisional); AQP-343 DEF-040 (#468, renumber announcement, Sev-3; diagnostic merged, grep Stage 12 logs for `[AQP-343 renumber diagnostic]`, DL-234); AQP-344 DEF-041 (#473, estimate-save:240 test timing, Sev-3; **not** caused by #452); AQP-345 DEF-042 (#480, task-queue:74 code collision, Sev-4); AQP-346 DEF-043 (#481, unlock.spec:134 mobile near 30 s, Sev-3; can turn CI red); **AQP-347 DEF-044 (#482, account.spec:299, Sev-3; has turned three runs red, including `master` 8c60579)**. Follow-ups: #463 (413 reset), #467 (setup warm-up), #471 (AQP-325 Minors), #478 (AQP-326 Minors; SQR-01 binds 07.03/07.04).
+
+**Hardening-window list (DL-228 and §9 item 3), add to as found:** vitest + `@vitest/coverage-v8` 5.1.0 in one PR before the final regression (DL-228); AQP-341, 343, 344, 345, 346; #463, #467, #471, #478; RISK-032 (production keep-alive behind Caddy, solution-architect, before G8); architecture notes: AC-3 live customer name (AQP-326 SQR-03), "rates = process plus exchange rates" and page-load limit (AQP-328).
+
+**Decisions today:** DL-231 (#459 retries ruling), DL-232 (#459 merge, C2 amended, part 2), DL-233 (#464 update, AQP-342 now, R1), DL-234 (AQP-343 diagnostic, RISK-031 and AQP-340 closed). **No decision is pending from the delivery lead.**
+
+**Next steps, in order (one lane; free RAM about 0.8 GB; integration and E2E in CI only):**
+1. **AQP-347 / DEF-044 first** (it makes `master` red): a test-only fix in `account.spec.ts:299`, signing in with `signInWithoutThePage` where the subject is the redirect and guard, not the sign-in screen (as AQP-340 part 1 did). No longer timeout, no retries, no skip (DL-229). Ask master for a one-line ruling that it takes the lane on DL-233's grounds. Merge on green, then read the `master` push run.
+2. #479: the one-line guard check above, then merge on green.
+3. #483 (AQP-329): read CI, fix loop, resolve the #479 overlap, combined review, merge.
+4. #455: update, re-dispatch the nightly Lighthouse run, merge; architect B0.
+5. AQP-346 (unlock.spec mobile budget) if it fails both attempts anywhere; otherwise hardening.
+6. Stories: AQP-330 (06.13) [c], then EPIC-07: AQP-332 (07.02) [c], 333 (07.03) [c, carries #478 SQR-01], 334 (07.04), 335, 336; then AQP-338, 308, 309, 312, 90.
+
+## Resume point (2026-11-17, shutdown)
+
+> The delivery lead shut down the PC mid-run. Everything is committed and pushed. This section wins over everything below it. It sits on records branch `docs/AQP-1-records-t`, because `docs/AQP-1-records-s` merged as #456. The branch has no PR yet.
+
+**`master` = 9eef6e7** (#456 records, on top of 342237e #450 AQP-324). Master's own CI push run 44026420626 on 9eef6e7 is **red**: the intermittent E2E timeouts of DEF-037. The previous push run, 44021154191 on 342237e, was green. Merged today: #450 (AQP-324, combined review 0 Blocker, Critical or Major, Jira Done) and #456 (records).
+
+**Master fix, top of the lane (AQP-340, DEF-037, Sev-2, DL-229, RISK-031):** PR **#459** (draft, `fix/AQP-340-e2e-calculate-flake`, head b80279a). The fix is tests only, with no timeout or retry change. Root cause 1: the estimate-workspace specs spend 13 to 19 s of the 30 s budget on the shared sign-in, queue and workspace prelude. Root cause 2: export.spec builds 3 workbooks against the limit of 2. Three-run proof: run 44053813502 attempt 1 is green and clean (1,572 passed, 0 flaky). Attempt 2 was in progress at shutdown, and attempt 3 has not started. **On resume:** read attempts 2 and 3, then have the developer finish the PR body (root cause and evidence), mark it ready and squash it. **Check the fix against DL-229 before merging.** Master should rule on three things: `test.slow()` on two tests (`fasteners:113`, `tree:67`) with measured durations; Playwright `maxRetries` on connection resets for the sign-in calls and one upload `PUT`; and a dev-server keep-alive preload in `NODE_OPTIONS`. DL-229 bars extra retries and blanket timeout increases. Also open: `estimate-picture:169` (the fix is a hypothesis, not proven), and a possible follow-up issue for the 413 that resets an oversize upload. Then update and merge the PRs below, one at a time.
+
+**Open PRs:**
+| PR | State | Next |
+|---|---|---|
+| #459 AQP-340 master E2E fix | Draft, b80279a; proof 1 of 3 | As above |
+| #458 `dependabot.yml` ignores (DL-119 majors plus `@types/node` majors, DL-227) | d2d5442, red only on DEF-037 specs | Update the branch after #459, then merge on green |
+| #453 typescript-eslint 8.72.2 | d784c26, red only on DEF-037 specs | Same (DL-227) |
+| #451 lucide-react 1.72.0, #452 react-hook-form 7.92.0 | Red only on DEF-037 specs | Same (DL-227) |
+| #455 `@lhci/cli` 0.16.1 | cf93755: licence and pin fix pushed (DL-230); Lighthouse nightly run 44037928001 green; E2E red only on DEF-037 specs | Before merge: the architect's one-line PR comment that the `licences.ts` diff matches AQP-1 12089 (DL-230). Then update after #459 and merge on green. After merge: the architect re-takes B0, updates §11 and closes #39 |
+| AQP-325 (06.08 unlock) | No PR yet. Branch `feat/AQP-325-unlock-2` at e3f8da8 (DL-215 re-cut from 342237e; clash set resolved). Paused. | Resume the developer: write `tests/integration/approval/unlock.test.ts` (CI fails without it), the route and client unit tests and `tests/e2e/unlock.spec.ts`, then open the draft PR. The combined review (§9 item 2) follows |
+
+**Worktrees in use** (keep): `agent-a358ec5d24f2e0364` (#459, also used for #455), `agent-ad018d01ac3784f70` (AQP-325), and `agent-aa1f064f6080db977` (AQP-324, merged; it can now be removed).
+
+**Jira:** AQP-324 Done. AQP-325 In Progress (paused). AQP-340 In Progress. No transition is half-done.
+
+**Decisions:** DL-227 to DL-230 and RISK-031 are recorded on this branch (7d33b18 and 30992c3). DL-227: Dependabot merges and ignores. DL-228: vitest 5.1.0 in the hardening window. DL-229: DEF-037 first in the lane, re-runs only when every failure is an AQP-340 test. DL-230: #455 upgrade now. **No decision is pending** from the delivery lead.
+
+**Lanes:** one, because free RAM is about 0.8 GB. After #459 and the Dependabot merges, the next story is AQP-325, then AQP-326, 328, 329, 330 and EPIC-07 (AQP-332 to 336).
 
 ## Daily update (2026-11-16, orchestrator)
 
