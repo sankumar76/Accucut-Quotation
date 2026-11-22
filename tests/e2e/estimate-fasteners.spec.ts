@@ -1,11 +1,14 @@
 import { expect, test, type Page, type Request as PageRequest, type TestInfo } from '@playwright/test';
 
 import { FIELD_ID_NAMESPACE, seedId } from '../../prisma/seed/config/seed-sections-and-stages';
+import { CUSTOMER_CANARIES } from '../support/customer-canary';
+import { defined } from '../support/defined';
+import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { columnLetterToIndex } from '../../src/lib/columns';
 
-import { useFreshAddress } from './support/auth';
+import { ensureCanaryCustomers, ensureCanaryMaterials, setCanaryCustomer, useFreshAddress } from './support/auth';
 import { horizontalOverflow } from './support/design-system';
-import { control, expectFormAccessible, isPatchOfInputs, leastFieldHeight, nextSave, openForm, partForm } from './support/part-form';
+import { control, expectFormAccessible, isPatchOfInputs, leastFieldHeight, nextSave, openForm, partForm, signInAsNewEngineer } from './support/part-form';
 
 /**
  * STORY-05.05 T6 (AC-1, AC-2, AC-3, AC-6; FR-048; SPEC section 14.4) at 360x800, 768x1024 and 1366x768 on the development server: Fasteners Qty (T) and Cost (U) show only when the part has
@@ -438,4 +441,31 @@ test.afterEach(async ({ page }, testInfo) => {
   const probe = probes.get(page);
   if (probe === undefined) return;
   process.stdout.write(`${probeLine(probe, await readScreen(page), testInfo)}\n`);
+});
+
+/**
+ * DEF-063 (AQP-397): the first open of the estimate workspace on a development server is not a case's subject, and it is the one that failed. The `[AQP-397 first-open]` lines of CI run 45019003031 (shard 4, desktop,
+ * attempt 1 of every case) show that the three cases that start first, one on each of three workers at once, wait for routes the development server compiles on their first request, one after the other: the page's
+ * document 2.3 to 2.6 s (0.4 to 0.9 s for the cases after them), the form's definition 2.6 to 2.7 s (0.4 to 0.7 s), the tree 3.0 to 3.1 s (0.4 to 0.6 s) and the part's stored values 1.7 s (0.2 to 0.5 s). The form is on the page 9.2 to 9.6 s
+ * in, against 3.4 to 5.3 s for the cases after them, and a slower draw of the same chain is the 15 s `expect` of `waitForForm` that ran out at about 20 s. The part form's skeleton stood the whole time (it is the page's waiting state, in place
+ * while those reads are answered, and not the cause), no script was pending and no error overlay showed. A production build compiles ahead of time, so this is the development server's cost and not product behaviour
+ * (DL-272 (B)). Each worker therefore opens the workspace once before its first case, as a person of its own, so the routes are compiled when the cases start. It waits for the form with no limit of its own (the hook's time is the only
+ * one), and a failure here is a failure of the hook, which every case of the worker shows. It sends no request to `/recalculate` and changes no case.
+ */
+test.beforeAll(async ({ browser }, testInfo) => {
+  const started = Date.now();
+  const context = await browser.newContext({ baseURL: defined(testInfo.project.use.baseURL) });
+  try {
+    await useFreshAddress(context);
+    const page = await context.newPage();
+    await ensureCanaryCustomers();
+    await ensureCanaryMaterials();
+    const owner = await signInAsNewEngineer(page, testInfo);
+    await setCanaryCustomer(owner.id, defined(CUSTOMER_CANARIES[0]).id);
+    await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
+    await partForm(page).waitFor();
+    process.stdout.write(`[AQP-397 warm-up] ${testInfo.project.name} | worker ${String(testInfo.workerIndex)} | the form was on the page ${String(Date.now() - started)} ms after the hook began\n`);
+  } finally {
+    await context.close();
+  }
 });
