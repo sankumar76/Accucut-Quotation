@@ -154,7 +154,7 @@ describe('getSummary', () => {
       basisOf({ calculationRevision: null }),
     );
     expect(await service.getSummary(LEAD, ESTIMATE_ID)).toEqual({
-      fileName: 'Quotation_Acme_Tools_Q-2026-0701_2026-11-14.xlsx',
+      fileName: 'Customer_Q-2026-0701_14-11-2026.xlsx',
       partCount: 3,
       pictureCount: 2,
       columns: { first: 'A', last: 'BO', count: 67 },
@@ -193,7 +193,7 @@ describe('getSummary', () => {
 
   it('is "Customer" in the name while no customer is chosen', async () => {
     const { service } = world({ header: { findHeader: () => Promise.resolve({ code: 'Q-2026-0701', customerName: null }) } });
-    expect((await service.getSummary(ADMIN, ESTIMATE_ID)).fileName).toBe('Quotation_Customer_Q-2026-0701_2026-11-14.xlsx');
+    expect((await service.getSummary(ADMIN, ESTIMATE_ID)).fileName).toBe('Customer_Q-2026-0701_14-11-2026.xlsx');
   });
 
   it('is a 404 for an estimate that is not there, before any part is read', async () => {
@@ -378,7 +378,7 @@ describe('getFile: the calculation\'s rows, in the version it was made with (AC-
   it('answers with the type, the bytes and the name, and builds one row per node of the calculation in depth-first order', async () => {
     const { service, builder } = world();
     const file = await service.getFile(LEAD, ESTIMATE_ID);
-    expect(file).toMatchObject({ mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileName: 'Quotation_Acme_Tools_Q-2026-0701_2026-11-14.xlsx' });
+    expect(file).toMatchObject({ mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fileName: 'Customer_Q-2026-0701_14-11-2026.xlsx' });
     const model = defined(builder.built[0]);
     expect(model.columns).toHaveLength(67);
     expect(model.rows.map((entry) => entry.cells['A'])).toEqual(['1', '1.1', '2']);
@@ -395,7 +395,7 @@ describe('getFile: the calculation\'s rows, in the version it was made with (AC-
 
   it('uses the IST date of the moment of the download', async () => {
     const { service } = world({ clock: createFixedClock(new Date('2026-11-14T19:00:00.000Z')) });
-    expect((await service.getFile(LEAD, ESTIMATE_ID)).fileName).toContain('_2026-11-15.xlsx');
+    expect((await service.getFile(LEAD, ESTIMATE_ID)).fileName).toContain('_15-11-2026.xlsx');
   });
 
   it('passes a failure of the build on as it is, which the route answers with a fixed 500 and no message, and gives the place back', async () => {

@@ -26,7 +26,7 @@ test.beforeEach(async ({ context }) => {
 
 const PHONE_MAX = 767;
 const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-const FILE_NAME = /^Quotation_[A-Za-z0-9_-]+_Q-\d{4}-\d{4,}_\d{4}-\d{2}-\d{2}\.xlsx$/;
+const FILE_NAME = /^[^\s/\\:*?"<>|]+_\d{2}-\d{2}-\d{4}\.xlsx$/u;
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 const downloadButton = (page: Page) => page.getByRole('button', { name: 'Download .xlsx' });
 
@@ -89,7 +89,7 @@ test.describe('AC-2, AC-4, AC-6: a Lead downloads the file', () => {
     );
     expect(answer.status).toBe(200);
     expect(answer.type).toBe(XLSX_TYPE);
-    expect(answer.disposition).toMatch(/^attachment; filename="Quotation_[A-Za-z0-9_-]+\.xlsx"$/);
+    expect(answer.disposition).toMatch(/^attachment; filename="[A-Za-z0-9._-]+\.xlsx"; filename\*=UTF-8''[A-Za-z0-9._%-]+\.xlsx$/);
     expect(answer.cache).toContain('no-store');
     expect(answer.size).toBeGreaterThan(1_000);
   });

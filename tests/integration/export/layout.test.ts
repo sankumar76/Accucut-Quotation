@@ -84,7 +84,7 @@ describe('AC-1, AC-2, AC-6: the file and the summary of a real estimate, for a L
 
     for (const viewer of [lead(), admin()]) {
       const file = exportFileSchema.parse(await exporter.getFile(viewer, estimateId));
-      expect(file.fileName).toMatch(new RegExp(`^Quotation_[A-Za-z0-9_-]+_${header.code}_2026-11-14\\.xlsx$`));
+      expect(file.fileName).toMatch(new RegExp(`^Customer_${header.code}_14-11-2026\\.xlsx$`));
       const sheet = defined((await loadWorkbook(file.bytes)).getWorksheet('Quotation'));
       expect(sheet.columnCount).toBe(document.fields.length);
       // The header, the one part, and the footer of the total Tool Cost two rows below it (row 4 is empty): 3 rows with values (STORY-07.03).

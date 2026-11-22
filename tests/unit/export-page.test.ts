@@ -57,7 +57,7 @@ describe('AC-6: a Lead and an Admin open the export page', () => {
     const html = await open(CODE);
     expect(html).toContain('Excel export');
     expect(html).toContain('The file');
-    expect(html).toContain(`Quotation_Customer_${CODE}_2026-11-14.xlsx`);
+    expect(html).toContain(`Customer_${CODE}_14-11-2026.xlsx`);
     expect(html).toContain('1 part');
     expect(html).toContain('A to BO');
     expect(html).toContain('Download .xlsx');

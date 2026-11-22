@@ -19,7 +19,7 @@ test.beforeEach(async ({ context }) => {
 });
 
 const PHONE_MAX = 767;
-const FILE_NAME = /^Quotation_[A-Za-z0-9_-]+_Q-\d{4}-\d{4,}_\d{4}-\d{2}-\d{2}\.xlsx$/;
+const FILE_NAME = /^[^\s/\\:*?"<>|]+_\d{2}-\d{2}-\d{4}\.xlsx$/u;
 /** Any other count than the one the part holds, so the input really changes and the figures are cleared (the recipe of `export-refusal.spec.ts`). */
 const CHANGED_COUNT = '7';
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;

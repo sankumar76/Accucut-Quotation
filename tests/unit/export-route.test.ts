@@ -46,7 +46,7 @@ const summaryRoute = await import('@/app/api/v1/estimates/[id]/export-summary/ro
 const ORIGIN = 'https://portal.example.test';
 const UNKNOWN_ID = '00000000-0000-4000-8000-00000000dead';
 /** The harness fixes the clock of the service at 12:00 UTC on 14 November 2026: 17:30 IST the same day. */
-const DOWNLOAD_DATE = '2026-11-14';
+const DOWNLOAD_DATE = '14-11-2026';
 
 const estimate = () => defined(harness.estimateWorld.estimates[0]);
 const request = (): Request => new Request(`${ORIGIN}/api/v1/estimates/x/export`);
@@ -75,7 +75,7 @@ describe('AC-2, AC-4: the file', () => {
     const response = await getFile(estimate().id);
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe(XLSX_MIME);
-    expect(response.headers.get('Content-Disposition')).toBe(`attachment; filename="Quotation_Customer_${canaryTaskCodeFor(harness.targetId)}_${DOWNLOAD_DATE}.xlsx"`);
+    expect(response.headers.get('Content-Disposition')).toBe(`attachment; filename="Customer_${canaryTaskCodeFor(harness.targetId)}_${DOWNLOAD_DATE}.xlsx"; filename*=UTF-8''Customer_${canaryTaskCodeFor(harness.targetId)}_${DOWNLOAD_DATE}.xlsx`);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(response.headers.get('X-Request-Id')).toMatch(/^req-[0-9a-f]{8}$/);
@@ -90,7 +90,7 @@ describe('AC-2, AC-4: the file', () => {
     expect(readXlsxParts(bytes).has('xl/workbook.xml')).toBe(true);
   });
 
-  it('names the file after the customer: spaces become underscores and every other character outside A-Z a-z 0-9 _ - is removed', async () => {
+  it('does not put the full name of the customer in the file name (the short name and the subject come with the data of AQP-390)', async () => {
     plantCalculation();
     const customer = defined(harness.masters.customers[0]);
     const original = customer.name;
@@ -98,7 +98,8 @@ describe('AC-2, AC-4: the file', () => {
     estimate().customerId = customer.id;
     try {
       const disposition = defined((await getFile(estimate().id)).headers.get('Content-Disposition'));
-      expect(disposition).toBe(`attachment; filename="Quotation_Acme_Tools__Dies_Ltd_${canaryTaskCodeFor(harness.targetId)}_${DOWNLOAD_DATE}.xlsx"`);
+      expect(disposition).not.toContain('Acme');
+      expect(disposition).toMatch(/^attachment; filename="[A-Za-z0-9._-]+\.xlsx"; filename\*=UTF-8''[A-Za-z0-9._%-]+\.xlsx$/);
     } finally {
       customer.name = original;
     }
@@ -166,7 +167,7 @@ describe('AC-6: the summary', () => {
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     const summary = exportSummarySchema.parse(await response.json());
     expect(summary).toEqual({
-      fileName: `Quotation_Customer_${canaryTaskCodeFor(harness.targetId)}_${DOWNLOAD_DATE}.xlsx`,
+      fileName: `Customer_${canaryTaskCodeFor(harness.targetId)}_${DOWNLOAD_DATE}.xlsx`,
       partCount: 1,
       pictureCount: 0,
       columns: { first: 'A', last: 'BO', count: 67 },

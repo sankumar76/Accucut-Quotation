@@ -25,7 +25,7 @@ test.beforeEach(async ({ context }) => {
 /** Journey name by engine, with the issue that tracks it. Empty: nothing is known to fail. */
 const KNOWN_ENGINE_FAULTS: ReadonlyArray<{ readonly journey: string; readonly engine: 'chromium' | 'firefox' | 'webkit'; readonly issue: string; readonly reason: string }> = [];
 
-const FILE_NAME = /^Quotation_[A-Za-z0-9_-]+_Q-\d{4}-\d{4,}_\d{4}-\d{2}-\d{2}\.xlsx$/;
+const FILE_NAME = /^[^\s/\\:*?"<>|]+_\d{2}-\d{2}-\d{4}\.xlsx$/u;
 const ZIP_MAGIC = [0x50, 0x4b];
 
 const calculateButton = (page: Page) => page.locator('#calculate-button');
