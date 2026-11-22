@@ -98,6 +98,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
   const nodes = createEstimateNodeRepository(db.prisma);
   const estimateService = createEstimateService({
     estimates,
+    audit: db.audit,
     nodes,
     images: createImageRepository(db.prisma),
     transactions: db.transactions,

@@ -16,6 +16,7 @@ import { createLateFailingRunner } from '../../support/late-failure-runner';
 
 import { openCustomerDefaults, resetCustomerTables } from './customers-support';
 import { shortNameOf } from '../../support/customer-short-name';
+import { auditFor, changeContext } from '../../support/customer-change';
 
 /**
  * STORY-02.07 (AC-1, AC-2, AC-4, AC-5, AC-8) against real PostgreSQL in a throwaway database: the delete of a customer over the real repositories. It is soft
@@ -41,7 +42,7 @@ const by = () => contextOf(adminId);
 
 /** The estimate service over the real repositories and the transaction runner given (the real one, or one that holds before commit). */
 const estimateServiceOver = (transactions: TransactionRunner) =>
-  createEstimateService({ estimates: createEstimateRepository(db.prisma), nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions, ...inputsDependencies() });
+  createEstimateService({ estimates: createEstimateRepository(db.prisma), audit: auditFor(db), nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions, ...inputsDependencies() });
 
 beforeAll(async () => {
   db = await openAuditDatabase();
@@ -233,7 +234,7 @@ describe('AC-5: the delete and a request choosing the same customer serialise, i
       reachedHolding = resolve;
     });
     const choosing = estimateServiceOver(createHoldingRunner(db, hold, reachedHolding));
-    const choice = choosing.setCustomer(adminViewer(), estimateId, alpha.id);
+    const choice = choosing.setCustomer(adminViewer(), changeContext(adminViewer()), estimateId, alpha.id);
     // If the choice fails before it holds, the race rejects with its error and the test says why.
     await Promise.race([isHolding, choice]);
 
@@ -272,7 +273,7 @@ describe('AC-5: the delete and a request choosing the same customer serialise, i
 
     const estimates = estimateServiceOver(createTransactionRunner(db.prisma));
     let choiceDone = false;
-    const choice = estimates.setCustomer(adminViewer(), estimateId, alpha.id).finally(() => {
+    const choice = estimates.setCustomer(adminViewer(), changeContext(adminViewer()), estimateId, alpha.id).finally(() => {
       choiceDone = true;
     });
     await expect.poll(async () => choiceDone || (await someoneIsWaitingForALock()), { message: 'the choice waits for the customer\'s lock, or has finished' }).toBe(true);

@@ -175,8 +175,8 @@ async function insertCanaryEstimate(client: Client, ownerId: string): Promise<vo
   const lead = rows[0];
   if (lead === undefined) throw new Error('The E2E Lead does not exist yet: the set-up project makes it.');
   await client.query(
-    `INSERT INTO tasks (id, code, engineer_id, assigned_by, folder_path, deadline_at, title, notes)
-     VALUES ($1::uuid, $2, $1::uuid, $3::uuid, $4, '2099-01-01T04:30:00Z', 'Canary task', 'Invented notes.') ON CONFLICT DO NOTHING`,
+    `INSERT INTO tasks (id, code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes)
+     VALUES ($1::uuid, $2, $1::uuid, $3::uuid, $4, '2099-01-01T04:30:00Z', 'Canary task', 'Canary subject', 'Invented notes.') ON CONFLICT DO NOTHING`,
     [ownerId, canaryTaskCodeFor(ownerId), lead.id, CANARY_FOLDER_PATH],
   );
   await client.query('INSERT INTO estimates (id, task_id) VALUES ($1::uuid, $1::uuid) ON CONFLICT DO NOTHING', [ownerId]);
@@ -473,7 +473,7 @@ export const E2E_SECOND_CUSTOMER = 'E2E Second Customer';
 export async function ensureE2eSecondCustomer(): Promise<string> {
   const client = await connectToTestDatabase();
   try {
-    await client.query('INSERT INTO customers (name) VALUES ($1) ON CONFLICT DO NOTHING', [E2E_SECOND_CUSTOMER]);
+    await client.query('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) ON CONFLICT DO NOTHING', [E2E_SECOND_CUSTOMER]);
     const { rows } = await client.query<{ id: string }>('SELECT id::text AS id FROM customers WHERE name = $1', [E2E_SECOND_CUSTOMER]);
     const id = rows[0]?.id;
     if (id === undefined) throw new Error('The second E2E customer could not be made.');

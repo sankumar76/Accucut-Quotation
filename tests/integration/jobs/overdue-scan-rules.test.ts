@@ -194,8 +194,8 @@ describe('AC-9 (NFR-010): the number of statements does not grow with the number
   /** `count` tasks open and overdue, plus `futureCount` that are not due, in two statements. */
   async function seedMany(count: number, futureCount: number): Promise<void> {
     await db.owner.query(
-      `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at)
-       SELECT 'Q-2026-' || ($4::bigint + n), $1::uuid, $2::uuid, $3, CASE WHEN n <= $5::int THEN $6::timestamptz - (n || ' minutes')::interval ELSE $6::timestamptz + (n || ' minutes')::interval END
+      `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject)
+       SELECT 'Q-2026-' || ($4::bigint + n), $1::uuid, $2::uuid, $3, CASE WHEN n <= $5::int THEN $6::timestamptz - (n || ' minutes')::interval ELSE $6::timestamptz + (n || ' minutes')::interval END, 'Invented task', 'Invented subject'
        FROM generate_series(1, $5::int + $7::int) AS n`,
       [engineerId, leadId, PATH, reserveCodes(count + futureCount), count, NOW, futureCount],
     );

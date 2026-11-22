@@ -16,6 +16,7 @@ import { forbiddenStrings } from '../../support/canary-masters';
 import { defined } from '../../support/defined';
 import { AUDIT_REQUEST_ID, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { openMailCapture, type CapturedMail, type MailCapture } from '../../support/mail-capture';
+import { insertAssignCustomer } from '../../support/assign-customer';
 
 /**
  * STORY-09.03 AC-1 to AC-5, AC-7 and AC-8 against real PostgreSQL in a throwaway database, as the runtime role, with the real outbox, the real worker job and a capturing mail server
@@ -42,6 +43,7 @@ let adminId: string;
 let otherLeadId: string;
 let arjunId: string;
 let meeraId: string;
+let customerId: string;
 const addressOf: Record<string, string> = {};
 
 async function person(label: string, role: 'ADMIN' | 'LEAD' | 'ENGINEER', active = true): Promise<string> {
@@ -53,9 +55,11 @@ async function person(label: string, role: 'ADMIN' | 'LEAD' | 'ENGINEER', active
 
 const input = (overrides: Partial<AssignInput> = {}): AssignInput => ({
   engineerId: arjunId,
+  customerId,
   folderPath: PATH,
   deadline: '2026-11-12T17:00',
   title: 'Hopper cover',
+  subject: 'Feed hopper',
   notes: 'Sheet-metal parts only.',
   ...overrides,
 });
@@ -114,6 +118,7 @@ beforeAll(async () => {
   await capture.clear();
   service = createTaskService({ tasks: createTaskRepository(db.prisma), transactions, clock, audit: db.audit, mail: taskMail() });
   sendDependencies = { store: outbox, mailer: createMailer(capture.transport), clock, log: () => undefined, jobRuns: { recordRun: () => Promise.resolve() } };
+  customerId = await insertAssignCustomer(db.owner, 'Mail Customer');
   leadId = await person('Mail Lead', 'LEAD');
   otherLeadId = await person('Mail Other Lead', 'LEAD');
   adminId = await person('Mail Admin', 'ADMIN');

@@ -41,7 +41,7 @@ beforeAll(async () => {
   adminId = await insertPersonAsOwner(db, 'Status Admin', 'ADMIN');
   arjunId = await insertPersonAsOwner(db, 'Status Arjun', 'ENGINEER');
   priyaId = await insertPersonAsOwner(db, 'Status Priya', 'ENGINEER');
-  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Invented status customer') RETURNING id::text");
+  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Invented status customer', left(md5('Invented status customer'), 10)) RETURNING id::text");
   customerId = defined(customer.rows[0]).id;
 });
 
@@ -57,7 +57,7 @@ afterEach(async () => {
 /** A task and its estimate in any state; returns the task's ID. */
 async function seed(code: string, engineerId: string, status: Status, chosenCustomerId: string | null = null, notes: string | null = null): Promise<string> {
   const task = await db.owner.query<{ id: string }>(
-    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, notes) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7) RETURNING id::text',
+    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, \'Invented subject\', $7) RETURNING id::text',
     [code, engineerId, leadId, PATH, DEADLINE, 'Hopper cover', notes],
   );
   const id = defined(task.rows[0]).id;

@@ -11,6 +11,7 @@ import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
 import { refusal } from '../../support/user-service-fixture';
+import { insertAssignCustomer } from '../../support/assign-customer';
 
 /**
  * STORY-04.01 T1, T3, T7 (AC-1, AC-2, AC-3, AC-5) against real PostgreSQL in a throwaway database: what the three tables keep whoever writes to them (a UNC
@@ -29,15 +30,18 @@ let adminId: string;
 let arjunId: string;
 let priyaId: string;
 let inactiveId: string;
+let customerId: string;
 
 const clock = createFixedClock(NOW);
 let service: TaskService;
 
 const input = (overrides: Partial<AssignInput> = {}): AssignInput => ({
   engineerId: arjunId,
+  customerId,
   folderPath: PATH,
   deadline: '2026-11-12T17:00',
   title: 'Hopper cover',
+  subject: 'Feed hopper',
   notes: 'Sheet-metal parts only.',
   ...overrides,
 });
@@ -51,6 +55,7 @@ beforeAll(async () => {
   arjunId = await insertPersonAsOwner(db, 'Task Arjun', 'ENGINEER');
   priyaId = await insertPersonAsOwner(db, 'Task Priya', 'ENGINEER');
   inactiveId = await insertPersonAsOwner(db, 'Task Gone', 'ENGINEER', false);
+  customerId = await insertAssignCustomer(db.owner, 'Task Customer');
 });
 
 afterAll(async () => {
@@ -71,7 +76,7 @@ const count = async (table: 'tasks' | 'estimates' | 'task_sequences'): Promise<n
 
 const insertTask = (code: string, folderPath: string, title: string | null = null, notes: string | null = null) =>
   db.owner.query(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, notes) VALUES ($1, $2::uuid, $3::uuid, $4, now(), $5, $6) RETURNING id::text`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes) VALUES ($1, $2::uuid, $3::uuid, $4, now(), $5, 'Invented subject', $6) RETURNING id::text`,
     [code, arjunId, leadId, folderPath, title, notes],
   );
 
@@ -97,10 +102,10 @@ describe('AC-1 (T1): what the tables keep, whoever writes to them', () => {
     await expect(insertTask('Q-2026-9007', PATH)).rejects.toMatchObject({ constraint: 'uq_tasks_code' });
     const nobody = '00000000-0000-4000-8000-00000000dead';
     await expect(
-      db.owner.query('INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at) VALUES ($1, $2::uuid, $3::uuid, $4, now())', ['Q-2026-9008', nobody, leadId, PATH]),
+      db.owner.query('INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, now(), \'Invented task\', \'Invented subject\')', ['Q-2026-9008', nobody, leadId, PATH]),
     ).rejects.toMatchObject({ constraint: 'fk_tasks_engineer_id' });
     await expect(
-      db.owner.query('INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at) VALUES ($1, $2::uuid, $3::uuid, $4, now())', ['Q-2026-9009', arjunId, nobody, PATH]),
+      db.owner.query('INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, now(), \'Invented task\', \'Invented subject\')', ['Q-2026-9009', arjunId, nobody, PATH]),
     ).rejects.toMatchObject({ constraint: 'fk_tasks_assigned_by' });
     await db.owner.query('INSERT INTO estimates (task_id) VALUES ($1::uuid)', [taskId]);
     await expect(db.owner.query('INSERT INTO estimates (task_id) VALUES ($1::uuid)', [taskId])).rejects.toMatchObject({ constraint: 'uq_estimates_task_id' });

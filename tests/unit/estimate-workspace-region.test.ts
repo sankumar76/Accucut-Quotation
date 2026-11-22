@@ -29,11 +29,13 @@ const HEADER: WorkspaceHeaderView = {
   folderPath: '\\\\invented-server\\invented-share\\RFQ-0318',
   folderUrl: null,
   title: 'Invented cabinet',
+  subject: 'Invented subject',
+  customer: { name: 'Invented Customer', shortName: 'INV' },
   notes: null,
   assignedByName: 'Invented Lead',
 };
 
-const render = (customer: { id: string; name: string } | null): string => renderToStaticMarkup(createElement(EstimateWorkspace, { header: HEADER, estimateId: '00000000-0000-4000-8000-000000000001', customer }));
+const render = (customer: { name: string; shortName: string } | null): string => renderToStaticMarkup(createElement(EstimateWorkspace, { header: { ...HEADER, customer }, estimateId: '00000000-0000-4000-8000-000000000001' }));
 
 /** Every element that carries the marker, as its opening tag and its inner text: a static render has no DOM, so the markup is read with a pattern that the one marker makes exact. */
 function regionsOf(html: string): { readonly tag: string; readonly inner: string }[] {
@@ -42,19 +44,19 @@ function regionsOf(html: string): { readonly tag: string; readonly inner: string
 
 describe('AC-1: one reserved region, the third track of the form area', () => {
   it('AC-1: exactly one region, and it comes after the parts tree and the form in the row', () => {
-    const html = render({ id: 'c1', name: 'Invented Customer' });
+    const html = render({ name: 'Invented Customer', shortName: 'INV' });
     expect(regionsOf(html)).toHaveLength(1);
     expect(html.split('data-drawing-region').length - 1).toBe(1);
     expect(html.indexOf('data-drawing-region')).toBeGreaterThan(html.indexOf('data-part-form'));
     expect(html.indexOf('data-drawing-region')).toBeGreaterThan(html.indexOf('Parts tree'));
   });
 
-  it('AC-1: it is there with no customer too (the form area is the same card, disabled)', () => {
+  it('AC-1: it is there with no customer too (the form area is the same card and is open: CR-01 item 6 removed the customer gate)', () => {
     expect(regionsOf(render(null))).toHaveLength(1);
   });
 
   it('AC-1: below 1024 px it is hidden by CSS (`hidden`, then `lg:block`), so it takes no space and is not in the accessibility tree', () => {
-    const [region] = regionsOf(render({ id: 'c1', name: 'Invented Customer' }));
+    const [region] = regionsOf(render({ name: 'Invented Customer', shortName: 'INV' }));
     const classes = /class="([^"]*)"/.exec(region?.tag ?? '')?.[1]?.split(/\s+/) ?? [];
     expect(classes).toContain('hidden');
     expect(classes).toContain('lg:block');
@@ -62,31 +64,31 @@ describe('AC-1: one reserved region, the third track of the form area', () => {
   });
 
   it('AC-1: its width is the token and the token is 0px now, defined once in globals.css :root', () => {
-    const [region] = regionsOf(render({ id: 'c1', name: 'Invented Customer' }));
+    const [region] = regionsOf(render({ name: 'Invented Customer', shortName: 'INV' }));
     expect(region?.tag).toContain('lg:w-(--drawing-region-width)');
     expect(root.get('--drawing-region-width')).toBe('0px');
     expect(GLOBALS.match(/--drawing-region-width\s*:/g)).toHaveLength(1);
   });
 
   it('AC-1: the gap is carried by the region, not by the row: a zero-width flex item still takes the row gap, so the region takes the gap back while it is zero wide', () => {
-    const [region] = regionsOf(render({ id: 'c1', name: 'Invented Customer' }));
+    const [region] = regionsOf(render({ name: 'Invented Customer', shortName: 'INV' }));
     // The margin is `min(0, width - gap)`: it cancels the row's gap at 0px and is 0 again from one gap of width.
     expect(region?.tag).toContain('lg:ml-[min(0px,calc(var(--drawing-region-width)_-_var(--s-4)))]');
   });
 
   it('AC-2: the region is held to what is left after the tree, one 232 px card and two gaps, so a 340px token never squeezes the form below one card at 1024 px', () => {
-    const [region] = regionsOf(render({ id: 'c1', name: 'Invented Customer' }));
+    const [region] = regionsOf(render({ name: 'Invented Customer', shortName: 'INV' }));
     expect(region?.tag).toContain('lg:max-w-[calc(100%_-_var(--tree-w)_-_14.5rem_-_2*var(--s-4))]');
   });
 
   it('AC-1: the product sets no override: the region has no inline style (the browser test sets the token itself, A-2)', () => {
-    const [region] = regionsOf(render({ id: 'c1', name: 'Invented Customer' }));
+    const [region] = regionsOf(render({ name: 'Invented Customer', shortName: 'INV' }));
     expect(region?.tag).not.toContain('style=');
   });
 });
 
 describe('AC-3: nothing to read, nothing to reach', () => {
-  const [region] = regionsOf(render({ id: 'c1', name: 'Invented Customer' }));
+  const [region] = regionsOf(render({ name: 'Invented Customer', shortName: 'INV' }));
 
   it('AC-3: empty: no text, no child element (so no icon, button or placeholder)', () => {
     expect(region?.inner).toBe('');
@@ -97,11 +99,11 @@ describe('AC-3: nothing to read, nothing to reach', () => {
     expect(region?.tag).not.toMatch(/\brole=/);
     expect(region?.tag).not.toMatch(/\baria-label/);
     expect(region?.tag).not.toMatch(/\btabindex=/);
-    const html = render({ id: 'c1', name: 'Invented Customer' });
+    const html = render({ name: 'Invented Customer', shortName: 'INV' });
     expect(html).not.toMatch(/<aside\b/);
   });
 
   it('AC-3: the region is a div, so it is not a landmark by its element either', () => {
-    expect(render({ id: 'c1', name: 'Invented Customer' })).toMatch(/<div\b[^>]*data-drawing-region=""/);
+    expect(render({ name: 'Invented Customer', shortName: 'INV' })).toMatch(/<div\b[^>]*data-drawing-region=""/);
   });
 });

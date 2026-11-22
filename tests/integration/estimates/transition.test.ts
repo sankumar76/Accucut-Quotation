@@ -12,6 +12,7 @@ import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
 import { inputsDependencies } from '../../support/estimate-inputs-deps';
+import { auditFor, changeContext } from '../../support/customer-change';
 
 /**
  * STORY-06.01 T5 (AC-1 to AC-6) against real PostgreSQL in a throwaway database: the estimate service's `transition` over the real repository and the real row
@@ -39,7 +40,7 @@ beforeAll(async () => {
   db = await openAuthDatabase();
   estimates = createEstimateRepository(db.prisma);
   runner = createTransactionRunner(db.prisma);
-  service = createEstimateService({ estimates, nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions: runner, ...inputsDependencies() });
+  service = createEstimateService({ estimates, audit: auditFor(db), nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions: runner, ...inputsDependencies() });
   const version = await db.owner.query<{ id: string }>("INSERT INTO config_versions (number, snapshot, reason) VALUES (1, '{}'::jsonb, 'Invented transition test') RETURNING id::text AS id");
   configVersionId = defined(version.rows[0]).id;
   leadId = await insertPersonAsOwner(db, 'Transition Lead', 'LEAD');
@@ -71,11 +72,11 @@ const admin = () => ({ id: adminId, role: 'ADMIN' as const });
 async function setUpEstimate(status: EstimateStatus, options: { withCalculation?: boolean } = {}): Promise<string | null> {
   taskNumber += 1;
   const task = await db.owner.query<{ id: string }>(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at)
-     VALUES ($4, $1::uuid, $2::uuid, $3, '2026-11-12T11:30:00Z') RETURNING id::text AS id`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject)
+     VALUES ($4, $1::uuid, $2::uuid, $3, '2026-11-12T11:30:00Z', 'Invented task', 'Invented subject') RETURNING id::text AS id`,
     [arjunId, leadId, PATH, `Q-2026-${String(5000 + taskNumber)}`],
   );
-  const customer = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text AS id', [`Transition Brightwater Controls ${String(taskNumber)}`]);
+  const customer = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text AS id', [`Transition Brightwater Controls ${String(taskNumber)}`]);
   customerId = defined(customer.rows[0]).id;
   const estimate = await db.owner.query<{ id: string }>(
     'INSERT INTO estimates (task_id, customer_id, status, inputs_revision) VALUES ($1::uuid, $2::uuid, $3::estimate_status, 4) RETURNING id::text AS id',
@@ -182,9 +183,9 @@ describe('AC-4: two transitions at once are serialised by the estimate row lock'
 
   it('an approval and a customer change at once: the customer changes only if it came first, and then the revision counts it; the status ends APPROVED either way', async () => {
     await setUpEstimate('SUBMITTED');
-    const other = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Transition Marlow Agro Systems') RETURNING id::text AS id");
+    const other = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Transition Marlow Agro Systems', left(md5('Transition Marlow Agro Systems'), 10)) RETURNING id::text AS id");
     const otherId = defined(other.rows[0]).id;
-    const [approval, change] = await Promise.allSettled([service.transition(lead(), estimateId, 'APPROVE'), service.setCustomer(lead(), estimateId, otherId)]);
+    const [approval, change] = await Promise.allSettled([service.transition(lead(), estimateId, 'APPROVE'), service.setCustomer(lead(), changeContext(lead()), estimateId, otherId)]);
     expect(approval.status).toBe('fulfilled');
     const after = await stored();
     expect(after.status).toBe('APPROVED');
@@ -206,18 +207,18 @@ describe('AC-4: two transitions at once are serialised by the estimate row lock'
   });
 });
 
-describe('AC-2: the inputs of a submitted or an approved estimate are read-only for the Engineer', () => {
-  it.each<EstimateStatus>(['SUBMITTED', 'APPROVED'])('the Engineer cannot change the customer of a %s estimate: 409, nothing changes', async (status) => {
+describe('AC-2, CR-01 item 6 AC-7: the customer is not the Engineer\'s to change at any status', () => {
+  it.each<EstimateStatus>(['DRAFT', 'SUBMITTED', 'APPROVED'])('the Engineer is refused the customer of a %s estimate, their own: 403, and nothing changes', async (status) => {
     await setUpEstimate(status);
     const before = await stored();
-    await expect(service.setCustomer(arjun(), estimateId, customerId)).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.setCustomer(arjun(), changeContext(arjun()), estimateId, customerId)).rejects.toBeInstanceOf(ForbiddenError);
     expect(await stored()).toEqual(before);
   });
 });
 
 describe('AC-2, FR-064: a Lead or an Admin may change the inputs of a submitted estimate, and nobody an approved one', () => {
   async function otherCustomer(): Promise<string> {
-    const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text AS id', [`Transition Marlow Agro Systems ${String(taskNumber)}`]);
+    const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text AS id', [`Transition Marlow Agro Systems ${String(taskNumber)}`]);
     return defined(rows[0]).id;
   }
 
@@ -226,7 +227,7 @@ describe('AC-2, FR-064: a Lead or an Admin may change the inputs of a submitted 
     const changeTo = await otherCustomer();
     const before = await stored();
     const viewer = { LEAD: lead, ADMIN: admin }[role]();
-    await expect(service.setCustomer(viewer, estimateId, changeTo)).resolves.toMatchObject({ id: estimateId, status: 'SUBMITTED' });
+    await expect(service.setCustomer(viewer, changeContext(viewer), estimateId, changeTo)).resolves.toMatchObject({ id: estimateId, status: 'SUBMITTED' });
     const after = await stored();
     expect(after).toMatchObject({ status: 'SUBMITTED', customerId: changeTo, revision: before.revision + 1, calculationId: before.calculationId });
     expect(after.customerId).not.toBe(before.customerId);
@@ -237,7 +238,7 @@ describe('AC-2, FR-064: a Lead or an Admin may change the inputs of a submitted 
     const changeTo = await otherCustomer();
     const before = await stored();
     const viewer = { LEAD: lead, ADMIN: admin }[role]();
-    await expect(service.setCustomer(viewer, estimateId, changeTo)).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.setCustomer(viewer, changeContext(viewer), estimateId, changeTo)).rejects.toBeInstanceOf(ConflictError);
     expect(await stored()).toEqual(before);
   });
 });
@@ -288,7 +289,7 @@ describe('SQR-01: transition joins the transaction its caller gives it', () => {
   it("a failure after the transition, in the caller's transaction, rolls the status back together with the caller's own write", async () => {
     await setUpEstimate('SUBMITTED');
     const before = await stored();
-    const other = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text AS id', [`Transition Marlow Agro Systems ${String(taskNumber)}`]);
+    const other = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text AS id', [`Transition Marlow Agro Systems ${String(taskNumber)}`]);
     const otherId = defined(other.rows[0]).id;
     await expect(
       runner.run(async (tx) => {
@@ -304,7 +305,7 @@ describe('SQR-01: transition joins the transaction its caller gives it', () => {
 
   it("when the caller's transaction commits, the status and the caller's own write arrive together", async () => {
     await setUpEstimate('SUBMITTED');
-    const other = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text AS id', [`Transition Marlow Agro Systems ${String(taskNumber)}`]);
+    const other = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text AS id', [`Transition Marlow Agro Systems ${String(taskNumber)}`]);
     const otherId = defined(other.rows[0]).id;
     await runner.run(async (tx) => {
       // The customer is written first, while the estimate is still SUBMITTED, then the status moves, all in one transaction.

@@ -20,6 +20,7 @@ import {
 } from '../../support/approval-helpers';
 import { type CalculationDatabase, idOf, openCalculationDatabase } from '../../support/calculation-database';
 import { defined } from '../../support/defined';
+import { changeContext } from '../../support/customer-change';
 
 /**
  * STORY-06.05 AC-1 to AC-5 and AC-8 (FR-101, D-20; NFR-007; architecture sections 4.8 and 6 "Approve") against real PostgreSQL in a throwaway database, as the **runtime role**: the guard of an approval over
@@ -67,7 +68,7 @@ describe('AC-2: every way an input can change makes the approval a 409 TOTALS_OU
     const { estimateId } = await calculatedEstimate(db);
     const seen = await currentCalculationOf(db, estimateId);
     const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Approval Guard Customer', left(md5('Approval Guard Customer'), 10)) RETURNING id::text AS id");
-    await db.estimateService.setCustomer(lead(), estimateId, defined(rows[0]).id);
+    await db.estimateService.setCustomer(lead(), changeContext(lead()), estimateId, defined(rows[0]).id);
     await expect(db.approvalService.approve(lead(), estimateId, request(seen))).rejects.toMatchObject({ code: TOTALS_OUT_OF_DATE_CODE });
   });
 });

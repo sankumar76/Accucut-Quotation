@@ -141,6 +141,8 @@ export interface SessionHarness {
   readonly taskAudit: AuditSink;
   /** The estimate service over in-memory estimates, the harness's own people and the Customer Master above (`getEstimateService` in the composition mock, STORY-05.01). */
   readonly estimateService: EstimateService;
+  /** The audit entries written by `estimateService` (a customer changed, CR-01 item 6): what a test reads, and clears between tests with `rows.length = 0`. */
+  readonly estimateAudit: AuditSink;
   /** The Engineer's Calculate over the same in-memory estimates, masters and a fake calculation store (`getCalculationService` in the composition mock, STORY-05.09). The canary estimate has an empty part, so a valid call is refused 422 `CALCULATE_BLOCKED` and writes nothing, at any state, for every caller. */
   readonly calculationService: CalculationService;
   /** The audit entries written by `calculationService` (an acknowledged quantity warning, STORY-05.12): what a test reads, and clears between tests with `rows.length = 0`. */
@@ -244,12 +246,13 @@ export function createSessionHarness(): SessionHarness {
     assignedById: idOf.LEAD,
     deadlineAt: new Date('2099-01-01T04:30:00.000Z'),
     title: 'Invented task',
+    subject: 'Invented subject',
     notes: 'Invented notes.',
     folderPath: CANARY_FOLDER_PATH,
   });
   // The recipe of the estimate routes (`estimate-recipe.ts`): the harness Engineer owns a draft whose ID is `targetId` and whose code is made from it.
   const estimateWorld = createFakeEstimateWorld(
-    () => masters.customers.map((customer) => ({ id: customer.id, name: customer.name, deleted: customer.deleted })),
+    () => masters.customers.map((customer) => ({ id: customer.id, name: customer.name, shortName: customer.shortName, deleted: customer.deleted })),
     [
       {
         id: targetId,
@@ -259,6 +262,7 @@ export function createSessionHarness(): SessionHarness {
         folderPath: CANARY_FOLDER_PATH,
         deadlineAt: new Date('2099-01-01T04:30:00.000Z'),
         title: 'Invented task',
+        subject: 'Invented subject',
         notes: 'Invented notes.',
         status: 'DRAFT',
         customerId: null,
@@ -271,8 +275,11 @@ export function createSessionHarness(): SessionHarness {
     // node keeps answering as before; the picture routes' own recipes (`route-calls.ts`) never change a revision.
     [{ id: targetId, estimateId: targetId, sha256: CANARY_PICTURE_HASH, mime: 'image/png', fileName: 'canary-part.png', bytes: smallPng() }],
   );
+  // The audit entries of a customer change (CR-01 item 6), kept apart from `auditWorld`, whose transactions are its own.
+  const estimateAudit = createAuditSink();
   const estimateService = createEstimateService({
     estimates: estimateWorld.repository,
+    audit: estimateAudit.service,
     nodes: estimateWorld.nodeRepository,
     images: estimateWorld.imageRepository,
     transactions: estimateWorld.transactions,
@@ -391,6 +398,7 @@ export function createSessionHarness(): SessionHarness {
     exportReads,
     reviewReads,
     calculationAudit,
+    estimateAudit,
     users,
     throttles,
     auditService,

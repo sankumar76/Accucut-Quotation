@@ -39,7 +39,7 @@ beforeAll(async () => {
   adminId = await insertPersonAsOwner(db, 'Queue Admin', 'ADMIN');
   arjunId = await insertPersonAsOwner(db, 'Queue Arjun', 'ENGINEER');
   priyaId = await insertPersonAsOwner(db, 'Queue Priya', 'ENGINEER');
-  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Invented queue customer') RETURNING id::text");
+  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Invented queue customer', left(md5('Invented queue customer'), 10)) RETURNING id::text");
   customerId = defined(customer.rows[0]).id;
 });
 
@@ -55,7 +55,7 @@ afterEach(async () => {
 /** A task and its estimate, in any state: the assignment would refuse a deadline that is not later than now. */
 async function seed(code: string, engineerId: string, deadlineAt: Date, status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' = 'DRAFT', chosenCustomerId: string | null = null, title: string | null = null): Promise<void> {
   const task = await db.owner.query<{ id: string }>(
-    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6) RETURNING id::text',
+    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, \'Invented subject\') RETURNING id::text',
     [code, engineerId, leadId, PATH, deadlineAt, title],
   );
   await db.owner.query('INSERT INTO estimates (task_id, customer_id, status) VALUES ($1::uuid, $2::uuid, $3::estimate_status)', [defined(task.rows[0]).id, chosenCustomerId, status]);

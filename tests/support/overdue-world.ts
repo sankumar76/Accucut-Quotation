@@ -110,7 +110,7 @@ export interface Seed {
 /** A task and its estimate. */
 export async function seed({ deadline, engineer = engineerId, assigner = leadId, status = 'DRAFT', title = 'Hopper cover' }: Seed): Promise<{ readonly id: string; readonly code: string }> {
   const code = `Q-2026-${reserveCodes(1)}`;
-  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6) RETURNING id::text', [
+  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, \'Invented subject\') RETURNING id::text', [
     code,
     engineer,
     assigner,

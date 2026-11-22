@@ -28,7 +28,17 @@ const PATH = '\\\\invented-server\\invented-share\\RFQ-123';
 /** 17:00 IST on 12 November. */
 const DEADLINE = new Date('2026-11-12T11:30:00.000Z');
 
-const input = (overrides: Partial<AssignInput> = {}): AssignInput => ({ engineerId: ARJUN.id, folderPath: PATH, deadline: '2026-11-12T17:00', title: 'Hopper cover', notes: 'Sheet-metal parts only.', ...overrides });
+const CUSTOMER_ID = '00000000-0000-4000-8000-0000000000c1';
+const input = (overrides: Partial<AssignInput> = {}): AssignInput => ({
+  engineerId: ARJUN.id,
+  customerId: CUSTOMER_ID,
+  folderPath: PATH,
+  deadline: '2026-11-12T17:00',
+  title: 'Hopper cover',
+  subject: 'Feed hopper',
+  notes: 'Sheet-metal parts only.',
+  ...overrides,
+});
 const by = (person: FakePerson) => ({ actorId: person.id, actorLabel: person.name, requestId: 'req-assign-email' });
 
 let people: FakePerson[];
@@ -45,6 +55,7 @@ let failEnqueue: Error | null;
 beforeEach(() => {
   people = [LEAD, OTHER_LEAD, ADMIN, ARJUN, MEERA, GONE];
   world = createFakeTaskWorld(() => people);
+  world.customers.set(CUSTOMER_ID, 'Invented Customer');
   clock = createFixedClock(NOW);
   settings = createFakeSettingsRepository({ alertsEnabled: true, senderName: 'Invented Portal', senderAddress: 'portal@example.com' });
   queued = [];

@@ -14,6 +14,7 @@ import type { ImageRepository, PictureRecord } from '../repositories/image-repos
 import type { EstimateStatus } from '../repositories/task-repository';
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
+import type { AuditContext, AuditService } from './audit-service';
 import { createEstimateInputs, type EstimateInputs, type EstimateInputsDependencies } from './estimate-inputs';
 import { createImageService, type ImageService } from './image-service';
 
@@ -32,9 +33,12 @@ import { createImageService, type ImageService } from './image-service';
  *     first left; a status never skips a step.
  *   - **A changed customer is an input change** (section 4.8): `inputs_revision` goes up by one in the same transaction as the customer. The same customer
  *     again changes nothing, and so raises nothing, which is also what stops a repeated request from clearing a total.
- *   - **Nothing but an ID and a name of a customer** is read or returned. The figures that depend on the customer are the Admin's and Lead's, never this file's.
+ *   - **Nothing but an ID, a name and a short name of a customer** is read or returned. The figures that depend on the customer are the Admin's and Lead's, never this file's.
+ *   - **Only a Lead or an Admin sets the customer** (CR-01 item 6, AQP-390; architecture section 4.11 b): the customer is chosen when a task is assigned, and an Engineer sees it and cannot change it.
+ *     The manifest drops the Engineer from the route (403 before the ID is read) and `setCustomer` refuses a viewer who is not a Lead or an Admin as well, before anything is read (defence in depth, as in section 4.10).
+ *     The customer is read `FOR SHARE`, so a delete of it waits for the change and then sees the open estimate (BR-053).
  *
- * There is no audit entry: the audit log of architecture section 8 lists no event for a customer chosen on an estimate.
+ * A customer change writes one `estimate.customer_changed` entry in the same transaction (`audit.record(tx, ...)`, the static check of STORY-10.18), with the company names before and after and no figure.
  *
  * **The parts tree (STORY-05.02; FR-043, FR-044; architecture sections 4.8, 5.1 and 6).** Reading the tree is open to whoever may open the estimate. Every write
  * (add, move, delete) follows one order, so the answer depends on the estimate before it depends on what was sent: the estimate is locked (404 when it is not the
@@ -50,17 +54,19 @@ export interface EstimateViewer {
   readonly role: RoleName;
 }
 
-/** The header of the workspace: the task as it was assigned, and the customer chosen so far. */
+/** The header of the workspace: the task as it was assigned, with its customer and subject (the same, read-only, for every role). */
 export interface Workspace {
   readonly estimateId: string;
   readonly code: string;
   readonly status: EstimateStatus;
   readonly customer: CustomerChoice | null;
+  /** The project name (CR-01 item 6). */
+  readonly subject: string;
   readonly deadlineAt: Date;
   readonly folderPath: string;
   /** The `file:` link built from the path on the server; the browser is never asked to build one. Null only for a path the portal would not link. */
   readonly folderUrl: string | null;
-  readonly title: string | null;
+  readonly title: string;
   readonly notes: string | null;
   readonly assignedByName: string;
 }
@@ -156,10 +162,11 @@ export interface EstimateService {
    */
   getWorkspace(viewer: EstimateViewer, code: string): Promise<Workspace | null>;
   /**
-   * Chooses the customer of an estimate (`PUT /api/v1/estimates/{id}/customer`). 404 for an estimate that is not this person's or does not exist, 409 when it
-   * is not editable by this person (`assertEditable`: an Engineer's submitted estimate, anyone's approved one), 422 under `customerId` for a customer that does not exist or was deleted. The same customer again writes nothing.
+   * Changes the customer of an estimate (`PUT /api/v1/estimates/{id}/customer`), for a Lead or an Admin only: 403 for any other viewer, before anything is read. 404 for an estimate that does not exist, 409 when it
+   * is not editable (`assertEditable`: anyone's approved one), 422 under `customerId` for a customer that does not exist or was deleted. The same customer again writes nothing and no entry. A real change raises
+   * `inputs_revision` and writes one `estimate.customer_changed` entry, in the same transaction.
    */
-  setCustomer(viewer: EstimateViewer, estimateId: string, customerId: string): Promise<EstimateCustomer>;
+  setCustomer(viewer: EstimateViewer, audit: AuditContext, estimateId: string, customerId: string): Promise<EstimateCustomer>;
   /** The parts tree (`GET /api/v1/estimates/{id}/tree`): 404 for an estimate that is not this person's or does not exist. The same answer for every role. */
   getTree(viewer: EstimateViewer, estimateId: string): Promise<PartsTree>;
   /** One part with what was typed into it (`GET /api/v1/estimates/{id}/nodes/{nodeId}`): 404 for an estimate or a part that is not there for this person. */
@@ -195,6 +202,8 @@ export interface EstimateService {
 
 export interface EstimateDependencies {
   readonly estimates: EstimateRepository;
+  /** The audit entry of a customer change (CR-01 item 6), written in the change's transaction. A service built without it refuses to change a customer (as the task service refuses to reassign). */
+  readonly audit?: AuditService | undefined;
   readonly nodes: EstimateNodeRepository;
   /** The part pictures (STORY-05.07). */
   readonly images: ImageRepository;
@@ -263,7 +272,7 @@ async function applyTransition(
 }
 
 // Over 40 lines on purpose (coding standards section 1): one object of the service's methods, each a few lines; the longer steps are the named helpers above and inside.
-export function createEstimateService({ estimates, nodes, images, transactions, materials, currentConfiguration, configurationById }: EstimateDependencies): EstimateService {
+export function createEstimateService({ estimates, audit, nodes, images, transactions, materials, currentConfiguration, configurationById }: EstimateDependencies): EstimateService {
   /** Locks the estimate for a change: 404 when it is not this person's, 409 when this person may no longer change its inputs (`assertEditable`). Returns the estimate's ID. */
   async function lockForChange(viewer: EstimateViewer, estimateId: string, tx: Transaction): Promise<string> {
     const estimate = await estimates.lockEstimate(estimateId, tx);
@@ -324,6 +333,7 @@ export function createEstimateService({ estimates, nodes, images, transactions, 
         code: record.code,
         status: record.status,
         customer: record.customer,
+        subject: record.subject,
         deadlineAt: record.deadlineAt,
         folderPath: record.folderPath,
         folderUrl: folderUrlOf(record.folderPath),
@@ -333,18 +343,30 @@ export function createEstimateService({ estimates, nodes, images, transactions, 
       };
     },
 
-    setCustomer(viewer, estimateId, customerId) {
+    setCustomer(viewer, context, estimateId, customerId) {
+      // Only a Lead or an Admin sets the customer, whoever the estimate belongs to and whether or not it exists: refused before anything is read, so the answer is the same for every ID (AC-7).
+      if (viewer.role === 'ENGINEER') throw new ForbiddenError();
+      if (audit === undefined) throw new Error('This estimate service was built without the audit service, so it cannot change a customer.');
       return transactions.run(async (tx) => {
         const estimate = await estimates.lockEstimate(estimateId, tx);
-        if (estimate === null || !mayOpen(viewer, estimate.engineerId)) throw new NotFoundError();
+        if (estimate === null) throw new NotFoundError();
         assertEditable(viewer, estimate);
         const customer = await estimates.findActiveCustomer(customerId, tx);
         if (customer === null) throw new FieldValidationError([{ field: 'customerId', message: CUSTOMER_CHOICE_MESSAGE }]);
-        // The same customer again is no change: no write, and so no new revision.
+        // The same customer again is no change: no write, no new revision and no entry.
         if (estimate.customerId !== null && estimate.customerId.toLowerCase() === customer.id.toLowerCase()) {
           return { id: estimate.id, status: estimate.status, customer };
         }
+        // The customer replaced is named in the entry even when the Admin has deleted it since (a deleted customer is still the estimate's until it is changed).
+        const previous = estimate.customerId === null ? null : await estimates.findCustomerChoice(estimate.customerId, tx);
         await estimates.setCustomer(estimate.id, customer.id, tx);
+        await audit.record(tx, {
+          event: 'estimate.customer_changed',
+          ...context,
+          object: { id: estimate.id, label: estimate.taskCode },
+          before: { customer: previous === null ? null : { name: previous.name, shortName: previous.shortName } },
+          after: { customer: { name: customer.name, shortName: customer.shortName } },
+        });
         return { id: estimate.id, status: estimate.status, customer };
       });
     },
