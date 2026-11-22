@@ -40,7 +40,7 @@ eq(L.NODES.reduce((s, x) => s + x.bg, 0), L.BL, 'BL = sum of every row BG (the S
 eq(0 * 2 + 1 * 6 + 1 * 24, 30, 'constructed example: frame row 0 + pipe row 6 + lid row 24 = 30');
 eq(L.get('1.1.1').n.H, 16, 'count of 1.1.1 = 16 (2 assemblies, 2 base frames in each, 4 gussets on each frame)');
 eq(L.BL / L.TOOL, L.BN, 'BN = BL / total Tool Cost');
-eq(L.BL - L.APPROVED, 29.9926, 'override difference = calculated total less approved price (29.99)');
+eq(L.BL - L.APPROVED, 51.5326, 'override difference = calculated total less approved price (51.53; CR-01 added two Fastener rows)');
 /* the working lines on SCR-07 are checked inside s2.cjs: the build throws if one does not reproduce its result within 0.005 */
 console.log(bad ? ('PROBLEMS: ' + bad) : 'figures agree');
 process.exit(bad ? 1 : 0);
