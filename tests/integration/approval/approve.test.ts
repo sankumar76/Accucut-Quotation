@@ -38,6 +38,9 @@ import { changeContext } from '../../support/customer-change';
  * approval waiting, so they fail if the approval does not take the lock. Every promise is awaited or asserted with `rejects` (#443). Every name, ID and number is invented.
  */
 
+// The time a price is removed at in the BO test below. Its milliseconds are 600, the digits of the price that test removes (DEF-067): the check that the price is gone must hold at any time of day.
+const REMOVED_AT_WITH_600_MS = '2026-11-23T02:33:11.600Z';
+
 let db: CalculationDatabase;
 let review: EstimateReviewService;
 const lead = () => leadOf(db);
@@ -332,7 +335,7 @@ describe('AC-9 (AQP-321 AC-4): BO is the approvals row, so clearing the calculat
       db.personId,
     ]);
     expect((await review.getCosts(lead(), estimateId)).approval?.price).toBe('600.00');
-    await db.owner.query("UPDATE approvals SET removed_by = $2::uuid, removed_at = now() WHERE estimate_id = $1::uuid AND approved_price = 600", [estimateId, db.personId]);
+    await db.owner.query("UPDATE approvals SET removed_by = $2::uuid, removed_at = $3::timestamptz WHERE estimate_id = $1::uuid AND approved_price = 600", [estimateId, db.personId, REMOVED_AT_WITH_600_MS]);
     const view = await review.getCosts(lead(), estimateId);
     expect(view.approval).toBeNull();
     expect(view.priceRemoved).toMatchObject({ byName: expect.any(String) });
