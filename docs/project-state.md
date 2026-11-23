@@ -8,13 +8,35 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target about 6 Dec 2026, range 5 to 8 Dec, freeze about 3 Dec, all agreed scope kept (DL-307, delivery lead, 2026-11-22; replaces DL-298's provisional 4 Dec). Date triggers: 28 Nov Q-18 (DL-309); freeze AC-8 (DL-310) and #476 (DL-308); G8 condition list DL-314** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
 | Last updated       | 2026-11-23 by orchestrator (daily update after pause 7) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-23, later, orchestrator)
+
+> This section wins over the morning update below where they differ.
+
+**`master` = 02460fbe.** Every push today since 425d2693 is fully green (latest push CI 45264337428, 0 flaky). **Merged today (11, squash, each on a fully green up-to-date run):** #643 (425d2693), #648 DEF-072 (ad0f53c7), #650 DEF-069 (d6fe4e7b), #652 DEF-040 client fix (1eae9353), #654 DEF-067 (87719a6e), #651 DEF-073 (151f42ca), **#649 7C AQP-400 (8ca2bb37)**, #653 DEF-070 2nd change (7decbc01), #658 DEF-074 diagnostic (b85b2aa9), #659 DEF-042 (79e13dee), **#656 3D AQP-406 (02460fbe)**. Jira Done: AQP-400, AQP-406 (+ the Bug issues below).
+
+**Defects closed today (8):** DEF-040 (Sev-2, was a G8 blocker), DEF-042, DEF-064, DEF-067, DEF-069, DEF-070 (DL-349/DL-352 replacement pushes), DEF-072, DEF-073. **RISK-031 Closed** (DL-353; reopen triggers stay armed until G8; W1 stays; keep each push's conclusion and flaky lines here). **G8 blocker: DEF-057 only** (master's T4 re-rule by 26 Nov). Open, not blocking: DEF-071, DEF-074 (both tied to #632/16.4.6), DEF-075 (Sev-3 Product, row toolbar; fix in lane 3).
+
+**#632:** not before G8 (DL-344): the release ships on **Next 16.4.5 / Vitest 5.0.5**; #632 and #513 post-G8; #476 stays open. Read-only 16.4.6 run 45200124686 was clean (`:188` passed, 0 diagnostic lines); a clean pass does not bring it back.
+
+**Rulings today (after the morning update):** DL-338 to DL-353 — DEF-040 M2 and fix scope (DL-338, DL-340, DL-341), DEF-073 proof (DL-339), merge order (DL-342), test-count freeze binds defect-fix PRs only (DL-343 (C); lifts after DEF-057's ruling), #632 out (DL-344), DEF-074 proof (DL-345), DEF-075 a product Bug (DL-346), ADR-019/020 Accepted (DL-347), DEF-042 fix allowed (DL-348), DEF-070 replacement window (DL-349, DL-352), **hosting decision (DL-350, DL-351)**, RISK-031 closed (DL-353).
+
+**Hosting (delivery lead, 23 Nov; DL-350, DL-351):** G8 on Accucut's Windows Server unchanged. **Hosting release H1** (post-G8) adds a managed web host + managed PostgreSQL, one codebase / two set-ups (`DEPLOY_TARGET`), data moved by export/import; **H1 starts only after the customer signs off Release 1 on the local install** (human step). Sizing ~22.5 dev-days (14–35), ~11 calendar days at 3 lanes from H1's start. ADR-021 (target model Accepted), `docs/04-architecture/hosting-h1-dual-target.md`, `data-move.md`, RISK-036, PRD 0.46, release plan 0.37, GitHub #660. **No hosting code before the freeze** (DL-351). Open for the delivery lead: OQ-PM-16 (a)(b), OQ-ARCH-H1-1 (proposal in PRD), OQ-ARCH-H1-2.
+
+**Product/UX today:** customer answers confirmed (DL-337; catalogue 1.13, SPEC 1.20, PRD 0.46). Restore takes no remarks (PM reading, PRD 0.43 FR-109 — for the delivery lead as information). DEF-075 design (toolbar under the name) accepted by the PM under FR-043 (PRD 0.42). UX words supplied as Jira comments (DEF-040 12880, DEF-075 12939, 7D 12944) — **the UX spec itself still needs these recorded; the routing question (CR-01 UX session or ux-expert in records-u) is open with the main session.**
+
+**G8 forecast (release plan 0.34):** holds — about 6 Dec, range 5 to 8 Dec, freeze about 3 Dec; 7D is the long path; trigger: 7D not merged by about 28 Nov.
+
+**Lanes now:** lane 1 (aqp-403) **7D AQP-401 PR #661** — branch updated to 73ec783c, developer adding a one-line `settle` fix, combined review (reviewer-quality) in progress. Lane 2 (aqp-398) free. Lane 3 (aqp-402) **DEF-075 AQP-418** fix in build. **Next after these:** the final full review (§9 item 3) and regression after development; D7 Minor list.
+
+**Housekeeping for the delivery lead (new today):** untracked scratch files left because `rm` is denied: `aqp-398/pw.aqp411.local.config.ts`, `aqp-402/tests/e2e/zz-race-tmp.spec.ts`; agent memory notes written into the main checkout's `.claude/agent-memory/developer/`; merged branches to delete: `fix/AQP-413-treatments-reload`, `fix/AQP-415-review-axe-ac9`, `fix/AQP-411-cost-details-route-warm-up`, `fix/AQP-343-tree-change-timeout`, `fix/AQP-409-approve-test-exact-shape`, `test/AQP-416-approve-step-timing`, `feat/AQP-400-mark-as-quoted`, `test/AQP-413-treatments-ac1-time`, `test/AQP-417-delete-diagnostic`, `fix/AQP-345-unique-task-codes`, `feat/AQP-406-tree-reorder`.
 
 ## Daily update (2026-11-23, orchestrator, after pause 7)
 
@@ -115,14 +137,14 @@
 | DEF-057 (Sev-2) | developer / qa-engineer / master | Observer reading names the stall and the fix is verified; **T4: master re-rules by 26 Nov** if no reading names it; open at the freeze → delivery lead with options (DL-295, DL-314) | Open (observer on `master` since #612) |
 | DEF-065 (Sev-2, AQP-407) | qa-engineer | P1 to P6 and QA's verification on #633's head (DL-319, DL-323 (5)) | **Closed** (QA verified on d2771045, 9762cc18; AQP-407 Done) |
 | DEF-069 (AQP-411, #638) | developer (test-only fix, lane 2) | **Off the blocking list (DL-335, 23 Nov): C1, back to Sev-3 Test** (QA, records e86d245e). Fix scope `tests/e2e/cost-details.spec.ts` only | **Not blocking** (row kept for the trail) |
-| DEF-040 (provisional Sev-2, AQP-343, #468) | developer (code-facts note first in 3D's lane) → master / qa-engineer | **DL-338 (23 Nov):** DL-234 (3)(iii) met on push 45125449394 (move request unanswered, no notice). M1 → Sev-3 the same day; M2 → client fix PR ahead of 3D's merge; M3 → master at once. Closes on no DEF-040 failure on the fix PR's run and the first two `master` pushes after it. Due by the freeze; else delivery lead with options. DL-275 A11 suspended | Open |
+| DEF-040 (provisional Sev-2, AQP-343, #468) | developer (code-facts note first in 3D's lane) → master / qa-engineer | **DL-338 (23 Nov):** DL-234 (3)(iii) met on push 45125449394 (move request unanswered, no notice). M1 → Sev-3 the same day; M2 → client fix PR ahead of 3D's merge; M3 → master at once. Closes on no DEF-040 failure on the fix PR's run and the first two `master` pushes after it. Due by the freeze; else delivery lead with options. DL-275 A11 suspended. **M2 (DL-340): client fix #652 merged 1eae9353; proof met on the PR run and pushes 45171590856 and 45179046845** | **Closed (23 Nov)**; watch until G8 (DL-345 reopen trigger) |
 
 **Date-triggered:**
 | ID | Date | Condition | Status |
 |---|---|---|---|
 | T1 | 28 Nov, end of day | Q-18 (mail details). No answer → AQP-355 Deferred; known gap: e-mail stays off until the install send (DL-309) | Open (delivery lead) |
 | T2 | Freeze, about 3 Dec | G8-C-AC8: no PASS → a go-live condition named in the delivery lead's G8 sign-off; a FAIL is not covered (DL-310) | Open |
-| T3 | Freeze, about 3 Dec, before the final regression | #632 (replaces #476) merges after #633 and DEF-038's test fix, on DL-320 M1 to M7 and DL-323 (4); otherwise the release ships on 16.4.5 with #632 and #513 post-G8 (DL-321 (4), DL-323 (5)) | Open: #633, #636, #642 merged; #632 hand-merged (only the two package files), run of record 45125512077 on 9f59beb3 in CI. Not held for DEF-069 (DL-329 (a)) |
+| T3 | Freeze, about 3 Dec, before the final regression | #632 (replaces #476) merges after #633 and DEF-038's test fix, on DL-320 M1 to M7 and DL-323 (4); otherwise the release ships on 16.4.5 with #632 and #513 post-G8 (DL-321 (4), DL-323 (5)) | **Decided (DL-344, 23 Nov): fallback taken — the release ships on Next 16.4.5 / Vitest 5.0.5; #632 and #513 post-G8; #476 stays open.** One way back before the freeze only if DEF-074's cause is version-independent and its fix has merged |
 | T4 | 26 Nov | DEF-057 re-ruling (see above) | Open |
 
 **Open conditions, owner and evidence:**
