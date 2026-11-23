@@ -23,6 +23,7 @@ const state = {
   failNext: false,
   failAfterHold: false,
   refuseNext: false,
+  ignoredNext: false,
   churn: false,
 };
 
@@ -39,6 +40,7 @@ export const partServer = {
     state.failNext = false;
     state.failAfterHold = false;
     state.refuseNext = false;
+    state.ignoredNext = false;
     state.churn = false;
   },
   /** The nth save since `reset` (1 is the first) waits until the returned function is called. */
@@ -58,6 +60,10 @@ export const partServer = {
   /** The next save is refused by the server's own rule (422) for the field it carries, though the text passed the screen's rule. */
   refuseNextSave(): void {
     state.refuseNext = true;
+  },
+  /** The next save is refused 409 `ESTIMATE_IGNORED`: a Lead or an Admin ignored the estimate while the person worked (CR-01 item 7D). Nothing is stored. */
+  ignoreNextSave(): void {
+    state.ignoredNext = true;
   },
   /** While on, somebody else saves just before every save of this tab arrives, so every save is refused with 409. */
   churn(on: boolean): void {
@@ -91,6 +97,10 @@ export const partServer = {
     if (state.failNext) {
       state.failNext = false;
       return { status: 'failed' };
+    }
+    if (state.ignoredNext) {
+      state.ignoredNext = false;
+      return { status: 'refused', httpStatus: 409, code: 'ESTIMATE_IGNORED', title: 'This estimate is ignored. Restore it first.', fields: {}, body: {} };
     }
     if (state.refuseNext) {
       state.refuseNext = false;

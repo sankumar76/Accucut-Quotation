@@ -195,13 +195,15 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
 
   /** The server did not accept the save: say why, in its words, where the person will look. */
   function explain(outcome: Exclude<Outcome<PartInputs>, { readonly status: 'ok' }>, fieldId: string): void {
-    mark(fieldId, true);
-    setUnstored((current) => new Set([...current, fieldId]));
-    // The estimate was ignored while the person typed (a save, or the 30-second one): the server's 409 says so before anything was stored. The page shows its one alert and stops the timer; nothing is shown under the field.
+    // The estimate was ignored while the person typed (a save, or the 30-second one): the server's 409 says so before anything was stored. The page shows its one alert and stops the timer; nothing is shown under the field. The
+    // typed value can no longer be saved by anyone, so it is not held as "unsaved": the way out of the page is the alert's Reload page, which the browser's own prompt on leaving would only get in front of.
     if (outcome.status === 'refused' && outcome.httpStatus === 409 && outcome.code === ESTIMATE_IGNORED_CODE) {
+      mark(fieldId, false);
       onServerIgnored();
       return;
     }
+    mark(fieldId, true);
+    setUnstored((current) => new Set([...current, fieldId]));
     // The 30-second save that could not save (no answer, a 5xx, or the server's own rule on a field, 422) is one polite status and nothing under the field: the person may be typing there (STORY-05.10 AC-3, AC-5).
     if (trail.isAutomatic(fieldId) && (outcome.status === 'failed' || (outcome.status === 'refused' && outcome.httpStatus === 422))) {
       trail.fail(fieldId, outcome.status === 'refused' ? (onItsWayRef.current.get(fieldId) ?? '') : null);

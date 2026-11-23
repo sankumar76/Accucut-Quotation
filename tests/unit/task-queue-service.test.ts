@@ -65,7 +65,7 @@ describe('AC-1: Open, Closed and Overdue, each by deadline, earliest first', () 
 
   it('counts every tab, whichever tab is shown, and an overdue task counts in Open as well', async () => {
     for (const tab of ['open', 'closed', 'overdue'] as const) {
-      expect((await service.listQueue(asViewer(BOSS), { tab })).counts).toEqual({ open: 5, closed: 1, overdue: 2 });
+      expect((await service.listQueue(asViewer(BOSS), { tab })).counts).toEqual({ open: 5, closed: 1, overdue: 2, ignored: 0 });
     }
   });
 
@@ -78,7 +78,7 @@ describe('AC-1: Open, Closed and Overdue, each by deadline, earliest first', () 
 
   it('answers an Engineer with nothing assigned with empty tabs and zero counts', async () => {
     const empty = await service.listQueue({ id: OTHER_ENGINEER_ID, role: 'ENGINEER' }, { tab: 'closed' });
-    expect(empty).toEqual({ tab: 'closed', tasks: [], counts: { open: 0, closed: 0, overdue: 0 }, nextCursor: null, asOf: NOW });
+    expect(empty).toEqual({ tab: 'closed', tasks: [], counts: { open: 0, closed: 0, overdue: 0, ignored: 0 }, nextCursor: null, asOf: NOW });
   });
 
   it('says at which instant it judged overdue (STORY-04.03 AC-1), so the rows and their "Overdue by" text use the same clock as the counts', async () => {
@@ -93,7 +93,7 @@ describe('AC-2: an Engineer gets their own tasks, a Lead and an Admin get all', 
   it('an Engineer sees only the tasks assigned to them, in every tab, with counts of their own', async () => {
     const arjun = await service.listQueue(asViewer(ARJUN), { tab: 'open' });
     expect(codesOf(arjun)).toEqual(['Q-2026-0001', 'Q-2026-0002']);
-    expect(arjun.counts).toEqual({ open: 2, closed: 1, overdue: 1 });
+    expect(arjun.counts).toEqual({ open: 2, closed: 1, overdue: 1, ignored: 0 });
     expect(codesOf(await service.listQueue(asViewer(ARJUN), { tab: 'closed' }))).toEqual(['Q-2026-0003']);
     expect(codesOf(await service.listQueue(asViewer(PRIYA), { tab: 'overdue' }))).toEqual(['Q-2026-0005']);
   });
@@ -134,6 +134,7 @@ describe('AC-3: what a row carries', () => {
         deadlineAt: at(-5 * DAY),
         status: 'APPROVED',
         assignedByName: BOSS.name,
+        ignoredRemarks: null,
       },
     ]);
   });

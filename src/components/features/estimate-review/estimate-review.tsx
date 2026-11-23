@@ -166,7 +166,8 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
       <CancelledNotice cancel={costs.approval?.cancel ?? null} wasUnlocked={costs.approval !== null && costs.approval.unlock !== null} status={header.status} viewedByAdmin={viewerRole === 'ADMIN'} />
       <PriceRemovedNotice removed={costs.priceRemoved} />
       <WarningNotice state={state} warning={costs.warning} at={calculatedAt} />
-      <RatesChangedNotice state={state} ratesChanged={costs.ratesChanged} at={calculatedAt} />
+      {/* The notice invites a Recalculate, which an ignored estimate cannot have (the action bar is not drawn and the server refuses it), so it is not drawn while the estimate is ignored (CR-01 item 7D). */}
+      {isIgnored ? null : <RatesChangedNotice state={state} ratesChanged={costs.ratesChanged} at={calculatedAt} />}
       <FigureTiles state={state} letters={letters} totals={totals} approval={approval} />
       <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} />
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}

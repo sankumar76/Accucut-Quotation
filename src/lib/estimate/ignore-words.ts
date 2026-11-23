@@ -25,7 +25,7 @@ export type IgnoreRemarksCheck = { readonly ok: true; readonly remarks: string }
  * folded into a line feed, and a line feed counts 1. The text kept is the trimmed one.
  *
  * It is judged by the shared text rule (`validateTextInput`, DL-219), as the unlock reason is (`checkUnlockReason`): this file writes no sentence of its own for a hidden character, so the message changes in one place
- * when GitHub #429 names the refused character. A NUL or a lone surrogate (which PostgreSQL cannot store) is a 422 and never a 500. The dialog and the service call this same function.
+ * when GitHub issue 429 names the refused character. A NUL or a lone surrogate (which PostgreSQL cannot store) is a 422 and never a 500. The dialog and the service call this same function.
  */
 export function checkIgnoreRemarks(text: string): IgnoreRemarksCheck {
   const checked = validateTextInput(text, { multiline: true, maxLength: IGNORE_REMARKS_MAX_LENGTH, countCodePoints: true });

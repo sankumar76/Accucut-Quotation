@@ -109,9 +109,10 @@ describe('AC-3, AC-6: Treatment / Color as a drop-down', () => {
     expect(markup.match(/data-part-field="true"/g)).toHaveLength(2);
   });
 
-  it('an estimate that may not be changed has a disabled list and a read-only box, and Enter does not stop at them', () => {
+  it('an estimate that may not be changed has a read-only list that is not disabled, a read-only box, and Enter does not stop at them (CR-01 item 7D: a read-only control stays in the reading order)', () => {
     const markup = select(encodeTreatment({ id: OTHER_TREATMENT_ID, text: 'Invented matt black' }), { readOnly: true, marked: false });
-    expect(markup).toContain('disabled=""');
+    expect(markup).not.toContain('disabled=""');
+    expect(markup).toContain('aria-readonly="true"');
     expect(markup).toContain('readOnly=""');
     expect(markup).not.toContain('data-part-field');
   });

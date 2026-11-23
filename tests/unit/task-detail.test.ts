@@ -61,6 +61,7 @@ describe('AC-1: the task and the status of its estimate, in every state', () => 
       deadlineAt: DEADLINE,
       status: 'DRAFT',
       assignedByName: 'Invented Boss',
+      ignored: null,
     });
   });
 
@@ -97,6 +98,6 @@ describe('AC-3, AC-5: a Lead and an Admin open any task and are told the same wo
     const engineerKeys = await keys({ id: ARJUN.id, role: 'ENGINEER' });
     expect(await keys({ id: LEAD.id, role: 'LEAD' })).toEqual(engineerKeys);
     expect(await keys({ id: ADMIN.id, role: 'ADMIN' })).toEqual(engineerKeys);
-    expect(engineerKeys).toEqual(['assignedByName', 'code', 'customer', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'subject', 'title']);
+    expect(engineerKeys).toEqual(['assignedByName', 'code', 'customer', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'ignored', 'notes', 'status', 'subject', 'title']);
   });
 });

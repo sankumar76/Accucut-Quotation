@@ -151,7 +151,7 @@ function IgnoreForm({ props, inFlightRef }: { readonly props: IgnoreDialogProps;
       <FormField
         id={IGNORE_REMARKS_FIELD_ID}
         label={REMARKS_LABEL}
-        tag={<span className="ml-s-2 text-label font-normal text-ink-2">{REMARKS_REQUIRED_TAG}</span>}
+        tag={<span className="ml-s-2 text-label font-normal text-ink-2">{` ${REMARKS_REQUIRED_TAG}`}</span>}
         hint={REMARKS_HINT}
         {...(error === null ? {} : { error })}
       >
