@@ -1,8 +1,9 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
-import { createDisposableUser, E2E_PASSWORD, readEstimateState, saveCanaryQuantity, useFreshAddress, type E2eUser } from './support/auth';
+import { createDisposableUser, E2E_PASSWORD, readEstimateState, saveCanaryQuantity, signInWithoutThePage, useFreshAddress, type E2eUser } from './support/auth';
 import { calculateAsEngineer, engineerWithEstimate, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
+import { DEVELOPMENT_URL } from './support/servers';
 
 /**
  * STORY-06.03 (AC-1 to AC-9; NFR-002): the cost details of a row, SCR-07, for a Lead and an Admin at `/estimates/<code>/costs/1`, at 360x800, 768x1024 and 1366x768. Each test makes an Engineer of its own with
@@ -21,6 +22,32 @@ test.beforeEach(async ({ context }) => {
   await useFreshAddress(context);
 });
 
+/**
+ * AQP-411 (DEF-069, DL-335 (6)): a warm-up of the cost route, once per worker, before its first case of this file. WHY: no test calls the route between `canary-scan.spec.ts` and the two cases below, so when the
+ * file's cases reach it the development server has not been asked for it for 70 to 94 s. In the seven attempt-1 readings of the AC-8 case that were read (the three widths of run 45128502168 and four earlier runs),
+ * the Engineer's first request to it took 1.9 s (mobile), 3.8 and 4.5 s (tablet) and 5.1 to 6.7 s (desktop), and the Lead's request to the same route in "cleared" ended 0.11 to 0.46 s after it every time. If both
+ * waited for the first use of the route after that gap, the wait now happens here, in the hook, on a Lead's request. If they did not, the readings stay as they were, and that is the answer. The warm-up does NOT
+ * stand in for any Engineer's request: the cases still send all of those, after a real sign-in, with their status and time printed. It asks for an estimate that is not there, so it is a Lead's 404 from the service
+ * (its lookup finds nothing) and nothing is made. A failure here is a failure of the hook, which every case of the worker shows. It prints one `[AQP-411 warm-up]` line.
+ */
+const NO_SUCH_ID = '11111111-1111-4111-8111-111111111111';
+test.beforeAll(async ({ browser }, testInfo) => {
+  const started = Date.now();
+  const context = await browser.newContext({ baseURL: DEVELOPMENT_URL });
+  try {
+    await useFreshAddress(context);
+    const page = await context.newPage();
+    const lead = await createDisposableUser('axe', testInfo, 'LEAD');
+    await signInWithoutThePage(page, lead.email, E2E_PASSWORD);
+    const asked = Date.now();
+    const answer = await page.request.get(`/api/v1/estimates/${NO_SUCH_ID}/nodes/${NO_SUCH_ID}/costs`);
+    expect(answer.status(), 'a Lead is told there is no such estimate').toBe(404);
+    process.stdout.write(`[AQP-411 warm-up] ${testInfo.project.name} | worker ${String(testInfo.workerIndex)} | the Lead's request to the cost route took ${String(Date.now() - asked)} ms, the hook ${String(Date.now() - started)} ms\n`);
+  } finally {
+    await context.close();
+  }
+});
+
 const PHONE_MAX = 767;
 const DESKTOP_MIN = 1280;
 const STAGE_TITLES = ['1. Weights & Areas', '2. Material Cost', '3. Process Costs', '4. Sub Total', '5. Rejection, Overheads & Logistics', '6. Pricing'];
@@ -31,7 +58,9 @@ const stage = (page: Page, number: number) => page.locator(`details[data-stage="
 /**
  * AQP-411 (DEF-069, DL-327 (5)): step timing for the two cases of this file that have run out of their 30 s on attempt 1 and passed on the retry, the "not found" case and the NFR-002 case of AC-8. It prints one
  * line per step on **every** attempt at every width, not only a failed one, so the next stall names the step that used the time and a slow sign-in is told from a slow refusal of the cost route. Nothing here
- * is an assertion, a timeout, a retry or a trace (CLAUDE.md section 9 item 4), and the two cases prove what they proved before: the same calls in the same order with the same checks.
+ * is an assertion, a timeout, a retry or a trace (CLAUDE.md section 9 item 4), and the two cases prove what they proved before: every check is kept. The one change in the calls since the lines were first printed (AQP-411,
+ * the fix of DL-335 (6)): the Engineer presses Calculate without loading the estimate page first (`calculateTimed`), so the steps are numbered one lower from there on and "estimate page: goto" of the owner is gone from the
+ * list. The AC-8 case still opens the owner's page, as "own estimate page: goto", where it is the subject.
  *
  * Line format (fields separated by " | "; QA greps for the prefix):
  *   [AQP-411 step timing] <project> | attempt <n> | <case> | step <k> | <step> | <took> ms | at +<ms> ms | <detail>
@@ -126,16 +155,19 @@ async function signInTimed(timer: StepTimer, page: Page, role: string, person: E
   expect(new URL(url, 'http://sign-in.invalid').searchParams.get('error'), 'the error the server names, if it refused').toBeNull();
 }
 
-/** `calculateAsEngineer` (support/calculated-estimate.ts) with its steps timed: the sign-in, the page, the press and the check of the state. */
-async function calculateTimed(timer: StepTimer, page: Page, owner: E2eUser & { readonly id: string }, code: string): Promise<void> {
+/**
+ * `calculateWithoutThePage` (support/calculated-estimate.ts) with its steps timed: the sign-in, the press and the check of the state. The press is the request the button sends, with the portal's own `Origin`,
+ * and no page is loaded first: neither case is about the Engineer's page at this point, and that load was 2.4 to 6.6 s of each case's 30 s (DEF-069, step 7 of the lines of 45128502168). The Engineer's own
+ * estimate page is still opened by the AC-8 case later, where it is the subject.
+ */
+async function calculateTimed(timer: StepTimer, page: Page, owner: E2eUser & { readonly id: string }): Promise<void> {
   await signInTimed(timer, page, 'Engineer (owner)', owner);
-  await timer.step('Engineer (owner) estimate page: goto', () => page.goto(`/estimates/${code}`), (response) => statusOf(response));
   const status = await timer.step(
-    'Engineer (owner) Calculate: fetch',
-    () => page.evaluate(async (id) => (await fetch(`/api/v1/estimates/${id}/calculate`, { method: 'POST' })).status, owner.id),
+    'Engineer (owner) Calculate: request without a page',
+    async () => (await page.request.post(`/api/v1/estimates/${owner.id}/calculate`, { headers: { origin: DEVELOPMENT_URL } })).status(),
     (value) => `status ${String(value)}`,
   );
-  expect(status).toBe(200);
+  expect(status, 'the Calculate of the Engineer').toBe(200);
   expect(await timer.step('Engineer (owner) Calculate: read the estimate state', () => readEstimateState(owner.id))).toEqual({ status: 'PREPARED', calculations: 1 });
 }
 
@@ -228,7 +260,7 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
   test('a part that is not in the estimate, and an address that is no Sl. No, are "not found"', async ({ page }, testInfo) => {
     const timer = startStepTiming(testInfo, 'not-found');
     const { owner, code } = await timer.step('set-up: Engineer with an estimate', () => engineerWithEstimate(testInfo));
-    await calculateTimed(timer, page, owner, code);
+    await calculateTimed(timer, page, owner);
     const lead = await timer.step('set-up: Lead creation', () => createDisposableUser('axe', testInfo, 'LEAD'));
     await signInTimed(timer, page, 'Lead', lead);
     for (const slNo of ['2', '1.1', 'abc']) {
@@ -286,7 +318,7 @@ test.describe('AC-8 (NFR-002): an Engineer gets nothing', () => {
   test('the route is the fixed 403 and the page is "no access" with HTTP 403, before anything is read; the Engineer sees no button or link to either; a Lead gets the answer', async ({ page }, testInfo) => {
     const timer = startStepTiming(testInfo, 'AC-8');
     const { owner, code } = await timer.step('set-up: Engineer with an estimate', () => engineerWithEstimate(testInfo));
-    await calculateTimed(timer, page, owner, code);
+    await calculateTimed(timer, page, owner);
 
     const own = await timer.step('Engineer (owner) own estimate page: goto', () => page.goto(`/estimates/${code}`), (response) => statusOf(response));
     expect(own?.status()).toBe(200);
