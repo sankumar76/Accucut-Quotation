@@ -27,8 +27,9 @@ export interface PartsTreeListProps<T extends PartsTreeItem> {
   readonly label: string;
   readonly renderRow: RenderPartsTreeRow<T>;
   /**
-   * What goes in the toolbar slot at the end of each row (CR-01 item 3C: the "+" and "-"; 3D adds the move handle), or nothing: the slot is there either way, empty, so no story lays a row out again. The toolbar
-   * shows on hover, on keyboard focus within the row and on the open row, and on a touch screen in line on the open row only.
+   * What goes in the toolbar slot of each row (CR-01 item 3C: the "+" and "-"; 3D adds the move handle). The slot is a line of its own **under the row's name**, in the column of the link (AQP-418, DEF-075: a toolbar
+   * that floated over the row took the press that was meant for the name). With no toolbar (the review tree, a person who may not edit) there is no slot, so no empty line. When the toolbar is in view is its own rule
+   * (`RowActions`): the slot only gives it its place.
    */
   readonly renderToolbar?: RenderPartsTreeRow<T>;
   /** The ID of the `nav`, for a caller that moves focus into it. */
@@ -89,11 +90,10 @@ interface BranchItemProps<T extends PartsTreeItem> {
 }
 
 /**
- * The toolbar slot of a row. A fine pointer sees it over the end of the row while the row is hovered, holds keyboard focus or is the open one (`aria-current`); it is in the tab order always, so Tab moves from a row to its
- * buttons. A touch screen has no hover: the slot is in line, after the row, and only on the open row.
+ * The toolbar slot of a row: the second line of the row's grid, in the link's column, so it is under the name and never over it. It is `relative`, so the clipped toolbar of a row that is not shown (`sr-only`, absolutely
+ * placed) stays at the foot of its own row and adds no height.
  */
-const TOOLBAR_SLOT =
-  'absolute inset-y-0 right-0 flex items-center opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 group-has-[[aria-current=true]]/row:opacity-100 pointer-coarse:static pointer-coarse:hidden pointer-coarse:opacity-100 pointer-coarse:group-has-[[aria-current=true]]/row:flex';
+const TOOLBAR_SLOT = 'relative col-start-2 min-w-0';
 
 function BranchItem<T extends PartsTreeItem>({ branch, siblings, level, renderRow, renderToolbar, closed, onToggle }: BranchItemProps<T>) {
   const { node, children } = branch;
@@ -102,13 +102,15 @@ function BranchItem<T extends PartsTreeItem>({ branch, siblings, level, renderRo
   const childrenId = `parts-tree-branch-${node.id}`;
   return (
     <li data-part-row={node.id}>
-      {/* The row. `relative` and the empty slot at its end are where the toolbar of 3C (add, delete) and 3D (move) goes, so neither has to lay the row out again. */}
-      <div className="group/row relative flex items-start">
+      {/* The row: two columns, the arrow cell and then the link, with the toolbar slot on a line of its own under the link (AQP-418). */}
+      <div className="group/row relative grid grid-cols-[auto_minmax(0,1fr)] items-start">
         <ArrowCell branch={branch} open={open} interactive={interactive} onToggle={interactive ? () => onToggle(node.id) : undefined} controls={childrenId} />
-        <div className="min-w-0 flex-1">{renderRow(node, nodeKindLabel(node, siblings))}</div>
-        <div data-row-toolbar="" className={TOOLBAR_SLOT}>
-          {renderToolbar?.(node, nodeKindLabel(node, siblings))}
-        </div>
+        <div className="min-w-0">{renderRow(node, nodeKindLabel(node, siblings))}</div>
+        {renderToolbar === undefined ? null : (
+          <div data-row-toolbar="" className={TOOLBAR_SLOT}>
+            {renderToolbar(node, nodeKindLabel(node, siblings))}
+          </div>
+        )}
       </div>
       {children.length > 0 && open ? (
         <ul id={childrenId} className={cn('flex flex-col', level < LAST_INDENTED_LEVEL && 'ml-s-5 border-l border-border')}>
@@ -124,7 +126,7 @@ function BranchItem<T extends PartsTreeItem>({ branch, siblings, level, renderRo
 /**
  * The parts tree as a list of links (CR-01 item 3B, UX spec section 0.9 row 3; AQP-404): `nav` > nested `ul`, not `role="tree"`, because a tree item may not hold a second control and a row now does (its arrow, and
  * later its "+", "-" and move buttons). The level is told by the nesting and by thin guide lines, never by an `aria-level`, `aria-posinset` or `aria-setsize`. Each row is an arrow cell (a button when the tree
- * can open and close, a mark when it cannot, and the same empty space for a leaf row), what the caller draws, and the empty toolbar slot at the row's end.
+ * can open and close, a mark when it cannot, and the same empty space for a leaf row), what the caller draws, and, where the caller gives a toolbar, the toolbar on its own line under it (AQP-418).
  */
 export function PartsTreeList<T extends PartsTreeItem>({ nodes, label, renderRow, renderToolbar, id, closed, onToggle }: PartsTreeListProps<T>) {
   const top = branchesOf(nodes);

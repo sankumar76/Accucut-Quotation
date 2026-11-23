@@ -28,23 +28,17 @@ const PHONE_MAX = 767;
 /** The parts tree is a `nav` of nested lists of links (CR-01 item 3B): a row is its link, and its number is the text marked `data-sl-no`. */
 const tree = (page: Page): Locator => page.getByRole('navigation', { name: 'Parts tree' });
 const part = (page: Page, slNo: string): Locator => tree(page).getByRole('link').filter({ has: page.locator('[data-sl-no]', { hasText: new RegExp(`^${slNo.replaceAll('.', '\\.')}$`) }) });
-/**
- * Chooses a row by a press at the start of its name. The toolbar of a row (move handle, "+" and "-", CR-01 items 3C and 3D) floats over the end of it, and in a narrow panel it reaches the middle of a short row, so the centre
- * of the link, where Playwright presses by default, is not always the row. A person presses on the name.
- *
- * This presses at the start of the name because of the toolbar overlap, a product Bug (#655: the toolbar of three buttons covers the middle of a short row in a narrow panel and takes the press). When the Bug is fixed,
- * this goes back to a plain click on the row.
- */
-const choose = (page: Page, slNo: string): Promise<void> => part(page, slNo).click({ position: { x: 16, y: 10 } });
+/** Chooses a row by a press at the centre of its name, where Playwright presses by default: nothing floats over a row (AQP-418, DEF-075), so that press is always the row. */
+const choose = (page: Page, slNo: string): Promise<void> => part(page, slNo).click();
 const action = (page: Page, name: string): Locator => page.getByRole('button', { name, exact: true });
 /**
- * A button of one row (CR-01 item 3C): its name starts with the words and the number of its row ("Add under 1 ", "Add fastener under 1.1.1 ", "Delete 1.1 "). The toolbar shows on hover, on focus and on the open row
- * (on a touch screen on the open row only), so a test chooses the row first, as a person does.
+ * A button of one row (CR-01 item 3C): its name starts with the words and the number of its row ("Add under 1 ", "Add fastener under 1.1.1 ", "Delete 1.1 "). The toolbar is in view on the open row, and on a row that
+ * holds the keyboard focus (AQP-418: under the name, with no hover look), so a test chooses the row first, as a person does, or reaches the button by the keyboard.
  */
 const rowButton = (page: Page, words: string, slNo: string): Locator => tree(page).getByRole('button', { name: new RegExp(`^${words} ${slNo.replaceAll('.', '\\.')} `) });
 /**
  * The move handle of one row (CR-01 item 3D): its name is "Move" and the number and name of its row. A click on it, Enter or Space opens Move up / Move down; a press and a drag move the row among the rows with the same
- * parent. Like the other row buttons it is shown on hover, on focus and on the open row, so a test chooses the row first.
+ * parent. Like the other row buttons it is in view on the open row and on a row that holds the keyboard focus, so a test chooses the row first.
  */
 const handleOf = (page: Page, slNo: string): Locator => rowButton(page, 'Move', slNo);
 /** Move up or Move down of a row, from the menu of its handle, by the pointer. */
@@ -71,6 +65,47 @@ const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <
 async function slNumbers(page: Page): Promise<string[]> {
   return tree(page).locator('[data-sl-no]').allTextContents();
 }
+
+/** What a press at the centre of a row's name reaches (AQP-418, DEF-075 acceptance check 1): the link itself or something in it, or the tag of whatever lies over it. */
+const reachedByCentrePress = (page: Page, slNo: string): Promise<string> =>
+  part(page, slNo).evaluate((link) => {
+    const { left, top, width, height } = link.getBoundingClientRect();
+    const reached = document.elementFromPoint(left + width / 2, top + height / 2);
+    return reached !== null && link.contains(reached) ? 'the row' : (reached?.outerHTML.slice(0, 80) ?? 'nothing');
+  });
+
+interface ToolbarBox {
+  readonly slNo: string;
+  readonly open: boolean;
+  readonly width: number;
+  readonly height: number;
+  /** The toolbar's box and the row's link overlap by more than half a pixel in both directions. */
+  readonly overlapsLink: boolean;
+  /** The topmost element at the centre of the toolbar's box is inside the toolbar: it would take a press. */
+  readonly takesPress: boolean;
+}
+
+/** The toolbar group of every row on screen, measured in the page (AQP-418 acceptance check 2). */
+const toolbarBoxes = (page: Page): Promise<ToolbarBox[]> =>
+  tree(page).evaluate((nav) =>
+    [...nav.querySelectorAll('li[data-part-row]')].map((item) => {
+      const link = item.querySelector('a[data-part-id]');
+      const group = item.querySelector('[data-row-actions]');
+      if (link === null || group === null) throw new Error('a row has no link or no toolbar group');
+      const box = group.getBoundingClientRect();
+      const text = link.getBoundingClientRect();
+      const overlap = (low: number, high: number, otherLow: number, otherHigh: number): boolean => Math.min(high, otherHigh) - Math.max(low, otherLow) > 0.5;
+      const reached = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return {
+        slNo: link.querySelector('[data-sl-no]')?.textContent ?? '',
+        open: link.getAttribute('aria-current') === 'true',
+        width: box.width,
+        height: box.height,
+        overlapsLink: overlap(box.left, box.right, text.left, text.right) && overlap(box.top, box.bottom, text.top, text.bottom),
+        takesPress: reached !== null && group.contains(reached),
+      };
+    }),
+  );
 
 /**
  * AQP-343 / DEF-040, master's DL-234 D2: a diagnostic and nothing else. A wait for "Part renumbered to ..." has failed on the first attempt only, twice, with no trace kept.
@@ -393,26 +428,21 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     expect((await arrow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     expect((await arrow.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
 
-    // Tab goes arrow, row, the row's own move handle, "+" and "-", next row, and so on: the order of the page, with no roving stop (UX spec section 0.9 row 3: "Keyboard: Tab moves between a row and its "+""). A touch screen has no
-    // hover, so there only the open row (row 2, the one added last) shows its buttons and the rows before it go straight to the next row (AQP-405 AC-7).
-    const toolbarStops = await page.evaluate(() => !window.matchMedia('(pointer: coarse)').matches);
+    // Tab goes arrow, row, the row's own move handle, "+" and "-", next row, and so on: the order of the page, with no roving stop (UX spec section 0.9 row 3: "Keyboard: Tab moves between a row and its "+""). The buttons of a row
+    // that is not open are clipped, not removed (AQP-418), so this holds on a touch screen too.
     const tabTo = async (target: Locator): Promise<void> => {
       await page.keyboard.press('Tab');
       await expect(target).toBeFocused();
     };
     await arrow.focus();
     await tabTo(part(page, '1'));
-    if (toolbarStops) {
-      await tabTo(rowButton(page, 'Move', '1'));
-      await tabTo(rowButton(page, 'Add under', '1'));
-      await tabTo(rowButton(page, 'Delete', '1'));
-    }
+    await tabTo(rowButton(page, 'Move', '1'));
+    await tabTo(rowButton(page, 'Add under', '1'));
+    await tabTo(rowButton(page, 'Delete', '1'));
     await tabTo(part(page, '1.1'));
-    if (toolbarStops) {
-      await tabTo(rowButton(page, 'Move', '1.1'));
-      await tabTo(rowButton(page, 'Add under', '1.1'));
-      await tabTo(rowButton(page, 'Delete', '1.1'));
-    }
+    await tabTo(rowButton(page, 'Move', '1.1'));
+    await tabTo(rowButton(page, 'Add under', '1.1'));
+    await tabTo(rowButton(page, 'Delete', '1.1'));
     await tabTo(part(page, '2'));
     // The arrow keys do not move between rows any more (STORY-05.02 AC-9 is withdrawn).
     await page.keyboard.press('ArrowUp');
@@ -549,17 +579,60 @@ test.describe('AQP-405: the row actions', () => {
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.1.1', '1.1.1.1', '2']);
     await expect(part(page, '2')).toHaveAttribute('aria-current', 'true');
     await expect(part(page, '2')).toBeFocused();
+
+    // AQP-418 (DEF-075), acceptance checks 1, 2 and 3 of the design (AQP-406 comment 12939). The toolbar never floats over a row, so a press at the centre of a name is a press on the row: a Main Assembly, a Sub-Assembly, a Part
+    // (level 3) and a Fastener, each when it is not the open row and again when it is. A press selects the row and opens no menu and no dialog, and sends no add, move or delete request.
+    const writes: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() !== 'GET' && /\/api\/v1\/estimates\/[^/]+\/(nodes|tree)/.test(new URL(request.url()).pathname)) writes.push(request.method() + ' ' + request.url());
+    });
+    for (const slNo of ['1.1', '1.1', '1.1.1', '1.1.1', '1.1.1.1', '1.1.1.1', '1', '1', '2', '2']) {
+      expect(await reachedByCentrePress(page, slNo), 'the centre of ' + slNo + ' reaches the row').toBe('the row');
+      await choose(page, slNo);
+      await expect(part(page, slNo)).toHaveAttribute('aria-current', 'true');
+      await expect(page.getByRole('menuitem')).toHaveCount(0);
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    }
+    expect(writes, 'a press on a name sent no add, move or delete request').toEqual([]);
+    // 2 is the open row now. Its toolbar is in view, under its name; every other toolbar is clipped to 1 px and has no hit area. A pointer over a row that is not open changes nothing (check 3).
+    const before = await toolbarBoxes(page);
+    expect(before.filter((row) => row.open).map((row) => row.slNo)).toEqual(['2']);
+    const rowOffsets = async (): Promise<number[]> => {
+      const tops = await Promise.all(['1', '1.1', '1.1.1', '1.1.1.1', '2'].map(async (slNo) => (await part(page, slNo).boundingBox())?.y ?? 0));
+      return tops.map((top) => top - (tops[0] ?? 0));
+    };
+    const offsets = await rowOffsets();
+    await part(page, '1.1').hover();
+    await part(page, '1.1.1').hover();
+    expect(await toolbarBoxes(page)).toEqual(before);
+    expect(await rowOffsets()).toEqual(offsets);
+    for (const row of before) {
+      if (!row.open) expect(row.takesPress, row.slNo + ' toolbar takes a press').toBe(false);
+      if (row.open) {
+        expect(row.overlapsLink, row.slNo + ' toolbar does not overlap its name').toBe(false);
+        expect(row.height, row.slNo + ' toolbar is in view').toBeGreaterThanOrEqual((page.viewportSize()?.width ?? 0) >= 1024 ? 36 : TOUCH_TARGET);
+      } else {
+        expect(row.width, row.slNo + ' toolbar is clipped').toBeLessThanOrEqual(1);
+        expect(row.height, row.slNo + ' toolbar is clipped').toBeLessThanOrEqual(1);
+      }
+    }
     await expectNoAxeViolations(page);
   });
 
-  test('AQP-405 AC-4: the "-" of a row that is not the open one deletes that row after the confirmation, and the open row stays open and is renumbered', async ({ page }, testInfo) => {
-    // The toolbar of a row that is not open shows on hover: a pointer is needed, so this is for the desktop width (a touch screen shows it on the open row only).
-    test.skip(isPhone(page) || (page.viewportSize()?.width ?? 0) < 1024, 'the toolbar of a row that is not open is shown by a pointer');
+  test('AQP-405 AC-4 (AQP-418): the "-" of a row that is not the open one, reached by the keyboard (Tab from its link), deletes that row after the confirmation, and the open row stays open and is renumbered', async ({ page }, testInfo) => {
+    // The toolbar of a row that is not open is clipped, so a press cannot reach it (AQP-418, DEF-075): a person reaches it with Tab from the row's link, on every screen. 1.1 is a Part: the handle, the "+" and the "-".
     await openTreeWithTwoSubParts(page, testInfo);
     await choose(page, '1.2');
     await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
 
-    await rowButton(page, 'Delete', '1.1').click();
+    await part(page, '1.1').focus();
+    await page.keyboard.press('Tab');
+    await expect(handleOf(page, '1.1')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(rowButton(page, 'Add fastener under', '1.1')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(rowButton(page, 'Delete', '1.1')).toBeFocused();
+    await page.keyboard.press('Enter');
     const dialog = page.getByRole('alertdialog', { name: 'Delete row 1.1?' });
     await expect(dialog).toContainText('Row 1.1 and everything typed into it will be deleted. This cannot be undone.');
     await dialog.getByRole('button', { name: 'Delete row' }).click();

@@ -4,7 +4,7 @@ import type { RoleName } from '@/lib/auth/roles';
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
 import { ALLOWED_CHILDREN, NODE_KINDS, type NodeKind } from '@/lib/estimate/node-kinds';
 import { ESTIMATE_STATUSES, type EstimateStatus } from '@/lib/estimate/state-machine';
-import { ADD_MAIN_ASSEMBLY, addActionOf, addFastenerLabel, addUnderLabel, deleteRowLabel, moveRowLabel, treeActionsOffered } from '@/lib/estimates/tree-actions';
+import { ADD_MAIN_ASSEMBLY, actionsLabel, addActionOf, addFastenerLabel, addUnderLabel, deleteRowLabel, moveRowLabel, treeActionsOffered } from '@/lib/estimates/tree-actions';
 
 /**
  * AQP-405 (CR-01 item 3C; SPEC 14.30, 14.33, 14.35 as ruled by the product-manager): what the row actions of the parts tree offer. The "+" offers exactly the kinds of `ALLOWED_CHILDREN` for the row
@@ -63,6 +63,8 @@ describe('the words of the row actions', () => {
     expect(deleteRowLabel('1.2', 'Frame')).toBe('Delete 1.2 Frame');
     // The move handle's name (CR-01 item 3D): the row it moves, as in the UX mock-up.
     expect(moveRowLabel('1.1', 'Base frame')).toBe('Move 1.1 Base frame');
+    // The group that holds the three buttons of a row (AQP-418): its number and name, as in the button names.
+    expect(actionsLabel('1.1', 'Frame')).toBe('Actions for 1.1 Frame');
   });
 
   it('says "Add main assembly" at the foot of the tree', () => {
