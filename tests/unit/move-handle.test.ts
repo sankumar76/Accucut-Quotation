@@ -47,7 +47,18 @@ const triggerOf = (tree: ReactNode): ReactElement<Props> => {
 const call = <T>(props: Props, name: string, event: unknown): T => (props[name] as (event: unknown) => T)(event);
 
 /** What a button gives a handler: its own `dataset` and a pointer to hold. */
-const handleOf = () => ({ dataset: {} as Record<string, string>, setPointerCapture: vi.fn() });
+/** A move handle as far as the code needs it: its `dataset`, the pointer it holds, and listeners that a test can fire (`fire`). */
+function handleOf() {
+  const listeners = new Map<string, Array<(event: { clientY: number }) => void>>();
+  return {
+    dataset: {} as Record<string, string>,
+    setPointerCapture: vi.fn(),
+    addEventListener: vi.fn((type: string, listener: (event: { clientY: number }) => void) => void listeners.set(type, [...(listeners.get(type) ?? []), listener])),
+    removeEventListener: vi.fn((type: string, listener: (event: { clientY: number }) => void) => void listeners.set(type, (listeners.get(type) ?? []).filter((kept) => kept !== listener))),
+    fire: (type: string, clientY: number) => (listeners.get(type) ?? []).forEach((listener) => listener({ clientY })),
+    listening: (type: string) => (listeners.get(type) ?? []).length,
+  };
+}
 const pointerDown = (handle: ReturnType<typeof handleOf>, extra: Props = {}) => ({ button: 0, pointerId: 7, clientY: 123, currentTarget: handle, preventDefault: vi.fn(), ...extra });
 
 const onMoveTo = vi.fn();
@@ -145,7 +156,7 @@ describe('AC-1, AC-5: a press on the handle starts a drag, and its code is fetch
     call(props, 'onPointerDown', pointerDown(held));
     expect(held.setPointerCapture).toHaveBeenCalledWith(7);
     await vi.waitFor(() => expect(mocks.attach).toHaveBeenCalledTimes(1));
-    expect(mocks.attach).toHaveBeenCalledWith({ handle: held, pointerId: 7, startY: 123, onDrop: onMoveTo });
+    expect(mocks.attach).toHaveBeenCalledWith({ handle: held, pointerId: 7, startY: 123, onDrop: onMoveTo, seen: [] });
   });
 
   it('does not start a drag for the right button', async () => {
@@ -155,6 +166,92 @@ describe('AC-1, AC-5: a press on the handle starts a drag, and its code is fetch
     expect(held.setPointerCapture).not.toHaveBeenCalled();
     await Promise.resolve();
     expect(mocks.attach).not.toHaveBeenCalled();
+  });
+});
+
+describe('AC-5: what the pointer does before the drag\'s code has arrived is not lost', () => {
+  const press = (held: ReturnType<typeof handleOf>) => call(triggerOf(handle()).props, 'onPointerDown', pointerDown(held));
+
+  it('keeps the moves, and the release, that come before the code, and hands them over in order when it arrives', async () => {
+    const held = handleOf();
+    press(held);
+    // The code is a dynamic import: it arrives in a later turn, so all of this is before it.
+    held.fire('pointermove', 130);
+    held.fire('pointermove', 200);
+    held.fire('pointerup', 200);
+    await vi.waitFor(() => expect(mocks.attach).toHaveBeenCalledTimes(1));
+    expect(mocks.attach.mock.calls[0]?.[0]).toMatchObject({
+      pointerId: 7,
+      startY: 123,
+      seen: [
+        { kind: 'move', y: 130 },
+        { kind: 'move', y: 200 },
+        { kind: 'up', y: 200 },
+      ],
+    });
+  });
+
+  it('marks the handle at the release of a drag that ended before the code arrived, so the click that follows opens no menu', async () => {
+    const held = handleOf();
+    const trigger = triggerOf(handle());
+    call(trigger.props, 'onPointerDown', pointerDown(held));
+    held.fire('pointermove', 200);
+    held.fire('pointerup', 200);
+    expect('dragged' in held.dataset).toBe(true);
+    // The click comes at once, before the code: it opens nothing.
+    call(trigger.props, 'onClick', { detail: 1, currentTarget: held });
+    expect(mocks.activate).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(mocks.attach).toHaveBeenCalledTimes(1));
+    // And the mark is gone: the next click opens the menu.
+    call(trigger.props, 'onClick', { detail: 1, currentTarget: held });
+    expect(mocks.activate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not mark a press that only wobbled: it is a click, and the click opens the menu', async () => {
+    const held = handleOf();
+    const trigger = triggerOf(handle());
+    call(trigger.props, 'onPointerDown', pointerDown(held));
+    held.fire('pointermove', 125);
+    held.fire('pointerup', 125);
+    expect('dragged' in held.dataset).toBe(false);
+    call(trigger.props, 'onClick', { detail: 1, currentTarget: held });
+    expect(mocks.activate).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(mocks.attach).toHaveBeenCalledTimes(1));
+  });
+
+  it('listens from the press and stops when the code has arrived, so the drag\'s own listeners are the only ones', async () => {
+    const held = handleOf();
+    press(held);
+    expect([held.listening('pointermove'), held.listening('pointerup'), held.listening('pointercancel')]).toEqual([1, 1, 1]);
+    await vi.waitFor(() => expect(mocks.attach).toHaveBeenCalledTimes(1));
+    expect([held.listening('pointermove'), held.listening('pointerup'), held.listening('pointercancel')]).toEqual([0, 0, 0]);
+  });
+
+  it('stops listening when the code does not arrive, and the click still opens the menu', async () => {
+    mocks.attach.mockImplementationOnce(() => {
+      throw new Error('the code failed');
+    });
+    const held = handleOf();
+    const trigger = triggerOf(handle());
+    call(trigger.props, 'onPointerDown', pointerDown(held));
+    await vi.waitFor(() => expect(mocks.attach).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    expect(held.listening('pointermove')).toBe(0);
+    call(trigger.props, 'onClick', { detail: 1, currentTarget: held });
+    expect(mocks.activate).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts fetching the drag\'s code when the pointer comes to the handle or it takes the focus, so it is usually here at the press', async () => {
+    // The face of the handle, called as a function: the handlers it puts on its button.
+    const onPointerEnter = vi.fn();
+    const onFocus = vi.fn();
+    const face = MoveHandleTrigger({ label: LABEL, onPointerEnter, onFocus });
+    call(face.props as Props, 'onPointerEnter', { type: 'pointerenter' });
+    call(face.props as Props, 'onFocus', { type: 'focus' });
+    // The drag's code is a module that the test replaces; what is pinned is that both handlers start the fetch without breaking the handlers the caller gave.
+    await Promise.resolve();
+    expect(onPointerEnter).toHaveBeenCalledTimes(1);
+    expect(onFocus).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -212,7 +309,7 @@ describe('AC-2: the loaded menu', () => {
     call(triggerOf(hook.render()).props, 'onPointerDown', event);
     expect(event.preventDefault).toHaveBeenCalled();
     await vi.waitFor(() => expect(mocks.attach).toHaveBeenCalledTimes(1));
-    expect(mocks.attach).toHaveBeenCalledWith({ handle: held, pointerId: 7, startY: 123, onDrop: onMoveTo });
+    expect(mocks.attach).toHaveBeenCalledWith({ handle: held, pointerId: 7, startY: 123, onDrop: onMoveTo, seen: [] });
   });
 
   it('opens nothing on the click that ends a drag', () => {

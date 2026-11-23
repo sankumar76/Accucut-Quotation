@@ -6,14 +6,16 @@
  * The first half is pure: where a drop lands, where the red line goes, and how fast the panel scrolls near its edge. The second half is the thin layer that listens to the pointer and draws the line.
  */
 
+import { DRAG_START_PX } from './move-handle-trigger';
+
 /** The top and the bottom of a sibling, with everything under it, in the same coordinates as the pointer (the viewport's). */
 export interface Box {
   readonly top: number;
   readonly bottom: number;
 }
 
-/** How far the pointer must go before a press on the handle is a drag and not a click (it opens the menu). */
-export const DRAG_START_PX = 4;
+/** How far the pointer must go before a press on the handle is a drag and not a click (it opens the menu). Defined with the handle, which needs it before this code has arrived. */
+export { DRAG_START_PX };
 /** How close to the edge of the panel the pointer must be for the panel to scroll, and the most it scrolls in one frame. */
 export const SCROLL_EDGE_PX = 48;
 export const SCROLL_MAX_STEP_PX = 16;
@@ -102,6 +104,30 @@ export function createReorder(host: ReorderHost, from: number, startY: number): 
   };
 }
 
+/** What the pointer did on the handle before this code arrived: kept by the handle (`startDrag`) and replayed here, so a quick drag on a page that has not fetched this code yet is not lost. */
+export interface GestureEvent {
+  readonly kind: 'move' | 'up' | 'cancel';
+  readonly y: number;
+}
+
+/**
+ * Plays what the pointer did before this code arrived into a new drag, in order. If the pointer was already let go (`up`) or abandoned (`cancel`), the drag is over: `index` is the place to drop at, or null when the
+ * row stays (or the gesture was cancelled). Otherwise the drag goes on, with its line where the pointer is now.
+ */
+export function replayGesture(reorder: Reorder, seen: ReadonlyArray<GestureEvent>): { readonly ended: boolean; readonly index: number | null } {
+  for (const event of seen) {
+    if (event.kind === 'move') {
+      reorder.move(event.y);
+    } else if (event.kind === 'up') {
+      return { ended: true, index: reorder.end(event.y) };
+    } else {
+      reorder.cancel();
+      return { ended: true, index: null };
+    }
+  }
+  return { ended: false, index: null };
+}
+
 export interface AttachOptions {
   /** The move handle that was pressed; it holds the pointer until the drag ends. */
   readonly handle: HTMLElement;
@@ -109,6 +135,8 @@ export interface AttachOptions {
   readonly startY: number;
   /** The place the row was dropped at; not called when it did not move. */
   readonly onDrop: (index: number) => void;
+  /** What the pointer did between the press and the arrival of this code (see `GestureEvent`). */
+  readonly seen?: ReadonlyArray<GestureEvent>;
 }
 
 const boxOf = (element: Element): Box => {
@@ -149,7 +177,7 @@ function scrollParentOf(element: HTMLElement): HTMLElement | null {
  * Starts the drag of a row from its handle: the pointer is held by the handle, the red line follows it, the panel scrolls at its edge, and on release `onDrop` gets the new place. A drag marks the handle
  * (`data-dragged`), so the click that follows it opens no menu; the handle clears the mark.
  */
-export function attachReorder({ handle, pointerId, startY, onDrop }: AttachOptions): void {
+export function attachReorder({ handle, pointerId, startY, onDrop, seen = [] }: AttachOptions): void {
   // The row is the `li` that holds the handle; its siblings are the `li` of its own `ul`, and no others (a row never changes parent).
   const row = handle.closest<HTMLElement>('li[data-part-row]');
   const list = row?.parentElement;
@@ -171,6 +199,14 @@ export function attachReorder({ handle, pointerId, startY, onDrop }: AttachOptio
     from,
     startY,
   );
+  // The pointer may have moved, or been let go, while this code was on its way: play that first. A drag that is over needs no listeners. (The handle has marked it already if it was a drag, so the click that followed it opened nothing.)
+  const replayed = replayGesture(reorder, seen);
+  if (replayed.ended) {
+    line.remove();
+    if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+    if (replayed.index !== null) onDrop(replayed.index);
+    return;
+  }
   let frame = 0;
   const tick = (): void => {
     reorder.frame();
