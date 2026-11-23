@@ -75,24 +75,6 @@ export async function expectNothingUnsaved(page: Page): Promise<void> {
 }
 
 /**
- * Has the page finished with what it was sent? The browser's answer reaching Playwright is not the page having handled it: the page reads the body and then moves its state on (what it holds as stored, the
- * revision it sends next), and a choice made in between is compared with the old state. A flag chosen and left again at once is then taken for "no change" and never sent (AQP-1 issue 513). The page already
- * says when it has finished: its warning on a closed tab (STORY-05.08 AC-4, `leave-guard.ts`) is cancelled while a save is in flight or a field shows a value the server does not hold. A synthetic
- * event opens no prompt, so this asks the question the leave guard answers, and nothing else.
- */
-export const hasUnsavedWork = (page: Page): Promise<boolean> =>
-  page.evaluate(() => {
-    const event = new Event('beforeunload', { cancelable: true });
-    window.dispatchEvent(event);
-    return event.defaultPrevented;
-  });
-
-/** Waits until no save is in flight and nothing is unsaved: the next action then meets the state the server's answer left. */
-export async function expectNothingUnsaved(page: Page): Promise<void> {
-  await expect.poll(() => hasUnsavedWork(page), { message: 'the page still holds a save in flight or a value that is not saved' }).toBe(false);
-}
-
-/**
  * A new Engineer who owns a task, signed in without the sign-in screen and the queue (`signInWithoutThePage`): the part-form specs start from the workspace, and the two page loads before it
  * were a quarter of a journey test's 30 s on a loaded runner (AQP-340). The caller goes to the workspace next, as every caller does.
  */
