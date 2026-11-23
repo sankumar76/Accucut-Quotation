@@ -185,11 +185,14 @@ test.describe('AC-1, AC-4, AC-5, AC-8, AC-10: ignore, then restore, with the key
     const dialog = ignoreDialogOf(page, code);
     await expect(dialog).toBeVisible();
     await expect(keepOpenOf(dialog)).toBeFocused();
-    await page.keyboard.press('Tab');
+    // The field comes before the two buttons in the dialog, so Shift+Tab from the safe choice reaches it.
+    await page.keyboard.press('Shift+Tab');
     await expect(remarksOf(dialog)).toBeFocused();
     await page.keyboard.type('Not taken forward.');
     await page.keyboard.press('Shift+Enter');
     await page.keyboard.type('The customer chose another supplier.');
+    await page.keyboard.press('Tab');
+    await expect(keepOpenOf(dialog)).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(ignoreSubmitOf(dialog)).toBeFocused();
     const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${owner.id}/ignore`));
