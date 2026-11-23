@@ -119,7 +119,7 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
       await expect(length).toHaveAttribute('aria-invalid', 'true');
     }
 
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'J');
     await length.fill('12.5');
     await length.blur();
     expect(await saved).toBe(200);
@@ -132,7 +132,7 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
     await waitForForm(page);
     await expect(control(page, 'J')).toHaveValue('12.50');
 
-    const cleared = nextSave(page);
+    const cleared = nextSave(page, 'J');
     await control(page, 'J').fill('');
     await control(page, 'J').blur();
     expect(await cleared).toBe(200);
@@ -143,13 +143,13 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
 
   test('AC-4, AC-7: text is saved by leaving the field and a value equal after normalisation sends nothing', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'B');
     await control(page, 'B').fill('  FR-1  ');
     await control(page, 'B').blur();
     expect(await saved).toBe(200);
     await expect(control(page, 'B')).toHaveValue('FR-1');
 
-    const savedWidth = nextSave(page);
+    const savedWidth = nextSave(page, 'K');
     await control(page, 'K').fill('1.5');
     await control(page, 'K').blur();
     expect(await savedWidth).toBe(200);
@@ -172,7 +172,7 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
     await openForm(page, testInfo);
     const select = control(page, 'E');
     await expect(select.locator('option', { hasText: ALPHA_MATERIAL.materialInDrawing })).toHaveCount(1);
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'E');
     await select.selectOption({ label: ALPHA_MATERIAL.materialInDrawing });
     expect(await saved).toBe(200);
     await expect(control(page, 'F')).toHaveValue(ALPHA_MATERIAL.materialConsidered);
@@ -187,7 +187,7 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
 
   test('SQR-01 (b): typing into a part moves the part\'s revision, and the tree follows: the part can still be deleted at once, with no "changed by someone else" notice', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'L');
     await control(page, 'L').fill('3');
     await control(page, 'L').blur();
     expect(await saved).toBe(200);
@@ -261,7 +261,7 @@ test.describe('AC-9: the screen', () => {
 
   test('AC-9 (with a value saved): the value is kept as 7.00, there is no sideways scroll and axe finds nothing', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'J');
     await control(page, 'J').fill('7');
     await control(page, 'J').blur();
     expect(await saved).toBe(200);

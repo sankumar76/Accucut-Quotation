@@ -86,7 +86,7 @@ async function expectStored(page: Page, id: string, expected: Record<string, str
 
 /** Leaves Fasteners with the text and waits for the save that follows. */
 async function saveFasteners(page: Page, text: string): Promise<void> {
-  const saved = nextSave(page);
+  const saved = nextSave(page, 'S');
   await control(page, 'S').fill(text);
   await control(page, 'S').blur();
   expect(await saved).toBe(200);
@@ -134,11 +134,11 @@ test.describe('AC-2, AC-3: any other word shows them, with what was typed earlie
     await expect(control(page, 'U')).toBeVisible();
     await expect(control(page, 'T')).toHaveValue('');
     await expect(region(page)).toContainText(COUNT_WITH_QTY_AND_COST_EMPTY);
-    const savedQty = nextSave(page);
+    const savedQty = nextSave(page, 'T');
     await control(page, 'T').fill(TYPED_QTY);
     await control(page, 'T').blur();
     expect(await savedQty).toBe(200);
-    const savedCost = nextSave(page);
+    const savedCost = nextSave(page, 'U');
     await control(page, 'U').fill(TYPED_COST);
     await control(page, 'U').blur();
     expect(await savedCost).toBe(200);
@@ -159,7 +159,7 @@ test.describe('AC-2, AC-3: any other word shows them, with what was typed earlie
       ['T', TYPED_QTY],
       ['U', TYPED_COST],
     ] as const) {
-      const saved = nextSave(page);
+      const saved = nextSave(page, letter);
       await control(page, letter).fill(typed);
       await control(page, letter).blur();
       expect(await saved).toBe(200);
@@ -192,7 +192,7 @@ test.describe('AC-2, AC-3: any other word shows them, with what was typed earlie
     test.slow();
     const owner = await openForm(page, testInfo);
     await saveFasteners(page, WITH_FASTENERS);
-    const savedQty = nextSave(page);
+    const savedQty = nextSave(page, 'T');
     await control(page, 'T').fill(TYPED_QTY);
     await control(page, 'T').blur();
     expect(await savedQty).toBe(200);
@@ -218,7 +218,7 @@ test.describe('AC-6: the screen at 360, 768 and 1366 px', () => {
     await expect(control(page, 'S')).toBeFocused();
 
     await control(page, 'S').fill(WITH_FASTENERS);
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'S');
     await page.keyboard.press('Enter');
     expect(await saved).toBe(200);
     await expect(control(page, 'T')).toBeFocused();
@@ -228,7 +228,7 @@ test.describe('AC-6: the screen at 360, 768 and 1366 px', () => {
     await expect(control(page, 'V')).toBeFocused();
 
     await control(page, 'S').fill(NONE);
-    const savedNone = nextSave(page);
+    const savedNone = nextSave(page, 'S');
     await page.keyboard.press('Enter');
     expect(await savedNone).toBe(200);
     await expect(control(page, 'V')).toBeFocused();
