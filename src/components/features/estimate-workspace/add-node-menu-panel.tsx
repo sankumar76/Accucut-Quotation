@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 import { Icon } from '@/components/shared/icon';
 import { NODE_KIND_ICON } from '@/components/shared/node-kind-icon';
@@ -28,22 +28,26 @@ function focusFirstItem(event: Event): void {
  * place. It opens at once (`defaultOpen`), offers exactly the kinds it is given (the ones `ALLOWED_CHILDREN` allows under the row) and then behaves as Radix menus do: arrow keys move, Escape closes and returns focus
  * to the trigger. Not modal on purpose: a modal menu hides the rest of the page from assistive technology while its controls stay focusable (axe `aria-hidden-focus`). It is placed under its row.
  */
-export function AddNodeMenuPanel({ label, nodeKinds, onChoose, keyboard }: AddNodeMenuPanelProps) {
+export function AddNodeMenuPanel({ label, nodeKinds, onChoose, keyboard, unavailable, describedBy }: AddNodeMenuPanelProps) {
   // The override is for the open that mounted the menu only; from then on Radix sees every key itself.
   const openedByKeyboard = useRef(keyboard);
+  const [open, setOpen] = useState(true);
   const focusOnOpen = (event: Event): void => {
     if (!openedByKeyboard.current) return;
     openedByKeyboard.current = false;
     focusFirstItem(event);
   };
   return (
-    <DropdownMenu modal={false} defaultOpen>
+    // Open at first, as it was asked for; controlled, so that while a change is on its way (AQP-343) a press, Enter, Space or an arrow on the trigger cannot open it again. Radix reads only `disabled`, which would also take the focus away.
+    <DropdownMenu modal={false} open={open} onOpenChange={(next) => {
+        if (!next || unavailable !== true) setOpen(next);
+      }}>
       <DropdownMenuTrigger asChild>
-        <AddNodeTrigger label={label} />
+        <AddNodeTrigger label={label} {...(unavailable === true ? { unavailable, ...(describedBy === undefined ? {} : { 'aria-describedby': describedBy }) } : {})} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" {...{ onOpenAutoFocus: focusOnOpen }}>
         {nodeKinds.map((nodeKind) => (
-          <DropdownMenuItem key={nodeKind} onSelect={() => onChoose(nodeKind)}>
+          <DropdownMenuItem key={nodeKind} disabled={unavailable === true} onSelect={() => onChoose(nodeKind)}>
             <Icon icon={NODE_KIND_ICON[nodeKind]} size="large" />
             {NODE_KIND_NAMES[nodeKind]}
           </DropdownMenuItem>
