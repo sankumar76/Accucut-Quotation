@@ -5,9 +5,10 @@
  */
 
 import { assertNever } from '@/lib/assert-never';
+import type { EstimateStatus } from '@/lib/estimate/state-machine';
 
 /** The status the estimate is in when the dialog opens: what the dialog promises depends on it (AC-10). */
-export type CancelStatus = 'APPROVED' | 'DRAFT' | 'PREPARED';
+export type CancelStatus = EstimateStatus;
 
 export const cancelTitle = (code: string): string => `Cancel the approval of ${code}?`;
 
@@ -20,6 +21,8 @@ const PRICE_STAYS = 'The approved price stays on screen, marked "Approval cancel
 export function cancelIntro(status: CancelStatus, engineerName: string): string {
   switch (status) {
     case 'APPROVED':
+    // A quoted estimate is an approved one whose quote has gone out; Cancel takes it back to Draft the same way (A-CR01-1).
+    case 'QUOTED':
       return `The estimate goes back to Draft and the task returns to ${engineerName}'s Open queue, as it does when it is unlocked. ${PRICE_STAYS} A new approval, after a Recalculate, brings a price back.`;
     case 'DRAFT':
       return `The estimate stays a Draft and its task does not change. ${PRICE_STAYS} A new approval brings a price back.`;

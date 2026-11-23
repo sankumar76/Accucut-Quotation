@@ -10,7 +10,7 @@ import {
 } from '../../lib/estimate/approval-words';
 import { assertNever } from '../../lib/assert-never';
 import { figureState } from '../../lib/estimate/figure-state';
-import { decideTransition, TRANSITION_REFUSALS, type EstimateStatus } from '../../lib/estimate/state-machine';
+import { decideTransition, stateOf, TRANSITION_REFUSALS, type EstimateStatus } from '../../lib/estimate/state-machine';
 import { toTwoPlaces } from '../../lib/money';
 import type { ApprovalWrites } from '../repositories/approval-repository';
 import type { CalculationApprovalReads, FigureBasis } from '../repositories/calculation-repository';
@@ -104,9 +104,14 @@ export function assertMayApprove(viewer: Pick<EstimateViewer, 'role'>): void {
  * The guard, with no storage: the status, then the state of the figures, then `calculationId` (the role first, again). Call it under the estimate's lock, with the basis read in the same transaction. It
  * returns when an approval may go ahead and throws the 409 that names the missing step otherwise.
  */
-export function assertApprovable(viewer: Pick<EstimateViewer, 'role'>, estimate: { readonly status: EstimateStatus }, basis: FigureBasis, input: { readonly calculationId: string }): void {
+export function assertApprovable(
+  viewer: Pick<EstimateViewer, 'role'>,
+  estimate: { readonly status: EstimateStatus; readonly ignoredAt: Date | null },
+  basis: FigureBasis,
+  input: { readonly calculationId: string },
+): void {
   assertMayApprove(viewer);
-  const decision = decideTransition(estimate.status, 'APPROVE', viewer.role);
+  const decision = decideTransition(stateOf(estimate), 'APPROVE', viewer.role);
   if (!decision.allowed) {
     if (decision.kind === 'ROLE') throw new ForbiddenError();
     const refusal = TRANSITION_REFUSALS[decision.reason];

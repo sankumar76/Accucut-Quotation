@@ -33,6 +33,7 @@ import {
   send,
   setActive,
   setAlerts,
+  setIgnored,
   setStatus,
 } from '../../support/overdue-world';
 
@@ -136,6 +137,18 @@ describe('AC-1, AC-2, AC-4: one row and one message per Engineer with an open ov
     // The task that was approved after it went overdue is no longer open.
     await setStatus(justLate.id, 'APPROVED');
     expect((await deps.store.findOverdue(AT_ELEVEN, ISO_DATE)).map((task) => task.code)).toEqual([tenDays.code]);
+  });
+
+  it('AQP-399 AC-6: a QUOTED task and an ignored task are never overdue, however late: only an open task that is not ignored is listed, and Restore puts it back', async () => {
+    const open = await seed({ deadline: hoursBefore(5) });
+    await seed({ deadline: hoursBefore(6), status: 'QUOTED' });
+    await seed({ deadline: hoursBefore(7), status: 'APPROVED' });
+    const ignoredDraft = await seed({ deadline: hoursBefore(8), ignored: true });
+    const ignoredPrepared = await seed({ deadline: hoursBefore(9), status: 'PREPARED', ignored: true });
+    expect((await deps.store.findOverdue(AT_ELEVEN, ISO_DATE)).map((task) => task.code)).toEqual([open.code]);
+    await setIgnored(ignoredDraft.id, false);
+    await setIgnored(ignoredPrepared.id, false);
+    expect((await deps.store.findOverdue(AT_ELEVEN, ISO_DATE)).map((task) => task.code)).toEqual([ignoredPrepared.code, ignoredDraft.code, open.code]);
   });
 
   it('the two tasks of one Engineer with the same deadline are listed by code', async () => {

@@ -1,4 +1,5 @@
 import { ACCEPT_JSON, isRecord, sendJson, type Fetch, type Outcome } from '../api-client';
+import { ESTIMATE_STATUSES } from '../estimate/state-machine';
 
 import { isQueueTab, type QueueCounts, type QueueTab, type TaskEstimateStatus } from './queue';
 import { NO_QUEUE_FILTERS, queueQueryString, type QueueFilters } from './queue-filters';
@@ -33,7 +34,7 @@ export interface QueuePageData {
 }
 
 const TASKS_PATH = '/api/v1/tasks';
-const STATUSES: ReadonlyArray<TaskEstimateStatus> = ['DRAFT', 'PREPARED', 'APPROVED'];
+const STATUSES: ReadonlyArray<TaskEstimateStatus> = ESTIMATE_STATUSES;
 
 function isCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0;

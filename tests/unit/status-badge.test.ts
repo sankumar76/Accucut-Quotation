@@ -68,6 +68,23 @@ describe('AC-1: a badge with the word and an icon', () => {
     expect(html).not.toContain('Closed');
   });
 
+  it('AQP-399: QUOTED is one badge, "Quoted", with an icon; the header keeps the word and does not say "Approved and locked"', () => {
+    for (const variant of ['list', 'header'] as const) {
+      const html = badge('QUOTED', variant);
+      expect(textOf(html).trim()).toBe('Quoted');
+      expect(occurrences(html, '<svg')).toBe(1);
+      expect(html).toContain('data-status="QUOTED"');
+      expect(html).not.toContain('Closed');
+    }
+  });
+
+  it('AQP-399: what a screen shows for an ignored estimate (`displayStatusOf`) is one badge, "Ignored", with an icon', () => {
+    const html = renderToStaticMarkup(createElement(StatusBadge, { status: 'IGNORED' }));
+    expect(textOf(html).trim()).toBe('Ignored');
+    expect(occurrences(html, '<svg')).toBe(1);
+    expect(html).toContain('data-status="IGNORED"');
+  });
+
   it('the task header says "Approved and locked" for an approved task and the same word as a list for the other two', () => {
     expect(textOf(badge('APPROVED', 'header')).trim()).toBe('Approved and locked');
     expect(textOf(badge('DRAFT', 'header')).trim()).toBe('Draft');
