@@ -29,6 +29,7 @@ const summary = (overrides: Partial<ExportSummaryView> = {}): ExportSummaryView 
   state: 'current',
   figures: null,
   warning: null,
+  download: { kind: 'none' },
   ...overrides,
 });
 

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { EstimateViewer } from '@/server/services/estimate-service';
 import { createConfigRepository } from '@/server/repositories/config-repository';
 import { buildWorkbook } from '@/server/export/build-workbook';
+import { createDownloadRepository } from '@/server/repositories/download-repository';
 import { createExportRepository } from '@/server/repositories/export-repository';
 import { createImageRepository } from '@/server/repositories/image-repository';
 import { createConfigVersionCache, getCurrentVersion, getVersionById } from '@/server/services/config-service';
@@ -134,6 +135,7 @@ function exporterWithHooks(hooks: { afterBasis?: () => Promise<void>; seenByLate
   const cache = createConfigVersionCache();
   return createExportService({
     header: createExportRepository(db.prisma),
+    downloads: createDownloadRepository(db.prisma),
     nodes: db.nodes,
     calculations: {
       findFigureBasis: async (estimateId, tx) => {

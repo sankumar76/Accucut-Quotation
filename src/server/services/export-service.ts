@@ -1,5 +1,6 @@
 import { assertNever } from '../../lib/assert-never';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../lib/errors';
+import { downloadMarkerOf } from '../../lib/export/download-marker';
 import { exportFileName } from '../../lib/export/file-name';
 import { figureState, readFiguresWhenCurrent, type FigureState } from '../../lib/estimate/figure-state';
 import { NOT_CALCULATED_REFUSAL, OUT_OF_DATE_REFUSAL, refusalMessage, type RefusalWords } from '../../lib/export/refusal-words';
@@ -15,12 +16,14 @@ import { approvedPriceOf, footerOf, withProductCells, type ProductFigures } from
 import { exportRowsOf } from '../export/rows';
 import { summaryFiguresOf, type SummaryApproval } from '../export/summary-figures';
 import type { ExportBuilder } from '../export/thread-runner';
-import type { ApprovalRepository } from '../repositories/approval-repository';
+import type { ApprovalRecord, ApprovalRepository } from '../repositories/approval-repository';
 import type { CalculationRepository, ExportFigures, FigureBasis } from '../repositories/calculation-repository';
+import type { DownloadRepository } from '../repositories/download-repository';
 import type { EstimateNodeRepository } from '../repositories/estimate-node-repository';
 import type { ExportRepository } from '../repositories/export-repository';
 import type { ImageRepository } from '../repositories/image-repository';
 import type { Transaction, TransactionOptions, TransactionRunner } from '../repositories/transaction';
+import { markerViewOf } from '../views/schemas/download-marker';
 import { exportFileSchema, exportSummarySchema, type ExportFileView, type ExportSummaryView } from '../views/schemas/export';
 
 import type { ConfigVersion } from './config-service';
@@ -52,6 +55,11 @@ import type { EstimateViewer } from './estimate-service';
  * file made of two moments, and the state the file is refused or allowed by is the state of the figures it holds. The transaction ends when the reads end: the workbook is built afterwards, from what was read, in
  * the thread (a build takes seconds, up to 120 s, and a transaction may not: ADR-012, the 10 s limit of `transaction.ts`). Nothing else decides: the one refusal is `refusalOf`, and the state is never taken from the summary.
  *
+ * **The download log (STORY-CR01.7E, AQP-402; CR-01 item 7c; architecture section 4.12 d)**: every file this service hands over is recorded in `estimate_downloads` (the estimate, the calculation it was made from, the approval whose
+ * price it carries in BO2, the person), **in a short write transaction after the file was built and before its bytes are returned**. If the record cannot be written the answer is the fault and no file is sent, so a file is never given
+ * without its record; a download that was refused (a 403, a 404, a 409) or whose build failed records nothing. "Recorded" means the server handed the file over: a browser that drops the answer still counts, because the server cannot
+ * know. The summary carries the marker of the log (`download`, for SCR-10), read in the same snapshot as the figures; it is for the Lead and the Admin alone, as the whole service is.
+ *
  * **Bounded** (review QS-01, GitHub issue 440): a place is taken (`ExportBuilder.admit`, counted from the number of rows, before any picture is read) and given back in a `finally`; the pictures are then
  * read 50 at a time (`image-batches.ts`) and the model is built and sent to the thread. The file is built from the plain `ExportModel` by the place's `build`, which the composition makes a
  * `worker_threads` thread (`thread-runner.ts`) and a test makes the build function itself.
@@ -74,6 +82,8 @@ export interface ExportDependencies {
   readonly transactions: TransactionRunner;
   /** BO2: the estimate's latest approval, through the one function every reader of BO uses (it answers none once the price was removed). Not a figure of the calculation: never through the figure state. */
   readonly approvals: Pick<ApprovalRepository, 'findLatestApproval'>;
+  /** The download log: one record for each file handed over (`getFile`), and the facts the summary's marker is made of. */
+  readonly downloads: Pick<DownloadRepository, 'insertDownload' | 'findMarkerFacts'>;
   /** The pictures of the estimate, by batch. */
   readonly images: Pick<ImageRepository, 'readMany' | 'findMimes'>;
   readonly configuration: {
@@ -142,7 +152,13 @@ function productFiguresOf(figures: ExportFigures, approval: SummaryApproval | nu
   return { ...figures.productValues, approvedPrice: approvedPriceOf(approval) };
 }
 
-export function createExportService({ header, nodes, calculations, approvals, images, configuration, builder, clock, transactions }: ExportDependencies): ExportService {
+/**
+ * The approval whose price the file carries in BO2, for the log: the latest approval while it stands, and `null` when there is none or it was cancelled (its price left the file; `approvedPriceOf`). The marker compares
+ * this with the approval that stands later (`download-repository.ts`), so "the same approval" means the same price in the same cell. An unlocked approval keeps its price in the file (D-29), so it is recorded.
+ */
+const approvalInFileOf = (approval: ApprovalRecord | null): string | null => (approval === null || approvedPriceOf(approval) === null ? null : approval.id);
+
+export function createExportService({ header, nodes, calculations, approvals, downloads, images, configuration, builder, clock, transactions }: ExportDependencies): ExportService {
   async function nameOf(estimateId: string): Promise<string> {
     const found = await header.findHeader(estimateId);
     if (found === null) throw new NotFoundError();
@@ -163,7 +179,7 @@ export function createExportService({ header, nodes, calculations, approvals, im
       assertMayExport(viewer);
       const fileName = await nameOf(estimateId);
       // The state, the parts, the figures and BO2 from one snapshot (AC-4), so the page never says "current" over rows of another moment.
-      const { state, calculation, records, figures, approval } = await transactions.run(async (tx) => {
+      const { state, calculation, records, figures, approval, marker } = await transactions.run(async (tx) => {
         const basis = await calculations.findFigureBasis(estimateId, tx);
         if (basis === null) throw new NotFoundError();
         const found = basis.calculation;
@@ -174,9 +190,12 @@ export function createExportService({ header, nodes, calculations, approvals, im
           records: await nodes.listNodes(estimateId, tx),
           figures: found === null ? null : await figuresOf(current, found.id, tx),
           approval: current === 'current' ? await approvals.findLatestApproval(estimateId, tx) : null,
+          // The marker of the download log, from the same snapshot (STORY-CR01.7E): it holds no figure, so it is read in every state.
+          facts: await downloads.findMarkerFacts(estimateId, tx),
         };
+        if (read.facts === null) throw new NotFoundError();
         if (current === 'current' && read.figures === null) throw new Error('The calculation linked to the estimate could not be read.');
-        return read;
+        return { ...read, marker: downloadMarkerOf(read.facts) };
       }, SNAPSHOT);
       // While the figures are current the columns and the cells are the version the calculation was made with, as the file's are; otherwise the version in force now (no figure is shown). A version never changes: it is read outside the snapshot.
       const version = await (calculation !== null && state === 'current' ? configuration.byId(calculation.configVersionId) : configuration.current());
@@ -200,6 +219,7 @@ export function createExportService({ header, nodes, calculations, approvals, im
         state,
         figures: shown === null ? null : summaryFiguresOf({ document, ...shown, approval }),
         warning: figures === null || calculation === null ? null : warningOf(figures, calculation.createdAt),
+        download: markerViewOf(marker),
       });
     },
 
@@ -225,6 +245,7 @@ export function createExportService({ header, nodes, calculations, approvals, im
 
       // The place is taken from the number of rows alone, before any picture is read (issue 440), and given back whatever happens next.
       const place = builder.admit(figures.rows.length);
+      let bytes: Uint8Array<ArrayBuffer>;
       try {
         const pictures = await readPictures((ids) => images.readMany(estimateId, ids), figures.rows.flatMap((row) => (row.imageId === null ? [] : [row.imageId])));
         const imageField = version.document.fields.find((field) => field.kind === 'input' && field.dataType === 'image');
@@ -236,11 +257,14 @@ export function createExportService({ header, nodes, calculations, approvals, im
           footer,
           ...(pictures.pictures.length > 0 && imageField !== undefined ? { pictures: pictures.pictures, pictureColumn: fieldLetter(imageField) } : {}),
         };
-        const bytes = await place.build(model);
-        return exportFileSchema.parse({ mime: XLSX_MIME, bytes, fileName });
+        bytes = await place.build(model);
       } finally {
         place.release();
       }
+      const file = exportFileSchema.parse({ mime: XLSX_MIME, bytes, fileName });
+      // The record, in a short write transaction of its own, after the build and before the bytes leave (STORY-CR01.7E AC-2): if it cannot be written the fault goes out and no file does.
+      await transactions.run((tx) => downloads.insertDownload({ estimateId, calculationId: calculation.id, approvalId: approvalInFileOf(approval), downloadedById: viewer.id }, tx));
+      return file;
     },
   };
 }

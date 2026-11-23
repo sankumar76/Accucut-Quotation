@@ -127,6 +127,34 @@ describe('AC-2, AC-4: the file', () => {
     }
   });
 
+  it('STORY-CR01.7E AC-2: the file is recorded in the same request that serves it, once, for the person who downloaded', async () => {
+    plantCalculation();
+    const insert = vi.spyOn(harness.exportDownloads, 'insertDownload');
+    const response = await getFile(estimate().id);
+    expect(response.status).toBe(200);
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(insert.mock.calls[0]?.[0]).toMatchObject({ estimateId: estimate().id, approvalId: null });
+  });
+
+  it('STORY-CR01.7E AC-2 (DL-302 condition a): a log write that fails fails the download: 500 with the fixed words of every fault, no file and no attachment', async () => {
+    plantCalculation();
+    vi.spyOn(harness.exportDownloads, 'insertDownload').mockRejectedValueOnce(new Error('the log could not be written'));
+    const response = await getFile(estimate().id);
+    expect(response.status).toBe(500);
+    expect(response.headers.get('Content-Disposition')).toBeNull();
+    expect(response.headers.get('Content-Type')).toContain('application/problem+json');
+    const body = await response.text();
+    expect(body).not.toMatch(/^PK/);
+    expect(body).not.toContain('the log could not be written');
+    expect(record.parse(JSON.parse(body))).toMatchObject({ status: 500, title: 'Something went wrong on our side.' });
+  });
+
+  it('STORY-CR01.7E AC-3: a refused download (never calculated) writes no row', async () => {
+    const insert = vi.spyOn(harness.exportDownloads, 'insertDownload');
+    expect((await getFile(estimate().id)).status).toBe(409);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
   it('is a read: each route exports GET and no other method', () => {
     for (const route of [fileRoute, summaryRoute]) expect(Object.keys(route).filter((name) => /^(GET|HEAD|POST|PUT|PATCH|DELETE)$/.test(name))).toEqual(['GET']);
   });
@@ -199,6 +227,8 @@ describe('AC-6: the summary', () => {
       figures: null,
       // Nor a warning (STORY-07.06 AC-4): it is carried only while the calculation is current.
       warning: null,
+      // Nothing was downloaded: the marker of the log says so (STORY-CR01.7E).
+      download: { kind: 'none' },
     });
   });
 

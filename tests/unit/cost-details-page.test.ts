@@ -29,6 +29,7 @@ vi.mock('@/server/composition', async () => {
     getUserRepository: () => shared.users,
     getEstimateService: () => shared.estimateService,
     getEstimateReviewService: () => shared.estimateReviewService,
+    getDownloadMarkerService: () => shared.downloadMarkerService,
     getCostDetailsService: () => shared.costDetailsService,
   };
 });
