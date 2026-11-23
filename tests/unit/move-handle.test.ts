@@ -223,7 +223,9 @@ describe('AC-5: what the pointer does before the drag\'s code has arrived is not
     expect('dragged' in held.dataset).toBe(false);
     call(trigger.props, 'onClick', { detail: 1, currentTarget: held });
     expect(mocks.activate).toHaveBeenCalledTimes(1);
-    await vi.waitFor(() => expect(mocks.attach).toHaveBeenCalledTimes(2));
+    // Both dynamic imports of the drag's code are settled before anything is read (on a loaded machine the second can take longer than a default wait).
+    await vi.dynamicImportSettled();
+    await vi.waitFor(() => expect(mocks.attach).toHaveBeenCalledTimes(2), { timeout: 5000 });
     // The first gesture was handed over whole, and the second as a click.
     expect(mocks.attach.mock.calls[0]?.[0]).toMatchObject({ seen: [{ kind: 'move', y: 200 }, { kind: 'up', y: 200 }] });
     expect(mocks.attach.mock.calls[1]?.[0]).toMatchObject({ seen: [{ kind: 'up', y: 123 }] });

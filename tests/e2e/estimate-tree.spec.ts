@@ -659,6 +659,52 @@ test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
     await expect(handleOf(page, '1.1')).toBeFocused();
   });
 
+  test('AQP-406 AC-1: a drag to the place after the last sibling moves the row down: 1.1 below 1.2 swaps them, and the moved row keeps its identity', async ({ page }, testInfo) => {
+    test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop; the phone has the touch drag');
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.1');
+    const moving = await idOf(page, '1.1');
+    const handle = defined(await handleOf(page, '1.1').boundingBox());
+    const below = defined(await part(page, '1.2').boundingBox());
+    const x = handle.x + handle.width / 2;
+    await page.mouse.move(x, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, below.y + below.height - 4, { steps: 8 });
+    // The line is at the bottom of 1.2, where the row would land. Both are read in one go in the page: near the edge of the panel the drag scrolls it, and the line moves with the rows.
+    const gap = await page.evaluate(() => {
+      const line = document.querySelector('[data-drop-line]')?.getBoundingClientRect();
+      const link = [...document.querySelectorAll('nav[aria-label="Parts tree"] a[data-part-id]')].find((candidate) => candidate.querySelector('[data-sl-no]')?.textContent === '1.2')?.getBoundingClientRect();
+      return line === undefined || link === undefined ? null : Math.abs(line.top + line.height / 2 - link.bottom);
+    });
+    expect(gap).not.toBeNull();
+    expect(gap ?? 999).toBeLessThan(12);
+    await page.mouse.up();
+    await expect(page.getByText('Part renumbered to 1.2')).toHaveCount(1);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    expect(await idOf(page, '1.2')).toBe(moving);
+    await expect(handleOf(page, '1.2')).toBeFocused();
+  });
+
+  test('AQP-406 AC-1: Escape during a drag abandons it: the line goes, no request is sent, nothing moves, and the click that ends the press opens no menu', async ({ page }, testInfo) => {
+    test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop');
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.2');
+    const moves = watchMoves(page);
+    const handle = defined(await handleOf(page, '1.2').boundingBox());
+    const above = defined(await part(page, '1.1').boundingBox());
+    const x = handle.x + handle.width / 2;
+    await page.mouse.move(x, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, above.y + 4, { steps: 8 });
+    await expect(page.locator('[data-drop-line]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-drop-line]')).toHaveCount(0);
+    await page.mouse.up();
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toHaveCount(0);
+    expect(moves.calls).toHaveLength(0);
+    expect(await slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+  });
+
   test('AQP-406 AC-1: a drag that ends where the row is, or a click with a few pixels of wobble, sends nothing and opens the menu only for the click', async ({ page }, testInfo) => {
     test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop');
     await openTreeWithTwoSubParts(page, testInfo);
