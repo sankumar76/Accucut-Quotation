@@ -1,6 +1,7 @@
 import { assertNever } from '../../lib/assert-never';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../lib/errors';
-import { stateOf, TRANSITION_REFUSALS } from '../../lib/estimate/state-machine';
+import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError } from '../../lib/errors';
+import { checkIgnoreRemarks } from '../../lib/estimate/ignore-words';
+import { decideTransition, stateOf, TRANSITION_REFUSALS, type EstimateStatus } from '../../lib/estimate/state-machine';
 import type { EstimateQuoting } from '../repositories/estimate-repository';
 import type { TransactionRunner } from '../repositories/transaction';
 
@@ -8,8 +9,9 @@ import type { AuditContext, AuditService } from './audit-service';
 import type { EstimateService, EstimateViewer } from './estimate-service';
 
 /**
- * The status actions of an estimate that no figure depends on (CR-01 item 7C, AQP-400; FR-110, FR-065; BR-066, BR-069; architecture section 4.12 a and c; ADR-019). Today one: **Mark as quoted**, the Lead's or the
- * Admin's mark, once the quote has gone to the customer, that takes an APPROVED estimate to QUOTED, the last status. Ignore and Restore (story 7D) are added to this service.
+ * The status actions of an estimate that no figure depends on (CR-01 items 7C and 7D, AQP-400 and AQP-401; FR-110, FR-065, FR-109; BR-066, BR-067, BR-069; architecture section 4.12 a and c; ADR-019). Three: **Mark as
+ * quoted**, the Lead's or the Admin's mark, once the quote has gone to the customer, that takes an APPROVED estimate to QUOTED, the last status; **Ignore**, which sets the layer over the status with the Lead's remarks
+ * and leaves the status as it is; and **Restore**, which clears the layer. An ignored estimate is read-only until it is restored (A-CR01-8, confirmed): every other route refuses it by its own check.
  *
  * **The write** is one transaction under the estimate's row lock (`FOR UPDATE`): the estimate is locked and read (404 when there is none), the Ignored layer is refused here by name (`ESTIMATE_IGNORED`: the state machine
  * does not reach every path, and an ignored Draft or Prepared estimate must say "ignored" and not "not approved", AQP-401 QLT-B2), the state machine decides `MARK_QUOTED` through the estimate service's `transition`
@@ -44,6 +46,14 @@ export interface EstimateStatusService {
    * Passing all of them it writes the status, the marker and the audit entry together, or none.
    */
   markQuoted(viewer: EstimateViewer, estimateId: string, request: MarkQuotedRequest): Promise<MarkQuotedResult>;
+  /**
+   * Sets the Ignored layer over a DRAFT, PREPARED or APPROVED estimate, with the Lead's remarks (AQP-401 AC-1, AC-2, AC-5). Throws, in this order: `ForbiddenError` (an Engineer, before anything is read),
+   * `FieldValidationError` under `remarks` (empty, over 500 code points, a hidden character: the shared rule), `NotFoundError` (no such estimate), `ConflictError` with the state machine's code
+   * (`ESTIMATE_QUOTED_IS_FINAL`, `ESTIMATE_ALREADY_IGNORED`). Every refusal writes nothing. Passing all of them it writes the three columns and the audit entry together, or none.
+   */
+  ignore(viewer: EstimateViewer, estimateId: string, request: IgnoreRequest): Promise<IgnoreResult>;
+  /** Clears the layer (AQP-401 AC-4, AC-5): 403 for an Engineer before anything is read, 404, 409 `ESTIMATE_NOT_IGNORED`. The status comes back as it was. One audit entry in the same transaction. */
+  restore(viewer: EstimateViewer, estimateId: string, request: RestoreRequest): Promise<RestoreResult>;
 }
 
 export interface EstimateStatusDependencies {
@@ -51,6 +61,28 @@ export interface EstimateStatusDependencies {
   readonly transactions: TransactionRunner;
   /** What the write needs of the rest of the system: the state machine's move (`transition`, in the caller's transaction) and the audit trail. */
   readonly workflow: { readonly transition: EstimateService['transition']; readonly audit: AuditService };
+}
+
+/** What `POST /api/v1/estimates/{id}/ignore` carries once the route has built it: the remarks as typed (judged here, by `checkIgnoreRemarks`) and who ignored on which request, for the audit entry. */
+export interface IgnoreRequest {
+  readonly remarks: string;
+  readonly audit: AuditContext;
+}
+
+/** What Restore carries: who restored and on which request. **There is no body and no remarks of its own** (the product-manager, FR-109): the Ignore remarks stay on record in the audit entry. */
+export interface RestoreRequest {
+  readonly audit: AuditContext;
+}
+
+/** What Ignore answers (NFR-002): the status underneath, which is unchanged, and the layer just written as UTC text, a name and the remarks. No figure, no master value, no ID. */
+export interface IgnoreResult {
+  readonly status: Exclude<EstimateStatus, 'QUOTED'>;
+  readonly ignored: { readonly at: string; readonly byName: string; readonly remarks: string };
+}
+
+/** What Restore answers: the status the estimate has again, which is the one it had when it was ignored. */
+export interface RestoreResult {
+  readonly status: Exclude<EstimateStatus, 'QUOTED'>;
 }
 
 /** The role check, first and alone: it reads nothing, so a role that may never mark learns nothing about any estimate (CR-33, NFR-002). Closed by `assertNever`, so a role added one day is refused until decided. */
@@ -64,6 +96,12 @@ export function assertMayMarkQuoted(viewer: Pick<EstimateViewer, 'role'>): void 
     default:
       return assertNever(viewer.role, 'role');
   }
+}
+
+/** The status of an estimate that may be ignored: the machine refuses QUOTED before this is asked, and a status that is not one of the three is a fault, not a guess. */
+function ignorableStatus(status: EstimateStatus): Exclude<EstimateStatus, 'QUOTED'> {
+  if (status === 'QUOTED') throw new Error('A quoted estimate cannot be ignored.');
+  return status;
 }
 
 export function createEstimateStatusService({ estimates, transactions, workflow }: EstimateStatusDependencies): EstimateStatusService {
@@ -91,6 +129,66 @@ export function createEstimateStatusService({ estimates, transactions, workflow 
           after: { status: moved.to },
         });
         return { status: 'QUOTED', quoted: { at: marker.at.toISOString(), byName: marker.byName } };
+      });
+    },
+
+    async ignore(viewer, estimateId, request) {
+      assertMayMarkQuoted(viewer);
+      // The remarks are judged before anything is read, by the one function the dialog calls (the shared text rule, DL-219): a 422 under `remarks` and never a 500.
+      const checked = checkIgnoreRemarks(request.remarks);
+      if (!checked.ok) throw new FieldValidationError([{ field: 'remarks', message: checked.message }]);
+      return await transactions.run(async (tx) => {
+        const estimate = await estimates.lockEstimate(estimateId, tx);
+        if (estimate === null) throw new NotFoundError();
+        // The machine decides under the lock: QUOTED is final (409 `ESTIMATE_QUOTED_IS_FINAL`), an ignored estimate is already ignored (409 `ESTIMATE_ALREADY_IGNORED`). The status is not changed by either event.
+        const decision = decideTransition(stateOf(estimate), 'IGNORE', viewer.role);
+        if (!decision.allowed) {
+          if (decision.kind === 'ROLE') throw new ForbiddenError();
+          const refusal = TRANSITION_REFUSALS[decision.reason];
+          throw new ConflictError(refusal.message, { code: refusal.code });
+        }
+        const written = await estimates.setIgnored(estimate.id, viewer.id, checked.remarks, tx);
+        // The lock makes this impossible; the check keeps a skipped write from answering an Ignore that did not happen.
+        if (!written) throw new Error('The estimate could not be ignored.');
+        const marker = await estimates.findIgnoreMarker(estimate.id, tx);
+        if (marker === null) throw new Error('The estimate has no Ignored layer after it was ignored.');
+        const status = ignorableStatus(estimate.status);
+        await workflow.audit.record(tx, {
+          event: 'estimate.ignored',
+          ...request.audit,
+          object: { id: estimate.id, label: estimate.taskCode },
+          before: { status },
+          after: { status, remarks: marker.remarks },
+        });
+        return { status, ignored: { at: marker.at.toISOString(), byName: marker.byName, remarks: marker.remarks } };
+      });
+    },
+
+    async restore(viewer, estimateId, request) {
+      assertMayMarkQuoted(viewer);
+      return await transactions.run(async (tx) => {
+        const estimate = await estimates.lockEstimate(estimateId, tx);
+        if (estimate === null) throw new NotFoundError();
+        const decision = decideTransition(stateOf(estimate), 'RESTORE', viewer.role);
+        if (!decision.allowed) {
+          if (decision.kind === 'ROLE') throw new ForbiddenError();
+          const refusal = TRANSITION_REFUSALS[decision.reason];
+          throw new ConflictError(refusal.message, { code: refusal.code });
+        }
+        // The Ignore remarks are read under the lock before the columns are cleared: they stay on record in the entry, as the "before" of the Restore.
+        const marker = await estimates.findIgnoreMarker(estimate.id, tx);
+        if (marker === null) throw new Error('The estimate has no Ignored layer to restore.');
+        const cleared = await estimates.clearIgnored(estimate.id, tx);
+        if (!cleared) throw new Error('The estimate could not be restored.');
+        const status = ignorableStatus(estimate.status);
+        await workflow.audit.record(tx, {
+          event: 'estimate.restored',
+          ...request.audit,
+          object: { id: estimate.id, label: estimate.taskCode },
+          before: { status, remarks: marker.remarks },
+          after: { status },
+        });
+        return { status };
       });
     },
   };

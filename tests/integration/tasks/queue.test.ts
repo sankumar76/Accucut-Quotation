@@ -86,7 +86,7 @@ describe('AC-1: Open, Closed and Overdue on the real tables', () => {
 
   it('counts every tab for the person asking, with an overdue task in Open as well', async () => {
     await seedSix();
-    expect((await service.listQueue({ id: adminId, role: 'ADMIN' }, { tab: 'closed' })).counts).toEqual({ open: 5, closed: 1, overdue: 2 });
+    expect((await service.listQueue({ id: adminId, role: 'ADMIN' }, { tab: 'closed' })).counts).toEqual({ open: 5, closed: 1, overdue: 2, ignored: 0 });
   });
 
   it('breaks a tie of deadlines by code', async () => {
@@ -97,7 +97,7 @@ describe('AC-1: Open, Closed and Overdue on the real tables', () => {
   });
 
   it('answers an empty database with empty tabs and zero counts', async () => {
-    expect(await service.listQueue({ id: leadId, role: 'LEAD' }, { tab: 'open' })).toEqual({ tab: 'open', tasks: [], counts: { open: 0, closed: 0, overdue: 0 }, nextCursor: null, asOf: NOW });
+    expect(await service.listQueue({ id: leadId, role: 'LEAD' }, { tab: 'open' })).toEqual({ tab: 'open', tasks: [], counts: { open: 0, closed: 0, overdue: 0, ignored: 0 }, nextCursor: null, asOf: NOW });
   });
 });
 
@@ -106,7 +106,7 @@ describe('AC-2: an Engineer gets their own tasks, a Lead and an Admin get all', 
     await seedSix();
     const arjun = await service.listQueue(asEngineer(arjunId), { tab: 'open' });
     expect(codes(arjun)).toEqual(['Q-2026-0001', 'Q-2026-0002']);
-    expect(arjun.counts).toEqual({ open: 2, closed: 1, overdue: 1 });
+    expect(arjun.counts).toEqual({ open: 2, closed: 1, overdue: 1, ignored: 0 });
     expect(codes(await service.listQueue(asEngineer(arjunId), { tab: 'closed' }))).toEqual(['Q-2026-0003']);
     expect(codes(await service.listQueue(asEngineer(priyaId), { tab: 'overdue' }))).toEqual(['Q-2026-0005']);
   });
@@ -122,7 +122,7 @@ describe('AC-2: an Engineer gets their own tasks, a Lead and an Admin get all', 
   it('answers a person who is not a UUID with nothing, and never an error or another person\'s tasks', async () => {
     await seedSix();
     const queue = await service.listQueue({ id: 'not-a-uuid', role: 'ENGINEER' }, { tab: 'open' });
-    expect(queue).toEqual({ tab: 'open', tasks: [], counts: { open: 0, closed: 0, overdue: 0 }, nextCursor: null, asOf: NOW });
+    expect(queue).toEqual({ tab: 'open', tasks: [], counts: { open: 0, closed: 0, overdue: 0, ignored: 0 }, nextCursor: null, asOf: NOW });
   });
 });
 
@@ -141,6 +141,7 @@ describe('AC-3: what a row carries', () => {
       deadlineAt: at(-5 * DAY),
       status: 'APPROVED',
       assignedByName: 'Invented Queue Lead',
+      ignoredRemarks: null,
     });
   });
 

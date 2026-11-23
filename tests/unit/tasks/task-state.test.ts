@@ -60,14 +60,14 @@ describe("AC-3: an unlock or the Admin's cancel puts an approved or a quoted tas
   });
 });
 
-describe('AQP-399 AC-6: an ignored task is in none of Open, Closed and Overdue', () => {
-  it.each(ESTIMATE_STATUSES)('%s and ignored: no tab of the three, at any deadline', (status) => {
-    for (const deadlineAt of [PAST, NOW, AHEAD]) expect(tabsOf(status, deadlineAt, NOW, true)).toEqual([]);
+describe('AQP-399 AC-6, AQP-401 AC-3: an ignored task is in the Ignored tab alone, not in Open, Closed or Overdue', () => {
+  it.each(ESTIMATE_STATUSES)('%s and ignored: the Ignored tab and no other, at any deadline', (status) => {
+    for (const deadlineAt of [PAST, NOW, AHEAD]) expect(tabsOf(status, deadlineAt, NOW, true)).toEqual(['ignored']);
   });
 
   it('the same task not ignored is in the tabs the matrix says, so the layer is the only difference', () => {
     expect(tabsOf('PREPARED', PAST, NOW, false)).toEqual(['open', 'overdue']);
-    expect(tabsOf('PREPARED', PAST, NOW, true)).toEqual([]);
+    expect(tabsOf('PREPARED', PAST, NOW, true)).toEqual(['ignored']);
   });
 });
 

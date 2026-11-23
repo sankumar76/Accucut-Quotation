@@ -44,6 +44,7 @@ export default async function AssignPage({ searchParams }: AssignPageProps) {
         title: task.title,
         notes: task.notes,
         status: task.status,
+        ignored: task.ignored !== null,
       }}
     />
   );

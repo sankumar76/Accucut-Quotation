@@ -7,6 +7,7 @@ import type { NodeKind } from '@/lib/estimate/node-kinds';
 import { addPart, deletePart, loadTree, movePart, treeFromRefusal, type PartItem, type TreeAnswer } from '@/lib/estimates/tree-client';
 import { deleteGuardOf, partsRemoved, siblingsOf } from '@/lib/estimates/tree-moves';
 
+import { ESTIMATE_IGNORED_CODE } from '../estimate-ignore/ignore-codes';
 import { addedMessage, deletedMessage, renumberedMessage, TREE_CHANGING } from './estimate-texts';
 
 /**
@@ -81,7 +82,7 @@ async function withinLimit<T>(run: (signal: AbortSignal) => Promise<T>, open: Se
  * second edit never overwrites the first (AC-6). A change is announced in words for a screen reader (`announcement`: "Part renumbered to 1.2"). The part
  * selected is the one the buttons are for; until one is chosen it is the first. Focus is not moved here: the tree moves it with the arrow keys.
  */
-export function usePartsTree(estimateId: string) {
+export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
   const [nodes, setNodes] = useState<ReadonlyArray<PartItem> | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -175,6 +176,11 @@ export function usePartsTree(estimateId: string) {
       setNodes(outcome.value.nodes);
       onDone(outcome.value);
       return true;
+    }
+    if (outcome.status === 'refused' && outcome.httpStatus === 409 && outcome.code === ESTIMATE_IGNORED_CODE && onServerIgnored !== undefined) {
+      // The estimate was ignored while the Engineer worked (CR-01 item 7D): the page's one alert says so, and the tree stays as it is, read-only from now on.
+      onServerIgnored();
+      return false;
     }
     const fresh = outcome.status === 'refused' ? treeFromRefusal(outcome) : null;
     if (fresh !== null) {

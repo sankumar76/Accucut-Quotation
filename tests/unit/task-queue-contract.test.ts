@@ -16,9 +16,9 @@ const DEADLINE = new Date('2026-11-12T11:30:00.000Z');
 const CODE = 'Q-2026-0042';
 
 describe('the tabs and the query string', () => {
-  it('knows the three tabs and nothing else', () => {
-    expect(QUEUE_TABS).toEqual(['open', 'closed', 'overdue']);
-    expect(['open', 'closed', 'overdue'].every(isQueueTab)).toBe(true);
+  it('knows the four tabs and nothing else, Ignored last (AQP-401 AC-3)', () => {
+    expect(QUEUE_TABS).toEqual(['open', 'closed', 'overdue', 'ignored']);
+    expect(['open', 'closed', 'overdue', 'ignored'].every(isQueueTab)).toBe(true);
     expect(['Open', 'all', '', 'overdue '].some(isQueueTab)).toBe(false);
   });
 
@@ -117,9 +117,10 @@ const queue: TaskQueue = {
       deadlineAt: DEADLINE,
       status: 'DRAFT',
       assignedByName: 'Invented Boss',
+      ignoredRemarks: null,
     },
   ],
-  counts: { open: 1, closed: 0, overdue: 0 },
+  counts: { open: 1, closed: 0, overdue: 0, ignored: 0 },
   nextCursor: null,
   asOf: new Date('2026-11-09T04:00:00.000Z'),
 };

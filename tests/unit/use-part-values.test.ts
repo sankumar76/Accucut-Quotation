@@ -44,7 +44,7 @@ const flushMicrotasks = (): Promise<void> => new Promise((resolve) => setTimeout
 async function open(held: Record<string, string> = { a: '1.00', b: '1.00' }, fields: ReadonlyArray<FormField> = [A, B, C]) {
   partServer.reset(held);
   const gate = createSaveGate();
-  const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields, onSaved: NOTHING, onChanged: NOTHING, onWrote: NOTHING, gate };
+  const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields, onSaved: NOTHING, onChanged: NOTHING, onServerIgnored: NOTHING, onWrote: NOTHING, gate };
   const hook = renderHook(usePartValues, props);
   hook.render();
   await flushMicrotasks();
@@ -65,6 +65,29 @@ async function disagreeOnB() {
 }
 
 const sentForB = (): number => partServer.sent.filter((save) => 'b' in save.values).length;
+
+describe('AQP-401 AC-8: a save refused because the estimate was ignored meanwhile (the 409 ESTIMATE_IGNORED)', () => {
+  it("tells the page once, shows no message under the field and no problem of its own, stores nothing, and leaves nothing marked unsaved (the way out is the page's alert, not the browser's prompt)", async () => {
+    partServer.reset({ a: '1.00', b: '1.00' });
+    const gate = createSaveGate();
+    const ignored = vi.fn();
+    const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields: [A, B, C], onSaved: NOTHING, onChanged: NOTHING, onServerIgnored: ignored, onWrote: NOTHING, gate };
+    const hook = renderHook(usePartValues, props);
+    hook.render();
+    await flushMicrotasks();
+    const form = hook.render();
+    form.setText('a', '2');
+    partServer.ignoreNextSave();
+    form.commit(A);
+    await gate.settle();
+    expect(ignored).toHaveBeenCalledTimes(1);
+    const after = hook.render();
+    expect(after.problem).toBeNull();
+    expect(after.errors['a']).toBeUndefined();
+    expect(partServer.inputs).toEqual({ a: '1.00', b: '1.00' });
+    expect(gate.isDirty()).toBe(false);
+  });
+});
 
 describe('SQR-01: a save queued before the 409 does not overwrite the newer value', () => {
   it('sends A again with the new revision, never sends B, and leaves B in conflict with the typed text and the newer value', async () => {

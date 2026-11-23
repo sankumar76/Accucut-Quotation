@@ -1,5 +1,6 @@
 import { assertNever } from '../../lib/assert-never';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../lib/errors';
+import { TRANSITION_REFUSALS } from '../../lib/estimate/state-machine';
 import { downloadMarkerOf } from '../../lib/export/download-marker';
 import { exportFileName } from '../../lib/export/file-name';
 import { figureState, readFiguresWhenCurrent, type FigureState } from '../../lib/estimate/figure-state';
@@ -122,6 +123,12 @@ function assertMayExport(viewer: EstimateViewer): void {
 /** The 409 of a state with no file to give: the one refusal of the download, for the file and, through the same words, the screen. */
 const refusalOf = (state: Exclude<FigureState, 'current'>): ConflictError => new ConflictError(refusalMessage(REFUSALS[state]), { code: REFUSALS[state].code });
 
+/**
+ * The 409 of an ignored estimate (CR-01 item 7D, AQP-401 AC-6; A-CR01-8, DL-304 (2)): an Ignored estimate is read-only except Restore, so **no file is made and no summary is drawn**, whatever the state of its figures. It is
+ * this route's own check (the state machine's EXPORT cell is not asked on this path), with the state machine's code and words so a client learns one. Read from the same snapshot as the figures.
+ */
+const ignoredRefusal = (): ConflictError => new ConflictError(TRANSITION_REFUSALS.IGNORED.message, { code: TRANSITION_REFUSALS.IGNORED.code });
+
 /** The state of an estimate's figures from its basis: `none` while it has no calculation. */
 const stateOf = ({ inputsRevision, calculation }: FigureBasis): FigureState =>
   calculation === null ? 'none' : figureState({ inputsRevision, calculationInputsRevision: calculation.inputsRevision });
@@ -182,6 +189,7 @@ export function createExportService({ header, nodes, calculations, approvals, do
       const { state, calculation, records, figures, approval, marker } = await transactions.run(async (tx) => {
         const basis = await calculations.findFigureBasis(estimateId, tx);
         if (basis === null) throw new NotFoundError();
+        if (basis.ignoredAt !== null) throw ignoredRefusal();
         const found = basis.calculation;
         const current = stateOf(basis);
         const read = {
@@ -231,6 +239,7 @@ export function createExportService({ header, nodes, calculations, approvals, do
       const { calculation, figures, approval } = await transactions.run(async (tx) => {
         const basis = await calculations.findFigureBasis(estimateId, tx);
         if (basis === null) throw new NotFoundError();
+        if (basis.ignoredAt !== null) throw ignoredRefusal();
         const state = stateOf(basis);
         // Never calculated (`none`) or out of date: nothing is read and the one refusal is thrown (AC-1, AC-2).
         if (state !== 'current') throw refusalOf(state);

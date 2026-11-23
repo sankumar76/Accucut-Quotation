@@ -1,7 +1,7 @@
 import { Clock } from 'lucide-react';
 
 import { Icon } from '@/components/shared/icon';
-import { isTaskClosed } from '@/lib/estimate/task-status';
+import { taskStatusOf } from '@/lib/estimate/task-status';
 import { overdueBy } from '@/lib/tasks/overdue';
 import type { TaskEstimateStatus } from '@/lib/tasks/queue';
 
@@ -19,10 +19,12 @@ export const OVERDUE_ROW_CLASS = 'bg-accent-soft [&>:first-child]:border-l-4 [&>
 /** The card of a phone: the same bar and tint. */
 export const OVERDUE_CARD_CLASS = 'border-l-4 border-l-accent bg-accent-soft';
 
-/** How late an open task is, in words (`1 d 18 h`), or null when it is not overdue. A closed task (`isTaskClosed`, the one rule) is never overdue, whatever its deadline. */
+/**
+ * How late an open task is, in words (`1 d 18 h`), or null when it is not overdue. A closed task (`taskStatusOf(...).closed`, built on `isTaskClosed`, the one rule) is never overdue, whatever its deadline, **and neither is an
+ * ignored one** (CR-01 item 7D, AC-3): its row carries the display status `IGNORED`, and it has no overdue bar, clock or tint, even past its deadline.
+ */
 export function lateTextFor(task: { readonly deadlineAt: string; readonly status: TaskEstimateStatus }, asOf: string): string | null {
-  // A row carries no Ignored layer until story 7D adds it to the view, so every row read here is not ignored; 7D passes the row's own flag.
-  return isTaskClosed(task.status, false) ? null : overdueBy(new Date(task.deadlineAt), new Date(asOf));
+  return task.status === 'IGNORED' || taskStatusOf(task.status).closed ? null : overdueBy(new Date(task.deadlineAt), new Date(asOf));
 }
 
 export function OverdueMarker({ late }: { readonly late: string }) {

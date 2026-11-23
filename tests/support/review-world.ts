@@ -136,6 +136,7 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
   };
   const basis: FigureBasis = {
     inputsRevision,
+    ignoredAt: null,
     calculation: calculated ? { id: INVENTED_CALCULATION_ID, inputsRevision: CALCULATION_REVISION, configVersionId: INVENTED_VERSION_ID, createdAt: REVIEW_CALCULATED_AT } : null,
   };
   const reads = { basis: readLog(), figures: readLog(), nodes: readLog(), approvals: readLog(), removals: readLog(), access: readLog(), snapshot: readLog() };

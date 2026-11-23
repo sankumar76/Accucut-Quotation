@@ -201,9 +201,10 @@ test.describe('an Engineer', () => {
             deadlineAt: z.string(),
             status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
             assignedByName: z.string(),
+            ignoredRemarks: z.string().nullable(),
           }),
         ),
-        counts: z.strictObject({ open: z.number(), closed: z.number(), overdue: z.number() }),
+        counts: z.strictObject({ open: z.number(), closed: z.number(), overdue: z.number(), ignored: z.number() }),
         nextCursor: z.string().nullable(),
         asOf: z.iso.datetime(),
       })
@@ -211,7 +212,7 @@ test.describe('an Engineer', () => {
     expect(body.tasks.map((task) => task.code)).not.toContain(otherCode);
     expect(new Set(body.tasks.map((task) => task.engineer.id))).toEqual(new Set([person.id]));
     expect(body.tasks).toHaveLength(3);
-    expect(body.counts).toEqual({ open: 3, closed: 1, overdue: 1 });
+    expect(body.counts).toEqual({ open: 3, closed: 1, overdue: 1, ignored: 0 });
     for (const query of ['engineer=00000000-0000-4000-8000-000000000000', 'tab=all', 'limit=0', 'cursor=junk']) {
       expect((await page.request.get(`${DEVELOPMENT_URL}/api/v1/tasks?${query}`)).status(), query).toBe(422);
     }

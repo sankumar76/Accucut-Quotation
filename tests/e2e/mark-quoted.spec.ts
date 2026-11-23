@@ -233,13 +233,15 @@ test.describe('AC-3: a second press', () => {
 });
 
 test.describe('AC-1, AC-2, AC-3: who is offered it and who is refused', () => {
-  test('an ignored approved estimate has no button, and the route refuses it as 409 ESTIMATE_IGNORED, writing nothing', async ({ page }, testInfo) => {
+  test('an ignored approved estimate has no button (the action bar is not drawn while it is ignored, CR-01 item 7D), and the route refuses it as 409 ESTIMATE_IGNORED, writing nothing', async ({ page }, testInfo) => {
     const { code, owner, lead } = await approvedEstimate(page, testInfo);
     await ignoreEstimate(owner.id, lead.id);
     const response = await page.goto(`/estimates/${code}`);
     expect(response?.status()).toBe(200);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
-    await expect(unlockButton(page)).toBeVisible();
+    await expect(page.locator('#review-ignored-notice')).toBeVisible();
+    await expect(page.locator('#review-actions')).toHaveCount(0);
+    await expect(unlockButton(page)).toHaveCount(0);
     await expect(markButton(page)).toHaveCount(0);
     expect(await markQuotedThroughTheApi(page, owner.id)).toBe(409);
     expect(await readQuote(owner.id)).toMatchObject({ status: 'APPROVED', quotedBy: null, quotedAtSet: false, entries: 0 });

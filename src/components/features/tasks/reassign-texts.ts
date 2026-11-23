@@ -37,6 +37,10 @@ export const FAILED_REASSIGN_BODY = 'What you chose is still here. Check your co
 export const CLOSED_TITLE = TASK_CLOSED_MESSAGE;
 export const CLOSED_BODY = 'It is in the Closed tab of the task queue. If it is unlocked, it can be changed again.';
 
+/** An ignored task (CR-01 item 7D, FR-040, DL-304): read-only until it is restored, so its Engineer and deadline cannot be changed. The sentence is the state machine's own words, then where Restore is. */
+export const IGNORED_TITLE = 'This task is ignored, so its Engineer and deadline cannot be changed.';
+export const IGNORED_BODY = 'It is in the Ignored tab of the task queue. Open it and restore it first.';
+
 export const BACK_TO_QUEUE = 'Back to the task queue';
 
 /** "2 things need fixing before this change can be saved." (the summary of a refused form; the singular reads "1 thing needs fixing ..."). */

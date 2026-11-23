@@ -5,7 +5,7 @@ import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, type EstimateViewer 
 
 import { changeContext } from '../support/customer-change';
 import { inputsDependencies } from '../support/estimate-inputs-deps';
-import { createFakeEstimateWorld, QUOTER_NAME, type FakeCustomerEntry, type FakeEstimate } from '../support/fake-estimates';
+import { createFakeEstimateWorld, IGNORER_NAME, QUOTER_NAME, type FakeCustomerEntry, type FakeEstimate } from '../support/fake-estimates';
 import { createAuditSink } from '../support/fake-audit-sink';
 
 /**
@@ -79,8 +79,9 @@ describe('AC-1: opening the workspace', () => {
       title: 'Hopper cover',
       notes: 'Sheet-metal parts only.',
       assignedByName: 'Kiran Bose',
+      engineerName: 'Invented Engineer',
       quoted: null,
-      ignored: false,
+      ignored: null,
     });
   });
 
@@ -111,13 +112,13 @@ describe('AC-1: opening the workspace', () => {
     const { service } = setUp([estimate({ customerId: BRIGHTWATER })]);
     const workspace = await service.getWorkspace(arjun, 'Q-2026-0318');
     expect(Object.keys(workspace ?? {}).sort()).toEqual(
-      ['assignedByName', 'code', 'customer', 'deadlineAt', 'estimateId', 'folderPath', 'folderUrl', 'ignored', 'notes', 'quoted', 'status', 'subject', 'title'].sort(),
+      ['assignedByName', 'code', 'customer', 'deadlineAt', 'engineerName', 'estimateId', 'folderPath', 'folderUrl', 'ignored', 'notes', 'quoted', 'status', 'subject', 'title'].sort(),
     );
     expect(Object.keys(workspace?.customer ?? {}).sort()).toEqual(['id', 'name', 'shortName']);
   });
 });
 
-describe('CR-01 item 7C, AC-5, AC-8 (AQP-400): the workspace carries the quote marker for a Lead and an Admin only, and whether the Ignored layer is set for every role', () => {
+describe('CR-01 item 7C, AC-5, AC-8 (AQP-400): the workspace carries the quote marker for a Lead and an Admin only', () => {
   const quotedAt = new Date('2026-11-23T04:30:00.000Z');
   const quoted = (): FakeEstimate => estimate({ status: 'QUOTED', quotedBy: LEAD, quotedAt });
 
@@ -141,16 +142,66 @@ describe('CR-01 item 7C, AC-5, AC-8 (AQP-400): the workspace carries the quote m
     const { service } = setUp([estimate({ status: 'APPROVED' })]);
     expect((await service.getWorkspace(lead, 'Q-2026-0318'))?.quoted).toBeNull();
   });
+});
+
+describe('CR-01 item 7D, AC-9 (AQP-401): the workspace carries the Ignored layer, who and when and the remarks, the same for every role', () => {
+  const ignoredAt = new Date('2026-11-20T10:00:00.000Z');
+  const REMARKS = 'Not taken forward.\nThe customer chose another supplier.';
+  const layer = (): FakeEstimate => estimate({ status: 'APPROVED', ignoredAt, ignoredBy: LEAD, ignoreRemarks: REMARKS });
 
   it.each([
     ['an Engineer', arjun],
     ['a Lead', lead],
     ['an Admin', admin],
-  ] as const)('%s is told whether the Ignored layer is set: true when it is, false when it is not', async (_name, viewer) => {
-    const ignored = setUp([estimate({ status: 'APPROVED', ignoredAt: new Date('2026-11-20T10:00:00.000Z') })]);
-    expect((await ignored.service.getWorkspace(viewer, 'Q-2026-0318'))?.ignored).toBe(true);
-    const open = setUp([estimate({ status: 'APPROVED' })]);
-    expect((await open.service.getWorkspace(viewer, 'Q-2026-0318'))?.ignored).toBe(false);
+  ] as const)('%s reads who ignored the estimate, when and the remarks, by name and with no ID', async (_name, viewer) => {
+    const { service } = setUp([layer()]);
+    const workspace = await service.getWorkspace(viewer, 'Q-2026-0318');
+    expect(workspace?.ignored).toEqual({ at: ignoredAt, byName: IGNORER_NAME, remarks: REMARKS });
+    expect(Object.keys(workspace?.ignored ?? {}).sort()).toEqual(['at', 'byName', 'remarks']);
+  });
+
+  it('keeps the status underneath: an ignored Approved estimate still reads APPROVED', async () => {
+    const { service } = setUp([layer()]);
+    expect((await service.getWorkspace(arjun, 'Q-2026-0318'))?.status).toBe('APPROVED');
+  });
+
+  it('is null for an estimate that is not ignored, for every role', async () => {
+    const { service } = setUp([estimate({ status: 'APPROVED' })]);
+    for (const viewer of [arjun, lead, admin]) expect((await service.getWorkspace(viewer, 'Q-2026-0318'))?.ignored).toBeNull();
+  });
+
+  it('names the Engineer of the task, for the Restore dialog, and holds no ID of them', async () => {
+    const { service } = setUp([layer()]);
+    expect((await service.getWorkspace(lead, 'Q-2026-0318'))?.engineerName).toBe('Invented Engineer');
+  });
+
+  it('another Engineer is told nothing of an ignored task: not found, as for any task that is not theirs', async () => {
+    const { service } = setUp([layer()]);
+    expect(await service.getWorkspace(priya, 'Q-2026-0318')).toBeNull();
+  });
+});
+
+describe("CR-01 item 7D, AC-6 (AQP-401): an ignored estimate is refused 409 ESTIMATE_IGNORED, and another Engineer's is a 404 first", () => {
+  const ignoredEstimate = (): FakeEstimate => estimate({ ignoredAt: new Date('2026-11-20T10:00:00.000Z'), ignoredBy: LEAD, ignoreRemarks: 'Invented remarks.' });
+
+  it("refuses the Engineer's own add and the Lead's customer change with the code, whatever the status underneath", async () => {
+    for (const status of ['DRAFT', 'PREPARED', 'APPROVED'] as const) {
+      const { service, change } = setUp([{ ...ignoredEstimate(), status }]);
+      await expect(service.addPart(arjun, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toMatchObject({ httpStatus: 409, code: 'ESTIMATE_IGNORED' });
+      await expect(change(lead, ESTIMATE, BRIGHTWATER)).rejects.toMatchObject({ httpStatus: 409, code: 'ESTIMATE_IGNORED' });
+    }
+  });
+
+  it("answers another Engineer's ignored estimate 404, never 409: the 409 would confirm that the task exists", async () => {
+    const { service } = setUp([ignoredEstimate()]);
+    await expect(service.addPart(priya, ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.transition(priya, ESTIMATE, 'CALCULATE')).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("refuses an Engineer's Calculate on their own ignored estimate 409, and writes nothing", async () => {
+    const { service, stored } = setUp([ignoredEstimate()]);
+    await expect(service.transition(arjun, ESTIMATE, 'CALCULATE')).rejects.toMatchObject({ httpStatus: 409, code: 'ESTIMATE_IGNORED' });
+    expect(stored().status).toBe('DRAFT');
   });
 });
 

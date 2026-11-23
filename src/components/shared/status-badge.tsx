@@ -22,21 +22,22 @@ export interface StatusBadgeProps {
   readonly iconSize?: IconSize;
 }
 
-const LOOK: Readonly<Record<TaskStatusLabel, { readonly tone: BadgeTone; readonly icon: LucideIcon }>> = {
+const LOOK: Readonly<Record<TaskStatusLabel, { readonly tone: BadgeTone; readonly icon: LucideIcon; readonly dashed?: true }>> = {
   Draft: { tone: 'neutral', icon: Pencil },
   Prepared: { tone: 'info', icon: Send },
   Approved: { tone: 'success', icon: Lock },
   // CR-01 item 7: Quoted follows Approved (the quote has gone to the customer); Ignored is the layer over the status, in the neutral tone with an eye that is shut.
   Quoted: { tone: 'success', icon: FileCheck },
-  Ignored: { tone: 'neutral', icon: EyeOff },
+  // The dashed edge is the second cue beside the shut eye and the word (WCAG 1.4.1: never colour alone), the ux-expert's ruling of CR-01 item 7D (comment 12944).
+  Ignored: { tone: 'neutral', icon: EyeOff, dashed: true },
 };
 
 export function StatusBadge({ status, variant = 'list', iconSize = 'badge' }: StatusBadgeProps) {
   const { label } = taskStatusOf(status);
-  const { tone, icon } = LOOK[label];
+  const { tone, icon, dashed } = LOOK[label];
   return (
     <span data-slot="status-badge" data-status={status} className="inline-flex flex-wrap items-center gap-s-1">
-      <Badge tone={tone}>
+      <Badge tone={tone} {...(dashed === true ? { className: 'border-dashed' } : {})}>
         <Icon icon={icon} size={iconSize} />
         {variant === 'header' && label === 'Approved' ? APPROVED_LOCKED_LABEL : label}
       </Badge>

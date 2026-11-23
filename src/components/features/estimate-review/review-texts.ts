@@ -89,6 +89,12 @@ export const UNLOCK_FIRST_OPEN_FAILED = 'The unlock window did not open. Check y
  */
 export const MARK_QUOTED_LABEL = 'Mark as quoted';
 export const MARK_QUOTED_FIRST_OPEN_FAILED = 'The mark as quoted window did not open. Check your connection and try again.';
+
+/** The buttons of Ignore and Restore on SCR-06 (CR-01 item 7D, AQP-401; the ux-expert's comment 12944): the same words as the dialogs' own buttons. The lines say what to do when a dialog's code did not come. */
+export const IGNORE_LABEL = 'Ignore RFQ';
+export const IGNORE_FIRST_OPEN_FAILED = 'The ignore window did not open. Check your connection and try again.';
+export const RESTORE_LABEL = 'Restore RFQ';
+export const RESTORE_FIRST_OPEN_FAILED = 'The restore window did not open. Check your connection and try again.';
 export const quotedNoticeTitle = (time: string, name: string): string => `Quoted on ${time} by ${name}.`;
 export const QUOTED_NOTICE_TITLE_PLAIN = 'Quoted.';
 export const quotedNoticeBody = (customerName: string | null): string =>

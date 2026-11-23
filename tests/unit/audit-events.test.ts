@@ -36,7 +36,7 @@ const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'app
 /** STORY-08.02: a formula of the field registry changed. Registry order puts it after the approval events and before the calculation event. */
 const WIRED_CONFIG: ReadonlyArray<AuditEventName> = ['config.formula_changed', 'config.field_inserted', 'config.field_deleted', 'config.reverted'];
 /** CR-01 item 6: the customer of an estimate changed (registry order puts it before the reassign); STORY-04.07: a task given to another Engineer, a new deadline, or both. */
-const WIRED_TASK: ReadonlyArray<AuditEventName> = ['estimate.customer_changed', 'estimate.quoted', 'task.reassigned'];
+const WIRED_TASK: ReadonlyArray<AuditEventName> = ['estimate.customer_changed', 'estimate.quoted', 'estimate.ignored', 'estimate.restored', 'task.reassigned'];
 const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CONFIG, ...WIRED_CALCULATION, ...WIRED_TASK];
 /** With STORY-06.13 no event is declared and left unwired. */
 const RESERVED: ReadonlyArray<AuditEventName> = [];
@@ -516,6 +516,44 @@ describe('CR-01 item 7C, AC-7 (AQP-400; SCR-16 "Task change"): the quoted event 
     ['an after that is null', { status: 'APPROVED' }, null],
   ])('refuses %s', (_name, storedBefore, storedAfter) => {
     expect(event.before.safeParse(storedBefore).success && event.after.safeParse(storedAfter).success).toBe(false);
+    expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
+  });
+});
+
+describe('CR-01 item 7D, AC-5 (AQP-401; SCR-16 "Task change"): the Ignore and Restore events keep the status and the remarks of the Lead, and nothing else', () => {
+  const ignored = AUDIT_EVENTS['estimate.ignored'];
+  const restored = AUDIT_EVENTS['estimate.restored'];
+  const REMARKS = 'Not taken forward.\nThe customer chose another supplier.';
+
+  it('are wired, about the estimate, under the "Task change" filter', () => {
+    for (const event of [ignored, restored]) expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'task_change' });
+  });
+
+  it.each(['DRAFT', 'PREPARED', 'APPROVED'] as const)('Ignore keeps the status underneath (%s) before and with the remarks after, and says so in words', (status) => {
+    const word = { DRAFT: 'Draft', PREPARED: 'Prepared', APPROVED: 'Approved' }[status];
+    expect(ignored.describeStored({ status }, { status, remarks: REMARKS })).toEqual({ before: word, after: `Ignored. Remarks: ${REMARKS}` });
+  });
+
+  it.each(['DRAFT', 'PREPARED', 'APPROVED'] as const)('Restore keeps the Ignore remarks before (they stay on record) and the status after (%s)', (status) => {
+    const word = { DRAFT: 'Draft', PREPARED: 'Prepared', APPROVED: 'Approved' }[status];
+    expect(restored.describeStored({ status, remarks: REMARKS }, { status })).toEqual({ before: `Ignored. Remarks: ${REMARKS}`, after: word });
+  });
+
+  it('counts the remarks in code points, as the column does: 500 emoji are kept and 501 are refused', () => {
+    expect(ignored.after.safeParse({ status: 'DRAFT', remarks: '😀'.repeat(500) }).success).toBe(true);
+    expect(ignored.after.safeParse({ status: 'DRAFT', remarks: '😀'.repeat(501) }).success).toBe(false);
+  });
+
+  it.each([
+    ['a figure on the Ignore (a price has no place here)', ignored, { status: 'PREPARED' }, { status: 'PREPARED', remarks: 'x', price: '1000.00' }],
+    ['no remarks on the Ignore', ignored, { status: 'PREPARED' }, { status: 'PREPARED' }],
+    ['empty remarks on the Ignore', ignored, { status: 'PREPARED' }, { status: 'PREPARED', remarks: '' }],
+    ['a QUOTED status under the layer (the database refuses it too)', ignored, { status: 'QUOTED' }, { status: 'QUOTED', remarks: 'x' }],
+    ['remarks on the "before" of an Ignore', ignored, { status: 'PREPARED', remarks: 'x' }, { status: 'PREPARED', remarks: 'x' }],
+    ['no remarks on the "before" of a Restore', restored, { status: 'PREPARED' }, { status: 'PREPARED' }],
+    ['remarks of its own on the "after" of a Restore (Restore has none)', restored, { status: 'PREPARED', remarks: 'x' }, { status: 'PREPARED', remarks: 'y' }],
+    ['a before that is null', restored, null, { status: 'PREPARED' }],
+  ])('refuses %s', (_name, event, storedBefore, storedAfter) => {
     expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
   });
 });

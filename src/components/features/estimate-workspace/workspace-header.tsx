@@ -35,6 +35,8 @@ export interface WorkspaceHeaderView {
   readonly customer: { readonly name: string; readonly shortName: string } | null;
   readonly notes: string | null;
   readonly assignedByName: string;
+  /** The Ignored layer is set over the status (CR-01 item 7D): the badge says "Ignored" whatever the status underneath. Absent is not ignored. */
+  readonly ignored?: boolean;
 }
 
 export interface WorkspaceHeaderProps {
@@ -45,6 +47,11 @@ export interface WorkspaceHeaderProps {
   readonly customerAction?: ReactNode;
   /** SCR-06's download marker chip (STORY-CR01.7E AC-5): drawn after the status, for a Lead and an Admin. SCR-05 passes none, so an Engineer's header has no marker (NFR-002). */
   readonly downloadMarker?: ReactNode;
+  /**
+   * The notice of an ignored estimate (CR-01 item 7D, AQP-401 AC-8; UX 12944 sections 2 and 4), directly under the page header and above the identity and folder cards, with the task's notes. SCR-05 hands in the Engineer's
+   * server-rendered notice as an element, so it is drawn at first paint and adds no client code; SCR-06 hands in the Lead's.
+   */
+  readonly notice?: ReactNode;
 }
 
 /** One labelled value of the identity card: the label is visible text, the value is text (not a disabled input). */
@@ -57,7 +64,7 @@ function Identity({ label, children }: { readonly label: string; readonly childr
   );
 }
 
-export function WorkspaceHeader({ view, noCustomerText = NO_CUSTOMER_SET_MESSAGE, customerAction, downloadMarker }: WorkspaceHeaderProps) {
+export function WorkspaceHeader({ view, noCustomerText = NO_CUSTOMER_SET_MESSAGE, customerAction, downloadMarker, notice }: WorkspaceHeaderProps) {
   return (
     <>
       <PageHeader
@@ -66,7 +73,7 @@ export function WorkspaceHeader({ view, noCustomerText = NO_CUSTOMER_SET_MESSAGE
         actions={
           <div className="flex flex-wrap items-center gap-s-3">
             {customerAction}
-            <StatusBadge status={view.status} variant="header" />
+            <StatusBadge status={view.ignored === true ? 'IGNORED' : view.status} variant="header" />
             {downloadMarker}
             <span className="inline-flex items-center gap-s-1 text-body font-semibold text-ink">
               <Icon icon={CalendarClock} size="small" />
@@ -75,6 +82,7 @@ export function WorkspaceHeader({ view, noCustomerText = NO_CUSTOMER_SET_MESSAGE
           </div>
         }
       />
+      {notice}
       <Card aria-label={IDENTITY_LABEL}>
         <CardContent>
           <dl className="grid gap-s-4 sm:grid-cols-3">

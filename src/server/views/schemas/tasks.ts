@@ -6,6 +6,8 @@ import { QUEUE_SEARCH_MAX_LENGTH } from '../../../lib/tasks/queue-filters';
 import { isIsoDate } from '../../../lib/time';
 import { decodeTaskQueueCursor, TASK_QUEUE_CURSOR_MAX_LENGTH } from '../../services/task-queue-cursor';
 
+import { ignoredMarkerSchema } from './estimates';
+
 /**
  * The contract of the task routes (STORY-04.01, architecture section 6 "Create task" and "Assign context"). Every body and answer is a strict object: a key
  * that is not named is an error, so nothing is sent that is not meant to be, and a client cannot set a field the route does not offer (`assignedBy` is the
@@ -100,7 +102,7 @@ const day = (message: string) => z.string({ error: message }).refine(isIsoDate, 
  * number and the cursor the place it names.
  */
 export const taskQueueQuerySchema = z.strictObject({
-  tab: z.enum(QUEUE_TABS, { error: 'The tab must be open, closed or overdue.' }).default(DEFAULT_QUEUE_TAB),
+  tab: z.enum(QUEUE_TABS, { error: 'The tab must be open, closed, overdue or ignored.' }).default(DEFAULT_QUEUE_TAB),
   limit: z.coerce
     .number({ error: LIMIT_MESSAGE })
     .int(LIMIT_MESSAGE)
@@ -147,8 +149,11 @@ const queueTaskSchema = z.strictObject({
   folderUrl: z.string().startsWith('file:///').nullable(),
   /** An ISO 8601 instant in UTC; the screen shows it in IST. */
   deadlineAt: z.iso.datetime(),
-  status: z.enum(ESTIMATE_STATUSES),
+  /** What a row shows (`displayStatusOf`): the estimate's status, or `IGNORED` while the layer over it is set (CR-01 item 7D). */
+  status: z.enum([...ESTIMATE_STATUSES, 'IGNORED']),
   assignedByName: z.string().min(1),
+  /** The Lead's remarks, **only on a row of the Ignored tab** (AC-3, AC-9); `null` on every other row. Who ignored it and when are not in a row. Words typed by a Lead: no figure (NFR-002). */
+  ignoredRemarks: z.string().min(1).nullable(),
 });
 
 /**
@@ -182,9 +187,14 @@ export const taskDetailSchema = z.strictObject({
   folderUrl: z.string().startsWith('file:///').nullable(),
   /** An ISO 8601 instant in UTC; the screen shows it in IST. */
   deadlineAt: z.iso.datetime(),
-  /** The status of the estimate, from `estimates.status`. The words come from `taskStatusOf`; an approved estimate is the closed task (`isTaskClosed`). */
+  /** The status of the estimate, from `estimates.status`, **underneath** the Ignored layer. The words come from `taskStatusOf`; an approved estimate is the closed task (`isTaskClosed`). */
   status: z.enum(ESTIMATE_STATUSES),
   assignedByName: z.string().min(1),
+  /**
+   * The Ignored layer (CR-01 item 7D, AQP-401 AC-9): who set it (by name, never an ID), when (UTC text) and the Lead's remarks, or `null`. **The same for every role**: an Engineer's own ignored task reads its notice from
+   * it, and another Engineer's task is not found before this is read. It holds no figure (NFR-002).
+   */
+  ignored: ignoredMarkerSchema.nullable(),
 });
 
 const count = z.number().int().nonnegative();
@@ -193,7 +203,7 @@ const count = z.number().int().nonnegative();
 export const taskQueueSchema = z.strictObject({
   tab: z.enum(QUEUE_TABS),
   tasks: z.array(queueTaskSchema),
-  counts: z.strictObject({ open: count, closed: count, overdue: count }),
+  counts: z.strictObject({ open: count, closed: count, overdue: count, ignored: count }),
   nextCursor: z.string().min(1).nullable(),
   /** The instant overdue was judged at, as an ISO 8601 instant in UTC: the rows' "Overdue by" text is worded against it (STORY-04.03 AC-1). */
   asOf: z.iso.datetime(),

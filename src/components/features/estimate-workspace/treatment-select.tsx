@@ -11,6 +11,7 @@ import { OTHER_TREATMENT_ID } from '@/lib/masters/system-entries';
 
 import { TRY_AGAIN } from './estimate-texts';
 import { FIELD_MARK } from './field-ids';
+import { readOnlySelectProps } from './read-only-select';
 import { TREATMENT_LOAD_FAILED, TREATMENT_LOADING, TREATMENT_OTHER_LABEL, TREATMENT_PLACEHOLDER, treatmentNoLongerListed } from './surface-texts';
 import { useTreatmentOptions } from './use-treatment-options';
 
@@ -55,6 +56,8 @@ export function TreatmentSelect({ control, name, maxLength, text, readOnly, mark
   const stored = chosen !== null && !listed.some((option) => option.id === chosen.id) ? chosen : null;
 
   function choose(event: ChangeEvent<HTMLSelectElement>): void {
+    // A read-only list never changes (CR-01 item 7D): it is not `disabled`, so a change that got through is refused here.
+    if (readOnly) return;
     const id = event.target.value;
     if (id === '') {
       onChange('');
@@ -75,8 +78,9 @@ export function TreatmentSelect({ control, name, maxLength, text, readOnly, mark
       <NativeSelect
         {...control}
         {...mark}
+        {...readOnlySelectProps(readOnly)}
         name={name}
-        disabled={readOnly || options.status === 'failed'}
+        disabled={options.status === 'failed'}
         aria-busy={options.status === 'loading' || undefined}
         value={chosen?.id ?? ''}
         onChange={choose}
@@ -110,6 +114,7 @@ export function TreatmentSelect({ control, name, maxLength, text, readOnly, mark
           enterKeyHint="next"
           maxLength={maxLength}
           readOnly={readOnly}
+          aria-readonly={readOnly || undefined}
           value={chosen.text}
           onChange={(event) => onChange(encodeTreatment({ id: OTHER_TREATMENT_ID, text: event.target.value }))}
           onBlur={() => onCommit()}
