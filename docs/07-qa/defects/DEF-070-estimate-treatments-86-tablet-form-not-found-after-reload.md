@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (qa-engineer, 2026-11-23, on master's DL-328 (2)) |
 | Priority | P3. Lane: hardening window, **the next free lane after DEF-069's code-facts note (DL-330 (4), DL-329 (8)); never pauses a CR-01 story.** Earlier (DL-328 (3)): behind DEF-064's fix and DEF-069's observation, and only if the mechanism reading below did not hold. Does not block G8 as a Sev-3 |
 | Type | **Test, product not excluded** (cause not determined; the family reading is below) |
-| Status | **Open (DL-330, 2026-11-23): the "yes" branch of DL-328 (3) does not hold; the "no" branch applies: a test-only fix by the developer, in the next free lane after DEF-069's code-facts note; it never pauses a CR-01 story. Not closed; no fix PR yet.** Proof: the case passes on attempt 1 at all three widths, under 25 s, on the fix PR's run of record and on the first `master` push after the squash. Watch trigger stays until G8. Earlier: **Open** (logged 2026-11-23). Proof route of DL-328 (3), "yes" branch: **half 1 read and half 2 read (2026-11-23, later; both met on the numbers)**. **Not closed by QA: master has not ruled whether the "yes" branch holds** (QA's mechanism reading has two stated limits, see "For master" item 1 and the half 2 reading below). The watch trigger stays until G8 |
+| Status | **Open. Fix PR #643 (head b56fbdfd) run of record 45128502168 is fully green; DL-330 proof half 1 NOT MET on the line as written: attempt 1 passed at 23.2 / 22.9 / 25.8 s (mobile / tablet / desktop), desktop not under 25 s (see "DL-330 proof, half 1 reading (PR #643)"); half 2 is read on the first `master` push after the squash.** Earlier: **Open (DL-330, 2026-11-23): the "yes" branch of DL-328 (3) does not hold; the "no" branch applies: a test-only fix by the developer, in the next free lane after DEF-069's code-facts note; it never pauses a CR-01 story. Not closed; no fix PR yet.** Proof: the case passes on attempt 1 at all three widths, under 25 s, on the fix PR's run of record and on the first `master` push after the squash. Watch trigger stays until G8. Earlier: **Open** (logged 2026-11-23). Proof route of DL-328 (3), "yes" branch: **half 1 read and half 2 read (2026-11-23, later; both met on the numbers)**. **Not closed by QA: master has not ruled whether the "yes" branch holds** (QA's mechanism reading has two stated limits, see "For master" item 1 and the half 2 reading below). The watch trigger stays until G8 |
 | Jira / GitHub | [AQP-413](https://sankumar76.atlassian.net/browse/AQP-413) / [#641](https://github.com/sankumar76/Accucut-Quotation/issues/641). Jira "relates to" AQP-1 (Intake) and AQP-314 (owner story). Labels `ai-delivery`, `aiid-DEF-070`, `bug`, `sev-3`, `final-review`, `agent-qa-engineer`; priority Medium. DEF-070 was free: no file in `docs/07-qa/defects/`, JQL `labels = "aiid-DEF-070"` found nothing, no GitHub issue named it |
 | Risk / rule | The trigger is DL-264 (5)(b): "any attempt-1 failure, or a reading of 29 s or more, means a Bug the same day" (no wave clause; triggers apply as written, DL-284). **No re-run rule** (W1 does not cover a watch-list case with a Bug trigger). RISK-031 (reopened at 9, DL-326): not a trigger (b) event (a PR run). The watch trigger stays until G8: any later attempt-1 failure of the case reopens this Bug the same day |
 | Found by / date | CI (PR run); wave reading by qa-engineer 2026-11-23 (14934a39); Bug logged on DL-328, 2026-11-23 |
@@ -65,9 +65,11 @@ Read on `master` d2771045 and on #636's head `b6396c11`. **What the two PRs add.
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer (the "no" branch applies, DL-330; not started) | | |
-| Regression test added | developer | | |
-| Verified (numbers) | qa-engineer | 2026-11-23 | half 1 read on 45111572570; half 2 read on `master` push 45116869670 (ce7c8c21); **both under 25 s at all three widths, attempt 1**. The Bug is not closed: master rules on the "yes" branch first (see "Half 2 reading") |
+| Fixed | developer (the "no" branch, DL-330) | 2026-11-23 | PR #643 (AQP-413), head b56fbdfd: `await waitForForm(page)` after `page.reload()` in the AC-1 case, +3 lines in `tests/e2e/estimate-treatments.spec.ts`; **not merged at the time of this record** |
+| Regression test added | developer | 2026-11-23 | the case itself (AC-1); E2E count unchanged |
+| Verified (numbers, superseded by DL-330) | qa-engineer | 2026-11-23 | half 1 read on 45111572570; half 2 read on `master` push 45116869670 (ce7c8c21); both under 25 s at all three widths, attempt 1 (the "yes" branch, which DL-330 ruled does not hold) |
+| Verified (DL-330 (4) proof, half 1 on the fix PR's run) | qa-engineer | 2026-11-23 | **NOT MET:** run 45128502168 (b56fbdfd), attempt 1 passed at 23.2 / 22.9 / **25.8 s** (mobile / tablet / desktop); the desktop reading is not under 25 s. See "DL-330 proof, half 1 reading (PR #643)" |
+| Verified (DL-330 (4) proof, half 2 on the first `master` push after the squash) | qa-engineer | | not yet read (#643 not merged) |
 
 ## For master
 1. **Step 1 answer, with its two limits.** The wait is a page signal that comes after the save has settled (lines above), subject to the lazy guard (gap 1). Whether "the change that should remove the exposure is already in #636" holds is not shown by it: #636 adds no wait before the reload, and the failing symptom was the form absent after the reload (gap 2). QA has not ruled; the Bug stays open on the DL-328 proof either way.
@@ -109,3 +111,26 @@ The watch trigger stays until G8: any later attempt-1 failure of the case reopen
 **Grade and G8.** Sev-3, type Test; not a G8 blocker. RISK-031 close-out item (ii) waits for this proof (test plan section 7, rules line).
 
 **Answer to "For master (2026-11-23, half 2)" item 1:** "No." The Bug stays open; QA closes nothing on the half 1 and half 2 numbers.
+
+## DL-330 proof, half 1 reading (PR #643; qa-engineer, 2026-11-23; read from the Stage 12 job logs of the run, ANSI stripped; no re-run, no ruling)
+
+**Run of record:** PR #643 (AQP-413, `fix/AQP-413-treatments-reload`; change: `await waitForForm(page)` after `page.reload()` in the AC-1 case, 3 lines, `tests/e2e/estimate-treatments.spec.ts` only) run **45128502168**, head **b56fbdfd**, event `pull_request`, **attempt 1**, created 07:04:43Z, `success` in all six jobs (Stages 1 to 11b 137538307961; the fan-in 137546465697; the four Stage 12 shards). Fully green in DL-332's sense (every job `success`).
+
+Case "AC-1: the list has the eight, each with its letter ..." (`estimate-treatments.spec.ts:92:3`, bound by title; the line number is the same as on #636's run and `master` ce7c8c21, since the 3 added lines come after it), attempt 1. No `✘`, no `retry #` and no `Test timeout` line for any `estimate-treatments` case in shards 1, 2 and 4 (shard 3 holds no case of this file):
+
+| Width | Shard / job | Attempt 1 | Under 25 s |
+|-------|-------------|-----------|------------|
+| mobile | shard 1, job 137538307861 (`548 passed (20.3m)`, 0 flaky) | **23.2 s** | yes |
+| tablet | shard 2, job 137538307865 (`541 passed (20.3m)`, 1 flaky, see below) | **22.9 s** | yes |
+| desktop | shard 4, job 137538307935 (`529 passed (17.6m)`, 0 flaky) | **25.8 s** | **no (0.8 s over)** |
+
+**Half 1 is NOT MET.** The condition in DL-330 (4) is "attempt 1 at all three widths, under 25 s". The case passed on attempt 1 at all three widths, but the desktop reading, 25.8 s, is not under 25 s. QA applies the line as written and does not interpret it; whether a first-attempt pass at 25.8 s on desktop counts is master's to rule (below). It is below DL-264 (5)(b)'s 29 s line, so the watch trigger is **not** met and no new Bug is due.
+
+**Readings against the earlier ones (s, attempt 1; mobile / tablet / desktop).** Before #630, failing run 45099210407: 13.8 / **30.1 (failed)** / 16.2. After #630, `master` e10e746c 21.6 / 21.2 / 19.7 and d2771045 **26.7** / 18.4 / 19.5. #636's run 45111572570 18.4 / 18.5 / 23.0. `master` ce7c8c21 13.4 / 14.4 / 18.3, and 86cf64d3 17.5 / 22.9 / 16.7. **This run: 23.2 / 22.9 / 25.8.** The tablet reading, the width that failed, is 22.9 s (it was 30.1 s). The three new readings are at the upper end of the earlier ones; consistent with the PR body's own limit (the change "does not shorten the case"; what used the time after the reload is not determined by the log). QA did not compute a wave ratio for this run (DL-328 (4)'s W1 (d) is a measure for a failure; none occurred).
+
+**Other facts from the same run (not this case).** `[AQP-341 stored-values diagnostic]` lines: 0 in shards 1, 2 and 4 (shard 3 was not searched for this). Two flaky retries passed, both outside this file: shard 2 `[tablet] estimate-warning.spec.ts:117` ("AC-6 (AC-4): when something changed after the 409 ...") and shard 3 `[desktop] cost-details.spec.ts:286` ("AC-8 (NFR-002): an Engineer gets nothing ..."); the run is `success` and fully green under DL-332. They are recorded here for the run, not graded.
+
+**Half 2** (the first `master` push after #643's squash) is not read: #643 was not merged at the time of this record.
+
+**For master (2026-11-23, #643 half 1).**
+1. Half 1 reads 23.2 / 22.9 / 25.8 s, attempt 1, all passed, desktop 0.8 s over the 25 s line. Is half 1 met (no, on the line as written) and does #643 merge on its fully green run (the merge condition in the orchestrator's hand-off) with half 1 and half 2 both still counting for closing the Bug? QA closes nothing and asks for no re-run (no rule covers one).
