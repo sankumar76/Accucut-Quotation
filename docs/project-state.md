@@ -53,7 +53,7 @@
 3. Commands denied, not worked around: QA's `git merge origin/master` and `rm` in records-u; a developer's compound `cd … && git merge` (the approved `git -C` form was used); the GitHub MCP review, update-branch and comment tools return 403 (`gh` used).
 4. Follow-ups open: #619, #626, #627, #629, #606/#607.
 
-## Pre-G8 list (master's G8 conditions: DL-314, with the DL-321 (4) and DL-323 (5) deltas)
+## Pre-G8 list (master's G8 conditions: DL-314, with the DL-321 (4), DL-323 (5) and DL-325 to DL-328 deltas)
 
 > Copied by the orchestrator on 2026-11-22 (late), as DL-314 asks (RISK-026: one list, so that no condition is lost). The decision-log entries are the source; where they differ, the later entry wins (DL-323 replaces DL-321 (4) for DEF-038). Status column as of `master` d2771045.
 
@@ -61,7 +61,7 @@
 | Item | Owner | Closes on | Status |
 |---|---|---|---|
 | DEF-057 (Sev-2) | developer / qa-engineer / master | Observer reading names the stall and the fix is verified; **T4: master re-rules by 26 Nov** if no reading names it; open at the freeze → delivery lead with options (DL-295, DL-314) | Open (observer on `master` since #612) |
-| DEF-065 (Sev-2, AQP-407) | qa-engineer | P1 to P6 and QA's verification on #633's head (DL-319, DL-323 (5)) | Fix merged in #633 (d2771045, run 45103803921 green); QA verification under way |
+| DEF-065 (Sev-2, AQP-407) | qa-engineer | P1 to P6 and QA's verification on #633's head (DL-319, DL-323 (5)) | **Closed** (QA verified on d2771045, 9762cc18; AQP-407 Done) |
 
 **Date-triggered:**
 | ID | Date | Condition | Status |
@@ -80,10 +80,11 @@
 | G8-C-581 | as DL-292 | Unchanged |
 | G8-C-CI | delivery lead's written acceptance at sign-off (DL-286) | Unchanged |
 | G8-C-FR064 | product-manager | **Closed (MET, DL-315)** |
+| G8-C-DEF069 (new, DL-327 (7)) | developer (observation, AQP-411) / qa-engineer | By the freeze (about 3 Dec), DEF-069 is closed on DL-327 (6), or its observation has named the step that used the time on at least one failing attempt and that step is not the Engineer's forbidden-route request. Otherwise → master, and the delivery lead with options before the G8 recommendation. **Open** (observation PR in progress) |
 
-**At G8:** the DL-312 Minor list, with every line holding an issue; STD-F-03 listed as a waived Major (DL-298 (6)); RISK-034 and RISK-035 reviewed (RISK-035 score unchanged, DL-323); the install-check list (DL-311 (4)). QA test plan §7.1: if #632 merges, the final regression runs on a 16.4.6 head and reads one export download end to end (DL-321 (5)).
+**At G8:** the DL-312 Minor list, with every line holding an issue; STD-F-03 listed as a waived Major (DL-298 (6)); RISK-034 and RISK-035 reviewed (RISK-035 score unchanged, DL-323); RISK-031 reviewed as reopened at 9 (DL-326; close-out needs the DEF-069 proof, the treatments `:86` Bug's proof, then one `master` push with 0 time-out flaky in every shard and Stage 11 green or red only on the DEF-064 signature); the install-check list (DL-311 (4)). QA test plan §7.1: if #632 merges, the final regression runs on a 16.4.6 head and reads one export download end to end (DL-321 (5)).
 
-**Not blocking, listed:** DEF-038 (Sev-3 Test; its reopen trigger stays on: any diagnostic line or first-read mismatch makes it provisional Sev-2 the same day and it then blocks G8; if not fixed by G8, listed with #462 and accepted in writing only if no diagnostic line has appeared on any `master` push run since DL-323). DEF-066 (Sev-4, fixed in #633, QA verification under way). DEF-067 (Sev-3, R14, DL-322). DEF-068 (`estimate-save` AC-5, DL-324). **Not a G8 condition:** QLT-08 (closes on AQP-390, DL-313).
+**Not blocking, listed:** DEF-038 (Sev-3 Test; its reopen trigger stays on: any diagnostic line or first-read mismatch makes it provisional Sev-2 the same day and it then blocks G8; if not fixed by G8, listed with #462 and accepted in writing only if no diagnostic line has appeared on any `master` push run since DL-323). DEF-066 (Sev-4: closed, QA 9762cc18). DEF-067 (Sev-3, R14, DL-322). DEF-068 (`estimate-save` AC-5, DL-324). DEF-064 (Sev-3 Test, Mailpit race; fix due before the final regression, DL-325). DEF-069 (Sev-3 Test, `cost-details` :100/:152, NFR-002; see G8-C-DEF069; a forbidden-route step over 5 s → provisional Sev-2, a verdict failure → Sev-1 and G8 blocker, DL-327). The treatments `:86` Bug (DL-328; QA logging it). **Not a G8 condition:** QLT-08 (closes on AQP-390, DL-313).
 
 ## Resume point (2026-11-22, pause 5, orchestrator)
 
