@@ -5,7 +5,7 @@ import { Icon } from '@/components/shared/icon';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 
-import { ROW_ACTION_SIZE } from './add-node-trigger';
+import { ROW_ACTION_SIZE, UNAVAILABLE_LOOK } from './add-node-trigger';
 
 /** The drag's code, fetched at the first pointer-down on a handle (AC-5). A request that fails leaves no drag, and the menu is still there. */
 const loadReorder = (): Promise<typeof import('./tree-reorder')> => import('./tree-reorder');
@@ -34,6 +34,8 @@ export function endsDrag(handle: HTMLElement): boolean {
 export interface MoveHandleTriggerProps extends Omit<ComponentProps<'button'>, 'children'> {
   /** The tooltip and the spoken name: "Move 1.1 Frame". */
   readonly label: string;
+  /** A change to the tree is on its way (AQP-343): the handle is `aria-disabled` and looks it, and keeps the focus. The caller sees to it that a press does nothing. Absent when not. */
+  readonly unavailable?: boolean;
 }
 
 /**
@@ -41,9 +43,9 @@ export interface MoveHandleTriggerProps extends Omit<ComponentProps<'button'>, '
  * the first open of its menu (`move-menu.tsx`), so nothing changes when they swap (AQP-188). `touch-none`: a finger that goes down on the handle drags the row, and a finger anywhere else still scrolls the page. It
  * passes every other prop on to the `<button>`, which is how Radix reaches it (`asChild`).
  */
-export function MoveHandleTrigger({ label, className, ...props }: MoveHandleTriggerProps) {
+export function MoveHandleTrigger({ label, className, unavailable, ...props }: MoveHandleTriggerProps) {
   return (
-    <Button variant="ghost" size="icon" aria-label={label} title={label} className={cn(ROW_ACTION_SIZE, 'cursor-grab touch-none', className)} {...props}>
+    <Button variant="ghost" size="icon" aria-label={label} title={label} data-move-handle="" className={cn(ROW_ACTION_SIZE, 'touch-none', unavailable === true ? UNAVAILABLE_LOOK : 'cursor-grab', className)} {...props} {...(unavailable === true ? { 'aria-disabled': true } : {})}>
       <Icon icon={GripVertical} size="large" />
     </Button>
   );

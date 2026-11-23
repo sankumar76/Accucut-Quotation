@@ -111,6 +111,33 @@ describe('AC-2, AC-7: the handle before the menu has loaded', () => {
   });
 });
 
+describe('AQP-343 state: while a change to the tree is on its way (DL-340)', () => {
+  it('is aria-disabled, described by the line when it is on screen, and does nothing: no drag, no click, no arrow', async () => {
+    const tree = handle({ unavailable: true, describedBy: 'parts-tree-changing' });
+    const trigger = triggerOf(tree);
+    expect(trigger.props).toMatchObject({ unavailable: true, 'aria-describedby': 'parts-tree-changing' });
+    const held = handleOf();
+    call(trigger.props, 'onPointerDown', pointerDown(held));
+    call(trigger.props, 'onClick', { detail: 1, currentTarget: handleOf() });
+    call(trigger.props, 'onKeyDown', { key: 'ArrowDown', preventDefault: vi.fn() });
+    await Promise.resolve();
+    expect(held.setPointerCapture).not.toHaveBeenCalled();
+    expect(mocks.attach).not.toHaveBeenCalled();
+    expect(mocks.activate).not.toHaveBeenCalled();
+  });
+
+  it('is as it was when nothing is on its way', () => {
+    expect(triggerOf(handle()).props['unavailable']).toBeUndefined();
+  });
+
+  it('hands the state to the loaded menu', () => {
+    const Menu = vi.fn();
+    mocks.state = { shown: true, Overlay: Menu, pending: false, failed: false, keyboard: false };
+    expect(handle({ unavailable: true, describedBy: 'parts-tree-changing' }).props).toMatchObject({ unavailable: true, describedBy: 'parts-tree-changing' });
+    expect(handle().props).not.toHaveProperty('unavailable');
+  });
+});
+
 describe('AC-1, AC-5: a press on the handle starts a drag, and its code is fetched then', () => {
   it('holds the pointer and starts the reorder with the pointer, the height it went down at and the way to move the row', async () => {
     const { props } = triggerOf(handle());
@@ -195,6 +222,23 @@ describe('AC-2: the loaded menu', () => {
     call(triggerOf(hook.render()).props, 'onClick', { detail: 1, currentTarget: dragged });
     expect(rootOf(hook.render()).props['open']).toBe(true);
     expect('dragged' in dragged.dataset).toBe(false);
+  });
+
+  it('while a change is on its way: the trigger is unavailable, no drag starts, it does not open again, and an open menu has its items disabled', async () => {
+    const hook = menu({ unavailable: true, describedBy: 'parts-tree-changing' });
+    const tree = hook.render();
+    expect(triggerOf(tree).props).toMatchObject({ unavailable: true, 'aria-describedby': 'parts-tree-changing' });
+    for (const item of itemsOf(tree)) expect(item.props['disabled']).toBe(true);
+    const held = handleOf();
+    call(triggerOf(tree).props, 'onPointerDown', pointerDown(held));
+    call(triggerOf(tree).props, 'onClick', { detail: 1, currentTarget: handleOf() });
+    await Promise.resolve();
+    expect(mocks.attach).not.toHaveBeenCalled();
+    expect(rootOf(hook.render()).props['open']).toBe(true);
+    call(rootOf(hook.render()).props, 'onOpenChange', false);
+    expect(rootOf(hook.render()).props['open']).toBe(false);
+    call(rootOf(hook.render()).props, 'onOpenChange', true);
+    expect(rootOf(hook.render()).props['open']).toBe(false);
   });
 
   it('has the name of the row on its trigger, the same as the handle it replaces', () => {

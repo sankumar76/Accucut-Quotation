@@ -17,6 +17,10 @@ export interface MoveHandleMenuProps {
   readonly downTo: number | null;
   /** Moves the row to this place among its siblings: from the menu, and from the end of a drag. */
   readonly onMoveTo: (index: number) => void;
+  /** A change to the tree is on its way (AQP-343): the handle is `aria-disabled` and keeps the focus, it neither drags nor opens, and an open menu has its items disabled. Absent when not. */
+  readonly unavailable?: boolean;
+  /** The ID of the line that says why it is unavailable, when it is on screen: the handle is described by it. Only with `unavailable`. */
+  readonly describedBy?: string;
   /** Opened with Enter, Space or ArrowDown: focus goes to the first item that can be chosen. A pointer open leaves it on the menu. */
   readonly keyboard: boolean;
 }
@@ -36,28 +40,31 @@ const FAILURE_MESSAGE = 'The menu did not open. Check your connection and try ag
  * same parent (`tree-reorder.ts`, loaded at the first pointer-down); **a click, Enter, Space or an arrow-down** opens Move up / Move down (`move-menu.tsx`, loaded at the first open: the pressed look and
  * `aria-busy` while it comes, a line if it does not). Until then it is a plain button with the face, name and `aria-haspopup="menu"` of the Radix trigger that replaces it. Same pattern as the "+" menu (`add-node-menu.tsx`).
  */
-export function MoveHandle({ id, label, upTo, downTo, onMoveTo }: MoveHandleProps) {
+export function MoveHandle({ id, label, upTo, downTo, onMoveTo, unavailable, describedBy }: MoveHandleProps) {
   const first = useFirstOpen<MoveHandleMenuProps>({ id, load: loadMenu });
   const failureId = `${id}-failure`;
 
   if (first.shown && first.Overlay !== null) {
     const Menu = first.Overlay;
-    return <Menu label={label} upTo={upTo} downTo={downTo} onMoveTo={onMoveTo} keyboard={first.keyboard} />;
+    return <Menu label={label} upTo={upTo} downTo={downTo} onMoveTo={onMoveTo} keyboard={first.keyboard} {...(unavailable === true ? { unavailable, ...(describedBy === undefined ? {} : { describedBy }) } : {})} />;
   }
 
-  const onPointerDown = (event: PointerEvent<HTMLButtonElement>): void => startDrag(event, onMoveTo);
+  // While a change is on its way the handle does nothing (and keeps the focus): no drag, no click, no Enter, Space or arrow starts anything.
+  const onPointerDown = (event: PointerEvent<HTMLButtonElement>): void => {
+    if (unavailable !== true) startDrag(event, onMoveTo);
+  };
   const onClick = (event: MouseEvent<HTMLButtonElement>): void => {
-    if (!endsDrag(event.currentTarget)) first.activate(event.detail === 0);
+    if (!endsDrag(event.currentTarget) && unavailable !== true) first.activate(event.detail === 0);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
-    if (event.key !== 'ArrowDown') return;
+    if (event.key !== 'ArrowDown' || unavailable === true) return;
     event.preventDefault();
     first.activate(true);
   };
 
   return (
     <span className="relative inline-flex">
-      <MoveHandleTrigger label={label} aria-haspopup="menu" aria-expanded={false} aria-busy={first.pending || undefined} aria-describedby={first.failed ? failureId : undefined} onPointerDown={onPointerDown} onClick={onClick} onKeyDown={onKeyDown} />
+      <MoveHandleTrigger label={label} {...(unavailable === true ? { unavailable } : {})} aria-haspopup="menu" aria-expanded={false} aria-busy={first.pending || undefined} aria-describedby={first.failed ? failureId : unavailable === true ? describedBy : undefined} onPointerDown={onPointerDown} onClick={onClick} onKeyDown={onKeyDown} />
       {first.failed ? <FirstOpenFailure id={failureId} message={FAILURE_MESSAGE} align="right" /> : null}
     </span>
   );

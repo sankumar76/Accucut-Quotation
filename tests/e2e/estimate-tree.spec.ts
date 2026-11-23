@@ -28,15 +28,31 @@ const PHONE_MAX = 767;
 /** The parts tree is a `nav` of nested lists of links (CR-01 item 3B): a row is its link, and its number is the text marked `data-sl-no`. */
 const tree = (page: Page): Locator => page.getByRole('navigation', { name: 'Parts tree' });
 const part = (page: Page, slNo: string): Locator => tree(page).getByRole('link').filter({ has: page.locator('[data-sl-no]', { hasText: new RegExp(`^${slNo.replaceAll('.', '\\.')}$`) }) });
+/**
+ * Chooses a row by a press at the start of its name. The toolbar of a row (move handle, "+" and "-", CR-01 items 3C and 3D) floats over the end of it, and in a narrow panel it reaches the middle of a short row, so the centre
+ * of the link, where Playwright presses by default, is not always the row. A person presses on the name.
+ */
+const choose = (page: Page, slNo: string): Promise<void> => part(page, slNo).click({ position: { x: 16, y: 10 } });
 const action = (page: Page, name: string): Locator => page.getByRole('button', { name, exact: true });
 /**
  * A button of one row (CR-01 item 3C): its name starts with the words and the number of its row ("Add under 1 ", "Add fastener under 1.1.1 ", "Delete 1.1 "). The toolbar shows on hover, on focus and on the open row
  * (on a touch screen on the open row only), so a test chooses the row first, as a person does.
  */
 const rowButton = (page: Page, words: string, slNo: string): Locator => tree(page).getByRole('button', { name: new RegExp(`^${words} ${slNo.replaceAll('.', '\\.')} `) });
+/**
+ * The move handle of one row (CR-01 item 3D): its name is "Move" and the number and name of its row. A click on it, Enter or Space opens Move up / Move down; a press and a drag move the row among the rows with the same
+ * parent. Like the other row buttons it is shown on hover, on focus and on the open row, so a test chooses the row first.
+ */
+const handleOf = (page: Page, slNo: string): Locator => rowButton(page, 'Move', slNo);
+/** Move up or Move down of a row, from the menu of its handle, by the pointer. */
+async function moveFromMenu(page: Page, slNo: string, item: 'Move up' | 'Move down'): Promise<void> {
+  await choose(page, slNo);
+  await handleOf(page, slNo).click();
+  await page.getByRole('menuitem', { name: item, exact: true }).click();
+}
 /** Adds a row of this kind under the row with this Sl. No by its "+": a menu for a Main Assembly or a Sub-Assembly (the code of the menu loads on the first open), the Fastener at once for a Part. */
 async function addUnder(page: Page, slNo: string, kind: 'Sub-Assembly' | 'Part' | 'Fastener'): Promise<void> {
-  await part(page, slNo).click();
+  await choose(page, slNo);
   if (kind === 'Fastener' && (await rowButton(page, 'Add fastener under', slNo).count()) === 1) {
     await rowButton(page, 'Add fastener under', slNo).click();
     return;
@@ -66,6 +82,7 @@ async function slNumbers(page: Page): Promise<string[]> {
  */
 const MOVE_ROUTE = /\/tree\/move$/;
 const TOOLBAR_ACTIONS = ['Add main assembly', 'Move up', 'Move down'] as const;
+/** CR-01 item 3D: Move up and Move down are the items of each row's move handle now, so the diagnostic reads the handles (named "Move 1.2 ...") as the move controls. */
 /** What the report waits for the page: it must never hold up the test's own failure for long. */
 const REPORT_PATIENCE_MS = 5_000;
 const KEPT_PAGE_ERRORS = 20;
@@ -138,6 +155,8 @@ async function readScreen(page: Page, wanted: string): Promise<string[]> {
       const found = buttons.find((button) => textOf(button) === name);
       return found === undefined ? `${name}: not on screen` : `${name}: aria-disabled=${found.getAttribute('aria-disabled') ?? 'no'}, disabled=${String(found.disabled)}`;
     });
+    const handles = buttons.filter((button) => (button.getAttribute('aria-label') ?? '').startsWith('Move ')).map((button) => `${button.getAttribute('aria-label') ?? ''}: aria-disabled=${button.getAttribute('aria-disabled') ?? 'no'}, disabled=${String(button.disabled)}`);
+    toolbar.push(...handles);
     const active = document.activeElement;
     const focus = active === null ? 'none' : `<${active.tagName.toLowerCase()}${active.getAttribute('role') === null ? '' : ` role=${active.getAttribute('role')}`}> "${textOf(active).slice(0, 60)}"`;
     // The elements `getByText` would count: the innermost ones that hold the words (it ignores case).
@@ -279,7 +298,7 @@ async function openTreeWithTwoSubParts(page: Page, testInfo: TestInfo): Promise<
 }
 
 test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
-  test('AC-1, AC-2: the "+" of a row and "Add main assembly" add rows and number them 1, 1.1, 1.2, 2; Move up renumbers and says so', async ({ page }, testInfo) => {
+  test('AC-1, AC-2: the "+" of a row and "Add main assembly" add rows and number them 1, 1.1, 1.2, 2; Move up and Move down of the handle renumber and say so', async ({ page }, testInfo) => {
     // The second of two tests that are slow by what they do (AQP-340): four additions and two moves, each a request and a re-read of the tree. Measured: 22.8 s on a mobile shard of a green run
     // (44021154191), and it ran out of its 30 s on the tablet shard in runs 43905784789, 44025795508 and 44045571667. Three times the default, for this test only.
     test.slow();
@@ -296,16 +315,19 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2', '2']);
 
     // The new part is the selected one; 1.2 up becomes 1.1, and the screen says so.
-    await part(page, '1.2').click();
-    await action(page, 'Move up').click();
+    await moveFromMenu(page, '1.2', 'Move up');
     await expectRenumbered(page, testInfo, moves, 'Part renumbered to 1.1');
-    await expect(action(page, 'Move up')).toBeFocused();
+    // The moved row's handle has the focus, in its new place, and the row is still the open one.
+    await expect(handleOf(page, '1.1')).toBeFocused();
     await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
-    // At the top of its group it cannot go further: the button says so and keeps focus.
-    await expect(action(page, 'Move up')).toHaveAttribute('aria-disabled', 'true');
+    // At the top of its group it cannot go further: Move up is disabled in the menu, and the menu still opens.
+    await handleOf(page, '1.1').click();
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Escape');
+    await expect(handleOf(page, '1.1')).toBeFocused();
 
     // Down again.
-    await action(page, 'Move down').click();
+    await moveFromMenu(page, '1.1', 'Move down');
     await expectRenumbered(page, testInfo, moves, 'Part renumbered to 1.2');
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2', '2']);
 
@@ -368,7 +390,7 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     expect((await arrow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     expect((await arrow.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
 
-    // Tab goes arrow, row, the row's own "+" and "-", next row, and so on: the order of the page, with no roving stop (UX spec section 0.9 row 3: "Keyboard: Tab moves between a row and its "+""). A touch screen has no
+    // Tab goes arrow, row, the row's own move handle, "+" and "-", next row, and so on: the order of the page, with no roving stop (UX spec section 0.9 row 3: "Keyboard: Tab moves between a row and its "+""). A touch screen has no
     // hover, so there only the open row (row 2, the one added last) shows its buttons and the rows before it go straight to the next row (AQP-405 AC-7).
     const toolbarStops = await page.evaluate(() => !window.matchMedia('(pointer: coarse)').matches);
     const tabTo = async (target: Locator): Promise<void> => {
@@ -378,11 +400,13 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await arrow.focus();
     await tabTo(part(page, '1'));
     if (toolbarStops) {
+      await tabTo(rowButton(page, 'Move', '1'));
       await tabTo(rowButton(page, 'Add under', '1'));
       await tabTo(rowButton(page, 'Delete', '1'));
     }
     await tabTo(part(page, '1.1'));
     if (toolbarStops) {
+      await tabTo(rowButton(page, 'Move', '1.1'));
       await tabTo(rowButton(page, 'Add under', '1.1'));
       await tabTo(rowButton(page, 'Delete', '1.1'));
     }
@@ -414,7 +438,7 @@ test.describe('AC-3: delete asks first and names the count', () => {
   test('AC-3: a part with 2 sub-parts: the dialog names 3 parts and Cancel is the safe choice; Cancel changes nothing', async ({ page }, testInfo) => {
     await openTreeWithTwoSubParts(page, testInfo);
 
-    await part(page, '1').click();
+    await choose(page, '1');
     await rowButton(page, 'Delete', '1').click();
     const dialog = page.getByRole('alertdialog', { name: 'Delete row 1?' });
     await expect(dialog).toBeVisible();
@@ -431,7 +455,7 @@ test.describe('AC-3: delete asks first and names the count', () => {
   test('AC-3: a part with 2 sub-parts: confirming deletes all three', async ({ page }, testInfo) => {
     await openTreeWithTwoSubParts(page, testInfo);
 
-    await part(page, '1').click();
+    await choose(page, '1');
     await rowButton(page, 'Delete', '1').click();
     const dialog = page.getByRole('alertdialog', { name: 'Delete row 1?' });
     await expect(dialog).toBeVisible();
@@ -477,7 +501,7 @@ test.describe('AQP-405: the row actions', () => {
     // Five additions, each a request and a re-read of the tree, as the AC-1, AC-2 test above (AQP-340).
     test.slow();
     await openTree(page, testInfo);
-    await part(page, '1').click();
+    await choose(page, '1');
 
     // Under a Main Assembly: a Sub-Assembly, a Part or a Fastener. Escape closes the menu and gives the focus back to its "+".
     const plus = rowButton(page, 'Add under', '1');
@@ -504,7 +528,7 @@ test.describe('AQP-405: the row actions', () => {
     await expect(part(page, '1.1.1')).toBeFocused();
 
     // Under a Part there is one kind allowed, so it is added at once, with no menu; the "+" says so in its name.
-    await part(page, '1.1.1').click();
+    await choose(page, '1.1.1');
     const fastener = rowButton(page, 'Add fastener under', '1.1.1');
     await expect(fastener).not.toHaveAttribute('aria-haspopup', 'menu');
     await fastener.click();
@@ -513,7 +537,7 @@ test.describe('AQP-405: the row actions', () => {
     await expect(tree(page).getByRole('img', { name: 'Fastener' })).toHaveCount(1);
 
     // A Fastener holds nothing: no "+", only its "-".
-    await part(page, '1.1.1.1').click();
+    await choose(page, '1.1.1.1');
     await expect(tree(page).getByRole('button', { name: /^Add (under|fastener under) 1\.1\.1\.1 / })).toHaveCount(0);
     await expect(rowButton(page, 'Delete', '1.1.1.1')).toHaveCount(1);
 
@@ -529,7 +553,7 @@ test.describe('AQP-405: the row actions', () => {
     // The toolbar of a row that is not open shows on hover: a pointer is needed, so this is for the desktop width (a touch screen shows it on the open row only).
     test.skip(isPhone(page) || (page.viewportSize()?.width ?? 0) < 1024, 'the toolbar of a row that is not open is shown by a pointer');
     await openTreeWithTwoSubParts(page, testInfo);
-    await part(page, '1.2').click();
+    await choose(page, '1.2');
     await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
 
     await rowButton(page, 'Delete', '1.1').click();
@@ -547,7 +571,7 @@ test.describe('AC-6: a change made under the person', () => {
     const { estimateId } = await openTree(page, testInfo);
     await addMain(page);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '2']);
-    await part(page, '2').click();
+    await choose(page, '2');
 
     // Someone else moves part 2 to the top, from the same session, while this screen still shows it second.
     const moved = await page.evaluate(async (id) => {
@@ -563,7 +587,8 @@ test.describe('AC-6: a change made under the person', () => {
     }, estimateId);
     expect(moved).toBe(200);
 
-    await action(page, 'Move up').click();
+    await handleOf(page, '2').click();
+    await page.getByRole('menuitem', { name: 'Move up', exact: true }).click();
     await expect(page.getByText('The parts were changed by someone else. The tree has been refreshed. Check it and try again.')).toBeVisible();
     // The tree is the server's: the part moved first is first, and nothing was moved twice.
     await expect.poll(() => slNumbers(page)).toEqual(['1', '2']);
@@ -582,12 +607,12 @@ test.describe('AC-9: the screen', () => {
     } else {
       await expect(page.getByRole('dialog')).toHaveCount(0);
     }
-    for (const name of ['Add main assembly', 'Move up', 'Move down']) {
+    for (const name of ['Add main assembly']) {
       expect((await action(page, name).boundingBox())?.height ?? 0, name).toBeGreaterThanOrEqual(TOUCH_TARGET);
     }
     // The row buttons are 44 px, and 36 px from 1024 px with a fine pointer (UX row 3, NFR-017). The open row (1.1, the one just added) is the one whose toolbar is on screen on a touch screen: the toolbar of another row is not drawn there.
     const rowButtonHeight = (page.viewportSize()?.width ?? 0) >= 1024 ? 36 : TOUCH_TARGET;
-    for (const [words, slNo] of [['Add under', '1.1'], ['Delete', '1.1']] as const) {
+    for (const [words, slNo] of [['Move', '1.1'], ['Add under', '1.1'], ['Delete', '1.1']] as const) {
       expect((await rowButton(page, words, slNo).boundingBox())?.height ?? 0, `${words} ${slNo}`).toBeGreaterThanOrEqual(rowButtonHeight);
     }
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
@@ -600,5 +625,126 @@ test.describe('AC-9: the screen', () => {
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     }
     await expectNoAxeViolations(page);
+  });
+});
+
+test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
+  /** The id of a row, from its link: it is how a test tells that the row, and not only its number, has moved. */
+  const idOf = async (page: Page, slNo: string): Promise<string | null> => part(page, slNo).getAttribute('data-part-id');
+
+  test('AQP-406 AC-1, AC-5, AC-8: dragging the handle of 1.2 above 1.1 shows a red line, moves the row, renumbers both, and announces it; the handle has the focus after', async ({ page }, testInfo) => {
+    test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop; the phone has the touch drag below');
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.2');
+    const moving = await idOf(page, '1.2');
+    const handle = defined(await handleOf(page, '1.2').boundingBox());
+    const above = defined(await part(page, '1.1').boundingBox());
+    const x = handle.x + handle.width / 2;
+    await page.mouse.move(x, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, above.y + 4, { steps: 8 });
+    // The red line is at the top of 1.1, where the row would land, and is not the only cue: the numbers change at the drop.
+    const line = page.locator('[data-drop-line]');
+    await expect(line).toBeVisible();
+    const lineBox = defined(await line.boundingBox());
+    expect(Math.abs(lineBox.y + lineBox.height / 2 - above.y)).toBeLessThan(10);
+    await page.mouse.up();
+    await expect(line).toHaveCount(0);
+    await expect(page.getByText('Part renumbered to 1.1')).toHaveCount(1);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    expect(await idOf(page, '1.1')).toBe(moving);
+    await expect(handleOf(page, '1.1')).toBeFocused();
+  });
+
+  test('AQP-406 AC-1: a drag that ends where the row is, or a click with a few pixels of wobble, sends nothing and opens the menu only for the click', async ({ page }, testInfo) => {
+    test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop');
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.1');
+    const moves = watchMoves(page);
+    const handle = defined(await handleOf(page, '1.1').boundingBox());
+    const x = handle.x + handle.width / 2;
+    const y = handle.y + handle.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y + 30, { steps: 4 });
+    await page.mouse.move(x, y, { steps: 4 });
+    await page.mouse.up();
+    // A drag, let go where it began: no request and no menu.
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toHaveCount(0);
+    expect(moves.calls).toHaveLength(0);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    // A click: the menu.
+    await handleOf(page, '1.1').click();
+    await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toBeVisible();
+    expect(moves.calls).toHaveLength(0);
+  });
+
+  test('AQP-406 AC-6, AC-8: a touch drag at phone width reorders, and the page still scrolls where the handle is not', async ({ page, context }, testInfo) => {
+    test.skip(!isPhone(page), 'the touch drag is judged at phone width');
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.2');
+    const moving = await idOf(page, '1.2');
+    const handle = defined(await handleOf(page, '1.2').boundingBox());
+    const above = defined(await part(page, '1.1').boundingBox());
+    const x = handle.x + handle.width / 2;
+    const fromY = handle.y + handle.height / 2;
+    const toY = above.y + 4;
+    const cdp = await context.newCDPSession(page);
+    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', y: number) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+    await touch('touchStart', fromY);
+    for (let step = 1; step <= 8; step += 1) await touch('touchMove', fromY + ((toY - fromY) * step) / 8);
+    await expect(page.locator('[data-drop-line]')).toBeVisible();
+    await touch('touchEnd', toY);
+    await expect(page.getByText('Part renumbered to 1.1')).toHaveCount(1);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    expect(await idOf(page, '1.1')).toBe(moving);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+
+  test('AQP-406 AC-2, AC-8: Move up and Move down by keyboard, with no dragging: Enter opens the menu on the first item that can be chosen, Enter chooses it, the row is announced and its handle keeps the focus; axe finds nothing with the menu open', async ({ page }, testInfo) => {
+    test.slow();
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.2');
+    await handleOf(page, '1.2').focus();
+    await page.keyboard.press('Enter');
+    // The last of two: Move down cannot be chosen, Move up can and has the focus.
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toBeFocused();
+    await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await expectNoAxeViolations(page);
+    await page.keyboard.press('Enter');
+    await expect(page.getByText('Part renumbered to 1.1')).toHaveCount(1);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    await expect(handleOf(page, '1.1')).toBeFocused();
+
+    // The first of two: Move up cannot be chosen, and Move down has the focus. Escape closes the menu and the handle keeps the focus.
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toHaveCount(0);
+    await expect(handleOf(page, '1.1')).toBeFocused();
+    expect(await slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+  });
+
+  test('AQP-406 AC-2, AC-3: an only child has both items disabled, and there is no item that moves a row under another parent', async ({ page }, testInfo) => {
+    await openTree(page, testInfo);
+    await choose(page, '1');
+    await handleOf(page, '1').click();
+    await expect(page.getByRole('menuitem')).toHaveCount(2);
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Escape');
+  });
+
+  test('AQP-406 AC-9: a request that fails leaves the row where it was, with no new order kept, and says that the change was not made', async ({ page }, testInfo) => {
+    await openTreeWithTwoSubParts(page, testInfo);
+    await page.route(/\/tree\/move$/, (route) => route.abort('failed'));
+    await moveFromMenu(page, '1.2', 'Move up');
+    await expect(page.getByText('The change was not made')).toBeVisible();
+    expect(await slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    await page.unroute(/\/tree\/move$/);
+    // Nothing is stuck: the same move goes through now.
+    await moveFromMenu(page, '1.2', 'Move up');
+    await expect(page.getByText('Part renumbered to 1.1')).toHaveCount(1);
   });
 });

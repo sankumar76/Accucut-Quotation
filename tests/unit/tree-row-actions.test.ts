@@ -24,7 +24,7 @@ const NODES: ReadonlyArray<PartItem> = [
 ];
 
 const noop = (): void => undefined;
-const actions = (node: PartItem): string => renderToStaticMarkup(createElement(RowActions, { part: node, onAdd: noop, onDelete: noop }));
+const actions = (node: PartItem): string => renderToStaticMarkup(createElement(RowActions, { part: node, onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop }));
 const count = (html: string, text: string): number => html.split(text).length - 1;
 
 function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
@@ -34,6 +34,7 @@ function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
     selected: nodes?.[0] ?? null,
     busy: false,
     waiting: false,
+    movedFocus: null,
     problem: null,
     announcement: '',
     deleting: null,
@@ -41,7 +42,7 @@ function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
     select: noop,
     addUnder: noop,
     wantsFocus: () => false,
-    move: noop,
+    moveTo: noop,
     askDelete: noop,
     confirmDelete: () => Promise.resolve(),
     cancelDelete: noop,
@@ -51,6 +52,26 @@ function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
 }
 
 const panel = (nodes: ReadonlyArray<PartItem> | null, editable: boolean, state: Partial<PartsTreeState> = {}): string => renderToStaticMarkup(createElement(TreePanel, { tree: { ...treeState(nodes), ...state }, editable }));
+
+describe('RowActions: the move handle of a row (AQP-406 AC-2, AC-5)', () => {
+  it('has a move handle on every row, named after its row, first in the toolbar and before the "+" and the "-"', () => {
+    for (const node of NODES) {
+      const html = actions(node);
+      expect(html).toContain(`aria-label="Move ${node.slNo} ${node.label}"`);
+      expect(html).toContain('aria-haspopup="menu"');
+      expect(html.indexOf('aria-label="Move ')).toBeLessThan(html.indexOf('aria-label="Delete '));
+    }
+    expect(actions(NODES[2] as PartItem).indexOf('aria-label="Move ')).toBeLessThan(actions(NODES[2] as PartItem).indexOf('aria-label="Add fastener'));
+  });
+
+  it('is a touch target of the same size as the other row buttons, and does not scroll the page when a finger goes down on it', () => {
+    const html = actions(NODES[0] as PartItem);
+    const handle = html.match(/<button[^>]*aria-label="Move [^"]*"[^>]*>/)?.[0] ?? '';
+    expect(handle).toContain('h-(--control-h)');
+    expect(handle).toContain('fine-wide:h-(--control-h-row)');
+    expect(handle).toContain('touch-none');
+  });
+});
 
 describe('RowActions: the "+" of a row (AC-1, AC-2, 14.30)', () => {
   it('is a menu button under a Main Assembly and under a Sub-Assembly, named after its row', () => {
@@ -68,14 +89,16 @@ describe('RowActions: the "+" of a row (AC-1, AC-2, 14.30)', () => {
     const html = actions(NODES[2] as PartItem);
     expect(html).toContain('aria-label="Add fastener under 1.1.1 Plate"');
     expect(html).toContain('title="Add fastener under 1.1.1 Plate"');
-    expect(html).not.toContain('aria-haspopup');
+    // The "+" is a plain button; the move handle beside it is the menu button.
+    expect(html.match(/<button[^>]*aria-label="Add fastener under[^"]*"[^>]*>/)?.[0]).not.toContain('aria-haspopup');
   });
 
   it('has no "+" on a Fastener', () => {
     const html = actions(NODES[3] as PartItem);
     expect(html).not.toContain('Add under');
     expect(html).not.toContain('Add fastener');
-    expect(count(html, '<button')).toBe(1);
+    // The move handle and the "-": no "+".
+    expect(count(html, '<button')).toBe(2);
   });
 
   it('puts a "-" on every row, named after its row (AC-4)', () => {
@@ -100,16 +123,15 @@ describe('TreePanel: where the actions are (AC-3, AC-5, AC-6)', () => {
     expect(count(html, 'aria-label="Delete ')).toBe(NODES.length);
   });
 
-  it('has lost the Add, Sub-part, Part beside and Delete buttons that sat above the input sections, and keeps Move up and Move down until 3D', () => {
+  it('has lost the Add, Sub-part, Part beside, Delete, Move up and Move down buttons that sat above the input sections: moving is the handle of each row (3D)', () => {
     const html = panel(NODES, true);
-    for (const gone of ['>New item<', '>Sub-part<', '>Part beside<', '>Delete<']) expect(html, gone).not.toContain(gone);
-    expect(html).toContain('>Move up<');
-    expect(html).toContain('>Move down<');
+    for (const gone of ['>New item<', '>Sub-part<', '>Part beside<', '>Delete<', '>Move up<', '>Move down<']) expect(html, gone).not.toContain(gone);
+    expect(count(html, 'aria-label="Move ')).toBe(NODES.length);
   });
 
   it('offers nothing where the person may not change the inputs: no "+", no "-", no "Add main assembly", no Move buttons, and the tree and its legend are still drawn', () => {
     const html = panel(NODES, false);
-    for (const gone of ['data-row-actions', 'Add main assembly', 'aria-label="Delete ', 'aria-label="Add', '>Move up<', '>Move down<']) expect(html, gone).not.toContain(gone);
+    for (const gone of ['data-row-actions', 'Add main assembly', 'aria-label="Delete ', 'aria-label="Add', 'aria-label="Move ', '>Move up<', '>Move down<']) expect(html, gone).not.toContain(gone);
     expect(count(html, 'data-part-id=')).toBe(NODES.length);
     expect(html).toContain('data-tree-legend');
     // The slot is still there, empty, so a later story does not lay the row out again.
@@ -158,20 +180,20 @@ describe('AQP-343 (DEF-040, DL-340): the tree while a change is on its way', () 
 
   it('keeps the move buttons, "Add main assembly" and the row buttons aria-disabled and described by that line, and none of them is disabled', () => {
     const html = panel(NODES, true, waiting);
-    for (const name of ['Move up', 'Move down', 'Add main assembly', 'Add under 1 Hopper', 'Add fastener under 1.1.1 Plate', 'Delete 1 Hopper', 'Delete 1.1.1.1 Nut']) {
+    for (const name of ['Move 1 Hopper', 'Move 1.1 Frame', 'Add main assembly', 'Add under 1 Hopper', 'Add fastener under 1.1.1 Plate', 'Delete 1 Hopper', 'Delete 1.1.1.1 Nut']) {
       const tag = buttonTag(html, name);
       expect(tag, name).toContain('aria-disabled="true"');
       expect(tag, name).toContain('aria-describedby="parts-tree-changing"');
       expect(tag, name).not.toMatch(DISABLED);
     }
-    expect(html).toContain('>Move up<');
+    expect(html).toContain('aria-label="Move 1 Hopper"');
   });
 
   it('is aria-disabled for the first 300 ms too, but names no line that is not on screen yet', () => {
     const html = panel(NODES, true, { busy: true });
     expect(html).not.toContain('parts-tree-changing');
-    expect(buttonTag(html, 'Move down')).toContain('aria-disabled="true"');
-    expect(buttonTag(html, 'Move down')).not.toContain('aria-describedby');
+    expect(buttonTag(html, 'Move 1.1 Frame')).toContain('aria-disabled="true"');
+    expect(buttonTag(html, 'Move 1.1 Frame')).not.toContain('aria-describedby');
     expect(buttonTag(html, 'Add main assembly')).toContain('aria-disabled="true"');
   });
 
@@ -189,7 +211,7 @@ describe('AQP-343 (DEF-040, DL-340): the tree while a change is on its way', () 
     expect(html).toContain('Check your connection and try again. What you typed is kept.');
     expect(html).toContain('>Try again<');
     expect(html).not.toContain('data-part-id=');
-    expect(html).not.toContain('>Move up<');
+    expect(html).not.toContain('aria-label="Move ');
     expect(html).not.toContain('The change was not made');
     expect(html).not.toContain('was saved');
   });

@@ -29,7 +29,7 @@ function focusFirstItem(event: Event): void {
  * **The handle still drags once the menu has loaded.** The menu is controlled: the trigger starts a drag on a pointer-down and keeps Radix from toggling on it (`preventDefault`, which Radix's own handler respects), and a
  * pointer click (one with a position, not the click an Enter or a Space makes) toggles it; Enter, Space and the arrow keys are Radix's own.
  */
-export function MoveMenu({ label, upTo, downTo, onMoveTo, keyboard }: MoveHandleMenuProps) {
+export function MoveMenu({ label, upTo, downTo, onMoveTo, keyboard, unavailable, describedBy }: MoveHandleMenuProps) {
   // The override is for the open that mounted the menu only; from then on Radix sees every key itself.
   const openedByKeyboard = useRef(keyboard);
   const [open, setOpen] = useState(true);
@@ -39,26 +39,34 @@ export function MoveMenu({ label, upTo, downTo, onMoveTo, keyboard }: MoveHandle
     focusFirstItem(event);
   };
   return (
-    <DropdownMenu modal={false} open={open} onOpenChange={setOpen}>
+    <DropdownMenu
+      modal={false}
+      open={open}
+      onOpenChange={(next) => {
+        // While a change is on its way (AQP-343) Enter, Space or an arrow cannot open it again; it can still be closed.
+        if (!next || unavailable !== true) setOpen(next);
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <MoveHandleTrigger
           label={label}
+          {...(unavailable === true ? { unavailable, ...(describedBy === undefined ? {} : { 'aria-describedby': describedBy }) } : {})}
           onPointerDown={(event: PointerEvent<HTMLButtonElement>) => {
             event.preventDefault();
-            startDrag(event, onMoveTo);
+            if (unavailable !== true) startDrag(event, onMoveTo);
           }}
           onClick={(event: MouseEvent<HTMLButtonElement>) => {
-            if (endsDrag(event.currentTarget)) return;
+            if (endsDrag(event.currentTarget) || unavailable === true) return;
             if (event.detail !== 0) setOpen((current) => !current);
           }}
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" {...{ onOpenAutoFocus: focusOnOpen }}>
-        <DropdownMenuItem disabled={upTo === null} onSelect={() => upTo !== null && onMoveTo(upTo)}>
+        <DropdownMenuItem disabled={upTo === null || unavailable === true} onSelect={() => upTo !== null && onMoveTo(upTo)}>
           <Icon icon={ArrowUp} size="large" />
           {TREE_MOVE_UP}
         </DropdownMenuItem>
-        <DropdownMenuItem disabled={downTo === null} onSelect={() => downTo !== null && onMoveTo(downTo)}>
+        <DropdownMenuItem disabled={downTo === null || unavailable === true} onSelect={() => downTo !== null && onMoveTo(downTo)}>
           <Icon icon={ArrowDown} size="large" />
           {TREE_MOVE_DOWN}
         </DropdownMenuItem>
