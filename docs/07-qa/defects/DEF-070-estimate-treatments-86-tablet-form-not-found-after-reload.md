@@ -4,9 +4,9 @@
 |-------|-------|
 | Story / AC | STORY-05.06 (AQP-314, Done) owns `estimate-treatments.spec.ts`, its **AC-1** ("the list has the eight, each with its letter; a chosen one is stored as 1 and one that is left as 0; none chosen is valid; the trigger says which, and a reload keeps it"). **No AC is shown to fail**: the case ran out of its 30 s budget at its last assertion, with no received value |
 | Severity | **Sev-3 Moderate** (qa-engineer, 2026-11-23, on master's DL-328 (2)) |
-| Priority | P3. Lane: hardening window, behind DEF-064's fix and DEF-069's observation (DL-328 (3)), and only if the mechanism reading below does not hold. Does not block G8 as a Sev-3 |
+| Priority | P3. Lane: hardening window, **the next free lane after DEF-069's code-facts note (DL-330 (4), DL-329 (8)); never pauses a CR-01 story.** Earlier (DL-328 (3)): behind DEF-064's fix and DEF-069's observation, and only if the mechanism reading below did not hold. Does not block G8 as a Sev-3 |
 | Type | **Test, product not excluded** (cause not determined; the family reading is below) |
-| Status | **Open** (logged 2026-11-23). Proof route of DL-328 (3), "yes" branch: **half 1 read and half 2 read (2026-11-23, later; both met on the numbers)**. **Not closed by QA: master has not ruled whether the "yes" branch holds** (QA's mechanism reading has two stated limits, see "For master" item 1 and the half 2 reading below). The watch trigger stays until G8 |
+| Status | **Open (DL-330, 2026-11-23): the "yes" branch of DL-328 (3) does not hold; the "no" branch applies: a test-only fix by the developer, in the next free lane after DEF-069's code-facts note; it never pauses a CR-01 story. Not closed; no fix PR yet.** Proof: the case passes on attempt 1 at all three widths, under 25 s, on the fix PR's run of record and on the first `master` push after the squash. Watch trigger stays until G8. Earlier: **Open** (logged 2026-11-23). Proof route of DL-328 (3), "yes" branch: **half 1 read and half 2 read (2026-11-23, later; both met on the numbers)**. **Not closed by QA: master has not ruled whether the "yes" branch holds** (QA's mechanism reading has two stated limits, see "For master" item 1 and the half 2 reading below). The watch trigger stays until G8 |
 | Jira / GitHub | [AQP-413](https://sankumar76.atlassian.net/browse/AQP-413) / [#641](https://github.com/sankumar76/Accucut-Quotation/issues/641). Jira "relates to" AQP-1 (Intake) and AQP-314 (owner story). Labels `ai-delivery`, `aiid-DEF-070`, `bug`, `sev-3`, `final-review`, `agent-qa-engineer`; priority Medium. DEF-070 was free: no file in `docs/07-qa/defects/`, JQL `labels = "aiid-DEF-070"` found nothing, no GitHub issue named it |
 | Risk / rule | The trigger is DL-264 (5)(b): "any attempt-1 failure, or a reading of 29 s or more, means a Bug the same day" (no wave clause; triggers apply as written, DL-284). **No re-run rule** (W1 does not cover a watch-list case with a Bug trigger). RISK-031 (reopened at 9, DL-326): not a trigger (b) event (a PR run). The watch trigger stays until G8: any later attempt-1 failure of the case reopens this Bug the same day |
 | Found by / date | CI (PR run); wave reading by qa-engineer 2026-11-23 (14934a39); Bug logged on DL-328, 2026-11-23 |
@@ -57,15 +57,15 @@ Read on `master` d2771045 and on #636's head `b6396c11`. **What the two PRs add.
 ## Suspected Area (optional)
 `tests/e2e/estimate-treatments.spec.ts` AC-1: seven steps that wait on a save each, then a reload and a 15 s expect, on a tablet shard that ran 1.36x slow. Cause not determined.
 
-## Fix route (DL-328 (3))
-- **"Yes" branch (the route master set):** no fix PR. The Bug closes when the case passes on its first attempt at all three widths, under 25 s, on #636's run of record (read above, 18.4 / 18.5 / 23.0 s) **and** on the first `master` push run after #636's squash. The watch trigger stays until G8: any later attempt-1 failure reopens it the same day, and "None selected" received after the reload sends QA to the DEF-065 / #513 family first.
-- **"No" branch:** a test-only fix by the developer in the hardening window behind DEF-064 and DEF-069's observation, with the same proof on its own PR. No retry, budget or timeout change.
+## Fix route (DL-328 (3); since DL-330 the "no" branch is the route)
+- **"Yes" branch (NOT the route: DL-330 ruled it does not hold; kept for the record):** no fix PR. The Bug closes when the case passes on its first attempt at all three widths, under 25 s, on #636's run of record (read above, 18.4 / 18.5 / 23.0 s) **and** on the first `master` push run after #636's squash. The watch trigger stays until G8: any later attempt-1 failure reopens it the same day, and "None selected" received after the reload sends QA to the DEF-065 / #513 family first.
+- **"No" branch (the route, DL-330 (4)):** see "DL-330" below.
 - No re-run rule. W1 does not cover the case.
 
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer (only on the "no" branch) | | |
+| Fixed | developer (the "no" branch applies, DL-330; not started) | | |
 | Regression test added | developer | | |
 | Verified (numbers) | qa-engineer | 2026-11-23 | half 1 read on 45111572570; half 2 read on `master` push 45116869670 (ce7c8c21); **both under 25 s at all three widths, attempt 1**. The Bug is not closed: master rules on the "yes" branch first (see "Half 2 reading") |
 
@@ -91,3 +91,21 @@ The watch trigger stays until G8: any later attempt-1 failure of the case reopen
 1. Does the "yes" branch of DL-328 (3) hold on QA's step 1 reading (DEF-070 "For master" item 1, with its gaps 1 and 2)? If yes, DEF-070 closes on 45111572570 (18.4 / 18.5 / 23.0 s) and 45116869670 (13.4 / 14.4 / 18.3 s); QA closes it (file, section 7, `gh issue close 641`, AQP-413 through transitions) on that word. If no, the "no" branch applies.
 
 **Watch reading on the next push (QA, 2026-11-23, later).** `master` push run **45122632176** (86cf64d3, `success`, 0 flaky, 0 failed): "AC-1: the list has the eight ..." attempt 1 passed at **17.5 / 22.9 / 16.7 s** (mobile / tablet / desktop), no failure, under 25 s. The watch trigger is not met.
+
+## DL-330 (master, 2026-11-23): the "no" branch applies (QA's record; no ruling made here)
+
+**Ruling.** DL-328 (3)'s "yes" branch does not hold. The two readings meet the numbers but do not close the Bug (DL-330 (3)): DL-328 (3) let the proof ride #636 "only with a mechanism reading, since two first-attempt passes alone cannot fail", so the mechanism must be the one that failed. Master's reading of the spec and `tests/e2e/support/part-form.ts` on `master` 06d5d56a: `toggle` (spec :50-56) awaits `nextSave(page, flagLetterOf(name))` and expects 200 before `expectNothingUnsaved`; since #636 `nextSave` waits for the response to the PATCH whose body carries that field (`carriesField`).
+- **Gap 1 (the lazily installed leave guard) does not matter for this case** (DL-330 (2)): a reload reads what the server stored, and the field-named 200 is awaited before the reload whether or not the guard is installed, so the save has settled on the server by then.
+- **Gap 2 decides it** (DL-330 (3)): the failure seen was the form **not found** after `page.reload()` at the 30 s edge, with no received text. A reload that raced a save would have shown the form with the wrong choice ("None selected", the DEF-065 / #513 family). The wait closes that path but not the one seen, and it adds time to the case (21.6, 21.2 and 19.7 s, and 26.7 s [mobile], after #630). So QA's readings of 18.4 / 18.5 / 23.0 s (45111572570, attempt 1) and 13.4 / 14.4 / 18.3 s (45116869670), and the 17.5 / 22.9 / 16.7 s of 45122632176, **stand as readings, not as proof.**
+
+**"No" branch (DL-330 (4)), with limits.**
+1. A test-only fix by the developer in the hardening window, in the next free lane after DEF-069's code-facts note (DL-329 (8)); it never pauses a CR-01 story.
+2. The PR body states **what used the time after the reload, or what the change takes out of the case**, with the case's attempt-1 durations at three widths before and after.
+3. No budget, retry, timeout, trace or artifact change, and every assertion is kept, including the reload check.
+4. The E2E test count stays unchanged while the DEF-057 and DEF-069 observers are being read (DL-296 (3)); splitting the case waits until both are read.
+
+**Proof (DL-330 (4)).** The case passes on **attempt 1 at all three widths, under 25 s**, on the fix PR's run of record **and** on the first `master` push after the squash. The watch trigger stays until G8, and "None selected" after a reload sends QA to the DEF-065 / #513 family first.
+
+**Grade and G8.** Sev-3, type Test; not a G8 blocker. RISK-031 close-out item (ii) waits for this proof (test plan section 7, rules line).
+
+**Answer to "For master (2026-11-23, half 2)" item 1:** "No." The Bug stays open; QA closes nothing on the half 1 and half 2 numbers.
