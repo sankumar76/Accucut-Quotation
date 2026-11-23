@@ -158,3 +158,26 @@ The half 2 numbers are met (all three attempt-1 passes under 25 s). Under DL-336
 `estimate-treatments.spec.ts:92` (AC-1) attempt 1 on `master` push 45183160959: **12.4 / 29.0 / 14.0 s** (mobile / tablet / desktop), all passed, no retry. **The tablet reading, 29.0 s (the log prints one decimal, so 28.95 to 29.05), is at DL-264 (5)(b)'s line ("a reading of 29 s or more means a Bug the same day") as the rule is written.** DEF-070 is the Bug for this case and it is already open (DL-336: the closing route is a second test-only change that takes time out of the case, in a lane after DEF-072, DEF-069's fix and DEF-073's cause step), so no new Bug is opened; the reading is evidence for that route. Earlier tablet readings after #643: 15.9 s (push 45157602768), 12.9 s (45168772552), 27.6 s (45171590856), 14.7 s (45179046845). For master: does the second test-only change move ahead in the lane order now that the 29 s line is reached on a `master` push?
 
 **DL-348 (B) (master, 2026-11-23): the 29.0 s reading is a DEF-070 occurrence, not a new Bug.** `estimate-treatments` AC-1 [tablet] read 29.0 s on attempt 1 on `master` push 45183160959 (151f42ca, which does not contain #653); DL-264 (5)(b) makes 29 s or more "a Bug the same day", and that Bug is DEF-070, already open. It was not a failure, so it is not on RISK-031 trigger (b). It shows the case one second from its budget on `master`, which is why **#653 (DEF-070's second test-only change, DL-343, RISK-031 close-out item (ii)) is next after #649 in the queue** (it needs a `git merge-tree` trial, an update, a fully green run that is 0 behind, and half 1 read on that run, DL-343 (3)). Recorded here and in test plan section 7.
+
+## Second test-only change #653: half 1 read on the run of record (qa-engineer, 2026-11-23; DL-336 (5), DL-343; Stage 12 job logs of run 45191290630, ANSI stripped; no re-run)
+
+**The change.** #653 (AQP-413; head 026b67a1, squashed as `master` **7decbc01**; one file, `tests/e2e/estimate-treatments.spec.ts` +7 -7; no `support/**`, config, CI, package or `src/` change; test count unchanged). In the AC-1 case the Primer pair is removed (two toggles, the `PRIMER` constant, "2 selected: Primer, Foam" becomes "1 selected: Foam", the two stored reads become `{ [FOAM]: '1' }` and `{ [FOAM]: '0' }`); the AC-2 case "with every treatment chosen" now clicks the eight in reverse and still expects "8 selected" in list order and all eight flags stored as 1. **Master accepted the narrowed AC-1 assertions as a recorded deviation from DL-336 (5)'s "every assertion is kept"** (DL-343 (A): the claims are mapped, not dropped: several chosen at once and the list order, and the second flag's column mapping, now live in the AC-2 case with a stronger check; only "a second flag stored as 0" is no longer read, the same code path as Foam's 0).
+
+**Half 1 (DL-330 (4); DL-343 (B): read on the run of record the PR merged on).** Run **45191290630** (head 026b67a1; every job `success`; shards `552 / 549 / 535 / 555 passed`, 0 flaky, 0 failed; 0 `[AQP-343 renumber diagnostic]` lines; the head was 1 behind `master` at my read, #653 squashed after). The AC-1 case ("AC-1: the list has the eight, each with its letter ..., and a reload keeps it"; **now `estimate-treatments.spec.ts:91`**, one line up; bound by title), attempt 1, no retry:
+
+| Width | Job | Attempt 1 | Under 25 s |
+|---|---|---|---|
+| mobile | shard 1 | 16.7 s | yes |
+| tablet | shard 2 | **25.2 s** | **no (0.2 s over)** |
+| desktop | shard 4 | 16.9 s | yes |
+
+**Half 1 is NOT MET on the line as written** ("attempt 1 at all three widths, under 25 s"; 25.2 s is not under 25 s). Under DL-343 (B) **#653 still merged on section 9 item 1** (DL-257 (7)) and **the miss comes to master**; the line is not moved after the result (DL-336 (3), DL-165). Earlier readings of the changed case: 11.1 / 19.2 / 18.1 s on PR run 45170751617 (a reading, before the update). No attempt-1 failure; below DL-264 (5)(b)'s 29 s line, so no reopen event.
+
+**Half 2 (DL-330 (4), DL-336 (4): a reading on the first `master` push after the squash).** `master` push CI run **45195759848** (7decbc01, #653's squash, created 14:35:03Z; every job `success`; Windows package `success`; shards `555 / 552 / 549 / 535 passed`, 0 flaky, 0 failed; 0 `[AQP-343 renumber diagnostic]` lines): the AC-1 case (`:91`) attempt 1 **12.5 / 13.7 / 15.7 s** (mobile / tablet / desktop), all under 25 s. **Half 2 is met as a reading** (it cannot close the Bug on its own, DL-336 (4)).
+
+| DL-330 (4) proof | Reading | Met |
+|---|---|---|
+| half 1: attempt-1 pass at three widths, each under 25 s, on the fix PR's run of record | run 45191290630: 16.7 / **25.2** / 16.9 s | **No (tablet 0.2 s over); #653 merged on section 9 item 1; to master (DL-343 (B))** |
+| half 2: the same on the first `master` push after the squash | push 45195759848: 12.5 / 13.7 / 15.7 s | Yes (a reading) |
+
+**DEF-070 is NOT closed by QA.** DL-330 (4) needs both halves, and half 1 missed by 0.2 s on the tablet; the line is not moved after the result (DL-336 (3), DL-165). **The close is master's to rule** (to master: close on half 2 plus the accepted narrowing and the 12.5 to 15.7 s reading, or another route). The watch trigger stays to G8 (any later attempt-1 failure of the case, or a reading of 29 s or more).
