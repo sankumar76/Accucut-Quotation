@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page, type Request as PlaywrightReques
 import { createDisposableUser, readEstimateState, saveCanaryQuantity, useFreshAddress } from './support/auth';
 import { calculateAsEngineer, engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
+import { DEVELOPMENT_URL } from './support/servers';
 
 /**
  * STORY-06.06 (AC-1, AC-2, AC-4, AC-5, AC-8; FR-062, NFR-002, NFR-016 to NFR-018): Approve and lock, SCR-06 and SCR-08, for a Lead at `/estimates/<code>`, at 360x800, 768x1024 and 1366x768. Each test makes an
@@ -47,8 +48,9 @@ const submitOf = (page: Page) => dialogOf(page).getByRole('button', { name: /^(A
  *   [AQP-416 step timing] <project> | attempt <n> | <case> | end | <status> | total <ms> ms | <the step standing, if any, and for how long> | Approve request: <what the page saw> | refresh request: <what the page saw>
  * and is printed by the afterEach hook, which still runs when the 30 s are used up, so a stall names its step and says whether the Approve request was answered. Only roles and statuses are printed, never an address.
  *
- * The set-up repeats the calls of `calculateAsEngineer` and `signInAsLead` (support/calculated-estimate.ts) with the same checks, so that each can be timed without a change to the shared helpers: if those change,
- * change `openedAsLeadTimed` to match or take this observation out.
+ * The set-up repeats the calls of `calculateWithoutThePage` and `signInAsLead` (support/calculated-estimate.ts) with the same checks, so that each can be timed without a change to the shared helpers: if those change,
+ * change `openedAsLeadTimed` to match or take this observation out. AQP-416 (DEF-073, DL-342 (B)) took the Engineer's page load out of the set-up of this case: the step lines of run 45161052093 had the set-up at 55 to
+ * 60 % of the case (desktop 14.9 s of 25.8 s), and nothing of the case is about the Engineer's page.
  */
 const STEP_TIMING = '[AQP-416 step timing]';
 
@@ -179,13 +181,9 @@ const statusOf = (response: { status(): number } | null): string => `status ${re
 async function openedAsLeadTimed(timer: StepTimer, page: Page, testInfo: TestInfo) {
   const { owner, code } = await timer.step('Engineer and estimate made', () => engineerWithEstimate(testInfo));
   await timer.step('Engineer sign-in', () => signInAs(page, owner));
-  await timer.step('Engineer estimate page: goto', () => page.goto(`/estimates/${code}`), (response) => statusOf(response));
-  const status = await timer.step(
-    'Engineer Calculate: fetch',
-    () => page.evaluate(async (id) => (await fetch(`/api/v1/estimates/${id}/calculate`, { method: 'POST' })).status, owner.id),
-    (value) => `status ${String(value)}`,
-  );
-  expect(status).toBe(200);
+  // No page load for the Engineer (DEF-073 fix, DL-342 (B)): the press of Calculate is the request the button sends, as `calculateWithoutThePage` makes it, and nothing of this case is about the Engineer's page.
+  const answer = await timer.step('Engineer Calculate: POST (no page)', () => page.request.post(`/api/v1/estimates/${owner.id}/calculate`, { headers: { origin: DEVELOPMENT_URL } }), (value) => statusOf(value));
+  expect(answer.status(), 'the Calculate of the Engineer').toBe(200);
   expect(await timer.step('Engineer Calculate: read the estimate state', () => readEstimateState(owner.id))).toEqual({ status: 'PREPARED', calculations: 1 });
   const lead = await timer.step('Lead made', () => createDisposableUser('axe', testInfo, 'LEAD'));
   await timer.step('Lead sign-in', () => signInAs(page, lead));
