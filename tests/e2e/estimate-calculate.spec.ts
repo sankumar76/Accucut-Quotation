@@ -126,7 +126,7 @@ test.describe('AC-1: a blank input blocks, and the page says where', () => {
     await summary(page).getByRole('link', { name: /^Length/ }).click();
     await expect(control(page, 'J')).toBeFocused();
 
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'J');
     await control(page, 'J').fill('200');
     await control(page, 'J').blur();
     expect(await saved).toBe(200);
@@ -139,7 +139,7 @@ test.describe('AC-1: a blank input blocks, and the page says where', () => {
   test('AC-1: Fasteners that is not "None" needs its Qty and Cost, which the summary then names', async ({ page }, testInfo) => {
     const owner = await openForm(page, testInfo);
     await makeComplete(page, owner.id);
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'S');
     await control(page, 'S').fill('Invented bolts');
     await control(page, 'S').blur();
     expect(await saved).toBe(200);
@@ -260,7 +260,7 @@ test.describe('AC-2: Calculate sends what the screen shows (review SQR-01 of AQP
     expect(posts.count()).toBe(0);
     expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 0 });
 
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'J');
     await control(page, 'J').fill('200');
     await control(page, 'J').blur();
     expect(await saved).toBe(200);

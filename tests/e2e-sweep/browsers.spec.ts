@@ -68,7 +68,7 @@ test.describe('AC-6: the five journeys', () => {
     await waitForForm(page);
 
     await control(page, 'B').fill('Journey part');
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'B');
     await control(page, 'B').blur();
     expect(await saved, 'the field is saved when it is left').toBe(200);
 
