@@ -217,6 +217,7 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
                   inTurn={values.inTurn}
                   onChanged={values.pictureSaved}
                   onConflict={onChanged}
+                  onServerIgnored={onServerIgnored}
                 />
               ) : (
                 <FieldRenderer

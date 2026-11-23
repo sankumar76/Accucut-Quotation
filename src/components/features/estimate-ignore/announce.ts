@@ -6,7 +6,11 @@
 
 const ANNOUNCER_ID = 'page-announcer';
 /** The pause that lets the empty region be read first, so the text that follows is announced as a change. */
-const ANNOUNCE_DELAY_MS = 150;
+export const ANNOUNCE_DELAY_MS = 150;
+/** How long the sentence stays after it is written: long enough to be read, short enough that it is not found later on an unrelated page (the region lives in `body`, which the App Router keeps across pages; AQP-401 QLT-03). */
+export const CLEAR_AFTER_MS = 7000;
+/** The open timer: the delay before the write, then the wait before the clear. */
+let timer: number | undefined;
 
 /** The region, made the first time it is asked for and found again after. Empty until `announce` writes to it. */
 export function prepareAnnouncer(): HTMLElement {
@@ -21,11 +25,15 @@ export function prepareAnnouncer(): HTMLElement {
   return region;
 }
 
-/** Writes the sentence into the region after a short pause. A second call replaces the first. */
+/** Writes the sentence into the region after a short pause and clears it once it has been read. A second call replaces the first, and only one timer is ever open. */
 export function announce(text: string): void {
   const region = prepareAnnouncer();
+  window.clearTimeout(timer);
   region.textContent = '';
-  window.setTimeout(() => {
+  timer = window.setTimeout(() => {
     region.textContent = text;
+    timer = window.setTimeout(() => {
+      region.textContent = '';
+    }, CLEAR_AFTER_MS);
   }, ANNOUNCE_DELAY_MS);
 }
