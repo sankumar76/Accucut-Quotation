@@ -91,7 +91,8 @@ const reassignHref = (task: QueueRowData): string => `/assign?task=${encodeURICo
  * the overdue cue, so a task is offered the action exactly when it is in the Open tab.
  */
 function RowAction({ task }: { readonly task: QueueRowData }) {
-  return isTaskClosed(task.status) ? (
+  // A row carries no Ignored layer until story 7D adds it to the view (7D passes the row's own flag).
+  return isTaskClosed(task.status, false) ? (
     <span data-closed-action="" className="font-semibold text-ink-2">
       {CLOSED_ROW_WORD}
     </span>
@@ -106,7 +107,8 @@ function RowAction({ task }: { readonly task: QueueRowData }) {
 
 /** The download chip under "Closed" for a Lead and an Admin (never drawn without `markers`, which an Engineer's list never has). */
 function DownloadMarker({ task, markers }: { readonly task: QueueRowData; readonly markers: QueueListProps['markers'] }) {
-  if (markers === undefined || !isTaskClosed(task.status)) return null;
+  // A row carries no Ignored layer until story 7D adds it to the view (7D passes the row's own flag).
+  if (markers === undefined || !isTaskClosed(task.status, false)) return null;
   // A marker that is not in the answer reads as unavailable, never as "Not downloaded".
   return <DownloadChip marker={markers === 'unavailable' ? 'unavailable' : (markers[task.id] ?? 'unavailable')} className="mt-s-1" />;
 }

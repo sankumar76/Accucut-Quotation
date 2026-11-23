@@ -31,6 +31,7 @@ import {
   send,
   setActive,
   setDeadline,
+  setIgnored,
   setStatus,
   store,
 } from '../../support/overdue-world';
@@ -228,6 +229,18 @@ describe('AC-5: closed tasks, deactivated people, unlocked and reassigned tasks'
     expect(mail?.cc).toEqual([]);
     const byKey = new Map((await outboxRows()).map((row) => [row.idempotency_key, row]));
     expect(byKey.get(idempotencyKeys.taskOverdue(first.id, ago(MILLISECONDS_PER_MINUTE)))).toMatchObject({ status: 'skipped', last_error: 'NO_RECIPIENT' });
+  });
+
+  it('AQP-399 AC-6: a QUOTED task and an ignored task past their deadline are not reported, and a task that is restored is', async () => {
+    await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), status: 'QUOTED' });
+    const ignored = await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), ignored: true });
+    await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), status: 'PREPARED', ignored: true });
+    await scan();
+    expect(await outboxRows()).toHaveLength(0);
+    await setIgnored(ignored.id, false);
+    await minute();
+    expect(await outboxRows()).toHaveLength(1);
+    expect(await messagesFor(ignored.code)).toHaveLength(1);
   });
 
   it('a task unlocked after approval and already past its deadline is reported at most once per deadline', async () => {

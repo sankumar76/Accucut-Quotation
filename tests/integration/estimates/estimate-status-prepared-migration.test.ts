@@ -61,13 +61,13 @@ describe('the migration file', () => {
 });
 
 describe('AC-2: the rename over existing estimates (run in order, in one database)', () => {
-  it('has the labels DRAFT, PREPARED and APPROVED once every migration is applied', async () => {
-    expect(await labels()).toEqual(['DRAFT', 'PREPARED', 'APPROVED']);
+  it('has the labels DRAFT, PREPARED, APPROVED and QUOTED once every migration is applied (7B adds QUOTED after the rename)', async () => {
+    expect(await labels()).toEqual(['DRAFT', 'PREPARED', 'APPROVED', 'QUOTED']);
   });
 
-  it('the rollback note gives back the enum as it was: DRAFT, SUBMITTED and APPROVED', async () => {
+  it('the rollback note gives back the label as it was: DRAFT, SUBMITTED, APPROVED (and QUOTED, which 7B added and no rollback of 7A removes)', async () => {
     for (const statement of ROLLBACK_STATEMENTS) await owner.query(statement);
-    expect(await labels()).toEqual(['DRAFT', OLD_LABEL, 'APPROVED']);
+    expect(await labels()).toEqual(['DRAFT', OLD_LABEL, 'APPROVED', 'QUOTED']);
   });
 
   it('plants the estimates of an existing install: a Draft, two Submitted and an Approved', async () => {
@@ -100,7 +100,7 @@ describe('AC-2: the rename over existing estimates (run in order, in one databas
     expect(after.map((row) => row.status).sort()).toEqual(['APPROVED', 'DRAFT', 'PREPARED', 'PREPARED']);
     // "No row is rewritten": a rewrite would give the row a new transaction ID (xmin) and often a new place on the page (ctid); a catalogue-only rename gives neither.
     expect(after.map(({ xmin, ctid }) => ({ xmin, ctid }))).toEqual(before.map(({ xmin, ctid }) => ({ xmin, ctid })));
-    expect(await labels()).toEqual(['DRAFT', 'PREPARED', 'APPROVED']);
+    expect(await labels()).toEqual(['DRAFT', 'PREPARED', 'APPROVED', 'QUOTED']);
   });
 
   it('accepts PREPARED on a write and refuses the old label, so nothing can store it again', async () => {

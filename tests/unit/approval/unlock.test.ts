@@ -55,9 +55,9 @@ function build(options: Options = {}) {
     estimates: {
       lockEstimate: (id) => {
         writes.push('lock');
-        return Promise.resolve(id === ESTIMATE_ID ? { id, engineerId: 'engineer-1', status, customerId, inputsRevision: 4, taskCode: 'Q-2026-0001' } : null);
+        return Promise.resolve(id === ESTIMATE_ID ? { id, engineerId: 'engineer-1', status, customerId, inputsRevision: 4, taskCode: 'Q-2026-0001', ignoredAt: null } : null);
       },
-      findEstimateAccess: (id) => Promise.resolve(id === ESTIMATE_ID ? { id, engineerId: 'engineer-1', status } : null),
+      findEstimateAccess: (id) => Promise.resolve(id === ESTIMATE_ID ? { id, engineerId: 'engineer-1', status, ignoredAt: null } : null),
       findActiveCustomer: () => {
         writes.push('customer');
         return Promise.resolve(options.customerDeleted === true ? null : { id: CUSTOMER_ID, name: 'Invented Customer', shortName: 'INV' });

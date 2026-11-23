@@ -4,7 +4,7 @@ import { canEditInputs } from '../../lib/estimate/can-edit-inputs';
 import { isAllowedChild, NODE_KIND_NAMES, type NodeKind } from '../../lib/estimate/node-kinds';
 import { createCompletenessReader, type CompletenessReader } from '../../lib/estimate/part-completeness';
 import type { PartView } from '../../lib/estimate/part-view';
-import { decideTransition, TRANSITION_REFUSALS, type EstimateEvent } from '../../lib/estimate/state-machine';
+import { decideTransition, isLocked, stateOf, TRANSITION_REFUSALS, type EstimateEvent } from '../../lib/estimate/state-machine';
 import { subtreeFingerprint } from '../../lib/estimate/subtree-fingerprint';
 import type { ConfigDocument } from '../../lib/fields/schema';
 import { buildTree, changedPlacements, childCount, descendantIds, insertNode, moveNode, removeNodes, type PlacedNode } from '../../lib/estimate/tree';
@@ -161,8 +161,11 @@ export interface EstimateTransition {
  * that story), with the same code and words. Call it **after** the estimate is locked, so the status it reads cannot change before the write. Who owns the
  * task is not asked here: that is the 404 the caller has already given.
  */
-export function assertEditable(viewer: EstimateViewer, estimate: { readonly status: EstimateStatus }): void {
-  if (!canEditInputs(estimate.status, viewer.role)) throw new ConflictError(NOT_EDITABLE_MESSAGE, { code: ESTIMATE_NOT_EDITABLE_CODE });
+export function assertEditable(viewer: EstimateViewer, estimate: { readonly status: EstimateStatus; readonly ignoredAt: Date | null }): void {
+  const state = stateOf(estimate);
+  // An ignored estimate is refused with its own code and words, whatever its status underneath (architecture section 4.12 c, DL-300): the person is told to Restore it, not that it is locked.
+  if (state.ignored) throw new ConflictError(TRANSITION_REFUSALS.IGNORED.message, { code: TRANSITION_REFUSALS.IGNORED.code });
+  if (!canEditInputs(state, viewer.role)) throw new ConflictError(NOT_EDITABLE_MESSAGE, { code: ESTIMATE_NOT_EDITABLE_CODE });
 }
 
 export interface EstimateService {
@@ -264,16 +267,20 @@ async function applyTransition(
 ): Promise<EstimateTransition> {
   const estimate = await estimates.lockEstimate(estimateId, tx);
   if (estimate === null || !mayOpen(viewer, estimate.engineerId)) throw new NotFoundError();
-  const decision = decideTransition(estimate.status, event, viewer.role);
+  const state = stateOf(estimate);
+  const decision = decideTransition(state, event, viewer.role);
   if (!decision.allowed) {
     // A role that may never apply the event is refused before the status is looked at. An Engineer gets the uniform "not found" (CR-33); a Lead gets 403.
     if (decision.kind === 'ROLE') throw viewer.role === 'ENGINEER' ? new NotFoundError() : new ForbiddenError();
     const refusal = TRANSITION_REFUSALS[decision.reason];
     throw new ConflictError(refusal.message, { code: refusal.code });
   }
+  // Ignore and Restore change the layer over the status, which this function does not write (story 7D adds the service that does, with its audit entry): refuse to report them as done.
+  if (decision.ignored !== state.ignored) throw new Error('Ignore and Restore are not written by the status transition.');
   // A transition that keeps the status (Recalculate of a prepared estimate, an edit, an export) writes nothing here; what it does is its own story's.
   if (decision.to !== decision.from) {
-    const moved = await estimates.setStatus(estimate.id, decision.from, decision.to, tx);
+    // Marking as quoted records the person with the status, in the same UPDATE (`setStatus`); every other move leaves no quote marker behind.
+    const moved = await estimates.setStatus(estimate.id, decision.from, decision.to, tx, decision.to === 'QUOTED' ? viewer.id : undefined);
     if (!moved) throw new ConflictError(STATUS_CHANGED_MESSAGE, { code: ESTIMATE_STATUS_CHANGED_CODE });
   }
   return { id: estimate.id, from: decision.from, to: decision.to };
@@ -303,7 +310,8 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
    */
   async function configurationFor(estimateId: string): Promise<ConfigDocument> {
     const basis = await estimates.findConfigurationBasis(estimateId);
-    return basis?.status === 'APPROVED' && basis.configVersionId !== null ? configurationById(basis.configVersionId) : currentConfiguration();
+    // A locked estimate (approved or quoted) keeps the fields it was approved with; a quoted one is an approved one the quote has gone out for, so its form does not change either.
+    return basis !== null && isLocked(basis.status) && basis.configVersionId !== null ? configurationById(basis.configVersionId) : currentConfiguration();
   }
 
   /** What every change to the tree ends with: the places of the siblings that shifted (they get no new revision), the input change, and the tree as it is now. */

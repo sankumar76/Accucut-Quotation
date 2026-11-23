@@ -187,7 +187,7 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
     estimates: {
       findEstimateAccess: (id) => {
         reads.access.record(id);
-        return Promise.resolve(id === REVIEW_ESTIMATE_ID ? { id, engineerId: 'invented-engineer', status: options.status ?? 'PREPARED' } : null);
+        return Promise.resolve(id === REVIEW_ESTIMATE_ID ? { id, engineerId: 'invented-engineer', status: options.status ?? 'PREPARED', ignoredAt: null } : null);
       },
     },
     masters: masters.masters,

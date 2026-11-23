@@ -21,7 +21,8 @@ export const OVERDUE_CARD_CLASS = 'border-l-4 border-l-accent bg-accent-soft';
 
 /** How late an open task is, in words (`1 d 18 h`), or null when it is not overdue. A closed task (`isTaskClosed`, the one rule) is never overdue, whatever its deadline. */
 export function lateTextFor(task: { readonly deadlineAt: string; readonly status: TaskEstimateStatus }, asOf: string): string | null {
-  return isTaskClosed(task.status) ? null : overdueBy(new Date(task.deadlineAt), new Date(asOf));
+  // A row carries no Ignored layer until story 7D adds it to the view, so every row read here is not ignored; 7D passes the row's own flag.
+  return isTaskClosed(task.status, false) ? null : overdueBy(new Date(task.deadlineAt), new Date(asOf));
 }
 
 export function OverdueMarker({ late }: { readonly late: string }) {

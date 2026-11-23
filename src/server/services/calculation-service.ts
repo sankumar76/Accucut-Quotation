@@ -16,7 +16,7 @@ import { quantityFieldIdOf, quantityWarnings, type QuantityWarning } from '../..
 import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
 import { calculateRowOutputs } from '../../lib/estimate/row-calculator';
 import { storeRowOutputs, type RowOutputs } from '../../lib/estimate/row-outputs';
-import { TRANSITION_REFUSALS } from '../../lib/estimate/state-machine';
+import { isLocked, TRANSITION_REFUSALS } from '../../lib/estimate/state-machine';
 import { buildTree } from '../../lib/estimate/tree';
 import { validateForCalculate, type CheckedPart } from '../../lib/estimate/calculate-check';
 import { findFieldById, findFieldByKey } from '../../lib/fields/registry';
@@ -325,8 +325,9 @@ export function createCalculationService(dependencies: CalculationServiceDepende
   ): Promise<StoredCalculation> {
     const estimate = await estimates.lockEstimate(request.estimateId, tx);
     if (estimate === null) throw new NotFoundError(ESTIMATE_NOT_FOUND_MESSAGE);
-    // One code and one sentence for "approved" on this path: the state machine's (review SQR-06 of STORY-06.01), so a client and a test learn one.
-    if (estimate.status === 'APPROVED') throw new ConflictError(TRANSITION_REFUSALS.APPROVED_IS_LOCKED.message, { code: TRANSITION_REFUSALS.APPROVED_IS_LOCKED.code });
+    // One code and one sentence for "ignored" and for "approved or quoted" on this path: the state machine's (review SQR-06 of STORY-06.01), so a client and a test learn one.
+    if (estimate.ignoredAt !== null) throw new ConflictError(TRANSITION_REFUSALS.IGNORED.message, { code: TRANSITION_REFUSALS.IGNORED.code });
+    if (isLocked(estimate.status)) throw new ConflictError(TRANSITION_REFUSALS.APPROVED_IS_LOCKED.message, { code: TRANSITION_REFUSALS.APPROVED_IS_LOCKED.code });
     if (estimate.customerId === null) throw new ConflictError(CUSTOMER_NOT_CHOSEN_MESSAGE, { code: CUSTOMER_NOT_CHOSEN_CODE });
     if (estimate.inputsRevision !== request.inputsRevision) throw new ConflictError(INPUTS_CHANGED_MESSAGE, { code: 'INPUTS_CHANGED' });
 

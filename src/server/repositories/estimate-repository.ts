@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { ESTIMATE_STATUSES } from '../../lib/estimate/state-machine';
+
 import { withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
 import type { EstimateStatus } from './task-repository';
@@ -18,6 +20,19 @@ import { clientFor, type Transaction } from './transaction';
  *
  * **What leaves.** A customer is an ID and a name here, and nothing else: no contact detail and no rate is ever selected (BR-003, NFR-002).
  */
+
+/** Who marked the estimate as quoted, and when (CR-01 item 7B): set exactly when the status is QUOTED (`ck_estimates_quoted`). Class Internal: no figure. */
+export interface QuoteMarker {
+  readonly at: Date;
+  readonly byId: string;
+}
+
+/** Who set the Ignored layer over the estimate, when, and the remarks the Lead or Admin gave: all three or none (`ck_estimates_ignored_all_or_none`). Class Internal: the remarks are not cost data. */
+export interface IgnoreMarker {
+  readonly at: Date;
+  readonly byId: string;
+  readonly remarks: string;
+}
 
 /** A customer as a choice: the ID, the name and the short name (class Internal, CR-01 item 6). No contact detail and no rate. */
 export interface CustomerChoice {
@@ -42,6 +57,10 @@ export interface WorkspaceRecord {
   readonly notes: string | null;
   /** The name of the Lead or Admin who assigned the task ("Notes from Kiran Bose: ...", UX-15). */
   readonly assignedByName: string;
+  /** The quote marker, or null while the estimate is not QUOTED. */
+  readonly quoted: QuoteMarker | null;
+  /** The Ignored layer over the status, or null while the estimate is not ignored. */
+  readonly ignored: IgnoreMarker | null;
 }
 
 /** The estimate row as it is held for a change. */
@@ -54,6 +73,8 @@ export interface EstimateLock {
   readonly inputsRevision: number;
   /** The task's code (`Q-2026-0501`), the name an audit entry gives the estimate (STORY-05.12). Read under the same lock; it never changes. */
   readonly taskCode: string;
+  /** When the Ignored layer was set over the status, or null: the state machine's `ignored` is `ignoredAt !== null` (`stateOf`). */
+  readonly ignoredAt: Date | null;
 }
 
 /** A material one of the estimate's parts names, and whether the Admin deleted it (a soft delete: the row stays). */
@@ -67,6 +88,8 @@ export interface EstimateAccess {
   readonly id: string;
   readonly engineerId: string;
   readonly status: EstimateStatus;
+  /** When the Ignored layer was set, or null (`stateOf`). */
+  readonly ignoredAt: Date | null;
 }
 
 /**
@@ -110,8 +133,11 @@ export interface EstimateRepository {
    * status the caller read under the row lock, so a status can only ever change from the one that was checked: it answers `false` (and writes nothing) when
    * the estimate no longer has `from`, which the lock makes impossible unless a caller skipped it. Nothing else of the row changes, and not
    * `inputs_revision`: a status change is not an input change (architecture section 4.8).
+   *
+   * **The quote columns move with the status, in the same UPDATE** (`ck_estimates_quoted` refuses a row where they disagree): leaving QUOTED (Unlock, Cancel) clears `quoted_at` and `quoted_by`, and
+   * going to QUOTED sets them from the database clock and `quotedBy`, which is then required. The Ignored layer is never touched here: the status underneath is kept (ADR-019).
    */
-  setStatus(estimateId: string, from: EstimateStatus, to: EstimateStatus, tx: Transaction): Promise<boolean>;
+  setStatus(estimateId: string, from: EstimateStatus, to: EstimateStatus, tx: Transaction, quotedBy?: string): Promise<boolean>;
   /**
    * Links the estimate to the calculation just stored for it and sets its status, in the caller's transaction (STORY-03.05; architecture sections 4.2 and 4.4).
    * It leaves `inputs_revision` alone: a calculation is not an input change. The statement links only a calculation that belongs to this very estimate, and
@@ -149,7 +175,7 @@ export interface EstimateUnlocking {
   readonly lockMaterialsInUse: EstimateRepository['lockMaterialsInUse'];
 }
 
-const STATUS = z.enum(['DRAFT', 'PREPARED', 'APPROVED']);
+const STATUS = z.enum(ESTIMATE_STATUSES);
 
 const WORKSPACE_ROWS = z.array(
   z.strictObject({
@@ -166,11 +192,16 @@ const WORKSPACE_ROWS = z.array(
     subject: z.string(),
     notes: z.string().nullable(),
     assignedByName: z.string(),
+    quotedAt: z.date().nullable(),
+    quotedById: z.string().nullable(),
+    ignoredAt: z.date().nullable(),
+    ignoredById: z.string().nullable(),
+    ignoreRemarks: z.string().nullable(),
   }),
 );
-const LOCK_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, customerId: z.string().nullable(), inputsRevision: z.number().int(), taskCode: z.string() }));
+const LOCK_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, customerId: z.string().nullable(), inputsRevision: z.number().int(), taskCode: z.string(), ignoredAt: z.date().nullable() }));
 const BASIS_ROWS = z.array(z.strictObject({ status: STATUS, configVersionId: z.string().nullable() }));
-const ACCESS_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS }));
+const ACCESS_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, ignoredAt: z.date().nullable() }));
 const CUSTOMER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string(), shortName: z.string() }));
 const MATERIAL_ROWS = z.array(z.strictObject({ id: z.string(), deleted: z.boolean() }));
 
@@ -184,7 +215,8 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
         const rows = await db.$queryRaw`
           SELECT e.id::text AS "estimateId", e.status::text AS "status", c.id::text AS "customerId", c.name AS "customerName", c.short_name AS "customerShortName",
                  t.code AS "code", t.engineer_id::text AS "engineerId", t.folder_path AS "folderPath", t.deadline_at AS "deadlineAt",
-                 t.title AS "title", t.subject AS "subject", t.notes AS "notes", u.name AS "assignedByName"
+                 t.title AS "title", t.subject AS "subject", t.notes AS "notes", u.name AS "assignedByName",
+                 e.quoted_at AS "quotedAt", e.quoted_by::text AS "quotedById", e.ignored_at AS "ignoredAt", e.ignored_by::text AS "ignoredById", e.ignore_remarks AS "ignoreRemarks"
           FROM tasks t
           JOIN estimates e ON e.task_id = t.id
           JOIN users u ON u.id = t.assigned_by
@@ -192,16 +224,19 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
           WHERE t.code = ${code}`;
         const [row] = WORKSPACE_ROWS.parse(rows);
         if (row === undefined) return null;
-        const { customerId, customerName, customerShortName, ...rest } = row;
+        const { customerId, customerName, customerShortName, quotedAt, quotedById, ignoredAt, ignoredById, ignoreRemarks, ...rest } = row;
         const customer = customerId === null || customerName === null || customerShortName === null ? null : { id: customerId, name: customerName, shortName: customerShortName };
-        return { ...rest, customer };
+        // The CHECKs make each marker all-or-none, so a half-set row is a fault and reads as no marker rather than as a guess.
+        const quoted = quotedAt === null || quotedById === null ? null : { at: quotedAt, byId: quotedById };
+        const ignored = ignoredAt === null || ignoredById === null || ignoreRemarks === null ? null : { at: ignoredAt, byId: ignoredById, remarks: ignoreRemarks };
+        return { ...rest, customer, quoted, ignored };
       }),
 
     findEstimateAccess: (id) =>
       withDatabaseErrors(async () => {
         if (!isUuid(id)) return null;
         const rows = await db.$queryRaw`
-          SELECT e.id::text AS "id", t.engineer_id::text AS "engineerId", e.status::text AS "status"
+          SELECT e.id::text AS "id", t.engineer_id::text AS "engineerId", e.status::text AS "status", e.ignored_at AS "ignoredAt"
           FROM estimates e JOIN tasks t ON t.id = e.task_id
           WHERE e.id = ${id}::uuid`;
         return ACCESS_ROWS.parse(rows)[0] ?? null;
@@ -224,7 +259,7 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
         // Prisma has no row lock, so the read is a raw statement: the ID is a bound parameter.
         const rows = await clientFor(db, tx).$queryRaw`
           SELECT e.id::text AS "id", t.engineer_id::text AS "engineerId", e.status::text AS "status", e.customer_id::text AS "customerId",
-                 e.inputs_revision::int AS "inputsRevision", t.code AS "taskCode"
+                 e.inputs_revision::int AS "inputsRevision", t.code AS "taskCode", e.ignored_at AS "ignoredAt"
           FROM estimates e JOIN tasks t ON t.id = e.task_id
           WHERE e.id = ${id}::uuid
           FOR UPDATE OF e FOR SHARE OF t`;
@@ -274,10 +309,23 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
         await clientFor(db, tx).estimate.update({ where: { id: estimateId }, data: { inputsRevision: { increment: 1 } }, select: { id: true } });
       }),
 
-    setStatus: (estimateId, from, to, tx) =>
+    setStatus: (estimateId, from, to, tx, quotedBy) =>
       withDatabaseErrors(async () => {
-        const { count } = await clientFor(db, tx).estimate.updateMany({ where: { id: estimateId, status: from }, data: { status: to } });
-        return count === 1;
+        if (!isUuid(estimateId)) return false;
+        const client = clientFor(db, tx);
+        if (to === 'QUOTED') {
+          // Fails closed: a QUOTED row with no person would be refused by `ck_estimates_quoted` anyway, but a programming fault should say so before the database does.
+          if (quotedBy === undefined || !isUuid(quotedBy)) throw new Error('Marking an estimate as quoted needs the person who quoted it.');
+          const marked = await client.$executeRaw`
+            UPDATE estimates SET status = 'QUOTED'::estimate_status, quoted_at = now(), quoted_by = ${quotedBy}::uuid, updated_at = now()
+            WHERE id = ${estimateId}::uuid AND status = ${from}::estimate_status`;
+          return marked === 1;
+        }
+        // Leaving QUOTED clears the quote columns in this same UPDATE; for any other move they are already null, so writing null changes nothing.
+        const changed = await client.$executeRaw`
+          UPDATE estimates SET status = ${to}::estimate_status, quoted_at = NULL, quoted_by = NULL, updated_at = now()
+          WHERE id = ${estimateId}::uuid AND status = ${from}::estimate_status`;
+        return changed === 1;
       }),
 
     linkCalculation: (estimateId, calculationId, status, tx) =>
