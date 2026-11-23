@@ -41,10 +41,10 @@ const C = number('c');
 const NOTHING = (): void => undefined;
 const flushMicrotasks = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-async function open(held: Record<string, string> = { a: '1.00', b: '1.00' }) {
+async function open(held: Record<string, string> = { a: '1.00', b: '1.00' }, fields: ReadonlyArray<FormField> = [A, B, C]) {
   partServer.reset(held);
   const gate = createSaveGate();
-  const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields: [A, B, C], onSaved: NOTHING, onChanged: NOTHING, onWrote: NOTHING, gate };
+  const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields, onSaved: NOTHING, onChanged: NOTHING, onWrote: NOTHING, gate };
   const hook = renderHook(usePartValues, props);
   hook.render();
   await flushMicrotasks();
@@ -248,5 +248,149 @@ describe('SQR-04: a text that cannot be read keeps its mark when the refused sav
     expect(gate.isDirty()).toBe(true);
     expect(await gate.settle()).toBe(false);
     expect(partServer.inputs['a']).toBe('9.00');
+  });
+});
+
+/**
+ * AQP-407 (DEF-065), STORY-05.06 AC-1: a flag chosen and then chosen the other way inside one save round trip. The second choice is compared with the value already on its way, not only with what
+ * the server held when the first was asked for, so the last choice is what the server ends up holding. `onToggle` of `part-fields.tsx` does `setText` and `commit` with the new text, with no waiting between.
+ */
+describe('AQP-407: a flag toggled twice within one save round trip', () => {
+  const P: FormField = { ...number('p'), defaultValue: '0', required: false, rule: { type: 'flag' } };
+  const openFlag = (held: Record<string, string>) => open(held, [P]);
+  const toggle = (form: ReturnType<typeof usePartValues>, on: boolean): void => {
+    const text = on ? '1' : '0';
+    form.setText('p', text);
+    form.commit(P, text);
+  };
+
+  // The second choice comes either at once (the first save is queued and has not been sent: it is made out of date and only the last is sent) or after the first request has reached the server and is waiting for its answer (both are sent).
+  describe.each([
+    { when: 'at once', arrived: false },
+    { when: 'while the first save waits for its answer', arrived: true },
+  ])('the second choice comes $when', ({ arrived }) => {
+    const twoChoices = async (held: Record<string, string>, first: boolean) => {
+      const { gate, hook } = await openFlag(held);
+      const form = hook.render();
+      const release = partServer.holdNextSave();
+      toggle(form, first);
+      if (arrived) await flushMicrotasks();
+      toggle(form, !first);
+      release();
+      await gate.settle();
+      return { gate, hook };
+    };
+
+    it('AC-1: ON then OFF with nothing stored ends with no 1 stored, and the screen agrees', async () => {
+      const { gate, hook } = await twoChoices({}, true);
+      expect(partServer.sent.at(-1)).toMatchObject({ values: { p: '0' } });
+      expect(partServer.sent).toHaveLength(arrived ? 2 : 1);
+      expect(partServer.inputs['p'] ?? '0').toBe('0');
+      expect(hook.render().texts['p']).toBe('0');
+      expect(gate.isDirty()).toBe(false);
+    });
+
+    it('AC-1: OFF then ON with 1 stored ends with 1 stored, and the screen agrees', async () => {
+      const { gate, hook } = await twoChoices({ p: '1' }, false);
+      expect(partServer.sent.at(-1)).toMatchObject({ values: { p: '1' } });
+      expect(partServer.sent).toHaveLength(arrived ? 2 : 1);
+      expect(partServer.inputs['p']).toBe('1');
+      expect(hook.render().texts['p']).toBe('1');
+      expect(gate.isDirty()).toBe(false);
+    });
+  });
+
+  it('AC-1: with the first request in flight, ON then OFF sends both, the second with the revision the first made', async () => {
+    const { gate, hook } = await openFlag({});
+    const form = hook.render();
+    const release = partServer.holdNextSave();
+    toggle(form, true);
+    await flushMicrotasks();
+    toggle(form, false);
+    release();
+    await gate.settle();
+    expect(partServer.sent).toEqual([
+      { revision: 1, values: { p: '1' } },
+      { revision: 2, values: { p: '0' } },
+    ]);
+  });
+
+  it('AC-1: with the first request in flight, OFF then ON from a stored 1 sends both and ends with 1', async () => {
+    const { gate, hook } = await openFlag({ p: '1' });
+    const form = hook.render();
+    const release = partServer.holdNextSave();
+    toggle(form, false);
+    await flushMicrotasks();
+    toggle(form, true);
+    release();
+    await gate.settle();
+    expect(partServer.sent).toEqual([
+      { revision: 1, values: { p: '0' } },
+      { revision: 2, values: { p: '1' } },
+    ]);
+    expect(partServer.inputs['p']).toBe('1');
+  });
+
+  it('AC-1: three choices in one round trip end with the last one', async () => {
+    const { gate, hook } = await openFlag({});
+    const form = hook.render();
+    const release = partServer.holdNextSave();
+    toggle(form, true);
+    await flushMicrotasks();
+    toggle(form, false);
+    toggle(form, true);
+    release();
+    await gate.settle();
+    expect(partServer.inputs['p']).toBe('1');
+    expect(partServer.sent.at(-1)).toMatchObject({ values: { p: '1' } });
+  });
+
+  it('the same choice made twice within one round trip is still one request', async () => {
+    const { gate, hook } = await openFlag({});
+    const form = hook.render();
+    const release = partServer.holdNextSave();
+    toggle(form, true);
+    toggle(form, true);
+    release();
+    await gate.settle();
+    expect(partServer.sent).toEqual([{ revision: 1, values: { p: '1' } }]);
+  });
+
+  it('a choice of the default with nothing on its way sends nothing (as before)', async () => {
+    const { gate, hook } = await openFlag({});
+    toggle(hook.render(), false);
+    await gate.settle();
+    expect(partServer.sent).toEqual([]);
+  });
+
+  it('a text typed back to what the server holds while its save is on its way is still unsaved, so the 30-second save mends it', async () => {
+    const { gate, hook } = await open();
+    const form = hook.render();
+    const release = partServer.holdNextSave();
+    form.setText('a', '2');
+    form.commit(A);
+    form.setText('a', '1');
+    release();
+    await gate.settle();
+    expect(partServer.inputs['a']).toBe('2.00');
+    expect(gate.isDirty()).toBe(true);
+    gate.flush('auto');
+    await gate.settle();
+    expect(partServer.inputs['a']).toBe('1.00');
+    expect(gate.isDirty()).toBe(false);
+  });
+
+  it('a text typed back to what the server holds while its save is on its way is sent when the field is left', async () => {
+    const { gate, hook } = await open();
+    const form = hook.render();
+    const release = partServer.holdNextSave();
+    form.setText('a', '2');
+    form.commit(A);
+    form.setText('a', '1');
+    form.commit(A);
+    release();
+    await gate.settle();
+    expect(partServer.inputs['a']).toBe('1.00');
+    expect(gate.isDirty()).toBe(false);
   });
 });

@@ -153,10 +153,20 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   };
   const fieldOf = (fieldId: string): FormField | undefined => fields.find((candidate) => candidate.id === fieldId);
 
-  /** Does this text differ from what the server holds, read by the field's rule (the one `commit` judges by)? A text the rule cannot read is never saved, so it differs. */
-  function differsFromHeld(field: FormField, text: string): boolean {
+  /**
+   * What the server holds for this field, or will hold once the save already on its way is answered: the value on its way, else the value held. A choice is judged against this, not against what was
+   * held when an earlier save was asked for: that is the value the earlier save is about to replace, so a choice back to it would be taken for "no change" and never sent (AQP-407, DEF-065).
+   * A blank on its way (a removal) is nothing stored.
+   */
+  function settledValue(field: FormField): string | null {
+    const onItsWay = onItsWayRef.current.get(field.id);
+    return onItsWay === undefined ? (heldRef.current[field.id] ?? null) : onItsWay === '' ? null : onItsWay;
+  }
+
+  /** Does this text differ from what the server holds or is about to hold (`settledValue`), read by the field's rule (the one `commit` judges by)? A text the rule cannot read is never saved, so it differs. */
+  function differsFromSettled(field: FormField, text: string): boolean {
     const check = readTyped(field.rule, text);
-    return !check.ok || standIn(field, heldRef.current[field.id] ?? null) !== standIn(field, check.value);
+    return !check.ok || standIn(field, settledValue(field)) !== standIn(field, check.value);
   }
 
   /** The person is typing: the text is theirs, a message about the earlier text goes, and the field is unsaved while what it shows is not what the server holds (the warning on leaving reads this, STORY-05.08 AC-4). */
@@ -173,7 +183,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
       });
     }
     const field = fieldOf(fieldId);
-    const unsaved = field !== undefined && differsFromHeld(field, text);
+    const unsaved = field !== undefined && differsFromSettled(field, text);
     mark(fieldId, unsaved);
     // Typed back to what the server holds: nothing is left to save, so an earlier failure of the automatic save is answered.
     if (!unsaved) trail.saved(fieldId);
@@ -319,19 +329,21 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     // A field with a default (Fasteners: "None") shows it again when it is left blank, and a blank over a default is the same as the default: nothing is stored for either, so leaving
     // the box alone changes nothing and a part with nothing typed stays EMPTY (STORY-05.04 AC-3).
     showText(field.id, standIn(field, check.value) ?? '');
-    if (standIn(field, heldRef.current[field.id] ?? null) === standIn(field, check.value)) return;
+    if (standIn(field, settledValue(field)) === standIn(field, check.value)) return;
     queueSave(field, check.value ?? '');
   }
 
   /** Queues the save of one field's value, behind the saves already queued. `automatic` is the 30-second save's (STORY-05.10): a failure of it is told quietly. */
   function queueSave(field: FormField, value: string, automatic = false): void {
     // The same text is already on its way (leaving the field and then pressing Save draft ask for it twice): one request, not two. A save that fails clears this, so the next leave sends it again.
+    // A different text is queued behind it, and makes it out of date (the ticket): the last choice is the one that is stored.
     if (onItsWayRef.current.get(field.id) === value) return;
     onItsWayRef.current.set(field.id, value);
     if (automatic) trail.begin(field.id);
     const ticket = newTicket(field.id);
     queueRef.current = queueRef.current.then(() => send(field.id, value, 0, ticket)).finally(() => {
-      if (onItsWayRef.current.get(field.id) === value) onItsWayRef.current.delete(field.id);
+      // Only the field's latest save clears this: an earlier one that was made out of date by a later choice (even one of the same text, ON, OFF, ON) must not take away the value still on its way.
+      if (ticketsRef.current.get(field.id) === ticket) onItsWayRef.current.delete(field.id);
       if (automatic) trail.end(field.id);
     });
     if (watchersOf(fields, field.id).length > 0) queueRef.current = queueRef.current.then(() => syncWatchers(field.id));
@@ -347,7 +359,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     if (!editable || !field.editable) return;
     const check = readTyped(field.rule, textsRef.current[field.id] ?? '');
     if (!check.ok || errors[field.id] !== undefined) return;
-    if (standIn(field, heldRef.current[field.id] ?? null) === standIn(field, check.value)) return;
+    if (standIn(field, settledValue(field)) === standIn(field, check.value)) return;
     const value = check.value ?? '';
     if (trail.refusedBefore(field.id, value)) return;
     mark(field.id, false);
