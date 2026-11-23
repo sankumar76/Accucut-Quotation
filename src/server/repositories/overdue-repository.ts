@@ -11,7 +11,7 @@ import { createTransactionRunner } from './transaction';
  * row that comes back is parsed (coding standards section 10, "SQL").
  *
  *   `findCandidates(now, since)`  ONE read: the open tasks of active Engineers whose deadline is in `[since, now)` and that have no outbox row for that deadline yet.
- *       - "Open" is "the estimate is not APPROVED" and "overdue" is "the deadline is strictly before `now`": the two conditions of the queue's Overdue tab (`tabFilter` in `task-repository.ts`),
+ *       - "Open" is "the estimate is not locked (APPROVED or QUOTED) and not ignored" and "overdue" is "the deadline is strictly before `now`": the two conditions of the queue's Overdue tab (`tabFilter` in `task-repository.ts`),
  *         written in SQL here and held together by `tests/integration/jobs/overdue-scan.test.ts`. The deadline range is served by `idx_tasks_deadline_at`; the estimate by its unique task
  *         index and the people by their primary key.
  *       - The last condition builds the idempotency key the job will use (`task-overdue:<taskId>:<deadlineAtUtc>`, `idempotencyKeys.taskOverdue`) and looks it up in the outbox's unique index, so
@@ -22,7 +22,7 @@ import { createTransactionRunner } from './transaction';
  *   `createOverdueScanStore(db)`  what the job takes as its store: the switch, the read above, the writes of a batch in ONE transaction, and its `job_runs` rows.
  *
  * The same file holds the read of the daily digest (STORY-09.05; FR-083), which asks the same question of the same tables without the 24-hour window:
- *   `findOverdueTasks(now, istDate)`  ONE read: every open task (the estimate is not APPROVED) with a deadline strictly before `now`, of an active Engineer who has no digest row for `istDate` yet
+ *   `findOverdueTasks(now, istDate)`  ONE read: every open task (the estimate is not locked, APPROVED or QUOTED, and not ignored) with a deadline strictly before `now`, of an active Engineer who has no digest row for `istDate` yet
  *       (the SQL builds the key `digest:<engineerId>:<istDate>` as `idempotencyKeys.dailyDigest` does, and a test holds them together; it is an optimisation, the outbox's unique key is what makes a
  *       digest happen once). Oldest deadline first, then by code, so the job's lists and its Cc are in that order. It returns IDs, the assigner's name and whether they are active, never an address.
  *   `createDailyDigestStore(db)`  what the digest job takes as its store: the switch, the read above, ONE insert per Engineer (one Engineer's failure must not undo the others), the question
@@ -108,7 +108,8 @@ export function createOverdueRepository(db: PrismaClient): OverdueRepository {
           JOIN users a ON a.id = t.assigned_by
           WHERE t.deadline_at < ${now}::timestamptz
             AND t.deadline_at >= ${since}::timestamptz
-            AND e.status::text <> 'APPROVED'
+            AND e.status::text NOT IN ('APPROVED', 'QUOTED') -- the locked statuses of isLocked (lib/estimate/state-machine.ts); a test holds the two together
+            AND e.ignored_at IS NULL
             AND NOT EXISTS (
               SELECT 1 FROM email_outbox o
               WHERE o.idempotency_key = 'task-overdue:' || t.id::text || ':' || to_char(t.deadline_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
@@ -135,7 +136,8 @@ export function createOverdueRepository(db: PrismaClient): OverdueRepository {
           JOIN users eng ON eng.id = t.engineer_id AND eng.is_active
           JOIN users a ON a.id = t.assigned_by
           WHERE t.deadline_at < ${now}::timestamptz
-            AND e.status::text <> 'APPROVED'
+            AND e.status::text NOT IN ('APPROVED', 'QUOTED') -- the locked statuses of isLocked (lib/estimate/state-machine.ts); a test holds the two together
+            AND e.ignored_at IS NULL
             AND NOT EXISTS (
               SELECT 1 FROM email_outbox o
               WHERE o.idempotency_key = 'digest:' || t.engineer_id::text || ':' || ${istDate}::text

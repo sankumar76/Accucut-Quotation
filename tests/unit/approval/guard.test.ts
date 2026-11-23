@@ -42,7 +42,7 @@ function refusalOf(call: () => void): unknown {
   return undefined;
 }
 
-const prepared = { status: 'PREPARED' as EstimateStatus };
+const prepared = { status: 'PREPARED' as EstimateStatus, ignoredAt: null };
 
 describe('AC-1: a never-calculated estimate is the 409 NOT_CALCULATED, naming the step', () => {
   it('state `none`', () => {
@@ -86,7 +86,7 @@ describe('AC-4: a status that is not PREPARED is the state machine\'s 409', () =
     ['APPROVED', 'ALREADY_APPROVED'],
   ])('%s: the code and sentence of %s, whatever the figures are', (status, reason) => {
     for (const basis of [CURRENT, OUT_OF_DATE, NEVER]) {
-      expect(refusalOf(() => assertApprovable(lead, { status }, basis, { calculationId: CURRENT_ID }))).toMatchObject({
+      expect(refusalOf(() => assertApprovable(lead, { status, ignoredAt: null }, basis, { calculationId: CURRENT_ID }))).toMatchObject({
         httpStatus: 409,
         code: TRANSITION_REFUSALS[reason].code,
         message: TRANSITION_REFUSALS[reason].message,
@@ -98,7 +98,7 @@ describe('AC-4: a status that is not PREPARED is the state machine\'s 409', () =
 describe('AC-5: the order of the checks is role, status, state, calculationId', () => {
   it('an Engineer is refused 403 by the role check whatever else is wrong', () => {
     expect(() => assertMayApprove(engineer)).toThrow(ForbiddenError);
-    expect(refusalOf(() => assertApprovable(engineer, { status: 'APPROVED' }, NEVER, { calculationId: OTHER_ID }))).toBeInstanceOf(ForbiddenError);
+    expect(refusalOf(() => assertApprovable(engineer, { status: 'APPROVED', ignoredAt: null }, NEVER, { calculationId: OTHER_ID }))).toBeInstanceOf(ForbiddenError);
   });
 
   it('a Lead and an Admin pass the role check', () => {
@@ -107,7 +107,7 @@ describe('AC-5: the order of the checks is role, status, state, calculationId', 
   });
 
   it('the status before the state: a Draft that was never calculated is "not prepared", not "not calculated"', () => {
-    expect(refusalOf(() => assertApprovable(lead, { status: 'DRAFT' }, NEVER, { calculationId: OTHER_ID }))).toMatchObject({ code: TRANSITION_REFUSALS.NOT_PREPARED.code });
+    expect(refusalOf(() => assertApprovable(lead, { status: 'DRAFT', ignoredAt: null }, NEVER, { calculationId: OTHER_ID }))).toMatchObject({ code: TRANSITION_REFUSALS.NOT_PREPARED.code });
   });
 
   it('the state before the calculationId: out-of-date with a wrong ID is TOTALS_OUT_OF_DATE', () => {
@@ -165,7 +165,7 @@ describe('STORY-06.06: the write refuses what the guard cannot, and writes nothi
     const audited: unknown[] = [];
     const tx = { kind: 'database-transaction' } as const;
     const service = createApprovalService({
-      estimates: { lockEstimate: () => Promise.resolve({ id: 'estimate-1', engineerId: 'engineer-1', status: 'PREPARED', customerId: 'customer-1', inputsRevision: 4, taskCode: 'Q-2026-0001' }) },
+      estimates: { lockEstimate: () => Promise.resolve({ id: 'estimate-1', engineerId: 'engineer-1', status: 'PREPARED', customerId: 'customer-1', inputsRevision: 4, taskCode: 'Q-2026-0001', ignoredAt: null }) },
       calculations: { findFigureBasis: () => Promise.resolve(CURRENT), findCalculatedTotal: () => Promise.resolve(total) },
       approvals: {
         insertApproval: (approval) => {
