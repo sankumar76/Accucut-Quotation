@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
+import { isExportFileName } from '../../../lib/export/file-name';
 import { XLSX_MIME } from '../../export/export-model';
+
+import { downloadMarkerSchema } from './download-marker';
 
 /**
  * The contracts of the two export routes (STORY-07.01 AC-2, AC-3, AC-6; architecture section 6 "Export" and "Export summary"): `GET /api/v1/estimates/{id}/export` answers the file, and
@@ -12,17 +15,17 @@ import { XLSX_MIME } from '../../export/export-model';
  * its Sl. No, its name and the count typed in H (an input, not a figure of the calculation). **Its figures (STORY-07.03 AC-8) are `figures`, present only while the state is `current`** and read through the figure
  * state like every other figure: each row's H, BG and Tool Cost as the file holds them, BL2, BN2, BO2 and the total Tool Cost, the approved price's difference and reason, and the reconciliation of the BG column
  * with BL2. In any other state `figures` is `null` and nothing of a calculation is in the answer. **The quantity warning (STORY-07.06 AC-4)** is `warning`, under the same rule: who went ahead, when and the
- * rows, only while the state is `current` (the schema refuses it in any other), for the Lead and the Admin alone, and never in the file (A-24).
+ * rows, only while the state is `current` (the schema refuses it in any other), for the Lead and the Admin alone, and never in the file (A-24). **The download marker (STORY-CR01.7E)** is `download`, in every state.
  */
 
-/** What a file name may be (`lib/export/file-name.ts` makes only these): letters, digits, underscore and hyphen, then `.xlsx`. It goes into a header, so nothing else may. */
-export const EXPORT_FILE_NAME_PATTERN = /^[A-Za-z0-9_-]{1,200}\.xlsx$/;
+/** A name the export makes (`isExportFileName`, `lib/export/file-name.ts`): `<short name>_<subject>_<DD-MM-YYYY>.xlsx`, which may hold non-ASCII letters. It goes into a header, so no other name may. */
+const exportFileNameSchema = z.string().refine(isExportFileName, { message: 'Not a name the export makes.' });
 
 /** The file route's answer: the MIME type of a workbook, its bytes and its name. `withRoute` turns it into the attachment (`file-response.ts`). */
 export const exportFileSchema = z.strictObject({
   mime: z.literal(XLSX_MIME),
   bytes: z.instanceof(Uint8Array),
-  fileName: z.string().regex(EXPORT_FILE_NAME_PATTERN),
+  fileName: exportFileNameSchema,
 });
 
 const columnLetters = z.string().regex(/^[A-Z]{1,10}$/);
@@ -74,7 +77,7 @@ export const exportWarningSchema = z.strictObject({
 
 export const exportSummarySchema = z.strictObject({
   /** The name the file would have if it were downloaded now (the date is today's IST date). */
-  fileName: z.string().regex(EXPORT_FILE_NAME_PATTERN),
+  fileName: exportFileNameSchema,
   /** The parts of the estimate: the rows the file will hold below its header. */
   partCount: z.number().int().min(0),
   /** The parts that have a picture. */
@@ -89,6 +92,8 @@ export const exportSummarySchema = z.strictObject({
   figures: exportFiguresSchema.nullable(),
   /** The quantity warning on the calculation, **only while the state is `current`** (the list of a stale calculation may be wrong): `null` in the other two states and when the calculation had none. */
   warning: exportWarningSchema.nullable(),
+  /** The marker of the download log (STORY-CR01.7E): "Not downloaded", "Downloaded N times" or "Changed since download", with who downloaded last and when. Present in every state; a Lead and an Admin read it (the route lists no Engineer, NFR-002). */
+  download: downloadMarkerSchema,
 }).refine((summary) => summary.warning === null || summary.state === 'current', { message: 'A warning is carried only while the figures are current.', path: ['warning'] });
 
 export type ExportWarningView = z.infer<typeof exportWarningSchema>;

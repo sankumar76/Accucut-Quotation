@@ -1,5 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
+import { shortNameOf } from '../support/customer-short-name';
+
 import {
   ADD,
   addButton,
@@ -98,6 +100,7 @@ async function addByKeyboard(page: Page, name: string): Promise<void> {
   const dialog = page.getByRole('dialog', { name: ADD });
   await expect(dialog.getByLabel('Customer name')).toBeFocused();
   await page.keyboard.type(name);
+  await dialog.getByLabel('Short name').fill(shortNameOf(name));
   await dialog.getByRole('button', { name: ADD }).click();
 }
 

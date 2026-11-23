@@ -2,11 +2,12 @@ import { InvalidLinkNotice } from '@/components/features/auth/invalid-link-notic
 import { PublicPageFrame } from '@/components/features/auth/public-page-frame';
 import { ResetPasswordForm } from '@/components/features/auth/reset-password-form';
 import { RESET_DESCRIPTION, RESET_TITLE, RESET_TOKEN_PARAMETER } from '@/lib/auth/password-reset';
+import { PRODUCT_NAME_IN_A_SENTENCE } from '@/lib/product-name';
 import { pageMetadata } from '@/lib/page-metadata';
 import { getPasswordResetService } from '@/server/composition';
 
 // The layout's description and robots rules apply (`noindex, nofollow`); this page's address carries a token, so it also has `Referrer-Policy: no-referrer` and `no-store` (`next.config.ts`).
-export const metadata = pageMetadata('Choose a new password', 'Choose a new password for the Accucut Lasers quotation portal with the link you were e-mailed.');
+export const metadata = pageMetadata('Choose a new password', `Choose a new password for the Accucut Lasers ${PRODUCT_NAME_IN_A_SENTENCE} with the link you were e-mailed.`);
 
 interface ResetPasswordPageProps {
   readonly searchParams: Promise<Readonly<Record<string, string | string[] | undefined>>>;

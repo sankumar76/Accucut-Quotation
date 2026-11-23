@@ -33,7 +33,7 @@ const occurrences = (html: string, text: string): number => html.split(text).len
 const tableOf = (html: string): string => html.slice(html.indexOf('<table'), html.indexOf('</table>'));
 const cardsOf = (html: string): string => html.slice(html.indexOf('<ul'));
 
-const SECOND = row({ id: '00000000-0000-4000-8000-000000000002', code: 'Q-2026-0043', status: 'SUBMITTED' });
+const SECOND = row({ id: '00000000-0000-4000-8000-000000000002', code: 'Q-2026-0043', status: 'PREPARED' });
 
 describe('AC-1: an open row has the action, for a Lead and an Admin', () => {
   it.each(['LEAD', 'ADMIN'] as const)('%s: the table has an Actions column and each open row links to SCR-04 in edit mode for its own task', (role) => {
@@ -83,7 +83,7 @@ describe('AC-1 (UX-20): a closed row has "Closed" and no action', () => {
 
 describe('AC-1: an Engineer sees none', () => {
   it('draws no action, no link to SCR-04 and no Actions column, whatever the status', () => {
-    for (const status of ['DRAFT', 'SUBMITTED', 'APPROVED'] as const) {
+    for (const status of ['DRAFT', 'PREPARED', 'APPROVED'] as const) {
       const html = list('ENGINEER', [row({ status })]);
       expect(html, status).not.toContain('data-reassign-action');
       expect(html, status).not.toContain('/assign');

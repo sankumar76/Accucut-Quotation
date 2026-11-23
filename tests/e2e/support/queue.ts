@@ -13,7 +13,7 @@ import { E2E_LEAD } from './auth';
  * year `9998` is one no real task has, and the running number is random, so no two runs meet on a code.
  */
 
-export type SeededStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED';
+export type SeededStatus = 'DRAFT' | 'PREPARED' | 'APPROVED';
 
 export interface SeededQueueTask {
   /** The task's ID, for `GET /api/v1/tasks/{id}` (STORY-04.04). */
@@ -55,8 +55,8 @@ export async function seedQueueTask(
   try {
     const code = queueTaskCode();
     const task = await client.query<{ id: string }>(
-      `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title)
-       SELECT $1, $2::uuid, id, $3, $4::timestamptz, $5 FROM users WHERE email = $6 RETURNING id::text`,
+      `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject)
+       SELECT $1, $2::uuid, id, $3, $4::timestamptz, $5, 'Invented subject' FROM users WHERE email = $6 RETURNING id::text`,
       [code, engineerId, FOLDER_PATH, deadlineAt, title, assignedByEmail],
     );
     const id = task.rows[0]?.id;

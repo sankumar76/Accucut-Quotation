@@ -25,12 +25,17 @@ const text = z.string().max(MAX_TEXT_LENGTH).default('');
 const MAX_ID_LENGTH = 100;
 
 
-/** `POST /api/v1/tasks` (AC-1, AC-3): the Engineer, the path, the deadline as `YYYY-MM-DDTHH:mm` in IST, and the optional title and notes. */
+/**
+ * `POST /api/v1/tasks` (AC-1, AC-3; CR-01 item 6, AQP-390): the Engineer, the customer, the path, the deadline as `YYYY-MM-DDTHH:mm` in IST, the title and the subject (both required by the service's
+ * rules), and the optional notes. The customer's short name has no key here: it is never typed, the service reads it from the Customer master. Each text only has its size bounded here (the limits of the screen are `lib/tasks/assign.ts`).
+ */
 export const assignTaskBodySchema = z.strictObject({
   engineerId: text,
+  customerId: text,
   folderPath: text,
   deadline: text,
   title: text,
+  subject: text,
   notes: text,
 });
 
@@ -46,6 +51,9 @@ export const reassignTaskBodySchema = z.strictObject({
 
 const engineerSchema = z.strictObject({ id: z.string().min(1), name: z.string().min(1) });
 
+/** A customer as the assignment answers carry it: the ID, the name and the short name (class Internal). No contact detail and no rate can leave with it (NFR-002). */
+const customerSchema = z.strictObject({ id: z.string().min(1), name: z.string().min(1), shortName: z.string().min(1) });
+
 /** The task as it was stored, with the `file:` link the server built from its path (AC-4), and its empty estimate (AC-1). */
 export const assignedTaskSchema = z.strictObject({
   id: z.string().min(1),
@@ -55,11 +63,13 @@ export const assignedTaskSchema = z.strictObject({
   folderUrl: z.string().startsWith('file:///'),
   /** An ISO 8601 instant in UTC; the screen shows it in IST. */
   deadlineAt: z.iso.datetime(),
-  title: z.string().nullable(),
+  title: z.string().min(1),
+  subject: z.string().min(1),
+  customer: customerSchema,
   notes: z.string().nullable(),
   estimate: z.strictObject({
     id: z.string().min(1),
-    status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']),
+    status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
     customerId: z.string().nullable(),
   }),
 });
@@ -68,7 +78,7 @@ export const assignedTaskSchema = z.strictObject({
  * `GET /api/v1/options/assign-context` (AC-5): the active Engineers, by ID and name, and one boolean of the settings, whether e-mail alerts are on (STORY-09.03 AC-6, for the notice of
  * SCR-04). A Lead cannot read Settings, so nothing else of them is here: no sender, no address.
  */
-export const assignContextSchema = z.strictObject({ engineers: z.array(engineerSchema).readonly(), alertsEnabled: z.boolean() });
+export const assignContextSchema = z.strictObject({ engineers: z.array(engineerSchema).readonly(), customers: z.array(customerSchema).readonly(), alertsEnabled: z.boolean() });
 
 const LIMIT_MESSAGE = `The limit must be a whole number from 1 to ${QUEUE_MAX_LIMIT}.`;
 const CURSOR_MESSAGE = 'This is not a place in the list. Start again from the first page.';
@@ -129,9 +139,9 @@ export const taskQueueQuerySchema = z.strictObject({
 const queueTaskSchema = z.strictObject({
   id: z.string().min(1),
   code: z.string().regex(/^Q-\d{4}-\d{4,}$/),
-  title: z.string().nullable(),
+  title: z.string(),
   engineer: engineerSchema,
-  /** Null until the Engineer chooses the customer. */
+  /** Null only for an estimate made before CR-01 item 6, which has no customer yet. */
   customerName: z.string().nullable(),
   folderPath: z.string().min(1),
   folderUrl: z.string().startsWith('file:///').nullable(),
@@ -159,11 +169,14 @@ export const taskIdParamsSchema = z.strictObject({ id: z.string().max(MAX_ID_LEN
 export const taskDetailSchema = z.strictObject({
   id: z.string().min(1),
   code: z.string().regex(/^Q-\d{4}-\d{4,}$/),
-  title: z.string().nullable(),
+  title: z.string(),
+  /** The project name (CR-01 item 6). */
+  subject: z.string().min(1),
   /** What the person who assigned the task wrote for the Engineer; null when nothing was written. */
   notes: z.string().nullable(),
   engineer: engineerSchema,
-  /** Null until the Engineer chooses the customer. */
+  /** Null only for an estimate made before CR-01 item 6. Names only: the ID, the name and the short name (NFR-002). */
+  customer: customerSchema.nullable(),
   customerName: z.string().nullable(),
   folderPath: z.string().min(1),
   folderUrl: z.string().startsWith('file:///').nullable(),

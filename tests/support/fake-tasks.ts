@@ -1,4 +1,5 @@
 import type {
+  AssignCustomer,
   EngineerRecord,
   EstimateRecord,
   EstimateStatus,
@@ -31,7 +32,9 @@ export interface SeededTask {
   readonly engineerId: string;
   readonly assignedById: string;
   readonly deadlineAt: Date;
-  readonly title?: string | null;
+  readonly title?: string;
+  /** The project name; the next invented one when left out. */
+  readonly subject?: string;
   readonly notes?: string | null;
   readonly folderPath?: string;
   readonly status?: EstimateStatus;
@@ -53,8 +56,12 @@ export interface FakeTaskWorld {
   readonly estimates: EstimateRecord[];
   /** The last number issued for each year. */
   readonly sequences: Map<number, number>;
-  /** The names of the customers a seeded task may have chosen, by ID. */
+  /** The names of the customers a task may have, by ID. A test that sets one gets the short name `SHORT` for it unless `customerShortNames` has another. */
   readonly customers: Map<string, string>;
+  /** The short names of those customers, by ID. */
+  readonly customerShortNames: Map<string, string>;
+  /** The IDs of the customers the Admin has deleted: an assignment cannot choose one, and an estimate that has one still names it. */
+  readonly deletedCustomers: Set<string>;
   /** Puts a task and its estimate in directly (any deadline, any status) and returns the task. */
   seed(task: SeededTask): TaskRecord;
   /** Puts the estimate of a task into another status, as an approval, an unlock or a calculation would (a test of the status words). */
@@ -75,7 +82,14 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
   const estimates: EstimateRecord[] = [];
   const sequences = new Map<number, number>();
   const customers = new Map<string, string>();
+  const customerShortNames = new Map<string, string>();
+  const deletedCustomers = new Set<string>();
   let failure: Error | null = null;
+
+  const customerOf = (id: string): AssignCustomer | null => {
+    const name = customers.get(id);
+    return name === undefined ? null : { id, name, shortName: customerShortNames.get(id) ?? 'SHORT' };
+  };
 
   const nameOf = (id: string): string => people().find((person) => person.id === id)?.name ?? 'Invented unknown person';
 
@@ -88,11 +102,12 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
           id: task.id,
           code: task.code,
           title: task.title,
+          subject: task.subject,
           folderPath: task.folderPath,
           deadlineAt: task.deadlineAt,
           engineer: { id: task.engineerId, name: nameOf(task.engineerId) },
           assignedByName: nameOf(task.assignedById),
-          customerName: estimate.customerId === null ? null : (customers.get(estimate.customerId) ?? null),
+          customer: estimate.customerId === null ? null : customerOf(estimate.customerId),
           status: estimate.status,
         },
       ];
@@ -107,7 +122,7 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
     const text = filter.text?.toLowerCase() ?? null;
     const customerId = estimates.find((candidate) => candidate.taskId === row.id)?.customerId ?? null;
     return (
-      (text === null || row.code.toLowerCase().includes(text) || (row.title ?? '').toLowerCase().includes(text)) &&
+      (text === null || row.code.toLowerCase().includes(text) || row.title.toLowerCase().includes(text)) &&
       (filter.engineerId === null || row.engineer.id === filter.engineerId) &&
       (filter.customerId === null || customerId === filter.customerId) &&
       (filter.deadlineFrom === null || row.deadlineAt.getTime() >= filter.deadlineFrom.getTime()) &&
@@ -166,6 +181,20 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
       return Promise.resolve({ open: count('open'), closed: count('closed'), overdue: count('overdue') });
     },
     countOverdue: (scope, now) => Promise.resolve(inScope(scope).filter((row) => inTab(row, 'overdue', now)).length),
+    listActiveCustomers: () =>
+      Promise.resolve(
+        [...customers.keys()]
+          .filter((id) => !deletedCustomers.has(id))
+          .flatMap((id) => {
+            const customer = customerOf(id);
+            return customer === null ? [] : [customer];
+          })
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      ),
+    findActiveCustomer: (id) => {
+      const found = [...customers.keys()].find((candidate) => candidate.toLowerCase() === id.toLowerCase() && !deletedCustomers.has(candidate));
+      return Promise.resolve(found === undefined ? null : customerOf(found));
+    },
     listActiveEngineers: () =>
       Promise.resolve(
         people()
@@ -191,13 +220,13 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
       tasks.push(created);
       return Promise.resolve(created);
     },
-    createEstimate: (taskId) => {
+    createEstimate: (taskId, customerId) => {
       if (failure !== null) {
         const error = failure;
         failure = null;
         return Promise.reject(error);
       }
-      const created: EstimateRecord = { id: nextId(), taskId, customerId: null, status: 'DRAFT' };
+      const created: EstimateRecord = { id: nextId(), taskId, customerId, status: 'DRAFT' };
       estimates.push(created);
       return Promise.resolve(created);
     },
@@ -226,6 +255,8 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
     estimates,
     sequences,
     customers,
+    customerShortNames,
+    deletedCustomers,
     seed(seeded) {
       const task: TaskRecord = {
         code: seeded.code,
@@ -233,7 +264,8 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
         assignedById: seeded.assignedById,
         folderPath: seeded.folderPath ?? '\\\\invented-server\\invented-share\\RFQ-1',
         deadlineAt: seeded.deadlineAt,
-        title: seeded.title ?? null,
+        title: seeded.title ?? 'Invented task',
+        subject: seeded.subject ?? 'Invented subject',
         notes: seeded.notes ?? null,
         id: seeded.id ?? nextId(),
         assignmentRevision: 1,

@@ -23,12 +23,12 @@ import type { EstimateService, EstimateViewer } from './estimate-service';
 /**
  * The approval service (STORY-06.05, STORY-06.06; FR-062, FR-064, FR-101, D-20; NFR-001, NFR-007; architecture sections 4.4, 4.8 and 6 "Approve").
  *
- * **The guard** (06.05): the server refuses an approval, with a fixed sentence that names the missing step, unless the estimate is SUBMITTED, its figures are `current` and the request names the estimate's
+ * **The guard** (06.05): the server refuses an approval, with a fixed sentence that names the missing step, unless the estimate is PREPARED, its figures are `current` and the request names the estimate's
  * current calculation. The button on SCR-06 being off is only a convenience; this is the authority. **The write** (06.06): an approval that passes the guard moves the estimate to APPROVED, stores the
  * `approvals` row (the price, the calculated total it was set against, the approver and the time) and records the audit entry `approval.approved`, **all in the one transaction that took the guard's lock**.
  *
  * **The order of the checks is the story's (06.05 AC-5):** the role (a Lead or an Admin; an Engineer is 403, before anything is read), then the estimate exists (404), then its status (the state machine's own
- * decision, so the code and sentence of "not submitted" and "already approved" are the machine's, written once), then the state of the figures, then `calculationId`. All of it runs **under the estimate's row
+ * decision, so the code and sentence of "not prepared" and "already approved" are the machine's, written once), then the state of the figures, then `calculationId`. All of it runs **under the estimate's row
  * lock in one transaction**, so an input saved at the same moment either lands first (the figures are out of date, refused) or waits until the approval is over (and an input cannot change after an approval,
  * because it locks them).
  *
@@ -73,7 +73,7 @@ export interface ApprovalResult {
 export interface ApprovalService {
   /**
    * Approves an estimate. Throws, in this order: `ForbiddenError` (an Engineer), `NotFoundError` (no such estimate, or an ID that is none), `ConflictError` with the state machine's code (a status that is not
-   * SUBMITTED), `NOT_CALCULATED`, `TOTALS_OUT_OF_DATE`, `CALCULATION_CHANGED`. Every refusal writes nothing. Passing all of them it writes the status, the approval and the audit entry together, or none.
+   * PREPARED), `NOT_CALCULATED`, `TOTALS_OUT_OF_DATE`, `CALCULATION_CHANGED`. Every refusal writes nothing. Passing all of them it writes the status, the approval and the audit entry together, or none.
    */
   approve(viewer: EstimateViewer, estimateId: string, request: ApprovalRequest): Promise<ApprovalResult>;
 }

@@ -121,6 +121,7 @@ function nodesOf(records: ReadonlyArray<NodeRecord>, document: ConfigDocument, c
       id: node.id,
       parentId: node.parentId,
       slNo,
+      nodeKind: node.nodeKind,
       name: partNameOf(document, node.inputs),
       count: count !== null && DECIMAL_TEXT.test(count) ? count : null,
       // A row's own figures and nothing summed over the rows below it (architecture section 4.3).

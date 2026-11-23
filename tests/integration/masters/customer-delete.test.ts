@@ -5,7 +5,10 @@ import { createEstimateNodeRepository } from '@/server/repositories/estimate-nod
 import { createImageRepository } from '@/server/repositories/image-repository';
 import { createEstimateRepository } from '@/server/repositories/estimate-repository';
 import { createTransactionRunner, type TransactionRunner } from '@/server/repositories/transaction';
+import { createTaskRepository } from '@/server/repositories/task-repository';
 import { createEstimateService } from '@/server/services/estimate-service';
+import { createTaskService } from '@/server/services/task-service';
+import { createFixedClock } from '@/lib/time';
 
 import { contextOf, entriesFor, entryCount, insertPersonAsOwner, openAuditDatabase, type AuditDatabase } from '../../support/audit-database';
 import { customerSide } from '../../support/customer-audit-side';
@@ -15,10 +18,12 @@ import { createHoldingRunner, createServiceHoldingBeforeCommit } from '../../sup
 import { createLateFailingRunner } from '../../support/late-failure-runner';
 
 import { openCustomerDefaults, resetCustomerTables } from './customers-support';
+import { shortNameOf } from '../../support/customer-short-name';
+import { auditFor, changeContext } from '../../support/customer-change';
 
 /**
  * STORY-02.07 (AC-1, AC-2, AC-4, AC-5, AC-8) against real PostgreSQL in a throwaway database: the delete of a customer over the real repositories. It is soft
- * (`deleted_at`) and keeps the rate rows; it is refused with the estimates named while a Draft or Submitted estimate has the customer, and allowed when only
+ * (`deleted_at`) and keeps the rate rows; it is refused with the estimates named while a Draft or Prepared estimate has the customer, and allowed when only
  * Approved ones do (they keep the customer's name); one `master.deleted` entry is written in the transaction of the delete and none when it is refused; a name of a
  * deleted customer stays taken (the unique indexes are not partial); and a delete and a request that is choosing the same customer serialise, in both orders,
  * so the two can never both succeed (AC-5). Every name, path and code is invented.
@@ -40,7 +45,7 @@ const by = () => contextOf(adminId);
 
 /** The estimate service over the real repositories and the transaction runner given (the real one, or one that holds before commit). */
 const estimateServiceOver = (transactions: TransactionRunner) =>
-  createEstimateService({ estimates: createEstimateRepository(db.prisma), nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions, ...inputsDependencies() });
+  createEstimateService({ estimates: createEstimateRepository(db.prisma), audit: auditFor(db), nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions, ...inputsDependencies() });
 
 beforeAll(async () => {
   db = await openAuditDatabase();
@@ -66,15 +71,15 @@ afterEach(async () => {
   await resetCustomerTables(db);
 });
 
-const customerNamed = (name: string) => db.mastersService.createCustomer(by(), { name, phone: '+99 555 0142', email: null, address: null });
+const customerNamed = (name: string) => db.mastersService.createCustomer(by(), { name, shortName: shortNameOf(name), phone: '+99 555 0142', email: null, address: null });
 
 /** A task with its estimate, in this status, for this customer (or none). Returns the estimate's ID and the task's code. */
-async function estimateFor(customerId: string | null, status: 'DRAFT' | 'SUBMITTED' | 'APPROVED'): Promise<{ readonly estimateId: string; readonly code: string }> {
+async function estimateFor(customerId: string | null, status: 'DRAFT' | 'PREPARED' | 'APPROVED'): Promise<{ readonly estimateId: string; readonly code: string }> {
   codes += 1;
   const code = `Q-2026-${String(9000 + codes).padStart(4, '0')}`;
   const task = await db.owner.query<{ id: string }>(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, notes)
-     VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented hopper cover', NULL) RETURNING id::text AS id`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes)
+     VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented hopper cover', 'Invented subject', NULL) RETURNING id::text AS id`,
     [code, engineerId, leadId, PATH],
   );
   const estimate = await db.owner.query<{ id: string }>(
@@ -155,8 +160,8 @@ describe('AC-1: a customer used by no estimate is soft-deleted', () => {
   });
 });
 
-describe('AC-2: a customer on a Draft or Submitted estimate is refused, and nothing changes', () => {
-  it.each(['DRAFT', 'SUBMITTED'] as const)('a %s estimate: 409 MasterInUseError naming its task code and status', async (status) => {
+describe('AC-2: a customer on a Draft or Prepared estimate is refused, and nothing changes', () => {
+  it.each(['DRAFT', 'PREPARED'] as const)('a %s estimate: 409 MasterInUseError naming its task code and status', async (status) => {
     const alpha = await customerNamed('Alpha Works');
     const { code } = await estimateFor(alpha.id, status);
     const entries = await entryCount(db);
@@ -172,7 +177,7 @@ describe('AC-2: a customer on a Draft or Submitted estimate is refused, and noth
     const alpha = await customerNamed('Alpha Works');
     const bravo = await customerNamed('Bravo Works');
     const made: string[] = [];
-    for (let index = 0; index < 12; index += 1) made.push((await estimateFor(alpha.id, index % 2 === 0 ? 'DRAFT' : 'SUBMITTED')).code);
+    for (let index = 0; index < 12; index += 1) made.push((await estimateFor(alpha.id, index % 2 === 0 ? 'DRAFT' : 'PREPARED')).code);
     await estimateFor(alpha.id, 'APPROVED');
     await estimateFor(bravo.id, 'DRAFT');
     const refusal = await db.mastersService.deleteCustomer(by(), alpha.id).catch((error: unknown) => error);
@@ -202,7 +207,7 @@ describe('AC-4: a customer used only by Approved estimates may be deleted, and t
     const kept = await db.owner.query<{ customer_id: string; status: string }>('SELECT customer_id::text, status::text FROM estimates WHERE id = $1::uuid', [estimateId]);
     expect(kept.rows).toEqual([{ customer_id: alpha.id, status: 'APPROVED' }]);
     const estimates = estimateServiceOver(createTransactionRunner(db.prisma));
-    expect((await estimates.getWorkspace({ id: adminId, role: 'ADMIN' }, code))?.customer).toEqual({ id: alpha.id, name: 'Alpha Works' });
+    expect((await estimates.getWorkspace({ id: adminId, role: 'ADMIN' }, code))?.customer).toEqual({ id: alpha.id, name: 'Alpha Works', shortName: shortNameOf('Alpha Works') });
   });
 });
 
@@ -232,7 +237,7 @@ describe('AC-5: the delete and a request choosing the same customer serialise, i
       reachedHolding = resolve;
     });
     const choosing = estimateServiceOver(createHoldingRunner(db, hold, reachedHolding));
-    const choice = choosing.setCustomer(adminViewer(), estimateId, alpha.id);
+    const choice = choosing.setCustomer(adminViewer(), changeContext(adminViewer()), estimateId, alpha.id);
     // If the choice fails before it holds, the race rejects with its error and the test says why.
     await Promise.race([isHolding, choice]);
 
@@ -255,6 +260,49 @@ describe('AC-5: the delete and a request choosing the same customer serialise, i
     expect(await deletedEntries(alpha.id)).toEqual([]);
   });
 
+  it('CR-01 item 6, AC-6 (BR-053): an assignment that holds the customer first: the delete waits, then sees the open estimate and is refused; the new task keeps its customer', async () => {
+    const alpha = await customerNamed('Alpha Works');
+    let release: () => void = () => undefined;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reachedHolding: () => void = () => undefined;
+    const isHolding = new Promise<void>((resolve) => {
+      reachedHolding = resolve;
+    });
+    const assigning = createTaskService({
+      tasks: createTaskRepository(db.prisma),
+      transactions: createHoldingRunner(db, hold, reachedHolding),
+      clock: createFixedClock(new Date('2026-11-09T04:00:00.000Z')),
+    });
+    const assignment = assigning.assignTask(leadId, {
+      engineerId,
+      customerId: alpha.id,
+      folderPath: PATH,
+      deadline: '2026-11-12T17:00',
+      title: 'Hopper cover',
+      subject: 'Feed hopper',
+      notes: '',
+    });
+    await Promise.race([isHolding, assignment]);
+
+    let deleteDone = false;
+    const deletion = db.mastersService.deleteCustomer(by(), alpha.id).finally(() => {
+      deleteDone = true;
+    });
+    // The customer row is read FOR SHARE by the assignment, so the delete (a FOR UPDATE) waits for it, and then sees the estimate that has the customer (DEF-039: the refusal is handled before the release).
+    await expect.poll(async () => deleteDone || (await someoneIsWaitingForALock()), { message: 'the delete waits for the customer\'s lock, or has finished' }).toBe(true);
+    expect(deleteDone, 'the delete did not wait for the assignment').toBe(false);
+    const refused = expect(deletion).rejects.toBeInstanceOf(MasterInUseError);
+    release();
+    await assignment;
+    await refused;
+
+    expect(await stored(alpha.id)).toEqual({ deleted: false, rates: 15 });
+    const { rows } = await db.owner.query<{ customer_id: string | null; status: string }>('SELECT customer_id::text, status::text FROM estimates');
+    expect(rows).toEqual([{ customer_id: alpha.id, status: 'DRAFT' }]);
+  });
+
   it('a delete that holds the customer first: the choice waits, then finds no customer and is refused; the estimate keeps no customer', async () => {
     const alpha = await customerNamed('Alpha Works');
     const { estimateId } = await estimateFor(null, 'DRAFT');
@@ -271,7 +319,7 @@ describe('AC-5: the delete and a request choosing the same customer serialise, i
 
     const estimates = estimateServiceOver(createTransactionRunner(db.prisma));
     let choiceDone = false;
-    const choice = estimates.setCustomer(adminViewer(), estimateId, alpha.id).finally(() => {
+    const choice = estimates.setCustomer(adminViewer(), changeContext(adminViewer()), estimateId, alpha.id).finally(() => {
       choiceDone = true;
     });
     await expect.poll(async () => choiceDone || (await someoneIsWaitingForALock()), { message: 'the choice waits for the customer\'s lock, or has finished' }).toBe(true);

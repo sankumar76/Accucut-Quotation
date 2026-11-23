@@ -68,11 +68,11 @@ afterEach(async () => {
 /** A draft estimate with one empty part, for the engineer. */
 async function setUpPart(): Promise<void> {
   const task = await db.owner.query<{ id: string }>(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at) VALUES ('Q-2026-0951', $1::uuid, $2::uuid, $3, '2026-11-12T11:30:00Z') RETURNING id::text AS id`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ('Q-2026-0951', $1::uuid, $2::uuid, $3, '2026-11-12T11:30:00Z', 'Invented task', 'Invented subject') RETURNING id::text AS id`,
     [engineerId, leadId, PATH],
   );
   estimateId = defined((await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id) VALUES ($1::uuid) RETURNING id::text AS id', [defined(task.rows[0]).id])).rows[0]).id;
-  nodeId = (await serviceOver(db.transactions).addPart(arjun, estimateId, { kind: 'item' })).nodeId;
+  nodeId = (await serviceOver(db.transactions).addPart(arjun, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
 }
 
 const material = (name: string) =>

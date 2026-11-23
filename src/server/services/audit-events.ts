@@ -62,6 +62,12 @@ interface EventDefinition<Before extends StoredShape, After extends StoredShape>
   readonly kindLabel?: string;
   readonly before: Before;
   readonly after: After;
+  /**
+   * The schemas a **stored** entry is read through, when they differ from the write schemas above (default: the same). The log is immutable, so an entry written under
+   * an older vocabulary must stay readable while the writer accepts only today's: a read schema may map an old value to its new word (`approval.cancelled`, below).
+   */
+  readonly readBefore?: z.ZodType<z.output<Before>, unknown>;
+  readonly readAfter?: z.ZodType<z.output<After>, unknown>;
   /** `objectType` is the entry's own (`process_item`, `material`): a generic master event chooses its words by it. */
   describe(before: z.output<Before>, after: z.output<After>, objectType: string): AuditChangeText;
   /**
@@ -96,11 +102,20 @@ function defineEvent<Before extends StoredShape, After extends StoredShape>(
       return shape === undefined ? null : definition.forMasterShape(shape);
     },
     describeStored(before, after, objectType) {
-      const parsedBefore = definition.before.safeParse(before);
-      const parsedAfter = definition.after.safeParse(after);
+      const parsedBefore = (definition.readBefore ?? definition.before).safeParse(before);
+      const parsedAfter = (definition.readAfter ?? definition.after).safeParse(after);
       return parsedBefore.success && parsedAfter.success ? definition.describe(parsedBefore.data, parsedAfter.data, objectType ?? definition.objectType) : null;
     },
   };
+}
+
+// ---- Shape of the estimate's customer change (SCR-16 "Task change"; CR-01 item 6) --------------------------------------------------
+/** The customer an estimate was for or is for: the name and the short name, or null for an estimate that had none. Names only: no contact detail and no rate. */
+const estimateCustomerState = z.strictObject({ customer: z.strictObject({ name: z.string().min(1), shortName: z.string().min(1) }).nullable() });
+
+/** "Brightwater Controls (BWC)", or "No customer" for an estimate that had none. */
+function describeEstimateCustomer(state: z.output<typeof estimateCustomerState>): string {
+  return state.customer === null ? 'No customer' : `${state.customer.name} (${state.customer.shortName})`;
 }
 
 // ---- Shapes of the user events (SCR-16 "User change") ----------------------------------------------------------------------
@@ -153,14 +168,23 @@ const unlockedBeforeState = z.strictObject({ approvedPrice: rupeesText });
 const unlockedAfterState = z.strictObject({ reason: z.string().min(1).max(500) });
 
 // ---- Shape of the cancel event (SCR-16 "Approval cancelled"; STORY-06.12) ---------------------------------------------------------
-/** The status of the estimate, before and after the cancel. Equal when the cancel did not move it (an approval kept through an unlock, on a Draft or a Submitted estimate: AC-10), so the entry shows that nothing moved. */
+/** The status of the estimate, before and after the cancel. Equal when the cancel did not move it (an approval kept through an unlock, on a Draft or a Prepared estimate: AC-10), so the entry shows that nothing moved. */
 const estimateStatus = z.enum(ESTIMATE_STATUSES);
 /** What a cancel keeps before: the price the approval stood at (BO), which stays on record, and the status the estimate was in. */
 const cancelledBeforeState = z.strictObject({ approvedPrice: rupeesText, status: estimateStatus });
 /** What a cancel keeps after: the Admin's reason, as stored (1 to 500 characters, trimmed), and the status the estimate is in now. Who cancelled and when are the entry's own columns. The password is in no shape here. */
 const cancelledAfterState = z.strictObject({ reason: reasonText, status: estimateStatus });
 
-const STATUS_WORDS: Readonly<Record<EstimateStatus, string>> = { DRAFT: 'a Draft', SUBMITTED: 'Submitted', APPROVED: 'Approved' };
+/**
+ * LEGACY READ (AQP-398, CR-01 item 7; the one place the old status value survives in `src/`). Until then the stored status of a not-yet-approved estimate was `SUBMITTED`. The audit log is
+ * immutable, so `approval.cancelled` entries written before the rename still hold it. The **read** schemas turn it into `PREPARED`; the write schemas above accept only today's values.
+ */
+const LEGACY_SUBMITTED = 'SUBMITTED';
+const readEstimateStatus = z.preprocess((value) => (value === LEGACY_SUBMITTED ? 'PREPARED' : value), estimateStatus);
+const cancelledBeforeRead = z.strictObject({ approvedPrice: rupeesText, status: readEstimateStatus });
+const cancelledAfterRead = z.strictObject({ reason: reasonText, status: readEstimateStatus });
+
+const STATUS_WORDS: Readonly<Record<EstimateStatus, string>> = { DRAFT: 'a Draft', PREPARED: 'Prepared', APPROVED: 'Approved' };
 
 /**
  * "Approved at ₹ 4,750.00 to Cancelled. Reason: …" (SCR-16, UX-64). When the cancel did not move the estimate the entry says so, before the reason: "Cancelled, the estimate stayed a Draft. Reason: …" (an assumption of
@@ -264,10 +288,12 @@ const customerRateState = z.strictObject({
 /**
  * A customer as the log keeps it. `contact` names the contact fields that were given (a create) or changed (an edit), the same list on both sides, and
  * **never their values**: the log is append-only, a phone number or an address is personal data, and erasure waits on Q-26 (data minimisation, as for the
- * user events). The ID and the name label the entry; `name` is kept in the state as well, so an edit shows the old name and the new one.
+ * user events). The ID and the name label the entry; `name` is kept in the state as well, so an edit shows the old name and the new one. `shortName` (CR-01 item 6, AQP-390) is kept beside it: it is
+ * class Internal and not contact data, so its value may be logged. It reads as null from an entry written before CR-01 (the key is absent there), so such an entry still reads; every entry written now has it.
  */
 const customerState = z.strictObject({
   name: z.string().min(1),
+  shortName: z.string().min(1).nullable().default(null),
   contact: z.array(z.enum(CONTACT_FIELD_NAMES)),
   rates: z.array(customerRateState),
 });
@@ -279,10 +305,11 @@ function describeCustomerRate(rate: z.output<typeof customerRateState>): string 
   return `${rate.name} ${rate.unit === PERCENT_UNIT ? formatDefaultValue(rate.value, rate.unit) : `${RUPEE} ${rate.value}`}`;
 }
 
-/** "Brightwater Controls; Contact: Phone, E-mail; Cutting-Rate-per-Sec ₹ 0.50": the name, the contact fields, and the rates the entry lists. */
+/** "Brightwater Controls (BWC); Contact: Phone, E-mail; Cutting-Rate-per-Sec ₹ 0.50": the name and short name, the contact fields, and the rates the entry lists. */
 function describeCustomer(state: z.output<typeof customerState>): string {
   const contact = state.contact.length === 0 ? [] : [`Contact: ${state.contact.map((field) => CONTACT_WORDS[field]).join(', ')}`];
-  return [state.name, ...contact, ...state.rates.map(describeCustomerRate)].join('; ');
+  const label = state.shortName === null ? state.name : `${state.name} (${state.shortName})`;
+  return [label, ...contact, ...state.rates.map(describeCustomerRate)].join('; ');
 }
 
 // ---- Shape of the Exchange Rate Master events (SCR-16 "Master data edit"; STORY-02.04) ------------------------------------------
@@ -543,6 +570,8 @@ export const AUDIT_EVENTS = {
     status: 'wired',
     before: cancelledBeforeState,
     after: cancelledAfterState,
+    readBefore: cancelledBeforeRead,
+    readAfter: cancelledAfterRead,
     describe: describeCancelled,
   }),
 
@@ -624,6 +653,18 @@ export const AUDIT_EVENTS = {
     before: z.null(),
     after: z.strictObject({ warnings: z.array(warnedRow).min(1) }),
     describe: (_before, after) => ({ before: 'No warning', after: `Went ahead with QTY per Assy 0 on ${after.warnings.map(describeWarnedRow).join(', ')}` }),
+  }),
+
+  // ---- Wired in CR-01 item 6 (AQP-390): the customer of an estimate changed by a Lead or an Admin ---------------------------------------
+  // One entry for one change, in the change's own transaction under the estimate's row lock: the customer (name and short name, company names and not personal data) before and after, null before for an
+  // estimate made before CR-01 that had none. The object is the task's code, the actor the Lead or the Admin who changed it. The same customer again writes no entry. No figure and no rate has a key to sit in (NFR-002).
+  'estimate.customer_changed': defineEvent({
+    objectType: 'estimate',
+    category: 'task_change',
+    status: 'wired',
+    before: estimateCustomerState,
+    after: estimateCustomerState,
+    describe: (before, after) => ({ before: describeEstimateCustomer(before), after: describeEstimateCustomer(after) }),
   }),
 
   // ---- Wired in STORY-04.07: a task given to another Engineer, a new deadline, or both ----------------------------------------------

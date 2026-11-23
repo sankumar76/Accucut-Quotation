@@ -1,14 +1,14 @@
 import type { RoleName } from '../../lib/auth/roles';
 import { ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
 import { isTaskClosed } from '../../lib/estimate/task-status';
-import { checkAssign, ENGINEER_MESSAGE, type AssignInput } from '../../lib/tasks/assign';
+import { checkAssign, CUSTOMER_MESSAGE, ENGINEER_MESSAGE, type AssignInput } from '../../lib/tasks/assign';
 import { folderUrlOf } from '../../lib/tasks/folder-path';
 import { QUEUE_DEFAULT_LIMIT, type QueueCounts, type QueueTab, type TaskEstimateStatus } from '../../lib/tasks/queue';
 import { DATE_ORDER_MESSAGE } from '../../lib/tasks/queue-filters';
 import { checkReassign, TASK_CLOSED_CODE, TASK_CLOSED_MESSAGE, type ReassignInput } from '../../lib/tasks/reassign';
 import { formatTaskCode } from '../../lib/tasks/task-code';
 import { istYearOf, startOfIstDay, startOfNextIstDay, type Clock } from '../../lib/time';
-import type { EngineerRecord, EstimateRecord, QueueFilter, QueueRow, QueueScope, TaskRepository } from '../repositories/task-repository';
+import type { AssignCustomer, EngineerRecord, EstimateRecord, QueueFilter, QueueRow, QueueScope, TaskRepository } from '../repositories/task-repository';
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
 import type { AuditContext, AuditService } from './audit-service';
@@ -23,6 +23,9 @@ import { encodeTaskQueueCursor, type TaskQueueCursor } from './task-queue-cursor
  *     same, and every problem is named at once. A deadline that is not later than now is refused whatever the browser said.
  *   - **The Engineer is looked up in the same transaction** (AC-3): an inactive person, a Lead, an Admin and an unknown ID are all "Choose an Engineer.",
  *     a 422 under that field, and nothing is stored.
+ *   - **The customer is looked up in the same transaction, locked for share** (CR-01 item 6, AQP-390): an unknown or deleted customer is "Choose a customer.", a 422 under `customerId`,
+ *     reported together with an Engineer that is wrong; the customer's short name is read from the master here and never taken from the request. A concurrent soft delete of the
+ *     customer waits for the task and then sees the open estimate (BR-053). The estimate is made with the customer already set.
  *   - **A task, its empty estimate and its number are one transaction** (AC-1, AC-2): if any insert fails none exists, and the number goes back. The
  *     code is `Q-<year>-<number>`, the year read in IST (FR-041, NFR-015), the number from the locked sequence.
  *   - **The `file:` link is built here**, from the validated UNC path (AC-4); the browser is never asked to build one.
@@ -60,7 +63,10 @@ export interface AssignedTask {
   readonly folderPath: string;
   readonly folderUrl: string;
   readonly deadlineAt: Date;
-  readonly title: string | null;
+  readonly title: string;
+  readonly subject: string;
+  /** The customer the task was assigned for, with the short name read from the master. */
+  readonly customer: AssignCustomer;
   readonly notes: string | null;
   readonly estimate: Pick<EstimateRecord, 'id' | 'status' | 'customerId'>;
 }
@@ -68,6 +74,8 @@ export interface AssignedTask {
 /** What SCR-04 chooses from. */
 export interface AssignContext {
   readonly engineers: ReadonlyArray<EngineerRecord>;
+  /** The customers that are not deleted, by name, with their short names (CR-01 item 6). Names and short names only: no contact detail and no rate. */
+  readonly customers: ReadonlyArray<AssignCustomer>;
   /** Whether e-mail alerts are on: the one fact of the settings a Lead may see, for the notice "E-mail alerts are OFF" (STORY-09.03 AC-6). */
   readonly alertsEnabled: boolean;
 }
@@ -76,9 +84,9 @@ export interface AssignContext {
 export interface QueueTask {
   readonly id: string;
   readonly code: string;
-  readonly title: string | null;
+  readonly title: string;
   readonly engineer: EngineerRecord;
-  /** Null until the Engineer chooses the customer ("Not chosen yet"). */
+  /** Null only for an estimate made before CR-01 item 6, which has no customer yet ("Not chosen yet"). */
   readonly customerName: string | null;
   readonly folderPath: string;
   /** Built here from the path; null only for a path the portal would not have accepted, so the row then shows the path as text. */
@@ -100,6 +108,9 @@ export interface ReassignResult {
 /** One task as the task route answers it: a row of the queue and the notes typed when it was assigned (STORY-04.04). The status is the estimate's, worded by `taskStatusOf`. */
 export interface TaskDetail extends QueueTask {
   readonly notes: string | null;
+  /** The project name and the customer with its short name (CR-01 item 6): the same for every role, names only. */
+  readonly subject: string;
+  readonly customer: AssignCustomer | null;
 }
 
 /** One page of one tab, and how many tasks each tab holds for this person. */
@@ -137,7 +148,7 @@ export interface QueueQuery {
 }
 
 export interface TaskService {
-  /** The active Engineers, for the Engineer field (`GET /api/v1/options/assign-context`). */
+  /** The active Engineers and the customers that are not deleted, for the Engineer and Customer Name fields (`GET /api/v1/options/assign-context`). */
   getAssignContext(): Promise<AssignContext>;
   /**
    * Assigns a task to an Engineer and makes its empty estimate. `assignedById` is the caller, taken from the session by the route and never from the body.
@@ -231,7 +242,7 @@ function toQueueTask(row: QueueRow): QueueTask {
     code: row.code,
     title: row.title,
     engineer: row.engineer,
-    customerName: row.customerName,
+    customerName: row.customer?.name ?? null,
     folderPath: row.folderPath,
     folderUrl: folderUrlOf(row.folderPath),
     deadlineAt: row.deadlineAt,
@@ -258,8 +269,12 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
 
   return {
     getAssignContext: async () => {
-      const [engineers, alertsEnabled] = await Promise.all([tasks.listActiveEngineers(), mail === undefined ? Promise.resolve(false) : mail.alertsEnabled()]);
-      return { engineers, alertsEnabled };
+      const [engineers, customers, alertsEnabled] = await Promise.all([
+        tasks.listActiveEngineers(),
+        tasks.listActiveCustomers(),
+        mail === undefined ? Promise.resolve(false) : mail.alertsEnabled(),
+      ]);
+      return { engineers, customers, alertsEnabled };
     },
 
     async assignTask(assignedById, input) {
@@ -275,14 +290,20 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
 
       return transactions.run(async (tx) => {
         const engineer = await tasks.findActiveEngineer(values.engineerId, tx);
-        if (engineer === null) throw new FieldValidationError([{ field: 'engineerId', message: ENGINEER_MESSAGE }]);
+        const customer = await tasks.findActiveCustomer(values.customerId, tx);
+        // Every problem at once (AC-5): an Engineer and a customer that are both wrong are both named.
+        const notFound: FieldProblem[] = [
+          ...(engineer === null ? [{ field: 'engineerId', message: ENGINEER_MESSAGE }] : []),
+          ...(customer === null ? [{ field: 'customerId', message: CUSTOMER_MESSAGE }] : []),
+        ];
+        if (engineer === null || customer === null) throw new FieldValidationError(notFound);
         const year = istYearOf(now);
         const code = formatTaskCode(year, await tasks.takeNextNumber(year, tx));
         const task = await tasks.createTask(
-          { code, engineerId: engineer.id, assignedById, folderPath: values.folderPath, deadlineAt: values.deadlineAt, title: values.title, notes: values.notes },
+          { code, engineerId: engineer.id, assignedById, folderPath: values.folderPath, deadlineAt: values.deadlineAt, title: values.title, subject: values.subject, notes: values.notes },
           tx,
         );
-        const estimate = await tasks.createEstimate(task.id, tx);
+        const estimate = await tasks.createEstimate(task.id, customer.id, tx);
         if (queueing) {
           await enqueueAssigned(
             tx,
@@ -298,6 +319,8 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
           folderUrl,
           deadlineAt: task.deadlineAt,
           title: task.title,
+          subject: task.subject,
+          customer,
           notes: task.notes,
           estimate: { id: estimate.id, status: estimate.status, customerId: estimate.customerId },
         };
@@ -327,7 +350,7 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
 
     async getTask(viewer, id) {
       const row = await tasks.findTask(id, scopeOf(viewer));
-      return row === null ? null : { ...toQueueTask(row), notes: row.notes };
+      return row === null ? null : { ...toQueueTask(row), notes: row.notes, subject: row.subject, customer: row.customer };
     },
 
     async reassignTask(context, id, input) {

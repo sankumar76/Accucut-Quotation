@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import type { NodeKind } from '../../src/lib/estimate/node-kinds';
 import { createApprovalRepository, type ApprovalRepository } from '../../src/server/repositories/approval-repository';
 import { createCalculationRepository, type CalculationRepository } from '../../src/server/repositories/calculation-repository';
 import { createConfigRepository } from '../../src/server/repositories/config-repository';
@@ -52,9 +53,10 @@ export interface CalculationDatabase extends AuditDatabase {
   readonly materialOneId: string;
   readonly materialTwoId: string;
   /** A new task and estimate for the customer, in this state. */
-  addEstimate(options?: { status?: 'DRAFT' | 'SUBMITTED' | 'APPROVED'; withCustomer?: boolean; revision?: number; engineer?: boolean; customerId?: string }): Promise<string>;
+  addEstimate(options?: { status?: 'DRAFT' | 'PREPARED' | 'APPROVED'; withCustomer?: boolean; revision?: number; engineer?: boolean; customerId?: string }): Promise<string>;
   /** Adds a part to an estimate, as the part form stores it (`inputs` by field ID), and returns its ID. The estimate's own lock is not taken: a test builds an estimate before anyone calculates it. */
-  addPart(estimateId: string, options?: { parentId?: string | null; sortIndex?: number; inputs?: Readonly<Record<string, unknown>> }): Promise<string>;
+  /** `nodeKind` (CR-01 item 3A) defaults to a Main Assembly at the top and a Part under a parent: a test that does not care about kinds gets a row the rules would accept. */
+  addPart(estimateId: string, options?: { parentId?: string | null; sortIndex?: number; nodeKind?: NodeKind; inputs?: Readonly<Record<string, unknown>> }): Promise<string>;
   /** A DRAFT of the Engineer's with the customer chosen and one part holding every needed input and the first material. */
   addCompleteEstimate(options?: { parts?: number }): Promise<string>;
   /** A node of the invented row, with its own ID. */
@@ -72,7 +74,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
   ]);
   const configVersionId = defined(version.rows[0]).id;
 
-  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Invented calculation customer') RETURNING id::text");
+  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Invented calculation customer', left(md5('Invented calculation customer'), 10)) RETURNING id::text");
   const customerId = defined(customer.rows[0]).id;
   for (const item of SEED_PROCESS_ITEMS) {
     await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) VALUES ($1::uuid, $2::uuid, $3)', [customerId, item.id, defined(TYPED_RATES[item.name], item.name)]);
@@ -98,6 +100,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
   const nodes = createEstimateNodeRepository(db.prisma);
   const estimateService = createEstimateService({
     estimates,
+    audit: db.audit,
     nodes,
     images: createImageRepository(db.prisma),
     transactions: db.transactions,
@@ -132,7 +135,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
   const addEstimate: CalculationDatabase['addEstimate'] = async (options = {}) => {
     taskNumber += 1;
     const task = await db.owner.query<{ id: string }>(
-      `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at) VALUES ($1, $2::uuid, $2::uuid, $3, now() + interval '3 days') RETURNING id::text`,
+      `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $2::uuid, $3, now() + interval '3 days', 'Invented task', 'Invented subject') RETURNING id::text`,
       [`Q-2026-${String(9000 + taskNumber)}`, options.engineer === true ? engineerId : personId, UNC_PATH],
     );
     const { rows } = await db.owner.query<{ id: string }>(
@@ -144,8 +147,8 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
 
   const addPart: CalculationDatabase['addPart'] = async (estimateId, options = {}) => {
     const { rows } = await db.owner.query<{ id: string }>(
-      'INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index, inputs) VALUES ($1::uuid, $2::uuid, $3, $4::jsonb) RETURNING id::text',
-      [estimateId, options.parentId ?? null, options.sortIndex ?? 0, JSON.stringify(options.inputs ?? {})],
+      'INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index, node_kind, inputs) VALUES ($1::uuid, $2::uuid, $3, $4::estimate_node_kind, $5::jsonb) RETURNING id::text',
+      [estimateId, options.parentId ?? null, options.sortIndex ?? 0, options.nodeKind ?? (options.parentId === undefined || options.parentId === null ? 'MAIN_ASSEMBLY' : 'PART'), JSON.stringify(options.inputs ?? {})],
     );
     return defined(rows[0]).id;
   };

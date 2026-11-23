@@ -9,6 +9,7 @@ import { createEstimateService, type EstimateService, type EstimateViewer } from
 import { PART_CHANGED_CODE } from '@/server/services/estimate-inputs';
 
 import { insertPersonAsOwner } from '../../support/audit-database';
+import { auditFor, changeContext } from '../../support/customer-change';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
 import { pngOfSize, smallPng } from '../../support/pictures';
@@ -38,6 +39,7 @@ let customerCounter = 0;
 const buildService = (): EstimateService =>
   createEstimateService({
     estimates: createEstimateRepository(db.prisma),
+    audit: auditFor(db),
     nodes: createEstimateNodeRepository(db.prisma),
     images: createImageRepository(db.prisma),
     transactions: createTransactionRunner(db.prisma),
@@ -58,6 +60,8 @@ afterAll(async () => {
 });
 
 const arjun = (): EstimateViewer => ({ id: arjunId, role: 'ENGINEER' });
+/** The customer is a Lead's to change (CR-01 item 6), so the tests of its revision rule change it as the Lead. */
+const lead = (): EstimateViewer => ({ id: leadId, role: 'LEAD' });
 
 interface World {
   readonly estimateId: string;
@@ -69,19 +73,19 @@ interface World {
 async function setUpEstimate(): Promise<World> {
   taskCounter += 1;
   const task = await db.owner.query<{ id: string }>(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at) VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z') RETURNING id::text AS id`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented task', 'Invented subject') RETURNING id::text AS id`,
     [`Q-2026-${String(5000 + taskCounter)}`, arjunId, leadId, PATH],
   );
   const estimate = await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id) VALUES ($1::uuid) RETURNING id::text AS id', [defined(task.rows[0]).id]);
   const estimateId = defined(estimate.rows[0]).id;
-  const first = (await service.addPart(arjun(), estimateId, { kind: 'item' })).nodeId;
-  const second = (await service.addPart(arjun(), estimateId, { kind: 'item' })).nodeId;
+  const first = (await service.addPart(arjun(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
+  const second = (await service.addPart(arjun(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
   return { estimateId, first, second };
 }
 
 async function newCustomer(): Promise<string> {
   customerCounter += 1;
-  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text AS id', [`Revision Customer ${String(customerCounter)}`]);
+  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text AS id', [`Revision Customer ${String(customerCounter)}`]);
   return defined(rows[0]).id;
 }
 
@@ -153,20 +157,20 @@ describe('AC-3: the customer', () => {
     const world = await setUpEstimate();
     const [a, b] = [await newCustomer(), await newCustomer()];
     const start = (await counts(world, world.first)).estimate;
-    await service.setCustomer(arjun(), world.estimateId, a);
-    await service.setCustomer(arjun(), world.estimateId, a);
+    await service.setCustomer(lead(), changeContext(lead()), world.estimateId, a);
+    await service.setCustomer(lead(), changeContext(lead()), world.estimateId, a);
     expect((await counts(world, world.first)).estimate).toBe(start + 1);
-    await service.setCustomer(arjun(), world.estimateId, b);
-    await service.setCustomer(arjun(), world.estimateId, a);
+    await service.setCustomer(lead(), changeContext(lead()), world.estimateId, b);
+    await service.setCustomer(lead(), changeContext(lead()), world.estimateId, a);
     expect((await counts(world, world.first)).estimate).toBe(start + 3);
   });
 
   it('the same customer again writes nothing: the estimate row is not touched', async () => {
     const world = await setUpEstimate();
     const customer = await newCustomer();
-    await service.setCustomer(arjun(), world.estimateId, customer);
+    await service.setCustomer(lead(), changeContext(lead()), world.estimateId, customer);
     const before = await counts(world, world.first);
-    await service.setCustomer(arjun(), world.estimateId, customer);
+    await service.setCustomer(lead(), changeContext(lead()), world.estimateId, customer);
     expect(await counts(world, world.first)).toEqual(before);
   });
 });
@@ -175,7 +179,7 @@ describe('AC-3: the parts tree', () => {
   it('adding a part is a change; moving a part to where it already is changes nothing; a real move is a change, and moving back is a second one', async () => {
     const world = await setUpEstimate();
     const start = (await counts(world, world.first)).estimate;
-    await service.addPart(arjun(), world.estimateId, { kind: 'beside', nodeId: world.second });
+    await service.addPart(arjun(), world.estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
     expect((await counts(world, world.first)).estimate).toBe(start + 1);
 
     const before = await counts(world, world.first);
@@ -252,7 +256,7 @@ describe('AC-6: two writers at once lose nothing and are counted once each', () 
     const customer = await newCustomer();
     const before = await counts(world, world.first);
     const revision = await partRevision(world.first);
-    await Promise.all([service.saveInputs(arjun(), world.estimateId, { nodeId: world.first, revision, values: { [LENGTH]: '5' } }), service.setCustomer(arjun(), world.estimateId, customer)]);
+    await Promise.all([service.saveInputs(arjun(), world.estimateId, { nodeId: world.first, revision, values: { [LENGTH]: '5' } }), service.setCustomer(lead(), changeContext(lead()), world.estimateId, customer)]);
     expect((await counts(world, world.first)).estimate).toBe(before.estimate + 2);
   });
 

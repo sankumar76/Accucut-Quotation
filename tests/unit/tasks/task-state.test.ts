@@ -19,9 +19,9 @@ describe('AC-1, AC-2: the status x deadline matrix', () => {
     ['DRAFT', 'past', PAST, 'open', ['open', 'overdue']],
     ['DRAFT', 'exactly now', NOW, 'open', ['open']],
     ['DRAFT', 'ahead', AHEAD, 'open', ['open']],
-    ['SUBMITTED', 'past', PAST, 'open', ['open', 'overdue']],
-    ['SUBMITTED', 'exactly now', NOW, 'open', ['open']],
-    ['SUBMITTED', 'ahead', AHEAD, 'open', ['open']],
+    ['PREPARED', 'past', PAST, 'open', ['open', 'overdue']],
+    ['PREPARED', 'exactly now', NOW, 'open', ['open']],
+    ['PREPARED', 'ahead', AHEAD, 'open', ['open']],
     // AC-2: an approved task is Closed, and never Overdue, even long past its deadline.
     ['APPROVED', 'past', PAST, 'closed', ['closed']],
     ['APPROVED', 'exactly now', NOW, 'closed', ['closed']],

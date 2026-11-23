@@ -23,7 +23,7 @@ const DEADLINE = new Date('2026-11-12T11:30:00.000Z');
 let world: FakeTaskWorld;
 let service: TaskService;
 let draft: string;
-let submitted: string;
+let prepared: string;
 let approved: string;
 let others: string;
 
@@ -31,28 +31,30 @@ beforeEach(() => {
   world = createFakeTaskWorld(() => [LEAD, ADMIN, ARJUN, PRIYA]);
   service = createTaskService({ tasks: world.repository, transactions: world.transactions, clock: createFixedClock(NOW) });
   draft = world.seed({ code: 'Q-2026-0001', engineerId: ARJUN.id, assignedById: LEAD.id, deadlineAt: DEADLINE, title: 'Hopper cover', status: 'DRAFT', notes: 'Sheet metal only.' }).id;
-  submitted = world.seed({ code: 'Q-2026-0002', engineerId: ARJUN.id, assignedById: LEAD.id, deadlineAt: DEADLINE, status: 'SUBMITTED' }).id;
+  prepared = world.seed({ code: 'Q-2026-0002', engineerId: ARJUN.id, assignedById: LEAD.id, deadlineAt: DEADLINE, status: 'PREPARED' }).id;
   approved = world.seed({ code: 'Q-2026-0003', engineerId: ARJUN.id, assignedById: LEAD.id, deadlineAt: DEADLINE, status: 'APPROVED' }).id;
-  others = world.seed({ code: 'Q-2026-0004', engineerId: PRIYA.id, assignedById: LEAD.id, deadlineAt: DEADLINE, status: 'SUBMITTED' }).id;
+  others = world.seed({ code: 'Q-2026-0004', engineerId: PRIYA.id, assignedById: LEAD.id, deadlineAt: DEADLINE, status: 'PREPARED' }).id;
 });
 
 describe('AC-1: the task and the status of its estimate, in every state', () => {
   it.each([
     ['DRAFT', () => draft],
-    ['SUBMITTED', () => submitted],
+    ['PREPARED', () => prepared],
     ['APPROVED', () => approved],
   ] as const)('an Engineer opens their own %s task and is told its status, derived from the estimate', async (status, id) => {
     expect((await service.getTask({ id: ARJUN.id, role: 'ENGINEER' }, id()))?.status).toBe(status);
   });
 
-  it('answers the task\'s own fields: code, title, notes, the people\'s names, the folder, the deadline and the customer\'s name', async () => {
+  it('answers the task\'s own fields: code, title, subject, notes, the people\'s names, the folder, the deadline and the customer (names only, none for an estimate made before CR-01 item 6)', async () => {
     const task = await service.getTask({ id: ARJUN.id, role: 'ENGINEER' }, draft);
     expect(task).toEqual({
       id: draft,
       code: 'Q-2026-0001',
       title: 'Hopper cover',
+      subject: 'Invented subject',
       notes: 'Sheet metal only.',
       engineer: { id: ARJUN.id, name: 'Invented Arjun' },
+      customer: null,
       customerName: null,
       folderPath: '\\\\invented-server\\invented-share\\RFQ-1',
       folderUrl: 'file:////invented-server/invented-share/RFQ-1',
@@ -84,10 +86,10 @@ describe('AC-3, AC-5: a Lead and an Admin open any task and are told the same wo
     ['LEAD', LEAD],
     ['ADMIN', ADMIN],
   ] as const)('%s opens another Engineer\'s task with the same shape as an Engineer\'s', async (role, person) => {
-    const own = await service.getTask({ id: ARJUN.id, role: 'ENGINEER' }, submitted);
-    const seen = await service.getTask({ id: person.id, role }, submitted);
+    const own = await service.getTask({ id: ARJUN.id, role: 'ENGINEER' }, prepared);
+    const seen = await service.getTask({ id: person.id, role }, prepared);
     expect(seen).toEqual(own);
-    expect((await service.getTask({ id: person.id, role }, others))?.status).toBe('SUBMITTED');
+    expect((await service.getTask({ id: person.id, role }, others))?.status).toBe('PREPARED');
   });
 
   it('has the same keys for every role and no key that could hold a figure, an approver or a reason', async () => {
@@ -95,6 +97,6 @@ describe('AC-3, AC-5: a Lead and an Admin open any task and are told the same wo
     const engineerKeys = await keys({ id: ARJUN.id, role: 'ENGINEER' });
     expect(await keys({ id: LEAD.id, role: 'LEAD' })).toEqual(engineerKeys);
     expect(await keys({ id: ADMIN.id, role: 'ADMIN' })).toEqual(engineerKeys);
-    expect(engineerKeys).toEqual(['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'title']);
+    expect(engineerKeys).toEqual(['assignedByName', 'code', 'customer', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'subject', 'title']);
   });
 });

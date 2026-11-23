@@ -108,7 +108,7 @@ test.describe('the screen (AC-2, AC-10)', () => {
 test.describe('saving a change (AC-3, AC-5)', () => {
   test('AC-3, AC-10: by keyboard, a new Engineer and a new deadline are saved, the polite status names the task, the Engineer and the deadline in IST and takes focus, and the server holds both', async ({ page }, testInfo) => {
     const { from, to } = await twoEngineers(testInfo);
-    const task = await seedQueueTask(from.id, OPEN_DEADLINE, 'SUBMITTED', 'E2E handover');
+    const task = await seedQueueTask(from.id, OPEN_DEADLINE, 'PREPARED', 'E2E handover');
     await openEdit(page, task.id);
 
     await page.getByLabel('Engineer').selectOption({ label: to.name });
@@ -183,7 +183,7 @@ test.describe('a change that cannot be saved (AC-3, AC-6)', () => {
 
   test('AC-6: a task approved after the form was opened is refused by the server, the form goes and the reason is said, and nothing changes', async ({ page }, testInfo) => {
     const { from, to } = await twoEngineers(testInfo);
-    const task = await seedQueueTask(from.id, OPEN_DEADLINE, 'SUBMITTED', 'E2E approved meanwhile');
+    const task = await seedQueueTask(from.id, OPEN_DEADLINE, 'PREPARED', 'E2E approved meanwhile');
     await openEdit(page, task.id);
     await setEstimateStatus(task.id, 'APPROVED');
     await page.getByLabel('Engineer').selectOption({ label: to.name });

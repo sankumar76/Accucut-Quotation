@@ -62,12 +62,12 @@ const lead = (): EstimateViewer => ({ id: leadId, role: 'LEAD' });
 async function setUpParts(parts: number): Promise<string[]> {
   taskCounter += 1;
   const task = await db.owner.query<{ id: string }>(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at) VALUES ($4, $1::uuid, $2::uuid, $3, '2026-11-12T11:30:00Z') RETURNING id::text AS id`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($4, $1::uuid, $2::uuid, $3, '2026-11-12T11:30:00Z', 'Invented task', 'Invented subject') RETURNING id::text AS id`,
     [arjunId, leadId, PATH, `Q-2026-${String(4000 + taskCounter)}`],
   );
   estimateId = defined((await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id) VALUES ($1::uuid) RETURNING id::text AS id', [defined(task.rows[0]).id])).rows[0]).id;
   const ids: string[] = [];
-  for (let index = 0; index < parts; index += 1) ids.push((await service.addPart(arjun(), estimateId, { kind: 'item' })).nodeId);
+  for (let index = 0; index < parts; index += 1) ids.push((await service.addPart(arjun(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId);
   return ids;
 }
 
@@ -189,7 +189,7 @@ describe('a 500-part tree', () => {
     await setUpParts(0);
     // 500 parts in one statement (the rows of `tree500` are one at a time and take seconds); the first is complete, the rest are empty.
     const { rows } = await db.owner.query<{ id: string }>(
-      'INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index) SELECT $1::uuid, NULL, sort_index FROM generate_series(0, $2::int - 1) AS sort_index RETURNING id::text AS id, sort_index',
+      'INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index, node_kind) SELECT $1::uuid, NULL, sort_index, \'MAIN_ASSEMBLY\' FROM generate_series(0, $2::int - 1) AS sort_index RETURNING id::text AS id, sort_index',
       [estimateId, TREE500_NODE_COUNT],
     );
     expect(rows).toHaveLength(TREE500_NODE_COUNT);

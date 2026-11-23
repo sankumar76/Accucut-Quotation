@@ -167,7 +167,7 @@ export async function ensureAuditCanaryEntry(): Promise<void> {
 
 /**
  * Gives the Engineer with this ID a task and its estimate for the confidentiality scan (STORY-05.01; `tests/support/estimate-recipe.ts`): both have the Engineer's own ID,
- * and the task a code made from it in a year no real task has, so the scan's recipes (`/estimates/<code>`, `PUT /api/v1/estimates/<id>/customer`) name a record the
+ * and the task a code made from it in a year no real task has, so the scan's recipes (`/estimates/<code>`, `PUT /api/v1/estimates/<id>/customer`, which an Engineer is refused) name a record the
  * signed-in Engineer really owns. Assigned by the E2E Lead. Inserts that do nothing on any conflict, so a repeat is safe. Invented values; the database is thrown away.
  */
 async function insertCanaryEstimate(client: Client, ownerId: string): Promise<void> {
@@ -175,13 +175,13 @@ async function insertCanaryEstimate(client: Client, ownerId: string): Promise<vo
   const lead = rows[0];
   if (lead === undefined) throw new Error('The E2E Lead does not exist yet: the set-up project makes it.');
   await client.query(
-    `INSERT INTO tasks (id, code, engineer_id, assigned_by, folder_path, deadline_at, title, notes)
-     VALUES ($1::uuid, $2, $1::uuid, $3::uuid, $4, '2099-01-01T04:30:00Z', 'Canary task', 'Invented notes.') ON CONFLICT DO NOTHING`,
+    `INSERT INTO tasks (id, code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes)
+     VALUES ($1::uuid, $2, $1::uuid, $3::uuid, $4, '2099-01-01T04:30:00Z', 'Canary task', 'Canary subject', 'Invented notes.') ON CONFLICT DO NOTHING`,
     [ownerId, canaryTaskCodeFor(ownerId), lead.id, CANARY_FOLDER_PATH],
   );
   await client.query('INSERT INTO estimates (id, task_id) VALUES ($1::uuid, $1::uuid) ON CONFLICT DO NOTHING', [ownerId]);
   // The one part the node routes of STORY-05.02 open: its ID is the estimate's too (`estimate-recipe.ts`), first at the top.
-  await client.query('INSERT INTO estimate_nodes (id, estimate_id, sort_index) VALUES ($1::uuid, $1::uuid, 0) ON CONFLICT DO NOTHING', [ownerId]);
+  await client.query('INSERT INTO estimate_nodes (id, estimate_id, sort_index, node_kind) VALUES ($1::uuid, $1::uuid, 0, \'MAIN_ASSEMBLY\') ON CONFLICT DO NOTHING', [ownerId]);
   // The one picture `GET /api/v1/images/{id}` opens (STORY-05.07): its ID and its estimate's are the owner's too. It is not the part's picture, so the node's recipes are unchanged. A tiny
   // invented PNG; the table is append-only and the insert does nothing on a repeat.
   const picture = smallPng();
@@ -254,6 +254,43 @@ export async function fillCanaryPart(ownerId: string): Promise<void> {
     const snapshot = registryShape.parse(rows[0]?.snapshot);
     const inputs = canaryPartInputs(snapshot as unknown as ConfigDocument);
     await client.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE id = $1::uuid', [ownerId, JSON.stringify(inputs)]);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Sets the customer of the canary estimate of a person made by `createDisposableUser('scan', ...)` directly in the throwaway database (CR-01 item 6, AQP-390). An Engineer can no longer set the customer
+ * through the API (only a Lead and an Admin can, `estimate-customer.spec.ts`), and a task is assigned with one in the product; the canary estimate is inserted without one, so a spec that needs a
+ * customer on it states it with this. The estimate has the ID of its owner (`estimate-recipe.ts`). Repeatable. Throwaway database only (guarded by `connectToTestDatabase`).
+ */
+export async function setCanaryCustomer(ownerId: string, customerId: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    const result = await client.query('UPDATE estimates SET customer_id = $2::uuid WHERE id = $1::uuid', [ownerId, customerId]);
+    if (result.rowCount !== 1) throw new Error('The canary estimate was not found: set it up first.');
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Sets the subject of the task of the canary estimate of a person made by `createDisposableUser('scan', ...)` (CR-01 items 6 and 9, AQP-391: the subject is part of the Excel file name), and returns the
+ * short name of the customer chosen on the estimate, which is the other part of that name. The task has the ID of its owner (`estimate-recipe.ts`). The subject is not an input of the calculation, so
+ * the state of the estimate does not change. Throwaway database only (guarded by `connectToTestDatabase`).
+ */
+export async function setCanarySubject(ownerId: string, subject: string): Promise<string> {
+  const client = await connectToTestDatabase();
+  try {
+    const result = await client.query('UPDATE tasks SET subject = $2 WHERE id = $1::uuid', [ownerId, subject]);
+    if (result.rowCount !== 1) throw new Error('The canary task was not found: set it up first.');
+    const { rows } = await client.query<{ shortName: string | null }>(
+      'SELECT c.short_name AS "shortName" FROM estimates e LEFT JOIN customers c ON c.id = e.customer_id WHERE e.id = $1::uuid',
+      [ownerId],
+    );
+    const shortName = rows[0]?.shortName;
+    if (shortName === null || shortName === undefined) throw new Error('The canary estimate has no customer: make it calculable first.');
+    return shortName;
   } finally {
     await client.end();
   }
@@ -473,7 +510,7 @@ export const E2E_SECOND_CUSTOMER = 'E2E Second Customer';
 export async function ensureE2eSecondCustomer(): Promise<string> {
   const client = await connectToTestDatabase();
   try {
-    await client.query('INSERT INTO customers (name) VALUES ($1) ON CONFLICT DO NOTHING', [E2E_SECOND_CUSTOMER]);
+    await client.query('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) ON CONFLICT DO NOTHING', [E2E_SECOND_CUSTOMER]);
     const { rows } = await client.query<{ id: string }>('SELECT id::text AS id FROM customers WHERE name = $1', [E2E_SECOND_CUSTOMER]);
     const id = rows[0]?.id;
     if (id === undefined) throw new Error('The second E2E customer could not be made.');

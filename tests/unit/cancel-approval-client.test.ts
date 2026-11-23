@@ -6,7 +6,7 @@ import { STEP_UP_FAILED_MESSAGE, STEP_UP_LOCKED_MESSAGE } from '@/lib/auth/step-
 
 /**
  * STORY-06.12 AC-2, AC-4, AC-5, AC-7 (UX spec SCR-06 "Cancel approval (Admin)"): the browser's call of Cancel approval. `fetch` is replaced, so the test answers for the server. Nothing is read from a good cancel but
- * that the estimate is DRAFT or SUBMITTED (the page is drawn again by the server, so no figure is kept); a refusal arrives with its code and the server's own sentence; an answer of the wrong shape is a failure,
+ * that the estimate is DRAFT or PREPARED (the page is drawn again by the server, so no figure is kept); a refusal arrives with its code and the server's own sentence; an answer of the wrong shape is a failure,
  * never a success that might be wrong. The password goes in the body of the one request and nowhere else. Every name, ID, number and password is invented.
  */
 
@@ -26,8 +26,8 @@ function fetching(response: Response | Error) {
 }
 
 describe('cancelApproval', () => {
-  it('sends POST /api/v1/estimates/{id}/approval/cancel with the approval, the reason and the password, and is ok when the status is DRAFT or SUBMITTED', async () => {
-    for (const status of ['DRAFT', 'SUBMITTED']) {
+  it('sends POST /api/v1/estimates/{id}/approval/cancel with the approval, the reason and the password, and is ok when the status is DRAFT or PREPARED', async () => {
+    for (const status of ['DRAFT', 'PREPARED']) {
       const doFetch = fetching(answer({ status, cancelledAt: '2026-11-17T06:00:00.000Z' }));
       expect(await cancelApproval(ESTIMATE, INPUT, doFetch)).toEqual({ status: 'ok', value: true });
       expect(doFetch.mock.calls[0]?.[0]).toBe(`/api/v1/estimates/${ESTIMATE}/approval/cancel`);
@@ -53,7 +53,7 @@ describe('cancelApproval', () => {
   });
 
   it.each([
-    ['a status that is not DRAFT or SUBMITTED', answer({ status: 'APPROVED' })],
+    ['a status that is not DRAFT or PREPARED', answer({ status: 'APPROVED' })],
     ['no status', answer({ cancelledAt: '2026-11-17T06:00:00.000Z' })],
     ['a body that is not an object', answer('DRAFT')],
     ['a body that is not JSON', new Response('<html>', { status: 200 })],

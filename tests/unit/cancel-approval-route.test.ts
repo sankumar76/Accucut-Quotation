@@ -185,11 +185,11 @@ describe('AC-3: a good cancel of an approved estimate writes the status, the can
     expect(harness.hasher.verified).toEqual([{ passwordHash: `hash:${HARNESS_PASSWORD}`, matched: true }]);
   });
 
-  it('after the cancel the estimate can be calculated again (a Recalculate on the Draft moves it to Submitted)', async () => {
+  it('after the cancel the estimate can be calculated again (a Recalculate on the Draft moves it to Prepared)', async () => {
     await approved();
     expect((await cancel()).status).toBe(200);
     await harness.calculationService.recalculate(admin(), owned());
-    expect(estimate().status).toBe('SUBMITTED');
+    expect(estimate().status).toBe('PREPARED');
   });
 
   it('an audit entry that cannot be written takes the cancel and the status with it', async () => {
@@ -218,18 +218,18 @@ describe('AC-10: an approval kept through an unlock is cancelled with the status
     expect(defined(cancels()[0])).toMatchObject({ before: { approvedPrice: PRICE, status: 'DRAFT' }, after: { reason: REASON, status: 'DRAFT' } });
   });
 
-  it('a Submitted estimate stays Submitted', async () => {
+  it('a Prepared estimate stays Prepared', async () => {
     await approved();
     await unlocked();
     await harness.calculationService.recalculate(admin(), owned());
-    expect(estimate().status).toBe('SUBMITTED');
+    expect(estimate().status).toBe('PREPARED');
     const writes = harness.estimateWorld.statusWrites();
     const response = await cancel();
     expect(response.status).toBe(200);
-    expect(await bodyOf(response)).toMatchObject({ status: 'SUBMITTED' });
-    expect(estimate().status).toBe('SUBMITTED');
+    expect(await bodyOf(response)).toMatchObject({ status: 'PREPARED' });
+    expect(estimate().status).toBe('PREPARED');
     expect(harness.estimateWorld.statusWrites()).toBe(writes);
-    expect(defined(cancels()[0])).toMatchObject({ before: { status: 'SUBMITTED' }, after: { status: 'SUBMITTED' } });
+    expect(defined(cancels()[0])).toMatchObject({ before: { status: 'PREPARED' }, after: { status: 'PREPARED' } });
   });
 
   it('an estimate with no approval is a 409 in plain words, and nothing is written', async () => {

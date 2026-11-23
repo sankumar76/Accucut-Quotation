@@ -14,7 +14,7 @@ import { APPROVED_NOTICE_ID } from './approve-ids';
 
 /**
  * The enabled Approve and lock button of SCR-06 (STORY-06.06 AC-1; UX spec SCR-06 and SCR-08): the second and last script the review draws, and as small as it can be (NFR-009, ADR-016: `/estimates/[code]` has
- * a budget, and this page is measured by CI stage 11b). It is drawn only while the server shows the figures `current` on a submitted estimate, so it is the convenience the guard of STORY-06.05 allows; the
+ * a budget, and this page is measured by CI stage 11b). It is drawn only while the server shows the figures `current` on a prepared estimate, so it is the convenience the guard of STORY-06.05 allows; the
  * server still decides. **The dialog is not in the first load**: its code is fetched by a bare `import()` on the first press, through the loader every overlay uses (`useFirstOpen`, architecture section 10),
  * and the type of its props is imported as a type only. A press before the page was interactive is kept (`data-early-intent`).
  *

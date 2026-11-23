@@ -17,7 +17,7 @@ const ESTIMATE_ID = '00000000-0000-4000-8000-0000000e5701';
 const CODE = 'Q-2026-0701';
 
 const summary = (overrides: Partial<ExportSummaryView> = {}): ExportSummaryView => ({
-  fileName: 'Quotation_Acme_Tools_Q-2026-0701_2026-11-14.xlsx',
+  fileName: 'MAS_Feed-hopper_14-11-2026.xlsx',
   partCount: 3,
   pictureCount: 1,
   columns: { first: 'A', last: 'BO', count: 67 },
@@ -29,6 +29,7 @@ const summary = (overrides: Partial<ExportSummaryView> = {}): ExportSummaryView 
   state: 'current',
   figures: null,
   warning: null,
+  download: { kind: 'none' },
   ...overrides,
 });
 
@@ -37,7 +38,7 @@ const render = (view: ExportSummaryView): string => renderToStaticMarkup(createE
 describe('the file card', () => {
   it('shows the file name as real text, the number of rows, the columns A to BO and an enabled Download .xlsx button', () => {
     const html = render(summary());
-    expect(html).toContain('>Quotation_Acme_Tools_Q-2026-0701_2026-11-14.xlsx</dd>');
+    expect(html).toContain('>MAS_Feed-hopper_14-11-2026.xlsx</dd>');
     expect(html).toContain('3 parts');
     expect(html).toContain('A to BO');
     expect(html).toMatch(/<button[^>]*id="export-download"[^>]*>Download \.xlsx<\/button>/);

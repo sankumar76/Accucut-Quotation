@@ -37,7 +37,7 @@ beforeEach(() => {
   const by = BOSS.id;
   // Arjun: one overdue and open, one open, one closed (approved, with a deadline in the past: closed is never overdue).
   world.seed({ code: 'Q-2026-0001', engineerId: ARJUN.id, assignedById: by, deadlineAt: at(-2 * DAY), title: 'Overdue hopper' });
-  world.seed({ code: 'Q-2026-0002', engineerId: ARJUN.id, assignedById: by, deadlineAt: at(DAY), status: 'SUBMITTED' });
+  world.seed({ code: 'Q-2026-0002', engineerId: ARJUN.id, assignedById: by, deadlineAt: at(DAY), status: 'PREPARED' });
   world.seed({ code: 'Q-2026-0003', engineerId: ARJUN.id, assignedById: by, deadlineAt: at(-5 * DAY), status: 'APPROVED', customerId: CUSTOMER_ID });
   // Priya: a deadline exactly now (not overdue yet), one millisecond ago (overdue), and one on the same deadline as 0002, to show the tie broken by code.
   world.seed({ code: 'Q-2026-0004', engineerId: PRIYA.id, assignedById: by, deadlineAt: at(0) });
@@ -126,7 +126,7 @@ describe('AC-3: what a row carries', () => {
       {
         id: expect.any(String),
         code: 'Q-2026-0003',
-        title: null,
+        title: 'Invented task',
         engineer: { id: ARJUN.id, name: ARJUN.name },
         customerName: 'Invented Customer Ltd',
         folderPath: '\\\\invented-server\\invented-share\\RFQ-1',

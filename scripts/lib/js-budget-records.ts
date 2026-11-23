@@ -42,6 +42,9 @@ const CREATED = 201;
 const BUDGET_FOLDER_PATH = '\\\\budget-check-server\\budget-check-share\\RFQ-budget';
 const BUDGET_DEADLINE = '2099-01-01T10:00';
 
+/** The short name's length: the customer's limit is 10 characters (CUSTOMER_SHORT_NAME_MAX_LENGTH); the script keeps to its own copy, as it imports no code of the portal. */
+const SHORT_NAME_LENGTH = 10;
+
 const idSchema = z.object({ id: z.string().min(1) });
 const taskSchema = z.object({ code: z.string().min(1), estimate: z.object({ id: z.string().min(1) }) });
 
@@ -82,12 +85,16 @@ async function signedInAdmin(options: RecordOptions): Promise<AdminCall | undefi
   };
 }
 
-/** Adds one customer named from a random UUID (invented, and unique so a second run does not collide) and returns the path of its page. */
-async function makeCustomerPath(admin: AdminCall): Promise<string> {
-  const created = idSchema.safeParse(await admin.post(CUSTOMERS_API_PATH, { name: `Budget check customer ${randomUUID()}` }));
+/** Adds one customer named from a random UUID (invented, and unique so a second run does not collide; the short name is the first ten characters of the UUID, CR-01 item 6) and returns its ID. */
+async function makeCustomer(admin: AdminCall): Promise<string> {
+  const unique = randomUUID();
+  const created = idSchema.safeParse(await admin.post(CUSTOMERS_API_PATH, { name: `Budget check customer ${unique}`, shortName: unique.slice(0, SHORT_NAME_LENGTH) }));
   if (!created.success) throw new Error(`POST ${CUSTOMERS_API_PATH} did not answer with the customer's ID`);
-  return `/masters/customers/${encodeURIComponent(created.data.id)}`;
+  return created.data.id;
 }
+
+/** The path of a customer's page. */
+const customerPathOf = (customerId: string): string => `/masters/customers/${encodeURIComponent(customerId)}`;
 
 /** The task code and the estimate ID of an invented task. */
 interface MadeEstimate {
@@ -95,15 +102,15 @@ interface MadeEstimate {
   readonly estimateId: string;
 }
 
-/** Adds an invented Engineer and assigns them one task. */
-async function makeEstimate(admin: AdminCall): Promise<MadeEstimate> {
+/** Adds an invented Engineer and assigns them one task for the customer. */
+async function makeEstimate(admin: AdminCall, customerId: string): Promise<MadeEstimate> {
   const unique = randomUUID();
   const engineer = idSchema.safeParse(
     await admin.post(USERS_API_PATH, { name: `Budget check engineer ${unique}`, email: `budget-check-${unique}@example.test`, role: 'ENGINEER', password: `${unique}-Aa1!` }),
   );
   if (!engineer.success) throw new Error(`POST ${USERS_API_PATH} did not answer with the Engineer's ID`);
   const task = taskSchema.safeParse(
-    await admin.post(TASKS_API_PATH, { engineerId: engineer.data.id, folderPath: BUDGET_FOLDER_PATH, deadline: BUDGET_DEADLINE, title: 'Budget check task', notes: 'Invented.' }),
+    await admin.post(TASKS_API_PATH, { engineerId: engineer.data.id, folderPath: BUDGET_FOLDER_PATH, deadline: BUDGET_DEADLINE, customerId, title: 'Budget check task', subject: 'Budget check subject', notes: 'Invented.' }),
   );
   if (!task.success) throw new Error(`POST ${TASKS_API_PATH} did not answer with the task's code`);
   return { code: task.data.code, estimateId: task.data.estimate.id };
@@ -114,7 +121,7 @@ const estimatePathOf = (estimate: MadeEstimate): string => `/estimates/${encodeU
 
 /** Adds one part to the estimate, which is then the part at the top (Sl. No 1), and returns the path of its cost details (STORY-06.03). */
 async function makeCostsPath(admin: AdminCall, estimate: MadeEstimate): Promise<string> {
-  await admin.post(`/api/v1/estimates/${encodeURIComponent(estimate.estimateId)}/nodes`, { kind: 'item' });
+  await admin.post(`/api/v1/estimates/${encodeURIComponent(estimate.estimateId)}/nodes`, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' });
   return `${estimatePathOf(estimate)}/costs/${FIRST_PART_SL_NO}`;
 }
 
@@ -130,10 +137,13 @@ export async function makeRecordPaths(options: RecordOptions): Promise<Readonly<
   }
   if (admin === undefined) return {};
   // One estimate serves all of its pages: the workspace, the cost details of its first part and the export. It is made once, on first use, and a failure to make it is every page's failure.
+  // The customer is made once too: the customer's page is opened at it, and the task is assigned for it (a task needs a customer).
+  let customer: Promise<string> | undefined;
+  const customerOf = (call: AdminCall): Promise<string> => (customer ??= makeCustomer(call));
   let estimate: Promise<MadeEstimate> | undefined;
-  const estimateOf = (call: AdminCall): Promise<MadeEstimate> => (estimate ??= makeEstimate(call));
+  const estimateOf = async (call: AdminCall): Promise<MadeEstimate> => (estimate ??= makeEstimate(call, await customerOf(call)));
   const makers: ReadonlyArray<readonly [string, (call: AdminCall) => Promise<string>]> = [
-    [CUSTOMER_PAGE_ROUTE, makeCustomerPath],
+    [CUSTOMER_PAGE_ROUTE, async (call) => customerPathOf(await customerOf(call))],
     [ESTIMATE_PAGE_ROUTE, async (call) => estimatePathOf(await estimateOf(call))],
     [COSTS_PAGE_ROUTE, async (call) => makeCostsPath(call, await estimateOf(call))],
     [EXPORT_PAGE_ROUTE, async (call) => `${estimatePathOf(await estimateOf(call))}/export`],

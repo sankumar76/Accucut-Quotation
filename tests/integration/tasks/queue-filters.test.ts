@@ -45,7 +45,7 @@ beforeAll(async () => {
   arjunId = await insertPersonAsOwner(db, 'Filter Arjun', 'ENGINEER');
   priyaId = await insertPersonAsOwner(db, 'Filter Priya', 'ENGINEER');
   meeraId = await insertPersonAsOwner(db, 'Filter Meera', 'ENGINEER');
-  const customers = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Invented Acme'), ('Invented Bolt') RETURNING id::text");
+  const customers = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Invented Acme', left(md5('Invented Acme'), 10)), ('Invented Bolt', left(md5('Invented Bolt'), 10)) RETURNING id::text");
   acmeId = defined(customers.rows[0]).id;
   boltId = defined(customers.rows[1]).id;
 });
@@ -64,11 +64,11 @@ async function seed(
   engineerId: string,
   assignedById: string,
   deadlineAt: Date,
-  options: { readonly title?: string | null; readonly customerId?: string | null; readonly status?: 'DRAFT' | 'SUBMITTED' | 'APPROVED' } = {},
+  options: { readonly title?: string | null; readonly customerId?: string | null; readonly status?: 'DRAFT' | 'PREPARED' | 'APPROVED' } = {},
 ): Promise<void> {
   const task = await db.owner.query<{ id: string }>(
-    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6) RETURNING id::text',
-    [code, engineerId, assignedById, PATH, deadlineAt, options.title ?? null],
+    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, \'Invented subject\') RETURNING id::text',
+    [code, engineerId, assignedById, PATH, deadlineAt, options.title ?? 'Invented task'],
   );
   await db.owner.query('INSERT INTO estimates (task_id, status, customer_id) VALUES ($1::uuid, $2::estimate_status, $3)', [
     defined(task.rows[0]).id,

@@ -1,11 +1,11 @@
 import { APPROVED_NOTICE_ID } from '@/components/features/estimate-approve/approve-ids';
-import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
+import { ChangeCustomerButton } from '@/components/features/estimate-customer/change-customer-button';
+import { DownloadChip } from '@/components/shared/download-chip';
 import { Notice } from '@/components/shared/notice';
 import { warnedNodeIds } from '@/components/shared/quantity-tag';
 import { WarningNotice } from '@/components/shared/warning-notice';
-import { Card, CardContent } from '@/components/ui/card';
 import type { RoleName } from '@/lib/auth/roles';
-import { cn } from '@/lib/cn';
+import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
@@ -26,7 +26,6 @@ import {
   CLEARED_NOTICE_BODY,
   CLEARED_NOTICE_TITLE,
   NOT_CALCULATED_NOTICE,
-  REVIEW_CUSTOMER_LABEL,
   REVIEW_NO_CUSTOMER,
 } from './review-texts';
 
@@ -46,12 +45,15 @@ export interface EstimateReviewProps {
   readonly header: WorkspaceHeaderView;
   /** The estimate's ID, for the Recalculate button's request (STORY-06.04). */
   readonly estimateId: string;
-  readonly customer: { readonly id: string; readonly name: string } | null;
+  /** The estimate's customer with its short name (CR-01 item 6), or null for one made before that. */
+  readonly customer: { readonly id: string; readonly name: string; readonly shortName: string } | null;
   readonly costs: CostsView;
   /** The time of the calculation written in IST (`formatIst`), or `null` while there is no calculation. */
   readonly calculatedAt: string | null;
   /** Who is looking: the Admin alone has the Cancel approval button (STORY-06.12 AC-1). A Lead sees the state and the line that says who can. */
   readonly viewerRole: RoleName;
+  /** The marker of the estimate's Excel downloads (STORY-CR01.7E AC-5), in the header beside the status: the review is the Lead's and the Admin's, so it is never drawn for an Engineer. */
+  readonly download: DownloadChipData | 'unavailable';
 }
 
 /** The approved notice of SCR-06 (STORY-06.06 AC-5): the approver and the time, and what approval means. It holds focus when an approval has just worked (`tabIndex` -1). */
@@ -65,7 +67,7 @@ function ApprovedNotice({ approval }: { readonly approval: ApprovedTileView | nu
   );
 }
 
-export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole }: EstimateReviewProps) {
+export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole, download }: EstimateReviewProps) {
   const { state, letters, nodes, totals } = costs;
   // The rows of the calculation's quantity warning, which the costs view holds only while the figures are current (STORY-06.10 AC-3, AC-4).
   const warned = warnedNodeIds(state === 'current' ? costs.warning : null);
@@ -84,16 +86,14 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           cancelled: costs.approval.cancel !== null,
         };
   return (
-    <div className="group/review contents">
-      <WorkspaceHeader view={header} />
-      <Card>
-        <CardContent>
-          <p className={cn('text-body', BREAK_LONG_NAMES)}>
-            <strong>{`${REVIEW_CUSTOMER_LABEL}: `}</strong>
-            {customer === null ? REVIEW_NO_CUSTOMER : customer.name}
-          </p>
-        </CardContent>
-      </Card>
+    <div className="is-compact group/review contents">
+      <WorkspaceHeader
+        view={header}
+        noCustomerText={REVIEW_NO_CUSTOMER}
+        downloadMarker={<DownloadChip marker={download} />}
+        // Change customer (CR-01 item 6, AC-12): on an estimate that is not approved only; the review is the Lead's and the Admin's, and the server refuses anyone else all the same.
+        customerAction={header.status === 'APPROVED' ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} />}
+      />
       {state === 'none' ? (
         <Notice tone="info" role="status">
           {NOT_CALCULATED_NOTICE}

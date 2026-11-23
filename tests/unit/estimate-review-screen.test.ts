@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { EstimateReview } from '@/components/features/estimate-review/estimate-review';
 import type { WorkspaceHeaderView } from '@/components/features/estimate-workspace/workspace-header';
+import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import type { CostsView } from '@/server/views/schemas/costs';
 
 import { defined } from '../support/defined';
@@ -27,11 +28,13 @@ const LEAD = { id: '00000000-0000-4000-8000-0000000001ed', role: 'LEAD' } as con
 
 const HEADER: WorkspaceHeaderView = {
   code: 'Q-2026-0318',
-  status: 'SUBMITTED',
+  status: 'PREPARED',
   deadlineLabel: '12 Nov 2026, 17:00 IST',
   folderPath: '\\\\invented-server\\invented-share\\RFQ-0318',
   folderUrl: null,
   title: 'Invented cabinet',
+  subject: 'Invented subject',
+  customer: { name: 'Invented Customer', shortName: 'INV' },
   notes: null,
   assignedByName: 'Invented Lead',
 };
@@ -44,11 +47,12 @@ async function costsOf(options: ReviewWorldOptions): Promise<CostsView> {
 
 const render = (
   costs: CostsView,
-  customer: { id: string; name: string } | null = { id: 'c1', name: 'Invented Customer' },
+  customer: { id: string; name: string; shortName: string } | null = { id: 'c1', name: 'Invented Customer', shortName: 'INV' },
   header: WorkspaceHeaderView = HEADER,
   viewerRole: 'ADMIN' | 'LEAD' = 'LEAD',
+  download: DownloadChipData = { kind: 'none' },
 ): string =>
-  renderToStaticMarkup(createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST', viewerRole }));
+  renderToStaticMarkup(createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST', viewerRole, download }));
 
 const countOf = (html: string, text: string): number => html.split(text).length - 1;
 
@@ -281,7 +285,7 @@ describe('AC-9: the tiles show a skeleton while a recalculation is under way, wi
 describe('STORY-06.06 AC-1: Approve and lock is on only while the guard would let the press through', () => {
   const approveButton = (html: string): string => defined(/<button[^>]*id="review-approve"[^>]*>/.exec(html))[0];
 
-  it('a submitted estimate with current figures: the button is on (not disabled), opens a dialog, and the page holds no dialog code', async () => {
+  it('a prepared estimate with current figures: the button is on (not disabled), opens a dialog, and the page holds no dialog code', async () => {
     const html = render(await current());
     const button = approveButton(html);
     expect(button).not.toContain(' disabled=""');
@@ -302,7 +306,7 @@ describe('STORY-06.06 AC-1: Approve and lock is on only while the guard would le
     expect(html).toContain(reason);
   });
 
-  it('current figures on an estimate that is not submitted (a draft after an unlock, STORY-06.08): the button stays off, with the words of ux-spec v0.31', async () => {
+  it('current figures on an estimate that is not prepared (a draft after an unlock, STORY-06.08): the button stays off, with the words of ux-spec v0.31', async () => {
     const html = render(await current(), undefined, { ...HEADER, status: 'DRAFT' });
     expect(approveButton(html)).toContain(' disabled=""');
     expect(html).toContain('Recalculate first. Approving is available once this Draft has been calculated again.');
@@ -439,7 +443,7 @@ describe('STORY-06.08 AC-11: Recalculate is shown while the status is DRAFT, wha
     expect(html).not.toContain('>Calculate</button>');
   });
 
-  it('a Submitted estimate with current figures shows no Recalculate button: its way on is Approve and lock', async () => {
+  it('a Prepared estimate with current figures shows no Recalculate button: its way on is Approve and lock', async () => {
     const html = render(await current());
     expect(html).not.toContain('id="review-calculate"');
     expect(html).toContain('id="review-approve"');
@@ -528,7 +532,7 @@ describe('STORY-06.08 AC-3, AC-12 (UX spec SCR-06 "Draft after unlock" and "Unlo
     expect(html).not.toContain('Approved earlier');
   });
 
-  it("a Submitted estimate whose approval was unlocked earlier keeps the label on BO but no longer says the task is in the Engineer's queue", async () => {
+  it("a Prepared estimate whose approval was unlocked earlier keeps the label on BO but no longer says the task is in the Engineer's queue", async () => {
     const html = render(await current({ approval: { price: '12600.00', unlock: UNLOCK } }));
     expect(countOf(html, 'Approved earlier')).toBe(1);
     expect(html).not.toContain('review-unlocked-notice');
@@ -542,7 +546,7 @@ describe('STORY-06.08 AC-3, AC-12 (UX spec SCR-06 "Draft after unlock" and "Unlo
   });
 });
 
-describe('STORY-06.12 AC-1, AC-6, AC-10 (UX spec SCR-06 "Approved (Admin)", "Approval cancelled (Admin)" and "(Lead)", "Cancel approval on a Draft or Submitted estimate")', () => {
+describe('STORY-06.12 AC-1, AC-6, AC-10 (UX spec SCR-06 "Approved (Admin)", "Approval cancelled (Admin)" and "(Lead)", "Cancel approval on a Draft or Prepared estimate")', () => {
   const APPROVED_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'APPROVED' };
   const DRAFT_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'DRAFT' };
   const UNLOCK = { unlockedAt: new Date('2026-11-05T06:35:00.000Z'), byName: 'Invented Kiran', reason: 'The customer changed the quantity.', engineerName: 'Invented Priya' };
@@ -567,7 +571,7 @@ describe('STORY-06.12 AC-1, AC-6, AC-10 (UX spec SCR-06 "Approved (Admin)", "App
     }
   });
 
-  it('AC-10: the Admin has the same button on a Draft or a Submitted estimate whose approval was kept through an unlock; a Lead has none and is told who can', async () => {
+  it('AC-10: the Admin has the same button on a Draft or a Prepared estimate whose approval was kept through an unlock; a Lead has none and is told who can', async () => {
     for (const header of [DRAFT_HEADER, HEADER]) {
       const admin = render(await current({ approval: { ...STANDING, unlock: UNLOCK } }), undefined, header, 'ADMIN');
       expect(admin).toContain('id="review-cancel"');
@@ -620,19 +624,19 @@ describe('STORY-06.12 AC-1, AC-6, AC-10 (UX spec SCR-06 "Approved (Admin)", "App
     expect(html).not.toContain('Only the Admin can cancel an approval.');
   });
 
-  it('AC-10 (ux-expert, v0.29): a cancel that did not move the estimate says it stays a Draft, or stays Submitted, and the task does not change', async () => {
+  it('AC-10 (ux-expert, v0.29): a cancel that did not move the estimate says it stays a Draft, or stays Prepared, and the task does not change', async () => {
     const draft = render(await current({ approval: { ...STANDING, unlock: UNLOCK, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
     expect(draft).toContain('The estimate stays a Draft and its task does not change.');
     expect(draft).not.toContain('Open queue');
-    const submitted = render(await current({ approval: { ...STANDING, unlock: UNLOCK, cancel: CANCEL } }), undefined, HEADER, 'ADMIN');
-    expect(submitted).toContain('The estimate stays Submitted and its task does not change.');
+    const prepared = render(await current({ approval: { ...STANDING, unlock: UNLOCK, cancel: CANCEL } }), undefined, HEADER, 'ADMIN');
+    expect(prepared).toContain('The estimate stays Prepared and its task does not change.');
     // The unlocked notice gives way to the cancelled one.
     expect(draft).not.toContain('review-unlocked-notice');
     expect(draft).not.toContain('Unlocked on');
     expect(countOf(draft, 'Approval cancelled</strong>')).toBe(1);
   });
 
-  it('a Submitted estimate whose approval was cancelled from Approved (and then recalculated) says nothing that is no longer true about its status or its queue', async () => {
+  it('a Prepared estimate whose approval was cancelled from Approved (and then recalculated) says nothing that is no longer true about its status or its queue', async () => {
     const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, HEADER, 'ADMIN');
     expect(html).toContain('Approval cancelled on 05 Nov 2026, 13:05 IST by Invented Meera.');
     expect(html).not.toContain('The estimate is a Draft');
@@ -808,11 +812,13 @@ describe('STORY-06.10 AC-5: the approval dialog is told the rows of the warning,
 });
 
 describe('the header and the customer', () => {
-  it('shows the task, its status and the customer by name, or "Not chosen yet"', async () => {
+  it('shows the task, its status and the customer by name and short name, or "Not set" with the Set customer action (CR-01 item 6)', async () => {
     const costs = await current();
     expect(render(costs)).toContain('Q-2026-0318');
     expect(render(costs)).toContain('Invented Customer');
-    expect(render(costs, null)).toContain('Not chosen yet');
+    expect(render(costs)).toContain('INV');
+    expect(render(costs, null)).toContain('Not set');
+    expect(render(costs, null)).toContain('Set customer');
   });
 });
 
@@ -821,8 +827,8 @@ describe('STORY-07.07: Download .xlsx on SCR-06 is the way to SCR-10 while the f
   const NOT_CALCULATED = 'Calculate or Recalculate first. There is no file until a calculation is current.';
 
   it.each([
-    ['AC-1 Lead, Submitted', 'LEAD', 'SUBMITTED'],
-    ['AC-1 Admin, Submitted', 'ADMIN', 'SUBMITTED'],
+    ['AC-1 Lead, Prepared', 'LEAD', 'PREPARED'],
+    ['AC-1 Admin, Prepared', 'ADMIN', 'PREPARED'],
     ['AC-1 Lead, Draft after an unlock', 'LEAD', 'DRAFT'],
     ['AC-4 Lead, Approved', 'LEAD', 'APPROVED'],
     ['AC-4 Admin, Approved', 'ADMIN', 'APPROVED'],
@@ -870,5 +876,19 @@ describe('STORY-07.07: Download .xlsx on SCR-06 is the way to SCR-10 while the f
       expect(source, file).not.toContain('DOWNLOAD_NOT_YET_REASON');
       expect(source, file).not.toContain("STORY-07.03's");
     }
+  });
+});
+
+describe('STORY-CR01.7E AC-5: the download marker in the header', () => {
+  const OPTIONS: ReviewWorldOptions = { rows: [{ sl: '1', h: '1', cost: '1', bg: '12' }], bl: '12' };
+  const LAST = { byName: 'Invented Lead', at: '2026-11-23T04:30:00.000Z' };
+
+  it('shows the chip once, beside the status, in each of its three states', async () => {
+    const costs = await costsOf(OPTIONS);
+    expect(countOf(render(costs), 'Not downloaded')).toBe(1);
+    expect(countOf(render(costs, undefined, undefined, 'LEAD', { kind: 'downloaded', count: 2, last: LAST }), 'Downloaded 2×')).toBe(1);
+    const amber = render(costs, undefined, undefined, 'ADMIN', { kind: 'changed', count: 2, last: LAST });
+    expect(countOf(amber, 'Changed since download')).toBe(1);
+    expect(amber).toContain('Last downloaded by Invented Lead, 23 Nov 2026, 10:00 IST');
   });
 });

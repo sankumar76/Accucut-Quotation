@@ -149,7 +149,7 @@ describe('AC-3, AC-8: Calculate, and the chosen text in the record and the file'
     const draft = await newDraft();
     await save(draft, draft.revision, 'Mirror');
     const answer = await world.db.service.calculate(engineer(), draft.estimateId);
-    expect(answer.status).toBe('SUBMITTED');
+    expect(answer.status).toBe('PREPARED');
     const { rows } = await world.db.owner.query<{ chosen: string | null }>(
       'SELECT r.inputs ->> $2 AS chosen FROM calculation_rows r JOIN calculations c ON c.id = r.calculation_id WHERE c.estimate_id = $1::uuid',
       [draft.estimateId, choiceId],

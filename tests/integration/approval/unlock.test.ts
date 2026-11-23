@@ -99,7 +99,7 @@ async function approvedEstimate(price = '1000.00'): Promise<{ readonly estimateI
 /** A customer of its own, with the rates of the shared one, so it can be deleted without touching the other tests' estimates. */
 async function ownCustomer(): Promise<string> {
   ownCount += 1;
-  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text', [`Invented unlock customer ${String(ownCount)}`]);
+  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text', [`Invented unlock customer ${String(ownCount)}`]);
   const id = defined(rows[0]).id;
   await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) SELECT $1::uuid, process_item_id, value FROM customer_rates WHERE customer_id = $2::uuid', [id, db.customerId]);
   return id;
@@ -272,10 +272,10 @@ describe('AC-4: an empty, white-space or over-long reason is a 422 under `reason
 });
 
 describe('AC-5: a status that is not APPROVED, a second unlock, and two unlocks at once', () => {
-  it('an estimate that is not approved (a Draft and a Submitted one) is the machine\'s 409, and writes nothing', async () => {
-    const submitted = await calculatedEstimate(db);
+  it('an estimate that is not approved (a Draft and a Prepared one) is the machine\'s 409, and writes nothing', async () => {
+    const prepared = await calculatedEstimate(db);
     const draft = await db.addEstimate({ engineer: true });
-    for (const estimateId of [submitted.estimateId, draft]) {
+    for (const estimateId of [prepared.estimateId, draft]) {
       const before = await storedOf(db, estimateId);
       await expect(unlocking().unlock(lead(), estimateId, request())).rejects.toMatchObject({ httpStatus: 409, code: TRANSITION_REFUSALS.NOT_APPROVED.code });
       expect(await storedOf(db, estimateId)).toEqual(before);
@@ -522,8 +522,8 @@ describe('AC-7, AC-12 (AQP-321 AC-4): after the unlock the inputs are editable a
     expect(await statusOf(db, estimateId)).toBe('DRAFT');
 
     await db.service.recalculate(lead(), estimateId);
-    expect(await statusOf(db, estimateId)).toBe('SUBMITTED');
-    // Still the price approved earlier while the estimate is Submitted again.
+    expect(await statusOf(db, estimateId)).toBe('PREPARED');
+    // Still the price approved earlier while the estimate is Prepared again.
     expect((await review.getCosts(lead(), estimateId)).approval).toMatchObject({ price: '1000.00', unlock: { reason: REASON } });
 
     const calculationId = await currentCalculationOf(db, estimateId);

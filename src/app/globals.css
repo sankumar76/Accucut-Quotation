@@ -43,6 +43,12 @@
   --control-h-row: 36px;
   /* The least height of a multi-line box: about three lines of body text. A named token, as the spacing scale is replaced (`--spacing-*: initial`) and a default size such as `min-h-24` does nothing (#395). */
   --textarea-min-h: 96px;
+  /* The compact layout of the input and output screens (CR-01 item 1, UX spec section 0.9; AQP-388). The number of each: a field is 36 px high from 1024 px with a fine pointer (44 px, `--control-h`, stays below it and for a finger,
+     NFR-017); a field never gets narrower than 140 px in a row of fields; each field a card has gives it 150 px of its row (a card of N fields wants N of them); a multi-line box is least 60 px high (`--textarea-min-h` is the default). */
+  --compact-field-h: 36px;
+  --compact-column-min: 140px;
+  --compact-weight-unit: 150px;
+  --compact-textarea-min-h: 60px;
   --topbar-h: 64px;
   --side-w: 248px;
   --drawer-w: 288px;
@@ -255,6 +261,24 @@
     to {
       opacity: 0;
     }
+  }
+}
+
+/* The two variants of the compact layout. The input screen (SCR-05), the review (SCR-06) and the cost details (SCR-07) opt in by the class `is-compact` on their root, and nothing else sets it, so a shared control changes
+   on those screens only (`tests/unit/compact-layout.test.ts`). `compact:` is any size of screen; `compact-fine:` is 1024 px and wider with a fine pointer, so a touch screen of any width keeps its 44 px (UX ruling, OQ-PM-12). */
+@custom-variant compact (&:where(.is-compact *));
+@custom-variant compact-fine {
+  @media (min-width: 1024px) and (pointer: fine) {
+    &:where(.is-compact *) {
+      @slot;
+    }
+  }
+}
+
+/* From 1024 px with a fine pointer, on any screen (not only the compact ones): the rows of the parts tree are 36 px high there and 44 px for a finger and below 1024 px (CR-01 item 3B; NFR-017; OQ-PM-12). */
+@custom-variant fine-wide {
+  @media (min-width: 1024px) and (pointer: fine) {
+    @slot;
   }
 }
 

@@ -22,7 +22,7 @@ export interface ReassignTaskData {
   readonly folderPath: string;
   /** The `file:` link the server built, or null for a stored path that has none (the path is then shown as text). */
   readonly folderUrl: string | null;
-  readonly title: string | null;
+  readonly title: string;
   readonly notes: string | null;
   /** The status of the estimate. An approved one means the task is closed: the form is not shown (A-14). */
   readonly status: EstimateStatus;
@@ -31,7 +31,7 @@ export interface ReassignTaskData {
 /** The form as the task is now: the stored Engineer, and the stored deadline as the date and the time it has in IST. */
 export function reassignValuesOf(task: Pick<ReassignTaskData, 'engineer' | 'deadlineAt'>): AssignFormValues {
   const deadline = new Date(task.deadlineAt);
-  return { engineerId: task.engineer.id, folderPath: '', deadlineDate: istIsoDateOf(deadline), deadlineTime: istTimeInputOf(deadline), title: '', notes: '' };
+  return { engineerId: task.engineer.id, customerId: '', folderPath: '', deadlineDate: istIsoDateOf(deadline), deadlineTime: istTimeInputOf(deadline), title: '', subject: '', notes: '' };
 }
 
 /**

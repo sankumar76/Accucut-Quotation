@@ -17,7 +17,8 @@ import { clientFor, type Transaction } from './transaction';
  * never found by ID. Customers have no hidden row, so there is no `is_hidden` filter.
  *
  * A name is unique ignoring letter case, and that rule belongs to the database (`uq_customers_name_lower`): a write that repeats a name fails with
- * `MasterConstraintError('customer-name')` whatever the caller checked first, so two requests that race for one name cannot both win.
+ * `MasterConstraintError('customer-name')` whatever the caller checked first, so two requests that race for one name cannot both win. The same holds for the short name (CR-01 item 6,
+ * `uq_customers_short_name_lower`, `MasterConstraintError('customer-short-name')`), over every row, a deleted customer's included.
  *
  * **Rates** are decimal text ("0.50"), never numbers (coding standards section 10). A customer's rates load in **one query** with the item's name,
  * unit and current default, in the order of the Process Master (the order of the SCR-12 table); the list of customers counts the rates that differ
@@ -29,10 +30,11 @@ import { clientFor, type Transaction } from './transaction';
  * and keeps its rate rows. The name's unique indexes are not partial, so a deleted customer's name stays taken (STORY-02.07 AC-8).
  */
 
-/** A customer's details. A contact field that was not given is `null`. */
+/** A customer's details. A contact field that was not given is `null`. `shortName` is required (CR-01 item 6) and is not contact data. */
 export interface CustomerRecord {
   readonly id: string;
   readonly name: string;
+  readonly shortName: string;
   readonly phone: string | null;
   readonly email: string | null;
   readonly address: string | null;
@@ -68,6 +70,7 @@ export interface CustomerOptionRecord {
 
 export interface NewCustomer {
   readonly name: string;
+  readonly shortName: string;
   readonly phone: string | null;
   readonly email: string | null;
   readonly address: string | null;
@@ -76,6 +79,7 @@ export interface NewCustomer {
 /** The details a change sets. A field that is left out is not written; a contact field given as `null` is cleared. */
 export interface CustomerDetailChanges {
   readonly name?: string | undefined;
+  readonly shortName?: string | undefined;
   readonly phone?: string | null | undefined;
   readonly email?: string | null | undefined;
   readonly address?: string | null | undefined;
@@ -104,10 +108,10 @@ export interface CustomerMethods {
   findCustomerForCalculation(id: string, tx?: Transaction): Promise<CustomerCalculationRecord | null>;
   /**
    * Adds a customer and one rate per Process Master item at the item's current default (SPEC section 4.2 rule 1), in the caller's transaction, and
-   * returns it with its rates. Throws `MasterConstraintError('customer-name')` for a name that is taken.
+   * returns it with its rates. Throws `MasterConstraintError` (`'customer-name'` or `'customer-short-name'`) for a name or a short name that is taken.
    */
   createCustomer(customer: NewCustomer, tx: Transaction): Promise<CustomerDetailRecord>;
-  /** Writes the details given to a listed customer; false if there is none with this ID. Throws `MasterConstraintError('customer-name')` for a name that is taken. */
+  /** Writes the details given to a listed customer; false if there is none with this ID. Throws `MasterConstraintError` for a name or a short name that is taken. */
   updateCustomerDetails(id: string, changes: CustomerDetailChanges, tx: Transaction): Promise<boolean>;
   /** Sets these rates of a listed customer; true only if every one of them is a rate that customer has, and then all are set. One statement. */
   setCustomerRates(customerId: string, values: ReadonlyArray<CustomerRateValue>, tx: Transaction): Promise<boolean>;
@@ -116,7 +120,7 @@ export interface CustomerMethods {
   /** A deleted Process Master item: its rate row of **every** customer is removed (SPEC section 4.2 rule 5). One statement. Returns the rows removed. */
   removeProcessItemFromCustomers(processItemId: string, tx: Transaction): Promise<number>;
   /**
-   * The Draft and Submitted estimates that have this customer (STORY-02.07 AC-2): how many, and the first ten by task code. A plain read: it takes no lock, so
+   * The Draft and Prepared estimates that have this customer (STORY-02.07 AC-2): how many, and the first ten by task code. A plain read: it takes no lock, so
    * it must run **after** `findCustomerForUpdate` in the same transaction. That lock waits for a request that is choosing this customer (it holds the
    * customer `FOR SHARE`) and, once it is granted, this statement (a new snapshot under READ COMMITTED) sees that request's estimate (AC-5).
    */
@@ -136,6 +140,7 @@ const RATE_ROWS = z.array(
 const CUSTOMER_ROW = z.strictObject({
   id: z.string(),
   name: z.string(),
+  shortName: z.string(),
   phone: z.string().nullable(),
   email: z.string().nullable(),
   address: z.string().nullable(),
@@ -168,23 +173,23 @@ async function selectCustomer(db: PrismaClient, id: string, lock: boolean, tx?: 
   const client = clientFor(db, tx);
   // Prisma has no row lock, so the locking read is a raw statement: the ID is a bound parameter. The default filter applies (A-13).
   const rows = lock
-    ? await client.$queryRaw`SELECT id::text AS "id", name, phone, email, address FROM customers WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`
-    : await client.$queryRaw`SELECT id::text AS "id", name, phone, email, address FROM customers WHERE id = ${id}::uuid AND deleted_at IS NULL`;
+    ? await client.$queryRaw`SELECT id::text AS "id", name, short_name AS "shortName", phone, email, address FROM customers WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`
+    : await client.$queryRaw`SELECT id::text AS "id", name, short_name AS "shortName", phone, email, address FROM customers WHERE id = ${id}::uuid AND deleted_at IS NULL`;
   return CUSTOMER_ROWS.parse(rows)[0] ?? null;
 }
 
 async function readCustomerForCalculation(db: PrismaClient, id: string, tx?: Transaction): Promise<CustomerCalculationRecord | null> {
   if (!isUuid(id)) return null;
-  const found = await clientFor(db, tx).customer.findUnique({ where: { id }, select: { id: true, name: true, phone: true, email: true, address: true, deletedAt: true } });
+  const found = await clientFor(db, tx).customer.findUnique({ where: { id }, select: { id: true, name: true, shortName: true, phone: true, email: true, address: true, deletedAt: true } });
   if (found === null) return null;
   if (found.deletedAt !== null) return { deleted: true, id: found.id, name: found.name };
-  const customer: CustomerRecord = { id: found.id, name: found.name, phone: found.phone, email: found.email, address: found.address };
+  const customer: CustomerRecord = { id: found.id, name: found.name, shortName: found.shortName, phone: found.phone, email: found.email, address: found.address };
   return { deleted: false, customer: await detailOf(db, customer, tx) };
 }
 
 async function insertCustomer(db: PrismaClient, customer: NewCustomer, tx: Transaction): Promise<CustomerDetailRecord> {
   const client = clientFor(db, tx);
-  const created = await client.customer.create({ data: customer, select: { id: true, name: true, phone: true, email: true, address: true } });
+  const created = await client.customer.create({ data: customer, select: { id: true, name: true, shortName: true, phone: true, email: true, address: true } });
   // SPEC section 4.2 rule 1: one rate per Process Master item at its current default, in one statement.
   await client.$executeRaw`
     INSERT INTO customer_rates (customer_id, process_item_id, value)
@@ -211,7 +216,7 @@ export function createCustomerMethods(db: PrismaClient): CustomerMethods {
     listCustomers: () =>
       withDatabaseErrors(async () => {
         const rows = await db.$queryRaw`
-          SELECT c.id::text AS "id", c.name, c.phone, c.email, c.address,
+          SELECT c.id::text AS "id", c.name, c.short_name AS "shortName", c.phone, c.email, c.address,
                  (count(*) FILTER (WHERE cr.value <> pi.default_value))::int AS "differ"
           FROM customers c
           LEFT JOIN customer_rates cr ON cr.customer_id = c.id
@@ -253,6 +258,7 @@ export function createCustomerMethods(db: PrismaClient): CustomerMethods {
             // Only the fields given are written.
             data: {
               ...(changes.name === undefined ? {} : { name: changes.name }),
+              ...(changes.shortName === undefined ? {} : { shortName: changes.shortName }),
               ...(changes.phone === undefined ? {} : { phone: changes.phone }),
               ...(changes.email === undefined ? {} : { email: changes.email }),
               ...(changes.address === undefined ? {} : { address: changes.address }),
@@ -279,12 +285,12 @@ export function createCustomerMethods(db: PrismaClient): CustomerMethods {
       withDatabaseErrors(async () => {
         // Fails closed (SQR-02): an ID that is not a UUID is a programming fault, never "no open estimate", which would let a delete through.
         if (!isUuid(customerId)) throw new Error('The open-estimate check needs a customer ID.');
-        // Open means Draft or Submitted (BR-053). The total is counted over all of them before the limit; only a code and a status are read.
+        // Open means Draft or Prepared (BR-053). The total is counted over all of them before the limit; only a code and a status are read.
         const rows = await clientFor(db, tx).$queryRaw`
           SELECT t.code AS "code", e.status::text AS "status", (count(*) OVER ())::int AS "total"
           FROM estimates e
           JOIN tasks t ON t.id = e.task_id
-          WHERE e.customer_id = ${customerId}::uuid AND e.status IN ('DRAFT', 'SUBMITTED')
+          WHERE e.customer_id = ${customerId}::uuid AND e.status IN ('DRAFT', 'PREPARED')
           ORDER BY t.code, e.id
           LIMIT ${ESTIMATE_USE_LIMIT}::int`;
         return toEstimateUses(rows);

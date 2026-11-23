@@ -4,8 +4,8 @@
  * sentence (BL, BG, H) is always a parameter, taken from the configuration version the figures belong to (FR-021, UX-26), never typed.
  */
 
-export const REVIEW_CUSTOMER_LABEL = 'Customer';
-export const REVIEW_NO_CUSTOMER = 'Not chosen yet';
+/** What the customer's name field says on an estimate that has none (made before CR-01 item 6): the Change customer action sits beside it. */
+export const REVIEW_NO_CUSTOMER = 'Not set';
 
 /** The three tiles: the plain name, and the letter tag and file cell beside it. */
 export const TILES_LABEL = 'Totals';
@@ -117,7 +117,7 @@ export const UNLOCKED_FIGURES_CLEARED = 'An input has changed since, so every ca
 export const UNLOCKED_PRICE_STAYS = 'The price approved earlier stays until a new approval replaces it.';
 export const unlockedQueueLine = (engineerName: string): string => `The task is back in ${engineerName}'s Open queue.`;
 /**
- * Cancel approval (STORY-06.12; UX spec SCR-06 "Approved (Admin)", "Approval cancelled (Admin)" and "(Lead)", "Cancel approval on a Draft or Submitted estimate"). The danger button of the Admin opens the dialog of
+ * Cancel approval (STORY-06.12; UX spec SCR-06 "Approved (Admin)", "Approval cancelled (Admin)" and "(Lead)", "Cancel approval on a Draft or Prepared estimate"). The danger button of the Admin opens the dialog of
  * `estimate-cancel` (fetched on the first press); a Lead sees no button and the line that says who can.
  */
 export const CANCEL_APPROVAL_LABEL = 'Cancel approval';
@@ -132,12 +132,12 @@ export const CANCELLED_ONLY_ADMIN_REMOVES = 'Only the Admin can remove it.';
 
 /**
  * The sentence about the estimate in the notice of a cancelled approval (ux-spec v0.31): an approved estimate that was cancelled went to Draft ("The estimate is a Draft and the task is back in ... Open queue."); a Draft or a
- * Submitted estimate whose approval was kept through an unlock **stays** as it was ("The estimate stays a Draft and its task does not change."). The sentence is said only while it is true: after a Recalculate the
- * first one would be false for a Submitted estimate and is left out (an assumption of STORY-06.12, listed in the pull request).
+ * Prepared estimate whose approval was kept through an unlock **stays** as it was ("The estimate stays a Draft and its task does not change."). The sentence is said only while it is true: after a Recalculate the
+ * first one would be false for a Prepared estimate and is left out (an assumption of STORY-06.12, listed in the pull request).
  */
-export function cancelledStatusLine(status: 'DRAFT' | 'SUBMITTED' | 'APPROVED', wasUnlocked: boolean, engineerName: string): string | null {
+export function cancelledStatusLine(status: 'DRAFT' | 'PREPARED' | 'APPROVED', wasUnlocked: boolean, engineerName: string): string | null {
   if (status === 'DRAFT') return wasUnlocked ? 'The estimate stays a Draft and its task does not change.' : `The estimate is a Draft and the task is back in ${engineerName}'s Open queue.`;
-  if (status === 'SUBMITTED' && wasUnlocked) return 'The estimate stays Submitted and its task does not change.';
+  if (status === 'PREPARED' && wasUnlocked) return 'The estimate stays Prepared and its task does not change.';
   return null;
 }
 /**

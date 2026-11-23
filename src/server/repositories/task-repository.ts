@@ -18,6 +18,9 @@ import { clientFor, type Transaction } from './transaction';
  * **The number** is taken with one `INSERT ... ON CONFLICT DO UPDATE` on the year's row. That statement locks the row until the transaction ends,
  * so two requests at once get different numbers (AC-2), and a task that fails to save gives its number back, so a code is never skipped.
  *
+ * **The customer** (CR-01 item 6, AQP-390) is read `WHERE deleted_at IS NULL ... FOR SHARE` in the same transaction, so a concurrent soft delete of it (an UPDATE) waits for the task, and then sees the open
+ * estimate that has it (BR-053); one that is already deleted is not found. It is set on the estimate (`estimates.customer_id`, the one place it is stored) in the statement that creates the estimate.
+ *
  * **The Engineer** is read with `FOR SHARE` in the same transaction: a person who is deactivated, or whose role is changed, while the task is being
  * written makes that update wait for the task, and one who is already deactivated is not found (AC-3).
  *
@@ -26,7 +29,7 @@ import { clientFor, type Transaction } from './transaction';
  * the reassign wait, and the status it reads once the lock is granted is the one that decides whether the task is still open (AC-6).
  */
 
-export type EstimateStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED';
+export type EstimateStatus = 'DRAFT' | 'PREPARED' | 'APPROVED';
 
 /** An Engineer as a choice: the ID and the name, and nothing else (the e-mail address is not sent to the screen). */
 export interface EngineerRecord {
@@ -40,8 +43,17 @@ export interface NewTask {
   readonly assignedById: string;
   readonly folderPath: string;
   readonly deadlineAt: Date;
-  readonly title: string | null;
+  readonly title: string;
+  /** The project name (CR-01 item 6). */
+  readonly subject: string;
   readonly notes: string | null;
+}
+
+/** A customer as the assignment reads it and the answers carry it: the ID, the name and the short name (class Internal). No contact detail and no rate (NFR-002). */
+export interface AssignCustomer {
+  readonly id: string;
+  readonly name: string;
+  readonly shortName: string;
 }
 
 export interface TaskRecord extends NewTask {
@@ -52,7 +64,7 @@ export interface TaskRecord extends NewTask {
 export interface EstimateRecord {
   readonly id: string;
   readonly taskId: string;
-  /** Null until the Engineer chooses the customer. */
+  /** Set when a task is assigned (CR-01 item 6). Null only for an estimate made before that, whose customer a Lead or an Admin sets. */
   readonly customerId: string | null;
   readonly status: EstimateStatus;
 }
@@ -76,13 +88,14 @@ export interface QueuePosition {
 export interface QueueRow {
   readonly id: string;
   readonly code: string;
-  readonly title: string | null;
+  readonly title: string;
+  readonly subject: string;
   readonly folderPath: string;
   readonly deadlineAt: Date;
   readonly engineer: EngineerRecord;
   readonly assignedByName: string;
-  /** Null until the Engineer chooses the customer. */
-  readonly customerName: string | null;
+  /** Null only for an estimate made before CR-01 item 6, which has no customer yet. A customer deleted since it was chosen is still named. */
+  readonly customer: AssignCustomer | null;
   readonly status: EstimateStatus;
 }
 
@@ -101,7 +114,7 @@ export interface LockedTask {
   readonly status: EstimateStatus;
   /** What the assignment e-mail of a change of Engineer shows (STORY-09.03 AC-7): plain fields of the task, read under the same lock. */
   readonly folderPath: string;
-  readonly title: string | null;
+  readonly title: string;
   readonly notes: string | null;
 }
 
@@ -144,6 +157,10 @@ export interface QueueRequest {
 export interface TaskRepository {
   /** The active Engineers by name, ignoring letter case. Deactivated people and the other roles are not listed. */
   listActiveEngineers(): Promise<ReadonlyArray<EngineerRecord>>;
+  /** The customers that are not deleted, by name ignoring letter case, with their short names (SCR-04's Customer Name field). Nothing else of a customer is read. */
+  listActiveCustomers(): Promise<ReadonlyArray<AssignCustomer>>;
+  /** The customer with this ID that is not deleted, **locked for share until the transaction ends**; null for an unknown ID, a deleted customer and an ID that is not a UUID. */
+  findActiveCustomer(id: string, tx: Transaction): Promise<AssignCustomer | null>;
   /** The active Engineer with this ID, **locked for share until the transaction ends**; null for an unknown ID, an inactive person or another role. */
   findActiveEngineer(id: string, tx: Transaction): Promise<EngineerRecord | null>;
   /**
@@ -154,8 +171,8 @@ export interface TaskRepository {
   /** The next running number of the year (1 for the first), taking the year's lock until the transaction ends. */
   takeNextNumber(year: number, tx: Transaction): Promise<number>;
   createTask(task: NewTask, tx: Transaction): Promise<TaskRecord>;
-  /** An empty estimate for the task: DRAFT, no customer. */
-  createEstimate(taskId: string, tx: Transaction): Promise<EstimateRecord>;
+  /** An empty estimate for the task: DRAFT, with the customer the task was assigned for. */
+  createEstimate(taskId: string, customerId: string, tx: Transaction): Promise<EstimateRecord>;
   /**
    * The task with this ID **inside this scope**, or null: an ID that is not a UUID, an unknown one and a task outside the scope (an Engineer's other-person task) are all
    * the same null, so nothing tells a task that exists from one that does not (STORY-04.04 AC-4). The scope is cut in the query, so another Engineer's row is never read.
@@ -185,12 +202,13 @@ const LOCKED_ROWS = z.array(
     engineerName: z.string(),
     deadlineAt: z.date(),
     assignmentRevision: z.number().int().positive(),
-    status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']),
+    status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
     folderPath: z.string(),
-    title: z.string().nullable(),
+    title: z.string(),
     notes: z.string().nullable(),
   }),
 );
+const CUSTOMER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string(), shortName: z.string() }));
 const ASSIGNER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string(), isActive: z.boolean() }));
 const NUMBER_ROWS = z.array(z.strictObject({ lastValue: z.number().int().positive() }));
 
@@ -198,11 +216,12 @@ const QUEUE_SELECT = {
   id: true,
   code: true,
   title: true,
+  subject: true,
   folderPath: true,
   deadlineAt: true,
   engineer: { select: { id: true, name: true } },
   assignedBy: { select: { name: true } },
-  estimate: { select: { status: true, customer: { select: { name: true } } } },
+  estimate: { select: { status: true, customer: { select: { id: true, name: true, shortName: true } } } },
 } satisfies Prisma.TaskSelect;
 
 const DETAIL_SELECT = { ...QUEUE_SELECT, notes: true } satisfies Prisma.TaskSelect;
@@ -216,11 +235,12 @@ function toQueueRow(row: QueueSelected): QueueRow | null {
     id: row.id,
     code: row.code,
     title: row.title,
+    subject: row.subject,
     folderPath: row.folderPath,
     deadlineAt: row.deadlineAt,
     engineer: row.engineer,
     assignedByName: row.assignedBy.name,
-    customerName: row.estimate.customer?.name ?? null,
+    customer: row.estimate.customer,
     status: row.estimate.status,
   };
 }
@@ -276,6 +296,23 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         return ENGINEER_ROWS.parse(rows);
       }),
 
+    listActiveCustomers: () =>
+      withDatabaseErrors(async () => {
+        const rows = await db.$queryRaw`
+          SELECT id::text AS "id", name, short_name AS "shortName" FROM customers WHERE deleted_at IS NULL ORDER BY lower(name), name, id`;
+        return CUSTOMER_ROWS.parse(rows);
+      }),
+
+    findActiveCustomer: (id, tx) =>
+      withDatabaseErrors(async () => {
+        // PostgreSQL would refuse a text that is not a UUID with an error; a customer asked for by one is not found.
+        if (!isUuid(id)) return null;
+        // Prisma has no row lock, so the read is a raw statement: the ID is a bound parameter. `FOR SHARE` makes a soft delete of this customer (an UPDATE) wait until this transaction ends (BR-053).
+        const rows = await clientFor(db, tx).$queryRaw`
+          SELECT id::text AS "id", name, short_name AS "shortName" FROM customers WHERE id = ${id}::uuid AND deleted_at IS NULL FOR SHARE`;
+        return CUSTOMER_ROWS.parse(rows)[0] ?? null;
+      }),
+
     findActiveEngineer: (id, tx) =>
       withDatabaseErrors(async () => {
         // PostgreSQL would refuse a text that is not a UUID with an error; an Engineer asked for by one is not found.
@@ -315,6 +352,7 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
             folderPath: task.folderPath,
             deadlineAt: task.deadlineAt,
             title: task.title,
+            subject: task.subject,
             notes: task.notes,
           },
           select: { id: true, assignmentRevision: true },
@@ -322,9 +360,9 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         return { ...task, id: created.id, assignmentRevision: created.assignmentRevision };
       }),
 
-    createEstimate: (taskId, tx) =>
+    createEstimate: (taskId, customerId, tx) =>
       withDatabaseErrors(() =>
-        clientFor(db, tx).estimate.create({ data: { taskId }, select: { id: true, taskId: true, customerId: true, status: true } }),
+        clientFor(db, tx).estimate.create({ data: { taskId, customerId }, select: { id: true, taskId: true, customerId: true, status: true } }),
       ),
 
     findTaskForUpdate: (id, tx) =>

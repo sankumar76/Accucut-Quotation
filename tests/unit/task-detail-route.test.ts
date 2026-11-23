@@ -39,7 +39,7 @@ const withId = (id: string) => ({ params: Promise.resolve({ id }) });
 const owned = (): string => harness.targetId;
 const task = () => defined(harness.taskWorld.tasks.find((candidate) => candidate.id === owned()));
 
-const ANSWER_KEYS = ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'title'];
+const ANSWER_KEYS = ['assignedByName', 'code', 'customer', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'subject', 'title'];
 
 beforeAll(holdSessionClock);
 afterAll(releaseSessionClock);
@@ -51,13 +51,13 @@ beforeEach(() => {
 });
 
 describe('AC-1: the Engineer is told the status of their own task, in every state', () => {
-  it.each(['DRAFT', 'SUBMITTED', 'APPROVED'] as const)('a %s estimate answers 200 with that status and the task\'s own fields', async (status) => {
+  it.each(['DRAFT', 'PREPARED', 'APPROVED'] as const)('a %s estimate answers 200 with that status and the task\'s own fields', async (status) => {
     harness.taskWorld.setStatus(owned(), status);
     const response = await GET(request(), withId(owned()));
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     const body = record.parse(await response.json());
-    expect(body).toMatchObject({ id: owned(), code: task().code, status, title: 'Invented task', notes: 'Invented notes.', customerName: null });
+    expect(body).toMatchObject({ id: owned(), code: task().code, status, title: 'Invented task', subject: 'Invented subject', notes: 'Invented notes.', customer: null, customerName: null });
     expect(body['deadlineAt']).toBe('2099-01-01T04:30:00.000Z');
   });
 
@@ -85,7 +85,7 @@ describe('AC-2, AC-3: one strict answer, with nothing about cost, an approver or
 
   it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('%s is answered with the same keys', async (role) => {
     harness.signInAs(role);
-    harness.taskWorld.setStatus(owned(), 'SUBMITTED');
+    harness.taskWorld.setStatus(owned(), 'PREPARED');
     const response = await GET(request(), withId(owned()));
     expect(response.status).toBe(200);
     expect(Object.keys(record.parse(await response.json())).sort()).toEqual(ANSWER_KEYS);
@@ -94,7 +94,7 @@ describe('AC-2, AC-3: one strict answer, with nothing about cost, an approver or
 
 describe('AC-5: a Lead and an Admin are told the same status words as the Engineer', () => {
   it.each(['LEAD', 'ADMIN'] as const)('%s reads the Engineer\'s answer, status included, for every state', async (role) => {
-    for (const status of ['DRAFT', 'SUBMITTED', 'APPROVED'] as const) {
+    for (const status of ['DRAFT', 'PREPARED', 'APPROVED'] as const) {
       harness.taskWorld.setStatus(owned(), status);
       harness.signInAs('ENGINEER');
       const own = record.parse(await (await GET(request(), withId(owned()))).json());
@@ -111,7 +111,7 @@ describe('AC-4: another Engineer\'s task is the same 404 as one that does not ex
       engineerId: harness.targetId,
       assignedById: harness.idOf.LEAD,
       deadlineAt: new Date('2099-01-01T04:30:00.000Z'),
-      status: 'SUBMITTED',
+      status: 'PREPARED',
     });
     const notOwn = await GET(request(), withId(other.id));
     const missing = await GET(request(), withId(UNKNOWN_ID));

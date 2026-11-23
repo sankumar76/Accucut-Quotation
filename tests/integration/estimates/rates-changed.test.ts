@@ -19,7 +19,7 @@ import { seedConfig } from '../../support/seed-config';
 /**
  * STORY-06.11 AC-1, AC-3 to AC-8 (FR-106; NFR-002, NFR-010; architecture section 4.8 "Rates changed since the last calculation") against real PostgreSQL in a throwaway database, as the **runtime role**: an Engineer's
  * Calculate stores a record with its master snapshot, a master is then changed as its owner, and the Lead's and the Admin's read of the costs says how many process rates, material prices and exchange rates changed,
- * **by kind and never a value**. The matrix is kind x state x status x who: each kind alone and together; a current, an out-of-date and a never-calculated estimate; a Submitted, an approved and an unlocked
+ * **by kind and never a value**. The matrix is kind x state x status x who: each kind alone and together; a current, an out-of-date and a never-calculated estimate; a Prepared, an approved and an unlocked
  * (Draft) one; the Lead, the Admin and the Engineer. The same counts come from the unlock preview of an approved estimate over the same masters (AC-8: one pure function, `rate-diff`). Every estimate has a customer
  * and a material of its own so no test moves another's masters; the exchange rates are shared by the whole file and are put back after each change. Every name, ID and number is invented.
  */
@@ -65,7 +65,7 @@ function unlocking(): UnlockService {
 /** A customer of its own, with the rates of the shared one, so its rates can change without touching the other tests' estimates. */
 async function ownCustomer(): Promise<string> {
   ownCount += 1;
-  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text', [`Invented rates customer ${String(ownCount)}`]);
+  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text', [`Invented rates customer ${String(ownCount)}`]);
   const id = defined(rows[0]).id;
   await db.owner.query('INSERT INTO customer_rates (customer_id, process_item_id, value) SELECT $1::uuid, process_item_id, value FROM customer_rates WHERE customer_id = $2::uuid', [id, db.customerId]);
   return id;
@@ -90,7 +90,7 @@ interface World {
   readonly rateId: string;
 }
 
-/** A Submitted estimate of the Engineer's on a customer and a material of its own, calculated. */
+/** A Prepared estimate of the Engineer's on a customer and a material of its own, calculated. */
 async function calculatedOnOwnMasters(): Promise<World> {
   const customerId = await ownCustomer();
   const materialId = await ownMaterial();
@@ -120,7 +120,7 @@ const changeEur = (): Promise<unknown> => db.owner.query("UPDATE exchange_rates 
 
 const noticeOf = async (estimateId: string, viewer = lead()) => (await review.getCosts(viewer, estimateId)).ratesChanged;
 
-describe('AC-1, AC-7: a submitted estimate with current figures says how many of each kind changed', () => {
+describe('AC-1, AC-7: a prepared estimate with current figures says how many of each kind changed', () => {
   it('nothing changed: no notice', async () => {
     const world = await calculatedOnOwnMasters();
     expect(await noticeOf(world.estimateId)).toBeNull();
@@ -260,7 +260,7 @@ describe('AC-10, AC-8: an unlocked Draft with current figures is told the same, 
 });
 
 describe('AC-7 (NFR-010): the read stays short', () => {
-  it('a submitted estimate with changed rates is answered well inside the bound of the costs view', async () => {
+  it('a prepared estimate with changed rates is answered well inside the bound of the costs view', async () => {
     const world = await calculatedOnOwnMasters();
     await changeMaterial(world);
     const started = performance.now();

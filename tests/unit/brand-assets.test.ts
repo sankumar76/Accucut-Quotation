@@ -46,7 +46,7 @@ describe('logo, AC-2', () => {
     expect(source).toContain('src="/accucut-logo.jpg"');
     expect(source).toContain('alt="AccuCut logo"');
     expect(source).toContain('ACCUCUT LASERS');
-    expect(source).toContain('Quotation Portal');
+    expect(source).toContain('{PRODUCT_NAME}'); // the subtitle reads the one constant; its words are asserted in product-name.test.ts
     expect(source).toContain('font-brand');
   });
 });

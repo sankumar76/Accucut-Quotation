@@ -33,7 +33,7 @@ test.describe('design system page, every width', () => {
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page.getByRole('banner')).toHaveCount(1);
     await expect(page.getByRole('main')).toHaveCount(1);
-    await expect(page).toHaveTitle(/^Design system · Accucut Quotation Portal$/);
+    await expect(page).toHaveTitle(/^Design system · Accucut RFQ Portal$/);
     expect(consoleProblems).toEqual([]);
   });
 
@@ -75,7 +75,7 @@ test.describe('design system page, every width', () => {
     expect(fonts.map((font) => font.familyName)).toEqual(['Tinos']);
     expect(fonts.every((font) => font.isCustomFont)).toBe(true);
 
-    if ((await widthOf(page)) >= TABLET_MIN_WIDTH) await expect(header.getByText('Quotation Portal')).toBeVisible();
+    if ((await widthOf(page)) >= TABLET_MIN_WIDTH) await expect(header.getByText('RFQ Portal')).toBeVisible();
     expect(await header.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe(await tokenColour(page, '--surface'));
   });
 

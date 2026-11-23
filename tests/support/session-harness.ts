@@ -28,7 +28,9 @@ import { createCostDetailsService, type CostDetailsService } from '../../src/ser
 import { createEstimateReviewService, type EstimateReviewService } from '../../src/server/services/estimate-review-service';
 import { createEstimateService, type EstimateService } from '../../src/server/services/estimate-service';
 import { buildWorkbook } from '../../src/server/export/build-workbook';
+import type { DownloadRepository } from '../../src/server/repositories/download-repository';
 import type { ExportRepository } from '../../src/server/repositories/export-repository';
+import { createDownloadMarkerService, type DownloadMarkerService } from '../../src/server/services/download-marker-service';
 import { createExportService, type ExportService } from '../../src/server/services/export-service';
 import { createTaskService, type TaskService } from '../../src/server/services/task-service';
 import { createUserService, type UserService } from '../../src/server/services/user-service';
@@ -141,6 +143,8 @@ export interface SessionHarness {
   readonly taskAudit: AuditSink;
   /** The estimate service over in-memory estimates, the harness's own people and the Customer Master above (`getEstimateService` in the composition mock, STORY-05.01). */
   readonly estimateService: EstimateService;
+  /** The audit entries written by `estimateService` (a customer changed, CR-01 item 6): what a test reads, and clears between tests with `rows.length = 0`. */
+  readonly estimateAudit: AuditSink;
   /** The Engineer's Calculate over the same in-memory estimates, masters and a fake calculation store (`getCalculationService` in the composition mock, STORY-05.09). The canary estimate has an empty part, so a valid call is refused 422 `CALCULATE_BLOCKED` and writes nothing, at any state, for every caller. */
   readonly calculationService: CalculationService;
   /** The audit entries written by `calculationService` (an acknowledged quantity warning, STORY-05.12): what a test reads, and clears between tests with `rows.length = 0`. */
@@ -169,6 +173,10 @@ export interface SessionHarness {
   readonly costDetailsService: CostDetailsService;
   /** The Excel export (STORY-07.01) over the same estimates and parts, building the file in process (`getExportService` in the composition mock). */
   readonly exportService: ExportService;
+  /** The download marker (STORY-CR01.7E) over a log that holds no download, for the Lead's review and the Closed tab (`getDownloadMarkerService` in the composition mock). */
+  readonly downloadMarkerService: DownloadMarkerService;
+  /** The log behind both: a test spies on `insertDownload` to see a file recorded or to make the write fail (STORY-CR01.7E AC-2). */
+  readonly exportDownloads: DownloadRepository;
   /** The pieces `exportService` reads through, for a test that spies on what a refused caller causes to be read. */
   readonly exportReads: ExportRepository & Pick<EstimateNodeRepository, 'listNodes'>;
   /** The in-memory estimates behind `estimateService`: one draft with no customer, the harness Engineer's, with the ID `targetId` (`estimate-recipe.ts`). */
@@ -234,6 +242,8 @@ export function createSessionHarness(): SessionHarness {
   // The e-mail alerts of STORY-09.02: the settings row and the mail transport in memory. The harness Admin's address is in `users`, so the test e-mail goes there.
   const settingsWorld = fakeSettingsDependencies({ jobRuns, clock: systemClock, users });
   const taskWorld = createFakeTaskWorld(() => users.records);
+  // The customers a task may be assigned for (CR-01 item 6): the canary customers of the scan, by the IDs the recipes name.
+  for (const customer of CUSTOMER_CANARIES) taskWorld.customers.set(customer.id, customer.name);
   // The audit entries of a reassign (STORY-04.07), kept apart from `auditWorld`, whose transactions are its own.
   const taskAudit = createAuditSink();
   // The recipe of the task route (`estimate-recipe.ts`, STORY-04.04): the harness Engineer owns a task whose ID is `targetId`, the same as the estimate's, as in the E2E database.
@@ -244,12 +254,13 @@ export function createSessionHarness(): SessionHarness {
     assignedById: idOf.LEAD,
     deadlineAt: new Date('2099-01-01T04:30:00.000Z'),
     title: 'Invented task',
+    subject: 'Invented subject',
     notes: 'Invented notes.',
     folderPath: CANARY_FOLDER_PATH,
   });
   // The recipe of the estimate routes (`estimate-recipe.ts`): the harness Engineer owns a draft whose ID is `targetId` and whose code is made from it.
   const estimateWorld = createFakeEstimateWorld(
-    () => masters.customers.map((customer) => ({ id: customer.id, name: customer.name, deleted: customer.deleted })),
+    () => masters.customers.map((customer) => ({ id: customer.id, name: customer.name, shortName: customer.shortName, deleted: customer.deleted })),
     [
       {
         id: targetId,
@@ -259,6 +270,7 @@ export function createSessionHarness(): SessionHarness {
         folderPath: CANARY_FOLDER_PATH,
         deadlineAt: new Date('2099-01-01T04:30:00.000Z'),
         title: 'Invented task',
+        subject: 'Invented subject',
         notes: 'Invented notes.',
         status: 'DRAFT',
         customerId: null,
@@ -271,8 +283,11 @@ export function createSessionHarness(): SessionHarness {
     // node keeps answering as before; the picture routes' own recipes (`route-calls.ts`) never change a revision.
     [{ id: targetId, estimateId: targetId, sha256: CANARY_PICTURE_HASH, mime: 'image/png', fileName: 'canary-part.png', bytes: smallPng() }],
   );
+  // The audit entries of a customer change (CR-01 item 6), kept apart from `auditWorld`, whose transactions are its own.
+  const estimateAudit = createAuditSink();
   const estimateService = createEstimateService({
     estimates: estimateWorld.repository,
+    audit: estimateAudit.service,
     nodes: estimateWorld.nodeRepository,
     images: estimateWorld.imageRepository,
     transactions: estimateWorld.transactions,
@@ -368,15 +383,24 @@ export function createSessionHarness(): SessionHarness {
       const estimate = estimateWorld.estimates.find((candidate) => candidate.id.toLowerCase() === estimateId.toLowerCase());
       if (estimate === undefined) return Promise.resolve(null);
       const customer = masters.customers.find((candidate) => candidate.id === estimate.customerId);
-      return Promise.resolve({ code: estimate.code, customerName: customer?.name ?? null });
+      return Promise.resolve({ code: estimate.code, customerShortName: customer?.shortName ?? null, subject: estimate.subject ?? 'Invented subject' });
     },
     listNodes: (estimateId: string) => estimateWorld.nodeRepository.listNodes(estimateId),
   };
+  // The download log (STORY-CR01.7E) is the real database's: the harness records nothing and every estimate reads "Not downloaded".
+  const noDownload = { count: 0, last: null, latestApprovalId: null } as const;
+  const downloads: DownloadRepository = {
+    insertDownload: () => Promise.resolve(),
+    findMarkerFacts: () => Promise.resolve(noDownload),
+    findMarkerFactsOfTasks: (taskIds: ReadonlyArray<string>) => Promise.resolve(taskIds.map((taskId) => ({ taskId, facts: noDownload }))),
+  };
+  const downloadMarkerService = createDownloadMarkerService({ downloads });
   const exportService = createExportService({
     header: exportReads,
     nodes: exportReads,
     calculations: reviewReads,
     approvals: reviewReads,
+    downloads,
     images: estimateWorld.imageRepository,
     configuration: { current: () => Promise.resolve(reviewVersion), byId: () => Promise.resolve(reviewVersion) },
     transactions: calculationWorld.transactions,
@@ -388,9 +412,12 @@ export function createSessionHarness(): SessionHarness {
     estimateReviewService,
     costDetailsService,
     exportService,
+    downloadMarkerService,
+    exportDownloads: downloads,
     exportReads,
     reviewReads,
     calculationAudit,
+    estimateAudit,
     users,
     throttles,
     auditService,

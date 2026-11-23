@@ -7,9 +7,8 @@ import { MATERIAL_CANARIES } from '../../support/material-master-canary';
 import { FIELD_ID_NAMESPACE, seedId } from '../../../prisma/seed/config/seed-sections-and-stages';
 import { columnLetterToIndex } from '../../../src/lib/columns';
 
-import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, signInWithoutThePage, type E2eUser } from './auth';
-import { expectNoAxeViolations } from './design-system';
-import { DEVELOPMENT_URL } from './servers';
+import { createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, ensureCanaryMaterials, setCanaryCustomer, signInWithoutThePage, type E2eUser } from './auth';
+import { expectNoAxeViolations, widthOf } from './design-system';
 
 /**
  * What the part-form specs (`estimate-form.spec.ts`, STORY-05.03, and `estimate-form-sections.spec.ts`, STORY-05.04) share: a person of the test's own who owns a task with an empty draft
@@ -26,7 +25,8 @@ export const NUMBER_RULE = 'Enter 0 or more, with up to 2 decimals.';
 /** The control of a field: its ID is the registry's, and the page's control ID is made from it. */
 export const control = (page: Page, letter: string): Locator => page.locator(`#part-field-${seedId(FIELD_ID_NAMESPACE, columnLetterToIndex(letter))}`);
 export const partForm = (page: Page): Locator => page.locator('form[data-part-form]');
-export const tree = (page: Page): Locator => page.getByRole('tree', { name: 'Parts tree' });
+/** The parts tree: a `nav` of nested lists of row links since CR-01 item 3B (not `role="tree"`); a row is its link. */
+export const tree = (page: Page): Locator => page.getByRole('navigation', { name: 'Parts tree' });
 export const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 export const isPatchOfInputs = (url: string, method: string): boolean => method === 'PATCH' && /\/api\/v1\/estimates\/[^/]+\/nodes\/[^/]+\/inputs$/.test(new URL(url).pathname);
 
@@ -44,6 +44,14 @@ export async function signInAsNewEngineer(page: Page, testInfo: TestInfo): Promi
   const person = await createDisposableUser('scan', testInfo);
   await signInWithoutThePage(page, person.email, E2E_PASSWORD);
   return person;
+}
+
+/**
+ * The least height of a field of the part form: 36 px from 1024 px with a fine pointer (the compact layout, AQP-388; UX ruling OQ-PM-12), and 44 px below that width and for a finger (NFR-017). The desktop project is
+ * the only one with a mouse at 1024 px or wider, so it is the one that reads 36.
+ */
+export async function leastFieldHeight(page: Page): Promise<number> {
+  return (await widthOf(page)) >= 1024 && (await page.evaluate(() => window.matchMedia('(pointer: fine)').matches)) ? 36 : 44;
 }
 
 export async function waitForForm(page: Page): Promise<void> {
@@ -64,10 +72,8 @@ export async function openForm(page: Page, testInfo: TestInfo, options: { readon
   await ensureCanaryMaterials();
   const owner = await signInAsNewEngineer(page, testInfo);
   if (options.fromTheQueue === true) await page.goto('/queue');
-  // The customer is chosen with the call that the drop-down makes (`PUT /api/v1/estimates/{id}/customer`), before the page is opened, so the page opens on the form. Choosing it through the
-  // drop-down cost 3 to 4 s of a test's 30 s on a loaded runner (traces of AQP-340) and is judged by `estimate-customer.spec.ts`, whose subject it is.
-  const chosen = await page.request.put(`/api/v1/estimates/${owner.id}/customer`, { headers: { origin: DEVELOPMENT_URL }, data: { customerId: ALPHA_CUSTOMER_ID } });
-  expect(chosen.status(), 'the customer is chosen').toBe(200);
+  // The customer is set in the database before the page is opened, as a task is assigned with one (CR-01 item 6): the Engineer cannot choose it. Changing it is the Lead's, `estimate-customer.spec.ts`.
+  await setCanaryCustomer(owner.id, ALPHA_CUSTOMER_ID);
   await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
   await waitForForm(page);
   return owner;

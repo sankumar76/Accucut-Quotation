@@ -26,7 +26,7 @@ async function expectTheApprovedWords(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(ABOUT_TITLE);
   await expect(main.getByText('ACCUCUT LASERS', { exact: true })).toBeVisible();
-  await expect(main.getByText('Quotation Portal', { exact: true })).toBeVisible();
+  await expect(main.getByText('RFQ Portal', { exact: true })).toBeVisible();
   await expect(main.getByText(ABOUT_DESCRIPTION, { exact: true })).toBeVisible();
   await expect(main.getByText(ABOUT_VERSION, { exact: true })).toBeVisible();
   await expect(main.getByText(ABOUT_COPYRIGHT, { exact: true })).toBeVisible();

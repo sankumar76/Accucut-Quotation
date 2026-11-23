@@ -11,7 +11,7 @@ import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { ASSIGN_FIELD_NAMES, type EngineerOption } from '@/lib/tasks/assign';
+import { ASSIGN_FIELD_NAMES, type CustomerOption, type EngineerOption } from '@/lib/tasks/assign';
 
 import { AlertsOffNotice } from './alerts-off-notice';
 import { AssignFields } from './assign-fields';
@@ -46,6 +46,8 @@ import { useAssignForm } from './use-assign-form';
 
 export interface AssignScreenProps {
   readonly engineers: ReadonlyArray<EngineerOption>;
+  /** The customers that are not deleted, with their short names (CR-01 item 6): the Customer Name field's choices. */
+  readonly customers: ReadonlyArray<CustomerOption>;
   /** Whether e-mail alerts are on (STORY-09.03 AC-6): with them off, choosing an Engineer shows the notice that they will not be e-mailed. */
   readonly alertsEnabled: boolean;
 }
@@ -88,7 +90,7 @@ function NextCard() {
   );
 }
 
-export function AssignScreen({ engineers, alertsEnabled }: AssignScreenProps) {
+export function AssignScreen({ engineers, customers, alertsEnabled }: AssignScreenProps) {
   const form = useAssignForm();
   const success = useRef<HTMLDivElement>(null);
   const { assigned } = form;
@@ -138,7 +140,7 @@ export function AssignScreen({ engineers, alertsEnabled }: AssignScreenProps) {
         <form noValidate aria-label={ASSIGN_TITLE} onSubmit={(event) => void form.submit(event)}>
           <Card>
             <CardContent className="flex flex-col gap-s-4">
-              <AssignFields values={form.values} errors={form.errors} engineers={engineers} onChange={form.setValue} />
+              <AssignFields values={form.values} errors={form.errors} engineers={engineers} customers={customers} onChange={form.setValue} />
             </CardContent>
             <CardFooter className="justify-between">
               <Button variant="secondary" asChild>

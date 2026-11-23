@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
+import { DownloadChip } from '@/components/shared/download-chip';
 import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
 import { QuantityTag, warnedSlNos } from '@/components/shared/quantity-tag';
@@ -92,6 +93,10 @@ import {
  *
  * **The quantity warning (STORY-07.06 AC-1 to AC-3; UX-47; A-24)** is drawn from `summary.warning`, which is `null` unless the calculation is current: the shared notice of SCR-06 above the file card, the mark
  * "Quantity 0" on each warned row, the sentence that the file holds no warning, and the checklist line "No warning cell". The file holds none: the page says what it keeps, and the warning is on this page alone.
+ *
+ * **The download marker (STORY-CR01.7E AC-5; UX spec section 0.9 row 7c)** is `summary.download`: the shared chip "Not downloaded", "Downloaded N×" with the last person and time, or amber "Changed since download", under the title
+ * in every state that has parts (a refused state still says what was downloaded before). It is drawn on the server and holds no figure; it shows what the log held when the page was drawn, so a file downloaded from this page
+ * shows in the chip the next time the page is opened.
  *
  * **Restricted** (NFR-002): every file in this folder is for the Lead and the Admin. The folder is loaded by `export/page.tsx` alone, whose manifest row lists no Engineer, and nothing outside it imports it.
  * The only script is `DownloadButton`. The table scrolls inside its own focusable, named region and the button stacks full width at 360 px (AC-7).
@@ -357,6 +362,7 @@ export function EstimateExport({ summary, estimateId, code }: EstimateExportProp
   return (
     <>
       <PageHeader title={EXPORT_TITLE} actions={<EstimateLink code={code} />} />
+      {summary.partCount === 0 ? null : <DownloadChip marker={summary.download} explain />}
       {summary.partCount === 0 ? (
         <Notice tone="info" role="status" title={EMPTY_TITLE}>
           {EMPTY_BODY}

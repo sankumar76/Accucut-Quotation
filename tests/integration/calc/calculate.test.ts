@@ -64,14 +64,14 @@ async function failure(promise: Promise<unknown>): Promise<Error> {
   throw new Error('Expected the call to be refused, but it was not.');
 }
 
-describe('AC-2: a complete estimate is calculated, stored and submitted in one transaction', () => {
-  it('answers {status, message}, stores a record with a row per part, submits the estimate, links it and leaves the input revision', async () => {
+describe('AC-2: a complete estimate is calculated, stored and prepared in one transaction', () => {
+  it('answers {status, message}, stores a record with a row per part, prepares the estimate, links it and leaves the input revision', async () => {
     const estimateId = await db.addCompleteEstimate({ parts: 2 });
     const answer = await db.service.calculate(engineer(), estimateId);
-    expect(answer).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(answer).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
 
     const state = await stateOf(estimateId);
-    expect(state).toMatchObject({ status: 'SUBMITTED', inputs_revision: 3 });
+    expect(state).toMatchObject({ status: 'PREPARED', inputs_revision: 3 });
     expect(await countFor(estimateId)).toEqual({ calculations: 1, rows: 2 });
     const header = await db.owner.query('SELECT id::text, created_by::text, inputs_revision, config_version_id::text FROM calculations WHERE estimate_id = $1::uuid', [estimateId]);
     expect(header.rows).toEqual([{ id: state.current_calculation_id, created_by: db.engineerId, inputs_revision: 3, config_version_id: db.configVersionId }]);
@@ -137,7 +137,7 @@ describe('AC-1 and AC-5: a blank input blocks, names the parts and fields, and w
 describe('AC-4: what cannot be calculated is a named 409 or a 404, and nothing is written', () => {
   it.each([
     ['no customer chosen', { withCustomer: false }, 'CUSTOMER_NOT_CHOSEN', 'DRAFT'],
-    ['already submitted', { status: 'SUBMITTED' as const }, 'ESTIMATE_ALREADY_SUBMITTED', 'SUBMITTED'],
+    ['already prepared', { status: 'PREPARED' as const }, 'ESTIMATE_ALREADY_PREPARED', 'PREPARED'],
     ['approved', { status: 'APPROVED' as const }, 'ESTIMATE_APPROVED_IS_LOCKED', 'APPROVED'],
   ])('%s is a 409 with the code %s', async (_name, options, code, status) => {
     const estimateId = await db.addEstimate({ engineer: true, ...options });
@@ -164,7 +164,7 @@ describe('AC-4: what cannot be calculated is a named 409 or a 404, and nothing i
   });
 
   it('a customer deleted after it was chosen is the 409 CUSTOMER_DELETED, not a 404 (STORY-02.07)', async () => {
-    const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name, deleted_at) VALUES ('Invented deleted customer', now()) RETURNING id::text");
+    const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name, deleted_at) VALUES ('Invented deleted customer', left(md5('Invented deleted customer'), 10), now()) RETURNING id::text");
     const estimateId = await db.addCompleteEstimate();
     await db.owner.query('UPDATE estimates SET customer_id = $2::uuid WHERE id = $1::uuid', [estimateId, defined(rows[0]).id]);
     expect(await failure(db.service.calculate(engineer(), estimateId))).toMatchObject({ code: 'CUSTOMER_DELETED', httpStatus: 409 });
@@ -191,10 +191,10 @@ describe('AC-4: what cannot be calculated is a named 409 or a 404, and nothing i
 });
 
 describe('AC-7: a second press is a 409 and makes no second calculation', () => {
-  it('the second call is ESTIMATE_ALREADY_SUBMITTED, and there is one record', async () => {
+  it('the second call is ESTIMATE_ALREADY_PREPARED, and there is one record', async () => {
     const estimateId = await db.addCompleteEstimate();
     await db.service.calculate(engineer(), estimateId);
-    expect(await failure(db.service.calculate(engineer(), estimateId))).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED', httpStatus: 409 });
+    expect(await failure(db.service.calculate(engineer(), estimateId))).toMatchObject({ code: 'ESTIMATE_ALREADY_PREPARED', httpStatus: 409 });
     expect((await countFor(estimateId)).calculations).toBe(1);
   });
 
@@ -203,7 +203,7 @@ describe('AC-7: a second press is a 409 and makes no second calculation', () => 
     const results = await Promise.allSettled([db.service.calculate(engineer(), estimateId), db.service.calculate(engineer(), estimateId)]);
     expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
     const rejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-    expect(rejected?.reason).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED' });
+    expect(rejected?.reason).toMatchObject({ code: 'ESTIMATE_ALREADY_PREPARED' });
     expect(await countFor(estimateId)).toEqual({ calculations: 1, rows: 2 });
   });
 });

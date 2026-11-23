@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import type { NodeKind } from '../../src/lib/estimate/node-kinds';
 import type { ImageMime } from '../../src/lib/images/signature';
 import type { EstimateNodeRepository, NodePlacement, NodeRecord } from '../../src/server/repositories/estimate-node-repository';
 import type { CustomerChoice, EstimateLock, EstimateRepository, WorkspaceRecord } from '../../src/server/repositories/estimate-repository';
@@ -22,7 +23,10 @@ export interface FakeEstimate {
   assignedByName: string;
   folderPath: string;
   deadlineAt: Date;
+  /** A test that does not care leaves it null: the workspace then shows the invented title `Invented task` (a task always has one since CR-01 item 6). */
   title: string | null;
+  /** The project name (CR-01 item 6); absent counts as the invented `Invented subject`. */
+  subject?: string;
   notes: string | null;
   status: EstimateStatus;
   customerId: string | null;
@@ -39,10 +43,28 @@ export interface FakeNode {
   estimateId: string;
   parentId: string | null;
   sortIndex: number;
+  /** The row's kind (CR-01 item 3A). Absent is derived from the tree's shape by the rule of the migration's backfill (`shapeKindOf`), so a test that seeds a tree and does not care gets a legacy-shaped one. */
+  nodeKind?: NodeKind;
   revision: number;
   inputs: Record<string, unknown>;
   /** The part's picture (STORY-05.07); absent counts as none. */
   imageId?: string | null;
+}
+
+/**
+ * The kind the migration `20261123140000_estimate_node_kind` gives a row from its tree's shape: depth 1 is a Main Assembly, depth 2 with at least one child a Sub-Assembly, every other row a Part. The
+ * parent chain is walked in this estimate's rows only. A row whose chain does not end at the top (cannot happen) is a Part, as in the migration.
+ */
+export function shapeKindOf(rows: ReadonlyArray<{ id: string; parentId: string | null }>, row: { id: string; parentId: string | null }): NodeKind {
+  let depth = 1;
+  for (let up = row.parentId; up !== null; depth += 1) {
+    const parent = rows.find((candidate) => candidate.id === up);
+    if (parent === undefined) return 'PART';
+    up = parent.parentId;
+    if (depth > rows.length) return 'PART';
+  }
+  if (depth === 1) return 'MAIN_ASSEMBLY';
+  return depth === 2 && rows.some((candidate) => candidate.parentId === row.id) ? 'SUB_ASSEMBLY' : 'PART';
 }
 
 /** A stored picture as the fake holds it: what the real table keeps, by estimate. */
@@ -58,6 +80,8 @@ export interface FakeImage {
 export interface FakeCustomerEntry {
   readonly id: string;
   readonly name: string;
+  /** Absent counts as `SHORT`. */
+  readonly shortName?: string;
   readonly deleted: boolean;
 }
 
@@ -92,6 +116,7 @@ const recordOf = (node: FakeNode): NodeRecord => ({
   id: node.id,
   parentId: node.parentId,
   sortIndex: node.sortIndex,
+  nodeKind: node.nodeKind ?? 'PART',
   revision: node.revision,
   inputs: { ...node.inputs },
   imageId: node.imageId ?? null,
@@ -105,6 +130,9 @@ export function createFakeEstimateWorld(
 ): FakeEstimateWorld {
   const estimates: FakeEstimate[] = initial.map((estimate) => ({ ...estimate }));
   const nodes: FakeNode[] = initialNodes.map((node) => ({ ...node, inputs: { ...node.inputs } }));
+  // A kind is stored and never changes, so a seeded row without one is given the shape's kind once, here, and not again as the tree changes.
+  const seeded = nodes.map((node) => ({ node, kind: node.nodeKind ?? shapeKindOf(nodes.filter((other) => same(other.estimateId, node.estimateId)), node) }));
+  for (const { node, kind } of seeded) node.nodeKind = kind;
   const images: FakeImage[] = [...initialImages];
   const materialsInUse: Array<{ id: string; deleted: boolean }> = [];
   let imageWrites = 0;
@@ -115,7 +143,7 @@ export function createFakeEstimateWorld(
   let lastWritten = new Date();
   const customerOf = (id: string | null): CustomerChoice | null => {
     const found = id === null ? undefined : customers().find((customer) => same(customer.id, id));
-    return found === undefined ? null : { id: found.id, name: found.name };
+    return found === undefined ? null : { id: found.id, name: found.name, shortName: found.shortName ?? 'SHORT' };
   };
 
   const repository: EstimateRepository = {
@@ -130,7 +158,8 @@ export function createFakeEstimateWorld(
         engineerId: estimate.engineerId,
         folderPath: estimate.folderPath,
         deadlineAt: estimate.deadlineAt,
-        title: estimate.title,
+        title: estimate.title ?? 'Invented task',
+        subject: estimate.subject ?? 'Invented subject',
         notes: estimate.notes,
         assignedByName: estimate.assignedByName,
       };
@@ -151,8 +180,9 @@ export function createFakeEstimateWorld(
     },
     findActiveCustomer: (id) => {
       const found = customers().find((customer) => same(customer.id, id) && !customer.deleted);
-      return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name });
+      return Promise.resolve(found === undefined ? null : { id: found.id, name: found.name, shortName: found.shortName ?? 'SHORT' });
     },
+    findCustomerChoice: (id) => Promise.resolve(customerOf(id)),
     lockMaterialsInUse: () => Promise.resolve([...materialsInUse].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))),
     linkCalculation: (estimateId, calculationId, status) => {
       const estimate = estimates.find((candidate) => same(candidate.id, estimateId));
@@ -186,8 +216,8 @@ export function createFakeEstimateWorld(
 
   const nodeRepository: EstimateNodeRepository = {
     listNodes: (estimateId) => Promise.resolve(nodes.filter((node) => same(node.estimateId, estimateId)).map(recordOf)),
-    insertNode: (estimateId, parentId, sortIndex) => {
-      const node: FakeNode = { id: randomUUID(), estimateId, parentId, sortIndex, revision: 1, inputs: {} };
+    insertNode: (estimateId, parentId, nodeKind, sortIndex) => {
+      const node: FakeNode = { id: randomUUID(), estimateId, parentId, sortIndex, nodeKind, revision: 1, inputs: {} };
       nodes.push(node);
       nodeWrites += 1;
       return Promise.resolve(recordOf(node));

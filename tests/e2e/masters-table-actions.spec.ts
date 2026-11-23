@@ -3,6 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 import { E2E_ADMIN } from './support/auth';
+import { shortNameOf } from '../support/customer-short-name';
+
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
 import { ADMIN_STATE, DEVELOPMENT_URL } from './support/servers';
 import { actionsOf, JSON_HEADERS, makeTreatment, openTreatments } from './support/treatments';
@@ -135,7 +137,7 @@ const SCREENS: ReadonlyArray<Screen> = [
     path: '/masters/customers',
     title: 'Customers',
     region: 'Customers, scrollable',
-    make: (page, name) => post(page, '/api/v1/customers', { name }),
+    make: (page, name) => post(page, '/api/v1/customers', { name, shortName: shortNameOf(name) }),
   },
   {
     label: 'SCR-13 Treatment / Color',

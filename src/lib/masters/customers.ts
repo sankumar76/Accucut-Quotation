@@ -6,12 +6,18 @@ import { DECIMAL_TEXT_MESSAGE, DECIMAL_TEXT_PATTERN, MASTER_NAME_MAX_LENGTH, NAM
  * component may import it. The server states the same rules again in `src/server/views/schemas/customers.ts`, which imports the limits and the
  * words from here, so a limit or a sentence is written once.
  *
- * Only the name is required (OQ-UX-04). The limits of the three contact fields are the build's own, because neither the architecture nor the
+ * The name and, since CR-01 item 6 (AQP-390), the short name are required (OQ-UX-04). The limits of the three contact fields are the build's own, because neither the architecture nor the
  * ux-spec gives one: they keep a pasted block of text out of a column, and are generous for a real phone number, address or e-mail address.
  */
 
 /** The longest customer name. The same limit as every master's name (`master-rules.ts`). */
 export const CUSTOMER_NAME_MAX_LENGTH = MASTER_NAME_MAX_LENGTH;
+/**
+ * The longest customer short name: the first part of the Excel file name (CR01-9). A proposal (A-CR01-4) that is one constant: the form, the schema, the message and the hint follow it. The
+ * database allows 20 (`ck_customers_short_name_length`), so raising it up to there is a code-only change; lowering it leaves longer stored values valid, and the next edit of such a row is
+ * refused until it is shortened.
+ */
+export const CUSTOMER_SHORT_NAME_MAX_LENGTH = 10;
 export const PHONE_MAX_LENGTH = 30;
 /** The longest e-mail address there can be (RFC 5321: 254 characters). */
 export const EMAIL_MAX_LENGTH = 254;
@@ -20,6 +26,11 @@ export const ADDRESS_MAX_LENGTH = 300;
 /** AC-1: the words of the refusals, as the ux-spec SCR-12 gives them. */
 export const CUSTOMER_NAME_REQUIRED_MESSAGE = 'Enter the customer name.';
 export const CUSTOMER_NAME_TAKEN_MESSAGE = 'A customer with this name already exists.';
+/** The short name's words (CR-01 item 6). The message for a taken short name names no other customer. */
+export const SHORT_NAME_REQUIRED_MESSAGE = 'Enter a short name.';
+export const SHORT_NAME_TOO_LONG_MESSAGE = `Keep the short name under ${CUSTOMER_SHORT_NAME_MAX_LENGTH} characters.`;
+export const SHORT_NAME_CONTROL_MESSAGE = 'Enter the short name without line breaks, hidden characters or other control characters.';
+export const SHORT_NAME_TAKEN_MESSAGE = 'A customer with this short name already exists.';
 export const EMAIL_FORMAT_MESSAGE = 'Enter an e-mail address like name@company.com.';
 export const NOTHING_TO_CHANGE_CUSTOMER_MESSAGE = 'Change at least one of the details or a rate.';
 
@@ -27,7 +38,7 @@ export const NOTHING_TO_CHANGE_CUSTOMER_MESSAGE = 'Change at least one of the de
 export const tooLongMessage = (limit: number): string => `Use ${limit} characters or fewer.`;
 
 /** The fields of the Details card, in the order the form draws them, so focus goes to the first one with a message. */
-export const CUSTOMER_FIELD_NAMES = ['name', 'phone', 'email', 'address'] as const;
+export const CUSTOMER_FIELD_NAMES = ['name', 'shortName', 'phone', 'email', 'address'] as const;
 export type CustomerFieldName = (typeof CUSTOMER_FIELD_NAMES)[number];
 
 /** The three contact fields: the audit entry names the ones that changed, never what they hold (architecture section 8). */
@@ -42,6 +53,8 @@ export type CustomerErrors = Readonly<Partial<Record<CustomerFieldName, string>>
 /** A customer's details as stored: a contact field that is not given is `null`. */
 export interface CustomerDetails {
   readonly name: string;
+  /** Required, unique ignoring letter case, kept as typed (trimmed). Class Internal: not contact data. */
+  readonly shortName: string;
   readonly phone: string | null;
   readonly email: string | null;
   readonly address: string | null;
@@ -50,6 +63,7 @@ export interface CustomerDetails {
 /** The part of the details a request asks to set. A contact field given as `null` is cleared. */
 export interface CustomerFields {
   readonly name?: string | undefined;
+  readonly shortName?: string | undefined;
   readonly phone?: string | null | undefined;
   readonly email?: string | null | undefined;
   readonly address?: string | null | undefined;
@@ -58,6 +72,11 @@ export interface CustomerFields {
 /** The one form in which a name is stored and compared: compatibility forms folded, surrounding spaces removed, runs of spaces made one. */
 export function canonicalCustomerName(value: string): string {
   return value.normalize('NFKC').trim().replace(/\s+/g, ' ');
+}
+
+/** The one form in which a short name is stored: surrounding spaces removed, and nothing else changed (it is shown and used as typed; the file-name builder cleans it for a file). */
+export function canonicalShortName(value: string): string {
+  return value.trim();
 }
 
 /** The stored form of a contact field: surrounding spaces removed, and `null` when nothing is left. */
@@ -71,6 +90,19 @@ export function customerNameProblem(value: string): string | null {
   const trimmed = canonicalCustomerName(value);
   if (trimmed === '') return CUSTOMER_NAME_REQUIRED_MESSAGE;
   return trimmed.length > CUSTOMER_NAME_MAX_LENGTH ? NAME_TOO_LONG_MESSAGE : null;
+}
+
+/** A line break, a tab, any other control character or a hidden format character (a zero-width space, a joiner, a bidi override): a short name is one line of visible text (assumption A-CR01-A2). A hidden character would let two short names that look alike both be stored. */
+const HIDDEN_OR_CONTROL = /[\p{Cc}\p{Cf}]/u;
+/** Nothing a person can see: spaces, control and format characters only. */
+const NOTHING_VISIBLE = /^[\s\p{Cc}\p{Cf}]*$/u;
+
+/** The message under the short-name field, or `null`: required, any printable text without a control character, and at most `CUSTOMER_SHORT_NAME_MAX_LENGTH` characters (a letter outside the basic plane counts as one, as the database counts). */
+export function shortNameProblem(value: string): string | null {
+  const stored = canonicalShortName(value);
+  if (NOTHING_VISIBLE.test(stored)) return SHORT_NAME_REQUIRED_MESSAGE;
+  if (Array.from(stored).length > CUSTOMER_SHORT_NAME_MAX_LENGTH) return SHORT_NAME_TOO_LONG_MESSAGE;
+  return HIDDEN_OR_CONTROL.test(stored) ? SHORT_NAME_CONTROL_MESSAGE : null;
 }
 
 /** The message under the phone field, or `null`: at most 30 characters; a phone number is otherwise free text (AC-1). */
@@ -96,6 +128,7 @@ export function addressProblem(value: string): string | null {
 
 const FIELD_CHECKS: Readonly<Record<CustomerFieldName, (value: string) => string | null>> = {
   name: customerNameProblem,
+  shortName: shortNameProblem,
   phone: phoneProblem,
   email: emailProblem,
   address: addressProblem,
@@ -118,7 +151,7 @@ export function customerFormProblems(values: CustomerValues): CustomerErrors {
 
 /** The Details card of a new customer is empty; an edit starts from the customer's own details. */
 export function initialCustomerValues(original: CustomerDetails | null): CustomerValues {
-  return { name: original?.name ?? '', phone: original?.phone ?? '', email: original?.email ?? '', address: original?.address ?? '' };
+  return { name: original?.name ?? '', shortName: original?.shortName ?? '', phone: original?.phone ?? '', email: original?.email ?? '', address: original?.address ?? '' };
 }
 
 /** The errors without the one for `field`, once the person has changed that field. */
@@ -134,6 +167,8 @@ export function withoutCustomerError(errors: CustomerErrors, field: CustomerFiel
 export function detailChangesFrom(before: CustomerDetails, wanted: CustomerFields): CustomerFields {
   const changes: { -readonly [Field in keyof CustomerFields]: CustomerFields[Field] } = {};
   if (wanted.name !== undefined && canonicalCustomerName(wanted.name) !== before.name) changes.name = canonicalCustomerName(wanted.name);
+  // The short name is compared as stored, letter case kept: "acme" to "ACME" is a change.
+  if (wanted.shortName !== undefined && canonicalShortName(wanted.shortName) !== before.shortName) changes.shortName = canonicalShortName(wanted.shortName);
   for (const field of CONTACT_FIELD_NAMES) {
     const given = wanted[field];
     if (given !== undefined && contactValue(given) !== before[field]) changes[field] = contactValue(given);
@@ -147,8 +182,14 @@ export function changedContactFields(changes: CustomerFields): ReadonlyArray<Con
 }
 
 /** The body of an add or an edit for what was typed: the name in its canonical form and a contact field as `null` when it is empty. */
-export function customerBody(values: CustomerValues): { readonly name: string; readonly phone: string | null; readonly email: string | null; readonly address: string | null } {
-  return { name: canonicalCustomerName(values.name), phone: contactValue(values.phone), email: contactValue(values.email), address: contactValue(values.address) };
+export function customerBody(values: CustomerValues): {
+  readonly name: string;
+  readonly shortName: string;
+  readonly phone: string | null;
+  readonly email: string | null;
+  readonly address: string | null;
+} {
+  return { name: canonicalCustomerName(values.name), shortName: canonicalShortName(values.shortName), phone: contactValue(values.phone), email: contactValue(values.email), address: contactValue(values.address) };
 }
 
 // ---- Rates (AC-2) ------------------------------------------------------------------------------------------------------------

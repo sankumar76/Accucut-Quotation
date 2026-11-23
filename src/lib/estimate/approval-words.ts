@@ -3,7 +3,7 @@
  * screen that may show them. Pure, with no import. **None of them holds a figure, a rate, a formula or an ID** (NFR-002): each names the missing step and nothing else, and a status is not a cost.
  * (From STORY-06.06 an approval that passes every check is written, so the 501 `APPROVAL_NOT_AVAILABLE` of STORY-06.05 is gone.)
  *
- * A wrong status is not here: it is the state machine's (`TRANSITION_REFUSALS` in `state-machine.ts`), one code and one sentence for "not submitted" and "already approved" on every path.
+ * A wrong status is not here: it is the state machine's (`TRANSITION_REFUSALS` in `state-machine.ts`), one code and one sentence for "not prepared" and "already approved" on every path.
  */
 
 /** The `code` of the 409 for an estimate that was never calculated (figure state `none`). */

@@ -28,7 +28,7 @@ const IN_USE = {
   requestId: 'req-0a0b0c0d',
   estimates: [
     { code: 'Q-2026-0101', status: 'DRAFT' },
-    { code: 'Q-2026-0102', status: 'SUBMITTED' },
+    { code: 'Q-2026-0102', status: 'PREPARED' },
   ],
   estimateTotal: 12,
 };
@@ -83,7 +83,7 @@ describe('estimateUsesOf: an answer of the wrong shape is never trusted', () => 
     const uses = defined(estimateUsesOf(refusalWith({ estimates: IN_USE.estimates, estimateTotal: 12 })));
     expect(unnamedCount(uses)).toBe(10);
     expect(statusWords('DRAFT')).toBe('Draft');
-    expect(statusWords('SUBMITTED')).toBe('Submitted');
+    expect(statusWords('PREPARED')).toBe('Prepared');
   });
 });
 

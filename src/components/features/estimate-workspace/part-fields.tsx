@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-client';
 import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
-import { isSectionComplete, sectionProgress, shownSections, sumProgress, textOf } from '@/lib/estimates/form-values';
+import { isSectionComplete, sectionProgress, sectionWeight, shownSections, sumProgress, textOf } from '@/lib/estimates/form-values';
 import type { SaveGate } from '@/lib/estimates/save-gate';
 import { FLAG_OFF, FLAG_ON } from '@/lib/estimate/treatment-value';
 import { formatIst } from '@/lib/time';
@@ -84,7 +84,7 @@ function derivedText(field: FormField, part: PartTarget, texts: Readonly<Record<
 
 /**
  * Enter moves to the next field that can be typed into, and never submits (STORY-05.03 AC-6; UX spec SCR-05 "Interactions"). Buttons and links keep their own Enter; Shift+Enter in a
- * multi-line box starts a new line; a read-only or disabled field is skipped. On the last field it moves focus to the Calculate button and never presses it (STORY-05.09 AC-9); once the estimate is submitted there is no button to take, and it falls back to the form's heading.
+ * multi-line box starts a new line; a read-only or disabled field is skipped. On the last field it moves focus to the Calculate button and never presses it (STORY-05.09 AC-9); once the estimate is prepared there is no button to take, and it falls back to the form's heading.
  */
 function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement | null): void {
   const target = event.target;
@@ -100,8 +100,8 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
 }
 
 /**
- * The form of one part (STORY-05.03 AC-1 to AC-6, AC-9): its title and the last save, the sections as cards in an auto-fit grid (one column on a phone, more as the width allows,
- * never narrower than 232 px, so a reserved region beside it takes a column with no redesign, UD-4), and every field from the server's definition. It is used under a key of the part's ID.
+ * The form of one part (STORY-05.03 AC-1 to AC-6, AC-9; AQP-388): its title and the last save, the sections as cards in wrapping rows (side by side from 768 px, each one's share of a row following
+ * its number of fields, one to a row on a phone; the form is held to one card's least width, so a reserved region beside it takes a column with no redesign, UD-4), and every field from the server's definition. It is used under a key of the part's ID.
  * Each value is the person's until the field is left, and then the part's values are saved on their own (`usePartValues`).
  */
 export function PartFields({ estimateId, part, editable, form, materials, lastSavedAt, onSaved, onChanged, onWrote, onReadMaterialsAgain, missing, gate }: PartFieldsProps) {
@@ -121,7 +121,7 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
   }
   if (values.stored.status === 'loading') {
     return (
-      <div role="status" aria-label={FORM_LOADING} className="flex flex-col gap-s-3">
+      <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
         <PartProgressSkeleton />
         <Skeleton className="h-(--control-h)" />
         <Skeleton className="h-(--control-h)" />
@@ -142,7 +142,7 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
   const missingNeeded = (field: FormField): boolean => missing.has(field.id) && textOf(field, values.texts).trim() === '';
   const hasMissing = (section: { readonly fields: ReadonlyArray<FormField> }): boolean => section.fields.some(missingNeeded);
   return (
-    <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, title.current)} className="flex min-w-0 flex-1 flex-col gap-s-4">
+    <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, title.current)} className="is-compact flex min-w-0 flex-1 flex-col gap-s-4">
       <div className="flex flex-col gap-s-1">
         <h3 id={TITLE_ID} ref={title} tabIndex={-1} className="text-sub font-semibold text-ink">
           {partFormTitle(part.slNo)}
@@ -185,9 +185,9 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
       ) : null}
       <PartProgress slNo={part.slNo} counts={sumProgress(progress.map(({ counts }) => counts))} />
       <SectionStrip items={progress.map(({ section, counts }) => ({ section, complete: isSectionComplete(counts), missing: hasMissing(section) }))} />
-      <div data-part-grid="" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14.5rem),1fr))] gap-s-4">
+      <div data-part-grid="" className="flex flex-wrap gap-s-3">
         {progress.map(({ section, counts }) => (
-          <SectionCard key={section.id} section={section} progress={counts.total === 0 ? null : counts} missing={hasMissing(section)}>
+          <SectionCard key={section.id} section={section} progress={counts.total === 0 ? null : counts} missing={hasMissing(section)} weight={sectionWeight(section)}>
             {/* The surface treatments of a section (07) are one multi-select, drawn first in the card: a chosen one is 1 and one that is not is 0, and each is saved on its own (STORY-05.06). */}
             {section.fields.some((field) => field.rule.type === 'flag') ? (
               <SurfaceTreatments

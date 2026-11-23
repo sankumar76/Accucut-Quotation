@@ -7,7 +7,7 @@ import { costsSchema } from '@/server/views/schemas/costs';
  * `POST /api/v1/estimates/{id}/recalculate` (STORY-06.04 AC-3; FR-061; architecture sections 4.2, 4.8 and 6 "Recalculate"): a Lead or an Admin presses Recalculate on an estimate. Lead and Admin only, so
  * `withRoute` refuses an Engineer with the fixed 403 **before the ID is looked at** (CR-33, NFR-002), and a signed-out caller is a 401 before that. It is **the Calculate of the same service** (`recalculate`
  * shares its transaction, its checks and their order with `calculate`, so there is no second calculation path): a part with a missing input is the 422 `CALCULATE_BLOCKED` that writes nothing, no customer
- * is a 409, an approved estimate is the 409 `ESTIMATE_APPROVED_IS_LOCKED`, and a good press stores a new record in the person's name, submits a draft and leaves a submitted estimate submitted.
+ * is a 409, an approved estimate is the 409 `ESTIMATE_APPROVED_IS_LOCKED`, and a good press stores a new record in the person's name, prepares a draft and leaves a prepared estimate prepared.
  *
  * The body is the same as Calculate's: none, or `{acknowledge: {inputsRevision}}` from the 409 `CALCULATE_ACK_REQUIRED` that a 0 in QTY per Assy earns every press, even when the Engineer already went
  * ahead (UX-44, A-26). A body that is not that shape is 400.

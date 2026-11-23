@@ -63,11 +63,11 @@ const arjun: EstimateViewer = {
 
 async function setUpPart(): Promise<string> {
   const task = await db.owner.query<{ id: string }>(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at) VALUES ('Q-2026-0341', $1::uuid, $2::uuid, $3, '2026-11-12T11:30:00Z') RETURNING id::text AS id`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ('Q-2026-0341', $1::uuid, $2::uuid, $3, '2026-11-12T11:30:00Z', 'Invented task', 'Invented subject') RETURNING id::text AS id`,
     [arjunId, leadId, PATH],
   );
   estimateId = defined((await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id) VALUES ($1::uuid) RETURNING id::text AS id', [defined(task.rows[0]).id])).rows[0]).id;
-  return (await service.addPart(arjun, estimateId, { kind: 'item' })).nodeId;
+  return (await service.addPart(arjun, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
 }
 
 async function stored(nodeId: string): Promise<Record<string, unknown>> {
@@ -141,9 +141,9 @@ describe('AQP-341 (DEF-038): "None" is what the server holds the moment its save
 /** One more draft estimate of Arjun's with one part (its own task code), for the test that runs many journeys at once. */
 async function setUpAnotherPart(index: number): Promise<{ estimate: string; node: string }> {
   const task = await db.owner.query<{ id: string }>(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at) VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z') RETURNING id::text AS id`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented task', 'Invented subject') RETURNING id::text AS id`,
     [`Q-2026-${String(3000 + index)}`, arjunId, leadId, PATH],
   );
   const estimate = defined((await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id) VALUES ($1::uuid) RETURNING id::text AS id', [defined(task.rows[0]).id])).rows[0]).id;
-  return { estimate, node: (await service.addPart(arjun, estimate, { kind: 'item' })).nodeId };
+  return { estimate, node: (await service.addPart(arjun, estimate, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId };
 }

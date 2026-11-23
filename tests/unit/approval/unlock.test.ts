@@ -60,7 +60,7 @@ function build(options: Options = {}) {
       findEstimateAccess: (id) => Promise.resolve(id === ESTIMATE_ID ? { id, engineerId: 'engineer-1', status } : null),
       findActiveCustomer: () => {
         writes.push('customer');
-        return Promise.resolve(options.customerDeleted === true ? null : { id: CUSTOMER_ID, name: 'Invented Customer' });
+        return Promise.resolve(options.customerDeleted === true ? null : { id: CUSTOMER_ID, name: 'Invented Customer', shortName: 'INV' });
       },
       lockMaterialsInUse: () => {
         writes.push('materials');
@@ -197,7 +197,7 @@ describe('AC-5: a status that is not APPROVED, and an estimate that is not there
     expect(writes).toEqual(['lock']);
   });
 
-  it.each(['DRAFT', 'SUBMITTED'] as const)('%s is the state machine\'s 409, the code and sentence of "not approved", and nothing is written', async (status) => {
+  it.each(['DRAFT', 'PREPARED'] as const)('%s is the state machine\'s 409, the code and sentence of "not approved", and nothing is written', async (status) => {
     const { service, writes, audited } = build({ status });
     const error: unknown = await service.unlock(lead, ESTIMATE_ID, { reason: REASON, audit }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ConflictError);

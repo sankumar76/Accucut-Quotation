@@ -8,6 +8,7 @@ import { createTaskService, type QueueViewer, type TaskService } from '@/server/
 import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
+import { shortNameOf } from '../../support/customer-short-name';
 
 /**
  * STORY-04.04 T6 (AC-1, AC-3, AC-4, AC-5) against real PostgreSQL in a throwaway database: one task and the status of its estimate through the real task service and
@@ -22,7 +23,7 @@ const DEADLINE = new Date('2026-11-12T11:30:00.000Z');
 const PATH = '\\\\invented-server\\invented-share\\RFQ-123';
 const UNKNOWN_ID = '00000000-0000-4000-8000-00000000dead';
 
-type Status = 'DRAFT' | 'SUBMITTED' | 'APPROVED';
+type Status = 'DRAFT' | 'PREPARED' | 'APPROVED';
 
 let db: AuthDatabase;
 let service: TaskService;
@@ -41,7 +42,7 @@ beforeAll(async () => {
   adminId = await insertPersonAsOwner(db, 'Status Admin', 'ADMIN');
   arjunId = await insertPersonAsOwner(db, 'Status Arjun', 'ENGINEER');
   priyaId = await insertPersonAsOwner(db, 'Status Priya', 'ENGINEER');
-  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Invented status customer') RETURNING id::text");
+  const customer = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Invented status customer', left(md5('Invented status customer'), 10)) RETURNING id::text");
   customerId = defined(customer.rows[0]).id;
 });
 
@@ -57,7 +58,7 @@ afterEach(async () => {
 /** A task and its estimate in any state; returns the task's ID. */
 async function seed(code: string, engineerId: string, status: Status, chosenCustomerId: string | null = null, notes: string | null = null): Promise<string> {
   const task = await db.owner.query<{ id: string }>(
-    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, notes) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7) RETURNING id::text',
+    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, \'Invented subject\', $7) RETURNING id::text',
     [code, engineerId, leadId, PATH, DEADLINE, 'Hopper cover', notes],
   );
   const id = defined(task.rows[0]).id;
@@ -66,7 +67,7 @@ async function seed(code: string, engineerId: string, status: Status, chosenCust
 }
 
 describe('AC-1: the status is the estimate\'s, in every state', () => {
-  it.each(['DRAFT', 'SUBMITTED', 'APPROVED'] as const)('an Engineer opens their own %s task and is told %s', async (status) => {
+  it.each(['DRAFT', 'PREPARED', 'APPROVED'] as const)('an Engineer opens their own %s task and is told %s', async (status) => {
     const id = await seed('Q-2026-0001', arjunId, status);
     expect((await service.getTask(asEngineer(arjunId), id))?.status).toBe(status);
   });
@@ -79,18 +80,20 @@ describe('AC-1: the status is the estimate\'s, in every state', () => {
   });
 
   it('answers the task\'s own fields: the notes, the customer\'s name, the two people\'s names, the folder link and the deadline as an instant', async () => {
-    const id = await seed('Q-2026-0001', arjunId, 'SUBMITTED', customerId, 'Sheet metal only.');
+    const id = await seed('Q-2026-0001', arjunId, 'PREPARED', customerId, 'Sheet metal only.');
     expect(await service.getTask(asEngineer(arjunId), id)).toEqual({
       id,
       code: 'Q-2026-0001',
       title: 'Hopper cover',
+      subject: 'Invented subject',
       notes: 'Sheet metal only.',
       engineer: { id: arjunId, name: 'Invented Status Arjun' },
+      customer: { id: customerId, name: 'Invented status customer', shortName: shortNameOf('Invented status customer') },
       customerName: 'Invented status customer',
       folderPath: PATH,
       folderUrl: 'file:////invented-server/invented-share/RFQ-123',
       deadlineAt: DEADLINE,
-      status: 'SUBMITTED',
+      status: 'PREPARED',
       assignedByName: 'Invented Status Lead',
     });
   });
@@ -98,7 +101,7 @@ describe('AC-1: the status is the estimate\'s, in every state', () => {
 
 describe('AC-4: another Engineer\'s task is the same answer as one that does not exist', () => {
   it('is null for another Engineer\'s task, an unknown ID and text that is no UUID (which PostgreSQL would refuse as a statement)', async () => {
-    const others = await seed('Q-2026-0002', priyaId, 'SUBMITTED');
+    const others = await seed('Q-2026-0002', priyaId, 'PREPARED');
     const viewer = asEngineer(arjunId);
     expect(await Promise.all([service.getTask(viewer, others), service.getTask(viewer, UNKNOWN_ID), service.getTask(viewer, 'not-an-id'), service.getTask(viewer, '')])).toEqual([
       null,
@@ -131,6 +134,7 @@ describe('AC-3, AC-5: a Lead and an Admin open any task, with the same fields as
     expect(Object.keys(defined(await service.getTask(asEngineer(arjunId), id))).sort()).toEqual([
       'assignedByName',
       'code',
+      'customer',
       'customerName',
       'deadlineAt',
       'engineer',
@@ -139,6 +143,7 @@ describe('AC-3, AC-5: a Lead and an Admin open any task, with the same fields as
       'id',
       'notes',
       'status',
+      'subject',
       'title',
     ]);
   });

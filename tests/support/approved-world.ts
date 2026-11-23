@@ -4,6 +4,7 @@ import { SHEET_NAME } from '../../src/server/export/export-columns';
 import type { CostsView } from '../../src/server/views/schemas/costs';
 import type { NodeCostsView } from '../../src/server/views/schemas/node-costs';
 import { createConfigRepository } from '../../src/server/repositories/config-repository';
+import { createDownloadRepository } from '../../src/server/repositories/download-repository';
 import { createExportRepository } from '../../src/server/repositories/export-repository';
 import { createImageRepository } from '../../src/server/repositories/image-repository';
 import type { AuditContext } from '../../src/server/services/audit-service';
@@ -56,6 +57,7 @@ export async function openApprovedWorld(): Promise<ApprovedWorld> {
     db,
     exporter: createExportService({
       header: createExportRepository(db.prisma),
+      downloads: createDownloadRepository(db.prisma),
       nodes: db.nodes,
       calculations: db.calculations,
       approvals: db.approvals,
@@ -81,6 +83,15 @@ export async function openApprovedWorld(): Promise<ApprovedWorld> {
   };
 }
 
+/**
+ * The summary of SCR-10 **without the download marker** (STORY-CR01.7E): the marker is the log of the downloads, and reading the file (`exportCellsOf`) is a download, so it changes with every read. What an approved estimate
+ * shows and holds is the rest of the summary, which a change of the masters must leave as it was.
+ */
+export async function summaryWithoutMarker(world: ApprovedWorld, estimateId: string) {
+  // The marker is replaced by a constant, so two summaries are equal whatever was downloaded in between.
+  return { ...(await world.exporter.getSummary(world.lead, estimateId)), download: null };
+}
+
 let sequence = 0;
 
 export interface CalculatedEstimate {
@@ -94,7 +105,7 @@ export interface CalculatedEstimate {
 }
 
 /**
- * An estimate of the Engineer's with two parts, calculated (SUBMITTED, the figures current). Its material and its treatment are new entries of the masters made through the Admin's services, used by no
+ * An estimate of the Engineer's with two parts, calculated (PREPARED, the figures current). Its material and its treatment are new entries of the masters made through the Admin's services, used by no
  * other estimate, so a test can rename and delete them. `materialId` names an existing material to use instead (a second estimate over the same material).
  */
 export async function calculatedEstimateOf(world: ApprovedWorld, options: { readonly materialId?: string } = {}): Promise<CalculatedEstimate> {

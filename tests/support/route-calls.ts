@@ -150,7 +150,7 @@ function treatmentCall(method: HttpMethod, path: string): ValidCall | undefined 
 function customerCall(method: HttpMethod, path: string): ValidCall | undefined {
   switch (`${method} ${path}`) {
     case 'POST /api/v1/customers':
-      return { id: NO_RECIPE_ID, body: { name: 'Invented-customer-Z' }, status: 201 };
+      return { id: NO_RECIPE_ID, body: { name: 'Invented-customer-Z', shortName: 'INVZ' }, status: 201 };
     case 'PATCH /api/v1/customers/[id]':
       return { id: CUSTOMER_RECIPE_ID, body: { phone: '+99 555 0142' }, status: 200 };
     case 'POST /api/v1/customers/[id]/reset-rates':
@@ -172,7 +172,15 @@ function taskCall(method: HttpMethod, path: string, context: CallContext): Valid
     case 'POST /api/v1/tasks':
       return {
         id: NO_RECIPE_ID,
-        body: { engineerId: context.targetId, folderPath: '\\\\invented-server\\invented-share\\RFQ-0', deadline: '2099-01-01T10:00', title: 'Invented task', notes: 'Invented notes.' },
+        body: {
+          engineerId: context.targetId,
+          customerId: CUSTOMER_RECIPE_ID,
+          folderPath: '\\\\invented-server\\invented-share\\RFQ-0',
+          deadline: '2099-01-01T10:00',
+          title: 'Invented task',
+          subject: 'Invented subject',
+          notes: 'Invented notes.',
+        },
         status: 201,
       };
     // STORY-04.04: the canary task of the signed-in Engineer, whose task ID is the same as its estimate's (`estimate-recipe.ts`), so the scan opens a task that really exists.
@@ -210,14 +218,14 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     case 'PATCH /api/v1/estimates/[id]/nodes/[nodeId]/inputs':
       return { id, body: { revision: 1, values: {} }, status: 200 };
     case 'POST /api/v1/estimates/[id]/nodes':
-      return { id, body: { kind: 'item' }, status: 201 };
+      return { id, body: { parentId: null, nodeKind: 'MAIN_ASSEMBLY' }, status: 201 };
     case 'POST /api/v1/estimates/[id]/tree/move':
       return { id, body: { nodeId: id, ...stay }, status: 200 };
     case 'PUT /api/v1/estimates/[id]/nodes/[nodeId]':
       return { id, body: stay, status: 200 };
     case 'DELETE /api/v1/estimates/[id]/nodes/[nodeId]':
       return { id, query: '?revision=999&parts=1&subtree=0000000000000000', status: 409 };
-    // STORY-05.09: a good Calculate would submit the canary estimate and every later call would be the 409 "already submitted", so its valid call is the one that cannot change anything: the
+    // STORY-05.09: a good Calculate would submit the canary estimate and every later call would be the 409 "already prepared", so its valid call is the one that cannot change anything: the
     // canary part is never complete (its material is not stored; the registry's treatment is not on the form), so Calculate is refused 422 `CALCULATE_BLOCKED` with the parts and fields
     // missing, and writes nothing, at any state of the customer, for the one role that may call it. The 422 body is read by the confidentiality scan; the success body is held by
     // `calculate-route.test.ts` and the strict-schema planted-key check of the route's own schema.
@@ -231,7 +239,7 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     case 'POST /api/v1/estimates/[id]/recalculate':
       return { id, body: { acknowledge: { inputsRevision: 1 } }, status: 422 };
     // STORY-06.05: an approval that passes the guard is, until STORY-06.06, the fixed 501 and writes nothing; a call that names a calculation the estimate does not have is refused 409 at every state the canary
-    // estimate can be in (a Draft is "not submitted", a Submitted estimate whose figures are cleared or never made is `TOTALS_OUT_OF_DATE` or `NOT_CALCULATED`, and a current one is `CALCULATION_CHANGED`),
+    // estimate can be in (a Draft is "not prepared", a Prepared estimate whose figures are cleared or never made is `TOTALS_OUT_OF_DATE` or `NOT_CALCULATED`, and a current one is `CALCULATION_CHANGED`),
     // writes nothing and repeats, for the two roles that may call it. The refusals hold the words of the step and no figure, so the scan reads them. The rest of the order is `approve-route.test.ts`'s.
     case 'POST /api/v1/estimates/[id]/approve':
       return { id, body: { calculationId: UNKNOWN_CALCULATION_ID, price: '1.00' }, status: 409 };
@@ -278,6 +286,9 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
       return { id, status: 409 };
     case 'GET /api/v1/estimates/[id]/export-summary':
       return { id, status: 200 };
+    // STORY-CR01.7E: the download marker of the rows of the Closed tab. The query names one task ID that is none of the harness's: the allowed role is answered 200 with no entry, and a refused role is sent the same query.
+    case 'GET /api/v1/download-markers':
+      return { id, query: '?ids=00000000-0000-4000-8000-0000000d0e01', status: 200 };
     // STORY-08.02: the formula editor. The valid call of the Admin is the check of a formula and the read of the sample rows (they store nothing), and the save of the formula Cutting Cost already has,
     // which is the decision on "edit to its own text": 200, no new version, no audit entry and no password asked for, so the call repeats at any state of the harness. A save that really writes, the
     // password step and the 409 are `config-edit-routes.test.ts`'s and `tests/integration/config/save-formula.test.ts`'s. The answers hold formulas and rate names: Admin only, and the scan reads the refusals.

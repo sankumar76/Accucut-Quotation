@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Response } from '@playwright/test';
+import { expect, test, type Page, type Response, type TestInfo } from '@playwright/test';
 
 import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
@@ -6,12 +6,12 @@ import { defined } from '../support/defined';
 import { makeCanaryEstimateCalculable, readCalculatedValues, readEstimateState, useFreshAddress } from './support/auth';
 import { engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { horizontalOverflow, waitUntilHydrated } from './support/design-system';
-import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree } from './support/part-form';
+import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, NUMBER_RULE, nextSave, openForm, partForm, showTree, tree, waitForForm } from './support/part-form';
 
 /**
  * STORY-05.09 T6 (AC-1, AC-2, AC-6, AC-7, AC-9): Calculate on SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server. Each test signs in as a person of its own with an
  * empty draft estimate and one part and the customer chosen (`support/part-form.ts`). A blocked Calculate shows the summary with each part and field as a link, a triangle in the tree and the
- * words under each blank, and writes nothing; a good one answers exactly {status, message} and turns the page to "Submitted" (read-only inputs, no part actions, a disabled button, no number);
+ * words under each blank, and writes nothing; a good one answers exactly {status, message} and turns the page to "Prepared" (read-only inputs, no part actions, a disabled button, no number);
  * a double press is one request; Enter on the last field moves to Calculate and never presses it; the action bar stays at the bottom and never hides a focused field; axe finds 0 violations in
  * each state. The words are the UX spec's and the story's, written out here and not imported, so a changed sentence fails a test. What the database holds is judged in
  * `tests/integration/calc/calculate.test.ts`. Every name and path is invented.
@@ -41,6 +41,18 @@ async function makeComplete(page: Page, ownerId: string): Promise<void> {
   await page.reload();
   await expect(partForm(page)).toBeVisible();
   await expect(control(page, 'E')).toBeEnabled();
+}
+
+/**
+ * An Engineer whose estimate is already ready to calculate in the database (the customer chosen, one part holding every input) opens the workspace once, and the page shows it as the database has it.
+ * `openForm` and then `makeComplete` loaded the page twice before the press (AQP-396, DEF-062); this is the one load. Answers the owner, whose ID is the ID of the estimate and of its one part.
+ */
+async function openCalculable(page: Page, testInfo: TestInfo): Promise<{ readonly id: string }> {
+  const { owner, code } = await engineerWithEstimate(testInfo);
+  await signInAs(page, owner);
+  await page.goto(`/estimates/${code}`);
+  await waitForForm(page);
+  return owner;
 }
 
 /**
@@ -93,7 +105,7 @@ test.describe('AC-1: a blank input blocks, and the page says where', () => {
     // The part's triangle (spoken as words) and the words under each blank.
     // On a phone the tree is in a drawer that stays shut until it is opened.
     await showTree(page);
-    await expect(tree(page).getByRole('treeitem').first()).toContainText('Missing inputs');
+    await expect(tree(page).getByRole('link').first()).toContainText('Missing inputs');
     if (isPhone(page)) await page.keyboard.press('Escape');
     await expect(partForm(page)).toContainText(NUMBER_MISSING);
     await expect(partForm(page)).toContainText(CHOICE_MISSING);
@@ -139,33 +151,32 @@ test.describe('AC-1: a blank input blocks, and the page says where', () => {
   });
 });
 
-test.describe('AC-2, AC-6: a complete estimate is submitted, and the page shows a status and a sentence', () => {
-  test('AC-2: Calculate answers exactly {status, message}, the page turns to "Submitted": read-only inputs, no part actions, a disabled button, the one sentence and no number', async ({ page }, testInfo) => {
-    const owner = await openForm(page, testInfo);
-    await makeComplete(page, owner.id);
+test.describe('AC-2, AC-6: a complete estimate is prepared, and the page shows a status and a sentence', () => {
+  test('AC-2: Calculate answers exactly {status, message}, the page turns to "Prepared": read-only inputs, no part actions, a disabled button, the one sentence and no number', async ({ page }, testInfo) => {
+    const owner = await openCalculable(page, testInfo);
     if (!isPhone(page)) await expect(page.getByRole('button', { name: 'New item' })).toBeVisible();
 
     const response = await press(page);
     expect(response.status()).toBe(200);
-    expect(await response.json()).toEqual({ status: 'SUBMITTED', message: SENTENCE });
+    expect(await response.json()).toEqual({ status: 'PREPARED', message: SENTENCE });
 
-    const notice = page.locator('[data-calculate-submitted]');
+    const notice = page.locator('[data-calculate-prepared]');
     await expect(notice).toBeFocused();
     await expect(notice).toContainText(SENTENCE);
-    await expect(page.locator('[data-slot="status-badge"]').first()).toContainText('Submitted');
+    await expect(page.locator('[data-slot="status-badge"]').first()).toContainText('Prepared');
     await expect(calculateButton(page)).toBeDisabled();
-    await expect(calculateButton(page)).toHaveText('Submitted');
+    await expect(calculateButton(page)).toHaveText('Prepared');
     await expect(control(page, 'J')).toHaveAttribute('readonly', '');
     for (const name of ['New item', 'Sub-part', 'Part beside', 'Move up', 'Move down', 'Delete']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
 
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
     // The page has no calculated figure: the notice holds the sentence and nothing else, and the answer holds no digit.
-    expect((await notice.innerText()).replace(/\s+/g, ' ').trim()).toBe(`Submitted ${SENTENCE}`);
+    expect((await notice.innerText()).replace(/\s+/g, ' ').trim()).toBe(`Prepared ${SENTENCE}`);
     expect(JSON.stringify(await response.json())).not.toMatch(/\d/);
 
-    // After a reload the page is still "Submitted", with the same sentence.
+    // After a reload the page is still "Prepared", with the same sentence.
     await page.reload();
-    await expect(page.locator('[data-calculate-submitted]')).toContainText(SENTENCE);
+    await expect(page.locator('[data-calculate-prepared]')).toContainText(SENTENCE);
     await expect(calculateButton(page)).toBeDisabled();
   });
 
@@ -177,7 +188,7 @@ test.describe('AC-2, AC-6: a complete estimate is submitted, and the page shows 
       if (request.method() === 'POST' && request.url().endsWith(`/api/v1/estimates/${owner.id}/calculate`)) posts += 1;
     });
     await calculateButton(page).dblclick();
-    await expect(calculateButton(page)).toHaveText('Submitted');
+    await expect(calculateButton(page)).toHaveText('Prepared');
     expect(posts).toBe(1);
 
     const again = await page.evaluate(async (id) => {
@@ -185,8 +196,8 @@ test.describe('AC-2, AC-6: a complete estimate is submitted, and the page shows 
       return { status: answered.status, body: (await answered.json()) as { code?: string } };
     }, owner.id);
     expect(again.status).toBe(409);
-    expect(again.body.code).toBe('ESTIMATE_ALREADY_SUBMITTED');
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(again.body.code).toBe('ESTIMATE_ALREADY_PREPARED');
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 });
 
@@ -200,8 +211,7 @@ test.describe('AC-2: Calculate sends what the screen shows (review SQR-01 of AQP
   };
 
   test('AC-2: a value typed just before the press is saved first: the press waits ("Calculating"), sends nothing until the save has been answered, and the record holds the typed value', async ({ page }, testInfo) => {
-    const owner = await openForm(page, testInfo);
-    await makeComplete(page, owner.id);
+    const owner = await openCalculable(page, testInfo);
     const posts = countPosts(page, owner.id);
     // The save of the field is held at the server's door until the test lets it go, so the press certainly arrives while the save is in flight.
     let release: () => void = () => undefined;
@@ -228,16 +238,15 @@ test.describe('AC-2: Calculate sends what the screen shows (review SQR-01 of AQP
     const answered = page.waitForResponse(isCalculate);
     release();
     expect((await answered).status()).toBe(200);
-    await expect(calculateButton(page)).toHaveText('Submitted');
+    await expect(calculateButton(page)).toHaveText('Prepared');
     expect(posts.count()).toBe(1);
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
     // What the immutable record holds is what the Engineer typed, not the value the part held before.
     expect(JSON.stringify((await readCalculatedValues(owner.id)).typed)).toMatch(/4321\.5/);
   });
 
   test('AC-2: nothing is sent while a field shows a value that is not saved: the page says so, the field says why, and fixing the field lets the next press go', async ({ page }, testInfo) => {
-    const owner = await openForm(page, testInfo);
-    await makeComplete(page, owner.id);
+    const owner = await openCalculable(page, testInfo);
     const posts = countPosts(page, owner.id);
 
     await control(page, 'J').fill('abc');
@@ -256,7 +265,7 @@ test.describe('AC-2: Calculate sends what the screen shows (review SQR-01 of AQP
     const response = await press(page);
     expect(response.status()).toBe(200);
     await expect(page.getByText('Nothing was submitted. A field has a value that is not saved.')).toHaveCount(0);
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 });
 
@@ -302,7 +311,7 @@ test.describe('AC-9: keyboard, sticky bar, width and accessibility', () => {
     await expectNoSidewaysScroll(page);
   });
 
-  test('AC-9: axe finds 0 violations in the submitted state, and the page does not scroll sideways', async ({ page }, testInfo) => {
+  test('AC-9: axe finds 0 violations in the prepared state, and the page does not scroll sideways', async ({ page }, testInfo) => {
     // The estimate is made complete in the database before the page is opened (the same `makeCanaryEstimateCalculable` that `makeComplete` calls), so the test does not open an empty form, choose the customer and reload
     // to see it: the page it scans is the same page in the same state, reached with about 10 s less work.
     const { owner, code } = await engineerWithEstimate(testInfo);
@@ -312,7 +321,7 @@ test.describe('AC-9: keyboard, sticky bar, width and accessibility', () => {
     await expect(control(page, 'E')).toBeEnabled();
     const response = await press(page);
     expect(response.status()).toBe(200);
-    await expect(calculateButton(page)).toHaveText('Submitted');
+    await expect(calculateButton(page)).toHaveText('Prepared');
     await expectFormAccessible(page);
     await expectNoSidewaysScroll(page);
   });

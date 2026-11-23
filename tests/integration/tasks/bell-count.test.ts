@@ -52,9 +52,9 @@ afterEach(async () => {
   await db.owner.query('DELETE FROM tasks');
 });
 
-async function seed(code: string, engineerId: string, assignedById: string, deadlineAt: Date, status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' = 'DRAFT'): Promise<string> {
+async function seed(code: string, engineerId: string, assignedById: string, deadlineAt: Date, status: 'DRAFT' | 'PREPARED' | 'APPROVED' = 'DRAFT'): Promise<string> {
   const task = await db.owner.query<{ id: string }>(
-    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at) VALUES ($1, $2::uuid, $3::uuid, $4, $5) RETURNING id::text',
+    'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, \'Invented task\', \'Invented subject\') RETURNING id::text',
     [code, engineerId, assignedById, PATH, deadlineAt],
   );
   const id = defined(task.rows[0]).id;
@@ -65,7 +65,7 @@ async function seed(code: string, engineerId: string, assignedById: string, dead
 /** Overdue and open: 0001 (Arjun, first Lead), 0002 (Arjun, second Lead), 0003 (Priya, first Lead), 0004 (Priya, second Lead, one millisecond past). Not counted: 0005 (exactly now), 0006 (ahead), 0007 (closed). */
 async function seedSeven(): Promise<void> {
   await seed('Q-2026-0001', arjunId, firstLeadId, at(-2 * DAY));
-  await seed('Q-2026-0002', arjunId, secondLeadId, at(-DAY), 'SUBMITTED');
+  await seed('Q-2026-0002', arjunId, secondLeadId, at(-DAY), 'PREPARED');
   await seed('Q-2026-0003', priyaId, firstLeadId, at(-3 * DAY));
   await seed('Q-2026-0004', priyaId, secondLeadId, at(-1));
   await seed('Q-2026-0005', arjunId, firstLeadId, at(0));
@@ -90,7 +90,7 @@ describe('AC-2: the bell counts what is relevant to the role, on the real tables
     expect(await service.countOverdue(as('not-a-uuid', 'LEAD'))).toBe(0);
   });
 
-  it('a task that closes leaves the count, and one that is submitted stays in it', async () => {
+  it('a task that closes leaves the count, and one that is prepared stays in it', async () => {
     await seedSeven();
     await db.owner.query("UPDATE estimates SET status = 'APPROVED' WHERE task_id = (SELECT id FROM tasks WHERE code = 'Q-2026-0001')");
     expect(await service.countOverdue(as(arjunId, 'ENGINEER'))).toBe(1);

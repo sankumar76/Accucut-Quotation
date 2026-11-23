@@ -135,7 +135,7 @@ test.describe('AC-2, AC-3, AC-5, AC-6, AC-7, AC-9: an estimate whose count chang
     const file = await withExportTurn(() => page.request.get(`/api/v1/estimates/${owner.id}/export`));
     expect(file.status()).toBe(200);
     expect(file.headers()['content-type']).toBe(XLSX_TYPE);
-    expect(file.headers()['content-disposition']).toMatch(/^attachment; filename="Quotation_[A-Za-z0-9_-]+\.xlsx"$/);
+    expect(file.headers()['content-disposition']).toMatch(/^attachment; filename="[A-Za-z0-9._-]+\.xlsx"; filename\*=UTF-8''[A-Za-z0-9._%-]+\.xlsx$/);
 
     // AC-3: an Engineer is still refused, and nobody signed in gets 401 (and is not told the state).
     await signInAs(page, owner);

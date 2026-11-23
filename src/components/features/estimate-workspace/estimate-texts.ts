@@ -10,26 +10,23 @@ export const FOLDER_TITLE = 'Task folder';
 export const NOTES_FROM_PREFIX = 'Notes from';
 export const NO_LINK_NOTE = 'This path has no link. Select it and copy it yourself.';
 
-export const NO_CUSTOMER_TITLE = 'Choose the customer to start.';
-export const NO_CUSTOMER_BODY = 'The form opens as soon as you pick one.';
+/**
+ * The customer, its short name and the subject on the header (CR-01 item 6, AQP-390): read-only labelled text for every role. The customer is set when the task is assigned and changed only by a Lead or an Admin
+ * on SCR-06, so there is no "choose the customer first" step on this page any more. The sentence for an estimate made before that, which has no customer, is one constant: a neutral line for the
+ * Engineer (who cannot set one), for the ux-expert to confirm. The refusal of Calculate keeps its words until that ruling (AC-11).
+ */
+export const IDENTITY_LABEL = 'Customer and subject';
+export const CUSTOMER_NAME_LABEL = 'Customer Name';
+export const CUSTOMER_SHORT_NAME_LABEL = 'Customer Short Name';
+/** What the short name shows for an estimate that has no customer: a value, so the label is never bare. */
+export const SHORT_NAME_NOT_SET = 'Not set';
+export const SUBJECT_LABEL = 'Subject (project name)';
 
-export const CUSTOMER_LABEL = 'Customer';
-export const CUSTOMER_TAG = 'Choose this first';
-export const CUSTOMER_HINT = 'Choose the customer this estimate is for. Changing it later asks you to confirm.';
-export const CUSTOMER_PLACEHOLDER = 'Choose the customer';
-export const CUSTOMER_LOADING = 'Loading customers';
-export const CUSTOMER_LOCKED_HINT = 'This estimate can no longer be changed.';
-export const CUSTOMER_SAVED = 'Customer saved.';
-export const CUSTOMER_SAVING = 'Saving';
-
-export const LOAD_FAILED_TITLE = 'We could not load the customers';
-export const SAVE_FAILED_TITLE = 'The customer was not saved';
 export const FAILED_BODY = 'Check your connection and try again. What you typed is kept.';
 export const TRY_AGAIN = 'Try again';
 
 
 export const FORM_AREA_TITLE = 'Parts and inputs';
-export const FORM_AREA_LOCKED = 'The parts tree and the form open here once the customer is chosen.';
 
 /**
  * The part form (STORY-05.03; UX spec SCR-05 "Content and microcopy", "States"). The labels, letters, hints and ranges of the fields come from the server, from the registry, and are
@@ -71,6 +68,8 @@ export const partCompleteText = (slNo: string): string => `Part ${slNo} is compl
 
 /** The parts tree (STORY-05.02; UX spec SCR-05 "Tree", "Delete part"). No word names a rate, a price or a formula (UX-24). */
 export const TREE_TITLE = 'Parts tree';
+/** The ID of the form area's title: the row links of the parts tree point at it (CR-01 item 3B), because a row opens the details that sit beside the tree. */
+export const FORM_AREA_TITLE_ID = 'estimate-form-area-title';
 export const TREE_CLOSE = 'Close parts tree';
 export const TREE_HIDE = 'Hide parts tree';
 export const TREE_EMPTY = 'No parts yet. Choose "New item" to add the first one.';
@@ -92,16 +91,18 @@ export const TREE_FAILED_TITLE = 'The change was not made';
 export const treeButtonLabel = (slNo: string | null): string => (slNo === null ? TREE_TITLE : `${TREE_TITLE}, part ${slNo}`);
 
 export const addedMessage = (slNo: string): string => `Part ${slNo} added`;
+/** The interim "Add sub-part" on a row that holds nothing (a Fastener, `ALLOWED_CHILDREN`): said at once, no request is sent. Replaced by the "+" menu of CR-01 3C. */
+export const noSubPartMessage = (kindName: string): string => `A ${kindName} cannot hold other parts.`;
 export const renumberedMessage = (slNo: string): string => `Part renumbered to ${slNo}`;
 export const deletedMessage = (parts: number): string => (parts === 1 ? 'Part deleted' : `${parts} parts deleted`);
 
 
 /**
- * Calculate (STORY-05.09; UX spec SCR-05 "Calculate blocked", "Submitted"). The sentence an Engineer is told after a good Calculate is the server's (`CALCULATE_MESSAGE`, in the answer); the
+ * Calculate (STORY-05.09; UX spec SCR-05 "Calculate blocked", "Prepared"). The sentence an Engineer is told after a good Calculate is the server's (`CALCULATE_MESSAGE`, in the answer); the
  * summary of a blocked one is built from the same function the server uses (`blockedSummary`), so the page and the 422 say one thing. None of these words names a rate, a price or a formula
  * (UX-24), and none holds a figure.
  */
-export const CALCULATE_SUBMITTED_TITLE = 'Submitted';
+export const CALCULATE_PREPARED_TITLE = 'Prepared';
 /** The state "Approved" of SCR-05 (STORY-06.06 AC-4; UX spec SCR-05 states and the G3 screen): read-only, and **no price** (NFR-002); a status is not a cost. */
 export const APPROVED_LOCKED_TITLE = 'Approved and locked.';
 export const APPROVED_LOCKED_BODY = 'This estimate is closed and the task has moved to Closed. Inputs cannot be changed.';

@@ -20,6 +20,7 @@ import {
 } from '../../support/approval-helpers';
 import { type CalculationDatabase, idOf, openCalculationDatabase } from '../../support/calculation-database';
 import { defined } from '../../support/defined';
+import { changeContext } from '../../support/customer-change';
 
 /**
  * STORY-06.05 AC-1 to AC-5 and AC-8 (FR-101, D-20; NFR-007; architecture sections 4.8 and 6 "Approve") against real PostgreSQL in a throwaway database, as the **runtime role**: the guard of an approval over
@@ -41,8 +42,8 @@ afterAll(async () => {
 });
 
 describe('AC-1: a never-calculated estimate is the 409 NOT_CALCULATED', () => {
-  it('a Submitted estimate with no calculation is refused, and nothing changes', async () => {
-    const estimateId = await db.addEstimate({ status: 'SUBMITTED', engineer: true });
+  it('a Prepared estimate with no calculation is refused, and nothing changes', async () => {
+    const estimateId = await db.addEstimate({ status: 'PREPARED', engineer: true });
     const before = await storedOf(db, estimateId);
     await expect(db.approvalService.approve(lead(), estimateId, request(UNKNOWN_CALCULATION_ID))).rejects.toMatchObject({ httpStatus: 409, code: NOT_CALCULATED_CODE });
     expect(await storedOf(db, estimateId)).toEqual(before);
@@ -53,7 +54,7 @@ describe('AC-2: every way an input can change makes the approval a 409 TOTALS_OU
   it.each([
     ['a typed number', async (estimateId: string, top: string) => db.estimateService.saveInputs(lead(), estimateId, { nodeId: top, revision: await revisionOf(db, top), values: { [idOf('J')]: '91' } })],
     ['Remarks', async (estimateId: string, top: string) => db.estimateService.saveInputs(lead(), estimateId, { nodeId: top, revision: await revisionOf(db, top), values: { [idOf('AJ')]: 'Deburr the edge.' } })],
-    ['a part added', async (estimateId: string, top: string) => db.estimateService.addPart(lead(), estimateId, { kind: 'beside', nodeId: top })],
+    ['a part added', async (estimateId: string) => db.estimateService.addPart(lead(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })],
   ])('%s', async (_name, change) => {
     const { estimateId, top } = await calculatedEstimate(db);
     const seen = await currentCalculationOf(db, estimateId);
@@ -66,8 +67,8 @@ describe('AC-2: every way an input can change makes the approval a 409 TOTALS_OU
   it('the customer changed', async () => {
     const { estimateId } = await calculatedEstimate(db);
     const seen = await currentCalculationOf(db, estimateId);
-    const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Approval Guard Customer') RETURNING id::text AS id");
-    await db.estimateService.setCustomer(lead(), estimateId, defined(rows[0]).id);
+    const { rows } = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Approval Guard Customer', left(md5('Approval Guard Customer'), 10)) RETURNING id::text AS id");
+    await db.estimateService.setCustomer(lead(), changeContext(lead()), estimateId, defined(rows[0]).id);
     await expect(db.approvalService.approve(lead(), estimateId, request(seen))).rejects.toMatchObject({ code: TOTALS_OUT_OF_DATE_CODE });
   });
 });
@@ -91,9 +92,9 @@ describe('AC-3: the calculationId must be the current calculation', () => {
   });
 });
 
-describe("AC-4: a status that is not SUBMITTED is the state machine's 409", () => {
+describe("AC-4: a status that is not PREPARED is the state machine's 409", () => {
   it.each([
-    ['DRAFT', 'NOT_SUBMITTED'],
+    ['DRAFT', 'NOT_PREPARED'],
     ['APPROVED', 'ALREADY_APPROVED'],
   ] as const)('%s', async (status, reason) => {
     const { estimateId } = await calculatedEstimate(db);
@@ -149,7 +150,7 @@ describe("AC-5: the order of the checks, under the estimate's lock", () => {
       // The save took the lock first: it landed, the figures are out of date, and the approval was refused and wrote nothing.
       expect(saveRefusal).toBeUndefined();
       expect(approvalRefusal).toMatchObject({ httpStatus: 409, code: TOTALS_OUT_OF_DATE_CODE });
-      expect(after).toEqual({ revision: before + 1, status: 'SUBMITTED' });
+      expect(after).toEqual({ revision: before + 1, status: 'PREPARED' });
     }
   });
 });

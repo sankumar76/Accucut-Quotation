@@ -88,7 +88,7 @@ export async function resetWorld(): Promise<void> {
 export const setActive = (id: string, active: boolean): Promise<unknown> => db.owner.query('UPDATE users SET is_active = $2 WHERE id = $1::uuid', [id, active]);
 export const setAlerts = (on: boolean): Promise<unknown> => db.owner.query('UPDATE settings SET alerts_enabled = $1 WHERE id = 1', [on]);
 export const setDeadline = (id: string, deadline: Date): Promise<unknown> => db.owner.query('UPDATE tasks SET deadline_at = $2 WHERE id = $1::uuid', [id, deadline]);
-export const setStatus = (id: string, status: 'DRAFT' | 'SUBMITTED' | 'APPROVED'): Promise<unknown> =>
+export const setStatus = (id: string, status: 'DRAFT' | 'PREPARED' | 'APPROVED'): Promise<unknown> =>
   db.owner.query('UPDATE estimates SET status = $2::estimate_status WHERE task_id = $1::uuid', [id, status]);
 
 /** Task codes are unique to a call (the table's unique key, and a shared Mailpit is searched by subject). `reserveCodes(n)` takes `n` of them at once. Set by `openWorld`. */
@@ -103,14 +103,14 @@ export interface Seed {
   readonly deadline: Date;
   readonly engineer?: string;
   readonly assigner?: string;
-  readonly status?: 'DRAFT' | 'SUBMITTED' | 'APPROVED';
-  readonly title?: string | null;
+  readonly status?: 'DRAFT' | 'PREPARED' | 'APPROVED';
+  readonly title?: string;
 }
 
 /** A task and its estimate. */
 export async function seed({ deadline, engineer = engineerId, assigner = leadId, status = 'DRAFT', title = 'Hopper cover' }: Seed): Promise<{ readonly id: string; readonly code: string }> {
   const code = `Q-2026-${reserveCodes(1)}`;
-  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6) RETURNING id::text', [
+  const { rows } = await db.owner.query<{ id: string }>('INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, \'Invented subject\') RETURNING id::text', [
     code,
     engineer,
     assigner,

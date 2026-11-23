@@ -38,7 +38,8 @@ Standard, one disk of about 100 GB.
    ```
 
    (Without `-Sha256` it uses the `.sha256` file next to the zip. That only guards against a damaged download.)
-5. It checks the zip's SHA-256 first, then asks a few questions: the address people will type, the first Admin's e-mail address and a first
+5. It checks the zip's SHA-256 first, then asks a few questions: the address people will type (the proxy's https address, such as
+   `https://portal.example.test`, with no port: see "Reverse proxy"), the first Admin's e-mail address and a first
    password, **the age public key for the backups**, the PostgreSQL administrator password and, if you use it, mail settings. It invents every other secret itself.
 6. It installs, starts the portal and waits until `/api/health` answers, then **runs the weekly backup once** (the first backup, see "Backups" below). When it
    ends with **Done**, open the address you gave and sign in as the first Admin. You will be asked to choose a new password.
@@ -50,7 +51,7 @@ For an install with no one at the keyboard, copy `values.example.txt`, fill it i
 
 Useful switches: `-Root` (not `C:\Accucut`; exactly one folder below a drive, such as `D:\Accucut`), `-Port` (not 3000), `-NodeExe` (not
 `C:\Program Files\nodejs\node.exe`), `-WithProxy` (a TLS proxy such as Caddy or IIS will stand in front: the portal
-listens on 127.0.0.1 only and Windows Firewall opens TCP 80 and 443; **you install the proxy**), `-DefenderExclusion Yes|No|Ask`, `-AdminAccount <DOMAIN\user>` (the Admin's own, limited Windows account: sets up the JEA endpoint of the guided restore, see "Restore a backup").
+listens on 127.0.0.1 only and Windows Firewall opens TCP 80 and 443; **you install the proxy, as "Reverse proxy" below says. Use this switch on every server that people use**: without it the portal answers plain http on every address, sign-in works only in a browser on the server itself, and the sign-in limits can be dodged), `-DefenderExclusion Yes|No|Ask`, `-AdminAccount <DOMAIN\user>` (the Admin's own, limited Windows account: sets up the JEA endpoint of the guided restore, see "Restore a backup").
 
 ### Why the install runs in two halves
 
@@ -128,6 +129,220 @@ and that group may also read the three settings files above (so `backup.pgpass` 
 too: Administrators and SYSTEM full control, `AccucutBackup` Modify, and **no entry for the portal's own services**, so a taken-over portal can neither read
 nor delete a backup.
 
+## Reverse proxy (required on every server people use)
+
+The portal does not speak https itself. A **TLS reverse proxy** on the same server takes the https connection and passes each request to the portal at
+`http://127.0.0.1:3000` (or your `-Port`). The portal's security depends on what that proxy does. This section says what it must do, gives a configuration
+for each of the two proxies we describe, and ends with a checklist you tick. Design: architecture section 8 ("Reverse proxy contract") and
+[ADR-017](../../docs/04-architecture/adr/ADR-017-export-limits-from-target-host.md) (export time and memory).
+
+**Which proxy.** **Caddy** is the one we support and describe first: one small program, one text file, no other Windows roles. **IIS** (with URL Rewrite and
+Application Request Routing) is described second, for a server where Accucut IT already runs IIS. The delivery team has not run the IIS configuration;
+the checklist at the end is what proves it on your server. Use one proxy only, directly in front of the portal. If another device (a load balancer or a
+firewall that ends TLS) also forwards to this server, stop and ask the delivery team first: the sign-in limits would then see that device's address for
+everyone.
+
+### What the proxy must do, and why
+
+| # | The proxy must | Why the portal needs it | Caddy | IIS |
+|---|----------------|-------------------------|-------|-----|
+| P1 | **End TLS** (TLS 1.2 or later) with a certificate for the address people type, and send plain http to `https://` | The session cookie is `__Secure-`, Secure-only. Over plain http no browser except one on the server itself keeps it, so nobody can sign in. `APP_ORIGIN` in `C:\Accucut\config\.env` must be exactly that https address, with no port and no path (for example `https://portal.example.test`), or every save is refused by the portal's same-origin check | `tls` line, automatic redirect | https binding, HSTS redirect |
+| P2 | **Put the address of the connecting computer as the last entry of `X-Forwarded-For`, and never pass on an address the browser sent as if it were real** | The sign-in, password-change and password-reset limits count failures per address, and take that address from the **last** entry of `X-Forwarded-For` (`src/server/auth/client-address.ts`). If the proxy passes on what the browser sent, an attacker gets a fresh counter on every request by inventing an address. If the proxy sends nothing, or adds a port (`198.51.100.4:51234` is not an address), every caller shares one counter, so one person's typos can lock out the whole office | default; never set `trusted_proxies` | `includePortInXForwardedFor` False |
+| P3 | **Add `Strict-Transport-Security: max-age=31536000`** and **remove the `Server` header**, and **pass the portal's own security headers through unchanged** | HSTS belongs to whatever ends TLS, so the proxy is its only sender. The portal sends `Content-Security-Policy` (with `frame-ancestors 'none'`, which stops other sites framing the sign-in or the Approve and Unlock dialogs), `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` and `Permissions-Policy` itself (DEF-054); the proxy must not add, change or strip them | `header` block | site `hsts`, `removeServerHeader` |
+| P4 | **Keep the query string out of its access log** | The password-reset link is `https://<address>/reset-password?token=<secret>`. A log that records query strings would hold working reset links for an hour (#560 SQR-03) | `query` filter deletes `token` | the W3C field `cs-uri-query` is off |
+| P5 | **Refuse a request body over 1 MB** | The portal reads up to 10 MB of a request into memory before its own checks run (#410). The largest real body is a picture upload of 256 KB | `request_body max_size 1MB` | `maxAllowedContentLength` 1048576 |
+| P6 | **Drop an idle connection to the portal sooner than the portal drops it**: proxy 60 s, portal 125 s | A proxy that re-sends a request on a connection the portal is closing at that moment gives the person a random 502 or a lost save (RISK-032). Node's own default is 5 s, shorter than both proxies' defaults, so the portal service sets `KEEP_ALIVE_TIMEOUT=125000` (125 s) | `keepalive 60s` | (not adjustable: see the note) |
+| P7 | **Wait up to 6 minutes for an answer** from the portal | The largest export (500 parts with pictures) can take minutes on a slow server, and the portal allows a build up to `EXPORT_TIMEOUT_SECONDS` (240 s by default, at most 300; ADR-017). A proxy that gives up first throws the file away | no response timeout (default) | proxy `timeout` 00:06:00 |
+| P8 | **Be the only way in**: the portal listens on 127.0.0.1 only | Anything that reaches port 3000 directly skips P1 to P5 | `-WithProxy` at install | `-WithProxy` at install |
+
+**The portal's side, for the developer (#576).** The service file `AccucutApp.xml` carries `<env name="KEEP_ALIVE_TIMEOUT" value="125000"/>` (P6; Next.js's
+standalone `server.js` reads it) and `--max-old-space-size=1024` (ADR-017). `GET /api/health` answers with a header `X-Client-Address-Seen`, giving the address
+the portal worked out (or `none`), so that check C5 can see P2 working. With `-WithProxy`, the install refuses an `APP_ORIGIN` that is not `https://`, and
+ends with checks C2, C3 and C5 against `APP_ORIGIN`. Until those land, tick C5 by reading the configuration (no `trusted_proxies` in the Caddyfile;
+`includePortInXForwardedFor` False in IIS).
+
+### Certificates
+
+The proxy needs a certificate for the address people type, which every phone, tablet and PC that uses the portal already trusts. Choose one:
+
+- **A certificate from your own certificate authority or a bought one** (the usual case on an office network). Caddy needs it as two PEM files: the certificate with
+  its chain, and the private key. IIS takes a `.pfx`. Keep the private key readable by Administrators and the proxy only.
+- **A free public certificate that Caddy fetches and renews by itself.** This works only if the address is a public DNS name pointing to this server, and ports 80
+  and 443 are reachable from the internet. Leave the `tls` line out of the Caddyfile.
+- **Not supported:** a self-signed certificate or Caddy's `tls internal`. Every device would show a warning or need a root installed by hand, and HSTS (P3)
+  then forbids clicking past the warning.
+
+### Caddy (supported)
+
+1. Download **Caddy 2.10 or a later 2.x** for Windows amd64 from the Caddy project's GitHub releases. Check the zip's SHA-256 against the checksums file of that
+   release (`Get-FileHash <zip> -Algorithm SHA256`).
+2. As an administrator, make the folders and copy `caddy.exe` into `C:\AccucutProxy`, and the certificate and key into `C:\AccucutProxy\certs`:
+
+   ```powershell
+   New-Item -ItemType Directory C:\AccucutProxy, C:\AccucutProxy\data, C:\AccucutProxy\logs, C:\AccucutProxy\certs | Out-Null
+   ```
+
+3. Save this as `C:\AccucutProxy\Caddyfile`. Replace `portal.example.test` with your address, the two certificate file names with yours, and `3000` with your
+   `-Port` if you changed it. Forward slashes are correct in Windows paths here.
+
+   ```caddyfile
+   {
+   	# No admin endpoint on the server; restart the service to apply a change.
+   	admin off
+   	storage file_system C:/AccucutProxy/data
+   	servers {
+   		timeouts {
+   			read_header 10s
+   			read_body 30s
+   			idle 2m
+   			# No write timeout: a large export is a long answer (P7).
+   		}
+   	}
+   	# Caddy's own messages (502s and other errors). The filter keeps a reset token out of them too (P4).
+   	log {
+   		output file C:/AccucutProxy/logs/caddy.log {
+   			roll_keep_for 720h
+   		}
+   		format filter {
+   			request>uri query {
+   				delete token
+   			}
+   		}
+   	}
+   }
+
+   portal.example.test {
+   	# P1. Leave this line out to let Caddy fetch a public certificate (see "Certificates").
+   	tls C:/AccucutProxy/certs/portal.crt C:/AccucutProxy/certs/portal.key
+
+   	# P5
+   	request_body {
+   		max_size 1MB
+   	}
+
+   	# P3: HSTS from the proxy only; Caddy's own Server header removed. The portal's other headers pass through untouched.
+   	header {
+   		Strict-Transport-Security "max-age=31536000"
+   		-Server
+   	}
+
+   	# P2 is Caddy's default: it replaces any X-Forwarded-For the browser sent with the real address. Never add trusted_proxies here.
+   	reverse_proxy 127.0.0.1:3000 {
+   		transport http {
+   			# P6: shorter than the portal's 125 s.
+   			keepalive 60s
+   			# P7: no read_timeout or response_header_timeout (none by default).
+   		}
+   	}
+
+   	# P4: the access log, with the reset token removed from every address it records. Kept 30 days.
+   	log {
+   		output file C:/AccucutProxy/logs/access.log {
+   			roll_keep_for 720h
+   		}
+   		format filter {
+   			request>uri query {
+   				delete token
+   			}
+   		}
+   	}
+   }
+   ```
+
+4. Check the file, then register Caddy as the service `AccucutProxy`, under its own virtual account and never LocalSystem. Give that account read access to
+   the program, the file and the certificates, and write access to `data` and `logs` only. (The `icacls` lines come after `sc.exe config`, because the
+   account `NT SERVICE\AccucutProxy` exists only once the service does. Keep the folder name free of spaces, as the service command line has no quotes.)
+
+   ```powershell
+   & C:\AccucutProxy\caddy.exe validate --config C:\AccucutProxy\Caddyfile --adapter caddyfile
+   sc.exe create AccucutProxy start= delayed-auto DisplayName= "Accucut Quotation Portal (TLS proxy)" binPath= "C:\AccucutProxy\caddy.exe run --config C:\AccucutProxy\Caddyfile --adapter caddyfile"
+   sc.exe config AccucutProxy obj= "NT SERVICE\AccucutProxy"
+   sc.exe failure AccucutProxy reset= 86400 actions= restart/10000/restart/30000/restart/60000
+   icacls C:\AccucutProxy /inheritance:r /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "NT SERVICE\AccucutProxy:(OI)(CI)RX"
+   icacls C:\AccucutProxy\data /grant "NT SERVICE\AccucutProxy:(OI)(CI)M"
+   icacls C:\AccucutProxy\logs /grant "NT SERVICE\AccucutProxy:(OI)(CI)M"
+   Start-Service AccucutProxy
+   ```
+
+   After any change to the Caddyfile, run the `validate` line again, then `Restart-Service AccucutProxy`. If the service does not start, read
+   `C:\AccucutProxy\logs\caddy.log`.
+
+### IIS (alternative, where IIS is already in use)
+
+Needs the Web Server (IIS) role, and Microsoft's **URL Rewrite 2.1** and **Application Request Routing 3.0** installed. The site is named `Accucut` below. As an
+administrator:
+
+1. Make a site `Accucut` with an **https** binding for your address and your certificate (a `.pfx` imported into the computer's certificate store). Add an http
+   binding on port 80 for the redirect. Its folder (for example `C:\inetpub\accucut`) holds only the `web.config` below.
+2. Server-wide ARR settings (P2, P7, and the Host header kept):
+
+   ```powershell
+   $appcmd = "$env:windir\System32\inetsrv\appcmd.exe"
+   & $appcmd set config -section:system.webServer/proxy /enabled:"True" /preserveHostHeader:"True" /reverseRewriteHostInResponseHeaders:"False" /includePortInXForwardedFor:"False" /timeout:"00:06:00" /commit:apphost
+   ```
+
+   If `appcmd` says an attribute is unknown, your ARR version differs from the one this was written for. Stop and ask the delivery team: P2 must not be
+   guessed.
+3. HSTS and the redirect to https (P1, P3), and the access log without the query string (P4):
+
+   ```powershell
+   & $appcmd set config -section:system.applicationHost/sites "/[name='Accucut'].hsts.enabled:True" "/[name='Accucut'].hsts.max-age:31536000" "/[name='Accucut'].hsts.redirectHttpToHttps:True" /commit:apphost
+   & $appcmd set config -section:system.applicationHost/sites "/[name='Accucut'].logFile.logExtFileFlags:Date,Time,ClientIP,ServerIP,Method,UriStem,HttpStatus,HttpSubStatus,Win32Status,TimeTaken,ServerPort,UserAgent" /commit:apphost
+   ```
+
+   Do not turn on Failed Request Tracing for this site: it records full addresses.
+4. The site's `web.config` (P3, P5, and the forwarding itself). `{UNENCODED_URL}` passes the path and query string exactly as the browser sent them:
+
+   ```xml
+   <?xml version="1.0" encoding="UTF-8"?>
+   <configuration>
+     <system.webServer>
+       <rewrite>
+         <rules>
+           <rule name="Accucut portal" stopProcessing="true">
+             <match url=".*" />
+             <action type="Rewrite" url="http://127.0.0.1:3000{UNENCODED_URL}" appendQueryString="false" />
+           </rule>
+         </rules>
+       </rewrite>
+       <security>
+         <requestFiltering removeServerHeader="true">
+           <requestLimits maxAllowedContentLength="1048576" />
+         </requestFiltering>
+       </security>
+       <httpProtocol>
+         <customHeaders>
+           <remove name="X-Powered-By" />
+         </customHeaders>
+       </httpProtocol>
+     </system.webServer>
+   </configuration>
+   ```
+
+**Note on P6 for IIS.** ARR re-uses its connections to the portal but has no setting for how long it keeps an idle one. The portal's 125 s is meant to be longer,
+but this is not proven for IIS. C9 is the check: if IIS logs show 502 with sub-status 3, tell the delivery team.
+
+### Checklist (tick each one after the install, and again after any proxy change)
+
+Run these in PowerShell. Use `curl.exe` (part of Windows Server 2019 and later), not `curl`, which in Windows PowerShell 5.1 is another command. Replace
+`portal.example.test` with your address. Run C1, C4 and C5 **from another computer** on the office network, not from the server.
+
+| # | Check | Command | Pass when |
+|---|-------|---------|-----------|
+| C1 | P1: https works with no certificate warning | `curl.exe -sS -o NUL -w "%{http_code}\n" https://portal.example.test/sign-in`, and open the address on one phone and one PC | `200`, and the browsers show no warning |
+| C2 | P1: http goes to https | `curl.exe -sS -o NUL -w "%{http_code} %{redirect_url}\n" http://portal.example.test/sign-in` | `301` or `308`, then `https://portal.example.test/sign-in` |
+| C3 | P3: the headers | `curl.exe -sSI https://portal.example.test/sign-in` | `strict-transport-security: max-age=31536000` once; `content-security-policy` holding `frame-ancestors 'none'`; `x-content-type-options: nosniff`; `x-frame-options: DENY`; `referrer-policy`; `permissions-policy`; no `server:` and no `x-powered-by:` line |
+| C4 | P8: no way round the proxy | `curl.exe -sS -m 5 http://<the server's own address>:3000/api/health` | It fails (refused or timed out) |
+| C5 | P2: the real address, last | `curl.exe -sSI -H "X-Forwarded-For: 203.0.113.7" https://portal.example.test/api/health` | `x-client-address-seen` is the address of the computer you ran it on: not `203.0.113.7`, not `none`, and no `:port` |
+| C6 | P5: the body cap | `fsutil file createnew "$env:TEMP\accucut-2mb.bin" 2097152`, then `curl.exe -sS -o NUL -w "%{http_code}\n" -X POST -H "Content-Type: application/json" --data-binary "@$env:TEMP\accucut-2mb.bin" https://portal.example.test/api/v1/account/password/forgot` | `413` (Caddy) or `404` (IIS; its log shows sub-status 13). Delete the file afterwards |
+| C7 | P4: no reset token in any log | Open `https://portal.example.test/reset-password?token=accucut-log-check` in a browser (it says the link does not work), wait a minute (IIS: `netsh http flush logbuffer`), then `Select-String -Path C:\AccucutProxy\logs\*.log -Pattern accucut-log-check` (IIS: the site's folder under `C:\inetpub\logs\LogFiles\`) | No output |
+| C8 | P6: the keep-alive pair | `Select-String -Path C:\Accucut\services\AccucutApp.xml -Pattern KEEP_ALIVE_TIMEOUT`, and the Caddyfile's `keepalive 60s` | `value="125000"`, and `60s` (IIS: the first part only) |
+| C9 | P6, P7: a working day without proxy errors (at the rehearsal, and after go-live) | `Select-String -Path C:\AccucutProxy\logs\caddy.log -Pattern '"status":502'` (IIS: lines with ` 502 3 ` in the site's log) | No output during a day of normal use that includes the largest export downloaded through the https address |
+| C10 | The proxy comes back by itself | Restart the server and wait 3 minutes, with nobody signed in | C1 passes |
+
+Keep the ticked list with the install record. A failed C3 to C7 means the portal is running with a weaker defence than it was designed for: fix it before people
+start using the portal.
+
 ## Update (about 5 minutes, under a minute of interruption)
 
 ```powershell
@@ -170,6 +385,31 @@ the previous release are kept.
 | See the last backups | `Get-ChildItem C:\Accucut\backups` as an administrator, or the "Last backup" line on the portal's Settings page (Admin). |
 
 After a Windows Update reboot both services start by themselves, a minute or so after PostgreSQL (NFR-012).
+
+## Uptime monitor (NFR-012)
+
+The portal should answer **99 % of the time** (NFR-012). The way to know when it does not is an **external monitor**: a free or paid web service that asks the portal's health address every **5 minutes** and tells the IT person when the answer is wrong. It runs outside the server, so it also notices a server that is switched off or cut off from the network, which nothing on the server can report. **Setting it up is a human step for the IT person after go-live and is not a condition for accepting a release** (it needs the web address of the portal, which Accucut IT has not given yet: Q-18).
+
+What to give the monitor:
+
+| Setting | Value |
+|---------|-------|
+| Type | HTTP(S) monitor (not "ping") |
+| Address | The portal's web address followed by `/api/health`, for example `https://quotes.example.test/api/health` (the address is Accucut's; the example is invented). The path needs no sign-in and no value in the request |
+| Interval | **5 minutes** |
+| Healthy answer | HTTP **200** with the body `{"status":"ok"}`. If the service can look for a word in the answer, the word `ok` is enough |
+| Alert when | The answer is anything else, or there is no answer. If the service lets you wait for **2 checks in a row** (10 minutes) before it alerts, do so: one slow reply or a restart for an update then wakes nobody |
+| Who receives the alerts | **The IT person who looks after the server** (the one who ran the install), by e-mail. Add a second address, such as the delivery lead's, if Accucut wants a back-up reader. The portal's own e-mail cannot be the alert route: if the portal is down, it cannot send |
+
+**What a 503 means.** The portal answers **503** with `{"status":"unavailable"}` in two cases, and the answer never says which (it reveals nothing about the server to a stranger): the **database** did not answer, or the **worker** has stopped (it writes a heartbeat every minute, and the check turns red when the newest one is 3 minutes old). Alerts that come with no answer at all (a timeout, no connection) mean the server, the network or the reverse proxy is down, or the web address is wrong. For any of these:
+
+1. On the server, run `Get-Service AccucutApp, AccucutWorker, postgresql-x64-17`. Start what is stopped (`Start-Service`), PostgreSQL first.
+2. If a service keeps stopping, read `AccucutApp.*.err.log` and `AccucutWorker.*.err.log` in `C:\Accucut\logs\` (the "Look and fix" table above says where to begin).
+3. Open `http://127.0.0.1:3000/api/health` on the server. `200` with `{"status":"ok"}` there but an alert from outside means the fault is between the monitor and the server: the reverse proxy, the certificate, the firewall or DNS.
+
+An update and a restart take the portal down for under a minute (see "Update"); that is why waiting for two checks is worth setting.
+
+**Which service, and the plan terms (architecture A-02).** The service chosen at the design review is **UptimeRobot**. Sources disagree on whether its **free plan allows business use**, so **Accucut IT must read the current terms** before relying on it, or buy the paid plan. Any external HTTP monitor with a **5-minute** interval meets NFR-012, so the choice is easy to change: use another service if the terms do not suit. Whatever is chosen, **read the monitor's own report once a month** and note the percentage: 99 % is about 7 hours of downtime in a month.
 
 ## Backups (STORY-10.05)
 

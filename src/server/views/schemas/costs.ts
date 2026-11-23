@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { NODE_KINDS } from '../../../lib/estimate/node-kinds';
+
 /**
  * The contract of `GET /api/v1/estimates/{id}/costs` (STORY-06.02 AC-4; architecture sections 4.3, 4.8 and 6 "Cost"): the figures of the estimate review (SCR-06), for the Lead and
  * the Admin only. **Restricted** (NFR-002, ADR-008): every figure here is a cost, so nothing an Engineer may call has a schema like this one. The route is in the manifest for the Lead and
@@ -35,6 +37,8 @@ const costNodeSchema = z.strictObject({
   id: z.string().min(1),
   parentId: z.string().min(1).nullable(),
   slNo: z.string().min(1),
+  /** The row's stored kind (CR-01 item 3B: the review tree draws its icon). It holds no figure; this view is the Lead's and the Admin's, and the Engineer's tree carries the same fact (`treePartSchema`). */
+  nodeKind: z.enum(NODE_KINDS),
   /** The part's name as typed (Description, else Part No.), or an empty text when neither was typed. */
   name: z.string(),
   count: decimalText.nullable(),

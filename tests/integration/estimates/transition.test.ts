@@ -12,6 +12,7 @@ import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
 import { inputsDependencies } from '../../support/estimate-inputs-deps';
+import { auditFor, changeContext } from '../../support/customer-change';
 
 /**
  * STORY-06.01 T5 (AC-1 to AC-6) against real PostgreSQL in a throwaway database: the estimate service's `transition` over the real repository and the real row
@@ -39,7 +40,7 @@ beforeAll(async () => {
   db = await openAuthDatabase();
   estimates = createEstimateRepository(db.prisma);
   runner = createTransactionRunner(db.prisma);
-  service = createEstimateService({ estimates, nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions: runner, ...inputsDependencies() });
+  service = createEstimateService({ estimates, audit: auditFor(db), nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions: runner, ...inputsDependencies() });
   const version = await db.owner.query<{ id: string }>("INSERT INTO config_versions (number, snapshot, reason) VALUES (1, '{}'::jsonb, 'Invented transition test') RETURNING id::text AS id");
   configVersionId = defined(version.rows[0]).id;
   leadId = await insertPersonAsOwner(db, 'Transition Lead', 'LEAD');
@@ -71,11 +72,11 @@ const admin = () => ({ id: adminId, role: 'ADMIN' as const });
 async function setUpEstimate(status: EstimateStatus, options: { withCalculation?: boolean } = {}): Promise<string | null> {
   taskNumber += 1;
   const task = await db.owner.query<{ id: string }>(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at)
-     VALUES ($4, $1::uuid, $2::uuid, $3, '2026-11-12T11:30:00Z') RETURNING id::text AS id`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject)
+     VALUES ($4, $1::uuid, $2::uuid, $3, '2026-11-12T11:30:00Z', 'Invented task', 'Invented subject') RETURNING id::text AS id`,
     [arjunId, leadId, PATH, `Q-2026-${String(5000 + taskNumber)}`],
   );
-  const customer = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text AS id', [`Transition Brightwater Controls ${String(taskNumber)}`]);
+  const customer = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text AS id', [`Transition Brightwater Controls ${String(taskNumber)}`]);
   customerId = defined(customer.rows[0]).id;
   const estimate = await db.owner.query<{ id: string }>(
     'INSERT INTO estimates (task_id, customer_id, status, inputs_revision) VALUES ($1::uuid, $2::uuid, $3::estimate_status, 4) RETURNING id::text AS id',
@@ -112,11 +113,11 @@ const stored = async (): Promise<Stored> => {
 
 describe('AC-1: the allowed pairs move the status by one step, in the database', () => {
   it.each<[EstimateStatus, EstimateEvent, 'ENGINEER' | 'LEAD' | 'ADMIN', EstimateStatus]>([
-    ['DRAFT', 'CALCULATE', 'ENGINEER', 'SUBMITTED'],
-    ['DRAFT', 'RECALCULATE', 'LEAD', 'SUBMITTED'],
-    ['SUBMITTED', 'RECALCULATE', 'ADMIN', 'SUBMITTED'],
-    ['SUBMITTED', 'EDIT', 'LEAD', 'SUBMITTED'],
-    ['SUBMITTED', 'APPROVE', 'LEAD', 'APPROVED'],
+    ['DRAFT', 'CALCULATE', 'ENGINEER', 'PREPARED'],
+    ['DRAFT', 'RECALCULATE', 'LEAD', 'PREPARED'],
+    ['PREPARED', 'RECALCULATE', 'ADMIN', 'PREPARED'],
+    ['PREPARED', 'EDIT', 'LEAD', 'PREPARED'],
+    ['PREPARED', 'APPROVE', 'LEAD', 'APPROVED'],
     ['APPROVED', 'UNLOCK', 'LEAD', 'DRAFT'],
     ['APPROVED', 'CANCEL', 'ADMIN', 'DRAFT'],
     ['APPROVED', 'EXPORT', 'ADMIN', 'APPROVED'],
@@ -132,11 +133,11 @@ describe('AC-1, AC-5: a refused transition leaves the row exactly as it was', ()
   it.each<[EstimateStatus, EstimateEvent, 'ENGINEER' | 'LEAD' | 'ADMIN', new (...args: never[]) => Error]>([
     ['DRAFT', 'APPROVE', 'LEAD', ConflictError],
     ['DRAFT', 'UNLOCK', 'ADMIN', ConflictError],
-    ['SUBMITTED', 'CALCULATE', 'ENGINEER', ConflictError],
+    ['PREPARED', 'CALCULATE', 'ENGINEER', ConflictError],
     ['APPROVED', 'RECALCULATE', 'LEAD', ConflictError],
     ['APPROVED', 'APPROVE', 'ADMIN', ConflictError],
     ['APPROVED', 'CANCEL', 'LEAD', ForbiddenError],
-    ['SUBMITTED', 'APPROVE', 'ENGINEER', NotFoundError],
+    ['PREPARED', 'APPROVE', 'ENGINEER', NotFoundError],
   ])('%s + %s by %s is refused', async (status, event, role, expected) => {
     await setUpEstimate(status);
     const before = await stored();
@@ -156,17 +157,17 @@ describe('AC-1, AC-5: a refused transition leaves the row exactly as it was', ()
 });
 
 describe('AC-4: two transitions at once are serialised by the estimate row lock', () => {
-  it('two Calculates: one wins, the other is 409, and the status is SUBMITTED', async () => {
+  it('two Calculates: one wins, the other is 409, and the status is PREPARED', async () => {
     await setUpEstimate('DRAFT');
     const results = await Promise.allSettled([service.transition(arjun(), estimateId, 'CALCULATE'), service.transition(arjun(), estimateId, 'CALCULATE')]);
     expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
     const rejected = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
     expect(rejected?.reason).toBeInstanceOf(ConflictError);
-    expect((await stored()).status).toBe('SUBMITTED');
+    expect((await stored()).status).toBe('PREPARED');
   });
 
   it('two approvals: one wins, the other is 409', async () => {
-    await setUpEstimate('SUBMITTED');
+    await setUpEstimate('PREPARED');
     const results = await Promise.allSettled([service.transition(lead(), estimateId, 'APPROVE'), service.transition(admin(), estimateId, 'APPROVE')]);
     expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
     expect((await stored()).status).toBe('APPROVED');
@@ -181,10 +182,10 @@ describe('AC-4: two transitions at once are serialised by the estimate row lock'
   });
 
   it('an approval and a customer change at once: the customer changes only if it came first, and then the revision counts it; the status ends APPROVED either way', async () => {
-    await setUpEstimate('SUBMITTED');
-    const other = await db.owner.query<{ id: string }>("INSERT INTO customers (name) VALUES ('Transition Marlow Agro Systems') RETURNING id::text AS id");
+    await setUpEstimate('PREPARED');
+    const other = await db.owner.query<{ id: string }>("INSERT INTO customers (name, short_name) VALUES ('Transition Marlow Agro Systems', left(md5('Transition Marlow Agro Systems'), 10)) RETURNING id::text AS id");
     const otherId = defined(other.rows[0]).id;
-    const [approval, change] = await Promise.allSettled([service.transition(lead(), estimateId, 'APPROVE'), service.setCustomer(lead(), estimateId, otherId)]);
+    const [approval, change] = await Promise.allSettled([service.transition(lead(), estimateId, 'APPROVE'), service.setCustomer(lead(), changeContext(lead()), estimateId, otherId)]);
     expect(approval.status).toBe('fulfilled');
     const after = await stored();
     expect(after.status).toBe('APPROVED');
@@ -195,40 +196,40 @@ describe('AC-4: two transitions at once are serialised by the estimate row lock'
     }
   });
 
-  it('a status never skips: from DRAFT, a Recalculate and an approval at once end SUBMITTED or APPROVED by a path through SUBMITTED, never APPROVED from DRAFT', async () => {
+  it('a status never skips: from DRAFT, a Recalculate and an approval at once end PREPARED or APPROVED by a path through PREPARED, never APPROVED from DRAFT', async () => {
     await setUpEstimate('DRAFT');
     const [recalculate, approve] = await Promise.allSettled([service.transition(lead(), estimateId, 'RECALCULATE'), service.transition(lead(), estimateId, 'APPROVE')]);
     expect(recalculate.status).toBe('fulfilled');
-    // The approval is either queued behind the Recalculate (and then approves a SUBMITTED estimate) or ahead of it (and is refused as a DRAFT).
+    // The approval is either queued behind the Recalculate (and then approves a PREPARED estimate) or ahead of it (and is refused as a DRAFT).
     const after = await stored();
-    expect(after.status).toBe(approve.status === 'fulfilled' ? 'APPROVED' : 'SUBMITTED');
+    expect(after.status).toBe(approve.status === 'fulfilled' ? 'APPROVED' : 'PREPARED');
     if (approve.status === 'rejected') expect(approve.reason).toBeInstanceOf(ConflictError);
   });
 });
 
-describe('AC-2: the inputs of a submitted or an approved estimate are read-only for the Engineer', () => {
-  it.each<EstimateStatus>(['SUBMITTED', 'APPROVED'])('the Engineer cannot change the customer of a %s estimate: 409, nothing changes', async (status) => {
+describe('AC-2, CR-01 item 6 AC-7: the customer is not the Engineer\'s to change at any status', () => {
+  it.each<EstimateStatus>(['DRAFT', 'PREPARED', 'APPROVED'])('the Engineer is refused the customer of a %s estimate, their own: 403, and nothing changes', async (status) => {
     await setUpEstimate(status);
     const before = await stored();
-    await expect(service.setCustomer(arjun(), estimateId, customerId)).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.setCustomer(arjun(), changeContext(arjun()), estimateId, customerId)).rejects.toBeInstanceOf(ForbiddenError);
     expect(await stored()).toEqual(before);
   });
 });
 
-describe('AC-2, FR-064: a Lead or an Admin may change the inputs of a submitted estimate, and nobody an approved one', () => {
+describe('AC-2, FR-064: a Lead or an Admin may change the inputs of a prepared estimate, and nobody an approved one', () => {
   async function otherCustomer(): Promise<string> {
-    const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text AS id', [`Transition Marlow Agro Systems ${String(taskNumber)}`]);
+    const { rows } = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text AS id', [`Transition Marlow Agro Systems ${String(taskNumber)}`]);
     return defined(rows[0]).id;
   }
 
-  it.each<['LEAD' | 'ADMIN']>([['LEAD'], ['ADMIN']])('%s changes the customer of a SUBMITTED estimate: it is written, the revision goes up by 1, and the status stays SUBMITTED', async (role) => {
-    await setUpEstimate('SUBMITTED', { withCalculation: true });
+  it.each<['LEAD' | 'ADMIN']>([['LEAD'], ['ADMIN']])('%s changes the customer of a PREPARED estimate: it is written, the revision goes up by 1, and the status stays PREPARED', async (role) => {
+    await setUpEstimate('PREPARED', { withCalculation: true });
     const changeTo = await otherCustomer();
     const before = await stored();
     const viewer = { LEAD: lead, ADMIN: admin }[role]();
-    await expect(service.setCustomer(viewer, estimateId, changeTo)).resolves.toMatchObject({ id: estimateId, status: 'SUBMITTED' });
+    await expect(service.setCustomer(viewer, changeContext(viewer), estimateId, changeTo)).resolves.toMatchObject({ id: estimateId, status: 'PREPARED' });
     const after = await stored();
-    expect(after).toMatchObject({ status: 'SUBMITTED', customerId: changeTo, revision: before.revision + 1, calculationId: before.calculationId });
+    expect(after).toMatchObject({ status: 'PREPARED', customerId: changeTo, revision: before.revision + 1, calculationId: before.calculationId });
     expect(after.customerId).not.toBe(before.customerId);
   });
 
@@ -237,7 +238,7 @@ describe('AC-2, FR-064: a Lead or an Admin may change the inputs of a submitted 
     const changeTo = await otherCustomer();
     const before = await stored();
     const viewer = { LEAD: lead, ADMIN: admin }[role]();
-    await expect(service.setCustomer(viewer, estimateId, changeTo)).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.setCustomer(viewer, changeContext(viewer), estimateId, changeTo)).rejects.toBeInstanceOf(ConflictError);
     expect(await stored()).toEqual(before);
   });
 });
@@ -274,7 +275,7 @@ describe('SQR-01: transition joins the transaction its caller gives it', () => {
   }
 
   it('without tx it opens one transaction of its own; with tx it opens none and writes in the caller\'s', async () => {
-    await setUpEstimate('SUBMITTED');
+    await setUpEstimate('PREPARED');
     const own = countingRunner();
     const counted = createEstimateService({ estimates, nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions: own.counted, ...inputsDependencies() });
     await counted.transition(lead(), estimateId, 'RECALCULATE');
@@ -286,9 +287,9 @@ describe('SQR-01: transition joins the transaction its caller gives it', () => {
   });
 
   it("a failure after the transition, in the caller's transaction, rolls the status back together with the caller's own write", async () => {
-    await setUpEstimate('SUBMITTED');
+    await setUpEstimate('PREPARED');
     const before = await stored();
-    const other = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text AS id', [`Transition Marlow Agro Systems ${String(taskNumber)}`]);
+    const other = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text AS id', [`Transition Marlow Agro Systems ${String(taskNumber)}`]);
     const otherId = defined(other.rows[0]).id;
     await expect(
       runner.run(async (tx) => {
@@ -303,11 +304,11 @@ describe('SQR-01: transition joins the transaction its caller gives it', () => {
   });
 
   it("when the caller's transaction commits, the status and the caller's own write arrive together", async () => {
-    await setUpEstimate('SUBMITTED');
-    const other = await db.owner.query<{ id: string }>('INSERT INTO customers (name) VALUES ($1) RETURNING id::text AS id', [`Transition Marlow Agro Systems ${String(taskNumber)}`]);
+    await setUpEstimate('PREPARED');
+    const other = await db.owner.query<{ id: string }>('INSERT INTO customers (name, short_name) VALUES ($1, left(md5($1), 10)) RETURNING id::text AS id', [`Transition Marlow Agro Systems ${String(taskNumber)}`]);
     const otherId = defined(other.rows[0]).id;
     await runner.run(async (tx) => {
-      // The customer is written first, while the estimate is still SUBMITTED, then the status moves, all in one transaction.
+      // The customer is written first, while the estimate is still PREPARED, then the status moves, all in one transaction.
       await estimates.setCustomer(estimateId, otherId, tx);
       await service.transition(lead(), estimateId, 'APPROVE', tx);
     });
@@ -315,11 +316,11 @@ describe('SQR-01: transition joins the transaction its caller gives it', () => {
   });
 
   it("the caller's transaction holds the estimate's lock after the transition: another transition waits for the commit and then sees the new status", async () => {
-    await setUpEstimate('SUBMITTED');
+    await setUpEstimate('PREPARED');
     let waiting: Promise<unknown> = Promise.resolve();
     await runner.run(async (tx) => {
       await service.transition(lead(), estimateId, 'APPROVE', tx);
-      // A second connection asks for the same lock. Were the lock not held here it would read SUBMITTED and be refused as "not approved".
+      // A second connection asks for the same lock. Were the lock not held here it would read PREPARED and be refused as "not approved".
       waiting = service.transition(admin(), estimateId, 'UNLOCK');
       await new Promise((resolve) => setTimeout(resolve, 300));
     });

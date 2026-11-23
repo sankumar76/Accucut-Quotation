@@ -46,7 +46,7 @@ const summaryRoute = await import('@/app/api/v1/estimates/[id]/export-summary/ro
 const ORIGIN = 'https://portal.example.test';
 const UNKNOWN_ID = '00000000-0000-4000-8000-00000000dead';
 /** The harness fixes the clock of the service at 12:00 UTC on 14 November 2026: 17:30 IST the same day. */
-const DOWNLOAD_DATE = '2026-11-14';
+const DOWNLOAD_DATE = '14-11-2026';
 
 const estimate = () => defined(harness.estimateWorld.estimates[0]);
 const request = (): Request => new Request(`${ORIGIN}/api/v1/estimates/x/export`);
@@ -75,7 +75,7 @@ describe('AC-2, AC-4: the file', () => {
     const response = await getFile(estimate().id);
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toBe(XLSX_MIME);
-    expect(response.headers.get('Content-Disposition')).toBe(`attachment; filename="Quotation_Customer_${canaryTaskCodeFor(harness.targetId)}_${DOWNLOAD_DATE}.xlsx"`);
+    expect(response.headers.get('Content-Disposition')).toBe(`attachment; filename="Customer_Invented-subject_${DOWNLOAD_DATE}.xlsx"; filename*=UTF-8''Customer_Invented-subject_${DOWNLOAD_DATE}.xlsx`);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(response.headers.get('X-Request-Id')).toMatch(/^req-[0-9a-f]{8}$/);
@@ -90,18 +90,69 @@ describe('AC-2, AC-4: the file', () => {
     expect(readXlsxParts(bytes).has('xl/workbook.xml')).toBe(true);
   });
 
-  it('names the file after the customer: spaces become underscores and every other character outside A-Z a-z 0-9 _ - is removed', async () => {
+  it('names the file <short name>_<subject>_<date>: a short name and a subject with a space, a slash and non-ASCII letters reach the header encoded, and the summary and the header say the same name (AQP-391 AC-1, AC-5, AC-6, AC-8)', async () => {
     plantCalculation();
     const customer = defined(harness.masters.customers[0]);
-    const original = customer.name;
-    customer.name = 'Acme Tools & Dies, "Ltd"\r\n';
+    const originalShortName = customer.shortName;
+    const originalSubject = estimate().subject;
+    customer.shortName = 'M A/S';
+    estimate().subject = 'Kühler Ø 40 – 工场/x';
     estimate().customerId = customer.id;
     try {
-      const disposition = defined((await getFile(estimate().id)).headers.get('Content-Disposition'));
-      expect(disposition).toBe(`attachment; filename="Quotation_Acme_Tools__Dies_Ltd_${canaryTaskCodeFor(harness.targetId)}_${DOWNLOAD_DATE}.xlsx"`);
+      const response = await getFile(estimate().id);
+      const disposition = defined(response.headers.get('Content-Disposition'));
+      const expected = `M-A-S_Kühler-Ø-40-–-工场-x_${DOWNLOAD_DATE}.xlsx`;
+      expect(disposition).toBe(
+        `attachment; filename="M-A-S_Khler--40---x_${DOWNLOAD_DATE}.xlsx"; filename*=UTF-8''M-A-S_K%C3%BChler-%C3%98-40-%E2%80%93-%E5%B7%A5%E5%9C%BA-x_${DOWNLOAD_DATE}.xlsx`,
+      );
+      expect(decodeURIComponent(/filename\*=UTF-8''(.+)$/.exec(disposition)?.[1] ?? '')).toBe(expected);
+      expect(exportSummarySchema.parse(await (await getSummary(estimate().id)).json()).fileName).toBe(expected);
     } finally {
-      customer.name = original;
+      customer.shortName = originalShortName;
+      if (originalSubject === undefined) delete estimate().subject;
+      else estimate().subject = originalSubject;
     }
+  });
+
+  it('falls back to "Customer" while no customer is chosen, and to the task code for a subject that is empty after clean-up', async () => {
+    plantCalculation();
+    const originalSubject = estimate().subject;
+    estimate().subject = '\u200B';
+    try {
+      const disposition = defined((await getFile(estimate().id)).headers.get('Content-Disposition'));
+      expect(disposition).toContain(`filename="Customer_${canaryTaskCodeFor(harness.targetId)}_${DOWNLOAD_DATE}.xlsx"`);
+    } finally {
+      if (originalSubject === undefined) delete estimate().subject;
+      else estimate().subject = originalSubject;
+    }
+  });
+
+  it('STORY-CR01.7E AC-2: the file is recorded in the same request that serves it, once, for the person who downloaded', async () => {
+    plantCalculation();
+    const insert = vi.spyOn(harness.exportDownloads, 'insertDownload');
+    const response = await getFile(estimate().id);
+    expect(response.status).toBe(200);
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(insert.mock.calls[0]?.[0]).toMatchObject({ estimateId: estimate().id, approvalId: null });
+  });
+
+  it('STORY-CR01.7E AC-2 (DL-302 condition a): a log write that fails fails the download: 500 with the fixed words of every fault, no file and no attachment', async () => {
+    plantCalculation();
+    vi.spyOn(harness.exportDownloads, 'insertDownload').mockRejectedValueOnce(new Error('the log could not be written'));
+    const response = await getFile(estimate().id);
+    expect(response.status).toBe(500);
+    expect(response.headers.get('Content-Disposition')).toBeNull();
+    expect(response.headers.get('Content-Type')).toContain('application/problem+json');
+    const body = await response.text();
+    expect(body).not.toMatch(/^PK/);
+    expect(body).not.toContain('the log could not be written');
+    expect(record.parse(JSON.parse(body))).toMatchObject({ status: 500, title: 'Something went wrong on our side.' });
+  });
+
+  it('STORY-CR01.7E AC-3: a refused download (never calculated) writes no row', async () => {
+    const insert = vi.spyOn(harness.exportDownloads, 'insertDownload');
+    expect((await getFile(estimate().id)).status).toBe(409);
+    expect(insert).not.toHaveBeenCalled();
   });
 
   it('is a read: each route exports GET and no other method', () => {
@@ -166,7 +217,7 @@ describe('AC-6: the summary', () => {
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     const summary = exportSummarySchema.parse(await response.json());
     expect(summary).toEqual({
-      fileName: `Quotation_Customer_${canaryTaskCodeFor(harness.targetId)}_${DOWNLOAD_DATE}.xlsx`,
+      fileName: `Customer_Invented-subject_${DOWNLOAD_DATE}.xlsx`,
       partCount: 1,
       pictureCount: 0,
       columns: { first: 'A', last: 'BO', count: 67 },
@@ -176,6 +227,8 @@ describe('AC-6: the summary', () => {
       figures: null,
       // Nor a warning (STORY-07.06 AC-4): it is carried only while the calculation is current.
       warning: null,
+      // Nothing was downloaded: the marker of the log says so (STORY-CR01.7E).
+      download: { kind: 'none' },
     });
   });
 

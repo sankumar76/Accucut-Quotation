@@ -70,8 +70,8 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   'GET /api/v1/tasks': ['ADMIN', 'LEAD', 'ENGINEER'],
   'POST /api/v1/tasks': ['ADMIN', 'LEAD'],
   '/api/v1/options/assign-context': ['ADMIN', 'LEAD'],
-  // STORY-05.01 (SCR-05; architecture section 6 "Set customer": A L; E own, while editable): every role, an Engineer on their own estimate only.
-  '/api/v1/estimates/[id]/customer': ['ADMIN', 'LEAD', 'ENGINEER'],
+  // STORY-05.01 (SCR-05; architecture section 6 "Set customer"), changed by CR-01 item 6 (AQP-390, architecture section 4.11 b): a Lead and an Admin only; an Engineer is refused with the fixed 403 before the ID is read.
+  '/api/v1/estimates/[id]/customer': ['ADMIN', 'LEAD'],
   // STORY-05.09: the Engineer's Calculate. Only the Engineer (SPEC section 9: a Lead's and an Admin's is Recalculate, STORY-06.04).
   'POST /api/v1/estimates/[id]/calculate': ['ENGINEER'],
   // STORY-06.04 (SCR-06's Recalculate; architecture section 6 row "Recalculate": A L): a Lead's and an Admin's press. An Engineer is refused with the fixed 403 before the ID is looked at (NFR-002, CR-33).
@@ -92,6 +92,7 @@ export const SPEC_ACCESS: Readonly<Record<string, ReadonlyArray<RoleName>>> = {
   // STORY-07.01 (SCR-10; architecture section 6 rows "Export" and "Export summary": A L): the Excel file and what the page shows before it. An Engineer is refused with the fixed 403, and no file, before the ID is looked at (NFR-002, CR-33).
   '/api/v1/estimates/[id]/export': ['ADMIN', 'LEAD'],
   '/api/v1/estimates/[id]/export-summary': ['ADMIN', 'LEAD'],
+  '/api/v1/download-markers': ['ADMIN', 'LEAD'],
   // STORY-05.02 (architecture section 6 "Tree", "Node", "Reorder": A L; E own, while editable): every role, an Engineer on their own estimate only.
   '/api/v1/estimates/[id]/tree': ['ADMIN', 'LEAD', 'ENGINEER'],
   '/api/v1/estimates/[id]/tree/move': ['ADMIN', 'LEAD', 'ENGINEER'],

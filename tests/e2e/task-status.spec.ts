@@ -16,7 +16,7 @@ import { DEVELOPMENT_URL } from './support/servers';
 const DAY_MS = 86_400_000;
 const PRICE_WORDS = /₹|\$|€|price|approved by|override|reason|formula/i;
 const APPROVAL_WORDS = /₹|\$|€|approved by|override|reason|formula/i;
-const ANSWER_KEYS = ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'title'];
+const ANSWER_KEYS = ['assignedByName', 'code', 'customer', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'subject', 'title'];
 
 const tab = (page: Page, name: string): Locator => page.getByRole('tab', { name: new RegExp(`^${name}`) });
 const rowOf = (page: Page, code: string): Locator => page.locator('[data-task-code]:visible', { hasText: code });
@@ -29,7 +29,7 @@ test.beforeEach(async ({ context }) => {
 
 interface SeededStates {
   readonly draft: SeededQueueTask;
-  readonly submitted: SeededQueueTask;
+  readonly prepared: SeededQueueTask;
   readonly approved: SeededQueueTask;
 }
 
@@ -38,7 +38,7 @@ async function seedStates(engineerId: string): Promise<SeededStates> {
   const later = new Date(Date.now() + 30 * DAY_MS).toISOString();
   return {
     draft: await seedQueueTask(engineerId, later, 'DRAFT', 'E2E status draft'),
-    submitted: await seedQueueTask(engineerId, later, 'SUBMITTED', 'E2E status submitted'),
+    prepared: await seedQueueTask(engineerId, later, 'PREPARED', 'E2E status prepared'),
     approved: await seedQueueTask(engineerId, new Date(Date.now() - 10 * DAY_MS).toISOString(), 'APPROVED', 'E2E status approved'),
   };
 }
@@ -58,12 +58,12 @@ async function openQueueWithStates(page: Page, testInfo: TestInfo): Promise<{ re
 test.describe('an Engineer', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('AC-1, AC-7: the queue says Draft, Submitted and Approved in words with an icon, one badge each, with no sideways scroll and axe 0 violations', async ({ page }, testInfo) => {
+  test('AC-1, AC-7: the queue says Draft, Prepared and Approved in words with an icon, one badge each, with no sideways scroll and axe 0 violations', async ({ page }, testInfo) => {
     const { states } = await openQueueWithStates(page, testInfo);
 
     await expect.poll(() => page.locator('[data-task-code]:visible').count()).toBe(2);
     await expect(rowOf(page, states.draft.code).locator('[data-slot="status-badge"]')).toHaveText('Draft');
-    await expect(rowOf(page, states.submitted.code).locator('[data-slot="status-badge"]')).toHaveText('Submitted');
+    await expect(rowOf(page, states.prepared.code).locator('[data-slot="status-badge"]')).toHaveText('Prepared');
     await expect(rowOf(page, states.draft.code).locator('[data-slot="status-badge"] svg')).toHaveCount(1);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
@@ -90,7 +90,7 @@ test.describe('an Engineer', () => {
     await expectNoAxeViolations(page);
 
     for (const [code, words] of [
-      [states.submitted.code, ['Submitted']],
+      [states.prepared.code, ['Prepared']],
       [states.approved.code, ['Approved and locked']],
     ] as const) {
       await page.goto(`/estimates/${code}`);
@@ -104,7 +104,7 @@ test.describe('an Engineer', () => {
     const { engineer, states } = await openQueueWithStates(page, testInfo);
     for (const [seeded, status] of [
       [states.draft, 'DRAFT'],
-      [states.submitted, 'SUBMITTED'],
+      [states.prepared, 'PREPARED'],
       [states.approved, 'APPROVED'],
     ] as const) {
       const response = await page.request.get(`${DEVELOPMENT_URL}/api/v1/tasks/${seeded.id}`);
@@ -118,7 +118,7 @@ test.describe('an Engineer', () => {
 
   test('AC-4: another Engineer\'s task, an unknown ID and text that is no ID are the same 404, with the same body apart from the request ID', async ({ page }, testInfo) => {
     await openQueueWithStates(page, testInfo);
-    const other = await seedQueueTask((await createDisposableUser('queue', testInfo)).id, new Date(Date.now() + 30 * DAY_MS).toISOString(), 'SUBMITTED', 'E2E belongs to someone else');
+    const other = await seedQueueTask((await createDisposableUser('queue', testInfo)).id, new Date(Date.now() + 30 * DAY_MS).toISOString(), 'PREPARED', 'E2E belongs to someone else');
 
     const asked = await Promise.all(
       [other.id, '00000000-0000-4000-8000-00000000dead', 'not-an-id'].map(async (id) => {

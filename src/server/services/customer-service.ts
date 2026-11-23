@@ -9,6 +9,7 @@ import {
 } from '../../lib/errors';
 import {
   canonicalCustomerName,
+  canonicalShortName,
   changedContactFields,
   CONTACT_FIELD_NAMES,
   contactValue,
@@ -16,6 +17,7 @@ import {
   CUSTOMER_NAME_TAKEN_MESSAGE,
   customerFieldProblem,
   detailChangesFrom,
+  SHORT_NAME_TAKEN_MESSAGE,
   differsFromDefault,
   rateProblem,
   rateText,
@@ -42,6 +44,8 @@ import type { AuditContext, AuditService } from './audit-service';
  * own value for every Process Master item. Who may call it is decided before it is reached (`withRoute`, the manifest, BR-004); this file holds the
  * rules that stay true whoever asks:
  *
+ *   - **A short name is required and unique ignoring letter case over every customer, a deleted one's included** (CR-01 item 6, AQP-390): the database's index is the judge, matched by its
+ *     index name, and the refusal is a 422 under `shortName` that names no other customer. It is kept as typed (trimmed), and is read through the join wherever it is shown, never copied.
  *   - **A name is required and unique ignoring letter case** (AC-1), stored in one canonical form (compatibility forms folded, surrounding spaces removed,
  *     runs of spaces made one). The database's index is the judge of uniqueness, so two requests that race for one name cannot both win. The phone, the
  *     e-mail address and the address are optional; an e-mail address, if given, must look like one.
@@ -51,7 +55,7 @@ import type { AuditContext, AuditService } from './audit-service';
  *   - **Reset to defaults** (AC-3) sets every rate that differs back to the item's current default and answers with the count; a customer that already
  *     has every default is a count of 0 and writes nothing. It is idempotent.
  *   - **A save or a reset that changes nothing writes no change and no entry** (AC-2, AC-6).
- *   - **Delete is soft and guarded** (STORY-02.07; A-13, BR-053): a customer that a Draft or Submitted estimate has is refused with a 409 that names those estimates
+ *   - **Delete is soft and guarded** (STORY-02.07; A-13, BR-053): a customer that a Draft or Prepared estimate has is refused with a 409 that names those estimates
  *     (the first ten and the count), and nothing changes. An Approved estimate does not count: it keeps the customer's name and its own figures (NFR-026). The
  *     customer's row is locked `FOR UPDATE` and **then** the estimates are read, so a request that is choosing this very customer (it holds the row `FOR SHARE`,
  *     `estimate-repository.ts`) and the delete serialise: either the delete waits and then sees the estimate, or the choice waits and then finds no customer. Both
@@ -60,7 +64,7 @@ import type { AuditContext, AuditService } from './audit-service';
  * Each change is one method here and **one transaction** (STORY-01.07; architecture section 6, DEF-017): the change and its audit entry are written
  * together with the same `tx`, so the entry exists exactly when the change does, and a refused change writes none. The entries are `master.created`,
  * `master.edited` and `master.deleted` with `object_type` `customer` (architecture section 8, the AQP-142 ruling: a reset is `master.edited` too). The state is
- * `{ name, contact, rates }`: the names of the contact fields (never their values) and the rates that changed, all of them on a create. Every change
+ * `{ name, shortName, contact, rates }`: the short name (CR-01 item 6; it is not contact data, so its value is kept), the names of the contact fields (never their values) and the rates that changed, all of them on a create. Every change
  * takes the Process Master's table lock first and then the customer's row, in that order everywhere (PRF-01), so a customer's change cannot wait on the
  * add or the delete of a Process Master item (AC-4), which takes the same lock first, and a customer added while an item is added cannot miss its rate.
  */
@@ -96,7 +100,7 @@ export interface CustomerOperations {
   resetCustomerRates(context: AuditContext, id: string): Promise<CustomerResetResult>;
   /**
    * Soft-deletes the customer and writes one `master.deleted` entry in the same transaction. Refused with `MasterInUseError` (409, naming the estimates) while a
-   * Draft or Submitted estimate has the customer; 404 for an unknown or already deleted ID. Nothing is written when it is refused.
+   * Draft or Prepared estimate has the customer; 404 for an unknown or already deleted ID. Nothing is written when it is refused.
    */
   deleteCustomer(context: AuditContext, id: string): Promise<void>;
 }
@@ -113,8 +117,8 @@ function ratesState(rates: ReadonlyArray<CustomerRateRecord>, valueOf: (rate: Cu
 }
 
 /** What an audit entry keeps of a customer (`customerState` in `audit-events.ts`). */
-function auditState(name: string, contact: ReadonlyArray<ContactFieldName>, rates: ReturnType<typeof ratesState>) {
-  return { name, contact: [...contact], rates };
+function auditState(customer: { readonly name: string; readonly shortName: string }, contact: ReadonlyArray<ContactFieldName>, rates: ReturnType<typeof ratesState>) {
+  return { name: customer.name, shortName: customer.shortName, contact: [...contact], rates };
 }
 
 /** The part of an audit entry that every change shares: who, which request, and what the object is called. */
@@ -126,12 +130,17 @@ function nameTaken(): FieldValidationError {
   return new FieldValidationError([{ field: 'name', message: CUSTOMER_NAME_TAKEN_MESSAGE }], { code: NAME_TAKEN_CODE });
 }
 
-/** Runs a write and gives the database's rule for names its words. Any other failure passes on untouched. */
+function shortNameTaken(): FieldValidationError {
+  return new FieldValidationError([{ field: 'shortName', message: SHORT_NAME_TAKEN_MESSAGE }], { code: NAME_TAKEN_CODE });
+}
+
+/** Runs a write and gives the database's rules for names and short names their words. Any other failure passes on untouched. */
 async function withNameRule<T>(write: () => Promise<T>): Promise<T> {
   try {
     return await write();
   } catch (error) {
     if (error instanceof MasterConstraintError && error.constraint === 'customer-name') throw nameTaken();
+    if (error instanceof MasterConstraintError && error.constraint === 'customer-short-name') throw shortNameTaken();
     throw error;
   }
 }
@@ -150,6 +159,7 @@ function assertDetails(given: CustomerFields): void {
 function withDetails(before: CustomerDetails, details: CustomerFields): CustomerDetails {
   return {
     name: details.name ?? before.name,
+    shortName: details.shortName ?? before.shortName,
     phone: details.phone === undefined ? before.phone : details.phone,
     email: details.email === undefined ? before.email : details.email,
     address: details.address === undefined ? before.address : details.address,
@@ -195,7 +205,7 @@ async function add({ masters, audit }: CustomerDependencies, tx: Transaction, co
   await masters.lockProcessItems(tx);
   const created = await masters.createCustomer(input, tx);
   const given = CONTACT_FIELD_NAMES.filter((field) => created[field] !== null);
-  const after = auditState(created.name, given, ratesState(created.rates, (rate) => rate.value));
+  const after = auditState(created, given, ratesState(created.rates, (rate) => rate.value));
   await audit.record(tx, { event: 'master.created', ...entryFor(context, created), before: null, after });
   return created;
 }
@@ -222,8 +232,8 @@ async function change(
   await audit.record(tx, {
     event: 'master.edited',
     ...entryFor(context, after),
-    before: auditState(before.name, contact, rates.before),
-    after: auditState(after.name, contact, rates.after),
+    before: auditState(before, contact, rates.before),
+    after: auditState(after, contact, rates.after),
   });
   return after;
 }
@@ -246,8 +256,8 @@ async function reset(
   await audit.record(tx, {
     event: 'master.edited',
     ...entryFor(context, after),
-    before: auditState(before.name, [], rates.before),
-    after: auditState(after.name, [], rates.after),
+    before: auditState(before, [], rates.before),
+    after: auditState(after, [], rates.after),
   });
   return { customer: after, count: writes.length };
 }
@@ -264,7 +274,7 @@ async function remove({ masters, audit }: CustomerDependencies, tx: Transaction,
   if (open.total > 0) throw new MasterInUseError(CUSTOMER_IN_USE_CODE, before.name, open.estimates, open.total);
   if (!(await masters.softDeleteCustomer(before.id, tx))) throw new NotFoundError(NOT_FOUND_MESSAGE);
   const given = CONTACT_FIELD_NAMES.filter((field) => before[field] !== null);
-  const state = auditState(before.name, given, ratesState(before.rates, (rate) => rate.value));
+  const state = auditState(before, given, ratesState(before.rates, (rate) => rate.value));
   await audit.record(tx, { event: 'master.deleted', ...entryFor(context, before), before: state, after: null });
 }
 
@@ -285,6 +295,7 @@ export function createCustomerOperations(dependencies: CustomerDependencies): Cu
       assertDetails(input);
       const customer: NewCustomer = {
         name: canonicalCustomerName(input.name),
+        shortName: canonicalShortName(input.shortName),
         phone: contactValue(input.phone),
         email: contactValue(input.email),
         address: contactValue(input.address),

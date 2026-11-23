@@ -11,7 +11,7 @@ import { CUSTOMER_CANARIES } from './customer-canary';
  */
 
 // Written out here and not imported from `src/lib/page-metadata.ts`, so a change to the helper's constants is caught by the rules, not followed by them.
-export const SITE_NAME = 'Accucut Quotation Portal';
+export const SITE_NAME = 'Accucut RFQ Portal';
 export const TITLE_SUFFIX = ` · ${SITE_NAME}`;
 export const MAX_TITLE_LENGTH = 60;
 export const MAX_DESCRIPTION_LENGTH = 160;

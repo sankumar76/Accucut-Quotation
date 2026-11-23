@@ -11,7 +11,7 @@ import { clearMaterials } from '../../support/system-rows';
 
 /**
  * STORY-02.07 (AC-3, AC-4, AC-5, AC-8) against real PostgreSQL in a throwaway database: the delete of a material over the real repositories. It is soft
- * (`deleted_at`); it is refused with the estimates named while a Draft or Submitted estimate has the material in a part (`estimate_nodes.inputs`), whatever the
+ * (`deleted_at`); it is refused with the estimates named while a Draft or Prepared estimate has the material in a part (`estimate_nodes.inputs`), whatever the
  * shape the part form will give that value, and allowed when only Approved ones do; the hidden "Not applicable" row is a 404 and never deleted; one
  * `master.deleted` entry is written in the transaction of the delete and none when it is refused; the name of a deleted material stays taken (the unique indexes
  * are not partial); a guard that is asked about something that is not a material ID throws and never answers "unused"; and the lock a writer of a part's Material
@@ -63,7 +63,7 @@ afterEach(async () => {
 const material = (name: string) =>
   db.mastersService.createMaterial(by(), { materialInDrawing: name, materialConsidered: 'Invented steel', pricePerKg: '58.37', specificGravity: '7.37', scrapRate: '22.37' });
 
-type Status = 'DRAFT' | 'SUBMITTED' | 'APPROVED';
+type Status = 'DRAFT' | 'PREPARED' | 'APPROVED';
 
 interface MadeEstimate {
   readonly estimateId: string;
@@ -76,8 +76,8 @@ async function estimateWith(status: Status, parts: ReadonlyArray<Record<string, 
   codes += 1;
   const code = `Q-2026-${String(9000 + codes).padStart(4, '0')}`;
   const task = await db.owner.query<{ id: string }>(
-    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, notes)
-     VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented hopper cover', NULL) RETURNING id::text AS id`,
+    `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes)
+     VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented hopper cover', 'Invented subject', NULL) RETURNING id::text AS id`,
     [code, engineerId, leadId, PATH],
   );
   const estimate = await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id, status) VALUES ($1::uuid, $2::estimate_status) RETURNING id::text AS id', [
@@ -88,7 +88,7 @@ async function estimateWith(status: Status, parts: ReadonlyArray<Record<string, 
   const nodeIds: string[] = [];
   for (const [index, inputs] of parts.entries()) {
     const node = await db.owner.query<{ id: string }>(
-      'INSERT INTO estimate_nodes (estimate_id, sort_index, inputs) VALUES ($1::uuid, $2::int, $3::jsonb) RETURNING id::text AS id',
+      'INSERT INTO estimate_nodes (estimate_id, sort_index, node_kind, inputs) VALUES ($1::uuid, $2::int, \'MAIN_ASSEMBLY\', $3::jsonb) RETURNING id::text AS id',
       [estimateId, index, JSON.stringify(inputs)],
     );
     nodeIds.push(defined(node.rows[0]).id);
@@ -170,14 +170,14 @@ describe('AC-3: a material no open estimate uses is soft-deleted', () => {
   });
 });
 
-describe('AC-3: a material that a Draft or Submitted estimate has in a part is refused, and nothing changes', () => {
+describe('AC-3: a material that a Draft or Prepared estimate has in a part is refused, and nothing changes', () => {
   it.each([
     ['a bare ID', (id: string) => ({ [FIELD]: id })],
     ['an object with the ID and the words', (id: string) => ({ [FIELD]: { id, text: 'Invented steel' } })],
     ['the ID in upper case', (id: string) => ({ [FIELD]: id.toUpperCase() })],
     ['the ID deep inside another value', (id: string) => ({ other: { nested: [{ choice: { materialId: id } }] } })],
-  ] as const)('%s, in a Draft or a Submitted estimate: 409 MaterialInUse naming its task code and status', async (_shape, inputsFor) => {
-    for (const status of ['DRAFT', 'SUBMITTED'] as const) {
+  ] as const)('%s, in a Draft or a Prepared estimate: 409 MaterialInUse naming its task code and status', async (_shape, inputsFor) => {
+    for (const status of ['DRAFT', 'PREPARED'] as const) {
       const alpha = await material(`Alpha-${status}`);
       const { code } = await estimateWith(status, [{}, inputsFor(alpha.id)]);
       const entries = await entryCount(db);
@@ -205,7 +205,7 @@ describe('AC-3: a material that a Draft or Submitted estimate has in a part is r
   it('names the first ten by task code and counts all of them; an Approved estimate is not counted', async () => {
     const alpha = await material('Alpha-sheet');
     const made: string[] = [];
-    for (let index = 0; index < 12; index += 1) made.push((await estimateWith(index % 2 === 0 ? 'DRAFT' : 'SUBMITTED', [{ [FIELD]: alpha.id }])).code);
+    for (let index = 0; index < 12; index += 1) made.push((await estimateWith(index % 2 === 0 ? 'DRAFT' : 'PREPARED', [{ [FIELD]: alpha.id }])).code);
     await estimateWith('APPROVED', [{ [FIELD]: alpha.id }]);
     const refusal = await inUse(alpha.id);
     expect(refusal.total).toBe(12);
