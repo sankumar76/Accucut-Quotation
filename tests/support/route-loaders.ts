@@ -65,6 +65,7 @@ export const API_LOADERS: Readonly<Record<string, Loader>> = {
   '/api/v1/estimates/[id]/nodes/[nodeId]/costs': () => import('@/app/api/v1/estimates/[id]/nodes/[nodeId]/costs/route'),
   '/api/v1/estimates/[id]/export': () => import('@/app/api/v1/estimates/[id]/export/route'),
   '/api/v1/estimates/[id]/export-summary': () => import('@/app/api/v1/estimates/[id]/export-summary/route'),
+  '/api/v1/download-markers': () => import('@/app/api/v1/download-markers/route'),
   '/api/v1/estimates/[id]/tree': () => import('@/app/api/v1/estimates/[id]/tree/route'),
   '/api/v1/estimates/[id]/tree/move': () => import('@/app/api/v1/estimates/[id]/tree/move/route'),
   '/api/v1/estimates/[id]/nodes': () => import('@/app/api/v1/estimates/[id]/nodes/route'),

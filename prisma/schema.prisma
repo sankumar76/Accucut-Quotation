@@ -41,17 +41,18 @@ model User {
   configCheckpoints ConfigCheckpoint[]
   auditEntries      AuditLog[]
   exchangeRates     ExchangeRate[]
-  tasksToDo         Task[]             @relation("TaskEngineer")
-  tasksAssigned     Task[]             @relation("TaskAssigner")
+  tasksToDo         Task[]               @relation("TaskEngineer")
+  tasksAssigned     Task[]               @relation("TaskAssigner")
   calculations      Calculation[]
-  emailOutbox       EmailOutbox[]      @relation("OutboxRecipient")
+  emailOutbox       EmailOutbox[]        @relation("OutboxRecipient")
   resetTokens       PasswordResetToken[]
-  approvals         Approval[]         @relation("ApprovalApprover")
-  unlocks           Approval[]         @relation("ApprovalUnlocker")
-  cancellations     Approval[]         @relation("ApprovalCanceller")
-  removals          Approval[]         @relation("ApprovalRemover")
-  estimatesQuoted   Estimate[]         @relation("EstimateQuoter")
-  estimatesIgnored  Estimate[]         @relation("EstimateIgnorer")
+  approvals         Approval[]           @relation("ApprovalApprover")
+  unlocks           Approval[]           @relation("ApprovalUnlocker")
+  cancellations     Approval[]           @relation("ApprovalCanceller")
+  removals          Approval[]           @relation("ApprovalRemover")
+  estimatesQuoted   Estimate[]           @relation("EstimateQuoter")
+  estimatesIgnored  Estimate[]           @relation("EstimateIgnorer")
+  downloads         EstimateDownload[]
 
   @@unique([email], map: "uq_users_email")
   @@map("users")
@@ -354,13 +355,14 @@ model Estimate {
   createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  task               Task           @relation(fields: [taskId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_task_id")
-  customer           Customer?      @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_customer_id")
-  currentCalculation Calculation?   @relation("CurrentCalculation", fields: [currentCalculationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_current_calculation_id")
-  quotedBy           User?          @relation("EstimateQuoter", fields: [quotedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_quoted_by")
-  ignoredBy          User?          @relation("EstimateIgnorer", fields: [ignoredById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_ignored_by")
-  calculations       Calculation[]  @relation("EstimateCalculations")
+  task               Task               @relation(fields: [taskId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_task_id")
+  customer           Customer?          @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_customer_id")
+  currentCalculation Calculation?       @relation("CurrentCalculation", fields: [currentCalculationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_current_calculation_id")
+  quotedBy           User?              @relation("EstimateQuoter", fields: [quotedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_quoted_by")
+  ignoredBy          User?              @relation("EstimateIgnorer", fields: [ignoredById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimates_ignored_by")
+  calculations       Calculation[]      @relation("EstimateCalculations")
   approvals          Approval[]
+  downloads          EstimateDownload[]
   nodes              EstimateNode[]
   partImages         PartImage[]
 
@@ -377,17 +379,17 @@ model Estimate {
 /// DELETE here; the foreign key to the parent has no cascade, so the service names every row it removes. Tree rules the schema cannot express (a parent in the
 /// same estimate, no node as its own parent) are in the migration or the service.
 model EstimateNode {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  estimateId String   @map("estimate_id") @db.Uuid
-  parentId   String?  @map("parent_id") @db.Uuid
-  sortIndex  Int      @map("sort_index")
+  id         String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  estimateId String           @map("estimate_id") @db.Uuid
+  parentId   String?          @map("parent_id") @db.Uuid
+  sortIndex  Int              @map("sort_index")
   /// The row's kind (CR-01 item 3A): set when the row is added and never changed. No default: every insert names it. Existing rows were given one from the tree's shape by migration 20261123140000.
   nodeKind   EstimateNodeKind @map("node_kind")
-  inputs     Json     @default("{}") @db.JsonB
-  imageId    String?  @map("image_id") @db.Uuid
-  revision   Int      @default(1)
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  inputs     Json             @default("{}") @db.JsonB
+  imageId    String?          @map("image_id") @db.Uuid
+  revision   Int              @default(1)
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   estimate Estimate       @relation(fields: [estimateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimate_nodes_estimate_id")
   parent   EstimateNode?  @relation("EstimateNodeChildren", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimate_nodes_parent_id")
@@ -443,12 +445,13 @@ model Calculation {
   createdById     String   @map("created_by") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  estimate        Estimate         @relation("EstimateCalculations", fields: [estimateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_calculations_estimate_id")
-  configVersion   ConfigVersion    @relation(fields: [configVersionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_calculations_config_version_id")
-  creator         User             @relation(fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_calculations_created_by")
+  estimate        Estimate           @relation("EstimateCalculations", fields: [estimateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_calculations_estimate_id")
+  configVersion   ConfigVersion      @relation(fields: [configVersionId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_calculations_config_version_id")
+  creator         User               @relation(fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_calculations_created_by")
   rows            CalculationRow[]
-  linkedEstimates Estimate[]       @relation("CurrentCalculation")
+  linkedEstimates Estimate[]         @relation("CurrentCalculation")
   approvals       Approval[]
+  downloads       EstimateDownload[]
 
   @@index([estimateId, createdAt(sort: Desc)], map: "idx_calculations_estimate_id")
   @@map("calculations")
@@ -480,16 +483,37 @@ model Approval {
   removedById    String?   @map("removed_by") @db.Uuid
   removedAt      DateTime? @map("removed_at") @db.Timestamptz(6)
 
-  estimate    Estimate    @relation(fields: [estimateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_estimate_id")
-  calculation Calculation @relation(fields: [calculationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_calculation_id")
-  approver    User        @relation("ApprovalApprover", fields: [approvedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_approved_by")
-  unlocker    User?       @relation("ApprovalUnlocker", fields: [unlockedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_unlocked_by")
-  canceller   User?       @relation("ApprovalCanceller", fields: [cancelledById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_cancelled_by")
-  remover     User?       @relation("ApprovalRemover", fields: [removedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_removed_by")
+  estimate    Estimate           @relation(fields: [estimateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_estimate_id")
+  calculation Calculation        @relation(fields: [calculationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_calculation_id")
+  approver    User               @relation("ApprovalApprover", fields: [approvedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_approved_by")
+  unlocker    User?              @relation("ApprovalUnlocker", fields: [unlockedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_unlocked_by")
+  canceller   User?              @relation("ApprovalCanceller", fields: [cancelledById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_cancelled_by")
+  remover     User?              @relation("ApprovalRemover", fields: [removedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_approvals_removed_by")
+  downloads   EstimateDownload[]
 
   @@index([estimateId, approvedAt(sort: Desc)], map: "idx_approvals_estimate_id")
   @@index([calculationId], map: "idx_approvals_calculation_id")
   @@map("approvals")
+}
+
+/// One Excel download that the server handed over (STORY-CR01.7E, AQP-402; architecture section 4.12 d): the estimate, the calculation the file was made from, the approval whose price the file carries in BO2
+/// (null when the file holds no price), who downloaded and when. Append-only like `job_runs` and `audit_log`: the runtime role holds SELECT and INSERT, and triggers refuse UPDATE, DELETE and TRUNCATE for every
+/// role. No `updated_at` (the append-only exception). Class Internal, read by the Lead and the Admin only (NFR-002).
+model EstimateDownload {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  estimateId     String   @map("estimate_id") @db.Uuid
+  calculationId  String   @map("calculation_id") @db.Uuid
+  approvalId     String?  @map("approval_id") @db.Uuid
+  downloadedById String   @map("downloaded_by") @db.Uuid
+  downloadedAt   DateTime @default(now()) @map("downloaded_at") @db.Timestamptz(6)
+
+  estimate    Estimate    @relation(fields: [estimateId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimate_downloads_estimate_id")
+  calculation Calculation @relation(fields: [calculationId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimate_downloads_calculation_id")
+  approval    Approval?   @relation(fields: [approvalId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimate_downloads_approval_id")
+  downloader  User        @relation(fields: [downloadedById], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_estimate_downloads_downloaded_by")
+
+  @@index([estimateId, downloadedAt(sort: Desc)], map: "idx_estimate_downloads_estimate_id")
+  @@map("estimate_downloads")
 }
 
 /// One node of the tree as it was calculated (STORY-03.05; architecture section 5.1): a full copy, so the record needs nothing live. `sl_no` is the derived Sl. No as text,

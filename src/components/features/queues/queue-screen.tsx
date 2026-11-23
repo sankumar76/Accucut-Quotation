@@ -14,6 +14,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { queueTitleFor, type RoleName } from '@/lib/auth/roles';
 import { overdueSummary } from '@/lib/tasks/overdue';
+import { fetchDownloadMarkers, type DownloadMarkers } from '@/lib/tasks/download-markers-client';
 import { isQueueTab, QUEUE_TABS, QUEUE_TAB_LABELS, type QueueTab } from '@/lib/tasks/queue';
 import { fetchQueuePage, type QueuePageData } from '@/lib/tasks/queue-client';
 import { dateRangeProblem, hasListFilter, queueAddressQuery, withoutListFilters, type QueueFilters } from '@/lib/tasks/queue-filters';
@@ -64,6 +65,11 @@ export interface QueueScreenProps {
   /** The active Engineers and the customers the filter row offers; empty for an Engineer, who has the search only. */
   readonly engineers?: ReadonlyArray<FilterOption>;
   readonly customers?: ReadonlyArray<FilterOption>;
+  /**
+   * The download markers of the first page when it is the Closed tab, read on the server for a Lead and an Admin (STORY-CR01.7E AC-5); `undefined` for an Engineer and for every other tab. The screen asks
+   * `/api/v1/download-markers` for the pages it loads itself, and never for an Engineer.
+   */
+  readonly initialMarkers?: DownloadMarkers | 'unavailable';
 }
 
 type Status = 'ready' | 'loading' | 'error';
@@ -85,15 +91,21 @@ function AssignButton() {
   );
 }
 
+/** The markers of the pages shown so far with those of the page just loaded; any that could not be read makes the whole list say so, rather than a mixture. */
+function mergeMarkers(have: DownloadMarkers | 'unavailable' | undefined, more: DownloadMarkers | 'unavailable'): DownloadMarkers | 'unavailable' {
+  return more === 'unavailable' || have === 'unavailable' || have === undefined ? more : { ...have, ...more };
+}
+
 /** Writes the tab and the filters into the browser's address without a new page or a new request (STORY-04.06 AC-4). */
 function writeAddress(tab: QueueTab, filters: QueueFilters): void {
   const query = queueAddressQuery(tab, filters);
   window.history.replaceState(null, '', query === '' ? window.location.pathname : `${window.location.pathname}?${query}`);
 }
 
-export function QueueScreen({ role, initialPage, initialFilters, engineers = [], customers = [] }: QueueScreenProps) {
+export function QueueScreen({ role, initialPage, initialFilters, engineers = [], customers = [], initialMarkers }: QueueScreenProps) {
   const [activeTab, setActiveTab] = useState<QueueTab>(initialPage.tab);
   const [page, setPage] = useState<QueuePageData>(initialPage);
+  const [markers, setMarkers] = useState<DownloadMarkers | 'unavailable' | undefined>(initialMarkers);
   const [filters, setFilters] = useState<QueueFilters>(initialFilters);
   const [searchText, setSearchText] = useState(initialFilters.q);
   const [announcement, setAnnouncement] = useState('');
@@ -125,6 +137,16 @@ export function QueueScreen({ role, initialPage, initialFilters, engineers = [],
     [],
   );
 
+  /**
+   * The download markers of the rows of a page of the Closed tab (STORY-CR01.7E AC-5), asked for only by a Lead and an Admin: `undefined` where none are drawn (an Engineer, the other tabs, no rows), and `'unavailable'`
+   * when they could not be read, which the rows say in words. A cancelled call is also `'unavailable'`; the caller ignores it when a newer request took over.
+   */
+  async function markersOf(tab: QueueTab, tasks: QueuePageData['tasks'], signal: AbortSignal): Promise<DownloadMarkers | 'unavailable' | undefined> {
+    if (!manager || tab !== 'closed' || tasks.length === 0) return undefined;
+    const outcome = await fetchDownloadMarkers(tasks.map((task) => task.id), fetch, signal);
+    return outcome.status === 'ok' ? outcome.value : 'unavailable';
+  }
+
   /** Starts a request and returns its controller; any request before it is cancelled. */
   function startRequest(): AbortController {
     inFlight.current?.abort();
@@ -150,7 +172,10 @@ export function QueueScreen({ role, initialPage, initialFilters, engineers = [],
     // A newer request took over while this one was on its way: its answer is the one to show.
     if (inFlight.current !== controller) return;
     if (outcome.status === 'ok') {
+      const nextMarkers = await markersOf(next, outcome.value.tasks, controller.signal);
+      if (inFlight.current !== controller) return;
       setPage(outcome.value);
+      setMarkers(nextMarkers);
       setStatus('ready');
       if (announce) setAnnouncement(tasksFoundText(outcome.value.counts[next]));
     } else {
@@ -210,9 +235,17 @@ export function QueueScreen({ role, initialPage, initialFilters, engineers = [],
     setMoreFailed(false);
     const outcome = await fetchQueuePage(activeTab, page.nextCursor, fetch, controller.signal, filters);
     if (inFlight.current !== controller) return;
+    if (outcome.status !== 'ok') {
+      setLoadingMore(false);
+      setMoreFailed(true);
+      return;
+    }
+    const more = await markersOf(activeTab, outcome.value.tasks, controller.signal);
+    if (inFlight.current !== controller) return;
     setLoadingMore(false);
-    if (outcome.status === 'ok') setPage({ ...outcome.value, tasks: [...page.tasks, ...outcome.value.tasks] });
-    else setMoreFailed(true);
+    setPage({ ...outcome.value, tasks: [...page.tasks, ...outcome.value.tasks] });
+    // The markers already read stay; the new rows' are added. One that could not be read makes the whole list say so, rather than a mixture.
+    if (more !== undefined) setMarkers(mergeMarkers(markers, more));
   }
 
   function retry(): void {
@@ -273,7 +306,7 @@ export function QueueScreen({ role, initialPage, initialFilters, engineers = [],
             </Notice>
           </div>
         ) : null}
-        <QueueList role={role} tasks={page.tasks} asOf={page.asOf} />
+        <QueueList role={role} tasks={page.tasks} asOf={page.asOf} {...(markers === undefined ? {} : { markers })} />
         {page.nextCursor === null ? null : (
           <div className="flex justify-center p-s-4">
             <Button variant="secondary" {...(loadingMore ? { 'aria-busy': true } : {})} onClick={() => void showMore()}>
