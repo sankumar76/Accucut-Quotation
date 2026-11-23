@@ -72,15 +72,11 @@ export const TREE_TITLE = 'Parts tree';
 export const FORM_AREA_TITLE_ID = 'estimate-form-area-title';
 export const TREE_CLOSE = 'Close parts tree';
 export const TREE_HIDE = 'Hide parts tree';
-export const TREE_EMPTY = 'No parts yet. Choose "New item" to add the first one.';
+export const TREE_EMPTY = 'No parts yet. Choose "Add main assembly" to add the first one.';
 export const TREE_LOADING = 'Loading the parts';
 export const TREE_LOAD_FAILED_TITLE = 'We could not load the parts';
-export const TREE_NEW_ITEM = 'New item';
-export const TREE_SUB_PART = 'Sub-part';
-export const TREE_PART_BESIDE = 'Part beside';
 export const TREE_MOVE_UP = 'Move up';
 export const TREE_MOVE_DOWN = 'Move down';
-export const TREE_DELETE = 'Delete';
 export const TREE_PART_NAME = 'Part';
 export const TREE_NO_INPUTS = 'No inputs yet';
 export const TREE_SOME_INPUTS = 'Some inputs entered';
@@ -91,10 +87,8 @@ export const TREE_FAILED_TITLE = 'The change was not made';
 export const treeButtonLabel = (slNo: string | null): string => (slNo === null ? TREE_TITLE : `${TREE_TITLE}, part ${slNo}`);
 
 export const addedMessage = (slNo: string): string => `Part ${slNo} added`;
-/** The interim "Add sub-part" on a row that holds nothing (a Fastener, `ALLOWED_CHILDREN`): said at once, no request is sent. Replaced by the "+" menu of CR-01 3C. */
-export const noSubPartMessage = (kindName: string): string => `A ${kindName} cannot hold other parts.`;
 export const renumberedMessage = (slNo: string): string => `Part renumbered to ${slNo}`;
-export const deletedMessage = (parts: number): string => (parts === 1 ? 'Part deleted' : `${parts} parts deleted`);
+export const deletedMessage = (parts: number): string => (parts === 1 ? 'Row deleted' : `${parts} rows deleted`);
 
 
 /**

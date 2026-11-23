@@ -1,0 +1,44 @@
+'use client';
+
+import { Minus } from 'lucide-react';
+
+import { Icon } from '@/components/shared/icon';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/cn';
+import type { NodeKind } from '@/lib/estimate/node-kinds';
+import type { PartItem } from '@/lib/estimates/tree-client';
+import { addActionOf, addFastenerLabel, addUnderLabel, deleteRowLabel } from '@/lib/estimates/tree-actions';
+
+import { AddNodeMenu } from './add-node-menu';
+import { AddNodeTrigger, ROW_ACTION_SIZE } from './add-node-trigger';
+import { TREE_PART_NAME } from './estimate-texts';
+
+export interface RowActionsProps {
+  readonly part: PartItem;
+  /** Adds a row of this kind last under the row `parentId`. */
+  readonly onAdd: (parentId: string, nodeKind: NodeKind) => void;
+  /** Opens the confirmation of the delete of this row (nothing is sent yet). */
+  readonly onDelete: (id: string) => void;
+}
+
+/**
+ * The toolbar of one row of the parts tree (CR-01 item 3C, UX spec section 0.9 row 3): the **"+"** and the **"-"**, in the toolbar slot at the end of the row that 3B left (the move handle of 3D joins them). It floats
+ * over the end of the row on hover, on keyboard focus within the row and on the open row, and shows in line on the open row on a touch screen (`PartsTreeList`). The "+" offers exactly the kinds that `ALLOWED_CHILDREN`
+ * allows under this row (`addActionOf`): a menu for a Main Assembly or a Sub-Assembly (its code loads on the first open, `AddNodeMenu`), the Fastener at once for a Part or a Sub-part, and no "+" at all on a Fastener.
+ * The "-" opens the existing confirmation, which names the row and every row under it. Each button's name is its tooltip and its spoken name, and says which row it is for. Tab moves from a row to these buttons.
+ * It is drawn only where the person may change the inputs (`treeActionsOffered`); the server asks again.
+ */
+export function RowActions({ part, onAdd, onDelete }: RowActionsProps) {
+  const add = addActionOf(part.nodeKind);
+  const name = part.label === '' ? TREE_PART_NAME : part.label;
+  const remove = deleteRowLabel(part.slNo, name);
+  return (
+    <div data-row-actions="" className="flex items-center rounded-md border border-border bg-surface">
+      {add.kind === 'direct' ? <AddNodeTrigger label={addFastenerLabel(part.slNo, name)} onClick={() => onAdd(part.id, add.nodeKind)} /> : null}
+      {add.kind === 'menu' ? <AddNodeMenu id={`add-node-${part.id}`} label={addUnderLabel(part.slNo, name)} nodeKinds={add.nodeKinds} onChoose={(nodeKind) => onAdd(part.id, nodeKind)} /> : null}
+      <Button variant="ghost" size="icon" aria-label={remove} title={remove} className={cn('text-danger-ink', ROW_ACTION_SIZE)} onClick={() => onDelete(part.id)}>
+        <Icon icon={Minus} size="large" />
+      </Button>
+    </div>
+  );
+}

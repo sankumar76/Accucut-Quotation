@@ -15,14 +15,14 @@ import { Button } from '@/components/ui/button';
 import type { DeleteTarget } from './use-parts-tree';
 
 /** The dialog's own words, here and not in `estimate-texts.ts`, which the first load carries whole: this dialog is fetched after the page is up (NFR-009). */
-const deleteTitle = (slNo: string): string => `Delete part ${slNo}?`;
-const subPartCount = (count: number): string => `${count} sub-part${count === 1 ? '' : 's'}`;
-/** "This also deletes its 2 sub-parts and everything typed into them. This cannot be undone." for a part with sub-parts; a shorter one for a part with none. */
+const deleteTitle = (slNo: string): string => `Delete row ${slNo}?`;
+const rowCount = (count: number): string => `${count} row${count === 1 ? '' : 's'}`;
+/** "This also deletes the 2 rows under it and everything typed into them. This cannot be undone." for a row with rows under it; a shorter one for a row with none. The rows under a row can be assemblies and Fasteners, so they are "rows" (PM ruling DL-303; UX spec section 0.9 row 3). */
 const deleteDescription = (slNo: string, parts: number): string =>
   parts === 1
-    ? `Part ${slNo} and everything typed into it will be deleted. This cannot be undone.`
-    : `This also deletes its ${subPartCount(parts - 1)}, and everything typed into them. This cannot be undone.`;
-const deleteConfirm = (parts: number): string => (parts === 1 ? 'Delete part' : `Delete ${parts} parts`);
+    ? `Row ${slNo} and everything typed into it will be deleted. This cannot be undone.`
+    : `This also deletes the ${rowCount(parts - 1)} under it, and everything typed into them. This cannot be undone.`;
+const deleteConfirm = (parts: number): string => (parts === 1 ? 'Delete row' : `Delete ${parts} rows`);
 const DELETE_CANCEL = 'Cancel';
 
 export interface DeletePartDialogProps {
@@ -36,8 +36,8 @@ export interface DeletePartDialogProps {
 }
 
 /**
- * "Delete part" (STORY-05.02 AC-3; UX spec SCR-05 state "Delete part"): an alert dialog, so focus starts on the safe choice, "Cancel", and Escape closes it with nothing sent.
- * It names how many parts would go ("This also deletes its 2 sub-parts ... Delete 3 parts"), which is the number the server checks again, so a part added below since then
+ * "Delete row" (STORY-05.02 AC-3; UX spec SCR-05 state "Delete part"; the words say "rows" since CR-01 item 3C, DL-303): an alert dialog, so focus starts on the safe choice, "Cancel", and Escape closes it with nothing sent.
+ * It names how many rows would go ("This also deletes the 2 rows under it ... Delete 3 rows"), which is the number the server checks again, so a part added below since then
  * is not deleted unseen. A part with no sub-parts is a plain confirm. Cancelling changes nothing.
  */
 export function DeletePartDialog({ target, open, deleting, onConfirm, onCancel, onCloseAutoFocus }: DeletePartDialogProps) {
