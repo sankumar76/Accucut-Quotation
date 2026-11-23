@@ -272,10 +272,10 @@ describe('AC-4: an empty, white-space or over-long reason is a 422 under `reason
 });
 
 describe('AC-5: a status that is not APPROVED, a second unlock, and two unlocks at once', () => {
-  it('an estimate that is not approved (a Draft and a Submitted one) is the machine\'s 409, and writes nothing', async () => {
-    const submitted = await calculatedEstimate(db);
+  it('an estimate that is not approved (a Draft and a Prepared one) is the machine\'s 409, and writes nothing', async () => {
+    const prepared = await calculatedEstimate(db);
     const draft = await db.addEstimate({ engineer: true });
-    for (const estimateId of [submitted.estimateId, draft]) {
+    for (const estimateId of [prepared.estimateId, draft]) {
       const before = await storedOf(db, estimateId);
       await expect(unlocking().unlock(lead(), estimateId, request())).rejects.toMatchObject({ httpStatus: 409, code: TRANSITION_REFUSALS.NOT_APPROVED.code });
       expect(await storedOf(db, estimateId)).toEqual(before);
@@ -522,8 +522,8 @@ describe('AC-7, AC-12 (AQP-321 AC-4): after the unlock the inputs are editable a
     expect(await statusOf(db, estimateId)).toBe('DRAFT');
 
     await db.service.recalculate(lead(), estimateId);
-    expect(await statusOf(db, estimateId)).toBe('SUBMITTED');
-    // Still the price approved earlier while the estimate is Submitted again.
+    expect(await statusOf(db, estimateId)).toBe('PREPARED');
+    // Still the price approved earlier while the estimate is Prepared again.
     expect((await review.getCosts(lead(), estimateId)).approval).toMatchObject({ price: '1000.00', unlock: { reason: REASON } });
 
     const calculationId = await currentCalculationOf(db, estimateId);

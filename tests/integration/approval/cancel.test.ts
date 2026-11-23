@@ -406,16 +406,16 @@ describe('AC-10: an approval kept through an unlock is cancelled with the status
     expect(defined(entries[0])).toMatchObject({ before: { approvedPrice: '1000.00', status: 'DRAFT' }, after: { reason: REASON, status: 'DRAFT' } });
   });
 
-  it('a Submitted estimate stays Submitted', async () => {
+  it('a Prepared estimate stays Prepared', async () => {
     const { estimateId } = await approvedEstimate('1000.00');
     await unlock(estimateId);
     await db.service.recalculate(lead(), estimateId);
-    expect(await statusOf(db, estimateId)).toBe('SUBMITTED');
+    expect(await statusOf(db, estimateId)).toBe('PREPARED');
     const answer = await cancelling().cancel(admin(), estimateId, await requestOf(estimateId));
-    expect(answer.status).toBe('SUBMITTED');
-    expect(await statusOf(db, estimateId)).toBe('SUBMITTED');
+    expect(answer.status).toBe('PREPARED');
+    expect(await statusOf(db, estimateId)).toBe('PREPARED');
     const entries = await approvalEntries(db, estimateId, 'approval.cancelled');
-    expect(defined(entries[0])).toMatchObject({ before: { status: 'SUBMITTED' }, after: { status: 'SUBMITTED' } });
+    expect(defined(entries[0])).toMatchObject({ before: { status: 'PREPARED' }, after: { status: 'PREPARED' } });
   });
 
   it('an estimate with no approval is a 409 NO_APPROVAL_TO_CANCEL, and nothing is written', async () => {
@@ -423,7 +423,7 @@ describe('AC-10: an approval kept through an unlock is cancelled with the status
     const before = await storedOf(db, estimateId);
     await expect(cancelling().cancel(admin(), estimateId, await requestOf(estimateId, { approvalId: UNKNOWN_APPROVAL_ID }))).rejects.toMatchObject({ httpStatus: 409, code: NO_APPROVAL_TO_CANCEL_CODE });
     expect(await storedOf(db, estimateId)).toEqual(before);
-    expect(await statusOf(db, estimateId)).toBe('SUBMITTED');
+    expect(await statusOf(db, estimateId)).toBe('PREPARED');
   });
 
   it('after the cancel a Recalculate and a new approval bring a price back; the cancelled approval stays on record with its price and its cancel', async () => {

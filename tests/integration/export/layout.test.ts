@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createConfigRepository } from '@/server/repositories/config-repository';
 import { buildWorkbook } from '@/server/export/build-workbook';
+import { createDownloadRepository } from '@/server/repositories/download-repository';
 import { createExportRepository } from '@/server/repositories/export-repository';
 import { createExportService, type ExportService } from '@/server/services/export-service';
 import { createImageRepository } from '@/server/repositories/image-repository';
@@ -34,6 +35,7 @@ beforeAll(async () => {
   const cache = createConfigVersionCache();
   exporter = createExportService({
     header: createExportRepository(db.prisma),
+    downloads: createDownloadRepository(db.prisma),
     nodes: db.nodes,
     calculations: db.calculations,
     approvals: db.approvals,

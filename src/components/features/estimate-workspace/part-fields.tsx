@@ -84,7 +84,7 @@ function derivedText(field: FormField, part: PartTarget, texts: Readonly<Record<
 
 /**
  * Enter moves to the next field that can be typed into, and never submits (STORY-05.03 AC-6; UX spec SCR-05 "Interactions"). Buttons and links keep their own Enter; Shift+Enter in a
- * multi-line box starts a new line; a read-only or disabled field is skipped. On the last field it moves focus to the Calculate button and never presses it (STORY-05.09 AC-9); once the estimate is submitted there is no button to take, and it falls back to the form's heading.
+ * multi-line box starts a new line; a read-only or disabled field is skipped. On the last field it moves focus to the Calculate button and never presses it (STORY-05.09 AC-9); once the estimate is prepared there is no button to take, and it falls back to the form's heading.
  */
 function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement | null): void {
   const target = event.target;

@@ -13,7 +13,7 @@ import { createEstimateService, type EstimateService, type EstimateViewer } from
 import { createStepUpService } from '@/server/services/step-up-service';
 
 import { currentCalculationOf, engineerOf, leadOf, PRICE, requestFor } from '../../support/approval-helpers';
-import { approvedValuesOf, calculatedEstimateOf, exportCellsOf, openApprovedWorld, type ApprovedWorld } from '../../support/approved-world';
+import { approvedValuesOf, calculatedEstimateOf, exportCellsOf, openApprovedWorld, summaryWithoutMarker, type ApprovedWorld } from '../../support/approved-world';
 import { KEY_SECRET } from '../../support/audit-database';
 import { createTestHasher } from '../../support/builders/user';
 import { defined } from '../../support/defined';
@@ -105,7 +105,7 @@ beforeAll(async () => {
   made.draft = (await calculatedEstimateOf(world)).estimateId;
   await db.owner.query("UPDATE estimates SET status = 'DRAFT' WHERE id = $1::uuid", [made.draft]);
   approvedBefore = await approvedValuesOf(world, made.approved);
-  summaryBefore = await world.exporter.getSummary(world.lead, made.approved);
+  summaryBefore = await summaryWithoutMarker(world, made.approved);
   formBefore = await estimates.getForm(lead(), made.approved);
   cellsBefore = await exportCellsOf(world, made.approved);
 
@@ -142,7 +142,7 @@ describe('AC-6: a revert touches no estimate data', () => {
     const after = await approvedValuesOf(world, made.approved);
     expect(after.costs.configurationNumber).toBe(1);
     expect(after).toEqual(approvedBefore);
-    expect(await world.exporter.getSummary(world.lead, made.approved)).toEqual(summaryBefore);
+    expect(await summaryWithoutMarker(world, made.approved)).toEqual(summaryBefore);
     expect(await exportCellsOf(world, made.approved)).toEqual(cellsBefore);
   });
 

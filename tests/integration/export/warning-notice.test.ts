@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CalculateAckRequiredError } from '@/lib/estimate/calculate-ack-required-error';
 import { buildWorkbook } from '@/server/export/build-workbook';
 import { createConfigRepository } from '@/server/repositories/config-repository';
+import { createDownloadRepository } from '@/server/repositories/download-repository';
 import { createExportRepository } from '@/server/repositories/export-repository';
 import { createImageRepository } from '@/server/repositories/image-repository';
 import type { CalculateOptions } from '@/server/services/calculation-service';
@@ -44,6 +45,7 @@ beforeAll(async () => {
   const cache = createConfigVersionCache();
   exporter = createExportService({
     header: createExportRepository(db.prisma),
+    downloads: createDownloadRepository(db.prisma),
     nodes: db.nodes,
     calculations: db.calculations,
     approvals: db.approvals,

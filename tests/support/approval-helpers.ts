@@ -24,7 +24,7 @@ export const auditOf = (db: CalculationDatabase, label = 'Calculation Lead'): Au
 /** The body the route hands the service: the calculation the Lead saw and a price, with the audit context. */
 export const requestFor = (db: CalculationDatabase, calculationId: string, price: string = PRICE) => ({ calculationId, price, audit: auditOf(db) });
 
-/** A calculated estimate of the Engineer's with `parts` parts: SUBMITTED, the figures `current`. `top` is its first part. */
+/** A calculated estimate of the Engineer's with `parts` parts: PREPARED, the figures `current`. `top` is its first part. */
 export async function calculatedEstimate(db: CalculationDatabase, parts = 2): Promise<{ readonly estimateId: string; readonly top: string }> {
   const estimateId = await db.addCompleteEstimate({ parts });
   await db.service.calculate(engineerOf(db), estimateId);

@@ -21,28 +21,28 @@ const ROLES: ReadonlyArray<RoleName> = ['ENGINEER', 'LEAD', 'ADMIN'];
 
 /** Where an allowed pair leads, and for which roles. A pair that is not in this table is refused for every role. */
 const ALLOWED: ReadonlyArray<{ status: EstimateStatus; event: EstimateEvent; to: EstimateStatus; roles: ReadonlyArray<RoleName> }> = [
-  { status: 'DRAFT', event: 'CALCULATE', to: 'SUBMITTED', roles: ['ENGINEER'] },
-  { status: 'DRAFT', event: 'RECALCULATE', to: 'SUBMITTED', roles: ['LEAD', 'ADMIN'] },
-  { status: 'SUBMITTED', event: 'EDIT', to: 'SUBMITTED', roles: ['LEAD', 'ADMIN'] },
-  { status: 'SUBMITTED', event: 'RECALCULATE', to: 'SUBMITTED', roles: ['LEAD', 'ADMIN'] },
-  { status: 'SUBMITTED', event: 'APPROVE', to: 'APPROVED', roles: ['LEAD', 'ADMIN'] },
+  { status: 'DRAFT', event: 'CALCULATE', to: 'PREPARED', roles: ['ENGINEER'] },
+  { status: 'DRAFT', event: 'RECALCULATE', to: 'PREPARED', roles: ['LEAD', 'ADMIN'] },
+  { status: 'PREPARED', event: 'EDIT', to: 'PREPARED', roles: ['LEAD', 'ADMIN'] },
+  { status: 'PREPARED', event: 'RECALCULATE', to: 'PREPARED', roles: ['LEAD', 'ADMIN'] },
+  { status: 'PREPARED', event: 'APPROVE', to: 'APPROVED', roles: ['LEAD', 'ADMIN'] },
   { status: 'APPROVED', event: 'UNLOCK', to: 'DRAFT', roles: ['LEAD', 'ADMIN'] },
   { status: 'APPROVED', event: 'CANCEL', to: 'DRAFT', roles: ['ADMIN'] },
   { status: 'APPROVED', event: 'EXPORT', to: 'APPROVED', roles: ['LEAD', 'ADMIN'] },
-  // STORY-06.12 AC-10: an approval kept through an unlock is cancelled on a Draft or a Submitted estimate, and the status stays. Admin only.
+  // STORY-06.12 AC-10: an approval kept through an unlock is cancelled on a Draft or a Prepared estimate, and the status stays. Admin only.
   { status: 'DRAFT', event: 'CANCEL', to: 'DRAFT', roles: ['ADMIN'] },
-  { status: 'SUBMITTED', event: 'CANCEL', to: 'SUBMITTED', roles: ['ADMIN'] },
+  { status: 'PREPARED', event: 'CANCEL', to: 'PREPARED', roles: ['ADMIN'] },
 ];
 
 /** The reason each refused pair names, for a role that may apply the event at all. */
 const REFUSED: ReadonlyArray<{ status: EstimateStatus; event: EstimateEvent; reason: RefusalReason }> = [
-  { status: 'DRAFT', event: 'EDIT', reason: 'NOT_SUBMITTED' },
-  { status: 'DRAFT', event: 'APPROVE', reason: 'NOT_SUBMITTED' },
+  { status: 'DRAFT', event: 'EDIT', reason: 'NOT_PREPARED' },
+  { status: 'DRAFT', event: 'APPROVE', reason: 'NOT_PREPARED' },
   { status: 'DRAFT', event: 'UNLOCK', reason: 'NOT_APPROVED' },
   { status: 'DRAFT', event: 'EXPORT', reason: 'NOT_APPROVED' },
-  { status: 'SUBMITTED', event: 'CALCULATE', reason: 'ALREADY_SUBMITTED' },
-  { status: 'SUBMITTED', event: 'UNLOCK', reason: 'NOT_APPROVED' },
-  { status: 'SUBMITTED', event: 'EXPORT', reason: 'NOT_APPROVED' },
+  { status: 'PREPARED', event: 'CALCULATE', reason: 'ALREADY_PREPARED' },
+  { status: 'PREPARED', event: 'UNLOCK', reason: 'NOT_APPROVED' },
+  { status: 'PREPARED', event: 'EXPORT', reason: 'NOT_APPROVED' },
   { status: 'APPROVED', event: 'CALCULATE', reason: 'APPROVED_IS_LOCKED' },
   { status: 'APPROVED', event: 'RECALCULATE', reason: 'APPROVED_IS_LOCKED' },
   { status: 'APPROVED', event: 'EDIT', reason: 'APPROVED_IS_LOCKED' },
@@ -87,7 +87,7 @@ describe('AC-1: every (status, event) pair is decided', () => {
 
   it('every refusal reason has its own 409 code and words, and the words carry no figure or name', () => {
     const reasons = Object.keys(TRANSITION_REFUSALS);
-    expect(reasons.sort()).toEqual(['ALREADY_APPROVED', 'ALREADY_SUBMITTED', 'APPROVED_IS_LOCKED', 'NOT_APPROVED', 'NOT_SUBMITTED']);
+    expect(reasons.sort()).toEqual(['ALREADY_APPROVED', 'ALREADY_PREPARED', 'APPROVED_IS_LOCKED', 'NOT_APPROVED', 'NOT_PREPARED']);
     expect(new Set(Object.values(TRANSITION_REFUSALS).map((text) => text.code)).size).toBe(reasons.length);
     for (const text of Object.values(TRANSITION_REFUSALS)) {
       expect(text.code).toMatch(/^ESTIMATE_[A-Z_]+$/);
@@ -116,10 +116,10 @@ describe('AC-5: roles', () => {
   });
 
   it('a Lead and an Admin may Recalculate, approve and unlock; only an Admin may cancel', () => {
-    expect(decideTransition('SUBMITTED', 'RECALCULATE', 'LEAD').allowed).toBe(true);
-    expect(decideTransition('SUBMITTED', 'RECALCULATE', 'ADMIN').allowed).toBe(true);
-    expect(decideTransition('SUBMITTED', 'APPROVE', 'LEAD').allowed).toBe(true);
-    expect(decideTransition('SUBMITTED', 'APPROVE', 'ADMIN').allowed).toBe(true);
+    expect(decideTransition('PREPARED', 'RECALCULATE', 'LEAD').allowed).toBe(true);
+    expect(decideTransition('PREPARED', 'RECALCULATE', 'ADMIN').allowed).toBe(true);
+    expect(decideTransition('PREPARED', 'APPROVE', 'LEAD').allowed).toBe(true);
+    expect(decideTransition('PREPARED', 'APPROVE', 'ADMIN').allowed).toBe(true);
     expect(decideTransition('APPROVED', 'UNLOCK', 'LEAD').allowed).toBe(true);
     expect(decideTransition('APPROVED', 'UNLOCK', 'ADMIN').allowed).toBe(true);
     expect(decideTransition('APPROVED', 'CANCEL', 'ADMIN').allowed).toBe(true);
@@ -135,9 +135,9 @@ describe('AC-5: roles', () => {
 });
 
 describe('AC-3: a Lead or an Admin Recalculate on a DRAFT', () => {
-  it.each(['LEAD', 'ADMIN'] as const)('sets SUBMITTED for a %s, the same status as the Engineer\'s Calculate', (role) => {
-    expect(decideTransition('DRAFT', 'RECALCULATE', role)).toEqual({ allowed: true, from: 'DRAFT', to: 'SUBMITTED' });
-    expect(decideTransition('DRAFT', 'CALCULATE', 'ENGINEER')).toEqual({ allowed: true, from: 'DRAFT', to: 'SUBMITTED' });
+  it.each(['LEAD', 'ADMIN'] as const)('sets PREPARED for a %s, the same status as the Engineer\'s Calculate', (role) => {
+    expect(decideTransition('DRAFT', 'RECALCULATE', role)).toEqual({ allowed: true, from: 'DRAFT', to: 'PREPARED' });
+    expect(decideTransition('DRAFT', 'CALCULATE', 'ENGINEER')).toEqual({ allowed: true, from: 'DRAFT', to: 'PREPARED' });
   });
 });
 
@@ -153,9 +153,9 @@ describe('AC-2: who may change the inputs of an estimate in each status', () => 
     ['DRAFT', 'ENGINEER', true],
     ['DRAFT', 'LEAD', true],
     ['DRAFT', 'ADMIN', true],
-    ['SUBMITTED', 'ENGINEER', false],
-    ['SUBMITTED', 'LEAD', true],
-    ['SUBMITTED', 'ADMIN', true],
+    ['PREPARED', 'ENGINEER', false],
+    ['PREPARED', 'LEAD', true],
+    ['PREPARED', 'ADMIN', true],
     ['APPROVED', 'ENGINEER', false],
     ['APPROVED', 'LEAD', false],
     ['APPROVED', 'ADMIN', false],
@@ -173,7 +173,7 @@ describe('AC-2: who may change the inputs of an estimate in each status', () => 
     expect(() => canEditInputs('CLOSED' as never, 'ADMIN')).toThrow('Unhandled estimate status.');
   });
 
-  it('agrees with the machine: a SUBMITTED estimate is editable by exactly the roles of the EDIT event', () => {
-    for (const role of ROLES) expect(canEditInputs('SUBMITTED', role)).toBe(decideTransition('SUBMITTED', 'EDIT', role).allowed);
+  it('agrees with the machine: a PREPARED estimate is editable by exactly the roles of the EDIT event', () => {
+    for (const role of ROLES) expect(canEditInputs('PREPARED', role)).toBe(decideTransition('PREPARED', 'EDIT', role).allowed);
   });
 });

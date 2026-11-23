@@ -1,23 +1,23 @@
-import { CALCULATE_BLOCKED_CODE, CALCULATE_SUBMITTED_STATUS } from '../estimate/calculate-words';
+import { CALCULATE_BLOCKED_CODE, CALCULATE_PREPARED_STATUS } from '../estimate/calculate-words';
 import { CALCULATE_ACK_REQUIRED_CODE } from '../estimate/warning-copy';
 import { ACCEPT_JSON, isRecord, JSON_HEADERS, sendJson, type Fetch, type Outcome, type Refusal } from '../api-client';
 
 import type { BlockedPartView, MissingFieldView } from './calculate-missing';
 
 /**
- * The browser's side of Calculate (STORY-05.09; SCR-05 "Calculate blocked" and "Submitted"; architecture section 6 "Calculate"): press the button, and read the answer. Nothing here decides
+ * The browser's side of Calculate (STORY-05.09; SCR-05 "Calculate blocked" and "Prepared"; architecture section 6 "Calculate"): press the button, and read the answer. Nothing here decides
  * anything: whether the estimate is the person's, whether it is a draft, which inputs are missing and whether the masters allow a calculation are the server's, and this file only reads what it says
  * (an answer of the wrong shape is a failure, not a crash). **The one good answer is a status and a sentence**; there is no figure in it to read, and none is asked for (NFR-002).
  */
 
-/** What a good Calculate answers: the estimate is now submitted, and the sentence to show. */
+/** What a good Calculate answers: the estimate is now prepared, and the sentence to show. */
 export interface CalculateDone {
-  readonly status: typeof CALCULATE_SUBMITTED_STATUS;
+  readonly status: typeof CALCULATE_PREPARED_STATUS;
   readonly message: string;
 }
 
 const toDone = (body: unknown): CalculateDone | null =>
-  isRecord(body) && body['status'] === CALCULATE_SUBMITTED_STATUS && typeof body['message'] === 'string' && body['message'] !== '' ? { status: CALCULATE_SUBMITTED_STATUS, message: body['message'] } : null;
+  isRecord(body) && body['status'] === CALCULATE_PREPARED_STATUS && typeof body['message'] === 'string' && body['message'] !== '' ? { status: CALCULATE_PREPARED_STATUS, message: body['message'] } : null;
 
 const calculatePath = (estimateId: string): string => `/api/v1/estimates/${encodeURIComponent(estimateId)}/calculate`;
 

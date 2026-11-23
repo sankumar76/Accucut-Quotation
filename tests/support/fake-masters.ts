@@ -57,7 +57,7 @@ export interface FakeMasterRepository extends MasterRepository {
   readonly materials: MutableMaterial[];
   /** The materials the Admin deleted (STORY-02.07): the row stays under the soft delete, and a calculation still finds it and says it is deleted (STORY-05.09). */
   readonly deletedMaterials: MutableMaterial[];
-  /** The Draft and Submitted estimates that have each material in a part, by material ID, in the order of their task code (STORY-02.07). A test sets an entry to make a material "in use". */
+  /** The Draft and Prepared estimates that have each material in a part, by material ID, in the order of their task code (STORY-02.07). A test sets an entry to make a material "in use". */
   readonly materialOpenEstimates: Map<string, EstimateUse[]>;
   /** The Exchange Rate Master, mutable in the same way (STORY-02.04). Starts with no rate set. */
   readonly exchange: MutableExchangeRates;

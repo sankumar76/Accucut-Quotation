@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ExportBusyError } from '@/lib/errors';
 import { createFixedClock } from '@/lib/time';
+import { buildWorkbook } from '@/server/export/build-workbook';
 import type { ExportModel } from '@/server/export/export-model';
 import type { ApprovalRecord, ApprovalRepository } from '@/server/repositories/approval-repository';
 import type { CalculationRepository, ExportFigures } from '@/server/repositories/calculation-repository';
+import type { DownloadRepository } from '@/server/repositories/download-repository';
 import type { EstimateNodeRepository, NodeRecord } from '@/server/repositories/estimate-node-repository';
 import type { ExportedImage } from '@/server/repositories/image-repository';
 import { createTransactionHandle, type Transaction, type TransactionOptions, type TransactionRunner } from '@/server/repositories/transaction';
@@ -112,6 +114,9 @@ function world(
   );
   // The stored type of each picture asked for: PNG unless a test names another.
   const findMimes = vi.fn((_estimateId: string, ids: ReadonlyArray<string>) => Promise.resolve(ids.map((id) => ({ id, mime: (mimes[id] ?? 'image/png') as ExportedImage['mime'] }))));
+  // The download log (STORY-CR01.7E): nothing recorded and no facts unless a test says so.
+  const insertDownload = vi.fn<DownloadRepository['insertDownload']>(() => Promise.resolve());
+  const findMarkerFacts = vi.fn<DownloadRepository['findMarkerFacts']>(() => Promise.resolve({ count: 0, last: null, latestApprovalId: null }));
   const builder = inProcessBuilder();
   // The one transaction the reads share (STORY-07.04 AC-4): what it was asked for, the handle it gave, and whether it is open now, so a test can tell a read inside it from a read after it.
   const transaction = { runs: [] as Array<{ readonly options: TransactionOptions | undefined; readonly tx: Transaction }>, open: false };
@@ -132,6 +137,7 @@ function world(
     nodes: { listNodes },
     calculations: { findFigureBasis, findExportFigures },
     approvals: { findLatestApproval },
+    downloads: { insertDownload, findMarkerFacts },
     images: { readMany, findMimes },
     configuration: { current, byId },
     transactions,
@@ -139,7 +145,7 @@ function world(
     clock: createFixedClock(NOON_UTC),
     ...overrides,
   });
-  return { service, transaction, findHeader, listNodes, current, byId, findFigureBasis, findExportFigures, findLatestApproval, readMany, findMimes, builder };
+  return { service, transaction, findHeader, listNodes, current, byId, findFigureBasis, findExportFigures, findLatestApproval, readMany, findMimes, builder, insertDownload, findMarkerFacts };
 }
 
 describe('getSummary', () => {
@@ -166,6 +172,7 @@ describe('getSummary', () => {
       state: 'none',
       figures: null,
       warning: null,
+      download: { kind: 'none' },
     });
   });
 
@@ -600,7 +607,8 @@ describe('STORY-07.04 AC-4 (race): the state and the figures are read in one rep
     const { service, transaction, findFigureBasis, findExportFigures, findLatestApproval, readMany, byId } = world({ builder }, [], basisOf(), FIGURES, {}, approvalOf());
     isOpen = () => transaction.open;
     await service.getFile(LEAD, ESTIMATE_ID);
-    expect(transaction.runs).toHaveLength(1);
+    // The snapshot, and after the build the short write transaction of the download log (STORY-CR01.7E), which is not repeatable-read and reads nothing.
+    expect(transaction.runs).toHaveLength(2);
     const run = defined(transaction.runs[0]);
     expect(run.options).toEqual({ isolation: 'repeatable-read' });
     expect(findFigureBasis).toHaveBeenCalledWith(ESTIMATE_ID, run.tx);
@@ -702,5 +710,153 @@ describe('the model sent to the thread holds only what the file shows', () => {
     const model: ExportModel = defined(builder.built[0]);
     expect(Object.keys(model).sort()).toEqual(['columns', 'footer', 'pictureColumn', 'pictures', 'rows', 'sheetName']);
     expect(JSON.stringify(model.rows)).not.toMatch(/00000000-0000-4000-8000-0000000008/);
+  });
+});
+
+/**
+ * STORY-CR01.7E (AQP-402) AC-2, AC-3: every file the server hands over is recorded, in a short write transaction after the file was built and before its bytes are returned; a download that is refused or fails
+ * records nothing; and if the record cannot be written, no file is sent. The approval recorded is the one whose price the file carries in BO2: the latest approval while it stands, and none when it was
+ * cancelled (the file then holds no price).
+ */
+describe('AC-2: the download log (STORY-CR01.7E)', () => {
+  const APPROVAL_ID = '00000000-0000-4000-8000-0000000ab001';
+
+  it('records one download with the calculation, the approval that went into the file and the person, in a write transaction of its own that is not the snapshot', async () => {
+    const { service, insertDownload, transaction } = world({}, [], basisOf(), FIGURES, {}, approvalOf());
+    const file = await service.getFile(LEAD, ESTIMATE_ID);
+    expect(file.bytes.length).toBeGreaterThan(0);
+    expect(insertDownload).toHaveBeenCalledTimes(1);
+    const [download, tx] = defined(insertDownload.mock.calls[0]);
+    expect(download).toEqual({ estimateId: ESTIMATE_ID, calculationId: CALCULATION_ID, approvalId: APPROVAL_ID, downloadedById: LEAD.id });
+    // Two transactions: the repeatable-read snapshot of the reads, then a plain one for the insert.
+    expect(transaction.runs).toHaveLength(2);
+    expect(transaction.runs[0]?.options).toEqual({ isolation: 'repeatable-read' });
+    expect(transaction.runs[1]?.options).toBeUndefined();
+    expect(tx).toBe(transaction.runs[1]?.tx);
+  });
+
+  it('records the Admin who downloaded, not the Engineer who made the calculation', async () => {
+    const { service, insertDownload } = world();
+    await service.getFile(ADMIN, ESTIMATE_ID);
+    expect(defined(insertDownload.mock.calls[0])[0].downloadedById).toBe(ADMIN.id);
+  });
+
+  it('records no approval for a file with no approval (the first approval after it will then turn the marker amber)', async () => {
+    const { service, insertDownload } = world();
+    await service.getFile(LEAD, ESTIMATE_ID);
+    expect(defined(insertDownload.mock.calls[0])[0].approvalId).toBeNull();
+  });
+
+  it('records no approval for a cancelled approval: its price left the file, so the file carries none', async () => {
+    const cancelled = approvalOf({ cancel: { cancelledAt: new Date('2026-11-13T00:00:00.000Z'), byName: 'Invented Admin', reason: null, engineerName: 'Invented Engineer' } });
+    const { service, insertDownload } = world({}, [], basisOf(), FIGURES, {}, cancelled);
+    await service.getFile(LEAD, ESTIMATE_ID);
+    expect(defined(insertDownload.mock.calls[0])[0].approvalId).toBeNull();
+  });
+
+  it('records the approval of an unlocked estimate: the earlier price stays in the file until a new approval replaces it (D-29)', async () => {
+    const unlocked = approvalOf({ unlock: { unlockedAt: new Date('2026-11-13T00:00:00.000Z'), byName: 'Invented Lead', reason: null, engineerName: 'Invented Engineer' } });
+    const { service, insertDownload } = world({}, [], basisOf(), FIGURES, {}, unlocked);
+    await service.getFile(LEAD, ESTIMATE_ID);
+    expect(defined(insertDownload.mock.calls[0])[0].approvalId).toBe(APPROVAL_ID);
+  });
+
+  it('records after the file was built and before the bytes are returned, so a file is never given without its record', async () => {
+    const order: string[] = [];
+    const { service, insertDownload } = world({
+      builder: inProcessBuilder(async (model) => {
+        const bytes = await buildWorkbook(model);
+        order.push('built');
+        return bytes;
+      }),
+    });
+    insertDownload.mockImplementation(() => {
+      order.push('recorded');
+      return Promise.resolve();
+    });
+    const file = await service.getFile(LEAD, ESTIMATE_ID);
+    order.push('returned');
+    // The name is unchanged by the log (AQP-391 owns its form).
+    expect(file.fileName).toBe('MAS_Feed-hopper_14-11-2026.xlsx');
+    expect(order).toEqual(['built', 'recorded', 'returned']);
+  });
+
+  it('sends no file when the record cannot be written: the answer is the fault, with no bytes', async () => {
+    const builder = inProcessBuilder();
+    const { service, insertDownload } = world({ builder });
+    insertDownload.mockRejectedValue(new Error('the database is busy'));
+    await expect(service.getFile(LEAD, ESTIMATE_ID)).rejects.toThrow('the database is busy');
+    // The place was given back all the same.
+    expect(builder.open()).toBe(0);
+  });
+});
+
+describe('AC-3: a download that is refused or fails writes no row (STORY-CR01.7E)', () => {
+  it.each([
+    ['never calculated', basisOf({ calculationRevision: null })],
+    ['out of date', basisOf({ inputsRevision: 6, calculationRevision: 5 })],
+  ])('%s: the 409, and nothing recorded', async (_title, basis) => {
+    const { service, insertDownload } = world({}, [], basis);
+    await expect(service.getFile(LEAD, ESTIMATE_ID)).rejects.toMatchObject({ httpStatus: 409 });
+    expect(insertDownload).not.toHaveBeenCalled();
+  });
+
+  it('an estimate that is not there: the 404, and nothing recorded', async () => {
+    const { service, insertDownload } = world({ header: { findHeader: () => Promise.resolve(null) } });
+    await expect(service.getFile(LEAD, ESTIMATE_ID)).rejects.toMatchObject({ httpStatus: 404 });
+    expect(insertDownload).not.toHaveBeenCalled();
+  });
+
+  it('an Engineer: the 403 before anything is read, and nothing recorded', async () => {
+    const { service, insertDownload } = world();
+    await expect(service.getFile(ENGINEER, ESTIMATE_ID)).rejects.toMatchObject({ httpStatus: 403 });
+    expect(insertDownload).not.toHaveBeenCalled();
+  });
+
+  it('a build that fails (the thread refused it or timed out): the fault, and nothing recorded', async () => {
+    const builder = inProcessBuilder(() => Promise.reject(new Error('The build failed.')));
+    const { service, insertDownload } = world({ builder });
+    await expect(service.getFile(LEAD, ESTIMATE_ID)).rejects.toThrow();
+    expect(insertDownload).not.toHaveBeenCalled();
+  });
+
+  it('the summary records nothing: only a file handed over is a download', async () => {
+    const { service, insertDownload } = world({}, [node('a', null, 0)]);
+    await service.getSummary(LEAD, ESTIMATE_ID);
+    expect(insertDownload).not.toHaveBeenCalled();
+  });
+});
+
+describe('AC-4, AC-6: the summary carries the marker for a Lead and an Admin only (STORY-CR01.7E)', () => {
+  const LAST = { approvalId: '00000000-0000-4000-8000-0000000ab001', byName: 'Invented Lead', at: new Date('2026-11-23T04:30:00.000Z') };
+
+  it('says "downloaded" with the count and the last person and time when the approval in the last file still stands', async () => {
+    const { service, findMarkerFacts } = world();
+    findMarkerFacts.mockResolvedValue({ count: 2, last: LAST, latestApprovalId: LAST.approvalId });
+    expect((await service.getSummary(LEAD, ESTIMATE_ID)).download).toEqual({ kind: 'downloaded', count: 2, last: { byName: 'Invented Lead', at: '2026-11-23T04:30:00.000Z' } });
+  });
+
+  it('says "changed" when the estimate was approved again after the last download', async () => {
+    const { service, findMarkerFacts } = world();
+    findMarkerFacts.mockResolvedValue({ count: 1, last: LAST, latestApprovalId: '00000000-0000-4000-8000-0000000ab002' });
+    expect((await service.getSummary(ADMIN, ESTIMATE_ID)).download).toMatchObject({ kind: 'changed', count: 1 });
+  });
+
+  it('reads the marker in the same snapshot as the figures, so the page never says "current" over a marker of another moment', async () => {
+    const { service, findMarkerFacts, transaction } = world();
+    await service.getSummary(LEAD, ESTIMATE_ID);
+    expect(findMarkerFacts).toHaveBeenCalledWith(ESTIMATE_ID, transaction.runs[0]?.tx);
+  });
+
+  it('is a 404 when the facts say there is no such estimate', async () => {
+    const { service, findMarkerFacts } = world();
+    findMarkerFacts.mockResolvedValue(null);
+    await expect(service.getSummary(LEAD, ESTIMATE_ID)).rejects.toMatchObject({ httpStatus: 404 });
+  });
+
+  it('refuses an Engineer before the marker is read', async () => {
+    const { service, findMarkerFacts } = world();
+    await expect(service.getSummary(ENGINEER, ESTIMATE_ID)).rejects.toMatchObject({ httpStatus: 403 });
+    expect(findMarkerFacts).not.toHaveBeenCalled();
   });
 });

@@ -13,7 +13,7 @@ import { seedConfig } from '../../support/seed-config';
 
 /**
  * STORY-08.05 AC-5 and AC-6 (FR-065, FR-077; SPEC section 8.4): the part form of an APPROVED estimate is built from the registry that estimate was approved with (the version of its current calculation), so a
- * field inserted later does not appear on it and a field deleted later is still shown with its stored value. A Draft (a new one, one unlocked, one after a cancelled approval) and a Submitted estimate that
+ * field inserted later does not appear on it and a field deleted later is still shown with its stored value. A Draft (a new one, one unlocked, one after a cancelled approval) and a Prepared estimate that
  * was never approved use the latest version. Which version served the form is never in the answer (NFR-002). Over in-memory storage; the same chain against PostgreSQL is
  * `tests/integration/config/version-pinning.test.ts`. Every name and ID is invented.
  */
@@ -121,7 +121,7 @@ describe('AC-5 and AC-6: every other estimate reads the latest version', () => {
   // A Draft is also what an unlocked estimate and an estimate whose approval was cancelled are (FR-107: the status goes back to DRAFT), each with its calculation still stored on the older version.
   it.each([
     ['a Draft with a stored calculation on an older version (also an unlocked one, or one after a cancelled approval)', 'DRAFT'],
-    ['a Submitted estimate that was never approved', 'SUBMITTED'],
+    ['a Prepared estimate that was never approved', 'PREPARED'],
   ] as const)('%s', async (_name, status) => {
     for (const [role, viewer] of viewers) {
       const { service, asked } = setUp(estimate(status));

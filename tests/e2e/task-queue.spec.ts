@@ -62,7 +62,7 @@ async function seedFour(engineerId: string): Promise<SeededSet> {
   const now = Date.now();
   return {
     lateNight: await seedQueueTask(engineerId, '2030-03-05T18:00:00.000Z', 'DRAFT', 'E2E late night'),
-    earlyMorning: await seedQueueTask(engineerId, '2030-03-05T21:30:00.000Z', 'SUBMITTED', 'E2E early morning'),
+    earlyMorning: await seedQueueTask(engineerId, '2030-03-05T21:30:00.000Z', 'PREPARED', 'E2E early morning'),
     overdue: await seedQueueTask(engineerId, new Date(now - 3 * DAY_MS).toISOString(), 'DRAFT', 'E2E overdue'),
     closed: await seedQueueTask(engineerId, new Date(now - 10 * DAY_MS).toISOString(), 'APPROVED', 'E2E closed'),
   };
@@ -199,7 +199,7 @@ test.describe('an Engineer', () => {
             folderPath: z.string(),
             folderUrl: z.string().nullable(),
             deadlineAt: z.string(),
-            status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']),
+            status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
             assignedByName: z.string(),
           }),
         ),

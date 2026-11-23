@@ -1,6 +1,6 @@
 /**
  * What Calculate waits for before it sends anything (STORY-05.09 AC-2, review SQR-01 of AQP-317). Leaving a field queues its save, and a press on Calculate follows the leaving at once, so
- * without a wait the press can reach the server before the save does: the estimate would then be submitted with the value the part held before, and the immutable record would hold that
+ * without a wait the press can reach the server before the save does: the estimate would then be prepared with the value the part held before, and the immutable record would hold that
  * value while the screen shows the new one. The gate holds the saves in flight and the fields that show a value the server does not hold (the rule refused it, the text is not a number,
  * or the save failed). `settle()` waits for every save and says whether Calculate may go.
  *

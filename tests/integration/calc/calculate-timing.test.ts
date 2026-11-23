@@ -29,7 +29,7 @@ afterAll(async () => {
 });
 
 describe('AC-8: a Calculate of 500 parts, through the whole path', () => {
-  it('stores 500 rows, submits the estimate, and takes well under the loose bound (the measure is printed)', { timeout: 120_000 }, async () => {
+  it('stores 500 rows, prepares the estimate, and takes well under the loose bound (the measure is printed)', { timeout: 120_000 }, async () => {
     const viewer = { id: db.engineerId, role: 'ENGINEER' as const };
     const samples: number[] = [];
     for (let run = 0; run < RUNS; run += 1) {
@@ -37,13 +37,13 @@ describe('AC-8: a Calculate of 500 parts, through the whole path', () => {
       const started = performance.now();
       const answer = await db.service.calculate(viewer, estimateId);
       samples.push(performance.now() - started);
-      expect(answer).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+      expect(answer).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
       const stored = await db.owner.query<{ rows: string; status: string }>(
         `SELECT (SELECT count(*) FROM calculation_rows r JOIN calculations c ON c.id = r.calculation_id WHERE c.estimate_id = $1::uuid) AS rows,
                 (SELECT status::text FROM estimates WHERE id = $1::uuid) AS status`,
         [estimateId],
       );
-      expect(defined(stored.rows[0])).toEqual({ rows: String(TREE500_NODE_COUNT), status: 'SUBMITTED' });
+      expect(defined(stored.rows[0])).toEqual({ rows: String(TREE500_NODE_COUNT), status: 'PREPARED' });
     }
     process.stdout.write(`\n${formatReport(`AC-8 Calculate of ${TREE500_NODE_COUNT} parts through calculation-service.calculate (PostgreSQL), ${RUNS} runs`, summarise(samples))}`);
     expect(summarise(samples).maxMs).toBeLessThan(LOOSE_BOUND_MS);

@@ -13,7 +13,7 @@ import { createSaveGate } from '@/lib/estimates/save-gate';
 import type { AutosaveProps } from './autosave';
 import type { CalculateBarProps } from './calculate-bar';
 import type { CalculateSummaryProps } from './calculate-summary';
-import { APPROVED_LOCKED_BODY, APPROVED_LOCKED_TITLE, CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_SUBMITTED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_TITLE, FORM_AREA_TITLE_ID, LEAVE_GUARD_FAILED_TITLE } from './estimate-texts';
+import { APPROVED_LOCKED_BODY, APPROVED_LOCKED_TITLE, CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_PREPARED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_TITLE, FORM_AREA_TITLE_ID, LEAVE_GUARD_FAILED_TITLE } from './estimate-texts';
 import { focusFirstField } from './focus-field';
 import type { LeaveGuardProps } from './leave-guard';
 import { PartForm } from './part-form';
@@ -30,8 +30,8 @@ import { WorkspaceHeader, type WorkspaceHeaderView } from './workspace-header';
  * whether or not a customer is set (an estimate made before CR-01 may have none; Calculate then refuses, in the server's words). It decides nothing: the estimate's state is the server's.
  *
  * **Calculate (STORY-05.09).** The action bar at the bottom presses it. A blocked answer is a summary at the top with each part and field as a link, a triangle on each part in the tree, the words
- * under each blank field and a triangle on each card and in the section strip; a good one turns the page to "Submitted": the badge, the sentence, inputs read-only, part actions hidden and
- * the button "Submitted" (`canEditInputs`, the same rule the server asks again). The page holds the status from the answer, not a guess: the server decided it.
+ * under each blank field and a triangle on each card and in the section strip; a good one turns the page to "Prepared": the badge, the sentence, inputs read-only, part actions hidden and
+ * the button "Prepared" (`canEditInputs`, the same rule the server asks again). The page holds the status from the answer, not a guess: the server decided it.
  */
 
 /** The code of the three parts that nobody needs before the page is up, each fetched after it is (`use-lazy-component.ts`; NFR-009: this page's first load has no room left in 200 KB). */
@@ -61,7 +61,7 @@ export interface EstimateWorkspaceProps {
 }
 
 export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps) {
-  // The status is the server's: it starts as the page was rendered and becomes SUBMITTED when Calculate says it did.
+  // The status is the server's: it starts as the page was rendered and becomes PREPARED when Calculate says it did.
   const [status, setStatus] = useState<EstimateStatus>(header.status);
   // This page is the Engineer's (a Lead or an Admin sees the short header until SCR-06), so the Engineer's rule is the one asked.
   const editable = canEditInputs(status, 'ENGINEER');
@@ -70,7 +70,7 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
   const selected = tree.selected === null ? null : { id: tree.selected.id, slNo: tree.selected.slNo, revision: tree.selected.revision };
   // What Calculate waits for: the part form's saves in flight, and the fields that show a value that is not saved (review SQR-01 of AQP-317).
   const [saves] = useState(createSaveGate);
-  const calculation = useCalculate({ estimateId, onSubmitted: () => setStatus('SUBMITTED'), settle: saves.settle });
+  const calculation = useCalculate({ estimateId, onPrepared: () => setStatus('PREPARED'), settle: saves.settle });
   const bar = useLazyComponent<CalculateBarProps>(loadBar, true);
   const summary = useLazyComponent<CalculateSummaryProps>(loadSummary, calculation.blocked !== null);
   const Bar = bar.Component;
@@ -85,10 +85,10 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
    */
   const guarded = (go: () => void): void => (saves.isDirty() ? askToLeave({ proceed: go, cancel: stay }) : go());
   const guardedTree: PartsTreeState = { ...tree, select: (next) => guarded(() => tree.select(next)), add: (kind) => guarded(() => tree.add(kind)) };
-  const submittedNotice = useRef<HTMLDivElement>(null);
-  // The press that submitted the estimate: the button has become "Submitted" and is off, so focus goes to the notice. A reload of a submitted estimate steals nothing (`done` is null).
+  const preparedNotice = useRef<HTMLDivElement>(null);
+  // The press that prepared the estimate: the button has become "Prepared" and is off, so focus goes to the notice. A reload of a prepared estimate steals nothing (`done` is null).
   useEffect(() => {
-    if (calculation.done !== null) submittedNotice.current?.focus();
+    if (calculation.done !== null) preparedNotice.current?.focus();
   }, [calculation.done]);
   const missingFields = useMemo(() => new Map((calculation.blocked ?? []).map((part) => [part.nodeId, new Set(part.fields.map((field) => field.fieldId))])), [calculation.blocked]);
   const missingParts = useMemo(() => new Set(missingFields.keys()), [missingFields]);
@@ -121,10 +121,10 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
           {calculation.problem.kind === 'failed' ? FAILED_BODY : null}
         </Notice>
       )}
-      {status === 'SUBMITTED' ? (
-        // The state "Submitted": the one sentence the server answers with and nothing else. No number from the calculation is anywhere (NFR-002). Focus comes here after the press that submitted it.
-        <div ref={submittedNotice} tabIndex={-1} data-calculate-submitted="" className="rounded-md">
-          <Notice tone="success" title={CALCULATE_SUBMITTED_TITLE}>
+      {status === 'PREPARED' ? (
+        // The state "Prepared": the one sentence the server answers with and nothing else. No number from the calculation is anywhere (NFR-002). Focus comes here after the press that prepared it.
+        <div ref={preparedNotice} tabIndex={-1} data-calculate-prepared="" className="rounded-md">
+          <Notice tone="success" title={CALCULATE_PREPARED_TITLE}>
             {calculation.done ?? CALCULATE_MESSAGE}
           </Notice>
         </div>
@@ -146,7 +146,7 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
         </CardContent>
       </Card>
       {status === 'APPROVED' ? null : Bar !== null ? (
-        <Bar submitted={status === 'SUBMITTED'} calculation={calculation} gate={saves} onChoosePart={guardedTree.select} />
+        <Bar prepared={status === 'PREPARED'} calculation={calculation} gate={saves} onChoosePart={guardedTree.select} />
       ) : bar.failed ? (
         // The button's code could not be fetched: the person is told so and what to do, never left with no button and no word (review SQR-06 of AQP-317).
         <Notice tone="danger" title={CALCULATE_BAR_FAILED_TITLE} />

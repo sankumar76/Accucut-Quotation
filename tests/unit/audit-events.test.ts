@@ -306,12 +306,28 @@ describe('STORY-06.12 AC-3, AC-7, AC-10: the cancel event keeps the price it sto
 
   it.each([
     ['DRAFT', 'a Draft'],
-    ['SUBMITTED', 'Submitted'],
+    ['PREPARED', 'Prepared'],
   ])('says so when the estimate stayed %s (AC-10): the entry shows that the status did not change', (status, words) => {
     expect(event.describeStored({ ...before, status }, { ...after, status })).toEqual({
       before: 'Approved at ₹ 4,750.00',
       after: `Cancelled, the estimate stayed ${words}. Reason: The wrong customer was priced.`,
     });
+  });
+
+  it.each([
+    ['an estimate that stayed Submitted', { ...before, status: 'SUBMITTED' }, { ...after, status: 'SUBMITTED' }, 'Cancelled, the estimate stayed Prepared. Reason: The wrong customer was priced.'],
+    ['an estimate that was approved and went back to Draft', { ...before, status: 'APPROVED' }, { ...after, status: 'DRAFT' }, 'Cancelled. Reason: The wrong customer was priced.'],
+  ])('AQP-398 AC-5: reads a legacy entry stored before the rename, for %s, and words SUBMITTED as Prepared (the log is immutable)', (_name, storedBefore, storedAfter, words) => {
+    expect(event.describeStored(storedBefore, storedAfter)).toEqual({ before: 'Approved at ₹ 4,750.00', after: words });
+  });
+
+  it('AQP-398 AC-5: writes only the new values, so SUBMITTED is refused on the write schemas and PREPARED is accepted', () => {
+    const schemas = event.schemasFor('estimate');
+    expect(schemas).not.toBeNull();
+    expect(schemas?.before.safeParse({ ...before, status: 'SUBMITTED' }).success).toBe(false);
+    expect(schemas?.after.safeParse({ ...after, status: 'SUBMITTED' }).success).toBe(false);
+    expect(schemas?.before.safeParse({ ...before, status: 'PREPARED' }).success).toBe(true);
+    expect(schemas?.after.safeParse({ ...after, status: 'PREPARED' }).success).toBe(true);
   });
 
   it.each([

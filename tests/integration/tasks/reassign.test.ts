@@ -89,7 +89,7 @@ async function taskRow(): Promise<TaskRow> {
   return defined(rows[0]);
 }
 
-const setStatus = (status: 'DRAFT' | 'SUBMITTED' | 'APPROVED') =>
+const setStatus = (status: 'DRAFT' | 'PREPARED' | 'APPROVED') =>
   db.owner.query('UPDATE estimates SET status = $2::estimate_status WHERE task_id = $1::uuid', [taskId, status]);
 
 async function fieldsOf(promise: Promise<unknown>): Promise<Record<string, string>> {
@@ -306,7 +306,7 @@ describe('AC-6 (A-14): an approved task cannot be changed', () => {
     expect(await entryCount(db)).toBe(entriesBefore);
   });
 
-  it.each(['DRAFT', 'SUBMITTED'] as const)('lets a %s task be changed (A-3)', async (status) => {
+  it.each(['DRAFT', 'PREPARED'] as const)('lets a %s task be changed (A-3)', async (status) => {
     await setStatus(status);
     await service.reassignTask(asLead(), taskId, { engineerId: priyaId });
     expect((await taskRow()).engineer_id).toBe(priyaId);
@@ -406,9 +406,9 @@ describe('AC-8: who sees it now', () => {
     expect(await service.getTask(priya, taskId)).toMatchObject({ code: 'Q-2026-0001', status: 'DRAFT', notes: 'Invented notes.' });
   });
 
-  it('a task reassigned while SUBMITTED keeps its status and reaches the new Engineer as SUBMITTED', async () => {
-    await setStatus('SUBMITTED');
+  it('a task reassigned while PREPARED keeps its status and reaches the new Engineer as PREPARED', async () => {
+    await setStatus('PREPARED');
     await service.reassignTask(asLead(), taskId, { engineerId: priyaId });
-    expect(await service.getTask({ id: priyaId, role: 'ENGINEER' }, taskId)).toMatchObject({ status: 'SUBMITTED' });
+    expect(await service.getTask({ id: priyaId, role: 'ENGINEER' }, taskId)).toMatchObject({ status: 'PREPARED' });
   });
 });

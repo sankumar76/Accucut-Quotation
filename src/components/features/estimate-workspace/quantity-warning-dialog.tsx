@@ -33,7 +33,7 @@ export interface QuantityWarningDialogProps {
  *
  * The dialog itself is the shared `QuantityWarningDialogView` (STORY-06.10 reuses it for the Lead's Recalculate); this file is the Engineer's half: the row links to the form's fields, and the focus.
  * Focus is placed here and not left to Radix, which has no trigger to return it to: "Go back" and every refusal or failure of "Calculate anyway" put it back on the Calculate button, a row link takes the person
- * to the field, and a good answer moves it to the Submitted notice (the workspace; Calculate is then disabled and takes none), so every way out puts focus somewhere deliberate (WCAG 2.4.3). A new list
+ * to the field, and a good answer moves it to the Prepared notice (the workspace; Calculate is then disabled and takes none), so every way out puts focus somewhere deliberate (WCAG 2.4.3). A new list
  * (the bar gives the dialog a new `key`) mounts the dialog again, so focus starts on "Go back" again and the notice, a live region, is announced (WCAG 4.1.3).
  */
 export function QuantityWarningDialog({ rows, changed, busy, onGoBack, onGoAhead, onChoosePart }: QuantityWarningDialogProps) {
@@ -48,7 +48,7 @@ export function QuantityWarningDialog({ rows, changed, busy, onGoBack, onGoAhead
 
   function goTo(event: MouseEvent<HTMLAnchorElement>, row: WarnedRowView): void {
     event.preventDefault();
-    // While "Calculate anyway" is on its way the request is sent and cannot be recalled: going to a field now would look like going back, and the estimate would be submitted under the person.
+    // While "Calculate anyway" is on its way the request is sent and cannot be recalled: going to a field now would look like going back, and the estimate would be prepared under the person.
     if (busy) return;
     toField.current = true;
     onGoBack();
@@ -72,7 +72,7 @@ export function QuantityWarningDialog({ rows, changed, busy, onGoBack, onGoAhead
       onGoBack={goBack}
       onGoAhead={onGoAhead}
       onCloseAutoFocus={(event) => {
-        // Radix has no trigger to return focus to. A dialog that goes away for any reason but a row link (a refusal, a failure, Escape) leaves focus on Calculate; once submitted that button is disabled and takes none.
+        // Radix has no trigger to return focus to. A dialog that goes away for any reason but a row link (a refusal, a failure, Escape) leaves focus on Calculate; once prepared that button is disabled and takes none.
         event.preventDefault();
         if (!toField.current) focusCalculate();
       }}

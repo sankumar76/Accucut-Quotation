@@ -96,7 +96,7 @@ export interface MaterialMethods {
   /** Changes a listed material and returns it, or null if there is none with this ID. Throws `MasterConstraintError` for a name that is taken. */
   updateMaterial(id: string, changes: MaterialChanges, tx: Transaction): Promise<MaterialRecord | null>;
   /**
-   * The Draft and Submitted estimates that have this material in a part (STORY-02.07 AC-3): how many, and the first ten by task code. **Fails closed**: an ID that
+   * The Draft and Prepared estimates that have this material in a part (STORY-02.07 AC-3): how many, and the first ten by task code. **Fails closed**: an ID that
    * is not a UUID throws, it is never "no estimate". A plain read: it takes no lock, so it must run **after** `findMaterialForUpdate` in the same transaction. That
    * lock waits for a writer of a part's Material in Drawing (which holds the material `FOR SHARE`, `lockMaterialForUse`) and, once granted, this statement (a new
    * snapshot under READ COMMITTED) sees what that writer committed (AC-5).
@@ -253,12 +253,12 @@ async function readOpenEstimatesOfMaterial(db: PrismaClient, materialId: string,
   if (!isUuid(materialId)) throw new Error('The open-estimate check needs a material ID.');
   // The ID as PostgreSQL prints a JSON string: lower case, in double quotes. A UUID holds only hex digits and hyphens, so nothing in it is special to the text search.
   const needle = `"${materialId.toLowerCase()}"`;
-  // Open means Draft or Submitted (BR-053). The total is counted over all of them before the limit; only a code and a status are read.
+  // Open means Draft or Prepared (BR-053). The total is counted over all of them before the limit; only a code and a status are read.
   const rows = await clientFor(db, tx).$queryRaw`
     SELECT t.code AS "code", e.status::text AS "status", (count(*) OVER ())::int AS "total"
     FROM estimates e
     JOIN tasks t ON t.id = e.task_id
-    WHERE e.status IN ('DRAFT', 'SUBMITTED')
+    WHERE e.status IN ('DRAFT', 'PREPARED')
       AND EXISTS (SELECT 1 FROM estimate_nodes n WHERE n.estimate_id = e.id AND position(${needle}::text IN lower(n.inputs::text)) > 0)
     ORDER BY t.code, e.id
     LIMIT ${ESTIMATE_USE_LIMIT}::int`;

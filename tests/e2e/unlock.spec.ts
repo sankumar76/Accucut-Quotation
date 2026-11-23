@@ -11,7 +11,7 @@ import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './
  * of the approval. What it checks: the dialog opens from the Unlock button with focus on the safe choice, the required reason and the notice of what changed since the approval, keeps focus inside, has no
  * sideways scroll and no axe violation; an empty reason and a reason over 500 characters show the spec's sentence under the field and send nothing; a good unlock shows "Unlocking", then the Draft with the
  * notice (who, when, why, the figures still the approval's, the price approved earlier, whose queue), BO labelled "Approved earlier", Recalculate as the primary action and Approve off; the Engineer then
- * sees the estimate editable and no price; an input changed after the unlock clears every figure but not BO, and a Recalculate brings the estimate back to Submitted; a deleted customer stops the dialog
+ * sees the estimate editable and no price; an input changed after the unlock clears every figure but not BO, and a Recalculate brings the estimate back to Prepared; a deleted customer stops the dialog
  * before the reason is typed; and an estimate unlocked in another window while the dialog was open is not unlocked twice. The unlocks are made by Leads of the tests' own, never by the Admin, so the audit
  * screen's list of "Approval cancelled" (no story has raised it yet) is not touched. The words are the UX spec's (v0.31), written out here and not imported. Every name and path is invented.
  */
@@ -185,7 +185,7 @@ test.describe('AC-2, AC-3, AC-7, AC-11: a good unlock', () => {
     await expect(page.getByText('Approved earlier')).toHaveCount(0);
   });
 
-  test('an input changed after the unlock clears every figure but not BO; a Recalculate brings the estimate back to Submitted with Approve on', async ({ page }, testInfo) => {
+  test('an input changed after the unlock clears every figure but not BO; a Recalculate brings the estimate back to Prepared with Approve on', async ({ page }, testInfo) => {
     const { code, owner } = await openedApproved(page, testInfo);
     // Another window unlocks, and an input changes: the page is read after both.
     expect(await unlockThroughTheApi(page, owner.id, REASON)).toBe(200);
@@ -207,7 +207,7 @@ test.describe('AC-2, AC-3, AC-7, AC-11: a good unlock', () => {
     await expect(page.locator('#review-approve')).toBeEnabled();
     await expect(notice).toHaveCount(0);
     await expect(tiles(page)).toContainText('Approved earlier');
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 2 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 2 });
   });
 });
 

@@ -155,11 +155,11 @@ describe('AC-3, AC-4, AC-13: changing the customer', () => {
     expect(await stored()).toMatchObject({ customerId: marlowId, revision: 2 });
   });
 
-  it('a Lead and an Admin may change it on a SUBMITTED estimate (their inputs, FR-064)', async () => {
+  it('a Lead and an Admin may change it on a PREPARED estimate (their inputs, FR-064)', async () => {
     await setUpEstimate(true);
-    await db.owner.query("UPDATE estimates SET status = 'SUBMITTED' WHERE id = $1::uuid", [estimateId]);
+    await db.owner.query("UPDATE estimates SET status = 'PREPARED' WHERE id = $1::uuid", [estimateId]);
     await change(lead(), marlowId);
-    expect(await stored()).toMatchObject({ customerId: marlowId, revision: 1, status: 'SUBMITTED' });
+    expect(await stored()).toMatchObject({ customerId: marlowId, revision: 1, status: 'PREPARED' });
   });
 
   it('two changes at once are serialised by the estimate row lock: both are counted and the last one holds', async () => {
@@ -255,7 +255,7 @@ describe('AC-7: the refusals leave the row as it was', () => {
     expect(await stored()).toEqual({ customerId: null, revision: 0, status: 'DRAFT' });
   });
 
-  it('an approved estimate is a 409 for a Lead and an Admin: nobody changes an approved estimate (a submitted one is theirs to change, FR-064)', async () => {
+  it('an approved estimate is a 409 for a Lead and an Admin: nobody changes an approved estimate (a prepared one is theirs to change, FR-064)', async () => {
     await setUpEstimate();
     await db.owner.query("UPDATE estimates SET status = 'APPROVED' WHERE id = $1::uuid", [estimateId]);
     await expect(change(lead(), brightwaterId)).rejects.toBeInstanceOf(ConflictError);

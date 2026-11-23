@@ -36,6 +36,7 @@ const summary = (state: ExportSummaryView['state']): ExportSummaryView => ({
   state,
   figures: null,
   warning: null,
+  download: { kind: 'none' },
 });
 
 const render = (view: ExportSummaryView): string => renderToStaticMarkup(createElement(EstimateExport, { summary: view, estimateId: ESTIMATE_ID, code: CODE }));
@@ -87,7 +88,7 @@ describe('AC-5: SCR-10 in a refused state shows no file card and no table', () =
 });
 
 describe('AC-7: the download button of SCR-06 in those states', () => {
-  const STATUSES: ReadonlyArray<EstimateStatus> = ['DRAFT', 'SUBMITTED', 'APPROVED'];
+  const STATUSES: ReadonlyArray<EstimateStatus> = ['DRAFT', 'PREPARED', 'APPROVED'];
   const REASON = 'Calculate or Recalculate first. There is no file until a calculation is current.';
 
   const bar = (state: 'none' | 'out-of-date', status: EstimateStatus): string =>

@@ -100,9 +100,9 @@ describe('AC-1: a customer used by no estimate is soft-deleted', () => {
   });
 });
 
-describe('AC-2: a customer on a Draft or Submitted estimate is refused', () => {
+describe('AC-2: a customer on a Draft or Prepared estimate is refused', () => {
   it('answers 409 CUSTOMER_IN_USE naming the estimates, and changes nothing and writes no entry', async () => {
-    alpha().openEstimates.push({ code: 'Q-2026-0101', status: 'DRAFT' }, { code: 'Q-2026-0102', status: 'SUBMITTED' });
+    alpha().openEstimates.push({ code: 'Q-2026-0101', status: 'DRAFT' }, { code: 'Q-2026-0102', status: 'PREPARED' });
     const before = harness.auditWorld.audit.committed.length;
     const response = await DELETE(request('DELETE'), withId(ALPHA));
     expect(response.status).toBe(409);
@@ -116,7 +116,7 @@ describe('AC-2: a customer on a Draft or Submitted estimate is refused', () => {
       code: 'CUSTOMER_IN_USE',
       estimates: [
         { code: 'Q-2026-0101', status: 'DRAFT' },
-        { code: 'Q-2026-0102', status: 'SUBMITTED' },
+        { code: 'Q-2026-0102', status: 'PREPARED' },
       ],
       estimateTotal: 2,
     });

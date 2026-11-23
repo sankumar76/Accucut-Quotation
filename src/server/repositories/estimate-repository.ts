@@ -149,7 +149,7 @@ export interface EstimateUnlocking {
   readonly lockMaterialsInUse: EstimateRepository['lockMaterialsInUse'];
 }
 
-const STATUS = z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']);
+const STATUS = z.enum(['DRAFT', 'PREPARED', 'APPROVED']);
 
 const WORKSPACE_ROWS = z.array(
   z.strictObject({
