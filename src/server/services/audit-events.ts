@@ -667,6 +667,18 @@ export const AUDIT_EVENTS = {
     describe: (before, after) => ({ before: describeEstimateCustomer(before), after: describeEstimateCustomer(after) }),
   }),
 
+  // ---- Wired in CR-01 item 7C (AQP-400): an approved estimate marked as quoted by a Lead or an Admin -----------------------------------
+  // One entry for one mark, in the mark's own transaction under the estimate's row lock: the status before (APPROVED, the only status the machine marks from) and after (QUOTED), and nothing else. The object is the
+  // task's code and the actor the Lead or the Admin who pressed. A refusal (a second press, a Draft, a Prepared or an ignored estimate) writes no entry. No figure has a key to sit in (NFR-002, NFR-007).
+  'estimate.quoted': defineEvent({
+    objectType: 'estimate',
+    category: 'task_change',
+    status: 'wired',
+    before: z.strictObject({ status: z.literal('APPROVED') }),
+    after: z.strictObject({ status: z.literal('QUOTED') }),
+    describe: () => ({ before: 'Approved', after: 'Quoted' }),
+  }),
+
   // ---- Wired in STORY-04.07: a task given to another Engineer, a new deadline, or both ----------------------------------------------
   // One entry for one save (decision D-g), in the change's own transaction under the task's and the estimate's row locks: the Engineer (ID and name) and the deadline before and after. The actor is the Lead or
   // the Admin who saved; the object is the task code. A save that changed nothing writes no entry.

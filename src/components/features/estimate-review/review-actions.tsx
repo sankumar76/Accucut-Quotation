@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { ApproveButton } from '@/components/features/estimate-approve/approve-button';
 import { CancelButton } from '@/components/features/estimate-cancel/cancel-button';
+import { MarkQuotedButton } from '@/components/features/estimate-quote/mark-quoted-button';
 import { RemoveButton } from '@/components/features/estimate-remove-price/remove-button';
 import { RecalculateButton } from '@/components/features/estimate-recalculate/recalculate-button';
 import { CALCULATED_LINE_ID } from '@/components/features/estimate-recalculate/recalculate-ids';
@@ -10,10 +11,11 @@ import { Button } from '@/components/ui/button';
 import type { RoleName } from '@/lib/auth/roles';
 import { approveRatesLine } from '@/lib/estimate/rates-changed-copy';
 import { isLocked, type EstimateStatus } from '@/lib/estimate/state-machine';
+import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatRupees } from '@/lib/money';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { REVIEW_APPROVE_ID, REVIEW_CALCULATE_ID, REVIEW_CANCEL_ID, REVIEW_DOWNLOAD_ID, REVIEW_REMOVE_PRICE_ID, REVIEW_UNLOCK_ID } from './review-ids';
+import { REVIEW_APPROVE_ID, REVIEW_CALCULATE_ID, REVIEW_CANCEL_ID, REVIEW_DOWNLOAD_ID, REVIEW_MARK_QUOTED_ID, REVIEW_REMOVE_PRICE_ID, REVIEW_UNLOCK_ID } from './review-ids';
 import {
   ACTIONS_LABEL,
   APPROVE_CLEARED_REASON,
@@ -29,6 +31,8 @@ import {
   CALCULATING_LINE,
   DOWNLOAD_LABEL,
   DOWNLOAD_NOT_CALCULATED_REASON,
+  MARK_QUOTED_FIRST_OPEN_FAILED,
+  MARK_QUOTED_LABEL,
   ONLY_ADMIN_CANCELS,
   RECALCULATE_LABEL,
   REMOVE_PRICE_FIRST_OPEN_FAILED,
@@ -80,6 +84,14 @@ export interface RemoveOffer {
   readonly priceLabel: string;
 }
 
+/**
+ * What the action bar offers of Mark as quoted (CR-01 item 7C, AC-1, AC-4), or `null` while it is not offered: the customer's name for the dialog's sentence and the download marker the page drew, for the chip in it.
+ */
+export interface QuoteOffer {
+  readonly customerName: string | null;
+  readonly download: DownloadChipData | 'unavailable';
+}
+
 export interface ReviewActionsProps {
   /** The estimate's ID, for the request of Calculate or Recalculate and of the approval and the unlock. */
   readonly estimateId: string;
@@ -97,6 +109,8 @@ export interface ReviewActionsProps {
   readonly remove: RemoveOffer | null;
   /** The "Rates changed" notice is drawn (STORY-06.11): the Recalculate button its link points at is on the bar. */
   readonly ratesChanged: boolean;
+  /** The Mark as quoted button, on an approved estimate that is not ignored, for a Lead and an Admin (see `quoteOffer`). */
+  readonly quote: QuoteOffer | null;
 }
 
 interface ReasonProps {
@@ -145,6 +159,16 @@ export function removeOffer(role: RoleName, approval: NonNullable<CostsView['app
 }
 
 /**
+ * Whether Mark as quoted is offered (CR-01 item 7C, AC-1): only to a Lead or an Admin, only on an APPROVED estimate, and not while the Ignored layer is set over it. A Draft, a Prepared estimate and a Quoted one (the last
+ * status) never have it, and an Engineer is never offered it (the review is not theirs). The button is the person's convenience: the server decides all the same (403 for an Engineer before the ID is read, the 409s).
+ */
+export function quoteOffer(role: RoleName, status: EstimateStatus, ignored: boolean, customerName: string | null, download: DownloadChipData | 'unavailable'): QuoteOffer | null {
+  // `APPROVED` by name and not `isLocked`: a QUOTED estimate is locked too, and Mark as quoted is the one action that exists only before it (QUOTED is the last status).
+  if (role === 'ENGINEER' || status !== 'APPROVED' || ignored) return null;
+  return { customerName, download };
+}
+
+/**
  * Why Approve and lock is off, by what the Lead can do about it (UX spec v0.31 SCR-06): never calculated, the figures cleared, or a Draft whose figures are current (an unlocked estimate: the way on is Recalculate).
  * Any other state with the button off is a page the server could not offer a total on; the way on is the same, so it says the same as the cleared state.
  */
@@ -181,7 +205,7 @@ function ApproveControl({ estimateId, state, status, approve }: Pick<ReviewActio
   );
 }
 
-export function ReviewActions({ estimateId, code, state, status, calculated, approve, cancel, remove, ratesChanged }: ReviewActionsProps) {
+export function ReviewActions({ estimateId, code, state, status, calculated, approve, cancel, remove, ratesChanged, quote }: ReviewActionsProps) {
   // Recalculate is the way on whenever the figures are not current, and **on a Draft whatever the state of the figures**: an unlocked estimate keeps its current figures, and it can be calculated again, prepared
   // and approved without anyone editing an input (AC-11). A Prepared estimate with current figures shows no button: its way on is Approve and lock, unless rates changed since the calculation: the notice's link
   // is to Recalculate, so the button is there then (STORY-06.11).
@@ -229,6 +253,17 @@ export function ReviewActions({ estimateId, code, state, status, calculated, app
             <ApproveControl estimateId={estimateId} state={state} status={status} approve={approve} />
           )}
         </div>
+        {quote === null ? null : (
+          <MarkQuotedButton
+            id={REVIEW_MARK_QUOTED_ID}
+            label={MARK_QUOTED_LABEL}
+            failedLine={MARK_QUOTED_FIRST_OPEN_FAILED}
+            estimateId={estimateId}
+            code={code}
+            customerName={quote.customerName}
+            download={quote.download}
+          />
+        )}
         {cancel === null ? null : cancel.kind === 'admin' ? (
           <div className="flex flex-col gap-s-1">
             <CancelButton

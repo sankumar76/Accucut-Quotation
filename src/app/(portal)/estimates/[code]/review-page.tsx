@@ -27,6 +27,10 @@ export interface ReviewPageArgs {
   readonly estimateId: string;
   readonly header: WorkspaceHeaderView;
   readonly customer: { readonly id: string; readonly name: string; readonly shortName: string } | null;
+  /** Who marked the estimate as quoted and when, for the Quoted notice (CR-01 item 7C): the Lead's and the Admin's only, so `page.tsx` reads it from the workspace on their branch alone. */
+  readonly quoted: { readonly at: Date; readonly byName: string } | null;
+  /** Whether the Ignored layer is set over the status: an ignored estimate is not offered Mark as quoted. */
+  readonly ignored: boolean;
 }
 
 /**
@@ -42,7 +46,7 @@ async function markerOf(viewer: EstimateViewer, estimateId: string): Promise<Dow
   }
 }
 
-export async function renderReview({ viewer, estimateId, header, customer }: ReviewPageArgs): Promise<ReactElement> {
+export async function renderReview({ viewer, estimateId, header, customer, quoted, ignored }: ReviewPageArgs): Promise<ReactElement> {
   const [costs, download] = await Promise.all([getEstimateReviewService().getCosts(viewer, estimateId), markerOf(viewer, estimateId)]);
   return (
     <EstimateReview
@@ -53,6 +57,8 @@ export async function renderReview({ viewer, estimateId, header, customer }: Rev
       calculatedAt={costs.calculatedAt === null ? null : formatIst(new Date(costs.calculatedAt))}
       viewerRole={viewer.role}
       download={download}
+      quoted={quoted === null ? null : { at: quoted.at.toISOString(), byName: quoted.byName }}
+      ignored={ignored}
     />
   );
 }

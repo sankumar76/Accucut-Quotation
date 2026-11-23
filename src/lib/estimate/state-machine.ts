@@ -14,7 +14,7 @@ import type { RoleName } from '../auth/roles';
  *   APPROVED   --UNLOCK (Lead, Admin) / CANCEL (Admin only)-->        DRAFT
  *   APPROVED   --EXPORT (Lead, Admin)-->                              APPROVED
  *   APPROVED   --MARK_QUOTED (Lead, Admin)-->                         QUOTED
- *   QUOTED     --UNLOCK (Lead, Admin) / CANCEL (Admin only)-->        DRAFT      (A-CR01-1, built as assumed: the two `QUOTED` cells of `followOn`)
+ *   QUOTED     --UNLOCK (Lead, Admin) / CANCEL (Admin only)-->        DRAFT      (A-CR01-1, confirmed 2026-11-23, AQP-1 comment 12832: the two `QUOTED` cells of `followOn`)
  *   QUOTED     --EXPORT (Lead, Admin)-->                              QUOTED
  *   DRAFT      --CANCEL (Admin only)-->                               DRAFT      (STORY-06.12 AC-10: an approval kept through an unlock is cancelled; the status stays)
  *   PREPARED   --CANCEL (Admin only)-->                               PREPARED   (the same)
@@ -204,8 +204,8 @@ function followOn(status: EstimateStatus, event: StatusEvent): TransitionDecisio
           return refuse('APPROVED_IS_LOCKED');
         case 'UNLOCK':
         case 'CANCEL':
-          // **A-CR01-1, the one assumption of these two cells** (built as assumed, to be confirmed with the customer): an Approved or Quoted estimate can be unlocked back to Draft. If the answer
-          // is "no", both cells become `refuse('QUOTED_IS_FINAL')`, and the service that clears the quote columns on leaving QUOTED is then never reached from here.
+          // **A-CR01-1, confirmed 2026-11-23 (AQP-1 comment 12832, "Yes, both, as built")**: an Approved or Quoted estimate can be unlocked back to Draft, and the Admin can cancel the approval from Quoted. These two cells
+          // are the **only** way back from QUOTED (A-CR01-3: no undo apart from Unlock, so there is no `UNMARK_QUOTED` event). `QUOTED_IS_FINAL` is kept for Ignore alone (`layerEvent`).
           return allow('QUOTED', 'DRAFT');
         case 'EXPORT':
           return allow('QUOTED', 'QUOTED');

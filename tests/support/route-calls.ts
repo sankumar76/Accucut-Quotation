@@ -250,6 +250,11 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
       return { id, status: 409 };
     case 'POST /api/v1/estimates/[id]/unlock':
       return { id, body: { reason: 'Invented reason for the canary estimate.' }, status: 409 };
+    // CR-01 item 7C: the canary estimate is never APPROVED (a Draft or a Prepared estimate at every state a test leaves it in), so a press is refused 409 by the state machine ("not approved") for the two roles that may
+    // call it, writes nothing (no status move, no marker, no audit entry) and repeats. The refusal holds a fixed sentence and no figure, so the scan reads it. The rest of the order is `mark-quoted-route.test.ts`'s,
+    // and the row lock and the CHECKs are `tests/integration/estimates/mark-quoted.test.ts`.
+    case 'POST /api/v1/estimates/[id]/quoted':
+      return { id, status: 409 };
     // STORY-06.12: Admin only. The canary estimate has no approval at any state it can be in, so a good reason, the person's own password (`HARNESS_PASSWORD`, the right one, so the step-up passes and clears its count) and an
     // approval that is none are refused 409 ("no approval to cancel") under the estimate's lock, for the one role that may call it, and write nothing (no cancel, no status move, no audit entry). The refusal holds a fixed
     // sentence and no figure, so the scan reads it. The rest of the order (the reason, the password, a deleted customer, a newer approval) is `cancel-approval-route.test.ts`'s, and the row lock is `tests/integration/approval/cancel.test.ts`.
