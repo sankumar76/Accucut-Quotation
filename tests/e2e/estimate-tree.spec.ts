@@ -31,6 +31,9 @@ const part = (page: Page, slNo: string): Locator => tree(page).getByRole('link')
 /**
  * Chooses a row by a press at the start of its name. The toolbar of a row (move handle, "+" and "-", CR-01 items 3C and 3D) floats over the end of it, and in a narrow panel it reaches the middle of a short row, so the centre
  * of the link, where Playwright presses by default, is not always the row. A person presses on the name.
+ *
+ * This presses at the start of the name because of the toolbar overlap, a product Bug (#655: the toolbar of three buttons covers the middle of a short row in a narrow panel and takes the press). When the Bug is fixed,
+ * this goes back to a plain click on the row.
  */
 const choose = (page: Page, slNo: string): Promise<void> => part(page, slNo).click({ position: { x: 16, y: 10 } });
 const action = (page: Page, name: string): Locator => page.getByRole('button', { name, exact: true });
