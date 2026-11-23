@@ -75,6 +75,32 @@ describe('movePart and deletePart', () => {
   });
 });
 
+describe('the abort signal (AQP-343, DEF-040)', () => {
+  const signal = new AbortController().signal;
+
+  it.each([
+    ['loadTree', (doFetch: ReturnType<typeof fetching>, given?: AbortSignal) => loadTree(ESTIMATE, doFetch, given), { nodes: [PART] }],
+    ['addPart', (doFetch: ReturnType<typeof fetching>, given?: AbortSignal) => addPart(ESTIMATE, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' }, doFetch, given), { nodeId: NODE, nodes: [PART] }],
+    ['movePart', (doFetch: ReturnType<typeof fetching>, given?: AbortSignal) => movePart(ESTIMATE, { nodeId: NODE, revision: 1, parentId: null, index: 0 }, doFetch, given), { nodes: [PART] }],
+    ['deletePart', (doFetch: ReturnType<typeof fetching>, given?: AbortSignal) => deletePart(ESTIMATE, { nodeId: NODE, revision: 1, parts: 1, subtree: 'abc' }, doFetch, given), { nodes: [] }],
+  ])('%s passes the signal it is given on to the request, and adds nothing to the request without one', async (_name, call, body) => {
+    const given = fetching(answer(body));
+    await call(given, signal);
+    expect(given.mock.calls[0]?.[1]?.signal).toBe(signal);
+    const without = fetching(answer(body));
+    await call(without);
+    expect(without.mock.calls[0]?.[1]).not.toHaveProperty('signal');
+  });
+
+  it('is "failed" for a request that its signal aborted, as for any network failure', async () => {
+    const controller = new AbortController();
+    const hanging = vi.fn((...args: Parameters<typeof fetch>) => new Promise<Response>((_resolve, reject) => args[1]?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))));
+    const pending = movePart(ESTIMATE, { nodeId: NODE, revision: 1, parentId: null, index: 0 }, hanging, controller.signal);
+    controller.abort();
+    expect(await pending).toEqual({ status: 'failed' });
+  });
+});
+
 describe('treeFromRefusal (AC-6)', () => {
   const problem = (tree: unknown, code = 'TREE_CHANGED', status = 409) => answer({ type: 'about:blank', title: 'The parts were changed.', status, code, requestId: 'req-0a0b0c0d', tree }, status);
 
