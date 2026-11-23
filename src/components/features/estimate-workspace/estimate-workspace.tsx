@@ -85,7 +85,7 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
    * first, once the saves in flight have finished; with nothing unsaved the choice goes through at once, as before.
    */
   const guarded = (go: () => void): void => (saves.isDirty() ? askToLeave({ proceed: go, cancel: stay }) : go());
-  const guardedTree: PartsTreeState = { ...tree, select: (next) => guarded(() => tree.select(next)), add: (kind) => guarded(() => tree.add(kind)) };
+  const guardedTree: PartsTreeState = { ...tree, select: (next) => guarded(() => tree.select(next)), addUnder: (parentId, nodeKind) => guarded(() => tree.addUnder(parentId, nodeKind)) };
   const preparedNotice = useRef<HTMLDivElement>(null);
   // The press that prepared the estimate: the button has become "Prepared" and is off, so focus goes to the notice. A reload of a prepared estimate steals nothing (`done` is null).
   useEffect(() => {
