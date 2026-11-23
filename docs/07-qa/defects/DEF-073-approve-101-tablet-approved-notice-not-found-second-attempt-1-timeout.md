@@ -54,8 +54,14 @@ Logs read 2026-11-23 (QA, Stage 12 job logs of 45125449394, ANSI stripped); figu
 4. **DL-301 (B)(c) and (d) apply:** no re-run rule covers `:101` and a re-run of a run red on it is not merge evidence; the cause step must rule out a fault in the approve flow before any test-only fix.
 5. The binding limits of DL-229 (4)(b) are the project's standing form for a time-out Bug (no skip, `fixme`, quarantine, retry, budget, timeout or `test.slow()` change; every assertion kept); DL-334 (5) states none beyond (1) to (4). The E2E test count stays the same while the DEF-057 and DEF-069 observers are being read (DL-296 (3)).
 
-## Proof (QA's proposal, for the fix PR; master has not set one)
-DL-334 (5) sets no proof line for this Bug. QA proposes the DL-257 (A) form used for DEF-072: attempt-1 pass at three widths on the fix PR's run of record and on the first `master` push after it, each under 25 s, and the watch trigger (any later attempt-1 time-out, or a received value) stays until G8. **This is a proposal, not a rule; master rules (below).**
+## Proof (CONFIRMED by master, DL-339, 2026-11-23; QA's proposal of the DL-257 (A) form, with three additions)
+1. **Confirmed (DL-339 (1)):** **P1** attempt-1 pass at three widths on the fix PR's run of record. **P2** each under 25 s. The **watch trigger** (any later attempt-1 time-out of the case, or a received value on an approval assertion) **stays until G8.**
+2. **Added, because approval is a section 9 item 2 area (DL-339 (2)):**
+   - **(a) Two `master` pushes.** P1 and P2 also hold on the **first two `master` pushes after the squash**, as for DEF-069 (DL-327 (6)), because the case's tablet readings are near the line (28.5 s on 45128502168, 24.2 s on 45122632176).
+   - **(b) Cause in the PR body.** The PR body names the step that used the time on **both failing attempts** (PR #613's run 45016832555 [desktop] and push 45125449394 [tablet]), from the cause step of DL-334 (5), and states **by file:line** what happens between the Approve press and `#review-approved-notice`. If spec-local step lines were added, the proof runs report the **Approve request's status and duration at three widths on AQP-416**.
+   - **(c) A product signal comes to master before closing.** An Approve request with **no answer within the 15 s notice wait** on a proof run, or an **answer other than the awaited status**, comes to master before the Bug closes. Under DL-301 (B)(d), a product cause found at any step changes the fix route: a **combined review before merge** (section 9 item 2), and the Bug's **type moves to Product**.
+3. **Scope of a test-only fix**, if the cause step clears the approve flow (DL-339 (3)): **`tests/e2e/approve.spec.ts` only.** No change to `tests/e2e/support/**`, config, CI or `src/`. No budget, retry, timeout, trace, artifact or `test.slow()` change. **Every assertion is kept**, including the notice, the "Approving" state, the keyboard path, the axe scan and the stored-state read at :130. The E2E test count is unchanged while the DEF-057 and DEF-069 observers are read (DL-296 (3)).
+4. **Lane (DL-339 (4)):** as DL-334 (5): after DEF-072 and DEF-069's fix; it never takes a lane promised to a CR-01 story.
 
 ## Suspected Area (optional)
 `tests/e2e/approve.spec.ts:101` to :131, the wait between "Approving" and the notice; or the approve flow itself (request, answer, the page taking the answer and showing the notice). Cause not determined; product not excluded.
@@ -66,7 +72,7 @@ DL-334 (5) sets no proof line for this Bug. QA proposes the DL-257 (A) form used
 | Cause stated (file:line on `master`) | developer | | not started |
 | Fixed | developer (lane: after DEF-072 and DEF-069's fix) | | |
 | Regression test added | developer (the case itself; count unchanged) | | |
-| Verified | qa-engineer | | not started |
+| Verified (DL-339: P1, P2 on the fix PR's run and the first two `master` pushes; PR body cause; no product signal) | qa-engineer | | not started |
 
 ## For master
-1. DL-334 (5) sets the order (cause step first) but not a proof line. QA proposes the DEF-072 form (above); please confirm or replace it before the fix PR opens.
+None open. The proof line asked for here was set by DL-339 (above).
