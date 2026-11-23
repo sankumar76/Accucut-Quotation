@@ -25,6 +25,8 @@ export interface TreeNodeProps {
   readonly selected: boolean;
   /** Calculate found a missing input in this part (STORY-05.09; architecture A-16: client state from the blocked answer, never stored): a triangle and words follow the name. */
   readonly missing?: boolean;
+  /** True once for the row that was just added: its link takes the focus when it is mounted (CR-01 item 3C AC-3). A ref callback, so nothing is read while rendering and nothing is set. */
+  readonly takesFocus?: (id: string) => boolean;
   /** The row was chosen. `byKeyboard` is true for Enter on the link: the form then takes the focus (STORY-05.03, review SQR-11), as Enter on a part did before. */
   readonly onChoose: (id: string, byKeyboard: boolean) => void;
 }
@@ -35,7 +37,7 @@ export interface TreeNodeProps {
  * label for the kind**. The open row carries `aria-current="true"`. Tab moves from a row to its arrow and to its buttons; there is no roving tab stop and no arrow-key navigation (PM ruling). What it is
  * and how filled it is are text, so a screen reader reads both; no figure is ever shown here. The name is empty until the part form stores one (STORY-05.03), so "Part" stands in.
  */
-export function TreeNode({ part, kindLabel, selected, missing = false, onChoose }: TreeNodeProps) {
+export function TreeNode({ part, kindLabel, selected, missing = false, onChoose, takesFocus }: TreeNodeProps) {
   const choose = (event: MouseEvent<HTMLAnchorElement>): void => {
     // The link is the way to the details, not a move of the page: the form beside the tree shows them. A press with a finger or a mouse has a detail of 1 or more, a key a detail of 0.
     event.preventDefault();
@@ -46,6 +48,9 @@ export function TreeNode({ part, kindLabel, selected, missing = false, onChoose 
       href={`#${FORM_AREA_TITLE_ID}`}
       data-part-id={part.id}
       aria-current={selected ? 'true' : undefined}
+      ref={(link) => {
+        if (link !== null && takesFocus?.(part.id) === true) link.focus();
+      }}
       onClick={choose}
       className={cn(
         'flex min-h-(--control-h) fine-wide:min-h-(--compact-field-h) cursor-pointer items-center gap-s-2 rounded-md border border-transparent py-s-1 pr-s-2 pl-s-1 text-body text-ink no-underline hover:bg-surface-2',

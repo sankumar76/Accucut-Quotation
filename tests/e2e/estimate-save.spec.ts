@@ -241,7 +241,7 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
     await openForm(page, testInfo);
     await typeAValueThatCannotBeSaved(page);
     await showTree(page);
-    await page.getByRole('button', { name: 'New item' }).click();
+    await page.getByRole('button', { name: 'Add main assembly' }).click();
     await expect(leaveDialog(page)).toBeVisible();
     await keepEditing(page).click();
     await expect(leaveDialog(page)).toHaveCount(0);
