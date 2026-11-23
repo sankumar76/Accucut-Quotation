@@ -670,7 +670,8 @@ test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
     await page.mouse.move(x, handle.y + handle.height / 2);
     await page.mouse.down();
     await page.mouse.move(x, below.y + below.height - 4, { steps: 8 });
-    // The line is at the bottom of 1.2, where the row would land. Both are read in one go in the page: near the edge of the panel the drag scrolls it, and the line moves with the rows.
+    // The line is there (it is drawn as soon as the drag code has the pointer), and at the bottom of 1.2, where the row would land. Both are read in one go in the page: near the edge of the panel the drag scrolls it, and the line moves with the rows.
+    await expect(page.locator('[data-drop-line]')).toBeVisible();
     const gap = await page.evaluate(() => {
       const line = document.querySelector('[data-drop-line]')?.getBoundingClientRect();
       const link = [...document.querySelectorAll('nav[aria-label="Parts tree"] a[data-part-id]')].find((candidate) => candidate.querySelector('[data-sl-no]')?.textContent === '1.2')?.getBoundingClientRect();
