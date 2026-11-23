@@ -181,3 +181,11 @@ The half 2 numbers are met (all three attempt-1 passes under 25 s). Under DL-336
 | half 2: the same on the first `master` push after the squash | push 45195759848: 12.5 / 13.7 / 15.7 s | Yes (a reading) |
 
 **DEF-070 is NOT closed by QA.** DL-330 (4) needs both halves, and half 1 missed by 0.2 s on the tablet; the line is not moved after the result (DL-336 (3), DL-165). **The close is master's to rule** (to master: close on half 2 plus the accepted narrowing and the 12.5 to 15.7 s reading, or another route). The watch trigger stays to G8 (any later attempt-1 failure of the case, or a reading of 29 s or more).
+
+## DL-349 replacement proof, push 1 of 2 read (qa-engineer, 2026-11-23; Stage 12 job logs of `master` push CI run 45200030493, ANSI stripped; no re-run)
+
+**The rule (DL-349 (B)).** DEF-070 closes when its AC-1 case (by title) passes on attempt 1, under 25 s, at three widths on **each of the next two `master` push runs created after the ruling**, one after the other; a miss (25 s or more at any width, or an attempt-1 failure) takes no further draw and a third test-only change follows; an attempt-1 failure or a reading of 29 s or more on either push is also a DEF-070 occurrence (DL-264 (5)(b)) and comes to master. RISK-031 closes when DEF-070 closes (DL-349 (C)).
+
+**Replacement push 1: `master` push CI run 45200030493** (b85b2aa9, #658's squash; created 14:58:45Z; every job `success`; shards `549 / 555 / 535 / 552 passed`, 0 flaky, 0 failed; 0 `[AQP-343 renumber diagnostic]` lines). The AC-1 case ("AC-1: the list has the eight, each with its letter ... and a reload keeps it", `estimate-treatments.spec.ts:91`, by title) attempt 1 **15.4 / 15.2 / 13.5 s** (mobile / tablet / desktop), no retry: **under 25 s at all three widths: push 1 of 2 MET.** No reading near 29 s. *Timing note for master:* the committed record of DL-349 (records-u 3730362b) is stamped 14:59:00Z, 15 s after this run was created (14:58:45Z); the orchestrator designates this run as replacement push 1 (the first push after the ruling was written); master confirms or names the next push instead.
+
+**Push 2 of 2:** the next `master` push run created after this one (not yet run at this read). DEF-070 closes only after it is read: under 25 s at three widths, attempt 1. The watch (any later attempt-1 failure, or a reading of 29 s or more) stays to G8.

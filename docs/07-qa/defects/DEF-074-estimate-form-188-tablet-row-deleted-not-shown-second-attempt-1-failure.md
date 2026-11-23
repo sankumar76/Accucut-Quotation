@@ -92,3 +92,14 @@ P1 attempt-1 pass at three widths on the fix PR's run of record and on the first
 **For the record (DL-345 (5)):** RISK-031's remaining close-out items are (ii) DEF-070 (#653) and (iv) DEF-072's half 2, then (iii), a clean `master` push containing them all. (QA's note: DEF-072 was closed on 2026-11-23 on P1 and P2 read on PR run 45158142007 and on the first `master` push 45164384066 (DEF-072 file, "Verification"); if "half 2" means a different reading, QA asks master which.)
 
 **For master.** The two questions of the earlier "For master" section are answered by DL-345 (A) and (B). None open.
+
+## Reads after #658 (the delete diagnostic is live on `master`) and #632's one update (qa-engineer, 2026-11-23; Stage 12 job logs, ANSI stripped; no re-run)
+
+**The case moved.** #658 added the diagnostic to `estimate-form.spec.ts`, so the SQR-01 (b) case ("... the part can still be deleted at once ...") is now at `:422` (was `:188`); QA binds it by title.
+
+| Run | Branch, Next | SQR-01 (b) attempt 1 (mobile / tablet / desktop) | `[AQP-417 delete diagnostic]` lines |
+|---|---|---|---|
+| **`master` push CI run 45200030493** (b85b2aa9, #658's squash; every job `success`, 0 flaky, 0 failed) | `master`, Next 16.4.5 | 10.1 / 7.4 / 7.2 s | 0 (no failure) |
+| **#632's one update, CI run 45200124686** (head 0364a633, net diff `package.json` and `package-lock.json` only; every job `success`; shards `552 / 535 / 555 / 549 passed`, 0 flaky, 0 failed; Stage 11 `645 files, 16408 tests`, 0 five-second cuts) | `chore/AQP-1-next-16.4.6-vitest-5.1`, **Next 16.4.6**, Vitest 5.1.0 | **10.8 / 9.4 / 9.6 s** | 0 (no failure) |
+
+**Reading.** On #632's branch (16.4.6) the case **passed on attempt 1 at all three widths** this time; it had failed on 2 of 3 earlier runs there (45157657813, 45171635228). There is no failure, so there is **no diagnostic content to read** (no DELETE status or time, no PATCH revisions, no in-flight line, no `aria-disabled` state, no Notice), and **no DL-344 (4) outcome is pointed to**; the DL-345 reopen trigger for DEF-040 (a `:188` failure whose diagnostic shows #652's feedback missing) is not fired. Per DL-344 (3), a pass with no cause named does not bring #632 back, and #632's run is read, not merged. **DEF-074 stays open** (Sev-3; DL-345 (B): "no failure caught before the freeze" leaves it open and listed; it does not close on silence). Counts, by QA: SQR-01 (b) attempt-1 failures on 16.4.6: 2 of 4 runs (45125512077 passed, 45157657813 and 45171635228 failed, 45200124686 passed); on 16.4.5: 0.
