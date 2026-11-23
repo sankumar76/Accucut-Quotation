@@ -79,7 +79,7 @@ export function EstimateWorkspace({ header, estimateId, ignored = false, notice 
   // This page is the Engineer's (a Lead or an Admin sees the short header until SCR-06), so the Engineer's rule is the one asked. The Ignored layer is the page's, as the server rendered it, and the server's 409 above.
   const editable = canEditInputs({ status, ignored: frozen }, 'ENGINEER');
   // The tree lives here: the form beside it is for the part chosen in it, and a save of the form gives the tree the part's new revision.
-  const tree = usePartsTree(estimateId);
+  const tree = usePartsTree(estimateId, serverIgnored);
   const selected = tree.selected === null ? null : { id: tree.selected.id, slNo: tree.selected.slNo, revision: tree.selected.revision };
   // What Calculate waits for: the part form's saves in flight, and the fields that show a value that is not saved (review SQR-01 of AQP-317).
   const [saves] = useState(createSaveGate);

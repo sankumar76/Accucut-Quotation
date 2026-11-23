@@ -296,6 +296,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
         'src/components/features/estimate-workspace/estimate-workspace.tsx',
         'src/components/features/estimate-workspace/use-calculate.ts',
         'src/components/features/estimate-workspace/use-part-form.ts',
+        'src/components/features/estimate-workspace/use-parts-tree.ts',
         'src/components/features/tasks/use-reassign-form.ts',
       ].sort(),
     );
