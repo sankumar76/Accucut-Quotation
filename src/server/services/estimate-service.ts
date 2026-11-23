@@ -70,6 +70,10 @@ export interface Workspace {
   readonly title: string;
   readonly notes: string | null;
   readonly assignedByName: string;
+  /** Who marked the estimate as quoted and when, by name (CR-01 item 7C): for a Lead and an Admin only, so it is `null` for an Engineer whatever the row holds (NFR-002, ADR-008). `null` while the estimate is not QUOTED. */
+  readonly quoted: { readonly at: Date; readonly byName: string } | null;
+  /** Whether the Ignored layer is set over the status (ADR-019): the same for every role, so the screen can tell a task that is out of the way. */
+  readonly ignored: boolean;
 }
 
 /** What choosing a customer answers: the estimate and the customer it is now for. */
@@ -356,6 +360,9 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
         title: record.title,
         notes: record.notes,
         assignedByName: record.assignedByName,
+        // The marker is the Lead's and the Admin's (ADR-008): an Engineer reads the status word and nothing of who marked it.
+        quoted: viewer.role === 'ENGINEER' || record.quoted === null ? null : { at: record.quoted.at, byName: record.quoted.byName },
+        ignored: record.ignored !== null,
       };
     },
 

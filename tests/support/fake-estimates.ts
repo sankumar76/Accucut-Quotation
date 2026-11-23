@@ -39,7 +39,12 @@ export interface FakeEstimate {
   ignoredAt?: Date | null;
   /** CR-01 item 7B: who marked the estimate as quoted, set by `setStatus` on the way to QUOTED and cleared on the way out; absent counts as none. */
   quotedBy?: string | null;
+  /** CR-01 item 7C: when it was marked, set with `quotedBy` (the real column is the database clock); absent counts as the moment the world was last written. */
+  quotedAt?: Date | null;
 }
+
+/** The name the fake gives the person who marked an estimate as quoted: the fake keeps their ID only, and the real repository joins `users`. */
+export const QUOTER_NAME = 'Invented Quoter';
 
 /** A part of an estimate's tree as the fake holds it: what the real table keeps, by estimate. */
 export interface FakeNode {
@@ -166,7 +171,7 @@ export function createFakeEstimateWorld(
         subject: estimate.subject ?? 'Invented subject',
         notes: estimate.notes,
         assignedByName: estimate.assignedByName,
-        quoted: estimate.quotedBy == null ? null : { at: lastWritten, byId: estimate.quotedBy },
+        quoted: estimate.quotedBy == null ? null : { at: estimate.quotedAt ?? lastWritten, byId: estimate.quotedBy, byName: QUOTER_NAME },
         ignored: estimate.ignoredAt == null ? null : { at: estimate.ignoredAt, byId: 'invented-person', remarks: 'Invented remarks.' },
       };
       return Promise.resolve(record);
@@ -190,6 +195,10 @@ export function createFakeEstimateWorld(
     },
     findCustomerChoice: (id) => Promise.resolve(customerOf(id)),
     lockMaterialsInUse: () => Promise.resolve([...materialsInUse].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))),
+    findQuoteMarker: (estimateId) => {
+      const estimate = estimates.find((candidate) => same(candidate.id, estimateId));
+      return Promise.resolve(estimate === undefined || estimate.status !== 'QUOTED' || estimate.quotedBy == null ? null : { at: estimate.quotedAt ?? lastWritten, byName: QUOTER_NAME });
+    },
     linkCalculation: (estimateId, calculationId, status) => {
       const estimate = estimates.find((candidate) => same(candidate.id, estimateId));
       if (estimate === undefined) return Promise.reject(new Error('The estimate to link does not exist.'));
@@ -217,8 +226,13 @@ export function createFakeEstimateWorld(
       if (to === 'QUOTED' && quotedBy === undefined) return Promise.reject(new Error('Marking an estimate as quoted needs the person who quoted it.'));
       estimate.status = to;
       // As the real UPDATE does: the quote columns move with the status, in the same write.
-      if (to === 'QUOTED') estimate.quotedBy = quotedBy ?? null;
-      else delete estimate.quotedBy;
+      if (to === 'QUOTED') {
+        estimate.quotedBy = quotedBy ?? null;
+        estimate.quotedAt = new Date();
+      } else {
+        delete estimate.quotedBy;
+        delete estimate.quotedAt;
+      }
       statusWrites += 1;
       return Promise.resolve(true);
     },

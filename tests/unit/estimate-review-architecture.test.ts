@@ -107,6 +107,8 @@ describe('AC-5: no review code reaches the Engineer', () => {
   const APPROVE_BUTTON = `${APPROVE_FOLDER}approve-button.tsx`;
   const UNLOCK_FOLDER = 'src/components/features/estimate-unlock/';
   const UNLOCK_BUTTON = `${UNLOCK_FOLDER}unlock-button.tsx`;
+  const QUOTE_FOLDER = 'src/components/features/estimate-quote/';
+  const QUOTE_BUTTON = `${QUOTE_FOLDER}mark-quoted-button.tsx`;
   const CANCEL_FOLDER = 'src/components/features/estimate-cancel/';
   const CANCEL_BUTTON = `${CANCEL_FOLDER}cancel-button.tsx`;
   const REMOVE_FOLDER = 'src/components/features/estimate-remove-price/';
@@ -129,6 +131,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     clientFiles.delete(APPROVE_BUTTON);
     clientFiles.delete(UNLOCK_BUTTON);
     clientFiles.delete(CANCEL_BUTTON);
+    clientFiles.delete(QUOTE_BUTTON);
     clientFiles.delete(REMOVE_BUTTON);
     clientFiles.delete(CUSTOMER_BUTTON);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
@@ -207,6 +210,27 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(dialog).toMatch(/@\/lib\/estimates\/unlock-client/);
     const importers = ALL.filter((file) => !file.path.startsWith(UNLOCK_FOLDER) && /estimate-unlock\//.test(file.text)).map((file) => file.path);
     expect(importers).toEqual(['src/components/features/estimate-review/review-actions.tsx', 'src/components/features/estimate-review/unlocked-notice.tsx']);
+  });
+
+  it('CR-01 item 7C ADR-016: the Mark as quoted button and its dialog are the only client files of their folder, are imported by the review alone, import no figure, schema, service or repository, and the dialog is fetched on the first press', () => {
+    const folder = ALL.filter((file) => file.path.startsWith(QUOTE_FOLDER));
+    expect(folder.map((file) => file.path).sort()).toEqual([QUOTE_BUTTON, `${QUOTE_FOLDER}mark-quoted-dialog.tsx`, `${QUOTE_FOLDER}mark-quoted-ids.ts`, `${QUOTE_FOLDER}mark-quoted-texts.ts`]);
+    for (const name of ['mark-quoted-ids.ts', 'mark-quoted-texts.ts']) expect(folder.find((file) => file.path.endsWith(name))?.text ?? '').not.toMatch(/use client/);
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const button = strip(folder.find((file) => file.path === QUOTE_BUTTON)?.text ?? '');
+    const dialog = strip(folder.find((file) => file.path.endsWith('mark-quoted-dialog.tsx'))?.text ?? '');
+    expect(folder.find((file) => file.path === QUOTE_BUTTON)?.text ?? '').toMatch(/^\s*['"]use client['"]/m);
+    expect(folder.find((file) => file.path.endsWith('mark-quoted-dialog.tsx'))?.text ?? '').toMatch(/^\s*['"]use client['"]/m);
+    // No restricted module in either: not the costs schema, not the review, not a service, a repository or a calculation's own code.
+    for (const code of [button, dialog]) expect(code).not.toMatch(/schemas\/|estimate-review|@\/server\/|calculation-|row-outputs|product-totals|figure-state/);
+    // The dialog is a bare dynamic `import()` behind a type-only import, so the page's first load does not carry it; the words and the request code belong to the dialog.
+    expect(button).toMatch(/import\('\.\/mark-quoted-dialog'\)/);
+    expect(button).toMatch(/^import type \{ MarkQuotedDialogProps \} from '\.\/mark-quoted-dialog';/m);
+    expect(button).not.toMatch(/^import (?!type).*mark-quoted-(dialog|texts)/m);
+    expect(button).not.toMatch(/mark-quoted-client/);
+    expect(dialog).toMatch(/@\/lib\/estimates\/mark-quoted-client/);
+    const importers = ALL.filter((file) => !file.path.startsWith(QUOTE_FOLDER) && /estimate-quote\//.test(file.text)).map((file) => file.path);
+    expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx', 'src/components/features/estimate-review/review-actions.tsx']);
   });
 
   it('STORY-06.12 ADR-016: the Cancel approval button and its dialog are the only client files of their folder, are imported by the review alone, import no figure, schema, service or repository, and the dialog is fetched on the first press', () => {

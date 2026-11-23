@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { EstimateReview } from '@/components/features/estimate-review/estimate-review';
+import { quoteOffer } from '@/components/features/estimate-review/review-actions';
 import type { WorkspaceHeaderView } from '@/components/features/estimate-workspace/workspace-header';
 import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import type { CostsView } from '@/server/views/schemas/costs';
@@ -51,8 +52,12 @@ const render = (
   header: WorkspaceHeaderView = HEADER,
   viewerRole: 'ADMIN' | 'LEAD' = 'LEAD',
   download: DownloadChipData = { kind: 'none' },
+  quoted: { at: string; byName: string } | null = null,
+  ignored = false,
 ): string =>
-  renderToStaticMarkup(createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST', viewerRole, download }));
+  renderToStaticMarkup(
+    createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST', viewerRole, download, quoted, ignored }),
+  );
 
 const countOf = (html: string, text: string): number => html.split(text).length - 1;
 
@@ -875,6 +880,87 @@ describe('STORY-07.07: Download .xlsx on SCR-06 is the way to SCR-10 while the f
       expect(source, file).not.toContain(NOT_YET);
       expect(source, file).not.toContain('DOWNLOAD_NOT_YET_REASON');
       expect(source, file).not.toContain("STORY-07.03's");
+    }
+  });
+});
+
+describe('CR-01 item 7C, AC-1, AC-4, AC-5, AC-6 (AQP-400; UX spec SCR-06 "Mark as quoted"): the offer, the Quoted notice and the way back', () => {
+  const APPROVED_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'APPROVED' };
+  const QUOTED_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'QUOTED' };
+  const STANDING = { price: '12600.00', approverName: 'Invented Kiran' };
+  const MARKER = { at: '2026-11-23T04:30:00.000Z', byName: 'Invented Kiran' };
+  const markButton = (html: string): string => /<button[^>]*id="review-mark-quoted"[^>]*>/.exec(html)?.[0] ?? '';
+
+  it.each(['LEAD', 'ADMIN'] as const)('AC-1: a %s sees Mark as quoted on an approved estimate that is not ignored, on, opening a dialog, beside Unlock; nothing of the dialog is in the page (NFR-009)', async (role) => {
+    const html = render(await current({ approval: STANDING }), undefined, APPROVED_HEADER, role);
+    const button = markButton(html);
+    expect(button).not.toBe('');
+    expect(button).not.toContain(' disabled=""');
+    expect(button).toContain('aria-haspopup="dialog"');
+    expect(html).toContain('>Mark as quoted</button>');
+    expect(html).toContain('id="review-unlock"');
+    for (const word of ['Not yet', 'This cannot be undone', 'Mark Q-2026-0318 as quoted?', 'The status becomes Quoted']) expect(html, word).not.toContain(word);
+  });
+
+  it.each([
+    ['a Draft', 'DRAFT', false],
+    ['a Prepared estimate', 'PREPARED', false],
+    ['a Quoted estimate', 'QUOTED', false],
+    ['an ignored approved estimate', 'APPROVED', true],
+    ['an ignored Draft', 'DRAFT', true],
+  ] as const)('AC-1: %s has no Mark as quoted', async (_name, status, ignored) => {
+    const html = render(await current({ approval: STANDING }), undefined, { ...HEADER, status }, 'LEAD', { kind: 'none' }, status === 'QUOTED' ? MARKER : null, ignored);
+    expect(html).not.toContain('review-mark-quoted');
+    expect(html).not.toContain('Mark as quoted');
+  });
+
+  it('AC-1: an Engineer is never offered it, whatever the status (the review is not theirs, and the offer says so too)', () => {
+    for (const status of ['DRAFT', 'PREPARED', 'APPROVED', 'QUOTED'] as const) {
+      expect(quoteOffer('ENGINEER', status, false, 'Invented Customer', { kind: 'none' })).toBeNull();
+    }
+    expect(quoteOffer('LEAD', 'APPROVED', false, 'Invented Customer', { kind: 'none' })).toEqual({ customerName: 'Invented Customer', download: { kind: 'none' } });
+    expect(quoteOffer('ADMIN', 'APPROVED', true, null, 'unavailable')).toBeNull();
+  });
+
+  it('AC-5, AC-6: a quoted estimate shows the Quoted notice with who and when, in place of the Approved notice; it stays locked, Unlock is still offered, and the way to the file stays', async () => {
+    const html = render(await current({ approval: STANDING }), undefined, QUOTED_HEADER, 'LEAD', { kind: 'none' }, MARKER);
+    expect(html).toContain('id="review-quoted-notice"');
+    expect(html).toContain('Quoted on 23 Nov 2026, 10:00 IST by Invented Kiran.');
+    expect(html).toContain('The quote was sent to Invented Customer. This is the last status; the estimate stays locked at the approved figures.');
+    expect(html).not.toContain('id="review-approved-notice"');
+    expect(html).not.toContain('id="review-approve"');
+    expect(html).not.toContain('review-mark-quoted');
+    expect(html).toContain('id="review-unlock"');
+    expect(downloadLink(html)).toContain(`href="${EXPORT_HREF}"`);
+    expect(html).toContain('₹ 12,600.00');
+  });
+
+  it('AC-5: an approved estimate that is not quoted has the Approved notice and no Quoted notice', async () => {
+    const html = render(await current({ approval: STANDING }), undefined, APPROVED_HEADER);
+    expect(html).toContain('id="review-approved-notice"');
+    expect(html).not.toContain('review-quoted-notice');
+  });
+
+  it('AC-5: a quoted estimate with no marker (data that should not exist) says only that it is quoted', async () => {
+    const html = render(await current({ approval: STANDING }), undefined, QUOTED_HEADER);
+    expect(html).toContain('id="review-quoted-notice"');
+    expect(html).toContain('Quoted.');
+  });
+
+  it('AC-6: there is no undo anywhere on the screen: no "Mark as not quoted", no unmark, no undo, for an approved or a quoted estimate', async () => {
+    for (const [header, marker] of [[APPROVED_HEADER, null], [QUOTED_HEADER, MARKER]] as const) {
+      const html = render(await current({ approval: STANDING }), undefined, header, 'ADMIN', { kind: 'none' }, marker);
+      expect(html).not.toMatch(/not quoted|unmark|un-mark|undo/i);
+    }
+  });
+
+  it('AC-6: the review folder and the quote folder hold no "Mark as not quoted" wording and no UNMARK_QUOTED', () => {
+    for (const folderUrl of ['../../src/components/features/estimate-review/', '../../src/components/features/estimate-quote/']) {
+      const folder = fileURLToPath(new URL(folderUrl, import.meta.url));
+      for (const file of readdirSync(folder)) {
+        const source = readFileSync(`${folder}${file}`, 'utf8');
+        expect(source, file).not.toMatch(/Mark as not quoted|UNMARK_QUOTED|unmark quoted/i);
+      }
     }
   });
 });

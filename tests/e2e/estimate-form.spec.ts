@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page, type Request, type TestInfo } from '@playwright/test';
 
 import { defined } from '../support/defined';
 
@@ -24,6 +24,240 @@ test.beforeEach(async ({ context }) => {
 const QTY_HINT = 'Enter the count for the whole order, not per assembly. For example, 24 lids in all, even if each pipe has 4.';
 /** The words with "cost" in them that the form may say: the four typed inputs (FR-008) and the name of section 08 (SPEC 7.1). */
 const ALLOWED_COST_WORDS = ['Fasteners Cost', 'Machining Cost', 'Plating Cost', 'Tool Cost', 'Other Costs and Remarks'];
+
+/**
+ * DEF-074 (AQP-417, DL-344, DL-345): the delete in SQR-01 (b) failed attempt 1 twice on Next 16.4.6 at "Row deleted" with no received text. The wait cannot say whether the delete had no answer in 15 s, was refused
+ * (for example a 409 `TREE_CHANGED`), or answered ok and the announcement was not drawn. `watchDelete` is started before the first save and records the requests and, in the page, how the screen changed (the
+ * in-flight line of `change()`, the tree controls' `aria-disabled`, the notices); when the wait fails, `expectRowDeleted` prints `[AQP-417 delete diagnostic]` (to stdout, so it is in the job log, and as an
+ * attachment) and re-throws the wait's own error. Nothing is printed when the wait passes, and no assertion, limit or retry is changed.
+ * How to read it: a DELETE with status 409, 4xx or 5xx, or a `TREE_CHANGED` answer, is a refusal; `no answer` is the server or the browser not answering, and the in-flight line and the time-limit notices
+ * say whether the page's own limit (#652) had run; a `200` with the tree as rendered already without the part is an announcement that was cleared or never drawn.
+ */
+const NODE_ROUTE = /\/api\/v1\/estimates\/[^/]+\/nodes\/[^/]+$/;
+const TREE_ROUTE = /\/api\/v1\/estimates\/[^/]+\/tree$/;
+/** What the report waits for the page: it must never hold up the test's own failure for long. */
+const REPORT_PATIENCE_MS = 5_000;
+const BODY_PATIENCE_MS = 300;
+const KEPT_BODY = 300;
+/** The words of the tree's in-flight line and of its notices (`estimate-texts.ts`), written out here and not imported: a changed sentence shows as "not seen", never as a failure of this report. */
+const IN_FLIGHT_WORDS = 'Updating the parts. This takes a moment.';
+const NOTICE_WORDS = ['The change was not made', 'We could not load the parts', 'The parts were changed by someone else', 'Row deleted'] as const;
+
+interface WatchedCall {
+  readonly label: string;
+  readonly path: string;
+  readonly sent: string;
+  readonly sentAt: number;
+  headersAt?: number;
+  finishedAt?: number;
+  status?: number;
+  failure?: string;
+  answer?: string;
+}
+
+interface DeleteWatch {
+  readonly startedAt: number;
+  readonly calls: WatchedCall[];
+}
+
+/**
+ * Records in the page, each time the screen changes, whether the in-flight line is shown, how many tree controls are `aria-disabled` and which notices are shown. A line is kept only when the state differs
+ * from the one before. It never throws into the page.
+ */
+async function recordScreenChanges(page: Page, inFlight: string, notices: readonly string[]): Promise<void> {
+  try {
+    await page.evaluate(
+      ({ line, words }) => {
+        const holder = window as unknown as { __aqp417?: string[] };
+        if (holder.__aqp417 !== undefined) return;
+        const log: string[] = [];
+        holder.__aqp417 = log;
+        const started = Date.now();
+        const controls = (): HTMLElement[] =>
+          [...document.querySelectorAll<HTMLElement>('button')].filter((button) => /^(Move up|Move down|Add main assembly|Delete \d|Add )/.test((button.getAttribute('aria-label') ?? button.textContent ?? '').trim()));
+        let last = '';
+        const snapshot = (): void => {
+          try {
+            const text = document.body.textContent ?? '';
+            const disabled = controls().filter((control) => control.getAttribute('aria-disabled') === 'true').length;
+            const shown = words.filter((word) => text.includes(word));
+            const state = `in-flight line ${text.includes(line) ? 'SHOWN' : 'not shown'}; tree controls aria-disabled ${String(disabled)} of ${String(controls().length)}; notices shown: ${shown.join(' | ') || 'none'}`;
+            if (state === last) return;
+            last = state;
+            if (log.length < 60) log.push(`+${String(Date.now() - started)} ms: ${state}`);
+          } catch {
+            // The report must not disturb the page.
+          }
+        };
+        let pending = false;
+        new MutationObserver(() => {
+          if (pending) return;
+          pending = true;
+          setTimeout(() => {
+            pending = false;
+            snapshot();
+          }, 0);
+        }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['aria-disabled'] });
+        snapshot();
+      },
+      { line: inFlight, words: [...notices] },
+    );
+  } catch {
+    // Without it the report says that the page's history was not recorded.
+  }
+}
+
+/** Starts recording the saves (PATCH of inputs), the delete (DELETE of the part) and the tree reads after the delete was sent. Call it before the first save and before the click. */
+async function watchDelete(page: Page): Promise<DeleteWatch> {
+  const watch: DeleteWatch = { startedAt: Date.now(), calls: [] };
+  const callOf = new Map<Request, WatchedCall>();
+  const labelOf = (request: Request): string | null => {
+    const { pathname } = new URL(request.url());
+    if (isPatchOfInputs(request.url(), request.method())) return 'save (PATCH inputs)';
+    if (request.method() === 'DELETE' && NODE_ROUTE.test(pathname)) return 'DELETE node';
+    if (request.method() === 'GET' && TREE_ROUTE.test(pathname) && watch.calls.some((call) => call.label === 'DELETE node')) return 'tree read after the delete (GET tree)';
+    return null;
+  };
+  page.on('request', (request) => {
+    const label = labelOf(request);
+    if (label === null) return;
+    const { pathname, search } = new URL(request.url());
+    const sent = request.method() === 'PATCH' ? (request.postData() ?? '') : search;
+    const call: WatchedCall = { label, path: pathname.split('/').slice(-1)[0] ?? '', sent: sent.slice(0, KEPT_BODY), sentAt: Date.now() };
+    callOf.set(request, call);
+    watch.calls.push(call);
+  });
+  page.on('response', (response) => {
+    const call = callOf.get(response.request());
+    if (call === undefined) return;
+    call.headersAt = Date.now();
+    call.status = response.status();
+    // The answer's own words (a refusal's code, a save's new revision); a body that cannot be read is no reason to stop.
+    void response
+      .text()
+      .then((body) => {
+        call.answer = body.slice(0, KEPT_BODY);
+      })
+      .catch(() => {
+        call.answer = '(body not readable)';
+      });
+  });
+  page.on('requestfinished', (request) => {
+    const call = callOf.get(request);
+    if (call !== undefined) call.finishedAt = Date.now();
+  });
+  page.on('requestfailed', (request) => {
+    const call = callOf.get(request);
+    if (call === undefined) return;
+    call.failure = request.failure()?.errorText ?? 'failed (no text)';
+    call.finishedAt = Date.now();
+  });
+  await recordScreenChanges(page, IN_FLIGHT_WORDS, NOTICE_WORDS);
+  return watch;
+}
+
+function describeDeleteCalls(watch: DeleteWatch, now: number): string[] {
+  if (watch.calls.length === 0) return ['  requests (0): none seen'];
+  const lines = watch.calls.map((call, index) => {
+    const at = `+${String(call.sentAt - watch.startedAt)} ms`;
+    let outcome: string;
+    if (call.failure !== undefined) outcome = `failed "${call.failure}" after ${String((call.finishedAt ?? now) - call.sentAt)} ms`;
+    else if (call.status === undefined) outcome = `no answer after ${String(now - call.sentAt)} ms`;
+    else {
+      const body = call.finishedAt === undefined ? `body not finished after ${String(now - call.sentAt)} ms` : `body finished after ${String(call.finishedAt - call.sentAt)} ms`;
+      outcome = `status ${String(call.status)} after ${String((call.headersAt ?? now) - call.sentAt)} ms, ${body}`;
+    }
+    return `  request #${String(index + 1)} ${call.label} .../${call.path} sent ${at}: ${outcome}; sent ${call.sent || '(nothing)'}; answer ${call.answer ?? '(none read)'}`;
+  });
+  return [`  requests (${String(watch.calls.length)}):`, ...lines];
+}
+
+/** The screen as it is, read in one go in the page: the dialog, the words of the wait, the in-flight line, the tree controls, the tree in order, every live region and notice, and what the page recorded on the way. */
+async function readDeleteScreen(page: Page): Promise<string[]> {
+  const screen = await page.evaluate(
+    ({ inFlight, notices }) => {
+      const textOf = (element: Element | null): string => (element?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      const rows = [...document.querySelectorAll('nav[aria-label="Parts tree"] a[data-part-id]')].map((row) => `${textOf(row.querySelector('[data-sl-no]'))} (${row.getAttribute('aria-current') === 'true' ? 'open' : 'closed'})`);
+      const liveRegions = [...document.querySelectorAll('[role="status"], [aria-live]')].map((region) => `${region.classList.contains('sr-only') ? 'sr-only ' : ''}${region.getAttribute('role') ?? 'aria-live'} "${textOf(region)}"`);
+      const alerts = [...document.querySelectorAll('[role="alert"]')].map((alert) => textOf(alert)).filter((text) => text !== '');
+      // The elements `getByText` would count: the innermost ones that hold the words (it ignores case).
+      const holds = (element: Element, words: string): boolean => textOf(element).toLowerCase().includes(words.toLowerCase());
+      const count = (words: string): number => [...document.querySelectorAll('body *:not(script):not(style)')].filter((element) => holds(element, words) && ![...element.children].some((child) => holds(child, words))).length;
+      const controls = [...document.querySelectorAll<HTMLElement>('button')]
+        .map((button) => ({ name: (button.getAttribute('aria-label') ?? button.textContent ?? '').trim().slice(0, 40), disabled: button.getAttribute('aria-disabled') === 'true' }))
+        .filter((control) => /^(Move up|Move down|Add main assembly|Delete \d|Add )/.test(control.name));
+      const history = (window as unknown as { __aqp417?: string[] }).__aqp417;
+      return {
+        rows,
+        liveRegions,
+        alerts,
+        deleted: count('Row deleted'),
+        dialogs: document.querySelectorAll('[role="alertdialog"]').length,
+        inFlight: count(inFlight),
+        noticeCounts: notices.map((words) => `"${words}" x${String(count(words))}`),
+        controls: controls.map((control) => `${control.name}: aria-disabled=${control.disabled ? 'true' : 'no'}`),
+        history: history ?? null,
+      };
+    },
+    { inFlight: IN_FLIGHT_WORDS, notices: [...NOTICE_WORDS] },
+  );
+  return [
+    `  elements with "Row deleted": ${String(screen.deleted)} (the wait needs exactly 1); open dialogs: ${String(screen.dialogs)}`,
+    `  in-flight line "${IN_FLIGHT_WORDS}" on screen now: ${screen.inFlight === 0 ? 'no' : 'YES'}`,
+    `  notices now: ${screen.noticeCounts.join(' ; ')}; role=alert: ${screen.alerts.length === 0 ? 'none visible' : screen.alerts.map((alert) => `"${alert}"`).join(' | ')}`,
+    `  tree controls now (${String(screen.controls.length)}): ${screen.controls.join(' ; ') || 'none'}`,
+    `  tree as rendered (${String(screen.rows.length)}): ${screen.rows.join(' | ') || 'none'}`,
+    `  live regions and status lines: ${screen.liveRegions.join(' | ') || 'none'}`,
+    ...(screen.history === null ? ['  screen history: not recorded'] : [`  screen history in the watch (${String(screen.history.length)} changes):`, ...screen.history.map((line) => `    ${line}`)]),
+  ];
+}
+
+/** The answer of `work`, or `fallback` when it takes longer than `ms` (the page may be stuck; its late answer or error is dropped). */
+async function within<T>(ms: number, work: Promise<T>, fallback: T): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  try {
+    return await Promise.race([work, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Prints and attaches the state. It never throws: a failed report must not replace the failure of the test. */
+async function reportDeleteState(page: Page, testInfo: TestInfo, watch: DeleteWatch): Promise<void> {
+  const now = Date.now();
+  // A moment for the body of an answer that is still being read.
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, BODY_PATIENCE_MS);
+  });
+  const header = `[AQP-417 delete diagnostic] ${testInfo.project.name} | ${testInfo.title} | attempt ${String(testInfo.retry + 1)} | toHaveCount(1) failed for "Row deleted" | watch ran ${String(now - watch.startedAt)} ms`;
+  let screen: string[];
+  try {
+    if (page.isClosed()) screen = ['  screen: the page is closed'];
+    else screen = await within(REPORT_PATIENCE_MS, readDeleteScreen(page), [`  screen: no answer from the page after ${String(REPORT_PATIENCE_MS)} ms`]);
+  } catch (error) {
+    screen = [`  screen: not readable (${error instanceof Error ? (error.message.split('\n')[0] ?? 'unknown') : 'unknown'})`];
+  }
+  const report = [header, ...describeDeleteCalls(watch, now), ...screen].join('\n');
+  process.stdout.write(`${report}\n`);
+  try {
+    await testInfo.attach('delete-diagnostic', { body: report, contentType: 'text/plain' });
+  } catch {
+    // The report is in the log already.
+  }
+}
+
+/** The wait the case always had ("Row deleted" once, within the 15 s of `expect`), with the diagnostic on its failure. The error that the wait throws is re-thrown as it is. */
+async function expectRowDeleted(page: Page, testInfo: TestInfo, watch: DeleteWatch): Promise<void> {
+  try {
+    await expect(page.getByText('Row deleted')).toHaveCount(1);
+  } catch (error) {
+    await reportDeleteState(page, testInfo, watch);
+    throw error;
+  }
+}
 
 test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
   test('AC-1: sections 01 and 02 with their numbers, names and column ranges, and an Excel letter on every field that a screen reader reads first', async ({ page }, testInfo) => {
@@ -187,6 +421,7 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
 
   test('SQR-01 (b): typing into a part moves the part\'s revision, and the tree follows: the part can still be deleted at once, with no "changed by someone else" notice', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
+    const watch = await watchDelete(page);
     const saved = nextSave(page, 'L');
     await control(page, 'L').fill('3');
     await control(page, 'L').blur();
@@ -199,7 +434,7 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Delete row' }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByText('Row deleted')).toHaveCount(1);
+    await expectRowDeleted(page, testInfo, watch);
     await expect(page.getByText('The parts were changed by someone else.')).toHaveCount(0);
   });
 });

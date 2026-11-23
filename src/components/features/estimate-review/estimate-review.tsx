@@ -1,5 +1,6 @@
 import { APPROVED_NOTICE_ID } from '@/components/features/estimate-approve/approve-ids';
 import { ChangeCustomerButton } from '@/components/features/estimate-customer/change-customer-button';
+import { QUOTED_NOTICE_ID } from '@/components/features/estimate-quote/mark-quoted-ids';
 import { DownloadChip } from '@/components/shared/download-chip';
 import { Notice } from '@/components/shared/notice';
 import { warnedNodeIds } from '@/components/shared/quantity-tag';
@@ -17,7 +18,7 @@ import { CancelledNotice } from './cancelled-notice';
 import { FigureTiles, type ApprovedTileView } from './figure-tiles';
 import { PriceRemovedNotice } from './price-removed-notice';
 import { RatesChangedNotice } from './rates-changed-notice';
-import { approveOffer, cancelOffer, removeOffer, ReviewActions } from './review-actions';
+import { approveOffer, cancelOffer, quoteOffer, removeOffer, ReviewActions } from './review-actions';
 import { ReviewTree } from './review-tree';
 import { UnlockedNotice } from './unlocked-notice';
 import {
@@ -27,6 +28,9 @@ import {
   CLEARED_NOTICE_BODY,
   CLEARED_NOTICE_TITLE,
   NOT_CALCULATED_NOTICE,
+  quotedNoticeBody,
+  QUOTED_NOTICE_TITLE_PLAIN,
+  quotedNoticeTitle,
   REVIEW_NO_CUSTOMER,
 } from './review-texts';
 
@@ -55,6 +59,10 @@ export interface EstimateReviewProps {
   readonly viewerRole: RoleName;
   /** The marker of the estimate's Excel downloads (STORY-CR01.7E AC-5), in the header beside the status: the review is the Lead's and the Admin's, so it is never drawn for an Engineer. */
   readonly download: DownloadChipData | 'unavailable';
+  /** Who marked the estimate as quoted and when (CR-01 item 7C), as the server read it: for the Quoted notice. `null` while the estimate is not QUOTED. The review is the Lead's and the Admin's, so this is never drawn for an Engineer. */
+  readonly quoted: { readonly at: string; readonly byName: string } | null;
+  /** Whether the Ignored layer is set over the status (ADR-019): an ignored estimate is not offered Mark as quoted (the server refuses it all the same). */
+  readonly ignored: boolean;
 }
 
 /** The approved notice of SCR-06 (STORY-06.06 AC-5): the approver and the time, and what approval means. It holds focus when an approval has just worked (`tabIndex` -1). */
@@ -68,7 +76,21 @@ function ApprovedNotice({ approval }: { readonly approval: ApprovedTileView | nu
   );
 }
 
-export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole, download }: EstimateReviewProps) {
+/**
+ * The Quoted notice of SCR-06 (CR-01 item 7C; UX spec SCR-06 "Quoted"): who marked the estimate and when (IST), to whom the quote was sent, and that this is the last status. It takes the place of the Approved notice
+ * and holds focus when a mark has just worked (`tabIndex` -1), so focus is not lost with the button that was pressed.
+ */
+function QuotedNotice({ quoted, customerName }: { readonly quoted: EstimateReviewProps['quoted']; readonly customerName: string | null }) {
+  return (
+    <div id={QUOTED_NOTICE_ID} tabIndex={-1} className="rounded-md">
+      <Notice tone="success" role="status" title={quoted === null ? QUOTED_NOTICE_TITLE_PLAIN : quotedNoticeTitle(formatIst(new Date(quoted.at)), quoted.byName)}>
+        {quotedNoticeBody(customerName)}
+      </Notice>
+    </div>
+  );
+}
+
+export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole, download, quoted, ignored }: EstimateReviewProps) {
   const { state, letters, nodes, totals } = costs;
   // The rows of the calculation's quantity warning, which the costs view holds only while the figures are current (STORY-06.10 AC-3, AC-4).
   const warned = warnedNodeIds(state === 'current' ? costs.warning : null);
@@ -105,7 +127,9 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           {CLEARED_NOTICE_BODY}
         </Notice>
       ) : null}
-      {isLocked(header.status) ? <ApprovedNotice approval={approval} /> : null}
+      {header.status === 'QUOTED' ? <QuotedNotice quoted={quoted} customerName={customer?.name ?? null} /> : null}
+      {/* A locked estimate says why: the Approved notice, or the Quoted one once the quote has gone (the last status; the figures stay locked as approved). */}
+      {isLocked(header.status) && header.status !== 'QUOTED' ? <ApprovedNotice approval={approval} /> : null}
       <UnlockedNotice state={state} unlock={costs.approval === null || costs.approval.cancel !== null ? null : costs.approval.unlock} isDraft={header.status === 'DRAFT'} />
       <CancelledNotice cancel={costs.approval?.cancel ?? null} wasUnlocked={costs.approval !== null && costs.approval.unlock !== null} status={header.status} viewedByAdmin={viewerRole === 'ADMIN'} />
       <PriceRemovedNotice removed={costs.priceRemoved} />
@@ -122,6 +146,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         approve={approveOffer(header.status, costs)}
         cancel={cancelOffer(viewerRole, costs.approval)}
         remove={removeOffer(viewerRole, costs.approval)}
+        quote={quoteOffer(viewerRole, header.status, ignored, customer?.name ?? null, download)}
         ratesChanged={costs.ratesChanged !== null}
         calculated={calculatedAt === null || costs.configurationNumber === null ? null : { at: calculatedAt, configurationNumber: costs.configurationNumber }}
       />

@@ -84,6 +84,17 @@ export const UNLOCK_LABEL = 'Unlock';
 export const UNLOCK_FIRST_OPEN_FAILED = 'The unlock window did not open. Check your connection and try again.';
 
 /**
+ * Mark as quoted (CR-01 item 7C, AQP-400; UX spec SCR-06 "Mark as quoted" and "Quoted"). The primary button of a Lead and an Admin beside Unlock on an approved estimate opens the dialog of `estimate-quote` (fetched on the
+ * first press); once marked, the Quoted notice replaces the Approved one: who and when (IST), to whom the quote was sent, and that this is the last status. There is no wording for an undo: the way back is Unlock (A-CR01-3).
+ */
+export const MARK_QUOTED_LABEL = 'Mark as quoted';
+export const MARK_QUOTED_FIRST_OPEN_FAILED = 'The mark as quoted window did not open. Check your connection and try again.';
+export const quotedNoticeTitle = (time: string, name: string): string => `Quoted on ${time} by ${name}.`;
+export const QUOTED_NOTICE_TITLE_PLAIN = 'Quoted.';
+export const quotedNoticeBody = (customerName: string | null): string =>
+  `The quote was sent to ${customerName ?? 'the customer'}. This is the last status; the estimate stays locked at the approved figures.`;
+
+/**
  * The Approved state of SCR-06 (STORY-06.06 AC-5; UX spec SCR-06 "Approved (Lead)" and the G3 screen): the notice with the approver and the time, and the two sentences the spec gives for what approval means.
  * `time` is written in IST (`formatIst`). A notice for an approved estimate with no approvals row (data made before approvals existed) says only that it is approved and locked.
  */
