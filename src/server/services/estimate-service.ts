@@ -135,7 +135,7 @@ export interface AddedPart {
 
 /** The `code` of the 422 of an add whose kind the parent's kind does not allow (`ALLOWED_CHILDREN`), under `nodeKind`. */
 export const NODE_KIND_NOT_ALLOWED_CODE = 'NODE_KIND_NOT_ALLOWED';
-/** The `code` of the 422 of a move to a parent other than the part's own (A-CR01-5: a row is reordered only among rows with the same parent), under `parentId`. */
+/** The `code` of the 422 of a move to a parent other than the part's own (A-CR01-5, confirmed 2026-11-23: a row is reordered only among rows with the same parent), under `parentId`. */
 export const MOVE_ACROSS_PARENTS_CODE = 'MOVE_ACROSS_PARENTS';
 export const MOVE_ACROSS_PARENTS_MESSAGE = 'A part can only be moved among the parts under the same parent.';
 
@@ -424,8 +424,8 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
         const before = await nodes.listNodes(id, tx);
         const part = partIn(before, request.nodeId);
         if (part.revision !== request.revision) throw new TreeChangedError(viewsOf(before, completenessOf));
-        // One refusal, one place (A-CR01-5): a row is reordered only among rows with the same parent. This also keeps a row out of its own subtree and out of another estimate, because the
-        // only parent allowed is the one it already has. If the customer answers "allow other parents", this line goes and, instead, the parent must exist in this estimate, must not be the row
+        // One refusal, one place (A-CR01-5, confirmed by the customer on 2026-11-23): a row is reordered only among rows with the same parent. This also keeps a row out of its own subtree and out of another estimate, because the
+        // only parent allowed is the one it already has. If the customer ever asks for "other parents", this line goes and, instead, the parent must exist in this estimate, must not be the row
         // or one of its descendants (`canMove` in `lib/estimate/tree.ts` is that check, unused until then) and must allow the moving row's kind (`isAllowedChild`).
         if ((request.parentId?.toLowerCase() ?? null) !== part.parentId) throw new FieldValidationError([{ field: 'parentId', message: MOVE_ACROSS_PARENTS_MESSAGE }], { code: MOVE_ACROSS_PARENTS_CODE });
         const placed = placedOf(before);
