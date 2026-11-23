@@ -85,6 +85,26 @@ export const approveAnswerSchema = z.strictObject({
 export type ApproveAnswer = z.infer<typeof approveAnswerSchema>;
 
 /**
+ * Who marked the estimate as quoted and when (CR-01 item 7C, AQP-400; architecture section 4.12 c): a time as UTC text and the person's name now. **It exists only in the Lead and Admin schemas** (ADR-008):
+ * the Engineer's schemas carry the status word Quoted and no key for this, and `tests/security/quoted-restricted.test.ts` holds both. It holds no price, no figure and no ID (NFR-002).
+ */
+export const quotedMarkerSchema = z.strictObject({
+  at: z.iso.datetime(),
+  byName: z.string().min(1),
+});
+export type QuotedMarkerView = z.infer<typeof quotedMarkerSchema>;
+
+/**
+ * The answer of a good `POST /api/v1/estimates/{id}/quoted` (architecture section 4.12 c, "the estimate status view"): the new status, which is the one word QUOTED, and the marker just written. A strict
+ * schema, so nothing else can leave: no figure, no master value and no ID.
+ */
+export const markQuotedAnswerSchema = z.strictObject({
+  status: z.literal('QUOTED'),
+  quoted: quotedMarkerSchema,
+});
+export type MarkQuotedAnswer = z.infer<typeof markQuotedAnswerSchema>;
+
+/**
  * The 409 `CALCULATE_ACK_REQUIRED` (STORY-05.12 AC-2, AC-7; architecture section 6 "Error model"; NFR-002): one strict schema, the same keys for every role and no number but `inputsRevision`
  * (a count of changes) and the Sl. No. Text and one revision: nothing that comes from a master, a rate or a calculation has a key to sit in. The wrapper builds this body in `problem.ts`, key by key;
  * this schema is what the tests and the canary scan hold it to.

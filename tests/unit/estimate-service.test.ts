@@ -5,7 +5,7 @@ import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, type EstimateViewer 
 
 import { changeContext } from '../support/customer-change';
 import { inputsDependencies } from '../support/estimate-inputs-deps';
-import { createFakeEstimateWorld, type FakeCustomerEntry, type FakeEstimate } from '../support/fake-estimates';
+import { createFakeEstimateWorld, QUOTER_NAME, type FakeCustomerEntry, type FakeEstimate } from '../support/fake-estimates';
 import { createAuditSink } from '../support/fake-audit-sink';
 
 /**
@@ -79,6 +79,8 @@ describe('AC-1: opening the workspace', () => {
       title: 'Hopper cover',
       notes: 'Sheet-metal parts only.',
       assignedByName: 'Kiran Bose',
+      quoted: null,
+      ignored: false,
     });
   });
 
@@ -109,9 +111,46 @@ describe('AC-1: opening the workspace', () => {
     const { service } = setUp([estimate({ customerId: BRIGHTWATER })]);
     const workspace = await service.getWorkspace(arjun, 'Q-2026-0318');
     expect(Object.keys(workspace ?? {}).sort()).toEqual(
-      ['assignedByName', 'code', 'customer', 'deadlineAt', 'estimateId', 'folderPath', 'folderUrl', 'notes', 'status', 'subject', 'title'].sort(),
+      ['assignedByName', 'code', 'customer', 'deadlineAt', 'estimateId', 'folderPath', 'folderUrl', 'ignored', 'notes', 'quoted', 'status', 'subject', 'title'].sort(),
     );
     expect(Object.keys(workspace?.customer ?? {}).sort()).toEqual(['id', 'name', 'shortName']);
+  });
+});
+
+describe('CR-01 item 7C, AC-5, AC-8 (AQP-400): the workspace carries the quote marker for a Lead and an Admin only, and whether the Ignored layer is set for every role', () => {
+  const quotedAt = new Date('2026-11-23T04:30:00.000Z');
+  const quoted = (): FakeEstimate => estimate({ status: 'QUOTED', quotedBy: LEAD, quotedAt });
+
+  it.each([
+    ['a Lead', lead],
+    ['an Admin', admin],
+  ] as const)('%s reads who marked the estimate as quoted and when, by name and with no ID', async (_name, viewer) => {
+    const { service } = setUp([quoted()]);
+    const workspace = await service.getWorkspace(viewer, 'Q-2026-0318');
+    expect(workspace?.quoted).toEqual({ at: quotedAt, byName: QUOTER_NAME });
+  });
+
+  it('an Engineer reads the status word Quoted on their own task and no marker: `quoted` is null for them whatever the row holds (NFR-002)', async () => {
+    const { service } = setUp([quoted()]);
+    const workspace = await service.getWorkspace(arjun, 'Q-2026-0318');
+    expect(workspace?.status).toBe('QUOTED');
+    expect(workspace?.quoted).toBeNull();
+  });
+
+  it('an estimate that is not quoted has no marker for anyone', async () => {
+    const { service } = setUp([estimate({ status: 'APPROVED' })]);
+    expect((await service.getWorkspace(lead, 'Q-2026-0318'))?.quoted).toBeNull();
+  });
+
+  it.each([
+    ['an Engineer', arjun],
+    ['a Lead', lead],
+    ['an Admin', admin],
+  ] as const)('%s is told whether the Ignored layer is set: true when it is, false when it is not', async (_name, viewer) => {
+    const ignored = setUp([estimate({ status: 'APPROVED', ignoredAt: new Date('2026-11-20T10:00:00.000Z') })]);
+    expect((await ignored.service.getWorkspace(viewer, 'Q-2026-0318'))?.ignored).toBe(true);
+    const open = setUp([estimate({ status: 'APPROVED' })]);
+    expect((await open.service.getWorkspace(viewer, 'Q-2026-0318'))?.ignored).toBe(false);
   });
 });
 

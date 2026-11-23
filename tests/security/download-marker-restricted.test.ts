@@ -99,6 +99,8 @@ const IMPORTERS: ReadonlyArray<readonly [module: RegExp, allowed: ReadonlyArray<
     /from '[^']*[/]download-chip'/,
     [
       'src/components/features/estimate-export/estimate-export.tsx',
+      // CR-01 item 7C: the Mark as quoted dialog shows the same chip (AQP-400 AC-4); it is the Lead's and the Admin's, and the Engineer's page never imports it.
+      'src/components/features/estimate-quote/mark-quoted-dialog.tsx',
       'src/components/features/estimate-review/estimate-review.tsx',
       'src/components/features/queues/queue-list.tsx',
     ],
@@ -107,7 +109,11 @@ const IMPORTERS: ReadonlyArray<readonly [module: RegExp, allowed: ReadonlyArray<
     /from '[^']*[/]download-marker-view'/,
     [
       'src/app/(portal)/estimates/[code]/review-page.tsx',
+      // CR-01 item 7C: the marker the page drew is handed to the Mark as quoted button and its dialog, as a type only.
+      'src/components/features/estimate-quote/mark-quoted-button.tsx',
+      'src/components/features/estimate-quote/mark-quoted-dialog.tsx',
       'src/components/features/estimate-review/estimate-review.tsx',
+      'src/components/features/estimate-review/review-actions.tsx',
       'src/components/shared/download-chip.tsx',
       'src/lib/tasks/download-markers-client.ts',
     ],
