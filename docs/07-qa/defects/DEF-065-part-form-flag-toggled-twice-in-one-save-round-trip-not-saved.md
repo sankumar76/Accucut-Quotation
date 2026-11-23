@@ -6,7 +6,7 @@
 | Severity | **Sev-2 Major** (qa-engineer, 2026-11-22, test plan section 6). Reason below |
 | Priority | **P2**. Lane: hardening window (CLAUDE.md section 9 item 3); behind any Sev-1, ahead of Sev-3. **Blocks G8** until fixed and verified |
 | Type | **Product** |
-| Status | **Open** (logged 2026-11-22) |
+| Status | **Open: fix in review, PR #633 (head 43b6366f, CI run 45100288884)** (logged 2026-11-22; see "State 2026-11-23") |
 | Jira / GitHub | [AQP-407](https://sankumar76.atlassian.net/browse/AQP-407) / [#631](https://github.com/sankumar76/Accucut-Quotation/issues/631) (opened by the lane-3 developer as a `follow-up`; QA added `bug` and `sev-2`). Jira "relates to" AQP-314 (STORY-05.06) and AQP-1 (Intake). Labels `ai-delivery`, `aiid-DEF-065`, `sev-2`, `final-review`, `agent-qa-engineer`; priority High |
 | Risk / rule | No re-run rule (it is a product fault, not a CI timing case). Not a RISK-031 event. DEF-064 is reserved by DL-305 for the Mailpit race, so this Bug takes the next free number (JQL `project = AQP AND labels in (aiid-DEF-064, aiid-DEF-065, aiid-DEF-066, aiid-DEF-067)` returned no issue on 2026-11-22 before AQP-407 was created) |
 | Found by / date | Lane-3 developer, while fixing #513 (PR #630, E2E timing prep for Next 16.4.6); graded and reproduced by qa-engineer, 2026-11-22 |
@@ -87,3 +87,9 @@ The developer's proposal in #631, which QA agrees with: in `commit()`, compare t
 | Fixed | developer | | |
 | Regression test added (red on master first) | developer | | |
 | Verified | qa-engineer | | |
+
+## State 2026-11-23 (qa-engineer; DL-319 P1 to P6; DL-321)
+- **Fix:** PR #633 (`fix/AQP-407-flag-toggle-lost-update`, head 43b6366f): `settledValue()` (the value on its way, else the held one) used by `commit`, `autosaveField` and the unsaved mark in `setText` (`differsFromSettled`); the on-its-way entry is cleared by the field's latest ticket. The PR shows P1 red on the base (8 failed of 24) and green after (24 passed). QA has not read CI run 45100288884 for this note; the combined review (DL-319 (5)) and P2 to P6 are open.
+- **Second occurrence of the mechanism, on a text field with a default (new evidence):** `estimate-form-sections.spec.ts:194` [mobile] "AC-3: clearing Fasteners shows "None" again" failed attempt 1 on PR #632's run 45097669695 (30.2 s, the `nextSave` at :200 never answered; retry 9.8 s). QA hook run (project harness, scratch file not committed): first save of "M6 bolt" held, then S cleared: **`master`** sends one request, the server keeps "M6 bolt", the screen shows "None"; **#633's head** sends both and the server ends with no value. #633 cures it in the hook run. The case is part of P6 (attempt-1 green at three widths on #633's run of record).
+- **Site `syncWatchers` (:376), P5:** #633 leaves it alone ("heldRef is current when it compares"). QA's hook run shows a repeat of an unchanged watcher save when the watcher is typed within the watched field's round trip, on master and on #633: that is DEF-066 (Sev-4, no wrong data), recommended into #633 for the combined review to rule on.
+- **DEF-038 (AQP-341):** classified Test on #632's run 45097669695 (see its file). `estimate-fasteners.spec.ts:151` is **not** a DEF-065 failure and #633 does not cure it. P6's wording ("`:151` passes on attempt 1 at all three widths and 0 diagnostic lines on the run of record") needs DEF-038's test-only fix as well as #633.
