@@ -394,3 +394,88 @@ describe('AQP-407: a flag toggled twice within one save round trip', () => {
     expect(gate.isDirty()).toBe(false);
   });
 });
+
+/**
+ * AQP-408 (DEF-066) and the clearing half of AQP-407: Fasteners (S, a text with the default "None") with Qty and Cost (T, U) that watch it, as in `fasteners-none-requests.test.ts`. The save that follows a change of S sends
+ * the watchers' typed text itself (`syncWatchers`), so a watcher left in the same round trip must not be sent a second time by its own queued save, and S cleared while its first save is on its way is a choice that is sent.
+ */
+describe('AQP-408: Fasteners and its watchers within one save round trip', () => {
+  const S: FormField = { ...number('s'), defaultValue: 'None', rule: { type: 'text', maxLength: 100, multiline: false } };
+  const watcher = (id: string): FormField => ({ ...number(id), visibleWhen: { fieldId: 's', values: ['None'] } });
+  const T = watcher('t');
+  const U = watcher('u');
+  const openFasteners = () => open({}, [S, T, U]);
+  const sentFor = (fieldId: string): number => partServer.sent.filter((save) => fieldId in save.values).length;
+
+  it('DEF-066: Qty and Cost typed and left right after Fasteners are sent once each, not a second time by their own saves', async () => {
+    const { gate, hook } = await openFasteners();
+    const release = partServer.holdNextSave();
+    for (const [field, typed] of [
+      [S, 'M6 bolt'],
+      [T, '5'],
+      [U, '3.5'],
+    ] as const) {
+      hook.render().setText(field.id, typed);
+      hook.render().commit(field);
+    }
+    release();
+    await gate.settle();
+    expect(sentFor('s')).toBe(1);
+    expect(sentFor('t')).toBe(1);
+    expect(sentFor('u')).toBe(1);
+    expect(partServer.inputs).toEqual({ s: 'M6 bolt', t: '5.00', u: '3.50' });
+    expect(gate.isDirty()).toBe(false);
+  });
+
+  it('DEF-066: Qty left while the save that follows Fasteners is on its way is not sent again', async () => {
+    const { gate, hook } = await openFasteners();
+    // Qty is typed while it is hidden, and kept; Fasteners then makes it show, and that save sends it.
+    hook.render().setText('t', '5');
+    const release = partServer.holdSaveNumber(2);
+    hook.render().setText('s', 'M6 bolt');
+    hook.render().commit(S);
+    await flushMicrotasks();
+    expect(sentFor('t')).toBe(1);
+    hook.render().commit(T);
+    release();
+    await gate.settle();
+    expect(sentFor('t')).toBe(1);
+    expect(partServer.inputs['t']).toBe('5.00');
+  });
+
+  it('DEF-066: a Qty typed since the one a queued save carries is sent, and the earlier one is not sent after it', async () => {
+    const { gate, hook } = await openFasteners();
+    const release = partServer.holdNextSave();
+    hook.render().setText('s', 'M6 bolt');
+    hook.render().commit(S);
+    hook.render().setText('t', '5');
+    hook.render().commit(T);
+    hook.render().setText('t', '6');
+    release();
+    await gate.settle();
+    expect(partServer.inputs['t']).toBe('6.00');
+    expect(partServer.sent.filter((save) => 't' in save.values).at(-1)?.values['t']).toBe('6.00');
+  });
+
+  describe.each([
+    { when: 'at once', arrived: false },
+    { when: 'while the first save waits for its answer', arrived: true },
+  ])('AQP-407: Fasteners cleared $when', ({ arrived }) => {
+    it('the clearing is what the server holds (nothing), and the screen shows "None" again', async () => {
+      const { gate, hook } = await openFasteners();
+      const release = partServer.holdNextSave();
+      hook.render().setText('s', 'M6 bolt');
+      hook.render().commit(S);
+      if (arrived) await flushMicrotasks();
+      hook.render().setText('s', '');
+      hook.render().commit(S);
+      release();
+      await gate.settle();
+      expect(partServer.sent.at(-1)).toMatchObject({ values: { s: '' } });
+      expect(partServer.sent).toHaveLength(arrived ? 2 : 1);
+      expect(partServer.inputs['s']).toBeUndefined();
+      expect(hook.render().texts['s']).toBe('None');
+      expect(gate.isDirty()).toBe(false);
+    });
+  });
+});

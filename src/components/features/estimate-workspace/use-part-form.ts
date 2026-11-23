@@ -385,8 +385,17 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
       if (!check.ok) {
         mark(watcher.id, true);
         setErrors((current) => ({ ...current, [watcher.id]: check.message }));
-      } else if ((heldRef.current[watcher.id] ?? null) !== check.value) {
-        await send(watcher.id, check.value ?? '');
+      } else if (settledValue(watcher) !== check.value) {
+        // Sent like a queued save: it is on its way while it is sent, so leaving the field meanwhile does not send the same text again, and a save of this field queued earlier is made out of date by it (it
+        // carries older text, or the same text that this one sends) instead of going after it (AQP-408, DEF-066). A save of the same text that is already queued is not sent here at all: it goes in its turn.
+        const value = check.value ?? '';
+        onItsWayRef.current.set(watcher.id, value);
+        const ticket = newTicket(watcher.id);
+        try {
+          await send(watcher.id, value, 0, ticket);
+        } finally {
+          if (ticketsRef.current.get(watcher.id) === ticket) onItsWayRef.current.delete(watcher.id);
+        }
       }
     }
   }
