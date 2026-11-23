@@ -354,6 +354,9 @@ const ROWS: ReadonlyArray<RouteRow> = [
   { path: '/api/v1/estimates/[id]/export', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/estimates/[id]/export-summary', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   { path: '/estimates/[code]/export', kind: 'page', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1', screen: 'SCR-10' },
+  // STORY-CR01.7E (AQP-402; CR-01 item 7c; architecture section 4.12 d): the download marker of the rows of the Closed tab, for the Lead and the Admin alone. The queue's answer is one strict schema for every role and carries
+  // no marker, so this is a route of its own: an Engineer is refused with the fixed 403 before the query is read, and it is in no Engineer's list, so the cost scan calls it a route an Engineer is refused (NFR-002).
+  { path: '/api/v1/download-markers', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
 
   // STORY-08.06 (SCR-21, Checkpoints and versions; architecture section 6 rows "Checkpoints" and "Revert": A, and the revert with the Admin's password, FR-078, FR-080). The Admin alone (NFR-001): a Lead and an Engineer are
   // refused 403 and a signed-out caller 401, before anything is looked up (the page: SCR-26 with HTTP 403). The answers hold a checkpoint's name, a version number and a person's name, never a snapshot or a formula, and

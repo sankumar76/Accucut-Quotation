@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { PRICE_MESSAGE, PRICE_PATTERN, validateReason } from '../../../lib/estimate/approve-price';
-import { CALCULATE_MESSAGE, CALCULATE_SUBMITTED_STATUS } from '../../../lib/estimate/calculate-words';
+import { CALCULATE_MESSAGE, CALCULATE_PREPARED_STATUS } from '../../../lib/estimate/calculate-words';
 import { CALCULATE_ACK_REQUIRED_CODE, QTY_ZERO_CODE } from '../../../lib/estimate/warning-copy';
 
 /**
@@ -28,7 +28,7 @@ const customerChoiceSchema = z.strictObject({ id: z.string().min(1), name: z.str
 /** The estimate and the customer it is now for. */
 export const estimateCustomerSchema = z.strictObject({
   id: z.string().min(1),
-  status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']),
+  status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
   customer: customerChoiceSchema,
 });
 
@@ -38,7 +38,7 @@ export const estimateCustomerSchema = z.strictObject({
  * is the last guard of "the Engineer never receives a cost", behind the service (which returns exactly this) and the import rule (which keeps the Restricted tables out of its reach).
  */
 export const calculateAnswerSchema = z.strictObject({
-  status: z.literal(CALCULATE_SUBMITTED_STATUS),
+  status: z.literal(CALCULATE_PREPARED_STATUS),
   message: z.literal(CALCULATE_MESSAGE),
 });
 

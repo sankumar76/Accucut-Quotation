@@ -25,7 +25,7 @@ vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error:
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
-  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users, getEstimateService: () => shared.estimateService, getEstimateReviewService: () => shared.estimateReviewService, getCostDetailsService: () => shared.costDetailsService };
+  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users, getEstimateService: () => shared.estimateService, getEstimateReviewService: () => shared.estimateReviewService, getDownloadMarkerService: () => shared.downloadMarkerService, getCostDetailsService: () => shared.costDetailsService };
 });
 
 const { default: EstimatePage } = await import('@/app/(portal)/estimates/[code]/page');
@@ -112,11 +112,11 @@ describe('AC-1: the Engineer opens their task with no customer', () => {
     expect(await open(CODE)).not.toContain('Notes from');
   });
 
-  it('a submitted estimate is shown read-only: its status, the customer it has, and no control to change it', async () => {
-    estimate().status = 'SUBMITTED';
+  it('a prepared estimate is shown read-only: its status, the customer it has, and no control to change it', async () => {
+    estimate().status = 'PREPARED';
     estimate().customerId = CUSTOMER_RECIPE_ID;
     const html = await open(CODE);
-    expect(html).toContain('Submitted');
+    expect(html).toContain('Prepared');
     // The customer field and its locked hint are gone with the picker: the status and the customer are read-only text.
     expect(html).toContain('Canary-Customer-Alpha');
     expect(html).not.toContain('Choose the customer to start.');
@@ -146,10 +146,10 @@ describe('AC-5: who may open it', () => {
     }
   });
 
-  it('the Lead sees the customer by name and short name, with "Change customer" while the estimate is a draft or submitted, and none once it is approved (AC-12)', async () => {
+  it('the Lead sees the customer by name and short name, with "Change customer" while the estimate is a draft or prepared, and none once it is approved (AC-12)', async () => {
     estimate().customerId = CUSTOMER_RECIPE_ID;
     harness.signInAs('LEAD');
-    for (const status of ['DRAFT', 'SUBMITTED'] as const) {
+    for (const status of ['DRAFT', 'PREPARED'] as const) {
       estimate().status = status;
       const html = await open(CODE);
       expect(html).toContain('Canary-Customer-Alpha');
@@ -165,7 +165,7 @@ describe('AC-5: who may open it', () => {
   it('an Engineer\'s page never carries the dialog\'s words or the action, whatever the state', async () => {
     estimate().customerId = CUSTOMER_RECIPE_ID;
     harness.signInAs('ENGINEER');
-    for (const status of ['DRAFT', 'SUBMITTED', 'APPROVED'] as const) {
+    for (const status of ['DRAFT', 'PREPARED', 'APPROVED'] as const) {
       estimate().status = status;
       const html = await open(CODE);
       for (const word of ['Change the customer?', 'New customer', 'Change customer', 'review-change-customer']) expect(html, word).not.toContain(word);
@@ -246,5 +246,31 @@ describe('STORY-06.02: the Lead\'s and the Admin\'s review of the estimate', () 
     const cleared = await open(CODE);
     expect(cleared).toContain('The total is cleared because an input changed.');
     expect(cleared).not.toContain('12,34,567');
+  });
+});
+
+describe('STORY-CR01.7E QLT-03, AC-6: the download marker in the Lead\'s header', () => {
+  it('shows "Not downloaded" for a Lead and an Admin, and nothing of it on the Engineer\'s page', async () => {
+    harness.signInAs('LEAD');
+    expect(await open(CODE)).toContain('Not downloaded');
+    harness.signInAs('ADMIN');
+    expect(await open(CODE)).toContain('Not downloaded');
+    harness.signInAs('ENGINEER');
+    const engineers = await open(CODE);
+    expect(engineers).not.toMatch(/Not downloaded|Downloaded \d+×|Changed since download|Download status/);
+  });
+
+  it('a fault in the marker read does not take the review down: the header says "Download status unavailable.", never "Not downloaded", and only the kind of the fault is logged', async () => {
+    const { logger } = await import('@/lib/logger');
+    harness.signInAs('LEAD');
+    vi.spyOn(harness.downloadMarkerService, 'getMarker').mockRejectedValueOnce(new TypeError('connect ECONNREFUSED db.invented-host.test:5432'));
+    const html = await open(CODE);
+    expect(html).toContain('Download status unavailable.');
+    expect(html).not.toContain('Not downloaded');
+    // The review itself is still there.
+    expect(html).toContain(CODE);
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith({ errorName: 'TypeError', errorCode: undefined }, 'The download marker could not be read.');
+    expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain('invented-host');
+    vi.restoreAllMocks();
   });
 });

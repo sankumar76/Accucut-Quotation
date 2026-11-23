@@ -180,6 +180,12 @@ export function istIsoDateOf(instant: Date): string {
   return new Date(instant.getTime() + IST_OFFSET_MILLISECONDS).toISOString().slice(0, ISO_DATE_LENGTH);
 }
 
+/** The same calendar date as `istIsoDateOf`, written `DD-MM-YYYY` (two digits for day and month): the date in an export's file name (CR-01 item 9, AQP-391). */
+export function istDayMonthYearOf(instant: Date): string {
+  const [year, month, day] = istIsoDateOf(instant).split('-');
+  return `${day}-${month}-${year}`;
+}
+
 /** `YYYY-MM-DDTHH:mm` is 16 characters, and the time of day `HH:mm` starts after the `T` (index 11). */
 const TIME_INPUT_START = 11;
 const TIME_INPUT_END = 16;

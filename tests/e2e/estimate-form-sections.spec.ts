@@ -463,7 +463,7 @@ test.describe('STORY-05.11 AC-1, AC-4, AC-7, AC-8: the completion line, the tree
     // On a phone the tree is a drawer over the form, so it is opened once the typing is done.
     if (!isPhone(page)) {
       await showTree(page);
-      const before = tree(page).getByRole('treeitem').first();
+      const before = tree(page).getByRole('link').first();
       await expect(before).toContainText('Some inputs entered');
       await expect(before.locator('[data-completeness="PARTIAL"]')).toHaveCount(1);
     }
@@ -478,7 +478,7 @@ test.describe('STORY-05.11 AC-1, AC-4, AC-7, AC-8: the completion line, the tree
     await expect(progressLine(page)).toContainText('21 of 21 inputs complete');
     await expect(status).toHaveText('Part 1 is complete.');
     await showTree(page);
-    const item = tree(page).getByRole('treeitem').first();
+    const item = tree(page).getByRole('link').first();
     await expect(item).toContainText('All inputs entered');
     await expect(item.locator('[data-completeness="COMPLETE"]')).toHaveCount(1);
     // The icons are decoration: the words carry the state.
@@ -494,6 +494,6 @@ test.describe('STORY-05.11 AC-1, AC-4, AC-7, AC-8: the completion line, the tree
     await waitForForm(page);
     await expect(progressLine(page)).toContainText('21 of 21 inputs complete');
     await showTree(page);
-    await expect(tree(page).getByRole('treeitem').first()).toContainText('All inputs entered');
+    await expect(tree(page).getByRole('link').first()).toContainText('All inputs entered');
   });
 });

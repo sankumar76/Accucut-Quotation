@@ -124,10 +124,10 @@ describe('AC-1, AC-2, AC-4: one row and one message per Engineer with an open ov
     expect(meera?.text).not.toContain(oldestByAdmin.code);
   });
 
-  it('"overdue" is the queue rule in SQL and in code: a task due exactly now is not listed, one a millisecond earlier is; SUBMITTED is open; an old task is listed whatever its age', async () => {
+  it('"overdue" is the queue rule in SQL and in code: a task due exactly now is not listed, one a millisecond earlier is; PREPARED is open; an old task is listed whatever its age', async () => {
     const atDeadline = await seed({ deadline: AT_ELEVEN });
     expect(await deps.store.findOverdue(AT_ELEVEN, ISO_DATE)).toEqual([]);
-    const justLate = await seed({ deadline: new Date(AT_ELEVEN.getTime() - 1), status: 'SUBMITTED' });
+    const justLate = await seed({ deadline: new Date(AT_ELEVEN.getTime() - 1), status: 'PREPARED' });
     const tenDays = await seed({ deadline: hoursBefore(240) });
     const found = await deps.store.findOverdue(AT_ELEVEN, ISO_DATE);
     expect(found.map((task) => task.code)).toEqual([tenDays.code, justLate.code]);

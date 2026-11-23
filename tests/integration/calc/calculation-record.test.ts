@@ -60,7 +60,7 @@ const request = (estimateId: string, nodes = [db.node(), db.node({ parentId: nul
 });
 
 describe('AC-1: one record, a row per node, the status and the link, in one transaction', () => {
-  it('writes the header and every row as stored, and links the estimate and submits it', async () => {
+  it('writes the header and every row as stored, and links the estimate and prepares it', async () => {
     const estimateId = await db.addEstimate();
     const first = db.node({ imageId: randomUUID() });
     const second = db.node({ parentId: first.nodeId, sortIndex: 0, slNo: '1.1', materialId: db.materialTwoId });
@@ -92,7 +92,7 @@ describe('AC-1: one record, a row per node, the status and the link, in one tran
     const alone = storeRowOutputs(await db.service.calculateRow({ customerId: db.customerId, materialId: db.materialOneId, inputs: typedRow() }));
     expect(defined(rows.rows[0]).outputs).toEqual(alone);
 
-    expect(await estimateState(estimateId)).toEqual({ status: 'SUBMITTED', current_calculation_id: stored.id, inputs_revision: 3 });
+    expect(await estimateState(estimateId)).toEqual({ status: 'PREPARED', current_calculation_id: stored.id, inputs_revision: 3 });
   });
 
   it('reads back through the repository exactly what was stored, with decimal text and no number anywhere', async () => {
@@ -106,10 +106,10 @@ describe('AC-1: one record, a row per node, the status and the link, in one tran
     expect(record.masterSnapshot.materials.map((material) => material.materialInDrawing)).toEqual(['Invented plate', 'Invented bar']);
   });
 
-  it('keeps a Draft as Draft until the link is written, and a Submitted estimate Submitted', async () => {
-    const estimateId = await db.addEstimate({ status: 'SUBMITTED' });
+  it('keeps a Draft as Draft until the link is written, and a Prepared estimate Prepared', async () => {
+    const estimateId = await db.addEstimate({ status: 'PREPARED' });
     const stored = await db.service.storeCalculation(request(estimateId));
-    expect(await estimateState(estimateId)).toMatchObject({ status: 'SUBMITTED', current_calculation_id: stored.id });
+    expect(await estimateState(estimateId)).toMatchObject({ status: 'PREPARED', current_calculation_id: stored.id });
   });
 
   it('stores a tree larger than one insert (1,001 nodes) and every row arrives', async () => {
@@ -265,7 +265,7 @@ describe('AC-6: the estimate\'s link to its calculation has a foreign key', () =
     const mine = await db.addEstimate();
     const theirs = await db.addEstimate();
     const foreign = await db.service.storeCalculation(request(theirs));
-    await expect(db.transactions.run((tx) => db.estimates.linkCalculation(mine, foreign.id, 'SUBMITTED', tx))).rejects.toThrow('could not be linked');
+    await expect(db.transactions.run((tx) => db.estimates.linkCalculation(mine, foreign.id, 'PREPARED', tx))).rejects.toThrow('could not be linked');
     expect(await estimateState(mine)).toEqual({ status: 'DRAFT', current_calculation_id: null, inputs_revision: 3 });
   });
 });

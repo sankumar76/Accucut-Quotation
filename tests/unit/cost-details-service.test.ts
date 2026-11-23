@@ -89,7 +89,7 @@ describe('AC-1: a current calculation gives the six stages of the row asked for,
 
   it('a part under another is found by its dotted Sl. No', async () => {
     const world = createCostWorld();
-    world.nodes.push({ id: '00000000-0000-4000-8000-000000000003', parentId: COST_FIRST_NODE_ID, sortIndex: 0, revision: 1, imageId: null, inputs: {} });
+    world.nodes.push({ id: '00000000-0000-4000-8000-000000000003', parentId: COST_FIRST_NODE_ID, sortIndex: 0, nodeKind: 'PART', revision: 1, imageId: null, inputs: {} });
     world.rows.set('00000000-0000-4000-8000-000000000003', defined(world.rows.get(COST_FIRST_NODE_ID)));
     expect((await world.service.getNodeCostsBySlNo(LEAD, COST_ESTIMATE_ID, '1.1')).row.slNo).toBe('1.1');
   });

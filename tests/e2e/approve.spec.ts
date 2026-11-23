@@ -89,7 +89,7 @@ test.describe('AC-1: the dialog', () => {
     await expect(priceField(page)).toHaveValue('12.345');
     await expect(priceField(page)).toBeFocused();
     expect(sent).toBe(0);
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
 
     await page.keyboard.press('Escape');
     await expect(dialogOf(page)).toHaveCount(0);
@@ -180,7 +180,7 @@ test.describe('the page changed while the dialog was open', () => {
     await expect(dialogOf(page).getByRole('button', { name: 'Cancel' })).toHaveCount(0);
     const wayOn = dialogOf(page).getByRole('button', { name: 'Recalculate first' });
     await expect(wayOn).toBeFocused();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
 
     await wayOn.click();
     await expect(dialogOf(page)).toHaveCount(0);
@@ -192,7 +192,7 @@ test.describe('the page changed while the dialog was open', () => {
   test('the figures were calculated again (409 CALCULATION_CHANGED): the alert in the spec\'s words, "Show the new figures" has focus, and the next dialog starts from the new total', async ({ page }, testInfo) => {
     const { owner } = await openedAsLead(page, testInfo);
     await openDialog(page);
-    // Someone presses Recalculate in another tab: the estimate stays Submitted with a newer calculation.
+    // Someone presses Recalculate in another tab: the estimate stays Prepared with a newer calculation.
     const recalculated = await page.evaluate(async (id) => (await fetch(`/api/v1/estimates/${id}/recalculate`, { method: 'POST' })).status, owner.id);
     expect(recalculated).toBe(200);
     await priceField(page).fill('1.00');
@@ -202,7 +202,7 @@ test.describe('the page changed while the dialog was open', () => {
     await expect(submitOf(page)).toBeDisabled();
     const wayOn = dialogOf(page).getByRole('button', { name: 'Show the new figures' });
     await expect(wayOn).toBeFocused();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 2 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 2 });
 
     await wayOn.click();
     await expect(dialogOf(page)).toHaveCount(0);
@@ -213,6 +213,6 @@ test.describe('the page changed while the dialog was open', () => {
     await openDialog(page);
     await expect(priceField(page)).toHaveValue(total);
     await expect(priceField(page)).not.toHaveValue('1.00');
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 2 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 2 });
   });
 });

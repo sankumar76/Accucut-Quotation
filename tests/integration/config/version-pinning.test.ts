@@ -12,7 +12,7 @@ import { createEstimateService, type EstimateService, type EstimateViewer } from
 import { createStepUpService } from '@/server/services/step-up-service';
 
 import { adminOf, auditOf, currentCalculationOf, engineerOf, leadOf, PRICE, requestFor } from '../../support/approval-helpers';
-import { approvedValuesOf, calculatedEstimateOf, exportCellsOf, openApprovedWorld, type ApprovedWorld } from '../../support/approved-world';
+import { approvedValuesOf, calculatedEstimateOf, exportCellsOf, openApprovedWorld, summaryWithoutMarker, type ApprovedWorld } from '../../support/approved-world';
 import { KEY_SECRET } from '../../support/audit-database';
 import { createTestHasher } from '../../support/builders/user';
 import { defined } from '../../support/defined';
@@ -21,7 +21,7 @@ import { seedConfig, seedFieldAt } from '../../support/seed-config';
 
 /**
  * STORY-08.05 AC-3 to AC-6 (FR-077, FR-065; SPEC section 8.4 and section 14 item 8) against real PostgreSQL in a throwaway database, as the runtime role, through the real services: estimates are calculated on
- * version 1 (an approved one, one unlocked, one whose approval was cancelled, a Submitted one, a new Draft), then **the Admin's own screens' services store three more versions** (a formula saved, an input inserted
+ * version 1 (an approved one, one unlocked, one whose approval was cancelled, a Prepared one, a new Draft), then **the Admin's own screens' services store three more versions** (a formula saved, an input inserted
  * after AX, Part No. deleted), and what each estimate shows and stores is read again.
  *
  * - AC-3: the bar line of SCR-06 names the calculation's version, not the latest; the unlock preview reads "1 to 4"; "estimates in use" is the count of estimates whose current calculation uses the version.
@@ -45,7 +45,7 @@ const STORED_PART_NO = 'Invented-PN-0001';
 const configurations = () => createConfigRepository(world.db.prisma);
 
 /** The estimates of the file. `approved` stays approved; the others were approved first and then unlocked or cancelled, so each holds a calculation made on version 1. */
-const made: { approved: string; unlocked: string; cancelled: string; submitted: string; fresh: string } = { approved: '', unlocked: '', cancelled: '', submitted: '', fresh: '' };
+const made: { approved: string; unlocked: string; cancelled: string; prepared: string; fresh: string } = { approved: '', unlocked: '', cancelled: '', prepared: '', fresh: '' };
 /** What the approved estimate showed and stored, and its form, before any later version existed. */
 let before: Awaited<ReturnType<typeof approvedValuesOf>>;
 let formBefore: Awaited<ReturnType<EstimateService['getForm']>>;
@@ -119,17 +119,17 @@ beforeAll(async () => {
   partOfApproved = defined(approved.nodeIds[0]);
   made.unlocked = (await approvedWithPartNo()).estimateId;
   made.cancelled = (await approvedWithPartNo()).estimateId;
-  made.submitted = (await calculatedEstimateOf(world)).estimateId;
+  made.prepared = (await calculatedEstimateOf(world)).estimateId;
   made.fresh = await db.addEstimate({ engineer: true });
   before = await approvedValuesOf(world, made.approved);
-  summaryBefore = await world.exporter.getSummary(world.lead, made.approved);
+  summaryBefore = await summaryWithoutMarker(world, made.approved);
   formBefore = await estimates.getForm(lead(), made.approved);
   await unlock(made.unlocked);
   await cancelApproval(made.cancelled);
   unlockedBefore = {
     costs: await world.review.getCosts(world.lead, made.unlocked),
     nodeCosts: await world.details.getNodeCosts(world.lead, made.unlocked, defined((await db.nodes.listNodes(made.unlocked))[0]).id),
-    summary: await world.exporter.getSummary(world.lead, made.unlocked),
+    summary: await summaryWithoutMarker(world, made.unlocked),
   };
 
   // Versions 2, 3 and 4, made by the Admin's services: a formula saved, an input inserted before BL, a field deleted.
@@ -157,7 +157,7 @@ describe('AC-3: each estimate records the version it was calculated with', () =>
 
   it("SCR-06's bar line names the calculation's version (1), not the latest (4); an estimate calculated now names the latest", async () => {
     expect((await world.review.getCosts(world.lead, made.approved)).configurationNumber).toBe(1);
-    expect((await world.review.getCosts(world.lead, made.submitted)).configurationNumber).toBe(1);
+    expect((await world.review.getCosts(world.lead, made.prepared)).configurationNumber).toBe(1);
     const fresh = await calculatedEstimateOf(world);
     expect((await world.review.getCosts(world.lead, fresh.estimateId)).configurationNumber).toBe(4);
   });
@@ -175,7 +175,7 @@ describe('AC-3: each estimate records the version it was calculated with', () =>
       return defined(rows[0]).n;
     };
     expect(await configurations().readVersionUse(firstVersionId)).toMatchObject({ estimatesInUse: await used(firstVersionId) });
-    // Four estimates of the file hold their current calculation on version 1 (approved, unlocked, cancelled, submitted).
+    // Four estimates of the file hold their current calculation on version 1 (approved, unlocked, cancelled, prepared).
     expect((await configurations().readVersionUse(firstVersionId)).estimatesInUse).toBe(4);
   });
 });
@@ -194,7 +194,7 @@ describe('AC-4 (FR-077, SPEC section 14 item 8): an approved estimate does not c
     expect(after.costs.configurationNumber).toBe(1);
     expect(after).toEqual(before);
     // SCR-10: the summary (the columns and the cell addresses it names) is the one of version 1 too.
-    expect(await world.exporter.getSummary(world.lead, made.approved)).toEqual(summaryBefore);
+    expect(await summaryWithoutMarker(world, made.approved)).toEqual(summaryBefore);
     // The file is not empty and is the one of version 1: header, two parts, an empty row and the footer, BL2 and BO2 in version 1's columns.
     expect((await exportCellsOf(world, made.approved)).rows).toHaveLength(5);
   });
@@ -220,7 +220,7 @@ describe('AC-5: the form of an approved estimate is pinned; every other form is 
   });
 
   it.each([
-    ['a Submitted estimate that was never approved', 'submitted'],
+    ['a Prepared estimate that was never approved', 'prepared'],
     ['an unlocked Draft whose calculation is on version 1', 'unlocked'],
     ['a Draft after a cancelled approval, whose calculation is on version 1', 'cancelled'],
     ['a new Draft with no calculation', 'fresh'],
@@ -255,7 +255,7 @@ describe('AC-6 (SPEC section 8.4): a new or unlocked estimate uses the latest ve
     expect(costsBefore.configurationNumber).toBe(1);
     expect(costsBefore.state).toBe('current');
     expect(costsBefore).toEqual(unlockedBefore.costs);
-    expect(await world.exporter.getSummary(world.lead, made.unlocked)).toEqual(unlockedBefore.summary);
+    expect(await summaryWithoutMarker(world, made.unlocked)).toEqual(unlockedBefore.summary);
     expect(await world.details.getNodeCosts(world.lead, made.unlocked, defined((await db.nodes.listNodes(made.unlocked))[0]).id)).toEqual(unlockedBefore.nodeCosts);
 
     const inUseBefore = (await configurations().readVersionUse(firstVersionId)).estimatesInUse;

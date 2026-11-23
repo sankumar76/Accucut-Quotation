@@ -23,7 +23,7 @@ import { auditFor, changeContext } from '../../support/customer-change';
 
 /**
  * STORY-02.07 (AC-1, AC-2, AC-4, AC-5, AC-8) against real PostgreSQL in a throwaway database: the delete of a customer over the real repositories. It is soft
- * (`deleted_at`) and keeps the rate rows; it is refused with the estimates named while a Draft or Submitted estimate has the customer, and allowed when only
+ * (`deleted_at`) and keeps the rate rows; it is refused with the estimates named while a Draft or Prepared estimate has the customer, and allowed when only
  * Approved ones do (they keep the customer's name); one `master.deleted` entry is written in the transaction of the delete and none when it is refused; a name of a
  * deleted customer stays taken (the unique indexes are not partial); and a delete and a request that is choosing the same customer serialise, in both orders,
  * so the two can never both succeed (AC-5). Every name, path and code is invented.
@@ -74,7 +74,7 @@ afterEach(async () => {
 const customerNamed = (name: string) => db.mastersService.createCustomer(by(), { name, shortName: shortNameOf(name), phone: '+99 555 0142', email: null, address: null });
 
 /** A task with its estimate, in this status, for this customer (or none). Returns the estimate's ID and the task's code. */
-async function estimateFor(customerId: string | null, status: 'DRAFT' | 'SUBMITTED' | 'APPROVED'): Promise<{ readonly estimateId: string; readonly code: string }> {
+async function estimateFor(customerId: string | null, status: 'DRAFT' | 'PREPARED' | 'APPROVED'): Promise<{ readonly estimateId: string; readonly code: string }> {
   codes += 1;
   const code = `Q-2026-${String(9000 + codes).padStart(4, '0')}`;
   const task = await db.owner.query<{ id: string }>(
@@ -160,8 +160,8 @@ describe('AC-1: a customer used by no estimate is soft-deleted', () => {
   });
 });
 
-describe('AC-2: a customer on a Draft or Submitted estimate is refused, and nothing changes', () => {
-  it.each(['DRAFT', 'SUBMITTED'] as const)('a %s estimate: 409 MasterInUseError naming its task code and status', async (status) => {
+describe('AC-2: a customer on a Draft or Prepared estimate is refused, and nothing changes', () => {
+  it.each(['DRAFT', 'PREPARED'] as const)('a %s estimate: 409 MasterInUseError naming its task code and status', async (status) => {
     const alpha = await customerNamed('Alpha Works');
     const { code } = await estimateFor(alpha.id, status);
     const entries = await entryCount(db);
@@ -177,7 +177,7 @@ describe('AC-2: a customer on a Draft or Submitted estimate is refused, and noth
     const alpha = await customerNamed('Alpha Works');
     const bravo = await customerNamed('Bravo Works');
     const made: string[] = [];
-    for (let index = 0; index < 12; index += 1) made.push((await estimateFor(alpha.id, index % 2 === 0 ? 'DRAFT' : 'SUBMITTED')).code);
+    for (let index = 0; index < 12; index += 1) made.push((await estimateFor(alpha.id, index % 2 === 0 ? 'DRAFT' : 'PREPARED')).code);
     await estimateFor(alpha.id, 'APPROVED');
     await estimateFor(bravo.id, 'DRAFT');
     const refusal = await db.mastersService.deleteCustomer(by(), alpha.id).catch((error: unknown) => error);

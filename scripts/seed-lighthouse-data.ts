@@ -115,6 +115,7 @@ async function seedTree500Estimate(
   const base = { ...completePartInputs(undefined, input.materialId) };
   const tree = buildTree500();
   const ids: string[] = [];
+  const parents = new Set(tree.nodes.map((node) => node.parentIndex));
   const nextPlace = new Map<number | null, number>();
   await client.$transaction(async (tx) => {
     await tx.$executeRaw`INSERT INTO tasks (id, code, engineer_id, assigned_by, folder_path, deadline_at, title, subject, notes)
@@ -127,8 +128,10 @@ async function seedTree500Estimate(
       const id = randomUUID();
       const parentId = node.parentIndex === null ? null : (ids[node.parentIndex] ?? null);
       ids.push(id);
-      await tx.$executeRaw`INSERT INTO estimate_nodes (id, estimate_id, parent_id, sort_index, inputs)
-        VALUES (${id}::uuid, ${estimateId}::uuid, ${parentId}::uuid, ${sortIndex}::int, ${JSON.stringify({ ...base, ...typed })}::jsonb)`;
+      // The kind a migrated tree of this shape would have (the backfill rule of CR-01 3A): depth 1 a Main Assembly, depth 2 with a child a Sub-Assembly, every other node a Part. The fixture is six levels deep, which the add rule no longer allows, so it is written here, as a legacy tree.
+      const kind = node.depth === 1 ? 'MAIN_ASSEMBLY' : node.depth === 2 && parents.has(node.index) ? 'SUB_ASSEMBLY' : 'PART';
+      await tx.$executeRaw`INSERT INTO estimate_nodes (id, estimate_id, parent_id, sort_index, node_kind, inputs)
+        VALUES (${id}::uuid, ${estimateId}::uuid, ${parentId}::uuid, ${sortIndex}::int, ${kind}::estimate_node_kind, ${JSON.stringify({ ...base, ...typed })}::jsonb)`;
     }
   });
   return estimateId;
@@ -156,7 +159,7 @@ async function run(): Promise<void> {
     const common = { engineerId: people.measurementEngineerId, leadId: people.leadId, customerId, materialId };
     await seedTree500Estimate(client, { ...common, code: WORKSPACE_CODE });
     const costEstimateId = await seedTree500Estimate(client, { ...common, code: COST_CODE });
-    // Calculate takes the whole path for 500 parts, as the Engineer's button does; the estimate is then Submitted and its cost details open for the Lead and the Admin.
+    // Calculate takes the whole path for 500 parts, as the Engineer's button does; the estimate is then Prepared and its cost details open for the Lead and the Admin.
     await calculateOverHttp(origin, await signInOverHttp(origin, engineer.email, engineer.password), costEstimateId);
     process.stdout.write('seed-lighthouse-data: the data was made (500 customers, 25,000 rates, 200 materials, 300 queue tasks, two estimates of 500 parts, one calculated).\n');
   } finally {

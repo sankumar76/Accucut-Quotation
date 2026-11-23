@@ -18,12 +18,12 @@ export type CalculateProblem = { readonly kind: 'refused'; readonly message: str
  */
 const loadClient = () => import('@/lib/estimates/calculate-client');
 
-/** The code of the 409 for an estimate that was already submitted (`TRANSITION_REFUSALS.ALREADY_SUBMITTED`, written here so the state machine's table is not carried for one string). */
-const ALREADY_SUBMITTED_CODE = 'ESTIMATE_ALREADY_SUBMITTED';
+/** The code of the 409 for an estimate that was already prepared (`TRANSITION_REFUSALS.ALREADY_PREPARED`, written here so the state machine's table is not carried for one string). */
+const ALREADY_PREPARED_CODE = 'ESTIMATE_ALREADY_PREPARED';
 
 /**
- * What Calculate does on SCR-05 (STORY-05.09 AC-1, AC-2, AC-7; UX spec SCR-05 "Calculate blocked", "Submitted"). One press is one request, and a press while one is in flight is ignored (a double
- * click is one request, and the server answers a second with a 409 and makes no second calculation). A good answer is the status and the fixed sentence: `onSubmitted` runs, and the screen
+ * What Calculate does on SCR-05 (STORY-05.09 AC-1, AC-2, AC-7; UX spec SCR-05 "Calculate blocked", "Prepared"). One press is one request, and a press while one is in flight is ignored (a double
+ * click is one request, and the server answers a second with a 409 and makes no second calculation). A good answer is the status and the fixed sentence: `onPrepared` runs, and the screen
  * shows the sentence and no number (there is none to show). A blocked one is the list of parts and fields the server named: it is kept as client state only (architecture A-16; after a reload
  * the part simply shows "Some inputs entered"). **Nothing is submitted on the screen's own judgement**: the missing list is the server's.
  *
@@ -32,7 +32,7 @@ const ALREADY_SUBMITTED_CODE = 'ESTIMATE_ALREADY_SUBMITTED';
  *
  * `filled(partId, inputs)` is told what a saved part now holds, so a part leaves the list as its last missing field is filled and the triangle in the tree goes with it.
  */
-export function useCalculate({ estimateId, onSubmitted, settle }: { readonly estimateId: string; readonly onSubmitted: () => void; readonly settle: () => Promise<boolean> }) {
+export function useCalculate({ estimateId, onPrepared, settle }: { readonly estimateId: string; readonly onPrepared: () => void; readonly settle: () => Promise<boolean> }) {
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState<ReadonlyArray<BlockedPartView> | null>(null);
   const [problem, setProblem] = useState<CalculateProblem | null>(null);
@@ -67,11 +67,11 @@ export function useCalculate({ estimateId, onSubmitted, settle }: { readonly est
     } else if (outcome.status === 'ok') {
       setBlocked(null);
       setDone(outcome.value.message);
-      onSubmitted();
-    } else if (outcome.code === ALREADY_SUBMITTED_CODE) {
-      // Another tab (or an earlier press whose answer was lost) already submitted it: the estimate is submitted, so the screen shows it as that, in the server's words.
+      onPrepared();
+    } else if (outcome.code === ALREADY_PREPARED_CODE) {
+      // Another tab (or an earlier press whose answer was lost) already prepared it: the estimate is prepared, so the screen shows it as that, in the server's words.
       setDone(outcome.title);
-      onSubmitted();
+      onPrepared();
     } else {
       const ask = client.warningFrom(outcome, acknowledged !== undefined);
       const parts = client.blockedPartsFrom(outcome);

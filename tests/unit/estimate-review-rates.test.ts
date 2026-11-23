@@ -41,7 +41,7 @@ const KINDS: ReadonlyArray<readonly [string, MastersNow, { processRates: number;
   ['one of each (the story\'s case)', ONE_OF_EACH, ONE_OF_EACH_COUNTS],
 ];
 
-describe('AC-1, AC-8: a current, submitted estimate says how many of each kind changed, and the unlock preview\'s fixture gives the same counts', () => {
+describe('AC-1, AC-8: a current, prepared estimate says how many of each kind changed, and the unlock preview\'s fixture gives the same counts', () => {
   it.each(KINDS)('%s: the counts are those of the shared fixture', async (_name, changed, counts) => {
     expect((await costsOf({ mastersNow: changed })).ratesChanged).toEqual(counts);
   });
@@ -121,7 +121,7 @@ describe('AC-4: state `out-of-date` and `none` have no notice, and no master is 
 });
 
 describe('the matrix: state x status, for a change of every kind', () => {
-  const STATUSES: ReadonlyArray<EstimateStatus> = ['DRAFT', 'SUBMITTED', 'APPROVED'];
+  const STATUSES: ReadonlyArray<EstimateStatus> = ['DRAFT', 'PREPARED', 'APPROVED'];
   const STATES: ReadonlyArray<readonly [string, Partial<ReviewWorldOptions>]> = [
     ['current', {}],
     ['out-of-date', { inputsRevision: 4 }],

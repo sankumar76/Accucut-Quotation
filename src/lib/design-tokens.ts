@@ -37,7 +37,7 @@ export const COLOUR_TOKENS = [
   { name: '--accent-ink', label: 'Amber ink', use: 'Text on the amber tint' },
   { name: '--success', label: 'Success', use: 'Approved and complete' },
   { name: '--danger', label: 'Error red', use: 'Errors and delete only' },
-  { name: '--info-ink', label: 'Neutral info ink', use: 'Neutral notices and the Submitted badge' },
+  { name: '--info-ink', label: 'Neutral info ink', use: 'Neutral notices and the Prepared badge' },
   { name: '--bg', label: 'Canvas', use: 'Page ground' },
   { name: '--surface', label: 'Surface', use: 'Cards and the top bar' },
   { name: '--surface-2', label: 'Auto-filled', use: 'Read-only and auto-filled fields' },

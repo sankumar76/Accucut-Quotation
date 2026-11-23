@@ -123,7 +123,7 @@ describe('AC-4: the state, when, and with which configuration', () => {
 
   it('a row of the tree with no row in the record has no figure, a dash, and not a wrong one', async () => {
     const world = createReviewWorld({ rows: [{ sl: '1', h: '1', cost: '1', bg: '1' }, { sl: '2', h: '1', cost: '1', bg: '1' }], bl: '2' });
-    world.nodes.push({ id: '00000000-0000-4000-8000-0000000000aa', parentId: null, sortIndex: 2, revision: 1, imageId: null, inputs: {} });
+    world.nodes.push({ id: '00000000-0000-4000-8000-0000000000aa', parentId: null, sortIndex: 2, nodeKind: 'MAIN_ASSEMBLY', revision: 1, imageId: null, inputs: {} });
     expect((await world.service.getCosts(LEAD, REVIEW_ESTIMATE_ID)).nodes.map((node) => node.figures === null)).toEqual([false, false, true]);
   });
 

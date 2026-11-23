@@ -29,7 +29,7 @@ import { clientFor, type Transaction } from './transaction';
  * the reassign wait, and the status it reads once the lock is granted is the one that decides whether the task is still open (AC-6).
  */
 
-export type EstimateStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED';
+export type EstimateStatus = 'DRAFT' | 'PREPARED' | 'APPROVED';
 
 /** An Engineer as a choice: the ID and the name, and nothing else (the e-mail address is not sent to the screen). */
 export interface EngineerRecord {
@@ -202,7 +202,7 @@ const LOCKED_ROWS = z.array(
     engineerName: z.string(),
     deadlineAt: z.date(),
     assignmentRevision: z.number().int().positive(),
-    status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']),
+    status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
     folderPath: z.string(),
     title: z.string(),
     notes: z.string().nullable(),

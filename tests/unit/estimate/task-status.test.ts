@@ -9,13 +9,13 @@ import { APPROVED_LOCKED_LABEL, isTaskClosed, taskStatusOf } from '@/lib/estimat
  * "Closed" is the tab's name, never a second word of the status (review SQR-01).
  */
 
-describe('AC-1: Draft, Submitted and Approved (a closed task is the approved one), derived from the status of the estimate', () => {
+describe('AC-1: Draft, Prepared and Approved (a closed task is the approved one), derived from the status of the estimate', () => {
   it('words a DRAFT estimate as Draft, still open', () => {
     expect(taskStatusOf('DRAFT')).toEqual({ label: 'Draft', closed: false });
   });
 
-  it('words a SUBMITTED estimate as Submitted, still open', () => {
-    expect(taskStatusOf('SUBMITTED')).toEqual({ label: 'Submitted', closed: false });
+  it('words a PREPARED estimate as Prepared, still open', () => {
+    expect(taskStatusOf('PREPARED')).toEqual({ label: 'Prepared', closed: false });
   });
 
   it('words an APPROVED estimate as Approved, and the task as closed (Closed is the approved estimate, never a status or a word of its own)', () => {
@@ -29,7 +29,7 @@ describe('AC-1: Draft, Submitted and Approved (a closed task is the approved one
   });
 
   it('knows every status of the state machine, and each has exactly one word of the three', () => {
-    expect(ESTIMATE_STATUSES.map((status) => taskStatusOf(status).label)).toEqual(['Draft', 'Submitted', 'Approved']);
+    expect(ESTIMATE_STATUSES.map((status) => taskStatusOf(status).label)).toEqual(['Draft', 'Prepared', 'Approved']);
   });
 });
 

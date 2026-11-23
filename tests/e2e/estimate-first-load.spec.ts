@@ -155,9 +155,9 @@ test.describe('AC-2, AC-3: the phone drawer fetches its code on the first press'
 
     await drawerButton(page).click();
     await expect(drawer(page)).toBeVisible();
-    const tree = drawer(page).getByRole('tree', { name: 'Parts tree' });
-    await expect(tree.getByRole('treeitem')).toHaveCount(1);
-    await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-selected', 'true');
+    const tree = drawer(page).getByRole('navigation', { name: 'Parts tree' });
+    await expect(tree.getByRole('link')).toHaveCount(1);
+    await expect(tree.getByRole('link').first()).toHaveAttribute('aria-current', 'true');
     await page.keyboard.press('Escape');
     await expect(drawer(page)).toHaveCount(0);
     await page.waitForLoadState('networkidle');
@@ -165,7 +165,7 @@ test.describe('AC-2, AC-3: the phone drawer fetches its code on the first press'
     const requested = gate.urls.length;
     await drawerButton(page).click();
     await expect(drawer(page)).toBeVisible();
-    await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-selected', 'true');
+    await expect(tree.getByRole('link').first()).toHaveAttribute('aria-current', 'true');
     expect(gate.urls.length, 'no script was requested for the second press').toBe(requested);
   });
 });

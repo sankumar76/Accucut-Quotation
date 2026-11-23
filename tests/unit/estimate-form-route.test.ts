@@ -273,8 +273,8 @@ describe('AC-4, AC-7: PATCH /estimates/{id}/nodes/{nodeId}/inputs', () => {
     expect(withoutRequestId(await notTheirs.json())).toEqual(withoutRequestId(await unknownEstimate.json()));
   });
 
-  it('is 409 ESTIMATE_NOT_EDITABLE for an Engineer once the estimate is submitted, and a Lead may still save', async () => {
-    estimate().status = 'SUBMITTED';
+  it('is 409 ESTIMATE_NOT_EDITABLE for an Engineer once the estimate is prepared, and a Lead may still save', async () => {
+    estimate().status = 'PREPARED';
     const refused = await save({ revision: 1, values: { [LENGTH]: '1' } });
     expect(refused.status).toBe(409);
     expect(record.parse(await refused.json())).toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
@@ -378,7 +378,7 @@ describe('SQR-09: the part is read back by field ID', () => {
   });
 
   it('the schemas refuse a key that is not a field ID, a value that is not text, and a planted key', () => {
-    const part = { id: 'a', parentId: null, slNo: '1', label: '', completeness: 'EMPTY', revision: 1, picture: null };
+    const part = { id: 'a', parentId: null, slNo: '1', label: '', nodeKind: 'MAIN_ASSEMBLY', completeness: 'EMPTY', revision: 1, picture: null };
     expect(nodeDetailSchema.safeParse({ ...part, inputs: [entry(LENGTH, '1.00')] }).success).toBe(true);
     expect(nodeDetailSchema.safeParse({ ...part, inputs: [entry('length', '1.00')] }).success).toBe(false);
     expect(nodeDetailSchema.safeParse({ ...part, inputs: [{ fieldId: LENGTH, value: '1.00', planted: 1 }] }).success).toBe(false);

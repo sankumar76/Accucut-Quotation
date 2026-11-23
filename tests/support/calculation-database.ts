@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import type { NodeKind } from '../../src/lib/estimate/node-kinds';
 import { createApprovalRepository, type ApprovalRepository } from '../../src/server/repositories/approval-repository';
 import { createCalculationRepository, type CalculationRepository } from '../../src/server/repositories/calculation-repository';
 import { createConfigRepository } from '../../src/server/repositories/config-repository';
@@ -52,9 +53,10 @@ export interface CalculationDatabase extends AuditDatabase {
   readonly materialOneId: string;
   readonly materialTwoId: string;
   /** A new task and estimate for the customer, in this state. */
-  addEstimate(options?: { status?: 'DRAFT' | 'SUBMITTED' | 'APPROVED'; withCustomer?: boolean; revision?: number; engineer?: boolean; customerId?: string }): Promise<string>;
+  addEstimate(options?: { status?: 'DRAFT' | 'PREPARED' | 'APPROVED'; withCustomer?: boolean; revision?: number; engineer?: boolean; customerId?: string }): Promise<string>;
   /** Adds a part to an estimate, as the part form stores it (`inputs` by field ID), and returns its ID. The estimate's own lock is not taken: a test builds an estimate before anyone calculates it. */
-  addPart(estimateId: string, options?: { parentId?: string | null; sortIndex?: number; inputs?: Readonly<Record<string, unknown>> }): Promise<string>;
+  /** `nodeKind` (CR-01 item 3A) defaults to a Main Assembly at the top and a Part under a parent: a test that does not care about kinds gets a row the rules would accept. */
+  addPart(estimateId: string, options?: { parentId?: string | null; sortIndex?: number; nodeKind?: NodeKind; inputs?: Readonly<Record<string, unknown>> }): Promise<string>;
   /** A DRAFT of the Engineer's with the customer chosen and one part holding every needed input and the first material. */
   addCompleteEstimate(options?: { parts?: number }): Promise<string>;
   /** A node of the invented row, with its own ID. */
@@ -145,8 +147,8 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
 
   const addPart: CalculationDatabase['addPart'] = async (estimateId, options = {}) => {
     const { rows } = await db.owner.query<{ id: string }>(
-      'INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index, inputs) VALUES ($1::uuid, $2::uuid, $3, $4::jsonb) RETURNING id::text',
-      [estimateId, options.parentId ?? null, options.sortIndex ?? 0, JSON.stringify(options.inputs ?? {})],
+      'INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index, node_kind, inputs) VALUES ($1::uuid, $2::uuid, $3, $4::estimate_node_kind, $5::jsonb) RETURNING id::text',
+      [estimateId, options.parentId ?? null, options.sortIndex ?? 0, options.nodeKind ?? (options.parentId === undefined || options.parentId === null ? 'MAIN_ASSEMBLY' : 'PART'), JSON.stringify(options.inputs ?? {})],
     );
     return defined(rows[0]).id;
   };

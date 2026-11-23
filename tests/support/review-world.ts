@@ -49,6 +49,7 @@ export function nodesOfCase(rows: ReadonlyArray<CaseRow>, names: Readonly<Record
       id: nodeIdOf(index),
       parentId: parts.length === 1 ? null : (idBySl.get(parentSl) ?? null),
       sortIndex: Number(parts[parts.length - 1]) - 1,
+      nodeKind: parts.length === 1 ? 'MAIN_ASSEMBLY' : 'PART',
       revision: 1,
       imageId: null,
       inputs: { [COUNT]: row.h, ...(name === undefined ? {} : { [DESCRIPTION]: name }) },
@@ -90,7 +91,7 @@ export interface ReviewWorldOptions {
   /** The warnings acknowledged for the calculation (STORY-06.10) and the name of the person who went ahead. Absent: none. */
   readonly warnings?: ReadonlyArray<StoredWarning>;
   readonly madeBy?: string;
-  /** The estimate's status. Absent: SUBMITTED, the status of a calculated estimate waiting for its Lead. */
+  /** The estimate's status. Absent: PREPARED, the status of a calculated estimate waiting for its Lead. */
   readonly status?: EstimateStatus;
   /**
    * What changed in the masters since the calculation (STORY-06.11): the masters now, over the one fixture the unlock preview is tested with. Absent: nothing changed, so there is no notice. The calculation stored
@@ -186,7 +187,7 @@ export function createReviewWorld(options: ReviewWorldOptions): ReviewWorld {
     estimates: {
       findEstimateAccess: (id) => {
         reads.access.record(id);
-        return Promise.resolve(id === REVIEW_ESTIMATE_ID ? { id, engineerId: 'invented-engineer', status: options.status ?? 'SUBMITTED' } : null);
+        return Promise.resolve(id === REVIEW_ESTIMATE_ID ? { id, engineerId: 'invented-engineer', status: options.status ?? 'PREPARED' } : null);
       },
     },
     masters: masters.masters,

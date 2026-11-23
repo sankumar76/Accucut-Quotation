@@ -44,7 +44,7 @@ export const autosaveFailedText = (time: string): string => `Auto-save could not
 
 /**
  * The words of the status line under the part form's title: `lastSaved` ("Last saved 20 Nov 2026, 10:41 IST" or "Nothing saved yet"), then "Auto-save every 30 s." while the person may edit (nothing saves a
- * submitted estimate), then, once, the failure of the automatic save with its time.
+ * prepared estimate), then, once, the failure of the automatic save with its time.
  */
 export function saveStatusText(lastSaved: string, editable: boolean, failedAt: Date | null): string {
   const parts = editable ? [`${lastSaved}.`, AUTOSAVE_NOTE] : [lastSaved];

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { NODE_KINDS, type NodeKind } from '../../lib/estimate/node-kinds';
+
 import { withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
 import { clientFor, type Transaction } from './transaction';
@@ -20,6 +22,8 @@ export interface NodeRecord {
   readonly id: string;
   readonly parentId: string | null;
   readonly sortIndex: number;
+  /** The row's stored kind (CR-01 item 3A): holds no figure, so every role's tree carries it. "Sub-part" is not stored; it is derived from the siblings (`nodeKindLabel`). */
+  readonly nodeKind: NodeKind;
   readonly revision: number;
   /** What a person typed, by field ID. Empty until the part form (STORY-05.03) writes it. */
   readonly inputs: Readonly<Record<string, unknown>>;
@@ -38,8 +42,8 @@ export interface NodePlacement {
 export interface EstimateNodeRepository {
   /** Every part of the estimate, in no particular order (the tree rules put them in order). Takes no lock. */
   listNodes(estimateId: string, tx?: Transaction): Promise<NodeRecord[]>;
-  /** Adds a part with empty inputs and revision 1, and returns it. The caller then writes the new places of the siblings that shifted (`placeNodes`). */
-  insertNode(estimateId: string, parentId: string | null, sortIndex: number, tx: Transaction): Promise<NodeRecord>;
+  /** Adds a part of this kind with empty inputs and revision 1, and returns it. The caller has checked the kind against its parent's (`ALLOWED_CHILDREN`) and then writes the new places of the siblings that shifted (`placeNodes`). */
+  insertNode(estimateId: string, parentId: string | null, nodeKind: NodeKind, sortIndex: number, tx: Transaction): Promise<NodeRecord>;
   /** Writes the new place of each of these parts, and raises `revision` by one on those marked. Throws when a part is not in the estimate. */
   placeNodes(estimateId: string, placements: ReadonlyArray<NodePlacement>, tx: Transaction): Promise<void>;
   /** Deletes exactly these parts, in one statement. Throws when one of them is not in the estimate. */
@@ -63,12 +67,12 @@ export interface EstimateNodeRepository {
   lastWrittenAt(estimateId: string): Promise<Date | null>;
 }
 
-const NODE_SELECT = { id: true, parentId: true, sortIndex: true, revision: true, inputs: true, imageId: true } as const;
+const NODE_SELECT = { id: true, parentId: true, sortIndex: true, nodeKind: true, revision: true, inputs: true, imageId: true } as const;
 
 /** `inputs` is a JSON object (a CHECK holds it); a value that is not one is a fault in the data and is refused rather than shown. */
 const INPUTS = z.record(z.string(), z.unknown());
 
-const NODE_ROW = z.strictObject({ id: z.string(), parentId: z.string().nullable(), sortIndex: z.number(), revision: z.number(), inputs: INPUTS, imageId: z.string().nullable() });
+const NODE_ROW = z.strictObject({ id: z.string(), parentId: z.string().nullable(), sortIndex: z.number(), nodeKind: z.enum(NODE_KINDS), revision: z.number(), inputs: INPUTS, imageId: z.string().nullable() });
 
 const toRecord = (row: unknown): NodeRecord => NODE_ROW.parse(row);
 
@@ -84,9 +88,9 @@ export function createEstimateNodeRepository(db: PrismaClient): EstimateNodeRepo
         return rows.map(toRecord);
       }),
 
-    insertNode: (estimateId, parentId, sortIndex, tx) =>
+    insertNode: (estimateId, parentId, nodeKind, sortIndex, tx) =>
       withDatabaseErrors(async () => {
-        const row = await clientFor(db, tx).estimateNode.create({ data: { estimateId, parentId, sortIndex }, select: NODE_SELECT });
+        const row = await clientFor(db, tx).estimateNode.create({ data: { estimateId, parentId, nodeKind, sortIndex }, select: NODE_SELECT });
         return toRecord(row);
       }),
 

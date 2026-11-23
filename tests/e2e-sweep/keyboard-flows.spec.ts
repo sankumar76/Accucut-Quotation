@@ -33,7 +33,7 @@ test.beforeEach(async ({ context }) => {
  * "Other" is chosen. The part of this flow holds "Other" (`completePartInputsFor`), and Enter goes through the box before it reaches H; `estimate-form-sections.spec.ts` opens a blank part, which has no box.
  */
 const FORM_ORDER = ['B', 'D', 'G', 'G-other', 'H', 'E', 'J', 'K', 'L', 'N', 'P', 'Q', 'R', 'S', 'V', 'W', 'X', 'Y', 'AP', 'AU', 'BM', 'AJ'] as const;
-const FILE_NAME = /^Quotation_[A-Za-z0-9_-]+_Q-\d{4}-\d{4,}_\d{4}-\d{2}-\d{2}\.xlsx$/;
+const FILE_NAME = /^[^\s/\\:*?"<>|]+_\d{2}-\d{2}-\d{4}\.xlsx$/u;
 const REFLOW_WIDTH = 320;
 const REFLOW_HEIGHT = 640;
 const NARROW_MAX = 360;
@@ -146,8 +146,8 @@ test.describe('AC-4: five flows by keyboard alone', () => {
     const answered = page.waitForResponse(isCalculate);
     await page.keyboard.press('Enter');
     expect((await answered).status(), 'the Calculate of the Engineer').toBe(200);
-    await expect(calculateButton(page)).toHaveText('Submitted');
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    await expect(calculateButton(page)).toHaveText('Prepared');
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
     await expect(partForm(page)).toBeVisible();
   });
 
@@ -231,6 +231,6 @@ test.describe('AC-4: five flows by keyboard alone', () => {
     await pressUntilFocused(page, 'Tab', download, 'Download .xlsx');
     const [file] = await withExportTurn(() => Promise.all([page.waitForEvent('download'), page.keyboard.press('Enter')]));
     expect(file.suggestedFilename()).toMatch(FILE_NAME);
-    expect(file.suggestedFilename()).toContain(`_${code}_`);
+    expect(file.suggestedFilename()).toContain('_Canary-subject_');
   });
 });

@@ -25,15 +25,15 @@ test.beforeEach(async ({ context }) => {
 const ALPHA_ID = defined(CUSTOMER_CANARIES[0]).id;
 const PHONE_MAX = 767;
 
-const tree = (page: Page): Locator => page.getByRole('tree', { name: 'Parts tree' });
-/** The part with this Sl. No: its number is the first text of the item. */
-const part = (page: Page, slNo: string): Locator => tree(page).getByRole('treeitem').filter({ has: page.locator('span', { hasText: new RegExp(`^${slNo.replaceAll('.', '\\.')}$`) }) });
+/** The parts tree is a `nav` of nested lists of links (CR-01 item 3B): a row is its link, and its number is the text marked `data-sl-no`. */
+const tree = (page: Page): Locator => page.getByRole('navigation', { name: 'Parts tree' });
+const part = (page: Page, slNo: string): Locator => tree(page).getByRole('link').filter({ has: page.locator('[data-sl-no]', { hasText: new RegExp(`^${slNo.replaceAll('.', '\\.')}$`) }) });
 const action = (page: Page, name: string): Locator => page.getByRole('button', { name, exact: true });
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 
 /** The Sl. No of every part on screen, in order. */
 async function slNumbers(page: Page): Promise<string[]> {
-  return tree(page).getByRole('treeitem').evaluateAll((items) => items.map((item) => item.querySelector('span')?.textContent ?? ''));
+  return tree(page).locator('[data-sl-no]').allTextContents();
 }
 
 /**
@@ -111,10 +111,7 @@ function watchMoves(page: Page): MoveWatch {
 async function readScreen(page: Page, wanted: string): Promise<string[]> {
   const screen = await page.evaluate(({ actions, words }) => {
     const textOf = (element: Element | null): string => (element?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
-    const items = [...document.querySelectorAll('[role="tree"] [role="treeitem"]')].map((item) => {
-      const place = `level ${item.getAttribute('aria-level') ?? '?'}, ${item.getAttribute('aria-posinset') ?? '?'} of ${item.getAttribute('aria-setsize') ?? '?'}`;
-      return `${textOf(item.querySelector('span'))} (${place}${item.getAttribute('aria-selected') === 'true' ? ', selected' : ''})`;
-    });
+    const items = [...document.querySelectorAll('nav[aria-label="Parts tree"] a[data-part-id]')].map((item) => `${textOf(item.querySelector('[data-sl-no]'))} (${item.getAttribute('aria-current') === 'true' ? 'open' : 'closed'})`);
     const liveRegions = [...document.querySelectorAll('[role="status"], [aria-live]')].map(
       (region) => `${region.classList.contains('sr-only') ? 'sr-only ' : ''}${region.getAttribute('role') ?? 'aria-live'} "${textOf(region)}"`,
     );
@@ -226,7 +223,7 @@ async function openTree(page: Page, testInfo: TestInfo): Promise<{ readonly esti
 /** The page's scripts are live, so a click or a key is not lost (DEF-011): on a phone the Parts tree button, from 768 px the first part of the tree, each by the handler React put on it. */
 async function waitUntilTheTreeIsLive(page: Page): Promise<void> {
   if (isPhone(page)) await waitUntilHydrated(page, 'button[data-early-intent="parts-tree"]', 'onClick');
-  else await waitUntilHydrated(page, '[role="treeitem"]', 'onFocus');
+  else await waitUntilHydrated(page, 'nav[aria-label="Parts tree"] a[data-part-id]', 'onClick');
 }
 
 async function showTree(page: Page): Promise<void> {
@@ -238,7 +235,7 @@ async function showTree(page: Page): Promise<void> {
 async function insertTwoSubParts(ownerId: string): Promise<void> {
   const client = await connectToTestDatabase();
   try {
-    await client.query('INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index) VALUES ($1::uuid, $1::uuid, 0), ($1::uuid, $1::uuid, 1)', [ownerId]);
+    await client.query('INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index, node_kind) VALUES ($1::uuid, $1::uuid, 0, \'PART\'), ($1::uuid, $1::uuid, 1, \'PART\')', [ownerId]);
   } finally {
     await client.end();
   }
@@ -287,7 +284,7 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await action(page, 'Move up').click();
     await expectRenumbered(page, testInfo, moves, 'Part renumbered to 1.1');
     await expect(action(page, 'Move up')).toBeFocused();
-    await expect(part(page, '1.1')).toHaveAttribute('aria-selected', 'true');
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
     // At the top of its group it cannot go further: the button says so and keeps focus.
     await expect(action(page, 'Move up')).toHaveAttribute('aria-disabled', 'true');
 
@@ -302,9 +299,8 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2', '2']);
   });
 
-  test('AC-2: the tree is a tree: levels, positions and the selected part are in the markup, and the arrow keys, Home, End and Alt with arrows work', async ({ page }, testInfo) => {
+  test('AQP-404 AC-1, AC-4: the tree is a nav of nested lists of links: no tree roles or counts, the open row is aria-current, each kind has its icon with its name, and a legend names the four', async ({ page }, testInfo) => {
     await openTree(page, testInfo);
-    const moves = watchMoves(page);
     await part(page, '1').click();
     await action(page, 'Sub-part').click();
     // One change at a time: a second press while the first is out is ignored, so wait for the part to appear.
@@ -312,33 +308,79 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await action(page, 'New item').click();
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '2']);
 
-    await expect(part(page, '1')).toHaveAttribute('aria-level', '1');
-    await expect(part(page, '1.1')).toHaveAttribute('aria-level', '2');
-    await expect(part(page, '2')).toHaveAttribute('aria-setsize', '2');
-    await expect(part(page, '2')).toHaveAttribute('aria-posinset', '2');
+    // A list of links, not a tree: no role, no level, no place, no count.
+    await expect(page.getByRole('tree')).toHaveCount(0);
+    await expect(page.getByRole('treeitem')).toHaveCount(0);
+    await expect(tree(page).locator('[aria-level], [aria-posinset], [aria-setsize], [aria-selected]')).toHaveCount(0);
+    expect(await tree(page).locator('ul ul').count()).toBeGreaterThan(0);
 
-    await part(page, '1').focus();
-    await page.keyboard.press('ArrowDown');
+    // The open row is the one that was added last (it is the selected one); it alone carries aria-current.
+    await expect(part(page, '2')).toHaveAttribute('aria-current', 'true');
+    await expect(part(page, '1')).not.toHaveAttribute('aria-current', 'true');
+    await expect(tree(page).locator('[aria-current="true"]')).toHaveCount(1);
+
+    // The kind is told by the icon, whose name is the tooltip and the spoken name; there is no text label for it on a row.
+    await expect(tree(page).getByRole('img', { name: 'Main Assembly' })).toHaveCount(2);
+    await expect(tree(page).getByRole('img', { name: 'Sub-Assembly' })).toHaveCount(1);
+    await expect(part(page, '1.1').getByRole('img', { name: 'Sub-Assembly' })).toHaveCount(1);
+    await expect(part(page, '1.1').locator('svg > title')).toHaveText('Sub-Assembly');
+    expect(await part(page, '1').innerText()).not.toContain('Main Assembly');
+    expect(await part(page, '1.1').innerText()).not.toContain('Sub-Assembly');
+
+    // The legend at the foot names the four icons.
+    const legend = page.locator('[data-tree-legend]');
+    await expect(legend).toBeVisible();
+    for (const words of ['Main Assembly', 'Sub-Assembly', 'Part or Sub-part', 'Fastener']) await expect(legend).toContainText(words);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoAxeViolations(page);
+  });
+
+  test('AQP-404 AC-1, AC-5: an arrow opens and closes its branch, a leaf keeps the space, Tab moves from a row to the next and to each arrow (no arrow-key navigation), and Enter opens the row', async ({ page }, testInfo) => {
+    await openTree(page, testInfo);
+    await part(page, '1').click();
+    await action(page, 'Sub-part').click();
+    await expect(part(page, '1.1')).toBeVisible();
+    await action(page, 'New item').click();
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '2']);
+
+    // Only a branch has an arrow button; the leaf rows have the same space and no button.
+    const arrows = tree(page).getByRole('button');
+    await expect(arrows).toHaveCount(1);
+    const arrow = tree(page).getByRole('button', { name: 'Close branch 1' });
+    await expect(arrow).toHaveAttribute('aria-expanded', 'true');
+    const leaf = await part(page, '2').boundingBox();
+    const branch = await part(page, '1').boundingBox();
+    expect(leaf?.x, 'a leaf row starts where a branch row does').toBeCloseTo(branch?.x ?? -1, 0);
+    expect((await arrow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    expect((await arrow.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
+
+    // Tab goes arrow, row, next row, next row: the order of the page, with no roving stop.
+    await arrow.focus();
+    await page.keyboard.press('Tab');
+    await expect(part(page, '1')).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(part(page, '1.1')).toBeFocused();
-    await expect(part(page, '1.1')).toHaveAttribute('aria-selected', 'true');
-    await expect(part(page, '1')).toHaveAttribute('aria-selected', 'false');
-    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Tab');
     await expect(part(page, '2')).toBeFocused();
-    await page.keyboard.press('ArrowLeft');
+    // The arrow keys do not move between rows any more (STORY-05.02 AC-9 is withdrawn).
+    await page.keyboard.press('ArrowUp');
     await expect(part(page, '2')).toBeFocused();
     await page.keyboard.press('Home');
-    await expect(part(page, '1')).toBeFocused();
-    await page.keyboard.press('ArrowRight');
-    await expect(part(page, '1.1')).toBeFocused();
-    await page.keyboard.press('ArrowLeft');
-    await expect(part(page, '1')).toBeFocused();
-    await page.keyboard.press('End');
     await expect(part(page, '2')).toBeFocused();
 
-    // Alt with an arrow moves the part, with no dragging: 2 up is 1 and the old 1 is 2.
-    await page.keyboard.press('Alt+ArrowUp');
-    await expectRenumbered(page, testInfo, moves, 'Part renumbered to 1');
-    await expect.poll(() => slNumbers(page)).toEqual(['1', '2', '2.1']);
+    // Closing the branch takes its rows away, says so on the arrow, and opening brings them back.
+    await arrow.click();
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '2']);
+    await expect(tree(page).getByRole('button', { name: 'Open branch 1' })).toHaveAttribute('aria-expanded', 'false');
+    await tree(page).getByRole('button', { name: 'Open branch 1' }).click();
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '2']);
+
+    // Enter on a row opens it: it becomes the open row and its form takes the focus.
+    await part(page, '1.1').focus();
+    await page.keyboard.press('Enter');
+    // On a phone the drawer closes on Enter, and the form takes the focus.
+    if (isPhone(page)) await expect(page.getByRole('dialog', { name: 'Parts tree' })).toHaveCount(0);
+    else await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
   });
 });
 

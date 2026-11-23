@@ -72,7 +72,7 @@ async function setUpPart(): Promise<void> {
     [engineerId, leadId, PATH],
   );
   estimateId = defined((await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id) VALUES ($1::uuid) RETURNING id::text AS id', [defined(task.rows[0]).id])).rows[0]).id;
-  nodeId = (await serviceOver(db.transactions).addPart(arjun, estimateId, { kind: 'item' })).nodeId;
+  nodeId = (await serviceOver(db.transactions).addPart(arjun, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
 }
 
 const material = (name: string) =>

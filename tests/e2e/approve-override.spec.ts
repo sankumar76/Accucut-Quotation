@@ -255,7 +255,7 @@ test.describe('AC-4: a reason of 501 characters, or with a hidden character', ()
     await expect(dialogOf(page).getByText(HIDDEN_CHARACTER_MESSAGE)).toBeVisible();
     await expect(reasonField(page)).toBeFocused();
     expect(sent).toBe(0);
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
 
     // The server refuses the same text itself, whatever the browser does: a 422 under `reason`, and nothing is written.
     const refused = await page.evaluate(async (id) => {

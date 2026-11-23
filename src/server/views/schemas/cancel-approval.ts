@@ -20,9 +20,9 @@ export const cancelApprovalBodySchema = z.strictObject({
   password: stepUpPasswordSchema,
 });
 
-/** The whole answer of a good cancel: the status the estimate has now (DRAFT, or the DRAFT or SUBMITTED it already had) and when (UTC text). */
+/** The whole answer of a good cancel: the status the estimate has now (DRAFT, or the DRAFT or PREPARED it already had) and when (UTC text). */
 export const cancelApprovalAnswerSchema = z.strictObject({
-  status: z.enum(['DRAFT', 'SUBMITTED']),
+  status: z.enum(['DRAFT', 'PREPARED']),
   cancelledAt: z.iso.datetime(),
 });
 export type CancelApprovalAnswer = z.infer<typeof cancelApprovalAnswerSchema>;

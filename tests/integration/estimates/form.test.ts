@@ -78,7 +78,7 @@ async function setUpPart(): Promise<string> {
     [arjunId, leadId, PATH],
   );
   estimateId = defined((await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id) VALUES ($1::uuid) RETURNING id::text AS id', [defined(task.rows[0]).id])).rows[0]).id;
-  return (await service.addPart(arjun, estimateId, { kind: 'item' })).nodeId;
+  return (await service.addPart(arjun, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodeId;
 }
 
 interface Row {
@@ -281,7 +281,7 @@ describe('AC-8, SQR-01 (b), SQR-09: what the form and the part send, and the del
 
   it('a delete confirmed for a part as it was is refused once a sub-part was typed into, and nothing is deleted', async () => {
     const parent = await setUpPart();
-    const child = (await service.addPart(arjun, estimateId, { kind: 'sub-part', nodeId: parent })).nodeId;
+    const child = (await service.addPart(arjun, estimateId, { parentId: parent, nodeKind: 'PART' })).nodeId;
     const { rows } = await db.owner.query<{ id: string; parent_id: string | null; sort_index: number; revision: number }>(
       'SELECT id::text AS id, parent_id::text AS parent_id, sort_index, revision FROM estimate_nodes WHERE estimate_id = $1::uuid',
       [estimateId],

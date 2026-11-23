@@ -120,9 +120,9 @@ describe('AC-2: a first press with a warning due is the 409, and writes nothing'
 });
 
 describe('AC-3: the acknowledged press calculates, records the warnings and writes one audit entry in the same transaction', () => {
-  it('stores each warning as text on the calculation as the person who pressed, links it, submits the estimate and answers exactly {status, message}', async () => {
+  it('stores each warning as text on the calculation as the person who pressed, links it, prepares the estimate and answers exactly {status, message}', async () => {
     const { estimateId, part, sub } = await addWarnedEstimate();
-    expect(await db.service.calculate(engineer(), estimateId, acknowledge(3))).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(await db.service.calculate(engineer(), estimateId, acknowledge(3))).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
     const { rows } = await db.owner.query<{ id: string; created_by: string; inputs_revision: number; warnings: unknown }>(
       'SELECT id::text, created_by::text, inputs_revision, warnings FROM calculations WHERE estimate_id = $1::uuid',
       [estimateId],
@@ -136,7 +136,7 @@ describe('AC-3: the acknowledged press calculates, records the warnings and writ
         { code: 'QTY_ZERO', nodeId: sub, slNo: '1.1.1', label: 'Invented lid' },
       ],
     });
-    expect(await stateOf(estimateId)).toEqual({ status: 'SUBMITTED', current_calculation_id: defined(rows[0]).id, inputs_revision: 3 });
+    expect(await stateOf(estimateId)).toEqual({ status: 'PREPARED', current_calculation_id: defined(rows[0]).id, inputs_revision: 3 });
   });
 
   it('writes one `calculation.warning_acknowledged` entry that names the person, the request, the estimate by its task code and each row, and holds no figure', async () => {
@@ -271,7 +271,7 @@ describe('AC-4: a stale acknowledgement never passes', () => {
 describe('AC-5: an acknowledgement with nothing to warn is ignored', () => {
   it('calculates as a press with none: `warnings` is empty and no audit entry is written', async () => {
     const estimateId = await db.addCompleteEstimate();
-    expect(await db.service.calculate(engineer(), estimateId, acknowledge(99))).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(await db.service.calculate(engineer(), estimateId, acknowledge(99))).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
     const { rows } = await db.owner.query<{ warnings: unknown[] }>('SELECT warnings FROM calculations WHERE estimate_id = $1::uuid', [estimateId]);
     expect(rows).toEqual([{ warnings: [] }]);
     expect(await entriesFor(db, estimateId)).toEqual([]);
@@ -279,7 +279,7 @@ describe('AC-5: an acknowledgement with nothing to warn is ignored', () => {
 });
 
 describe('each press stands alone', () => {
-  it('a second press on a submitted estimate is the 409 for that; once it is a draft again, the next press is asked again and a second calculation and a second entry follow', async () => {
+  it('a second press on a prepared estimate is the 409 for that; once it is a draft again, the next press is asked again and a second calculation and a second entry follow', async () => {
     const { estimateId } = await addWarnedEstimate();
     await db.service.calculate(engineer(), estimateId, acknowledge(3));
     await expect(db.service.calculate(engineer(), estimateId, acknowledge(3))).rejects.toBeInstanceOf(ConflictError);
@@ -331,7 +331,7 @@ describe('AC-8 (CE-9): the seven trees, calculated with the acknowledgement, giv
     const estimateId = await addCase(quantityCase);
     const warned = quantityCase.rows.filter((row) => Number(row.h) === 0).map((row) => row.sl);
     expect((await askedToConfirm(db.service.calculate(engineer(), estimateId))).warnings.map((warning) => warning.slNo)).toEqual(warned);
-    expect(await db.service.calculate(engineer(), estimateId, acknowledge(3))).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(await db.service.calculate(engineer(), estimateId, acknowledge(3))).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
     const header = await db.owner.query<{ id: string; total: string | null; warnings: Array<{ slNo: string }> }>(
       "SELECT id::text, product_values ->> 'totalPrice' AS total, warnings FROM calculations WHERE estimate_id = $1::uuid",
       [estimateId],

@@ -41,10 +41,10 @@ import {
  * The action bar of SCR-06 (STORY-06.02 AC-6, STORY-06.04 AC-3, AC-5, STORY-06.06 AC-1, AC-5; UX spec SCR-06 "States"): the line "Calculated <time> · configuration version <n>" (FR-031), the primary **Calculate**
  * (for an estimate that was never calculated) or **Recalculate** (while the figures are cleared, and **on a Draft whatever the state of the figures**, STORY-06.08 AC-11), which works from STORY-06.04, **Approve and lock**, and Download .xlsx.
  *
- * **A "Rates changed" notice brings the button with it** (STORY-06.11 AC-1, AC-10): its link is to Recalculate, so while the costs view holds that notice the bar shows Recalculate whatever the status (a Submitted
+ * **A "Rates changed" notice brings the button with it** (STORY-06.11 AC-1, AC-10): its link is to Recalculate, so while the costs view holds that notice the bar shows Recalculate whatever the status (a Prepared
  * estimate with current figures has none otherwise), and a link never points at a missing button.
  *
- * **Approve and lock** is on only while the guard of STORY-06.05 would let the press through (the estimate is SUBMITTED, its figures are `current` and the page holds the calculation they come from): it is then the
+ * **Approve and lock** is on only while the guard of STORY-06.05 would let the press through (the estimate is PREPARED, its figures are `current` and the page holds the calculation they come from): it is then the
  * button of the one small script `ApproveButton`, which opens the dialog of SCR-08 (fetched on the first press, not in the first load). In every other state it is **off with a reason**: each disabled button names its
  * reason in visible text and is described by it (`aria-describedby`), so a screen reader hears why. The server decides all the same; the button is a convenience. For an **approved** estimate Approve and lock is gone and
  * **Unlock** takes its place (STORY-06.06 AC-5), which opens the dialog of SCR-09 (STORY-06.08; fetched on the first press, not in the first load). **Download .xlsx** (STORY-07.07; UX spec SCR-06 "Download opens SCR-10 and is off unless the figures are current") is the link, drawn as a button, to SCR-10 while the figures are `current`, whatever the status; it is off with its reason in the cleared and never-calculated states. In flow, not sticky.
@@ -89,7 +89,7 @@ export interface ReviewActionsProps {
   readonly status: EstimateStatus;
   /** The time of the calculation written in IST, and the configuration version it used; `null` while there is no calculation. */
   readonly calculated: { readonly at: string; readonly configurationNumber: number } | null;
-  /** Present only for a SUBMITTED estimate whose figures are current (see `approveOffer`): the Approve button is then on. */
+  /** Present only for a PREPARED estimate whose figures are current (see `approveOffer`): the Approve button is then on. */
   readonly approve: ApproveOffer | null;
   /** The Cancel approval button for the Admin, or the line for a Lead, while the latest approval has not been cancelled (see `cancelOffer`). */
   readonly cancel: CancelOffer | null;
@@ -111,12 +111,12 @@ const Reason = ({ id, text }: ReasonProps) => (
 );
 
 /**
- * Whether Approve and lock is on, and with what: a SUBMITTED estimate whose figures are `current`, with the calculation they come from and its total. This is the button's own convenience and mirrors the
+ * Whether Approve and lock is on, and with what: a PREPARED estimate whose figures are `current`, with the calculation they come from and its total. This is the button's own convenience and mirrors the
  * server's guard (`assertApprovable`), which stays the authority: a button that is on for an estimate the server would refuse only earns the refusal's sentence.
  */
 export function approveOffer(status: EstimateStatus, costs: Pick<CostsView, 'state' | 'calculationId' | 'totals' | 'letters' | 'warning' | 'ratesChanged'>): ApproveOffer | null {
   const total = costs.totals?.totalPrice ?? null;
-  if (status !== 'SUBMITTED' || costs.state !== 'current' || costs.calculationId === null || total === null) return null;
+  if (status !== 'PREPARED' || costs.state !== 'current' || costs.calculationId === null || total === null) return null;
   return {
     calculationId: costs.calculationId,
     calculatedTotal: total,
@@ -182,8 +182,8 @@ function ApproveControl({ estimateId, state, status, approve }: Pick<ReviewActio
 }
 
 export function ReviewActions({ estimateId, code, state, status, calculated, approve, cancel, remove, ratesChanged }: ReviewActionsProps) {
-  // Recalculate is the way on whenever the figures are not current, and **on a Draft whatever the state of the figures**: an unlocked estimate keeps its current figures, and it can be calculated again, submitted
-  // and approved without anyone editing an input (AC-11). A Submitted estimate with current figures shows no button: its way on is Approve and lock, unless rates changed since the calculation: the notice's link
+  // Recalculate is the way on whenever the figures are not current, and **on a Draft whatever the state of the figures**: an unlocked estimate keeps its current figures, and it can be calculated again, prepared
+  // and approved without anyone editing an input (AC-11). A Prepared estimate with current figures shows no button: its way on is Approve and lock, unless rates changed since the calculation: the notice's link
   // is to Recalculate, so the button is there then (STORY-06.11).
   const showRecalculate = state !== 'current' || status === 'DRAFT' || ratesChanged;
   return (
@@ -243,7 +243,7 @@ export function ReviewActions({ estimateId, code, state, status, calculated, app
             />
           </div>
         ) : status === 'APPROVED' ? null : (
-          // An approved estimate says it in its notice ("Locked. ... Only the Admin can cancel an approval."); a Draft or Submitted one whose approval was kept through an unlock says it here.
+          // An approved estimate says it in its notice ("Locked. ... Only the Admin can cancel an approval."); a Draft or Prepared one whose approval was kept through an unlock says it here.
           <Reason id={CANCEL_REASON_ID} text={ONLY_ADMIN_CANCELS} />
         )}
         {remove === null ? null : (

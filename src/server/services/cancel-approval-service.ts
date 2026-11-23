@@ -26,7 +26,7 @@ import type { StepUpService } from './step-up-service';
  * Cancel approval (STORY-06.12; FR-107, FR-038; D-29; NFR-001, NFR-004, NFR-007; architecture sections 4.4, 4.8, 4.10 and 6 "Cancel approval"): the Admin, and only the Admin, cancels an approval with a reason and their
  * password. The approved price **stays on screen**, marked "Approval cancelled", until the Admin removes it (STORY-06.13) or a new approval replaces it; it leaves the Excel file (STORY-07.03).
  *
- * **Two cases, one request.** On an APPROVED estimate it does what Unlock does: the estimate goes to DRAFT through the state machine and its task is open again (derived from the status, never stored). On a DRAFT or SUBMITTED
+ * **Two cases, one request.** On an APPROVED estimate it does what Unlock does: the estimate goes to DRAFT through the state machine and its task is open again (derived from the status, never stored). On a DRAFT or PREPARED
  * estimate whose latest approval was kept through an unlock (AC-10; delivery lead decision, 2026-11-15) the **status and the task do not change**; the cancel is stored and audited the same way, and the audit entry holds the
  * status before and after, so it shows that nothing moved.
  *
@@ -61,7 +61,7 @@ export interface CancelApprovalRequest {
 
 /** What a cancel answers (NFR-002): the status the estimate has now and when. No figure, no master value, no ID, no password. */
 export interface CancelApprovalResult {
-  /** DRAFT when an approved estimate went back to Draft; the status it already had (DRAFT or SUBMITTED) when it did not move. */
+  /** DRAFT when an approved estimate went back to Draft; the status it already had (DRAFT or PREPARED) when it did not move. */
   readonly status: Exclude<EstimateStatus, 'APPROVED'>;
   /** UTC, ISO 8601, the database's clock. */
   readonly cancelledAt: string;
@@ -121,7 +121,7 @@ export function createCancelApprovalService({ estimates, approvals, transactions
         // IDs are compared without regard to case, as PostgreSQL's `uuid` type does.
         if (latest.id.toLowerCase() !== request.approvalId.toLowerCase()) throw new ConflictError(APPROVAL_CHANGED_MESSAGE, { code: APPROVAL_CHANGED_CODE });
         if (latest.cancelledAt !== null) throw new ConflictError(APPROVAL_ALREADY_CANCELLED_MESSAGE, { code: APPROVAL_ALREADY_CANCELLED_CODE });
-        // The write, in this transaction and in this order: the status (the machine decides under the same lock; DRAFT and SUBMITTED stay as they are and write nothing), the cancel, the entry. Any of them failing takes the others back.
+        // The write, in this transaction and in this order: the status (the machine decides under the same lock; DRAFT and PREPARED stay as they are and write nothing), the cancel, the entry. Any of them failing takes the others back.
         const moved = await workflow.transition(viewer, estimate.id, 'CANCEL', tx);
         // The machine's CANCEL leads to DRAFT from APPROVED and stays put from the other two, so the estimate is never APPROVED afterwards; the check keeps a changed table from answering a status that is not one of the two.
         if (moved.to === 'APPROVED') throw new Error('A cancelled approval would leave the estimate APPROVED.');

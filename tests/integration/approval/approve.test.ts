@@ -146,7 +146,7 @@ describe('AC-2: the approval is written in one piece', () => {
     const before = await storedOf(db, estimateId);
     await expect(failing.approve(lead(), estimateId, request(calculationId))).rejects.toThrow('Invented audit failure.');
     expect(await storedOf(db, estimateId)).toEqual(before);
-    expect(await statusOf(db, estimateId)).toBe('SUBMITTED');
+    expect(await statusOf(db, estimateId)).toBe('PREPARED');
     expect(await approvalCount(db, estimateId)).toBe(0);
   });
 
@@ -163,7 +163,7 @@ describe('AC-2: the approval is written in one piece', () => {
     const before = await storedOf(db, estimateId);
     await expect(failing.approve(lead(), estimateId, request(calculationId))).rejects.toThrow('Invented insert failure.');
     expect(await storedOf(db, estimateId)).toEqual(before);
-    expect(await statusOf(db, estimateId)).toBe('SUBMITTED');
+    expect(await statusOf(db, estimateId)).toBe('PREPARED');
   });
 });
 
@@ -183,7 +183,7 @@ describe('the approval takes the estimate\'s row lock, and waits for it (06.05 S
     expect(await waiting.current).toMatchObject({ httpStatus: 409, code: TOTALS_OUT_OF_DATE_CODE });
     expect(await approvalCount(db, estimateId)).toBe(0);
     expect(await approvalEntries(db, estimateId)).toEqual([]);
-    expect(await statusOf(db, estimateId)).toBe('SUBMITTED');
+    expect(await statusOf(db, estimateId)).toBe('PREPARED');
     // Only the save's own change is different from before: the revision went up by one, and nothing else of the estimate.
     const after = (await storedOf(db, estimateId)) as { estimate: Array<{ revision: number }> };
     expect(defined(after.estimate[0]).revision).toBe(defined((before as typeof after).estimate[0]).revision + 1);
@@ -224,7 +224,7 @@ describe('the approval takes the estimate\'s row lock, and waits for it (06.05 S
       expect(approvalRefusal).toMatchObject({ httpStatus: 409, code: CALCULATION_CHANGED_CODE });
       expect(await approvalCount(db, estimateId)).toBe(0);
       expect(await currentCalculationOf(db, estimateId)).not.toBe(seen);
-      expect(await statusOf(db, estimateId)).toBe('SUBMITTED');
+      expect(await statusOf(db, estimateId)).toBe('PREPARED');
     }
   });
 });
@@ -258,7 +258,7 @@ describe('AC-4: once approved, every writer of an input is refused and nothing c
     const writers: ReadonlyArray<readonly [string, () => Promise<unknown>, string]> = [
       ['a save by a Lead', () => db.estimateService.saveInputs(lead(), estimateId, { nodeId: top, revision: topRevision, values: { [idOf('J')]: '95' } }), ESTIMATE_NOT_EDITABLE_CODE],
       ['a save by the Engineer', () => db.estimateService.saveInputs(engineer, estimateId, { nodeId: top, revision: topRevision, values: { [idOf('J')]: '95' } }), ESTIMATE_NOT_EDITABLE_CODE],
-      ['a part added', () => db.estimateService.addPart(lead(), estimateId, { kind: 'item' }), ESTIMATE_NOT_EDITABLE_CODE],
+      ['a part added', () => db.estimateService.addPart(lead(), estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' }), ESTIMATE_NOT_EDITABLE_CODE],
       ['a part moved', () => db.estimateService.moveNode(lead(), estimateId, { nodeId: top, revision: topRevision, parentId: null, index: 0 }), ESTIMATE_NOT_EDITABLE_CODE],
       ['a part deleted', () => db.estimateService.deleteNode(lead(), estimateId, { nodeId: top, revision: topRevision, parts: 1, subtree: 'unused' }), ESTIMATE_NOT_EDITABLE_CODE],
       ['the customer changed', () => db.estimateService.setCustomer(lead(), changeContext(lead()), estimateId, customerId), ESTIMATE_NOT_EDITABLE_CODE],

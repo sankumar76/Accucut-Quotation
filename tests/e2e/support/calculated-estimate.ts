@@ -49,13 +49,13 @@ export async function makeCalculable(owner: E2eUser & { readonly id: string }): 
   await makeCanaryEstimateCalculable(owner.id, ALPHA_MATERIAL_ID, ALPHA_CUSTOMER_ID);
 }
 
-/** The Engineer presses Calculate through the portal, and the estimate is Submitted. */
+/** The Engineer presses Calculate through the portal, and the estimate is Prepared. */
 export async function calculateAsEngineer(page: Page, owner: E2eUser & { readonly id: string }, code: string): Promise<void> {
   await signInAs(page, owner);
   await page.goto(`/estimates/${code}`);
   const status = await page.evaluate(async (id) => (await fetch(`/api/v1/estimates/${id}/calculate`, { method: 'POST' })).status, owner.id);
   expect(status).toBe(200);
-  expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+  expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
 }
 
 /** Signs in as a Lead (made for the test) or as the one Admin of the database. */
@@ -68,18 +68,18 @@ export async function signInAsLead(page: Page, testInfo: TestInfo, role: 'LEAD' 
 /**
  * The Engineer presses Calculate with the request the button sends, **without loading a page first** (AQP-340: a page load of the estimate costs the development server seconds on a loaded runner). The
  * person is signed in without the sign-in screen, and the call carries the portal's own `Origin`, as a call from a page does. For the specs whose subject is what a Lead sees after the press, not the press:
- * `calculateAsEngineer` is for those whose subject is the Engineer's own page. The estimate is Submitted afterwards, as the helper above checks.
+ * `calculateAsEngineer` is for those whose subject is the Engineer's own page. The estimate is Prepared afterwards, as the helper above checks.
  */
 export async function calculateWithoutThePage(page: Page, owner: E2eUser & { readonly id: string }, origin: string = DEVELOPMENT_URL): Promise<void> {
   await signInAs(page, owner);
   const answer = await page.request.post(`/api/v1/estimates/${owner.id}/calculate`, { headers: { origin } });
   expect(answer.status(), 'the Calculate of the Engineer').toBe(200);
-  expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+  expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
 }
 
 /**
  * The Engineer presses Calculate on an estimate whose part has 0 in QTY per Assy and goes ahead past the warning (STORY-07.06 AC-6), with the requests the button and its dialog send and **without loading a
- * page**: the first press is the 409 `CALCULATE_ACK_REQUIRED` with the estimate's revision, the second carries that revision as the acknowledgement. The estimate is Submitted afterwards, with one calculation
+ * page**: the first press is the 409 `CALCULATE_ACK_REQUIRED` with the estimate's revision, the second carries that revision as the acknowledgement. The estimate is Prepared afterwards, with one calculation
  * that holds the warning, whose `created_by` is this Engineer.
  */
 export async function calculateAnywayWithoutThePage(page: Page, owner: E2eUser & { readonly id: string }, origin: string = DEVELOPMENT_URL): Promise<void> {
@@ -90,5 +90,5 @@ export async function calculateAnywayWithoutThePage(page: Page, owner: E2eUser &
   const { inputsRevision } = (await asked.json()) as { inputsRevision: number };
   const went = await page.request.post(url, { headers: { origin }, data: { acknowledge: { inputsRevision } } });
   expect(went.status(), 'the Calculate anyway of the Engineer').toBe(200);
-  expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+  expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
 }
