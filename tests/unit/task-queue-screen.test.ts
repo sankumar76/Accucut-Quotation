@@ -28,6 +28,7 @@ const row = (overrides: Partial<QueueRowData> = {}): QueueRowData => ({
   deadlineAt: '2026-11-12T11:30:00.000Z',
   status: 'DRAFT',
   assignedByName: 'Invented Boss',
+  ignoredRemarks: null,
   ...overrides,
 });
 
@@ -37,7 +38,7 @@ const AS_OF = '2026-11-09T04:00:00.000Z';
 const page = (tasks: ReadonlyArray<QueueRowData>, overrides: Partial<QueuePageData> = {}): QueuePageData => ({
   tab: 'open',
   tasks,
-  counts: { open: tasks.length, closed: 1, overdue: 2 },
+  counts: { open: tasks.length, closed: 1, overdue: 2, ignored: 0 },
   nextCursor: null,
   asOf: AS_OF,
   ...overrides,
@@ -49,10 +50,11 @@ const list = (role: RoleName, tasks: ReadonlyArray<QueueRowData>, asOf: string =
 const occurrences = (html: string, text: string): number => html.split(text).length - 1;
 
 describe('AC-1: three tabs with counts, and the sort note', () => {
-  it('has a tablist of Open, Closed and Overdue, each with its count, and the first one selected', () => {
-    const html = screen('LEAD', page([row()], { counts: { open: 5, closed: 1, overdue: 2 } }));
+  it('has a tablist of Open, Closed, Overdue and Ignored, each with its count, and the first one selected', () => {
+    const html = screen('LEAD', page([row()], { counts: { open: 5, closed: 1, overdue: 2, ignored: 3 } }));
     expect(html).toContain('role="tablist"');
-    expect(occurrences(html, 'role="tab"')).toBe(3);
+    expect(occurrences(html, 'role="tab"')).toBe(4);
+    expect(html).toMatch(/Ignored<span[^>]*>3<\/span>/);
     expect(html).toMatch(/aria-selected="true"[^>]*>Open<span[^>]*>5<\/span>/);
     expect(html).toMatch(/>Closed<span[^>]*>1<\/span>/);
     expect(html).toMatch(/Overdue<span[^>]*>2<\/span>/);
@@ -71,8 +73,8 @@ describe('AC-1: three tabs with counts, and the sort note', () => {
     expect(descriptionFor('LEAD')).toBe('All tasks assigned to Engineers.');
   });
 
-  it('knows the three tabs it draws', () => {
-    expect(QUEUE_TABS).toHaveLength(3);
+  it('knows the four tabs it draws', () => {
+    expect(QUEUE_TABS).toHaveLength(4);
   });
 });
 
@@ -242,12 +244,12 @@ describe('STORY-04.03 AC-1: an overdue row has the clock icon, "Overdue by", and
 
 describe('STORY-04.03 AC-1: the Overdue tab says how many tasks are overdue, in the singular where it is 1', () => {
   it('adds the summary notice on the Overdue tab, "1 task is overdue" and "3 tasks are overdue"', () => {
-    expect(screen('LEAD', page([row()], { tab: 'overdue', counts: { open: 1, closed: 0, overdue: 1 }, asOf: LATE }))).toContain('1 task is overdue');
-    expect(screen('LEAD', page([row()], { tab: 'overdue', counts: { open: 3, closed: 0, overdue: 3 }, asOf: LATE }))).toContain('3 tasks are overdue');
+    expect(screen('LEAD', page([row()], { tab: 'overdue', counts: { open: 1, closed: 0, overdue: 1, ignored: 0 }, asOf: LATE }))).toContain('1 task is overdue');
+    expect(screen('LEAD', page([row()], { tab: 'overdue', counts: { open: 3, closed: 0, overdue: 3, ignored: 0 }, asOf: LATE }))).toContain('3 tasks are overdue');
   });
 
   it('has no summary notice on the other tabs', () => {
-    expect(screen('LEAD', page([row()], { tab: 'open', counts: { open: 1, closed: 0, overdue: 3 } }))).not.toContain('tasks are overdue');
+    expect(screen('LEAD', page([row()], { tab: 'open', counts: { open: 1, closed: 0, overdue: 3, ignored: 0 } }))).not.toContain('tasks are overdue');
   });
 });
 

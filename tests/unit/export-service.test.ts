@@ -84,11 +84,12 @@ const approvalOf = (over: Partial<ApprovalRecord> = {}): ApprovalRecord => ({
 });
 
 /** The estimate is calculated at the revision it is at now, so its figures are current, unless a test says otherwise. */
-const basisOf = (over: { inputsRevision?: number; calculationRevision?: number | null } = {}) => {
+const basisOf = (over: { inputsRevision?: number; calculationRevision?: number | null; ignoredAt?: Date | null } = {}) => {
   const inputsRevision = over.inputsRevision ?? 5;
   const calculationRevision = over.calculationRevision === undefined ? inputsRevision : over.calculationRevision;
   return {
     inputsRevision,
+    ignoredAt: over.ignoredAt ?? null,
     calculation: calculationRevision === null ? null : { id: CALCULATION_ID, inputsRevision: calculationRevision, configVersionId: OLD_VERSION.id, createdAt: new Date('2026-11-10T00:00:00.000Z') },
   };
 };

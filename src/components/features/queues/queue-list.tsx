@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { RoleName } from '@/lib/auth/roles';
 import { cn } from '@/lib/cn';
-import { isTaskClosed } from '@/lib/estimate/task-status';
+import { taskStatusOf } from '@/lib/estimate/task-status';
 import type { DownloadMarkers } from '@/lib/tasks/download-markers-client';
 import type { QueueRowData } from '@/lib/tasks/queue-client';
+import { remarksPreview } from '@/lib/tasks/remarks-preview';
 import { formatIst } from '@/lib/time';
 
 import { lateTextFor, OVERDUE_CARD_CLASS, OVERDUE_ROW_CLASS, OverdueMarker } from './overdue-marker';
@@ -21,6 +22,10 @@ import {
   DEADLINE_COLUMN,
   LIST_LABEL,
   NOT_CHOSEN_YET,
+  OPEN_TO_RESTORE,
+  openToRestoreLabel,
+  READ_ALL_REMARKS,
+  readAllRemarksLabel,
   REASSIGN_ACTION,
   reassignActionLabel,
   TABLE_CAPTION,
@@ -87,12 +92,21 @@ function DeadlineCell({ task, late }: { readonly task: QueueRowData; readonly la
 const reassignHref = (task: QueueRowData): string => `/assign?task=${encodeURIComponent(task.id)}`;
 
 /**
- * What a Lead and an Admin find in the action column: the action for an open row, the word "Closed" for a closed one. `isTaskClosed` is the one rule, shared with the tabs and
- * the overdue cue, so a task is offered the action exactly when it is in the Open tab.
+ * What a Lead and an Admin find in the action column: the action for an open row, the word "Closed" for a closed one, and for an Ignored row the link **Open to restore** (CR-01 item 7D; no Reassign, DL-304, and not a
+ * Restore button: the link restores nothing, so it does not say so). `taskStatusOf(...).closed` is built on `isTaskClosed`, the one rule, shared with the tabs and the overdue cue, so a task is offered the action exactly
+ * when it is in the Open tab.
  */
 function RowAction({ task }: { readonly task: QueueRowData }) {
-  // A row carries no Ignored layer until story 7D adds it to the view (7D passes the row's own flag).
-  return isTaskClosed(task.status, false) ? (
+  if (task.status === 'IGNORED') {
+    return (
+      <Button variant="secondary" asChild>
+        <Link href={taskHref(task.code)} data-restore-link="" aria-label={openToRestoreLabel(task.code)}>
+          {OPEN_TO_RESTORE}
+        </Link>
+      </Button>
+    );
+  }
+  return taskStatusOf(task.status).closed ? (
     <span data-closed-action="" className="font-semibold text-ink-2">
       {CLOSED_ROW_WORD}
     </span>
@@ -107,10 +121,38 @@ function RowAction({ task }: { readonly task: QueueRowData }) {
 
 /** The download chip under "Closed" for a Lead and an Admin (never drawn without `markers`, which an Engineer's list never has). */
 function DownloadMarker({ task, markers }: { readonly task: QueueRowData; readonly markers: QueueListProps['markers'] }) {
-  // A row carries no Ignored layer until story 7D adds it to the view (7D passes the row's own flag).
-  if (markers === undefined || !isTaskClosed(task.status, false)) return null;
+  // An ignored row is not closed (its display status is IGNORED), so it draws no marker.
+  if (markers === undefined || !taskStatusOf(task.status).closed) return null;
   // A marker that is not in the answer reads as unavailable, never as "Not downloaded".
   return <DownloadChip marker={markers === 'unavailable' ? 'unavailable' : (markers[task.id] ?? 'unavailable')} className="mt-s-1" />;
+}
+
+/**
+ * The status and, on a row of the Ignored tab, the Lead's remarks under it (CR-01 item 7D, AC-3): plain text nodes (never markup, so `<b>x</b>` shows as typed), line breaks as spaces, up to 140 code points whole and
+ * longer cut at a word with "Read all remarks", a link to the task page where the whole text is. No new component and no client code: the cut is a pure function.
+ */
+function IgnoredRemarks({ task }: { readonly task: QueueRowData }) {
+  if (task.ignoredRemarks === null) return null;
+  const preview = remarksPreview(task.ignoredRemarks);
+  return (
+    <div data-ignored-remarks="" className={cn('mt-s-2 max-w-[280px] text-body text-ink-2', BREAK_LONG_NAMES)}>
+      <p>{preview.text}</p>
+      {preview.cut ? (
+        <Link href={taskHref(task.code)} aria-label={readAllRemarksLabel(task.code)} className="font-semibold text-primary-ink underline-offset-2 hover:underline">
+          {READ_ALL_REMARKS}
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+function StatusCell({ task }: { readonly task: QueueRowData }) {
+  return (
+    <>
+      <StatusBadge status={task.status} iconSize="hint" />
+      <IgnoredRemarks task={task} />
+    </>
+  );
 }
 
 function TaskTable({ role, tasks, asOf, markers }: QueueListProps) {
@@ -148,7 +190,7 @@ function TaskTable({ role, tasks, asOf, markers }: QueueListProps) {
               <DeadlineCell task={task} late={lateTextFor(task, asOf)} />
             </TableCell>
             <TableCell>
-              <StatusBadge status={task.status} iconSize="hint" />
+              <StatusCell task={task} />
             </TableCell>
             <TableCell className={cn('hidden lg:table-cell', BREAK_LONG_NAMES)}>{task.assignedByName}</TableCell>
             {manager ? (
@@ -186,6 +228,7 @@ function TaskCards({ role, tasks, asOf, markers }: QueueListProps) {
             </div>
             <StatusBadge status={task.status} iconSize="hint" />
           </div>
+          <IgnoredRemarks task={task} />
           <div className="text-body text-ink-2 tabular-nums">
             {CARD_DEADLINE_LABEL}: {formatIst(new Date(task.deadlineAt))}
           </div>

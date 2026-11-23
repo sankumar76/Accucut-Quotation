@@ -28,6 +28,7 @@ import {
   emptyTextFor,
   ERROR_RETRY,
   ERROR_TITLE,
+  ignoredIntroFor,
   LOADING_LABEL,
   NO_MATCH_ENGINEER,
   NO_MATCH_MANAGER,
@@ -35,6 +36,7 @@ import {
   SHOW_MORE_FAILED_BODY,
   SHOW_MORE_FAILED_TITLE,
   SORT_NOTE,
+  SORT_NOTE_IGNORED,
   TABS_LABEL,
   tasksFoundText,
 } from './queue-texts';
@@ -44,6 +46,10 @@ import {
  * counts, the sort note, and the tasks of the tab. It holds the first page the server rendered for the address and asks `/api/v1/tasks` when the person changes tab, a filter
  * or asks for more. It decides nothing: which tasks a person sees, their order and the counts are the server's, and every request carries the filters, so the counts of the
  * three tabs follow them. The filters are written back into the browser's address after every change, so a filtered queue can be copied and bookmarked (AC-4).
+ *
+ * **Four tabs** (CR-01 item 7D, AQP-401): Open, Closed, Overdue and Ignored, the last for the tasks a Lead or an Admin set aside. Below 480 px they are a 2 by 2 grid (each tab 44 px high, none out of view and no sideways
+ * scroll: four labels with counts do not fit one row at 360 px, and a strip that scrolls would hide the one tab this change adds, WCAG 1.4.10, 2.5.8); from 480 px they are one row. The Ignored tab's intro line says whose
+ * tasks these are. No new component and no new client code: one more tab value, its labels and texts, and a remarks line in the rows.
  *
  * States: the tasks; empty (the words of the role and the tab, with "Assign task" for a Lead and an Admin on the Open tab); no match (a filter is set and nothing fits: "Clear filters"
  * for a Lead and an Admin); loading (the skeleton, shown after 300 ms, the card `aria-busy`); error ("We could not load the tasks", "Try again"). A newer request cancels the one
@@ -273,6 +279,8 @@ export function QueueScreen({ role, initialPage, initialFilters, engineers = [],
       );
     }
     if (status === 'loading') return <SkeletonBlock rows={SKELETON_ROWS} label={LOADING_LABEL} />;
+    // The Ignored tab says whose tasks these are above the list and above its empty state (UX 12944 section 1).
+    const intro = activeTab === 'ignored' ? <p className="px-s-4 pt-s-4 text-label text-ink-2">{ignoredIntroFor(role)}</p> : null;
     if (page.tasks.length === 0) {
       const filtered = hasListFilter(filters);
       const words = filtered ? (manager ? NO_MATCH_MANAGER : NO_MATCH_ENGINEER) : emptyTextFor(role, activeTab);
@@ -287,13 +295,17 @@ export function QueueScreen({ role, initialPage, initialFilters, engineers = [],
         action = <AssignButton />;
       }
       return (
-        <div role="status">
-          <EmptyState icon={<Icon icon={ListChecks} size="state" />} title={words.title} description={words.description} action={action} />
-        </div>
+        <>
+          {intro}
+          <div role="status">
+            <EmptyState icon={<Icon icon={ListChecks} size="state" />} title={words.title} description={words.description} action={action} />
+          </div>
+        </>
       );
     }
     return (
       <>
+        {intro}
         {activeTab === 'overdue' ? (
           <div className="p-s-4 pb-0">
             <Notice tone="warn">{overdueSummary(page.counts.overdue)}</Notice>
@@ -351,7 +363,7 @@ export function QueueScreen({ role, initialPage, initialFilters, engineers = [],
         <Card aria-busy={status === 'loading' || undefined}>
           <CardContent className="flex flex-col gap-s-4">
             <Tabs value={activeTab} onValueChange={changeTab}>
-              <TabsList aria-label={TABS_LABEL}>
+              <TabsList aria-label={TABS_LABEL} className="max-[479px]:grid max-[479px]:grid-cols-2 max-[479px]:overflow-x-visible">
                 {QUEUE_TABS.map((value) => (
                   <TabsTrigger key={value} value={value}>
                     {value === 'overdue' ? <Icon icon={Clock} size="hint" /> : null}
@@ -360,7 +372,7 @@ export function QueueScreen({ role, initialPage, initialFilters, engineers = [],
                   </TabsTrigger>
                 ))}
               </TabsList>
-              <p className="pt-s-3 text-label text-ink-2">{SORT_NOTE}</p>
+              <p className="pt-s-3 text-label text-ink-2">{activeTab === 'ignored' ? SORT_NOTE_IGNORED : SORT_NOTE}</p>
               {QUEUE_TABS.map((value) => (
                 <TabsContent key={value} value={value}>
                   {panel}

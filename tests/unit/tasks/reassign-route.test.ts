@@ -64,7 +64,7 @@ describe('AC-3: a Lead and an Admin change a task and are answered with the task
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     const body = record.parse(await response.json());
-    expect(Object.keys(body).sort()).toEqual(['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'status', 'title']);
+    expect(Object.keys(body).sort()).toEqual(['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'ignoredRemarks', 'status', 'title']);
     expect(body).toMatchObject({ id: taskId, engineer: { id: spare() }, deadlineAt: LATER, status: 'DRAFT' });
     expect(JSON.stringify(body)).not.toMatch(/price|cost|rate|approver|formula|total|amount|₹/i);
     expect(stored()).toMatchObject({ engineerId: spare(), deadlineAt: new Date(LATER), assignmentRevision: 2 });

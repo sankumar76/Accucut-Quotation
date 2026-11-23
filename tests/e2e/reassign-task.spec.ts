@@ -233,7 +233,7 @@ test.describe('the route (AC-3, AC-6, AC-7)', () => {
     expect(changed.status()).toBe(200);
     const body = z.looseObject({ id: z.string(), code: z.string(), engineer: z.looseObject({ id: z.string() }), status: z.string() }).parse(await changed.json());
     expect(body).toMatchObject({ id: task.id, code: task.code, engineer: { id: to.id }, status: 'DRAFT' });
-    expect(Object.keys(body).sort()).toEqual(['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'status', 'title']);
+    expect(Object.keys(body).sort()).toEqual(['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'ignoredRemarks', 'status', 'title']);
 
     await setEstimateStatus(task.id, 'APPROVED');
     const closed = await page.request.patch(url, { headers: HEADERS, data: { engineerId: from.id } });

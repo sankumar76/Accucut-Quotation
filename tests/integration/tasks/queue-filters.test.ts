@@ -153,11 +153,11 @@ describe('AC-3: filters combine with AND, with the tab and with assignedBy, and 
 
   it('counts the three tabs under the filters, and the bell count is the Overdue tab of assignedBy=me with no other filter', async () => {
     await seedFive();
-    expect((await open(as(adminId, 'ADMIN'), { customer: acmeId })).counts).toEqual({ open: 2, closed: 0, overdue: 1 });
-    expect((await open(as(adminId, 'ADMIN'), { engineer: priyaId })).counts).toEqual({ open: 1, closed: 1, overdue: 0 });
+    expect((await open(as(adminId, 'ADMIN'), { customer: acmeId })).counts).toEqual({ open: 2, closed: 0, overdue: 1, ignored: 0 });
+    expect((await open(as(adminId, 'ADMIN'), { engineer: priyaId })).counts).toEqual({ open: 1, closed: 1, overdue: 0, ignored: 0 });
     const lead = as(firstLeadId, 'LEAD');
     const cut = await service.listQueue(lead, { tab: 'overdue', assignedBy: 'me' });
-    expect(cut.counts).toEqual({ open: 2, closed: 1, overdue: 1 });
+    expect(cut.counts).toEqual({ open: 2, closed: 1, overdue: 1, ignored: 0 });
     expect(cut.tasks).toHaveLength(await service.countOverdue(lead));
   });
 
@@ -178,7 +178,7 @@ describe('AC-5, AC-8: scope and what an Engineer is refused', () => {
     await seedFive();
     const result = await open(as(priyaId, 'ENGINEER'), { q: 'q-2026' });
     expect(codes(result)).toEqual(['Q-2026-0004']);
-    expect(result.counts).toEqual({ open: 1, closed: 1, overdue: 0 });
+    expect(result.counts).toEqual({ open: 1, closed: 1, overdue: 0, ignored: 0 });
     expect(codes(await service.listQueue(as(arjunId, 'ENGINEER'), { tab: 'closed', q: 'plate' }))).toEqual([]);
   });
 
@@ -200,7 +200,7 @@ describe('AC-5, AC-8: scope and what an Engineer is refused', () => {
     await seedFive();
     const second = await open(as(secondLeadId, 'LEAD'), { assignedBy: 'me' });
     expect(codes(second)).toEqual(['Q-2026-0002', 'Q-2026-0004']);
-    expect(second.counts).toEqual({ open: 2, closed: 0, overdue: 1 });
+    expect(second.counts).toEqual({ open: 2, closed: 0, overdue: 1, ignored: 0 });
   });
 
   it('uses a cursor made under one filter set under another, and returns rows only inside the caller\'s scope', async () => {

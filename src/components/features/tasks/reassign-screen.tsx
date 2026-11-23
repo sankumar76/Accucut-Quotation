@@ -25,6 +25,8 @@ import {
   CANCEL_REASSIGN,
   CLOSED_BODY,
   CLOSED_TITLE,
+  IGNORED_BODY,
+  IGNORED_TITLE,
   FAILED_REASSIGN_BODY,
   FAILED_REASSIGN_TITLE,
   FOLDER_LOCKED_LABEL,
@@ -101,13 +103,14 @@ function LockedFields({ task }: { readonly task: ReassignTaskData }) {
   );
 }
 
-function ClosedView({ task }: { readonly task: ReassignTaskData }) {
+/** The form is replaced by the reason it cannot be used: the task is approved (closed), or it is ignored and read-only until it is restored (CR-01 item 7D). */
+function ClosedView({ task, ignored }: { readonly task: ReassignTaskData; readonly ignored: boolean }) {
   return (
     <>
       <Breadcrumb />
       <PageHeader title={REASSIGN_TITLE} description={`Task ${task.code}`} />
-      <Notice tone="danger" title={CLOSED_TITLE}>
-        <p>{CLOSED_BODY}</p>
+      <Notice tone="danger" title={ignored ? IGNORED_TITLE : CLOSED_TITLE}>
+        <p>{ignored ? IGNORED_BODY : CLOSED_BODY}</p>
         <div className="mt-s-3">
           <Button variant="secondary" asChild>
             <Link href="/queue">{BACK_TO_QUEUE}</Link>
@@ -128,7 +131,7 @@ export function ReassignScreen({ task, engineers }: ReassignScreenProps) {
     if (done !== null) success.current?.focus();
   }, [done]);
 
-  if (form.closed) return <ClosedView task={task} />;
+  if (form.ignored || form.closed) return <ClosedView task={task} ignored={form.ignored} />;
 
   const items = (['engineerId', 'deadline'] as const).flatMap((field) => {
     const message = form.errors[field];

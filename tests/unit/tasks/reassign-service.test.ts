@@ -85,7 +85,7 @@ describe('AC-3: the change is stored whole, and the answer is the task as the qu
   it('the answer holds no cost, rate or price key, only the keys of a row of the queue', async () => {
     const { task } = await service.reassignTask(by(LEAD), taskId, { engineerId: MEERA.id });
     expect(Object.keys(task).sort()).toEqual(
-      ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'status', 'title'],
+      ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'ignoredRemarks', 'status', 'title'],
     );
   });
 
@@ -267,7 +267,7 @@ describe('AC-8: who sees it now', () => {
     const arjun = await service.listQueue({ id: ARJUN.id, role: 'ENGINEER' }, { tab: 'open' });
     const meera = await service.listQueue({ id: MEERA.id, role: 'ENGINEER' }, { tab: 'open' });
     expect(arjun.tasks).toHaveLength(0);
-    expect(arjun.counts).toEqual({ open: 0, closed: 0, overdue: 0 });
+    expect(arjun.counts).toEqual({ open: 0, closed: 0, overdue: 0, ignored: 0 });
     expect(meera.tasks.map((task) => task.code)).toEqual(['Q-2026-0001']);
     expect(await service.getTask({ id: ARJUN.id, role: 'ENGINEER' }, taskId)).toBeNull();
     expect(await service.getTask({ id: MEERA.id, role: 'ENGINEER' }, taskId)).toMatchObject({ code: 'Q-2026-0001', status: 'DRAFT' });

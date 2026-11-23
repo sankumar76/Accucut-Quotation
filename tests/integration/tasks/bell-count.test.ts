@@ -127,7 +127,7 @@ describe('AC-3: the Overdue tab a Lead\'s bell opens holds the set the bell coun
     const tab = await service.listQueue(lead, { tab: 'overdue', assignedBy: 'me' });
     expect(codes(tab)).toEqual(['Q-2026-0003', 'Q-2026-0001']);
     expect(tab.tasks).toHaveLength(await service.countOverdue(lead));
-    expect(tab.counts).toEqual({ open: 4, closed: 1, overdue: 2 });
+    expect(tab.counts).toEqual({ open: 4, closed: 1, overdue: 2, ignored: 0 });
   });
 
   it('without assignedBy the service gives a Lead the whole queue (the page applies the default), and assignedBy is refused for an Engineer (STORY-04.06 AC-5)', async () => {

@@ -53,10 +53,10 @@ const render = (
   viewerRole: 'ADMIN' | 'LEAD' = 'LEAD',
   download: DownloadChipData = { kind: 'none' },
   quoted: { at: string; byName: string } | null = null,
-  ignored = false,
+  ignored: { at: string; byName: string; remarks: string } | null = null,
 ): string =>
   renderToStaticMarkup(
-    createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST', viewerRole, download, quoted, ignored }),
+    createElement(EstimateReview, { header, estimateId: REVIEW_ESTIMATE_ID, customer, costs, calculatedAt: costs.calculatedAt === null ? null : '05 Nov 2026, 10:42 IST', viewerRole, download, quoted, ignored, engineerName: 'Invented Engineer', deadlinePassed: false }),
   );
 
 const countOf = (html: string, text: string): number => html.split(text).length - 1;
@@ -889,6 +889,7 @@ describe('CR-01 item 7C, AC-1, AC-4, AC-5, AC-6 (AQP-400; UX spec SCR-06 "Mark a
   const QUOTED_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'QUOTED' };
   const STANDING = { price: '12600.00', approverName: 'Invented Kiran' };
   const MARKER = { at: '2026-11-23T04:30:00.000Z', byName: 'Invented Kiran' };
+  const IGNORED = { at: '2026-11-23T06:35:00.000Z', byName: 'Invented Kiran', remarks: 'Invented remarks.' };
   const markButton = (html: string): string => /<button[^>]*id="review-mark-quoted"[^>]*>/.exec(html)?.[0] ?? '';
 
   it.each(['LEAD', 'ADMIN'] as const)('AC-1: a %s sees Mark as quoted on an approved estimate that is not ignored, on, opening a dialog, beside Unlock; nothing of the dialog is in the page (NFR-009)', async (role) => {
@@ -903,11 +904,11 @@ describe('CR-01 item 7C, AC-1, AC-4, AC-5, AC-6 (AQP-400; UX spec SCR-06 "Mark a
   });
 
   it.each([
-    ['a Draft', 'DRAFT', false],
-    ['a Prepared estimate', 'PREPARED', false],
-    ['a Quoted estimate', 'QUOTED', false],
-    ['an ignored approved estimate', 'APPROVED', true],
-    ['an ignored Draft', 'DRAFT', true],
+    ['a Draft', 'DRAFT', null],
+    ['a Prepared estimate', 'PREPARED', null],
+    ['a Quoted estimate', 'QUOTED', null],
+    ['an ignored approved estimate', 'APPROVED', IGNORED],
+    ['an ignored Draft', 'DRAFT', IGNORED],
   ] as const)('AC-1: %s has no Mark as quoted', async (_name, status, ignored) => {
     const html = render(await current({ approval: STANDING }), undefined, { ...HEADER, status }, 'LEAD', { kind: 'none' }, status === 'QUOTED' ? MARKER : null, ignored);
     expect(html).not.toContain('review-mark-quoted');

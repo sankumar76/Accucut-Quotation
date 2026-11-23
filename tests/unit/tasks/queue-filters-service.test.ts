@@ -82,9 +82,9 @@ describe('AC-3: filters combine with AND, with the tab and with assignedBy, and 
   });
 
   it('counts every tab under the filters', async () => {
-    expect((await service.listQueue(viewer(CHIEF), { tab: 'open', customer: ACME })).counts).toEqual({ open: 2, closed: 0, overdue: 1 });
-    expect((await service.listQueue(viewer(CHIEF), { tab: 'open', engineer: PRIYA.id })).counts).toEqual({ open: 1, closed: 1, overdue: 0 });
-    expect((await service.listQueue(viewer(FIRST_LEAD), { tab: 'open', assignedBy: 'me' })).counts).toEqual({ open: 1, closed: 1, overdue: 1 });
+    expect((await service.listQueue(viewer(CHIEF), { tab: 'open', customer: ACME })).counts).toEqual({ open: 2, closed: 0, overdue: 1, ignored: 0 });
+    expect((await service.listQueue(viewer(CHIEF), { tab: 'open', engineer: PRIYA.id })).counts).toEqual({ open: 1, closed: 1, overdue: 0, ignored: 0 });
+    expect((await service.listQueue(viewer(FIRST_LEAD), { tab: 'open', assignedBy: 'me' })).counts).toEqual({ open: 1, closed: 1, overdue: 1, ignored: 0 });
   });
 
   it('pages a filtered set: the next page is the next rows of the same filtered set', async () => {
@@ -128,13 +128,13 @@ describe('AC-8: no filter widens the scope', () => {
   it('cannot show another Lead\'s tasks through assignedBy=me, which is always the signed-in person', async () => {
     const mine = await service.listQueue(viewer(SECOND_LEAD), { tab: 'open', assignedBy: 'me' });
     expect(codesOf(mine)).toEqual(['Q-2026-0002', 'Q-2026-0004']);
-    expect(mine.counts).toEqual({ open: 2, closed: 0, overdue: 1 });
+    expect(mine.counts).toEqual({ open: 2, closed: 0, overdue: 1, ignored: 0 });
   });
 
   it('keeps an Engineer to their own tasks under any search, for the list and for the counts', async () => {
     const result = await service.listQueue(viewer(PRIYA), { tab: 'open', q: 'Q-' });
     expect(codesOf(result)).toEqual(['Q-2026-0004']);
-    expect(result.counts).toEqual({ open: 1, closed: 1, overdue: 0 });
+    expect(result.counts).toEqual({ open: 1, closed: 1, overdue: 0, ignored: 0 });
   });
 
   it('uses a cursor made under one filter set, under another, only inside the caller\'s scope', async () => {

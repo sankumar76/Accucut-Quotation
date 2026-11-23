@@ -11,6 +11,7 @@ import { lengthProblem } from '@/lib/estimates/form-values';
 
 import { MATERIAL_LOADING, MATERIAL_PLACEHOLDER, OPTION_PLACEHOLDER } from './estimate-texts';
 import { controlIdFor, FIELD_MARK } from './field-ids';
+import { readOnlySelectProps } from './read-only-select';
 import { TreatmentSelect } from './treatment-select';
 import type { Loaded } from './use-form-definition';
 
@@ -59,10 +60,12 @@ export function FieldRenderer({ field, missing, text, error, editable, materials
             <NativeSelect
               {...control}
               {...common}
-              disabled={readOnly || materials.status !== 'ready'}
+              {...readOnlySelectProps(readOnly)}
+              disabled={materials.status !== 'ready'}
               aria-busy={materials.status === 'loading' || undefined}
               value={text}
               onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+                if (readOnly) return;
                 onChange(event.target.value);
                 onCommit(event.target.value);
               }}
@@ -85,9 +88,10 @@ export function FieldRenderer({ field, missing, text, error, editable, materials
             <NativeSelect
               {...control}
               {...common}
-              disabled={readOnly}
+              {...readOnlySelectProps(readOnly)}
               value={text}
               onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+                if (readOnly) return;
                 onChange(event.target.value);
                 onCommit(event.target.value);
               }}
@@ -119,6 +123,7 @@ export function FieldRenderer({ field, missing, text, error, editable, materials
               {...control}
               {...common}
               readOnly={readOnly}
+              aria-readonly={readOnly || undefined}
               enterKeyHint="next"
               value={text}
               onChange={(event) => onChange(event.target.value)}
@@ -130,6 +135,7 @@ export function FieldRenderer({ field, missing, text, error, editable, materials
           ...control,
           ...common,
           readOnly,
+          'aria-readonly': readOnly || undefined,
           value: text,
           autoComplete: 'off',
           enterKeyHint: 'next',

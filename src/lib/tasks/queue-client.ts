@@ -22,6 +22,8 @@ export interface QueueRowData {
   readonly deadlineAt: string;
   readonly status: TaskEstimateStatus;
   readonly assignedByName: string;
+  /** The Lead's remarks, only on a row of the Ignored tab (CR-01 item 7D); null on every other row. Plain text: it is drawn as a text node and never as markup. */
+  readonly ignoredRemarks: string | null;
 }
 
 export interface QueuePageData {
@@ -34,7 +36,7 @@ export interface QueuePageData {
 }
 
 const TASKS_PATH = '/api/v1/tasks';
-const STATUSES: ReadonlyArray<TaskEstimateStatus> = ESTIMATE_STATUSES;
+const STATUSES: ReadonlyArray<TaskEstimateStatus> = [...ESTIMATE_STATUSES, 'IGNORED'];
 
 function isCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 0;
@@ -58,15 +60,16 @@ function toRow(value: unknown): QueueRowData | null {
   const customerName = nullableTextOf(value['customerName']);
   const folderUrl = nullableTextOf(value['folderUrl']);
   const status = STATUSES.find((candidate) => candidate === value['status']);
+  const ignoredRemarks = nullableTextOf(value['ignoredRemarks']);
   if (id === undefined || code === undefined || engineerName === undefined || folderPath === undefined || deadlineAt === undefined || assignedByName === undefined) return null;
-  if (title === undefined || customerName === undefined || folderUrl === undefined || status === undefined) return null;
-  return { id, code, title, engineerName, customerName, folderPath, folderUrl, deadlineAt, status, assignedByName };
+  if (title === undefined || customerName === undefined || folderUrl === undefined || status === undefined || ignoredRemarks === undefined) return null;
+  return { id, code, title, engineerName, customerName, folderPath, folderUrl, deadlineAt, status, assignedByName, ignoredRemarks };
 }
 
 function toCounts(value: unknown): QueueCounts | null {
   if (!isRecord(value)) return null;
-  const { open, closed, overdue } = value;
-  return isCount(open) && isCount(closed) && isCount(overdue) ? { open, closed, overdue } : null;
+  const { open, closed, overdue, ignored } = value;
+  return isCount(open) && isCount(closed) && isCount(overdue) && isCount(ignored) ? { open, closed, overdue, ignored } : null;
 }
 
 /** The page of the queue that an answer of `GET /api/v1/tasks` is, or null for a body that is not one. The server's own page reads its first paint through it too. */

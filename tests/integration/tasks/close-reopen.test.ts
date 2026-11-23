@@ -146,7 +146,7 @@ describe('AC-2: the estimate becomes APPROVED, and the task is Closed', () => {
       }
     }
     const everything = await service.listQueue(asAdmin(), { tab: 'open' });
-    expect(everything.counts).toEqual({ open: 2, closed: 1, overdue: 1 });
+    expect(everything.counts).toEqual({ open: 2, closed: 1, overdue: 1, ignored: 0 });
   });
 });
 
@@ -220,8 +220,8 @@ describe('AC-6: an Engineer opens the Closed tab', () => {
     const closed = await service.listQueue(asEngineer(arjunId), { tab: 'closed' });
     expect(closed.tasks.map((task) => [task.code, task.status])).toEqual([['Q-2026-0001', 'APPROVED']]);
     expect(Object.keys(defined(closed.tasks[0])).sort()).toEqual(
-      ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'status', 'title'].sort(),
+      ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'ignoredRemarks', 'status', 'title'].sort(),
     );
-    expect(closed.counts).toEqual({ open: 1, closed: 1, overdue: 0 });
+    expect(closed.counts).toEqual({ open: 1, closed: 1, overdue: 0, ignored: 0 });
   });
 });

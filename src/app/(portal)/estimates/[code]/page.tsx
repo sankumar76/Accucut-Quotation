@@ -1,9 +1,10 @@
 import { notFound } from 'next/navigation';
 
 import { ESTIMATE_META_DESCRIPTION, ESTIMATE_META_TITLE } from '@/components/features/estimate-workspace/estimate-texts';
+import { EngineerIgnoredNotice } from '@/components/features/estimate-ignore/engineer-ignored-notice';
 import { EstimateWorkspace } from '@/components/features/estimate-workspace/estimate-workspace';
 import { assertNever } from '@/lib/assert-never';
-import { formatIst } from '@/lib/time';
+import { formatIst, systemClock } from '@/lib/time';
 import { getEstimateService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
 import { pageMetadata } from '@/lib/page-metadata';
@@ -41,16 +42,29 @@ export default async function EstimatePage({ params }: PageProps) {
     customer: workspace.customer === null ? null : { name: workspace.customer.name, shortName: workspace.customer.shortName },
     notes: workspace.notes,
     assignedByName: workspace.assignedByName,
+    ignored: workspace.ignored !== null,
   };
+  // The Ignored layer as text for the notice: a time as UTC text, a name and the Lead's words (CR-01 item 7D). The same for every role; no ID and no figure (NFR-002).
+  const ignored = workspace.ignored === null ? null : { at: workspace.ignored.at.toISOString(), byName: workspace.ignored.byName, remarks: workspace.ignored.remarks };
   // An allow-list by name, closed by `assertNever`: a fourth role added one day gets no branch here until someone decides (it fails to compile) and never the review's figures (NFR-002).
   switch (user.role) {
     case 'ENGINEER':
-      return <EstimateWorkspace header={header} estimateId={workspace.estimateId} />;
+      // The Engineer's notice of an ignored task is a server component with no script, handed in as an element: drawn at first paint, outside the client form (UX 12944 section 4).
+      return <EstimateWorkspace header={header} estimateId={workspace.estimateId} ignored={ignored !== null} notice={ignored === null ? undefined : <EngineerIgnoredNotice ignored={ignored} />} />;
     case 'LEAD':
     case 'ADMIN': {
       // SCR-06 is Restricted: it is loaded here, on the Lead's and the Admin's branch only, and never imported by this file (NFR-002).
       const { renderReview } = await import('./review-page');
-      return renderReview({ viewer: { id: user.id, role: user.role }, estimateId: workspace.estimateId, header, customer: workspace.customer, quoted: workspace.quoted, ignored: workspace.ignored });
+      return renderReview({
+        viewer: { id: user.id, role: user.role },
+        estimateId: workspace.estimateId,
+        header,
+        customer: workspace.customer,
+        quoted: workspace.quoted,
+        ignored,
+        engineerName: workspace.engineerName,
+        deadlinePassed: workspace.deadlineAt.getTime() < systemClock.now().getTime(),
+      });
     }
     default:
       return assertNever(user.role, 'role');

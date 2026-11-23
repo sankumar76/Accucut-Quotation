@@ -6,6 +6,8 @@ import { useFocusOnRefusal } from '@/components/shared/use-focus-on-refusal';
 import { isTaskClosed } from '@/lib/estimate/task-status';
 import type { AssignErrors, AssignFieldName } from '@/lib/tasks/assign';
 import { checkReassign, TASK_CLOSED_CODE } from '@/lib/tasks/reassign';
+
+import { ESTIMATE_IGNORED_CODE } from '../estimate-ignore/ignore-codes';
 import { reassignTask, type ReassignedTaskView } from '@/lib/tasks/tasks-client';
 import { systemClock } from '@/lib/time';
 
@@ -37,7 +39,9 @@ export function useReassignForm(task: ReassignTaskData) {
   const [errors, setErrors] = useState<AssignErrors>({});
   const [failed, setFailed] = useState(false);
   const [unchanged, setUnchanged] = useState(false);
-  const [closed, setClosed] = useState(isTaskClosed(task.status, false)); // no Ignored layer in the row until story 7D
+  // An ignored task (the layer over its status) is refused before it is judged closed: its words say "restore it first" (CR-01 item 7D).
+  const [ignored, setIgnored] = useState(task.ignored);
+  const [closed, setClosed] = useState(isTaskClosed(task.status, task.ignored));
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<ReassignedTaskView | null>(null);
   const showErrors = useFocusOnRefusal(LIVE_FIELDS, (field) => document.getElementById(ASSIGN_FIELD_IDS[field])?.focus(), setErrors);
@@ -62,6 +66,7 @@ export function useReassignForm(task: ReassignTaskData) {
       return;
     }
     if (outcome.status === 'refused' && outcome.code === TASK_CLOSED_CODE) return setClosed(true);
+    if (outcome.status === 'refused' && outcome.code === ESTIMATE_IGNORED_CODE) return setIgnored(true);
     const fromServer = outcome.status === 'refused' ? serverReassignErrors(outcome.fields) : {};
     if (Object.keys(fromServer).length === 0) return setFailed(true);
     showErrors(fromServer);
@@ -81,5 +86,5 @@ export function useReassignForm(task: ReassignTaskData) {
     finish(await reassignTask(task.id, input));
   }
 
-  return { values, errors, failed, unchanged, closed, submitting, done, held, setValue, submit };
+  return { values, errors, failed, unchanged, closed, ignored, submitting, done, held, setValue, submit };
 }

@@ -105,6 +105,38 @@ export const markQuotedAnswerSchema = z.strictObject({
 export type MarkQuotedAnswer = z.infer<typeof markQuotedAnswerSchema>;
 
 /**
+ * Who ignored the estimate, when, and the remarks they gave (CR-01 item 7D, AQP-401 AC-9; architecture section 4.12 c): a time as UTC text, the person's name now and the Lead's words. **One nested object, the same
+ * for every role** (ADR-008): an Engineer's own ignored task reads its notice from it, and another Engineer's task is not found before it is read. It holds no price, no figure and no ID (NFR-002): the person's ID
+ * stays on the server.
+ */
+export const ignoredMarkerSchema = z.strictObject({
+  at: z.iso.datetime(),
+  byName: z.string().min(1),
+  remarks: z.string().min(1),
+});
+export type IgnoredMarkerView = z.infer<typeof ignoredMarkerSchema>;
+
+/** The size of the body of Ignore: only a bound, the rule (1 to 500 code points once trimmed) and its words are the service's (`checkIgnoreRemarks`), as `unlockBodySchema` does. */
+const MAX_BODY_REMARKS_LENGTH = 5_000;
+
+/** `POST /api/v1/estimates/{id}/ignore`: the Lead's remarks. A key that is left out is read as empty, and the service names it (422 under `remarks`). */
+export const ignoreBodySchema = z.strictObject({ remarks: z.string().max(MAX_BODY_REMARKS_LENGTH).default('') });
+
+/** The status that can lie under the Ignored layer: a Quoted estimate cannot be ignored. */
+const IGNORABLE_STATUSES = ['DRAFT', 'PREPARED', 'APPROVED'] as const;
+
+/** The answer of a good `POST /api/v1/estimates/{id}/ignore`: the status underneath (unchanged) and the layer just written. A strict schema, so nothing else can leave. */
+export const ignoreAnswerSchema = z.strictObject({
+  status: z.enum(IGNORABLE_STATUSES),
+  ignored: ignoredMarkerSchema,
+});
+export type IgnoreAnswer = z.infer<typeof ignoreAnswerSchema>;
+
+/** The answer of a good `POST /api/v1/estimates/{id}/restore` (no body): the status the estimate has again, the one it had when it was ignored. */
+export const restoreAnswerSchema = z.strictObject({ status: z.enum(IGNORABLE_STATUSES) });
+export type RestoreAnswer = z.infer<typeof restoreAnswerSchema>;
+
+/**
  * The 409 `CALCULATE_ACK_REQUIRED` (STORY-05.12 AC-2, AC-7; architecture section 6 "Error model"; NFR-002): one strict schema, the same keys for every role and no number but `inputsRevision`
  * (a count of changes) and the Sl. No. Text and one revision: nothing that comes from a master, a rate or a calculation has a key to sit in. The wrapper builds this body in `problem.ts`, key by key;
  * this schema is what the tests and the canary scan hold it to.

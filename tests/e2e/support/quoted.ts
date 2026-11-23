@@ -5,7 +5,7 @@ import { DEVELOPMENT_URL } from './servers';
 
 /**
  * What the specs of Mark as quoted (CR-01 item 7C, AQP-400) share beyond the approved estimate of `approved-estimate.ts`: the stored marker and its audit entries read as the database's owner, the press made through the API as
- * another window would send it, and the Ignored layer set as story 7D's Ignore will set it (three columns, the status untouched). Every name is invented.
+ * another window would send it, and the Ignored layer set as Ignore sets it (three columns, the status untouched; story 7D, AQP-401). Every name is invented.
  */
 
 const JSON_HEADERS = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
@@ -51,7 +51,7 @@ export async function markQuotedThroughTheApi(page: Page, estimateId: string): P
   return (await page.request.post(`/api/v1/estimates/${estimateId}/quoted`, { headers: JSON_HEADERS })).status();
 }
 
-/** Sets the Ignored layer over the estimate, as story 7D's Ignore will: the three columns, the status untouched. */
+/** Sets the Ignored layer over the estimate, as Ignore does (story 7D, AQP-401): the three columns, the status untouched. */
 export async function ignoreEstimate(estimateId: string, byUserId: string): Promise<void> {
   const client = await connectToTestDatabase();
   try {

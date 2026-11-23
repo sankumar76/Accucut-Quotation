@@ -327,7 +327,7 @@ describe('AC-8: the marker is the Lead\'s and the Admin\'s, by name, and an Engi
       const workspace = defined(await db.estimateService.getWorkspace(viewer, code));
       expect(workspace.status).toBe('QUOTED');
       expect(workspace.quoted).toEqual({ at: expect.any(Date), byName: 'Invented Calculation Lead' });
-      expect(workspace.ignored).toBe(false);
+      expect(workspace.ignored).toBeNull();
     }
     const owner = defined(await db.estimateService.getWorkspace(engineer(), code));
     expect(owner.status).toBe('QUOTED');

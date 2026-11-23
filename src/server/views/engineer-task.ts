@@ -30,6 +30,8 @@ export interface TaskDetailSource {
   readonly deadlineAt: Date;
   readonly status: EstimateStatus;
   readonly assignedByName: string;
+  /** The Ignored layer: who (by name), when and the Lead's remarks, or null (CR-01 item 7D). Words and a time, no figure. */
+  readonly ignored: { readonly at: Date; readonly byName: string; readonly remarks: string } | null;
 }
 
 export function buildTaskDetail(task: TaskDetailSource): z.input<typeof taskDetailSchema> {
@@ -48,5 +50,7 @@ export function buildTaskDetail(task: TaskDetailSource): z.input<typeof taskDeta
     deadlineAt: task.deadlineAt.toISOString(),
     status: task.status,
     assignedByName: task.assignedByName,
+    // Copied key by key: a field added to the layer later does not leave by accident (NFR-002).
+    ignored: task.ignored === null ? null : { at: task.ignored.at.toISOString(), byName: task.ignored.byName, remarks: task.ignored.remarks },
   };
 }

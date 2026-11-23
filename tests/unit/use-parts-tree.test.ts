@@ -324,6 +324,29 @@ describe('AC-e: the answers that already gave feedback are unchanged', () => {
     expect(state().problem).toEqual({ kind: 'refused', message: 'The system is busy. Try again.' });
   });
 
+  it.each([
+    ['a move', (state: () => ReturnType<typeof usePartsTree>) => state().moveTo('p1', 0)],
+    ['an add', (state: () => ReturnType<typeof usePartsTree>) => state().addUnder('m1', 'PART')],
+  ] as const)('tells the page, for %s refused 409 ESTIMATE_IGNORED (CR-01 item 7D, AQP-401 AC-8), and shows no notice of its own', async (_name, run) => {
+    const onIgnored = vi.fn();
+    calls.load.mockReset().mockResolvedValue(ok(BEFORE));
+    const hook = renderHook((props: { readonly onIgnored: () => void }) => usePartsTree(ESTIMATE, props.onIgnored), { onIgnored });
+    hook.render();
+    await tick(0);
+    const state = (): ReturnType<typeof usePartsTree> => hook.render();
+    state().select('p1');
+    calls.move.mockResolvedValue(refused(409, 'ESTIMATE_IGNORED', 'This estimate is ignored.'));
+    calls.add.mockResolvedValue(refused(409, 'ESTIMATE_IGNORED', 'This estimate is ignored.'));
+    run(state);
+    await tick(0);
+    const after = state();
+    expect(onIgnored).toHaveBeenCalledTimes(1);
+    expect(after.problem).toBeNull();
+    expect(after.busy).toBe(false);
+    expect(after.nodes).toEqual(BEFORE);
+    expect(calls.load).toHaveBeenCalledTimes(1);
+  });
+
   it('says "failed" for a network failure that came before the limit, with no second read', async () => {
     const { state } = await open();
     calls.move.mockResolvedValue(failed);

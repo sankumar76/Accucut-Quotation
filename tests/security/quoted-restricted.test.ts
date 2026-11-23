@@ -95,7 +95,8 @@ function filesUnder(folder: string, found: string[] = []): string[] {
 /** The modules of Mark as quoted, by the text that imports them, and the only files in `src` that may import each. */
 const IMPORTERS: ReadonlyArray<readonly [module: RegExp, allowed: ReadonlyArray<string>]> = [
   [/from '[^']*[/]services[/]estimate-status-service'/, ['src/server/composition.ts']],
-  [/getEstimateStatusService/, ['src/app/api/v1/estimates/[id]/quoted/route.ts', 'src/server/composition.ts']],
+  // CR-01 item 7D (AQP-401): the same service holds Ignore and Restore, so their two routes ask for it as well, for the Lead and the Admin alone.
+  [/getEstimateStatusService/, ['src/app/api/v1/estimates/[id]/ignore/route.ts', 'src/app/api/v1/estimates/[id]/quoted/route.ts', 'src/app/api/v1/estimates/[id]/restore/route.ts', 'src/server/composition.ts']],
   [/from '[^']*[/]estimates[/]mark-quoted-client'/, ['src/components/features/estimate-quote/mark-quoted-dialog.tsx']],
   [/['"]\.[/]mark-quoted-dialog['"]/, ['src/components/features/estimate-quote/mark-quoted-button.tsx']],
   [/from '[^']*[/]estimate-quote[/]mark-quoted-button'/, ['src/components/features/estimate-review/review-actions.tsx']],

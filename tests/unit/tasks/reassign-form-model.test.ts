@@ -31,6 +31,7 @@ const TASK: ReassignTaskData = {
   title: 'Hopper cover',
   notes: 'Invented notes.',
   status: 'DRAFT',
+  ignored: false,
 };
 
 describe('AC-2: the form is filled with what the task holds', () => {

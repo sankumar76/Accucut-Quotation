@@ -24,6 +24,8 @@ export interface PartFormProps {
   readonly onSaved: (saved: SavedPart) => void;
   /** The server says the part is not as the person saw it: the tree is read again. */
   readonly onChanged: () => void;
+  /** A save was refused because the estimate was ignored (CR-01 item 7D): the page shows its alert. */
+  readonly onServerIgnored: () => void;
   /** The IDs of this part's fields that Calculate found blank (STORY-05.09). */
   readonly missing: ReadonlySet<string>;
   /** What Calculate waits for: the saves in flight and the fields that show a value that is not saved (STORY-05.09). */
@@ -36,7 +38,7 @@ export interface PartFormProps {
  * nothing typed into one can land in another. Skeleton cards while it loads, a notice with "Try again" when it cannot be read. No rate, cost or formula is requested, held or drawn: the
  * server's form has none, and the materials are IDs and names.
  */
-export function PartForm({ estimateId, part, editable, onSaved, onChanged, missing, gate }: PartFormProps) {
+export function PartForm({ estimateId, part, editable, onSaved, onChanged, onServerIgnored, missing, gate }: PartFormProps) {
   const definition = useFormDefinition(estimateId);
   const fields = useLazyComponent<PartFieldsProps>(loadFields, true);
   const Fields = fields.Component;
@@ -84,6 +86,7 @@ export function PartForm({ estimateId, part, editable, onSaved, onChanged, missi
       lastSavedAt={definition.lastSavedAt}
       onSaved={onSaved}
       onChanged={onChanged}
+      onServerIgnored={onServerIgnored}
       onWrote={definition.wrote}
       onReadMaterialsAgain={definition.readAgain}
       missing={missing}

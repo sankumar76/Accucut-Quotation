@@ -10,6 +10,8 @@ import type { FlushMode, SaveGate } from '@/lib/estimates/save-gate';
 import type { Completeness } from '@/lib/estimates/tree-client';
 import { systemClock } from '@/lib/time';
 
+import { ESTIMATE_IGNORED_CODE } from '../estimate-ignore/ignore-codes';
+
 import { PART_SAVED, partCompleteText } from './estimate-texts';
 import { CONFLICT_RETRY_FAILED, conflictFieldMessage } from './save-texts';
 import { useAutosaveTrail } from './use-autosave-trail';
@@ -55,6 +57,8 @@ export interface UsePartValuesProps {
   readonly onSaved: (saved: SavedPart) => void;
   /** The server says the part is not as the person saw it: the tree is read again. */
   readonly onChanged: () => void;
+  /** The server refused a save with the 409 of an ignored estimate (CR-01 item 7D): the page says so once, in one alert, and nothing more is sent. */
+  readonly onServerIgnored: () => void;
   /** A save changed the part, at this time. */
   readonly onWrote: (at: string) => void;
   /** Told about every save in flight and every field that shows a value that is not saved, so Calculate waits for the saves and does not go over such a field (STORY-05.09, review SQR-01). */
@@ -77,7 +81,7 @@ export interface UsePartValuesProps {
  * of Save draft only in what it says. Nothing under a field and no alert, because the person may be typing in it: a value the rule refuses is left unsent and unsaved, the text shown is not rewritten, and a failure
  * is one polite status (`autosaveFailedAt`, `use-autosave-trail.ts`). A conflict pauses it until the person has chosen.
  */
-export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onWrote, gate }: UsePartValuesProps) {
+export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onServerIgnored, onWrote, gate }: UsePartValuesProps) {
   const partId = part.id;
   const [stored, setStored] = useState<Loaded<PartInputs>>(LOADING);
   const [texts, setTexts] = useState<Readonly<Record<string, string>>>({});
@@ -191,6 +195,13 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
 
   /** The server did not accept the save: say why, in its words, where the person will look. */
   function explain(outcome: Exclude<Outcome<PartInputs>, { readonly status: 'ok' }>, fieldId: string): void {
+    // The estimate was ignored while the person typed (a save, or the 30-second one): the server's 409 says so before anything was stored. The page shows its one alert and stops the timer; nothing is shown under the field. The
+    // typed value can no longer be saved by anyone, so it is not held as "unsaved": the way out of the page is the alert's Reload page, which the browser's own prompt on leaving would only get in front of.
+    if (outcome.status === 'refused' && outcome.httpStatus === 409 && outcome.code === ESTIMATE_IGNORED_CODE) {
+      mark(fieldId, false);
+      onServerIgnored();
+      return;
+    }
     mark(fieldId, true);
     setUnstored((current) => new Set([...current, fieldId]));
     // The 30-second save that could not save (no answer, a 5xx, or the server's own rule on a field, 422) is one polite status and nothing under the field: the person may be typing there (STORY-05.10 AC-3, AC-5).
