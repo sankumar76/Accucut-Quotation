@@ -259,6 +259,9 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     const refusedField = fieldOf(fieldId);
     if (refusedField !== undefined && readTyped(refusedField.rule, textsRef.current[fieldId] ?? '').ok) clearError(fieldId);
     for (const [adoptedId, text] of Object.entries(plan.adopt)) {
+      // A save already queued for this field carries a choice that the newer value has just replaced on the screen: it is out of date, as in a conflict. Sent, it would overwrite the other side's value unseen (AQP-407, STORY-05.08 AC-6).
+      newTicket(adoptedId);
+      onItsWayRef.current.delete(adoptedId);
       showText(adoptedId, text);
       clearError(adoptedId);
     }
@@ -298,7 +301,8 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
       return;
     }
     if (outcome.status !== 'ok') {
-      explain(outcome, fieldId);
+      // A save that a later save of the same field has made out of date does not speak for the field: the later one is sent next, and its answer is the one shown (AQP-407).
+      if ((ticketsRef.current.get(fieldId) ?? 0) === ticket) explain(outcome, fieldId);
       return;
     }
     if (outcome.value.revision !== revisionRef.current) {

@@ -331,7 +331,7 @@ describe('AQP-407: a flag toggled twice within one save round trip', () => {
     expect(partServer.inputs['p']).toBe('1');
   });
 
-  it('AC-1: three choices in one round trip end with the last one', async () => {
+  it('AC-1: four choices in one round trip, the first on its way, end with the last one (OFF)', async () => {
     const { gate, hook } = await openFlag({});
     const form = hook.render();
     const release = partServer.holdNextSave();
@@ -339,10 +339,100 @@ describe('AQP-407: a flag toggled twice within one save round trip', () => {
     await flushMicrotasks();
     toggle(form, false);
     toggle(form, true);
+    toggle(form, false);
+    release();
+    await gate.settle();
+    expect(partServer.inputs['p'] ?? '0').toBe('0');
+    expect(partServer.sent.at(-1)).toMatchObject({ values: { p: '0' } });
+    expect(hook.render().texts['p']).toBe('0');
+  });
+
+  it('QLT-02: ON, OFF, ON with the first save lost after the others queue, then OFF while the third is in flight, ends OFF (only the latest save of the field clears what is on its way)', async () => {
+    const { gate, hook } = await openFlag({});
+    const form = hook.render();
+    partServer.failAfterHold();
+    const releaseFirst = partServer.holdNextSave();
+    toggle(form, true);
+    await flushMicrotasks();
+    // The first request has reached the server and waits. The next request to arrive is the third choice: the second is made out of date by it and is never sent.
+    const releaseThird = partServer.holdNextSave();
+    toggle(form, false);
+    toggle(form, true);
+    releaseFirst();
+    await flushMicrotasks();
+    toggle(form, false);
+    releaseThird();
+    await gate.settle();
+    expect(partServer.inputs['p'] ?? '0').toBe('0');
+    expect(hook.render().texts['p']).toBe('0');
+    expect(gate.isDirty()).toBe(false);
+  });
+
+  it('QLT-03: a save lost after a later choice was queued does not leave the field unsaved once the later one is stored', async () => {
+    const { gate, hook } = await openFlag({});
+    const form = hook.render();
+    partServer.failAfterHold();
+    const release = partServer.holdNextSave();
+    toggle(form, true);
+    await flushMicrotasks();
+    toggle(form, false);
+    release();
+    await gate.settle();
+    expect(partServer.inputs['p'] ?? '0').toBe('0');
+    expect(hook.render().unstored.size).toBe(0);
+    expect(hook.render().problem).toBeNull();
+    expect(gate.isDirty()).toBe(false);
+  });
+
+  it('QLT-03: the same for a number field', async () => {
+    const { gate, hook } = await open();
+    const form = hook.render();
+    partServer.failAfterHold();
+    const release = partServer.holdNextSave();
+    form.setText('a', '2');
+    form.commit(A);
+    await flushMicrotasks();
+    form.setText('a', '3');
+    form.commit(A);
+    release();
+    await gate.settle();
+    expect(partServer.inputs['a']).toBe('3.00');
+    expect(hook.render().unstored.size).toBe(0);
+    expect(gate.isDirty()).toBe(false);
+  });
+
+  it('QLT-01: a 409 that adopts the other tab value for a flag does not send the queued second choice over it', async () => {
+    const { gate, hook } = await openFlag({});
+    const form = hook.render();
+    const release = partServer.holdNextSave();
+    toggle(form, true);
+    await flushMicrotasks();
+    toggle(form, false);
+    partServer.changeElsewhere({ p: '1' });
     release();
     await gate.settle();
     expect(partServer.inputs['p']).toBe('1');
-    expect(partServer.sent.at(-1)).toMatchObject({ values: { p: '1' } });
+    expect(hook.render().texts['p']).toBe('1');
+    expect(partServer.sent).toHaveLength(1);
+    expect(gate.isDirty()).toBe(false);
+  });
+
+  it('QLT-01: the same for a number field (typed back to what the part held, while the other tab changed it)', async () => {
+    const { gate, hook } = await open();
+    const form = hook.render();
+    const release = partServer.holdNextSave();
+    form.setText('a', '2');
+    form.commit(A);
+    await flushMicrotasks();
+    form.setText('a', '1');
+    form.commit(A);
+    partServer.changeElsewhere({ a: '5.00' });
+    release();
+    await gate.settle();
+    expect(partServer.inputs['a']).toBe('5.00');
+    expect(hook.render().texts['a']).toBe('5.00');
+    expect(partServer.sent).toHaveLength(1);
+    expect(gate.isDirty()).toBe(false);
   });
 
   it('the same choice made twice within one round trip is still one request', async () => {
