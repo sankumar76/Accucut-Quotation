@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (qa-engineer, 2026-11-23; a flaky test, test plan section 6; it can turn a required check red on any PR) |
 | Priority | P3. Lane: hardening window, test-only; ahead of Minors. Does not block G8 |
 | Type | **Test** |
-| Status | **Open** (logged 2026-11-23) |
+| Status | **CLOSED 2026-11-23 (qa-engineer): fixed by #654 (`master` 87719a6e); DL-322 (5) P1, P2 and P3 met (P3 on the squash push 45179046845: Stage 11 `640 files, 16272 tests passed`, `approve.test.ts` 14 tests passed, 0 five-second cuts; section "Closed" at the end). R14 ended with the merge; a recurrence reopens it the same day.** Earlier: **Open** (logged 2026-11-23) |
 | Jira / GitHub | [AQP-409](https://sankumar76.atlassian.net/browse/AQP-409) / [#635](https://github.com/sankumar76/Accucut-Quotation/issues/635). Jira "relates to" AQP-321 and AQP-1. Labels `ai-delivery`, `aiid-DEF-067`, `sev-3`, `final-review`, `agent-qa-engineer`; priority Medium |
 | Risk / rule | No re-run rule covers a Stage 11 integration failure (R13 is the Mailpit signature, DL-305; W1 is Stage 12). A red `Stages 1 to 11b` from this case comes to master for a ruling before a re-run. Not a RISK-031 event |
 | Found by / date | qa-engineer, 2026-11-23, reading PR #633's run |
@@ -55,3 +55,7 @@ Assert the shape instead of a substring: the keys of `view.priceRemoved` are exa
 | **Sweep** (`git grep -nE "not\.toContain\('[0-9]" tests`) | QA ran it on `origin/master` 1eae9353: 44 lines in 40 files; the PR's list is the same families. The lines over data that holds a database clock are only `approve.test.ts:339` (fixed here) and `remove-price.test.ts:200` (`'1234'`: an ISO time holds four digits in a row only as the year); the rest search fixed constants or strings with a dot, a space or five or more digits. The residual: `tests/e2e/remove-price.spec.ts:184` and `:215` (`'48271'`) search page text that may hold UUIDs; the chance that a UUID holds that exact five-digit run is about 1 in 100,000 per UUID, not worth a change (QA) | **Accepted** |
 
 R14 (DL-322 (3)) ends with the merge. **Not closed here until the squash push's Stage 11 is read clean** (QA then closes: this file, test plan, Jira AQP-409 through the Done transition, GitHub #635).
+
+## Closed 2026-11-23 (qa-engineer; DL-322 (5) P3; Stage 11 job log of `master` push 45179046845, ANSI stripped)
+
+**P3 on the squash push.** `master` 87719a6e (#654's squash), CI run 45179046845, every job `success`: Stage 6 `475 files, 10650 tests`, Stage 11 `640 files, 16272 tests passed`, `approve.test.ts` (14 tests) passed in 1,552 ms, 0 five-second cuts, 0 "Mailpit answered". The fixed `.600Z` literal keeps the case's regression guard on every run. **DEF-067 is closed** (this file, test plan, Jira AQP-409 through the Done transition, GitHub #635 closed with a comment); R14 ended with the merge; a recurrence (a failure of `approve.test.ts` on a timestamp digit) reopens it the same day.
