@@ -168,7 +168,7 @@ test.describe('AC-2, AC-6: a complete estimate is prepared, and the page shows a
     await expect(calculateButton(page)).toHaveText('Prepared');
     await expect(control(page, 'J')).toHaveAttribute('readonly', '');
     for (const name of ['Add main assembly', 'Move up', 'Move down']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
-    // Nor does any row have its "+" or its "-": the actions are offered exactly when the Engineer may change the inputs, and a submitted estimate is read-only for them (CR-01 item 3C AC-6).
+    // Nor does any row have its "+" or its "-": the actions are offered exactly when the Engineer may change the inputs, and a prepared estimate is read-only for them (CR-01 item 3C AC-6).
     await expect(page.getByRole('button', { name: /^(Add under|Add fastener under|Delete) / })).toHaveCount(0);
 
     expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });

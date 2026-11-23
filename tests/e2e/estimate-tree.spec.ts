@@ -350,7 +350,7 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await expectNoAxeViolations(page);
   });
 
-  test('AQP-404 AC-1, AC-5: an arrow opens and closes its branch, a leaf keeps the space, Tab moves from a row to the next and to each arrow (no arrow-key navigation), and Enter opens the row', async ({ page }, testInfo) => {
+  test('AQP-404 AC-1, AC-5: an arrow opens and closes its branch, a leaf keeps the space, Tab moves from a row to its "+" and "-", then to the next row, and to each arrow (no arrow-key navigation), and Enter opens the row', async ({ page }, testInfo) => {
     await openTree(page, testInfo);
     await addUnder(page, '1', 'Sub-Assembly');
     await expect(part(page, '1.1')).toBeVisible();
@@ -368,14 +368,25 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     expect((await arrow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     expect((await arrow.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
 
-    // Tab goes arrow, row, next row, next row: the order of the page, with no roving stop.
+    // Tab goes arrow, row, the row's own "+" and "-", next row, and so on: the order of the page, with no roving stop (UX spec section 0.9 row 3: "Keyboard: Tab moves between a row and its "+""). A touch screen has no
+    // hover, so there only the open row (row 2, the one added last) shows its buttons and the rows before it go straight to the next row (AQP-405 AC-7).
+    const toolbarStops = await page.evaluate(() => !window.matchMedia('(pointer: coarse)').matches);
+    const tabTo = async (target: Locator): Promise<void> => {
+      await page.keyboard.press('Tab');
+      await expect(target).toBeFocused();
+    };
     await arrow.focus();
-    await page.keyboard.press('Tab');
-    await expect(part(page, '1')).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(part(page, '1.1')).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(part(page, '2')).toBeFocused();
+    await tabTo(part(page, '1'));
+    if (toolbarStops) {
+      await tabTo(rowButton(page, 'Add under', '1'));
+      await tabTo(rowButton(page, 'Delete', '1'));
+    }
+    await tabTo(part(page, '1.1'));
+    if (toolbarStops) {
+      await tabTo(rowButton(page, 'Add under', '1.1'));
+      await tabTo(rowButton(page, 'Delete', '1.1'));
+    }
+    await tabTo(part(page, '2'));
     // The arrow keys do not move between rows any more (STORY-05.02 AC-9 is withdrawn).
     await page.keyboard.press('ArrowUp');
     await expect(part(page, '2')).toBeFocused();

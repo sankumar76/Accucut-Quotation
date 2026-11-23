@@ -14,15 +14,15 @@ import { ADD_MAIN_ASSEMBLY, addActionOf, addFastenerLabel, addUnderLabel, delete
 
 describe('treeActionsOffered (AC-6): exactly when the person can edit the inputs', () => {
   const ROLES: ReadonlyArray<RoleName> = ['ENGINEER', 'LEAD', 'ADMIN'];
-  const STATUSES: ReadonlyArray<EstimateStatus> = ['DRAFT', 'SUBMITTED', 'APPROVED'];
+  const STATUSES: ReadonlyArray<EstimateStatus> = ['DRAFT', 'PREPARED', 'APPROVED'];
 
   it.each(ROLES.flatMap((role) => STATUSES.map((status) => ({ role, status }))))('$role on $status is the same answer as canEditInputs', ({ role, status }) => {
     expect(treeActionsOffered(status, role)).toBe(canEditInputs(status, role));
   });
 
-  it('is: an Engineer on a Draft only; a Lead or an Admin on a Draft and on a Prepared (submitted) estimate; nobody on an Approved one', () => {
+  it('is: an Engineer on a Draft only; a Lead or an Admin on a Draft and on a Prepared estimate; nobody on an Approved one', () => {
     const offered = ROLES.flatMap((role) => STATUSES.filter((status) => treeActionsOffered(status, role)).map((status) => `${role} ${status}`));
-    expect(offered).toEqual(['ENGINEER DRAFT', 'LEAD DRAFT', 'LEAD SUBMITTED', 'ADMIN DRAFT', 'ADMIN SUBMITTED']);
+    expect(offered).toEqual(['ENGINEER DRAFT', 'LEAD DRAFT', 'LEAD PREPARED', 'ADMIN DRAFT', 'ADMIN PREPARED']);
   });
 });
 
