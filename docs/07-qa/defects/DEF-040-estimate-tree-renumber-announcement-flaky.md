@@ -134,3 +134,15 @@ Under M2 or M3, master re-rules the order against 3D: the fix is a separate PR, 
 **What QA did not do.** No browser run of the new states (no local E2E, CLAUDE.md section 9 item 5). The CI E2E has no case that hangs a request, by DL-340 (5), so the hang path is pinned by the unit tests with fake timers only. QA did not repeat the developer's "planted break" (the PR says a planted break of the limit branch fails 7 hook tests).
 
 **Closing proof (DL-338 (7), unchanged): NOT YET MET.** DEF-040 closes when **no DEF-040 failure shows on the fix PR's run of record (the fresh run after the update) and on the first two `master` pushes after the squash, at three widths**; the diagnostic stays until then. QA greps every Stage 12 log for `[AQP-343 renumber diagnostic]`. The type stays Product (client) and the Bug stays on the blocking list until that proof is read.
+
+## DEF-040 proof reading 2026-11-23, later: the fix PR's run of record and `master` push 1 after #652's squash (qa-engineer; DL-338 (7), DL-340; Stage 12 job logs, ANSI stripped; no re-run)
+
+**The squash and the diff.** #652 was updated from `master` (final head d906a21d) and squashed as `master` **1eae9353**. QA compared the PR's 12 files between the verified head ace30f75 and 1eae9353 with `git diff`: **all 12 are identical**, so the verification above stands for the code that merged.
+
+| Proof (DL-338 (7)) | Reading | Met |
+|---|---|---|
+| **No DEF-040 failure on the fix PR's run of record** | **PR run 45168820853** (head d906a21d, the fresh run after the update; every job `success`; shards `542 / 545 / 548 / 529 passed`, 0 failed, 0 flaky): **0 `[AQP-343 renumber diagnostic]` lines in all four shards**; `estimate-tree.spec.ts:282` (the DEF-040 case) attempt 1 **25.2 / 21.9 / 23.5 s** and `:318` 12.1 / 10.5 / 9.3 s (mobile / tablet / desktop); Stage 6 `475 files, 10650 tests` and the four #652 unit files passed (24 + 12 + 16 + 20 tests); first load `/estimates/[code]` 187,526 B, headroom 12,474 B | **Yes** |
+| **First `master` push after the squash** | **45171590856** (1eae9353, #652's squash; every job `success`; shards `529 / 548 / 542 / 545 passed`, 0 flaky, 0 failed): **0 diagnostic lines**; `:282` attempt 1 **35.3 / 43.4 / 34.6 s** (the case is `test.slow()`, a budget of 90 s) and `:318` 17.1 / 17.2 / 19.4 s, all passes; `estimate-form.spec.ts:188` (a tree delete) passed at three widths | **Yes (push 1 of 2)** |
+| **Second `master` push after the squash** | the next push: `master` 87719a6e (#654's squash), CI run **45179046845**, in progress at this read (not read) | **Pending** |
+
+**The Bug stays open (Sev-2, type Product (client), a G8 blocker) until push 2 is read clean**; the diagnostic stays until then. Any later occurrence comes to master with its diagnostic. **DEF-074** (`estimate-form.spec.ts:188`, a tree delete, two attempt-1 failures on #632's branch) is not a DEF-040 signature by its text (no "Part renumbered to" wait, no diagnostic); whether it counts against this proof is master's to rule (DEF-074 file, "For master" item 2; DL-344 reads it as 16.4.6-correlated).

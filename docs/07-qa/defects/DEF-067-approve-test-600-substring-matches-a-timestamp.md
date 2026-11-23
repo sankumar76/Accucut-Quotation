@@ -42,3 +42,16 @@ Assert the shape instead of a substring: the keys of `view.priceRemoved` are exa
 | Fixed | developer | | |
 | Regression test added (red on master first) | developer | | |
 | Verified | qa-engineer | | |
+
+## Fix PR #654 read against DL-322 (5) (qa-engineer, 2026-11-23; PR run 45174775621 Stage 11 job log, ANSI stripped; no re-run)
+
+**The fix.** #654 (AQP-409; head 5f7a92ae; squashed as `master` 87719a6e; one file, `tests/integration/approval/approve.test.ts` +6 -3). Commit 1 (`7e154426`) fixes the test's own `removed_at` to the literal `2026-11-23T02:33:11.600Z` (set-up) and is shown red in the PR body (`not to contain '600'` at :342, the CI failure's received value); commit 2 replaces the substring check with `expect(view.priceRemoved).toEqual({ at: REMOVED_AT_WITH_600_MS, byName: 'Invented Calculation Lead' })` (stricter than DL-322 (5)'s `expect.any(String)`: the value is fixed, the keys are exactly `at` and `byName`, so a price field still fails). The `toMatchObject` line before it is dropped (the `toEqual` includes it); test count unchanged (14 in the file); nothing else under `tests/integration/approval/` changed; no `src/`, config or CI change.
+
+| DL-322 (5) | Reading | Met |
+|---|---|---|
+| **P1** a fixed `.600` clock, red first, then green | the PR body's red run (commit 1, local, `1 failed`) and the green commit 2; QA did not repeat the local red run | **Yes** (developer's evidence, not repeated) |
+| **P2** the integration suite is green on the PR's run of record, nothing else under `tests/integration/approval/` changed | PR run **45174775621** (head 5f7a92ae; every job `success`): Stage 11 `640 files, 16272 tests passed`; `approve.test.ts` **14 tests** passed with its siblings `cancel` (27), `unlock` (26), `remove-price` (17), `grants` (59), `override` (19), `guard` (14), `immutability` (17); one file changed | **Yes** |
+| **P3** QA reruns the case and the approval pack, then closes | the approval pack (8 files, 193 tests) is green on the PR's run, 0 failures, 0 five-second cuts; QA's "rerun" is this CI run (no local PostgreSQL run by QA); **the squash push's Stage 11 (`master` 87719a6e, CI run 45179046845) was still running at this read** | **Met on the PR run; the close waits for the push's Stage 11** |
+| **Sweep** (`git grep -nE "not\.toContain\('[0-9]" tests`) | QA ran it on `origin/master` 1eae9353: 44 lines in 40 files; the PR's list is the same families. The lines over data that holds a database clock are only `approve.test.ts:339` (fixed here) and `remove-price.test.ts:200` (`'1234'`: an ISO time holds four digits in a row only as the year); the rest search fixed constants or strings with a dot, a space or five or more digits. The residual: `tests/e2e/remove-price.spec.ts:184` and `:215` (`'48271'`) search page text that may hold UUIDs; the chance that a UUID holds that exact five-digit run is about 1 in 100,000 per UUID, not worth a change (QA) | **Accepted** |
+
+R14 (DL-322 (3)) ends with the merge. **Not closed here until the squash push's Stage 11 is read clean** (QA then closes: this file, test plan, Jira AQP-409 through the Done transition, GitHub #635).
