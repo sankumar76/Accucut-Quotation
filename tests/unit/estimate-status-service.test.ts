@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ConflictError, ForbiddenError, NotFoundError } from '@/lib/errors';
 import { ESTIMATE_EVENTS, TRANSITION_REFUSALS, type EstimateStatus } from '@/lib/estimate/state-machine';
+import { ALREADY_QUOTED_CODE } from '@/components/features/estimate-quote/mark-quoted-texts';
 import { createEstimateService, type EstimateViewer } from '@/server/services/estimate-service';
 import { createEstimateStatusService } from '@/server/services/estimate-status-service';
 
@@ -160,6 +161,12 @@ describe('AC-3: every refusal is a 409 with its own code, and the estimate and t
     const guarded = createEstimateStatusService({ estimates: world.repository, transactions: world.transactions, workflow: { transition, audit: createAuditSink().service } });
     expect(await caught(guarded.markQuoted(lead, ESTIMATE, { audit: audit(lead, 'Kiran Bose') }))).toMatchObject({ code: TRANSITION_REFUSALS.IGNORED.code });
     expect(transition).not.toHaveBeenCalled();
+  });
+});
+
+describe('AC-10: the browser names the second press by a constant of its own, which the machine\'s table agrees with', () => {
+  it('the dialog\'s own spelling of the code is the one the machine refuses a second press with, so the dialog never imports the table of sentences', () => {
+    expect(ALREADY_QUOTED_CODE).toBe(TRANSITION_REFUSALS.ALREADY_QUOTED.code);
   });
 });
 

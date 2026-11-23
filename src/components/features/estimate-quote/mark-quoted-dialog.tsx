@@ -9,11 +9,10 @@ import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { TRANSITION_REFUSALS } from '@/lib/estimate/state-machine';
 import { markEstimateQuoted } from '@/lib/estimates/mark-quoted-client';
 import type { DownloadChipData } from '@/lib/export/download-marker-view';
 
-import { MARK_QUOTED_NO_UNDO, MARK_QUOTED_SUBMIT_LABEL, MARK_QUOTED_UNCONFIRMED, MARKING_LABEL, markQuotedIntro, markQuotedTitle, NOT_YET_LABEL } from './mark-quoted-texts';
+import { ALREADY_QUOTED_CODE, MARK_QUOTED_NO_UNDO, MARK_QUOTED_SUBMIT_LABEL, MARK_QUOTED_UNCONFIRMED, MARKING_LABEL, markQuotedIntro, markQuotedTitle, NOT_YET_LABEL } from './mark-quoted-texts';
 
 /**
  * "Mark as quoted" (CR-01 item 7C, AQP-400; AC-3, AC-4, AC-9; UX spec SCR-06 "Mark as quoted"): the dialog a Lead or an Admin opens on an approved estimate. It says that the quote should have been sent to the customer, that the
@@ -74,7 +73,7 @@ function MarkQuotedForm({ props, inFlightRef }: { readonly props: MarkQuotedDial
     if (outcome.status === 'ok') return onMarked();
     if (outcome.status === 'refused') {
       // A second press (another window, a double tap that got through): the estimate is quoted, which is what was asked for.
-      if (outcome.httpStatus === 409 && outcome.code === TRANSITION_REFUSALS.ALREADY_QUOTED.code) return onMarked();
+      if (outcome.httpStatus === 409 && outcome.code === ALREADY_QUOTED_CODE) return onMarked();
       setPhase({ kind: 'refused', message: outcome.title });
       return onStale();
     }

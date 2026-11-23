@@ -101,6 +101,7 @@ export const TRANSITION_REFUSALS: Readonly<Record<RefusalReason, RefusalText>> =
   ALREADY_APPROVED: { code: 'ESTIMATE_ALREADY_APPROVED', message: 'This estimate has already been approved.' },
   // A QUOTED estimate is refused with the same code and words as an APPROVED one: the person is told it is locked and what to do about it.
   APPROVED_IS_LOCKED: { code: 'ESTIMATE_APPROVED_IS_LOCKED', message: 'This estimate is approved and locked. Unlock it first.' },
+  // The Mark as quoted dialog spells this code once more, in `mark-quoted-texts.ts`, so the browser need not import this table (NFR-009); a unit test holds the two equal.
   ALREADY_QUOTED: { code: 'ESTIMATE_ALREADY_QUOTED', message: 'This estimate has already been marked as quoted.' },
   QUOTED_IS_FINAL: { code: 'ESTIMATE_QUOTED_IS_FINAL', message: 'This estimate is quoted and cannot be ignored.' },
   ALREADY_IGNORED: { code: 'ESTIMATE_ALREADY_IGNORED', message: 'This estimate is already ignored.' },
