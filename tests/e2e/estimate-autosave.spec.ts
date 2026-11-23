@@ -57,7 +57,7 @@ test.describe('STORY-05.10: autosave every 30 seconds', () => {
 
     // AC-1, AC-3: a value that is typed and not left is saved by the tick; focus stays and the text is not rewritten (12.5 is not shown as 12.50 until the field is left); nothing is said under any field.
     await control(page, 'J').fill('12.5');
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'J');
     await page.clock.fastForward(TICK_MS);
     expect(await saved).toBe(200);
     await expect(statusLine(page)).toHaveText(SAVED_LINE);
@@ -99,7 +99,7 @@ test.describe('STORY-05.10: autosave every 30 seconds', () => {
 
     // The connection is back: the next tick saves it, and the failure goes.
     await page.unroute(SAVE_ROUTE);
-    const savedAgain = nextSave(page);
+    const savedAgain = nextSave(page, 'J');
     await page.clock.fastForward(TICK_MS);
     expect(await savedAgain).toBe(200);
     await expect(statusLine(page)).toHaveText(SAVED_LINE);

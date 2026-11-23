@@ -96,12 +96,12 @@ test.describe('AC-1, AC-6: the sections, their headers, the strip and the placeh
     await control(page, 'P').fill('-1');
     await control(page, 'P').blur();
     await expect(cutting).toContainText('0 of 2 complete');
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'P');
     await control(page, 'P').fill('38.5');
     await control(page, 'P').blur();
     expect(await saved).toBe(200);
     await expect(cutting).toContainText('1 of 2 complete');
-    const savedQ = nextSave(page);
+    const savedQ = nextSave(page, 'Q');
     await control(page, 'Q').fill('960');
     await control(page, 'Q').blur();
     expect(await savedQ).toBe(200);
@@ -149,7 +149,7 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
       await expect(control(page, letter), letter).toHaveAccessibleDescription(COST_HINT);
       await expect(control(page, letter).locator('xpath=following-sibling::span'), letter).toHaveText('₹');
     }
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'BM');
     await control(page, 'BM').fill('4321.5');
     await control(page, 'BM').blur();
     expect(await saved).toBe(200);
@@ -183,7 +183,7 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
     expect(requests).toEqual([]);
     expect(await storedValues(page, owner.id)).toMatchObject({ completeness: 'EMPTY', inputs: [] });
 
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'S');
     await control(page, 'S').fill('M6 bolt');
     await control(page, 'S').blur();
     expect(await saved).toBe(200);
@@ -193,11 +193,11 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
 
   test('AC-3: clearing Fasteners shows "None" again, and a stored value is removed', async ({ page }, testInfo) => {
     const owner = await openForm(page, testInfo);
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'S');
     await control(page, 'S').fill('M6 bolt');
     await control(page, 'S').blur();
     expect(await saved).toBe(200);
-    const cleared = nextSave(page);
+    const cleared = nextSave(page, 'S');
     await control(page, 'S').fill('');
     await control(page, 'S').blur();
     expect(await cleared).toBe(200);
@@ -218,7 +218,7 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
     await page.keyboard.type('Line two');
     await expect(remarks).toHaveValue('Line one\nLine two');
     await expect(remarks).toBeFocused();
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'AJ');
     await page.keyboard.press('Enter');
     expect(await saved).toBe(200);
     await expect(remarks).not.toBeFocused();
@@ -241,7 +241,7 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
     await expect(remarks).toHaveValue('x'.repeat(1001));
     expect(requests).toEqual([]);
 
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'AJ');
     await remarks.fill('x'.repeat(1000));
     await expect(partForm(page).getByText(REMARKS_TOO_LONG)).toHaveCount(0);
     await remarks.blur();
@@ -259,7 +259,7 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
       await expect(field, letter).toHaveValue('-1');
     }
     await expect(partForm(page).getByText(NUMBER_RULE).first()).toBeVisible();
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'V');
     await control(page, 'V').fill('12.5');
     await control(page, 'V').blur();
     expect(await saved).toBe(200);
@@ -290,11 +290,11 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
 test.describe('AC-7: what an Engineer is sent', () => {
   test('AC-7 (NFR-002): the form, the part and the page carry no rate, calculated value or formula, with typed costs filled in and a material chosen; the typed costs are only what was typed', async ({ page }, testInfo) => {
     const owner = await openForm(page, testInfo);
-    const savedMaterial = nextSave(page);
+    const savedMaterial = nextSave(page, 'E');
     await control(page, 'E').selectOption({ label: ALPHA_MATERIAL.materialInDrawing });
     expect(await savedMaterial).toBe(200);
     // Fasteners Cost shows only once the part has fasteners (STORY-05.05).
-    const savedFasteners = nextSave(page);
+    const savedFasteners = nextSave(page, 'S');
     await control(page, 'S').fill('M6 bolt');
     await control(page, 'S').blur();
     expect(await savedFasteners).toBe(200);
@@ -304,7 +304,7 @@ test.describe('AC-7: what an Engineer is sent', () => {
       ['BM', '45678.75'],
       ['U', '3.5'],
     ] as const) {
-      const saved = nextSave(page);
+      const saved = nextSave(page, letter);
       await control(page, letter).fill(typed);
       await control(page, letter).blur();
       expect(await saved).toBe(200);
@@ -422,7 +422,7 @@ test.describe('STORY-05.11 AC-1, AC-4, AC-7, AC-8: the completion line, the tree
     await control(page, 'P').fill('-1');
     await control(page, 'P').blur();
     await expect(progressLine(page)).toContainText('1 of 21 inputs complete');
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'P');
     await control(page, 'P').fill('0');
     await control(page, 'P').blur();
     expect(await saved).toBe(200);
@@ -434,7 +434,7 @@ test.describe('STORY-05.11 AC-1, AC-4, AC-7, AC-8: the completion line, the tree
     await expect(progressLine(page)).toContainText('1 of 21 inputs complete');
 
     // A field the registry hides for what is typed is not counted: another word in Fasteners shows Qty and Cost, which are two more to fill.
-    const fasteners = nextSave(page);
+    const fasteners = nextSave(page, 'S');
     await control(page, 'S').fill('Invented bolts');
     await control(page, 'S').blur();
     expect(await fasteners).toBe(200);
@@ -471,7 +471,7 @@ test.describe('STORY-05.11 AC-1, AC-4, AC-7, AC-8: the completion line, the tree
     const status = page.getByRole('status').filter({ hasText: 'Part 1 is complete.' });
     await expect(status).toHaveCount(0);
 
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'AJ');
     await control(page, 'AJ').fill('Invented remark');
     await control(page, 'AJ').blur();
     expect(await saved).toBe(200);

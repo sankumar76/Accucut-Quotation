@@ -68,7 +68,7 @@ async function typeQuantity(page: Page, value: string): Promise<void> {
   await pressUntilFocused(page, 'Shift+Tab', control(page, 'H'), 'QTY per Assy');
   await page.keyboard.press('ControlOrMeta+A');
   await page.keyboard.type(value);
-  const saved = nextSave(page);
+  const saved = nextSave(page, 'H');
   await page.keyboard.press('Enter');
   expect(await saved, `the count ${value} is saved when the field is left`).toBe(200);
   await expect(control(page, 'E')).toBeFocused();
