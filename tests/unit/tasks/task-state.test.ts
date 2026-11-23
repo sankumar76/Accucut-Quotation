@@ -26,9 +26,13 @@ describe('AC-1, AC-2: the status x deadline matrix', () => {
     ['APPROVED', 'past', PAST, 'closed', ['closed']],
     ['APPROVED', 'exactly now', NOW, 'closed', ['closed']],
     ['APPROVED', 'ahead', AHEAD, 'closed', ['closed']],
+    // AQP-399 AC-6: a quoted task is closed too, and never overdue.
+    ['QUOTED', 'past', PAST, 'closed', ['closed']],
+    ['QUOTED', 'exactly now', NOW, 'closed', ['closed']],
+    ['QUOTED', 'ahead', AHEAD, 'closed', ['closed']],
   ] as const)('%s, deadline %s: the tab is %s and it is listed in %j', (status, _when, deadlineAt, tab, tabs) => {
     expect(taskTab(status)).toBe(tab);
-    expect(tabsOf(status, deadlineAt, NOW)).toEqual(tabs);
+    expect(tabsOf(status, deadlineAt, NOW, false)).toEqual(tabs);
   });
 
   it('covers every status the machine has, so a new status fails here until its tab is decided', () => {
@@ -38,31 +42,45 @@ describe('AC-1, AC-2: the status x deadline matrix', () => {
   });
 });
 
-describe("AC-3: an unlock or the Admin's cancel puts an approved task back in Open (and Overdue if late)", () => {
+describe("AC-3: an unlock or the Admin's cancel puts an approved or a quoted task back in Open (and Overdue if late)", () => {
   it.each([
-    ['UNLOCK', 'LEAD'],
-    ['UNLOCK', 'ADMIN'],
-    ['CANCEL', 'ADMIN'],
-  ] as const)('%s by %s: APPROVED leads to a status whose task is open, and overdue again past the deadline', (event, role) => {
-    const decision = decideTransition('APPROVED', event, role);
+    ['APPROVED', 'UNLOCK', 'LEAD'],
+    ['APPROVED', 'UNLOCK', 'ADMIN'],
+    ['APPROVED', 'CANCEL', 'ADMIN'],
+    ['QUOTED', 'UNLOCK', 'LEAD'],
+    ['QUOTED', 'UNLOCK', 'ADMIN'],
+    ['QUOTED', 'CANCEL', 'ADMIN'],
+  ] as const)('%s, %s by %s: leads to a status whose task is open, and overdue again past the deadline', (from, event, role) => {
+    const decision = decideTransition({ status: from, ignored: false }, event, role);
     if (!decision.allowed) throw new Error('The state machine should allow this event.');
-    expect(taskTab('APPROVED')).toBe('closed');
+    expect(taskTab(from)).toBe('closed');
     expect(taskTab(decision.to)).toBe('open');
-    expect(tabsOf(decision.to, PAST, NOW)).toEqual(['open', 'overdue']);
-    expect(tabsOf(decision.to, AHEAD, NOW)).toEqual(['open']);
+    expect(tabsOf(decision.to, PAST, NOW, false)).toEqual(['open', 'overdue']);
+    expect(tabsOf(decision.to, AHEAD, NOW, false)).toEqual(['open']);
+  });
+});
+
+describe('AQP-399 AC-6: an ignored task is in none of Open, Closed and Overdue', () => {
+  it.each(ESTIMATE_STATUSES)('%s and ignored: no tab of the three, at any deadline', (status) => {
+    for (const deadlineAt of [PAST, NOW, AHEAD]) expect(tabsOf(status, deadlineAt, NOW, true)).toEqual([]);
+  });
+
+  it('the same task not ignored is in the tabs the matrix says, so the layer is the only difference', () => {
+    expect(tabsOf('PREPARED', PAST, NOW, false)).toEqual(['open', 'overdue']);
+    expect(tabsOf('PREPARED', PAST, NOW, true)).toEqual([]);
   });
 });
 
 describe('AC-4: one rule', () => {
   it('takes its answer from isTaskClosed for every status', () => {
     for (const status of ESTIMATE_STATUSES) {
-      expect(taskTab(status) === 'closed').toBe(isTaskClosed(status));
+      expect(taskTab(status) === 'closed').toBe(isTaskClosed(status, false));
     }
   });
 
   it('counts consistently: open + closed is the number of tasks, and every overdue task is also an open one', () => {
     const tasks = ESTIMATE_STATUSES.flatMap((status) => [PAST, NOW, AHEAD].map((deadlineAt) => ({ status, deadlineAt })));
-    const inTab = (tab: 'open' | 'closed' | 'overdue') => tasks.filter((task) => tabsOf(task.status, task.deadlineAt, NOW).includes(tab));
+    const inTab = (tab: 'open' | 'closed' | 'overdue') => tasks.filter((task) => tabsOf(task.status, task.deadlineAt, NOW, false).includes(tab));
     expect(inTab('open').length + inTab('closed').length).toBe(tasks.length);
     expect(inTab('overdue')).toHaveLength(2);
     expect(inTab('overdue').every((task) => inTab('open').includes(task))).toBe(true);

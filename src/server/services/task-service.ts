@@ -360,7 +360,8 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
         const locked = await tasks.findTaskForUpdate(id, tx);
         if (locked === null) throw new NotFoundError();
         // Read under the lock: an approval that was committing has finished, and is seen here (AC-6).
-        if (isTaskClosed(locked.status)) throw new ConflictError(TASK_CLOSED_MESSAGE, { code: TASK_CLOSED_CODE });
+        // The locked task row carries no Ignored layer yet: whether an ignored task may be reassigned is not decided (a question for 7D, review QLT-B2), so today the layer is not asked.
+        if (isTaskClosed(locked.status, false)) throw new ConflictError(TASK_CLOSED_MESSAGE, { code: TASK_CLOSED_CODE });
         const checked = checkReassign(input, { engineerId: locked.engineer.id, deadlineAt: locked.deadlineAt }, now);
         if (!checked.ok) throw new FieldValidationError(problemsOf(checked.errors));
         const { changes } = checked;

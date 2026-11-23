@@ -54,11 +54,12 @@ describe('the read side of an approved estimate reads no master', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('the review service holds the one sanctioned import of rate-changes, and ratesChangedSince refuses an APPROVED estimate before it reads a snapshot or a master', () => {
+  it('the review service holds the one sanctioned import of rate-changes, and ratesChangedSince refuses a locked (APPROVED or QUOTED) estimate before it reads a snapshot or a master', () => {
     expect(codeOf(textOf(REVIEW_SERVICE))).toMatch(SANCTIONED);
     const code = codeOf(textOf(join(SERVICES, 'rate-changes.ts')));
     const body = code.slice(code.indexOf('function ratesChangedSince('));
-    const approved = body.indexOf("status === 'APPROVED'");
+    // CR-01 item 7B: "locked" is asked of `isLocked`, the one helper, so a quoted estimate is refused like an approved one.
+    const approved = body.indexOf('isLocked(access.status)');
     expect(approved).toBeGreaterThan(-1);
     expect(approved).toBeLessThan(body.indexOf('findMasterSnapshot('));
     expect(approved).toBeLessThan(body.indexOf('countRateChanges('));

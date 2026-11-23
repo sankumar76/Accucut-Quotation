@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { RoleName } from '@/lib/auth/roles';
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
 import { ALLOWED_CHILDREN, NODE_KINDS, type NodeKind } from '@/lib/estimate/node-kinds';
-import type { EstimateStatus } from '@/lib/estimate/state-machine';
+import { ESTIMATE_STATUSES, type EstimateStatus } from '@/lib/estimate/state-machine';
 import { ADD_MAIN_ASSEMBLY, addActionOf, addFastenerLabel, addUnderLabel, deleteRowLabel, treeActionsOffered } from '@/lib/estimates/tree-actions';
 
 /**
@@ -14,15 +14,24 @@ import { ADD_MAIN_ASSEMBLY, addActionOf, addFastenerLabel, addUnderLabel, delete
 
 describe('treeActionsOffered (AC-6): exactly when the person can edit the inputs', () => {
   const ROLES: ReadonlyArray<RoleName> = ['ENGINEER', 'LEAD', 'ADMIN'];
-  const STATUSES: ReadonlyArray<EstimateStatus> = ['DRAFT', 'PREPARED', 'APPROVED'];
+  const STATUSES: ReadonlyArray<EstimateStatus> = ESTIMATE_STATUSES;
+  const LAYERS: ReadonlyArray<boolean> = [false, true];
 
-  it.each(ROLES.flatMap((role) => STATUSES.map((status) => ({ role, status }))))('$role on $status is the same answer as canEditInputs', ({ role, status }) => {
-    expect(treeActionsOffered(status, role)).toBe(canEditInputs(status, role));
+  it.each(ROLES.flatMap((role) => STATUSES.flatMap((status) => LAYERS.map((ignored) => ({ role, status, ignored })))))(
+    '$role on $status (ignored: $ignored) is the same answer as canEditInputs',
+    ({ role, status, ignored }) => {
+      expect(treeActionsOffered({ status, ignored }, role)).toBe(canEditInputs({ status, ignored }, role));
+    },
+  );
+
+  it('is: an Engineer on a Draft only; a Lead or an Admin on a Draft and on a Prepared estimate; nobody on an Approved or a Quoted one', () => {
+    const offered = ROLES.flatMap((role) => STATUSES.filter((status) => treeActionsOffered({ status, ignored: false }, role)).map((status) => `${role} ${status}`));
+    expect(offered).toEqual(['ENGINEER DRAFT', 'LEAD DRAFT', 'LEAD PREPARED', 'ADMIN DRAFT', 'ADMIN PREPARED']);
   });
 
-  it('is: an Engineer on a Draft only; a Lead or an Admin on a Draft and on a Prepared estimate; nobody on an Approved one', () => {
-    const offered = ROLES.flatMap((role) => STATUSES.filter((status) => treeActionsOffered(status, role)).map((status) => `${role} ${status}`));
-    expect(offered).toEqual(['ENGINEER DRAFT', 'LEAD DRAFT', 'LEAD PREPARED', 'ADMIN DRAFT', 'ADMIN PREPARED']);
+  it('is: nobody on an ignored estimate, whatever its status underneath (7B, DL-300 (1)): the tree is read-only until it is restored', () => {
+    const offered = ROLES.flatMap((role) => STATUSES.filter((status) => treeActionsOffered({ status, ignored: true }, role)).map((status) => `${role} ${status}`));
+    expect(offered).toEqual([]);
   });
 });
 

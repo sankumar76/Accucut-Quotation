@@ -88,8 +88,18 @@ export async function resetWorld(): Promise<void> {
 export const setActive = (id: string, active: boolean): Promise<unknown> => db.owner.query('UPDATE users SET is_active = $2 WHERE id = $1::uuid', [id, active]);
 export const setAlerts = (on: boolean): Promise<unknown> => db.owner.query('UPDATE settings SET alerts_enabled = $1 WHERE id = 1', [on]);
 export const setDeadline = (id: string, deadline: Date): Promise<unknown> => db.owner.query('UPDATE tasks SET deadline_at = $2 WHERE id = $1::uuid', [id, deadline]);
-export const setStatus = (id: string, status: 'DRAFT' | 'PREPARED' | 'APPROVED'): Promise<unknown> =>
-  db.owner.query('UPDATE estimates SET status = $2::estimate_status WHERE task_id = $1::uuid', [id, status]);
+export const setStatus = (id: string, status: 'DRAFT' | 'PREPARED' | 'APPROVED' | 'QUOTED'): Promise<unknown> =>
+  // A QUOTED row carries the quote columns, and any other status none (`ck_estimates_quoted`), so the markers move with the status as the real UPDATE moves them.
+  db.owner.query(
+    `UPDATE estimates SET status = $2::estimate_status, quoted_at = CASE WHEN $2 = 'QUOTED' THEN now() END, quoted_by = CASE WHEN $2 = 'QUOTED' THEN $3::uuid END WHERE task_id = $1::uuid`,
+    [id, status, leadId],
+  );
+/** Sets or clears the Ignored layer over the status (CR-01 item 7B): the three columns, the status untouched. A QUOTED estimate cannot be ignored (`ck_estimates_quoted_not_ignored`). */
+export const setIgnored = (id: string, ignored: boolean): Promise<unknown> =>
+  db.owner.query(
+    `UPDATE estimates SET ignored_at = CASE WHEN $2::boolean THEN now() END, ignored_by = CASE WHEN $2::boolean THEN $3::uuid END, ignore_remarks = CASE WHEN $2::boolean THEN 'Invented remarks.' END WHERE task_id = $1::uuid`,
+    [id, ignored, leadId],
+  );
 
 /** Task codes are unique to a call (the table's unique key, and a shared Mailpit is searched by subject). `reserveCodes(n)` takes `n` of them at once. Set by `openWorld`. */
 let counter = 0;
@@ -103,12 +113,14 @@ export interface Seed {
   readonly deadline: Date;
   readonly engineer?: string;
   readonly assigner?: string;
-  readonly status?: 'DRAFT' | 'PREPARED' | 'APPROVED';
+  readonly status?: 'DRAFT' | 'PREPARED' | 'APPROVED' | 'QUOTED';
+  /** The Ignored layer over the status; not for a QUOTED estimate. */
+  readonly ignored?: boolean;
   readonly title?: string;
 }
 
 /** A task and its estimate. */
-export async function seed({ deadline, engineer = engineerId, assigner = leadId, status = 'DRAFT', title = 'Hopper cover' }: Seed): Promise<{ readonly id: string; readonly code: string }> {
+export async function seed({ deadline, engineer = engineerId, assigner = leadId, status = 'DRAFT', ignored = false, title = 'Hopper cover' }: Seed): Promise<{ readonly id: string; readonly code: string }> {
   const code = `Q-2026-${reserveCodes(1)}`;
   const { rows } = await db.owner.query<{ id: string }>('INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, \'Invented subject\') RETURNING id::text', [
     code,
@@ -119,7 +131,9 @@ export async function seed({ deadline, engineer = engineerId, assigner = leadId,
     title,
   ]);
   const id = defined(rows[0]).id;
-  await db.owner.query('INSERT INTO estimates (task_id, status) VALUES ($1::uuid, $2::estimate_status)', [id, status]);
+  await db.owner.query('INSERT INTO estimates (task_id, status) VALUES ($1::uuid, $2::estimate_status)', [id, 'DRAFT']);
+  await setStatus(id, status);
+  if (ignored) await setIgnored(id, true);
   return { id, code };
 }
 

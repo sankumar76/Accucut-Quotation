@@ -73,8 +73,11 @@ afterEach(async () => {
 
 const customerNamed = (name: string) => db.mastersService.createCustomer(by(), { name, shortName: shortNameOf(name), phone: '+99 555 0142', email: null, address: null });
 
-/** A task with its estimate, in this status, for this customer (or none). Returns the estimate's ID and the task's code. */
-async function estimateFor(customerId: string | null, status: 'DRAFT' | 'PREPARED' | 'APPROVED'): Promise<{ readonly estimateId: string; readonly code: string }> {
+/**
+ * A task with its estimate, in this status, for this customer (or none). Returns the estimate's ID and the task's code. `ignored` sets the three ignore columns of the layer over the status (CR-01 item 7B), as a
+ * Lead's Ignore will; a QUOTED estimate carries the quote columns (`ck_estimates_quoted`) and is never ignored (`ck_estimates_quoted_not_ignored`).
+ */
+async function estimateFor(customerId: string | null, status: 'DRAFT' | 'PREPARED' | 'APPROVED' | 'QUOTED', ignored = false): Promise<{ readonly estimateId: string; readonly code: string }> {
   codes += 1;
   const code = `Q-2026-${String(9000 + codes).padStart(4, '0')}`;
   const task = await db.owner.query<{ id: string }>(
@@ -83,8 +86,12 @@ async function estimateFor(customerId: string | null, status: 'DRAFT' | 'PREPARE
     [code, engineerId, leadId, PATH],
   );
   const estimate = await db.owner.query<{ id: string }>(
-    'INSERT INTO estimates (task_id, customer_id, status) VALUES ($1::uuid, $2::uuid, $3::estimate_status) RETURNING id::text AS id',
-    [defined(task.rows[0]).id, customerId, status],
+    `INSERT INTO estimates (task_id, customer_id, status, quoted_at, quoted_by, ignored_at, ignored_by, ignore_remarks)
+     VALUES ($1::uuid, $2::uuid, $3::estimate_status,
+             CASE WHEN $3 = 'QUOTED' THEN now() END, CASE WHEN $3 = 'QUOTED' THEN $4::uuid END,
+             CASE WHEN $5::boolean THEN now() END, CASE WHEN $5::boolean THEN $4::uuid END, CASE WHEN $5::boolean THEN 'Invented remarks.' END)
+     RETURNING id::text AS id`,
+    [defined(task.rows[0]).id, customerId, status, leadId, ignored],
   );
   return { estimateId: defined(estimate.rows[0]).id, code };
 }
@@ -193,6 +200,27 @@ describe('AC-2: a customer on a Draft or Prepared estimate is refused, and nothi
     const { estimateId } = await estimateFor(alpha.id, 'DRAFT');
     await expect(db.mastersService.deleteCustomer(by(), alpha.id)).rejects.toBeInstanceOf(MasterInUseError);
     await db.owner.query('UPDATE estimates SET customer_id = $2::uuid WHERE id = $1::uuid', [estimateId, bravo.id]);
+    await db.mastersService.deleteCustomer(by(), alpha.id);
+    expect((await stored(alpha.id)).deleted).toBe(true);
+  });
+});
+
+describe('AQP-399 AC-6 (BR-053): the Ignored layer does not close an estimate that is still a Draft or Prepared one', () => {
+  it.each(['DRAFT', 'PREPARED'] as const)('an ignored %s estimate still counts as open: the delete is refused naming its task code and status, because Restore needs a valid customer', async (status) => {
+    const alpha = await customerNamed('Alpha Works');
+    const { code } = await estimateFor(alpha.id, status, true);
+    const entries = await entryCount(db);
+    const refusal = await db.mastersService.deleteCustomer(by(), alpha.id).catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(MasterInUseError);
+    expect(refusal).toMatchObject({ code: CUSTOMER_IN_USE_CODE, httpStatus: 409, estimates: [{ code, status }], total: 1 });
+    expect(await stored(alpha.id)).toEqual({ deleted: false, rates: 15 });
+    expect(await entryCount(db)).toBe(entries);
+  });
+
+  it('a closed estimate is Approved or Quoted, ignored or not: neither holds the customer', async () => {
+    const alpha = await customerNamed('Alpha Works');
+    await estimateFor(alpha.id, 'APPROVED', true);
+    await estimateFor(alpha.id, 'QUOTED');
     await db.mastersService.deleteCustomer(by(), alpha.id);
     expect((await stored(alpha.id)).deleted).toBe(true);
   });

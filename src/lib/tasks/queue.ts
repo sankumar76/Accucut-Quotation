@@ -6,6 +6,8 @@
  * Open as well (the sort note says so). All three are derived from `estimates.status` and the deadline, never stored (architecture section 4.4).
  */
 
+import type { EstimateStatus } from '../estimate/state-machine';
+
 export const QUEUE_TABS = ['open', 'closed', 'overdue'] as const;
 
 export type QueueTab = (typeof QUEUE_TABS)[number];
@@ -23,8 +25,8 @@ export function isQueueTab(value: string): value is QueueTab {
   return QUEUE_TABS.some((tab) => tab === value);
 }
 
-/** The status of an estimate, which is what a row shows until story 04.04 words it for the Engineer. */
-export type TaskEstimateStatus = 'DRAFT' | 'PREPARED' | 'APPROVED';
+/** The status of an estimate, which is what a row shows until story 04.04 words it for the Engineer: the state machine's, so a status added there reaches the queue. */
+export type TaskEstimateStatus = EstimateStatus;
 
 /** How many tasks each tab holds for the person asking (an Engineer's own, or every task for a Lead and an Admin). */
 export interface QueueCounts {

@@ -35,6 +35,10 @@ export interface FakeEstimate {
   currentCalculationId?: string | null;
   /** The configuration version that calculation was made with (STORY-08.05); absent counts as none. */
   configVersionId?: string | null;
+  /** CR-01 item 7B: when the Ignored layer was set over the status; absent counts as not ignored. The fake has no `ignore_remarks`: a test of the layer sets the time only. */
+  ignoredAt?: Date | null;
+  /** CR-01 item 7B: who marked the estimate as quoted, set by `setStatus` on the way to QUOTED and cleared on the way out; absent counts as none. */
+  quotedBy?: string | null;
 }
 
 /** A part of an estimate's tree as the fake holds it: what the real table keeps, by estimate. */
@@ -162,12 +166,14 @@ export function createFakeEstimateWorld(
         subject: estimate.subject ?? 'Invented subject',
         notes: estimate.notes,
         assignedByName: estimate.assignedByName,
+        quoted: estimate.quotedBy == null ? null : { at: lastWritten, byId: estimate.quotedBy },
+        ignored: estimate.ignoredAt == null ? null : { at: estimate.ignoredAt, byId: 'invented-person', remarks: 'Invented remarks.' },
       };
       return Promise.resolve(record);
     },
     findEstimateAccess: (id) => {
       const estimate = estimates.find((candidate) => same(candidate.id, id));
-      return Promise.resolve(estimate === undefined ? null : { id: estimate.id, engineerId: estimate.engineerId, status: estimate.status });
+      return Promise.resolve(estimate === undefined ? null : { id: estimate.id, engineerId: estimate.engineerId, status: estimate.status, ignoredAt: estimate.ignoredAt ?? null });
     },
     findConfigurationBasis: (id) => {
       const estimate = estimates.find((candidate) => same(candidate.id, id));
@@ -175,7 +181,7 @@ export function createFakeEstimateWorld(
     },
     lockEstimate: (id) => {
       const estimate = estimates.find((candidate) => same(candidate.id, id));
-      const lock: EstimateLock | null = estimate === undefined ? null : { id: estimate.id, engineerId: estimate.engineerId, status: estimate.status, customerId: estimate.customerId, inputsRevision: estimate.inputsRevision, taskCode: estimate.code };
+      const lock: EstimateLock | null = estimate === undefined ? null : { id: estimate.id, engineerId: estimate.engineerId, status: estimate.status, customerId: estimate.customerId, ignoredAt: estimate.ignoredAt ?? null, inputsRevision: estimate.inputsRevision, taskCode: estimate.code };
       return Promise.resolve(lock);
     },
     findActiveCustomer: (id) => {
@@ -205,10 +211,14 @@ export function createFakeEstimateWorld(
       estimate.inputsRevision += 1;
       return Promise.resolve();
     },
-    setStatus: (estimateId, from, to) => {
+    setStatus: (estimateId, from, to, _tx, quotedBy) => {
       const estimate = estimates.find((candidate) => same(candidate.id, estimateId));
       if (estimate === undefined || estimate.status !== from) return Promise.resolve(false);
+      if (to === 'QUOTED' && quotedBy === undefined) return Promise.reject(new Error('Marking an estimate as quoted needs the person who quoted it.'));
       estimate.status = to;
+      // As the real UPDATE does: the quote columns move with the status, in the same write.
+      if (to === 'QUOTED') estimate.quotedBy = quotedBy ?? null;
+      else delete estimate.quotedBy;
       statusWrites += 1;
       return Promise.resolve(true);
     },

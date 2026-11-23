@@ -9,7 +9,7 @@ import { UnlockButton } from '@/components/features/estimate-unlock/unlock-butto
 import { Button } from '@/components/ui/button';
 import type { RoleName } from '@/lib/auth/roles';
 import { approveRatesLine } from '@/lib/estimate/rates-changed-copy';
-import type { EstimateStatus } from '@/lib/estimate/state-machine';
+import { isLocked, type EstimateStatus } from '@/lib/estimate/state-machine';
 import { formatRupees } from '@/lib/money';
 import type { CostsView } from '@/server/views/schemas/costs';
 
@@ -223,7 +223,7 @@ export function ReviewActions({ estimateId, code, state, status, calculated, app
           )}
         </div>
         <div className="flex flex-col gap-s-1">
-          {status === 'APPROVED' ? (
+          {isLocked(status) ? (
             <UnlockButton id={REVIEW_UNLOCK_ID} label={UNLOCK_LABEL} failedLine={UNLOCK_FIRST_OPEN_FAILED} estimateId={estimateId} code={code} />
           ) : (
             <ApproveControl estimateId={estimateId} state={state} status={status} approve={approve} />
@@ -242,7 +242,7 @@ export function ReviewActions({ estimateId, code, state, status, calculated, app
               engineerName={cancel.engineerName}
             />
           </div>
-        ) : status === 'APPROVED' ? null : (
+        ) : isLocked(status) ? null : (
           // An approved estimate says it in its notice ("Locked. ... Only the Admin can cancel an approval."); a Draft or Prepared one whose approval was kept through an unlock says it here.
           <Reason id={CANCEL_REASON_ID} text={ONLY_ADMIN_CANCELS} />
         )}

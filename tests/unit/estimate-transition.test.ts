@@ -274,7 +274,7 @@ describe('AC-2: assertEditable, the one check every input write shares', () => {
   ])('a %s estimate is refused for %o with 409 ESTIMATE_NOT_EDITABLE and the words of the form', (status, viewer) => {
     let refusal: unknown;
     try {
-      assertEditable(viewer, { status });
+      assertEditable(viewer, { status, ignoredAt: null });
     } catch (error) {
       refusal = error;
     }
@@ -291,7 +291,7 @@ describe('AC-2: assertEditable, the one check every input write shares', () => {
     ['PREPARED', lead],
     ['PREPARED', admin],
   ])('a %s estimate may be changed by %o', (status, viewer) => {
-    expect(() => assertEditable(viewer, { status })).not.toThrow();
+    expect(() => assertEditable(viewer, { status, ignoredAt: null })).not.toThrow();
   });
 });
 
@@ -388,5 +388,109 @@ describe('SQR-01: transition joins the transaction its caller gives it', () => {
     expect(stored().status).toBe('APPROVED');
     const stranger = await caught(strict.runner.run((tx) => service.transition(priya, ESTIMATE, 'CALCULATE', tx)));
     expect(stranger).toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe('AQP-399 (CR-01 item 7B): Quoted and the Ignored layer, applied to a stored estimate', () => {
+  it.each([
+    ['a Lead', lead, LEAD],
+    ['an Admin', admin, ADMIN],
+  ] as const)('%s marks an approved estimate as quoted: the status moves and the person is recorded with it, in one write', async (_name, viewer, personId) => {
+    const { service, stored, world } = setUp([estimate({ status: 'APPROVED' })]);
+    expect(await service.transition(viewer, ESTIMATE, 'MARK_QUOTED')).toEqual({ id: ESTIMATE, from: 'APPROVED', to: 'QUOTED' });
+    expect(stored()).toMatchObject({ status: 'QUOTED', quotedBy: personId });
+    expect(world.statusWrites()).toBe(1);
+  });
+
+  it('an Engineer marking as quoted is the same 404 on their own estimate whatever its status, and nothing changes', async () => {
+    for (const status of ['DRAFT', 'PREPARED', 'APPROVED', 'QUOTED'] as const) {
+      const { service, stored } = setUp([estimate({ status })]);
+      expect(await caught(service.transition(arjun, ESTIMATE, 'MARK_QUOTED'))).toBeInstanceOf(NotFoundError);
+      expect(stored().status).toBe(status);
+    }
+  });
+
+  it.each<[EstimateStatus, keyof typeof TRANSITION_REFUSALS]>([
+    ['DRAFT', 'NOT_APPROVED'],
+    ['PREPARED', 'NOT_APPROVED'],
+    ['QUOTED', 'ALREADY_QUOTED'],
+  ])('marking a %s estimate as quoted is refused as %s, and the estimate is as it was', async (status, reason) => {
+    const { service, stored, world } = setUp([estimate({ status })]);
+    const refusal = await caught(service.transition(lead, ESTIMATE, 'MARK_QUOTED'));
+    expect(refusal).toBeInstanceOf(ConflictError);
+    expect((refusal as ConflictError).code).toBe(TRANSITION_REFUSALS[reason].code);
+    expect(stored()).toEqual(estimate({ status }));
+    expect(world.statusWrites()).toBe(0);
+  });
+
+  it.each([
+    ['UNLOCK', lead],
+    ['UNLOCK', admin],
+    ['CANCEL', admin],
+  ] as const)('%s by a %o takes a quoted estimate to DRAFT and the quote marker goes with it, in the same write (A-CR01-1)', async (event, viewer) => {
+    const { service, stored, world } = setUp([estimate({ status: 'APPROVED' })]);
+    await service.transition(lead, ESTIMATE, 'MARK_QUOTED');
+    expect(stored().quotedBy).toBe(LEAD);
+    expect(await service.transition(viewer, ESTIMATE, event)).toEqual({ id: ESTIMATE, from: 'QUOTED', to: 'DRAFT' });
+    expect(stored()).toEqual(estimate({ status: 'DRAFT' }));
+    expect(world.statusWrites()).toBe(2);
+  });
+
+  it('a quoted estimate refuses Calculate, Recalculate, Edit and Approve with the locked words of an approved one (AC-4), and Export leaves it QUOTED', async () => {
+    for (const [event, viewer] of [['CALCULATE', arjun], ['RECALCULATE', lead], ['EDIT', lead], ['APPROVE', lead]] as const) {
+      const { service, stored, world } = setUp([estimate({ status: 'QUOTED', quotedBy: LEAD })]);
+      const refusal = await caught(service.transition(viewer, ESTIMATE, event));
+      // An Engineer's Calculate on their own task is a refusal of state; every other event of theirs is the 404 of the role, so the Engineer is told nothing but what Calculate says.
+      expect(refusal, event).toBeInstanceOf(ConflictError);
+      expect((refusal as ConflictError).code).toBe(TRANSITION_REFUSALS.APPROVED_IS_LOCKED.code);
+      expect((refusal as ConflictError).message).toBe(TRANSITION_REFUSALS.APPROVED_IS_LOCKED.message);
+      expect(stored().status).toBe('QUOTED');
+      expect(world.statusWrites()).toBe(0);
+    }
+    const { service, stored } = setUp([estimate({ status: 'QUOTED', quotedBy: LEAD })]);
+    expect(await service.transition(lead, ESTIMATE, 'EXPORT')).toEqual({ id: ESTIMATE, from: 'QUOTED', to: 'QUOTED' });
+    expect(stored()).toMatchObject({ status: 'QUOTED', quotedBy: LEAD });
+  });
+
+  it.each(['DRAFT', 'PREPARED', 'APPROVED'] as const)('an ignored %s estimate refuses every event with ESTIMATE_IGNORED, Export included, and nothing changes', async (status) => {
+    const ignoredAt = new Date('2026-11-23T10:00:00.000Z');
+    for (const [event, viewer] of [['CALCULATE', arjun], ['RECALCULATE', lead], ['EDIT', lead], ['APPROVE', lead], ['UNLOCK', lead], ['CANCEL', admin], ['EXPORT', lead], ['MARK_QUOTED', lead]] as const) {
+      const { service, stored, world } = setUp([estimate({ status, ignoredAt })]);
+      const refusal = await caught(service.transition(viewer, ESTIMATE, event));
+      expect(refusal, `${status} ${event}`).toBeInstanceOf(ConflictError);
+      expect((refusal as ConflictError).code).toBe('ESTIMATE_IGNORED');
+      expect((refusal as ConflictError).message).toBe('This estimate is ignored. Restore it first.');
+      expect(stored()).toEqual(estimate({ status, ignoredAt }));
+      expect(world.statusWrites()).toBe(0);
+    }
+  });
+
+  it('Ignore and Restore are allowed by the machine, but the status transition does not write the layer, so it refuses to report them as done (story 7D writes them)', async () => {
+    for (const [event, ignoredAt] of [['IGNORE', null], ['RESTORE', new Date('2026-11-23T10:00:00.000Z')]] as const) {
+      const { service, stored, world } = setUp([estimate({ status: 'PREPARED', ignoredAt })]);
+      const failure = await caught(service.transition(lead, ESTIMATE, event));
+      expect(failure).toBeInstanceOf(Error);
+      expect(failure).not.toBeInstanceOf(ConflictError);
+      expect((failure as Error).message).toBe('Ignore and Restore are not written by the status transition.');
+      expect(stored()).toEqual(estimate({ status: 'PREPARED', ignoredAt }));
+      expect(world.statusWrites()).toBe(0);
+    }
+  });
+
+  it('assertEditable refuses a quoted estimate for everyone with the words of the form, and an ignored one with its own code, whatever the status underneath', () => {
+    const refused = (viewer: EstimateViewer, status: EstimateStatus, ignoredAt: Date | null): ConflictError => {
+      try {
+        assertEditable(viewer, { status, ignoredAt });
+      } catch (error) {
+        return error as ConflictError;
+      }
+      throw new Error('assertEditable should have refused.');
+    };
+    for (const viewer of [arjun, lead, admin]) {
+      expect(refused(viewer, 'QUOTED', null)).toMatchObject({ httpStatus: 409, code: ESTIMATE_NOT_EDITABLE_CODE, message: NOT_EDITABLE_MESSAGE });
+      for (const status of ['DRAFT', 'PREPARED', 'APPROVED'] as const) {
+        expect(refused(viewer, status, new Date('2026-11-23T10:00:00.000Z'))).toMatchObject({ httpStatus: 409, code: 'ESTIMATE_IGNORED', message: 'This estimate is ignored. Restore it first.' });
+      }
+    }
   });
 });

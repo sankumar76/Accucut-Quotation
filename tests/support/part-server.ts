@@ -21,6 +21,7 @@ const state = {
   /** The number (1 is the first save since `reset`) of the save that waits for `hold`, or 0 for the next one. */
   holdAt: 0,
   failNext: false,
+  failAfterHold: false,
   refuseNext: false,
   churn: false,
 };
@@ -36,6 +37,7 @@ export const partServer = {
     state.hold = null;
     state.holdAt = 0;
     state.failNext = false;
+    state.failAfterHold = false;
     state.refuseNext = false;
     state.churn = false;
   },
@@ -48,6 +50,10 @@ export const partServer = {
   /** The next save is lost on the way, as a dropped connection loses it: no answer came. */
   failNextSave(): void {
     state.failNext = true;
+  },
+  /** The next held save reaches the server and is lost when it is let go, as a dropped connection loses it: it was sent, and no answer came. */
+  failAfterHold(): void {
+    state.failAfterHold = true;
   },
   /** The next save is refused by the server's own rule (422) for the field it carries, though the text passed the screen's rule. */
   refuseNextSave(): void {
@@ -98,6 +104,10 @@ export const partServer = {
       state.holdAt = 0;
     }
     if (held !== null) await held;
+    if (held !== null && state.failAfterHold) {
+      state.failAfterHold = false;
+      return { status: 'failed' };
+    }
     if (state.churn) {
       state.inputs = { ...state.inputs, c: '1.00' };
       state.revision += 1;
