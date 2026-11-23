@@ -133,12 +133,13 @@ describe('the loaded menu', () => {
 
 describe('the "+" and the "-" of a row', () => {
   const part = (nodeKind: PartItem['nodeKind']): PartItem => ({ id: 'p1', parentId: 'm1', slNo: '1.1', label: 'Plate', nodeKind, completeness: 'EMPTY', revision: 1 });
+  const PLACES = { upTo: 0, downTo: 2, onMoveTo: vi.fn() };
   const buttons = (tree: ReactNode) => elementsIn(tree).filter((element) => typeof element.props['aria-label'] === 'string' || element.type === AddNodeTrigger);
 
   it('puts the direct "+" and the "-" out of reach while a change is on its way: aria-disabled, the look, described by the line, and a press does nothing', () => {
     const onAdd = vi.fn();
     const onDelete = vi.fn();
-    const tree = RowActions({ part: part('PART'), onAdd, onDelete, busy: true, describedBy: 'parts-tree-changing' });
+    const tree = RowActions({ part: part('PART'), onAdd, onDelete, ...PLACES, busy: true, describedBy: 'parts-tree-changing' });
     const [add, remove] = buttons(tree);
     expect(add?.props).toMatchObject({ unavailable: true, 'aria-describedby': 'parts-tree-changing' });
     expect(add?.props['onClick']).toBeUndefined();
@@ -150,7 +151,7 @@ describe('the "+" and the "-" of a row', () => {
   });
 
   it('does not describe them by a line that is not on screen', () => {
-    const [add, remove] = buttons(RowActions({ part: part('PART'), onAdd: vi.fn(), onDelete: vi.fn(), busy: true }));
+    const [add, remove] = buttons(RowActions({ part: part('PART'), onAdd: vi.fn(), onDelete: vi.fn(), ...PLACES, busy: true }));
     expect(add?.props).not.toHaveProperty('aria-describedby');
     expect(remove?.props).not.toHaveProperty('aria-describedby');
   });
@@ -158,7 +159,7 @@ describe('the "+" and the "-" of a row', () => {
   it('leaves them as they were when nothing is on its way, and a press goes through', () => {
     const onAdd = vi.fn();
     const onDelete = vi.fn();
-    const [add, remove] = buttons(RowActions({ part: part('PART'), onAdd, onDelete }));
+    const [add, remove] = buttons(RowActions({ part: part('PART'), onAdd, onDelete, ...PLACES }));
     expect(add?.props['unavailable']).toBe(false);
     expect(remove?.props).not.toHaveProperty('aria-disabled');
     (add?.props['onClick'] as () => void)();
@@ -168,7 +169,7 @@ describe('the "+" and the "-" of a row', () => {
   });
 
   it('hands the state to the "+" menu of a Main Assembly row', () => {
-    const menu = elementsIn(RowActions({ part: part('MAIN_ASSEMBLY'), onAdd: vi.fn(), onDelete: vi.fn(), busy: true, describedBy: 'parts-tree-changing' })).find((element) => element.type === AddNodeMenu);
+    const menu = elementsIn(RowActions({ part: part('MAIN_ASSEMBLY'), onAdd: vi.fn(), onDelete: vi.fn(), ...PLACES, busy: true, describedBy: 'parts-tree-changing' })).find((element) => element.type === AddNodeMenu);
     expect(menu?.props).toMatchObject({ unavailable: true, describedBy: 'parts-tree-changing' });
   });
 });
