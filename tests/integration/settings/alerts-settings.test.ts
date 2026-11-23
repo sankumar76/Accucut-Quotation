@@ -74,7 +74,6 @@ const SAVED = { alertsEnabled: true, senderName: 'Accucut Portal', senderAddress
 beforeAll(async () => {
   db = await openAuthDatabase();
   capture = openMailCapture();
-  await capture.clear();
   outbox = createEmailOutboxRepository(db.prisma);
   transactions = createTransactionRunner(db.prisma);
   adminId = await plantUser('Invented Admin', ADMIN_ADDRESS, 'ADMIN');
