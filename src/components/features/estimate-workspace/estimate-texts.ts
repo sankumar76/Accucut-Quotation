@@ -84,6 +84,10 @@ export const TREE_ALL_INPUTS = 'All inputs entered';
 
 export const TREE_CHANGED_NOTICE = 'The parts were changed by someone else. The tree has been refreshed. Check it and try again.';
 export const TREE_FAILED_TITLE = 'The change was not made';
+/** Shown above the tree, and spoken, while a change to the tree is still open after 300 ms (AQP-343, DL-340; ux-expert's words, AQP-343 comment 12880). The pattern of "Calculating. This takes a moment." */
+export const TREE_CHANGING = 'Updating the parts. This takes a moment.';
+/** The ID of the visible line above: the buttons that are `aria-disabled` while it shows point at it (`aria-describedby`). */
+export const TREE_CHANGING_ID = 'parts-tree-changing';
 export const treeButtonLabel = (slNo: string | null): string => (slNo === null ? TREE_TITLE : `${TREE_TITLE}, part ${slNo}`);
 
 export const addedMessage = (slNo: string): string => `Part ${slNo} added`;
