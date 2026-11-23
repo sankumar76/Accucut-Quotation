@@ -1,22 +1,9 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
-import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
-import { canaryTaskCodeFor } from '../support/estimate-recipe';
-import { MATERIAL_CANARIES } from '../support/material-master-canary';
 
-import {
-  createDisposableUser,
-  E2E_ADMIN,
-  E2E_PASSWORD,
-  ensureCanaryCustomers,
-  ensureCanaryMaterials,
-  makeCanaryEstimateCalculable,
-  readEstimateState,
-  signInThroughThePage,
-  useFreshAddress,
-  type E2eUser,
-} from './support/auth';
+import { createDisposableUser, E2E_ADMIN, useFreshAddress } from './support/auth';
+import { calculateWithoutThePage, engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
 
 /**
@@ -26,6 +13,10 @@ import { expectNoAxeViolations, horizontalOverflow } from './support/design-syst
  * their reasons; that an Engineer who opens the same address gets their own workspace and a 403 from `/costs`; no sideways scroll and no axe violation. The words are the UX spec's and the story's,
  * written out here and not imported. The figures themselves are held by `tests/unit/estimate-review-*.test.ts` against the constructed cases, and the cost scan reads the same page as an Engineer
  * (`canary-scan.spec.ts`). Every name and path is invented.
+ *
+ * Set-up (AQP-415, DEF-072): the Engineer and the Lead are signed in with the two calls the sign-in page makes, and the Engineer's Calculate is the request the button sends, **without** the sign-in screen, the queue
+ * and the Engineer's workspace page (`support/calculated-estimate.ts`). The subject here is the review page, and those page loads were most of a case's 30 s on the development server of a loaded runner (a
+ * set-up of 18 to 20 s at 768 px, before the case's own steps and its one axe scan of AC-9). The sign-in screen is judged by `sign-in.spec.ts`.
  */
 
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -35,36 +26,9 @@ test.beforeEach(async ({ context }) => {
   await useFreshAddress(context);
 });
 
-const ALPHA_CUSTOMER_ID = defined(CUSTOMER_CANARIES[0]).id;
-const ALPHA_MATERIAL_ID = defined(MATERIAL_CANARIES[0]).id;
 const PHONE_MAX = 767;
 const FIGURE = /^[\d,]+\.\d{2}$/;
 const RUPEES = /^₹ [\d,]+\.\d{2}$/;
-
-async function signInAs(page: Page, person: E2eUser): Promise<void> {
-  await page.context().clearCookies();
-  await page.goto('/sign-in');
-  await signInThroughThePage(page, person.email, E2E_PASSWORD);
-  await expect(page).toHaveURL(/\/queue$/);
-}
-
-/** An Engineer with an estimate that can be calculated: the customer chosen and one part holding every input. */
-async function engineerWithEstimate(testInfo: TestInfo) {
-  await ensureCanaryCustomers();
-  await ensureCanaryMaterials();
-  const owner = await createDisposableUser('scan', testInfo);
-  await makeCanaryEstimateCalculable(owner.id, ALPHA_MATERIAL_ID, ALPHA_CUSTOMER_ID);
-  return { owner, code: canaryTaskCodeFor(owner.id) };
-}
-
-/** The Engineer presses Calculate through the portal (the same request the button sends), and the estimate is Prepared. */
-async function calculateAsEngineer(page: Page, owner: E2eUser & { readonly id: string }, code: string): Promise<void> {
-  await signInAs(page, owner);
-  await page.goto(`/estimates/${code}`);
-  const status = await page.evaluate(async (id) => (await fetch(`/api/v1/estimates/${id}/calculate`, { method: 'POST' })).status, owner.id);
-  expect(status).toBe(200);
-  expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
-}
 
 async function openAsLead(page: Page, testInfo: TestInfo, code: string, role: 'LEAD' | 'ADMIN' = 'LEAD'): Promise<void> {
   // There is one active Admin in the database (the E2E Admin of the setup project), so an Admin is not made for the test.
@@ -83,7 +47,7 @@ const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <
 test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
   test('AC-1: the tiles show BL in rupees, BN and BO, each with its letter tag and its file cell once', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
-    await calculateAsEngineer(page, owner, code);
+    await calculateWithoutThePage(page, owner);
     await openAsLead(page, testInfo, code);
 
     await expect(tiles(page)).toContainText('Total Unit Production Price');
@@ -98,7 +62,7 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
 
   test('AC-2: every row shows its own figure with its count beside it, and the legend says so', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
-    await calculateAsEngineer(page, owner, code);
+    await calculateWithoutThePage(page, owner);
     await openAsLead(page, testInfo, code);
 
     const rows = treePanel(page).locator('[data-part-row]');
@@ -111,7 +75,7 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
 
   test('AC-3: "How the total is built" lists the row and ends with the total, which is the figure of the BL tile, under the example and the rounding sentence', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
-    await calculateAsEngineer(page, owner, code);
+    await calculateWithoutThePage(page, owner);
     await openAsLead(page, testInfo, code);
 
     await expect(buildPanel(page)).not.toHaveAttribute('open', '');
@@ -129,7 +93,7 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
 
   test('AC-2: an Admin sees the same review', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
-    await calculateAsEngineer(page, owner, code);
+    await calculateWithoutThePage(page, owner);
     await openAsLead(page, testInfo, code, 'ADMIN');
     await expect(tiles(page)).toContainText('File cell BL2');
   });
@@ -165,7 +129,7 @@ test.describe('AC-6: not calculated', () => {
 test.describe('AC-5 (NFR-002): an Engineer at the same address', () => {
   test('the owner gets their own workspace and no review; `/costs` is the fixed 403 and holds no figure; another Engineer gets "not found"', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
-    await calculateAsEngineer(page, owner, code);
+    await calculateWithoutThePage(page, owner);
 
     const own = await page.goto(`/estimates/${code}`);
     expect(own?.status()).toBe(200);
@@ -191,7 +155,7 @@ test.describe('AC-5 (NFR-002): an Engineer at the same address', () => {
 
   test('a Lead is answered by `/costs` with the state and the figures, and nobody signed in is 401', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
-    await calculateAsEngineer(page, owner, code);
+    await calculateWithoutThePage(page, owner);
     await openAsLead(page, testInfo, code);
     const answer = await page.evaluate(async (id) => {
       const response = await fetch(`/api/v1/estimates/${id}/costs`);
@@ -209,7 +173,7 @@ test.describe('AC-5 (NFR-002): an Engineer at the same address', () => {
 test.describe('AC-9: layout and accessibility', () => {
   test('a calculated estimate: no sideways scroll, tiles stack on a phone and sit side by side from 768, the tree folds away, axe finds nothing', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
-    await calculateAsEngineer(page, owner, code);
+    await calculateWithoutThePage(page, owner);
     await openAsLead(page, testInfo, code);
 
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
