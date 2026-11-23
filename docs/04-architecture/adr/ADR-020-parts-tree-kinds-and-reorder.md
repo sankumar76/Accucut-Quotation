@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Proposed (2026-11-22), for `master` to log |
+| Status | Accepted (2026-11-23, A-CR01-5 confirmed by the customer, DL-337), for `master` to log. Proposed 2026-11-22 |
 | Date | 2026-11-22 |
 | Deciders | solution-architect (+ Santhosh, delivery lead) |
 | Related | CR-01 item 3 (UX spec 0.34 section 0.9 row 3); FR-043, FR-044; NFR-009, NFR-017, NFR-018 (WCAG 2.2 SC 2.5.7); ADR-016; architecture sections 4.8, 4.12 e and 5.1 |
@@ -56,8 +56,8 @@ The Move up / Move down menu (lazy, through `first-open`) is the full way withou
 ## Decision
 
 - **Kind:** Option K1.
-- **Reorder:** Option R1, with the server refusing a move across parents (422 `MOVE_ACROSS_PARENTS`) while A-CR01-5 holds.
-- **Trigger to revisit R1 for R2:** if the customer answers A-CR01-5 with "allow other parents" (drops across levels with the allowed-children check), or if R1's touch E2E proves unreliable.
+- **Reorder:** Option R1, with the server refusing a move across parents (422 `MOVE_ACROSS_PARENTS`). The customer confirmed A-CR01-5 as "Same parent only" on 2026-11-23 (ASSUMPTION-71, DL-337).
+- **Trigger to revisit R1 for R2:** if the customer later asks for moves across parents (drops across levels with the allowed-children check), or if R1's touch E2E proves unreliable.
 
 ## Consequences
 

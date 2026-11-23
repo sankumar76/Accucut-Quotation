@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Proposed (2026-11-22), for `master` to log |
+| Status | Accepted (2026-11-23, A-CR01-1, -2, -3 and -8 confirmed by the customer, DL-337), for `master` to log. Proposed 2026-11-22 |
 | Date | 2026-11-22 |
 | Deciders | solution-architect (+ Santhosh, delivery lead) |
 | Related | CR-01 item 7 (UX spec 0.34 section 0.9 rows 7 and 7c); FR-038, FR-064, FR-102; NFR-001, NFR-002, NFR-007; ADR-007, ADR-008; architecture sections 4.4 and 4.12 |
@@ -58,7 +58,7 @@ We take **Option A**:
 - **Quoted:** add `QUOTED` as a status value, with `quoted_at` and `quoted_by` on `estimates`. Unlock and Cancel clear them.
 - **Ignored:** model it as a layer of three columns over the status, with CHECKs (all or none; never over QUOTED).
 - **Transitions:** the state machine takes `{ status, ignored }` and gains `MARK_QUOTED`, `IGNORE` and `RESTORE`, for Lead and Admin only.
-- **Monday's answers:** A-CR01-1 is two cells of the state machine, A-CR01-3 is the absence of an `UNMARK_QUOTED` event, and A-CR01-2 is one queue predicate.
+- **Monday's answers:** A-CR01-1 is two cells of the state machine, A-CR01-3 is the absence of an `UNMARK_QUOTED` event, and A-CR01-2 is one queue predicate. **All three were confirmed as built on 2026-11-23 (DL-337), with A-CR01-8 "Fully frozen"**: while Ignored, every route refuses by its own check as well as through the state machine (DL-304; architecture 4.12 c), and the layer reaches every role's view as `ignored: { at, byName, remarks } | null` (architecture 4.12 c, v0.64).
 
 ## Consequences
 
