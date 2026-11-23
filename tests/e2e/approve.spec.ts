@@ -1,6 +1,6 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Request as PlaywrightRequest, type TestInfo } from '@playwright/test';
 
-import { readEstimateState, saveCanaryQuantity, useFreshAddress } from './support/auth';
+import { createDisposableUser, readEstimateState, saveCanaryQuantity, useFreshAddress } from './support/auth';
 import { calculateAsEngineer, engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
 
@@ -33,6 +33,169 @@ const approveButton = (page: Page) => page.locator('#review-approve');
 const dialogOf = (page: Page) => page.getByRole('dialog', { name: 'Approve and lock' });
 const priceField = (page: Page) => dialogOf(page).locator('#approve-price');
 const submitOf = (page: Page) => dialogOf(page).getByRole('button', { name: /^(Approve and lock|Approving)$/ });
+
+/**
+ * AQP-416 (DEF-073, DL-334 (5), DL-327 (5)): step timing for the one case of this file that has run out of its 30 s on attempt 1 and passed on the retry, "AC-8: the dialog at this width", twice, each time waiting at
+ * its last-but-one line for the product's own `#review-approved-notice`. It prints one line per step on **every** attempt at every width, not only a failed one, so the next stall names the step that used the time.
+ * Nothing here is an assertion, a timeout, a retry or a trace (CLAUDE.md section 9 item 4): the case makes the same calls in the same order with the same checks as before, and the other cases of the file are untouched.
+ *
+ * Line format (fields separated by " | "; QA greps for the prefix):
+ *   [AQP-416 step timing] <project> | attempt <n> | <case> | step <k> | <step> | <took> ms | at +<ms> ms | <detail>
+ *   [AQP-416 step timing] <project> | attempt <n> | <case> | <request> | <event> | at +<ms> ms | <detail>
+ * where "at" is counted from the start of the test body, and a `<request>` line is the Approve request (the POST of the dialog) or the refresh request (the RSC GET of `/estimates/<code>` that follows its answer), seen
+ * from the page: sent, released (the end of the 800 ms hold the case puts on the Approve route), answered (the status), and the end of the body. The last line of an attempt is
+ *   [AQP-416 step timing] <project> | attempt <n> | <case> | end | <status> | total <ms> ms | <the step standing, if any, and for how long> | Approve request: <what the page saw> | refresh request: <what the page saw>
+ * and is printed by the afterEach hook, which still runs when the 30 s are used up, so a stall names its step and says whether the Approve request was answered. Only roles and statuses are printed, never an address.
+ *
+ * The set-up repeats the calls of `calculateAsEngineer` and `signInAsLead` (support/calculated-estimate.ts) with the same checks, so that each can be timed without a change to the shared helpers: if those change,
+ * change `openedAsLeadTimed` to match or take this observation out.
+ */
+const STEP_TIMING = '[AQP-416 step timing]';
+
+interface TrackedRequest {
+  readonly name: string;
+  sentAt: number | null;
+  releasedAt: number | null;
+  answeredAt: number | null;
+  summary: string;
+}
+
+class StepTimer {
+  private readonly startedAt = Date.now();
+  private steps = 0;
+  private standing: { readonly name: string; readonly since: number } | null = null;
+  private ended = false;
+  private readonly approve: TrackedRequest = { name: 'Approve request', sentAt: null, releasedAt: null, answeredAt: null, summary: 'none was sent' };
+  private readonly refresh: TrackedRequest = { name: 'refresh request', sentAt: null, releasedAt: null, answeredAt: null, summary: 'none was sent after the answer' };
+
+  constructor(
+    private readonly testInfo: TestInfo,
+    private readonly label: string,
+  ) {}
+
+  private prefix(): string {
+    return `${STEP_TIMING} ${this.testInfo.project.name} | attempt ${String(this.testInfo.retry + 1)} | ${this.label}`;
+  }
+
+  private print(text: string): void {
+    process.stdout.write(`${this.prefix()} | ${text}${this.ended ? ' | printed after the end line' : ''}\n`);
+  }
+
+  private elapsed(): string {
+    return `at +${String(Date.now() - this.startedAt)} ms`;
+  }
+
+  /** Runs one step, prints its line (also when it throws), and keeps it as the standing step while it runs. */
+  async step<T>(name: string, run: () => Promise<T>, describe: (value: T) => string = () => ''): Promise<T> {
+    this.steps += 1;
+    const number = this.steps;
+    const began = Date.now();
+    this.standing = { name, since: began };
+    const print = (detail: string): void => {
+      const tail = detail === '' ? '' : ` | ${detail}`;
+      this.print(`step ${String(number)} | ${name} | ${String(Date.now() - began)} ms | ${this.elapsed()}${tail}`);
+    };
+    try {
+      const value = await run();
+      print(describe(value));
+      return value;
+    } catch (error) {
+      print(`FAILED: ${(error instanceof Error ? error.message : String(error)).split('\n')[0]?.slice(0, 200) ?? ''}`);
+      throw error;
+    } finally {
+      if (!this.ended) this.standing = null;
+    }
+  }
+
+  /** The Approve route's hold is over and the request goes on to the server. */
+  released(): void {
+    this.approve.releasedAt = Date.now();
+    this.print(`${this.approve.name} | released | ${this.elapsed()} | the ${String(SLOW_MILLISECONDS)} ms hold of the case is over`);
+  }
+
+  /** Prints what the page sees of the Approve request and of the refresh that follows its answer. Passive: the listeners change nothing the case does. */
+  watch(page: Page): void {
+    const which = (request: PlaywrightRequest): TrackedRequest | null => {
+      const { pathname } = new URL(request.url());
+      if (request.method() === 'POST' && pathname.endsWith('/approve')) return this.approve;
+      if (this.approve.answeredAt !== null && request.method() === 'GET' && request.url().includes('_rsc=') && pathname.startsWith('/estimates/')) return this.refresh;
+      return null;
+    };
+    const since = (from: number | null): string => (from === null ? 'no start' : `${String(Date.now() - from)} ms`);
+    page.on('request', (request) => {
+      const tracked = which(request);
+      if (tracked === null) return;
+      tracked.sentAt = Date.now();
+      tracked.summary = 'sent, not answered yet';
+      this.print(`${tracked.name} | sent | ${this.elapsed()}`);
+    });
+    page.on('response', (response) => {
+      const tracked = which(response.request());
+      if (tracked === null) return;
+      tracked.answeredAt = Date.now();
+      const released = tracked.releasedAt === null ? '' : ` | ${since(tracked.releasedAt)} after the hold was released`;
+      tracked.summary = `answered with status ${String(response.status())}, ${since(tracked.sentAt)} after it was sent${released}`;
+      this.print(`${tracked.name} | answered | ${this.elapsed()} | status ${String(response.status())} | ${since(tracked.sentAt)} after sent${released}`);
+    });
+    page.on('requestfinished', (request) => {
+      const tracked = which(request);
+      if (tracked !== null) this.print(`${tracked.name} | body end | ${this.elapsed()} | ${since(tracked.sentAt)} after sent`);
+    });
+    page.on('requestfailed', (request) => {
+      const tracked = which(request);
+      if (tracked === null) return;
+      tracked.summary = `FAILED after ${since(tracked.sentAt)}: ${request.failure()?.errorText ?? 'no reason'}`;
+      this.print(`${tracked.name} | FAILED | ${this.elapsed()} | ${tracked.summary}`);
+    });
+  }
+
+  /** The last line of an attempt: how it ended, the step that was still running, and what the page had seen of the two requests. */
+  finish(): void {
+    const now = Date.now();
+    const standing = this.standing === null ? 'no step was standing' : `STANDING STEP: ${this.standing.name} for ${String(now - this.standing.since)} ms`;
+    this.print(`end | ${String(this.testInfo.status)} | total ${String(now - this.startedAt)} ms | ${standing} | Approve request: ${this.approve.summary} | refresh request: ${this.refresh.summary}`);
+    this.ended = true;
+  }
+}
+
+const stepTimers = new Map<string, StepTimer>();
+
+function startStepTiming(testInfo: TestInfo, label: string): StepTimer {
+  const timer = new StepTimer(testInfo, label);
+  stepTimers.set(testInfo.testId, timer);
+  return timer;
+}
+
+// Runs after a test that used up its time too, so the end line of a stalled attempt names the step that was standing.
+test.afterEach(() => {
+  const testInfo = test.info();
+  stepTimers.get(testInfo.testId)?.finish();
+  stepTimers.delete(testInfo.testId);
+});
+
+const statusOf = (response: { status(): number } | null): string => `status ${response === null ? 'none' : String(response.status())}`;
+
+/** `openedAsLead` with its steps timed: the same calls, in the same order, with the same checks. */
+async function openedAsLeadTimed(timer: StepTimer, page: Page, testInfo: TestInfo) {
+  const { owner, code } = await timer.step('Engineer and estimate made', () => engineerWithEstimate(testInfo));
+  await timer.step('Engineer sign-in', () => signInAs(page, owner));
+  await timer.step('Engineer estimate page: goto', () => page.goto(`/estimates/${code}`), (response) => statusOf(response));
+  const status = await timer.step(
+    'Engineer Calculate: fetch',
+    () => page.evaluate(async (id) => (await fetch(`/api/v1/estimates/${id}/calculate`, { method: 'POST' })).status, owner.id),
+    (value) => `status ${String(value)}`,
+  );
+  expect(status).toBe(200);
+  expect(await timer.step('Engineer Calculate: read the estimate state', () => readEstimateState(owner.id))).toEqual({ status: 'PREPARED', calculations: 1 });
+  const lead = await timer.step('Lead made', () => createDisposableUser('axe', testInfo, 'LEAD'));
+  await timer.step('Lead sign-in', () => signInAs(page, lead));
+  const response = await timer.step('Lead review page: goto', () => page.goto(`/estimates/${code}`), (answer) => statusOf(answer));
+  expect(response?.status()).toBe(200);
+  await timer.step('Lead review page: heading is the code', () => expect(page.getByRole('heading', { level: 1 })).toHaveText(code));
+  await timer.step('Lead review page: Approve enabled', () => expect(approveButton(page)).toBeEnabled());
+  await timer.step('Lead review page: Approve hydrated', () => waitUntilHydrated(page, '#review-approve'));
+  return { owner, code };
+}
 
 /** A calculated estimate opened as a Lead, with the figures current and Approve and lock on. */
 async function openedAsLead(page: Page, testInfo: Parameters<typeof signInAsLead>[1]) {
@@ -99,35 +262,44 @@ test.describe('AC-1: the dialog', () => {
 
 test.describe('AC-8: the dialog at this width', () => {
   test('is keyboard operable, has no sideways scroll and no axe violation, and shows "Approving" while the request is under way', async ({ page }, testInfo) => {
-    const { owner } = await openedAsLead(page, testInfo);
+    const timer = startStepTiming(testInfo, 'AC-8');
+    const { owner } = await openedAsLeadTimed(timer, page, testInfo);
+    timer.watch(page);
     await page.route(APPROVE_ROUTE, async (route) => {
       await new Promise<void>((resolve) => {
         setTimeout(resolve, SLOW_MILLISECONDS);
       });
+      timer.released();
       await route.continue();
     });
-    await approveButton(page).focus();
-    await page.keyboard.press('Enter');
-    await expect(dialogOf(page)).toBeVisible();
-    await expect(priceField(page)).toBeFocused();
-    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectNoAxeViolations(page);
+    await timer.step('Approve button: focus, Enter', async () => {
+      await approveButton(page).focus();
+      await page.keyboard.press('Enter');
+    });
+    await timer.step('dialog is visible', () => expect(dialogOf(page)).toBeVisible());
+    await timer.step('price field is focused', () => expect(priceField(page)).toBeFocused());
+    expect(await timer.step('horizontal overflow read', () => horizontalOverflow(page))).toBeLessThanOrEqual(0);
+    await timer.step('axe scan, dialog open', () => expectNoAxeViolations(page));
 
     // Tab stays inside the dialog: price, Cancel, Approve and lock, and round again.
     const inside = dialogOf(page).locator(':focus');
-    for (let press = 0; press < 5; press += 1) {
-      await page.keyboard.press('Tab');
-      await expect(inside).toHaveCount(1);
-    }
+    await timer.step('five Tab presses inside the dialog', async () => {
+      for (let press = 0; press < 5; press += 1) {
+        await page.keyboard.press('Tab');
+        await expect(inside).toHaveCount(1);
+      }
+    });
 
-    await priceField(page).focus();
-    await page.keyboard.press('Enter');
-    await expect(dialogOf(page).getByRole('button', { name: 'Approving' })).toBeDisabled();
+    await timer.step('price field: focus, Enter (the approval is sent)', async () => {
+      await priceField(page).focus();
+      await page.keyboard.press('Enter');
+    });
+    await timer.step('"Approving" button is disabled', () => expect(dialogOf(page).getByRole('button', { name: 'Approving' })).toBeDisabled());
     // The dialog cannot be dismissed while the request is under way.
-    await page.keyboard.press('Escape');
-    await expect(dialogOf(page)).toBeVisible();
-    await expect(page.locator('#review-approved-notice')).toBeVisible();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'APPROVED', calculations: 1 });
+    await timer.step('Escape pressed', () => page.keyboard.press('Escape'));
+    await timer.step('dialog is still visible', () => expect(dialogOf(page)).toBeVisible());
+    await timer.step('approved notice is visible (#review-approved-notice)', () => expect(page.locator('#review-approved-notice')).toBeVisible());
+    expect(await timer.step('estimate state read', () => readEstimateState(owner.id))).toEqual({ status: 'APPROVED', calculations: 1 });
   });
 });
 
