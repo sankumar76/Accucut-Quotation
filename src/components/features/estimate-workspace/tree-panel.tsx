@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowDown, ArrowUp, Plus, type LucideIcon } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
@@ -14,6 +14,7 @@ import { ADD_MAIN_ASSEMBLY } from '@/lib/estimates/tree-actions';
 import type { PartItem } from '@/lib/estimates/tree-client';
 import { stepOf } from '@/lib/estimates/tree-moves';
 
+import { UNAVAILABLE_LOOK } from './add-node-trigger';
 import type { DeletePartDialogProps } from './delete-part-dialog';
 import {
   FAILED_BODY,
@@ -21,6 +22,8 @@ import {
   TREE_EMPTY,
   TREE_FAILED_TITLE,
   TREE_LOAD_FAILED_TITLE,
+  TREE_CHANGING,
+  TREE_CHANGING_ID,
   TREE_LOADING,
   TREE_MOVE_DOWN,
   TREE_MOVE_UP,
@@ -55,11 +58,12 @@ function focusTree(event: Event): void {
 
 /**
  * One action of the toolbar: an icon and its words, so it is never an icon alone. An action that cannot be taken is `aria-disabled`, not `disabled`: a button that is
- * pressed and then disabled (Move up on the way to the top) would drop the keyboard focus to the page, and the person would have to find their place again.
+ * pressed and then disabled (Move up on the way to the top) would drop the keyboard focus to the page, and the person would have to find their place again. The same holds while a change is on its way (AQP-343):
+ * the buttons that would start another are `aria-disabled` and keep the focus.
  */
-function ToolbarButton({ icon, label, unavailable, onClick }: { readonly icon: LucideIcon; readonly label: string; readonly unavailable: boolean; readonly onClick: () => void }) {
+function ToolbarButton({ icon, label, unavailable, describedBy, onClick }: { readonly icon: LucideIcon; readonly label: string; readonly unavailable: boolean; readonly describedBy: string | undefined; readonly onClick: () => void }) {
   return (
-    <Button variant="secondary" aria-disabled={unavailable || undefined} className={cn(unavailable && 'cursor-not-allowed opacity-60')} onClick={unavailable ? undefined : onClick}>
+    <Button variant="secondary" aria-disabled={unavailable || undefined} aria-describedby={unavailable ? describedBy : undefined} className={cn(unavailable && UNAVAILABLE_LOOK)} onClick={unavailable ? undefined : onClick}>
       <Icon icon={icon} />
       {label}
     </Button>
@@ -82,11 +86,32 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
   const toggle = (id: string): void => setClosed((current) => (current.has(id) ? new Set([...current].filter((other) => other !== id)) : new Set([...current, id])));
   const canUp = selected !== null && nodes !== null && stepOf(nodes, selected, 'up') !== null;
   const canDown = selected !== null && nodes !== null && stepOf(nodes, selected, 'down') !== null;
+  // While a change is on its way the buttons that would start another are not offered, and once the line above the tree is on screen they are described by it (AQP-343, DL-340).
+  const describedBy = tree.waiting ? TREE_CHANGING_ID : undefined;
+  // The tree could not be read (the first time, or after a change that nothing answered): the Notice takes the tree's place, and after a change that nothing answered the focus goes to its button.
+  const notKnown = tree.problem?.kind === 'unconfirmed';
+  const retry = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (notKnown) retry.current?.focus();
+  }, [notKnown]);
+  const loadFailedNotice = (
+    <Notice tone="danger" title={TREE_LOAD_FAILED_TITLE}>
+      <p>{FAILED_BODY}</p>
+      <Button ref={retry} variant="secondary" className="mt-s-2" onClick={tree.readAgain}>
+        {TRY_AGAIN}
+      </Button>
+    </Notice>
+  );
 
   // "Add main assembly" at the foot of the tree (and in the empty tree): another top-level Main Assembly, last. Not offered while the tree is still being read.
   const addMainAssembly = (
     <div>
-      <Button variant="secondary" disabled={busy} onClick={() => tree.addUnder(null, 'MAIN_ASSEMBLY')}>
+      <Button
+        variant="secondary"
+        className={cn(busy && UNAVAILABLE_LOOK)}
+        {...(busy ? { 'aria-disabled': true, ...(describedBy === undefined ? {} : { 'aria-describedby': describedBy }) } : {})}
+        onClick={busy ? undefined : () => tree.addUnder(null, 'MAIN_ASSEMBLY')}
+      >
         <Icon icon={Plus} />
         {ADD_MAIN_ASSEMBLY}
       </Button>
@@ -94,15 +119,8 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
   );
 
   let body: ReactNode;
-  if (nodes === null && tree.loadFailed) {
-    body = (
-      <Notice tone="danger" title={TREE_LOAD_FAILED_TITLE}>
-        <p>{FAILED_BODY}</p>
-        <Button variant="secondary" className="mt-s-2" onClick={tree.readAgain}>
-          {TRY_AGAIN}
-        </Button>
-      </Notice>
-    );
+  if ((nodes === null && tree.loadFailed) || (nodes !== null && notKnown)) {
+    body = loadFailedNotice;
   } else if (nodes === null) {
     body = (
       <div role="status" aria-label={TREE_LOADING} className="flex flex-col gap-s-2">
@@ -131,7 +149,7 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
           renderRow={(part, kindLabel) => (
             <TreeNode part={part} kindLabel={kindLabel} selected={part.id === selected?.id} missing={missingIds?.has(part.id) ?? false} onChoose={choose} takesFocus={tree.wantsFocus} />
           )}
-          {...(editable ? { renderToolbar: (part: PartItem) => <RowActions part={part} onAdd={tree.addUnder} onDelete={tree.askDelete} /> } : {})}
+          {...(editable ? { renderToolbar: (part: PartItem) => <RowActions part={part} onAdd={tree.addUnder} onDelete={tree.askDelete} busy={busy} describedBy={describedBy} /> } : {})}
         />
         {editable ? addMainAssembly : null}
         <TreeLegend />
@@ -142,13 +160,18 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
   const noPart = selected === null;
   return (
     <div className="flex min-w-0 flex-col gap-s-3">
-      {editable && nodes !== null && nodes.length > 0 ? (
+      {editable && nodes !== null && nodes.length > 0 && !notKnown ? (
         <div className="flex flex-wrap gap-s-2">
-          <ToolbarButton icon={ArrowUp} label={TREE_MOVE_UP} unavailable={noPart || !canUp} onClick={() => tree.move('up')} />
-          <ToolbarButton icon={ArrowDown} label={TREE_MOVE_DOWN} unavailable={noPart || !canDown} onClick={() => tree.move('down')} />
+          <ToolbarButton icon={ArrowUp} label={TREE_MOVE_UP} unavailable={noPart || !canUp || busy} describedBy={describedBy} onClick={() => tree.move('up')} />
+          <ToolbarButton icon={ArrowDown} label={TREE_MOVE_DOWN} unavailable={noPart || !canDown || busy} describedBy={describedBy} onClick={() => tree.move('down')} />
         </div>
       ) : null}
-      {tree.problem === null ? null : (
+      {tree.waiting ? (
+        <p id={TREE_CHANGING_ID} className="text-body text-ink-2">
+          {TREE_CHANGING}
+        </p>
+      ) : null}
+      {tree.problem === null || tree.problem.kind === 'unconfirmed' ? null : (
         <Notice tone="danger" title={tree.problem.kind === 'changed' ? TREE_CHANGED_NOTICE : tree.problem.kind === 'refused' ? tree.problem.message : TREE_FAILED_TITLE}>
           {tree.problem.kind === 'failed' ? FAILED_BODY : null}
         </Notice>

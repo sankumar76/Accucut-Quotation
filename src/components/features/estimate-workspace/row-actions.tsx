@@ -10,7 +10,7 @@ import type { PartItem } from '@/lib/estimates/tree-client';
 import { addActionOf, addFastenerLabel, addUnderLabel, deleteRowLabel } from '@/lib/estimates/tree-actions';
 
 import { AddNodeMenu } from './add-node-menu';
-import { AddNodeTrigger, ROW_ACTION_SIZE } from './add-node-trigger';
+import { AddNodeTrigger, ROW_ACTION_SIZE, UNAVAILABLE_LOOK } from './add-node-trigger';
 import { TREE_PART_NAME } from './estimate-texts';
 
 export interface RowActionsProps {
@@ -19,6 +19,10 @@ export interface RowActionsProps {
   readonly onAdd: (parentId: string, nodeKind: NodeKind) => void;
   /** Opens the confirmation of the delete of this row (nothing is sent yet). */
   readonly onDelete: (id: string) => void;
+  /** A change to the tree is on its way (AQP-343): the "+" and the "-" are `aria-disabled` and keep the focus, and a press does nothing. Absent when not. */
+  readonly busy?: boolean;
+  /** The ID of the line that says why they are not offered, when it is on screen (`aria-describedby`). */
+  readonly describedBy?: string | undefined;
 }
 
 /**
@@ -28,15 +32,25 @@ export interface RowActionsProps {
  * The "-" opens the existing confirmation, which names the row and every row under it. Each button's name is its tooltip and its spoken name, and says which row it is for. Tab moves from a row to these buttons.
  * It is drawn only where the person may change the inputs (`treeActionsOffered`); the server asks again.
  */
-export function RowActions({ part, onAdd, onDelete }: RowActionsProps) {
+export function RowActions({ part, onAdd, onDelete, busy = false, describedBy }: RowActionsProps) {
   const add = addActionOf(part.nodeKind);
   const name = part.label === '' ? TREE_PART_NAME : part.label;
   const remove = deleteRowLabel(part.slNo, name);
+  const why = busy && describedBy !== undefined ? { 'aria-describedby': describedBy } : {};
   return (
     <div data-row-actions="" className="flex items-center rounded-md border border-border bg-surface">
-      {add.kind === 'direct' ? <AddNodeTrigger label={addFastenerLabel(part.slNo, name)} onClick={() => onAdd(part.id, add.nodeKind)} /> : null}
-      {add.kind === 'menu' ? <AddNodeMenu id={`add-node-${part.id}`} label={addUnderLabel(part.slNo, name)} nodeKinds={add.nodeKinds} onChoose={(nodeKind) => onAdd(part.id, nodeKind)} /> : null}
-      <Button variant="ghost" size="icon" aria-label={remove} title={remove} className={cn('text-danger-ink', ROW_ACTION_SIZE)} onClick={() => onDelete(part.id)}>
+      {add.kind === 'direct' ? <AddNodeTrigger label={addFastenerLabel(part.slNo, name)} unavailable={busy} {...why} onClick={busy ? undefined : () => onAdd(part.id, add.nodeKind)} /> : null}
+      {add.kind === 'menu' ? <AddNodeMenu id={`add-node-${part.id}`} label={addUnderLabel(part.slNo, name)} nodeKinds={add.nodeKinds} onChoose={(nodeKind) => onAdd(part.id, nodeKind)} {...(busy ? { unavailable: true, ...(describedBy === undefined ? {} : { describedBy }) } : {})} /> : null}
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={remove}
+        title={remove}
+        className={cn('text-danger-ink', ROW_ACTION_SIZE, busy && UNAVAILABLE_LOOK)}
+        {...(busy ? { 'aria-disabled': true } : {})}
+        {...why}
+        onClick={busy ? undefined : () => onDelete(part.id)}
+      >
         <Icon icon={Minus} size="large" />
       </Button>
     </div>
