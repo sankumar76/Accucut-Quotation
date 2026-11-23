@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { Prisma } from '../../generated/prisma/client';
 import { escapeLike } from '../../lib/escape-like';
+import { ESTIMATE_STATUSES, LOCKED_STATUSES, type EstimateStatus } from '../../lib/estimate/state-machine';
 import type { QueueCounts, QueueTab } from '../../lib/tasks/queue';
 
 import { withDatabaseErrors } from './database-errors';
@@ -29,7 +30,8 @@ import { clientFor, type Transaction } from './transaction';
  * the reassign wait, and the status it reads once the lock is granted is the one that decides whether the task is still open (AC-6).
  */
 
-export type EstimateStatus = 'DRAFT' | 'PREPARED' | 'APPROVED';
+// The estimate's status is the state machine's (`lib/estimate/state-machine.ts`): one list, so a status added there reaches every read here. Re-exported for the repositories and services that named it here.
+export type { EstimateStatus };
 
 /** An Engineer as a choice: the ID and the name, and nothing else (the e-mail address is not sent to the screen). */
 export interface EngineerRecord {
@@ -202,7 +204,7 @@ const LOCKED_ROWS = z.array(
     engineerName: z.string(),
     deadlineAt: z.date(),
     assignmentRevision: z.number().int().positive(),
-    status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
+    status: z.enum(ESTIMATE_STATUSES),
     folderPath: z.string(),
     title: z.string(),
     notes: z.string().nullable(),
@@ -245,15 +247,19 @@ function toQueueRow(row: QueueSelected): QueueRow | null {
   };
 }
 
-/** The tab as a filter on the task and on the status of its estimate; Open and Closed are derived from `estimates.status`, never stored (architecture section 4.4). */
+/**
+ * The tab as a filter on the task and on its estimate; Open and Closed are derived from `estimates.status` and `estimates.ignored_at`, never stored (architecture sections 4.4 and 4.12 a). It is
+ * the SQL form of `taskTab` and `tabsOf` (`lib/tasks/task-state.ts`), which are built on `isTaskClosed` and so on `isLocked`: Closed is a locked status (`LOCKED_STATUSES`) that is not ignored, Open is any
+ * other status that is not ignored, and Overdue is Open and past its deadline. An ignored estimate is in none of the three (its tab is story 7D's). An integration test holds the two forms together.
+ */
 function tabFilter(tab: QueueTab, now: Date): Prisma.TaskWhereInput {
   switch (tab) {
     case 'open':
-      return { estimate: { is: { status: { not: 'APPROVED' } } } };
+      return { estimate: { is: { status: { notIn: [...LOCKED_STATUSES] }, ignoredAt: null } } };
     case 'closed':
-      return { estimate: { is: { status: 'APPROVED' } } };
+      return { estimate: { is: { status: { in: [...LOCKED_STATUSES] }, ignoredAt: null } } };
     case 'overdue':
-      return { estimate: { is: { status: { not: 'APPROVED' } } }, deadlineAt: { lt: now } };
+      return { estimate: { is: { status: { notIn: [...LOCKED_STATUSES] }, ignoredAt: null } }, deadlineAt: { lt: now } };
   }
 }
 

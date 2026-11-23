@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { ESTIMATE_STATUSES, isLocked, LOCKED_STATUSES } from '@/lib/estimate/state-machine';
+
 /**
  * STORY-04.05 AC-4 (architecture section 4.4; review SQR-02): there is one rule for "this task is closed", `isTaskClosed` in `src/lib/estimate/task-status.ts`, and no stored
  * open/closed column. This is the grep the story asks for:
@@ -29,8 +31,8 @@ function filesUnder(directory: string): string[] {
 /** The source without block and line comments (and without the text of a string that only says `//`, which these files do not have). */
 const withoutComments = (source: string): string => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-/** A comparison with, or a filter on, the status that closes a task: `=== 'APPROVED'`, `!== 'APPROVED'`, `status: 'APPROVED'`, `not: 'APPROVED'`, `case 'APPROVED'`. */
-const APPROVED_TEST = /(?:[!=]==?\s*'APPROVED'|'APPROVED'\s*[!=]==?|\bnot:\s*'APPROVED'|\bstatus:\s*'APPROVED'|\bcase\s+'APPROVED')/;
+/** A comparison with, or a filter on, a status that closes a task: `=== 'APPROVED'`, `!== 'APPROVED'`, `status: 'APPROVED'`, `not: 'APPROVED'`, `case 'APPROVED'`, and the same for `'QUOTED'` (CR-01 item 7B). */
+const APPROVED_TEST = /(?:[!=]==?\s*'(?:APPROVED|QUOTED)'|'(?:APPROVED|QUOTED)'\s*[!=]==?|\bnot:\s*'(?:APPROVED|QUOTED)'|\bstatus:\s*'(?:APPROVED|QUOTED)'|\bcase\s+'(?:APPROVED|QUOTED)')/;
 
 const TAB_DECIDING_CODE = [
   ...filesUnder('src/lib/tasks'),
@@ -49,15 +51,30 @@ describe('AC-4: no second implementation of "is closed"', () => {
     expect(withoutComments(read(path))).not.toMatch(APPROVED_TEST);
   });
 
-  it("the repository names APPROVED only in `tabFilter`, the SQL form of the one rule", () => {
+  it("the repository decides the tabs only in `tabFilter`, the SQL form of the one rule, from `LOCKED_STATUSES` (derived from `isLocked`), and compares no status to APPROVED or QUOTED", () => {
     const source = withoutComments(read('src/server/repositories/task-repository.ts'));
     const start = source.indexOf('function tabFilter(');
     const end = source.indexOf('\nfunction afterFilter(');
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
+    expect(source).not.toMatch(APPROVED_TEST);
+    const tabFilter = source.slice(start, end);
+    expect(tabFilter).toContain('LOCKED_STATUSES');
+    // The layer is part of the rule: Open, Closed and Overdue are never an ignored estimate.
+    expect(tabFilter.match(/ignoredAt:\s*null/g)).toHaveLength(3);
     const outside = source.slice(0, start) + source.slice(end);
-    expect(outside).not.toMatch(APPROVED_TEST);
-    expect(source.slice(start, end)).toMatch(APPROVED_TEST);
+    expect(outside.replace(/import[^;]*LOCKED_STATUSES[^;]*;/, '')).not.toContain('LOCKED_STATUSES');
+  });
+
+  it('QLT-B3: the overdue repository\'s SQL names exactly the locked statuses, in both reads, and `LOCKED_STATUSES` is what `isLocked` says', () => {
+    const source = read('src/server/repositories/overdue-repository.ts');
+    const lists = [...source.matchAll(/e\.status::text NOT IN \(([^)]*)\)/g)].map((match) => (match[1] ?? '').split(',').map((word) => word.trim().replace(/^'|'$/g, '')).sort());
+    // The candidate read and the digest read: both must exclude every locked status and nothing else.
+    expect(lists).toHaveLength(2);
+    for (const list of lists) expect(list).toEqual([...LOCKED_STATUSES].sort());
+    expect([...LOCKED_STATUSES]).toEqual(ESTIMATE_STATUSES.filter(isLocked));
+    // Nothing else in the file compares a status, so a third list cannot hide.
+    expect(source.match(/e\.status::text/g)).toHaveLength(2);
   });
 
   it('writes `isTaskClosed` once under src, and `taskTab` builds on it', () => {

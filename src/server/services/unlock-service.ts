@@ -1,7 +1,7 @@
 import { assertNever } from '../../lib/assert-never';
 import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError } from '../../lib/errors';
 import type { RateChangeCounts } from '../../lib/estimate/rate-diff';
-import { decideTransition, TRANSITION_REFUSALS, type EstimateStatus } from '../../lib/estimate/state-machine';
+import { decideTransition, stateOf, TRANSITION_REFUSALS, type EstimateState } from '../../lib/estimate/state-machine';
 import { checkUnlockReason, UNLOCK_CUSTOMER_DELETED_MESSAGE, UNLOCK_MATERIAL_DELETED_MESSAGE } from '../../lib/estimate/unlock-words';
 import { createPlanCache, type PlanCache } from '../../lib/formula';
 import type { ApprovalUnlocking } from '../repositories/approval-repository';
@@ -110,8 +110,8 @@ export function assertMayUnlock(viewer: Pick<EstimateViewer, 'role'>): void {
 }
 
 /** The state machine's decision for UNLOCK, as the error it is: 403 for a role that may not, the machine's own code and sentence for a status that does not allow it (`ESTIMATE_NOT_APPROVED`). */
-function assertUnlockable(viewer: Pick<EstimateViewer, 'role'>, status: EstimateStatus): void {
-  const decision = decideTransition(status, 'UNLOCK', viewer.role);
+function assertUnlockable(viewer: Pick<EstimateViewer, 'role'>, state: EstimateState): void {
+  const decision = decideTransition(state, 'UNLOCK', viewer.role);
   if (decision.allowed) return;
   if (decision.kind === 'ROLE') throw new ForbiddenError();
   const refusal = TRANSITION_REFUSALS[decision.reason];
@@ -130,7 +130,7 @@ export function createUnlockService({ estimates, approvals, calculations, master
       return await transactions.run(async (tx) => {
         const estimate = await estimates.lockEstimate(estimateId, tx);
         if (estimate === null) throw new NotFoundError();
-        assertUnlockable(viewer, estimate.status);
+        assertUnlockable(viewer, stateOf(estimate));
         // The customer, then the materials in ascending ID order, each `FOR SHARE` after the estimate's and the task's lock (AC-10): the check Cancel approval shares (`deleted-masters.ts`), in the unlock's words.
         await assertCustomerAndMaterialsExist(estimates, estimate, tx, UNLOCK_WORDS);
         // An approved estimate has a live approval: the approval that approved it. Anything else is a fault in the data (a plain `Error`, a 500 with fixed words), never a guess.
@@ -156,7 +156,7 @@ export function createUnlockService({ estimates, approvals, calculations, master
       assertMayUnlock(viewer);
       const access = await estimates.findEstimateAccess(estimateId);
       if (access === null) throw new NotFoundError();
-      assertUnlockable(viewer, access.status);
+      assertUnlockable(viewer, stateOf(access));
       const live = await approvals.findLiveApproval(estimateId);
       if (live === null) throw new Error('The approved estimate has no live approval to unlock.');
       const stored = await calculations.findMasterSnapshot(live.calculationId);

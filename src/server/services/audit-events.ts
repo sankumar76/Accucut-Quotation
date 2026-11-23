@@ -184,7 +184,7 @@ const readEstimateStatus = z.preprocess((value) => (value === LEGACY_SUBMITTED ?
 const cancelledBeforeRead = z.strictObject({ approvedPrice: rupeesText, status: readEstimateStatus });
 const cancelledAfterRead = z.strictObject({ reason: reasonText, status: readEstimateStatus });
 
-const STATUS_WORDS: Readonly<Record<EstimateStatus, string>> = { DRAFT: 'a Draft', PREPARED: 'Prepared', APPROVED: 'Approved' };
+const STATUS_WORDS: Readonly<Record<EstimateStatus, string>> = { DRAFT: 'a Draft', PREPARED: 'Prepared', APPROVED: 'Approved', QUOTED: 'Quoted' };
 
 /**
  * "Approved at ₹ 4,750.00 to Cancelled. Reason: …" (SCR-16, UX-64). When the cancel did not move the estimate the entry says so, before the reason: "Cancelled, the estimate stayed a Draft. Reason: …" (an assumption of

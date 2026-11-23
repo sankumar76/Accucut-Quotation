@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, type Locator, type Page, type Request, type TestInfo } from '@playwright/test';
 
 import { CUSTOMER_CANARIES } from '../../support/customer-canary';
 import { canaryTaskCodeFor } from '../../support/estimate-recipe';
@@ -23,16 +23,37 @@ export const PHONE_MAX = 767;
 export const NUMBER_RULE = 'Enter 0 or more, with up to 2 decimals.';
 
 /** The control of a field: its ID is the registry's, and the page's control ID is made from it. */
-export const control = (page: Page, letter: string): Locator => page.locator(`#part-field-${seedId(FIELD_ID_NAMESPACE, columnLetterToIndex(letter))}`);
+/** The registry's ID of the field of a column letter: what the control's ID is made from and what a save carries as the key of its value. */
+export const fieldIdOf = (letter: string): string => seedId(FIELD_ID_NAMESPACE, columnLetterToIndex(letter));
+export const control = (page: Page, letter: string): Locator => page.locator(`#part-field-${fieldIdOf(letter)}`);
 export const partForm = (page: Page): Locator => page.locator('form[data-part-form]');
 /** The parts tree: a `nav` of nested lists of row links since CR-01 item 3B (not `role="tree"`); a row is its link. */
 export const tree = (page: Page): Locator => page.getByRole('navigation', { name: 'Parts tree' });
 export const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 export const isPatchOfInputs = (url: string, method: string): boolean => method === 'PATCH' && /\/api\/v1\/estimates\/[^/]+\/nodes\/[^/]+\/inputs$/.test(new URL(url).pathname);
 
-/** Waits for the save that leaving a field starts, and answers its status. */
-export function nextSave(page: Page): Promise<number> {
-  return page.waitForResponse((response) => isPatchOfInputs(response.url(), response.request().method())).then((response) => response.status());
+/** Does the body of this save carry a value for the field? A save is `{ revision, values: { [fieldId]: value } }`; anything else is not a save of that field. */
+function carriesField(request: Request, fieldId: string): boolean {
+  let body: unknown;
+  try {
+    body = request.postDataJSON();
+  } catch {
+    return false;
+  }
+  if (typeof body !== 'object' || body === null || !('values' in body)) return false;
+  const { values } = body;
+  return typeof values === 'object' && values !== null && Object.hasOwn(values, fieldId);
+}
+
+/**
+ * Waits for the save of the field of a column letter, and answers its status. It is the save that carries that field and no other: the page also sends a repeat of a field that was left but not
+ * changed (DEF-038, AQP-341), and a wait for "the next save" ended on it, before the save the test meant had been sent.
+ */
+export function nextSave(page: Page, letter: string): Promise<number> {
+  const fieldId = fieldIdOf(letter);
+  return page
+    .waitForResponse((response) => isPatchOfInputs(response.url(), response.request().method()) && carriesField(response.request(), fieldId))
+    .then((response) => response.status());
 }
 
 /**

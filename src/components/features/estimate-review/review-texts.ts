@@ -4,6 +4,8 @@
  * sentence (BL, BG, H) is always a parameter, taken from the configuration version the figures belong to (FR-021, UX-26), never typed.
  */
 
+import type { EstimateStatus } from '@/lib/estimate/state-machine';
+
 /** What the customer's name field says on an estimate that has none (made before CR-01 item 6): the Change customer action sits beside it. */
 export const REVIEW_NO_CUSTOMER = 'Not set';
 
@@ -135,7 +137,7 @@ export const CANCELLED_ONLY_ADMIN_REMOVES = 'Only the Admin can remove it.';
  * Prepared estimate whose approval was kept through an unlock **stays** as it was ("The estimate stays a Draft and its task does not change."). The sentence is said only while it is true: after a Recalculate the
  * first one would be false for a Prepared estimate and is left out (an assumption of STORY-06.12, listed in the pull request).
  */
-export function cancelledStatusLine(status: 'DRAFT' | 'PREPARED' | 'APPROVED', wasUnlocked: boolean, engineerName: string): string | null {
+export function cancelledStatusLine(status: EstimateStatus, wasUnlocked: boolean, engineerName: string): string | null {
   if (status === 'DRAFT') return wasUnlocked ? 'The estimate stays a Draft and its task does not change.' : `The estimate is a Draft and the task is back in ${engineerName}'s Open queue.`;
   if (status === 'PREPARED' && wasUnlocked) return 'The estimate stays Prepared and its task does not change.';
   return null;

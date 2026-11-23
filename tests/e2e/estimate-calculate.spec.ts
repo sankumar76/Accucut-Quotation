@@ -126,7 +126,7 @@ test.describe('AC-1: a blank input blocks, and the page says where', () => {
     await summary(page).getByRole('link', { name: /^Length/ }).click();
     await expect(control(page, 'J')).toBeFocused();
 
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'J');
     await control(page, 'J').fill('200');
     await control(page, 'J').blur();
     expect(await saved).toBe(200);
@@ -139,7 +139,7 @@ test.describe('AC-1: a blank input blocks, and the page says where', () => {
   test('AC-1: Fasteners that is not "None" needs its Qty and Cost, which the summary then names', async ({ page }, testInfo) => {
     const owner = await openForm(page, testInfo);
     await makeComplete(page, owner.id);
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'S');
     await control(page, 'S').fill('Invented bolts');
     await control(page, 'S').blur();
     expect(await saved).toBe(200);
@@ -154,7 +154,7 @@ test.describe('AC-1: a blank input blocks, and the page says where', () => {
 test.describe('AC-2, AC-6: a complete estimate is prepared, and the page shows a status and a sentence', () => {
   test('AC-2: Calculate answers exactly {status, message}, the page turns to "Prepared": read-only inputs, no part actions, a disabled button, the one sentence and no number', async ({ page }, testInfo) => {
     const owner = await openCalculable(page, testInfo);
-    if (!isPhone(page)) await expect(page.getByRole('button', { name: 'New item' })).toBeVisible();
+    if (!isPhone(page)) await expect(page.getByRole('button', { name: 'Add main assembly' })).toBeVisible();
 
     const response = await press(page);
     expect(response.status()).toBe(200);
@@ -167,7 +167,9 @@ test.describe('AC-2, AC-6: a complete estimate is prepared, and the page shows a
     await expect(calculateButton(page)).toBeDisabled();
     await expect(calculateButton(page)).toHaveText('Prepared');
     await expect(control(page, 'J')).toHaveAttribute('readonly', '');
-    for (const name of ['New item', 'Sub-part', 'Part beside', 'Move up', 'Move down', 'Delete']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
+    for (const name of ['Add main assembly', 'Move up', 'Move down']) await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0);
+    // Nor does any row have its "+" or its "-": the actions are offered exactly when the Engineer may change the inputs, and a prepared estimate is read-only for them (CR-01 item 3C AC-6).
+    await expect(page.getByRole('button', { name: /^(Add under|Add fastener under|Delete) / })).toHaveCount(0);
 
     expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
     // The page has no calculated figure: the notice holds the sentence and nothing else, and the answer holds no digit.
@@ -258,7 +260,7 @@ test.describe('AC-2: Calculate sends what the screen shows (review SQR-01 of AQP
     expect(posts.count()).toBe(0);
     expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 0 });
 
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'J');
     await control(page, 'J').fill('200');
     await control(page, 'J').blur();
     expect(await saved).toBe(200);
