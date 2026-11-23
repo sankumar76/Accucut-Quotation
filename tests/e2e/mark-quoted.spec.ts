@@ -27,6 +27,8 @@ const SLOW_MILLISECONDS = 800;
 const MARK_ROUTE = '**/api/v1/estimates/*/quoted';
 const UNLOCK_REASON = 'The customer asked for a new fixture.';
 const NO_UNDO = 'This cannot be undone, except by Unlock.';
+const NOT_APPROVED_SENTENCE = 'This estimate has not been approved.';
+const UNCONFIRMED_START = 'We could not confirm that the estimate was marked as quoted.';
 const INTRO = /Do this once the quote has been sent to .+\. The status becomes Quoted, with your name and the time\./;
 
 const markButton = (page: Page) => page.locator('#review-mark-quoted');
@@ -57,8 +59,6 @@ async function openDialog(page: Page, code: string): Promise<Locator> {
 
 test.describe('AC-1, AC-4, AC-9: the dialog', () => {
   test('opens with focus on "Not yet", says the quote has been sent, that only Unlock can reverse it and the download marker, keeps focus inside, scrolls no way sideways, has no axe violation and 44 px targets below 1024 px; Escape sends nothing and gives focus back', async ({ page }, testInfo) => {
-    // The first press fetches the dialog's code, which the development server compiles on demand, and the test scans the open dialog with axe: the budget of one test is not enough on a cold server (AQP-340).
-    test.slow();
     const { code, owner } = await openedApproved(page, testInfo);
     let sent = 0;
     await page.route(MARK_ROUTE, async (route) => {
@@ -101,9 +101,7 @@ test.describe('AC-1, AC-4, AC-9: the dialog', () => {
 });
 
 test.describe('AC-2, AC-5, AC-7: a good mark', () => {
-  test('shows "Marking as quoted" while it is under way, then the Quoted notice with who and when, the status Quoted, Unlock still offered and nothing else of the approval\'s actions; the task is in the Closed tab as Quoted; the Engineer sees the status word and nothing of who marked it', async ({ page }, testInfo) => {
-    // The mark, the notice, the Closed tab and the Engineer's page: four scanned page loads on the development server (AQP-340).
-    test.slow();
+  test('shows "Marking as quoted" while it is under way, then the Quoted notice with who and when, the status Quoted, Unlock still offered and nothing else of the approval\'s actions; the task is in the Closed tab as Quoted', async ({ page }, testInfo) => {
     const { code, owner, lead } = await openedApproved(page, testInfo);
     await page.route(MARK_ROUTE, async (route) => {
       await new Promise<void>((resolve) => {
@@ -152,7 +150,14 @@ test.describe('AC-2, AC-5, AC-7: a good mark', () => {
     await expect(row.locator('[data-slot="status-badge"]')).toHaveAttribute('data-status', 'QUOTED');
     await expect(row.locator('[data-slot="status-badge"]')).toHaveText('Quoted');
 
-    // AC-8: the Engineer reads the status word on their own task, and no notice, no name of who marked it and no time of it.
+  });
+});
+
+test.describe('AC-8: what the Engineer is told', () => {
+  test('the Engineer reads the status word Quoted on their own task, and no notice, no name of who marked it and no time of it', async ({ page }, testInfo) => {
+    const { code, owner, lead } = await approvedEstimate(page, testInfo);
+    // The mark is made through the API as another window would send it: this test is about what the Engineer is shown, and the mark itself is the test above.
+    expect(await markQuotedThroughTheApi(page, owner.id)).toBe(200);
     await signInAs(page, owner);
     const own = await page.goto(`/estimates/${code}`);
     expect(own?.status()).toBe(200);
@@ -161,6 +166,54 @@ test.describe('AC-2, AC-5, AC-7: a good mark', () => {
     await expect(page.locator('#review-quoted-notice')).toHaveCount(0);
     expect(await page.locator('main').innerText()).not.toContain(lead.name);
     expect(await page.locator('main').innerText()).not.toMatch(/Quoted on /);
+  });
+});
+
+test.describe('AC-3, AC-4: the dialog when the mark is refused or no answer comes', () => {
+  test('a refusal keeps the server\'s sentence in view with focus on it and nothing is written; the page is drawn again only when the dialog is closed, and focus lands on the action bar', async ({ page }, testInfo) => {
+    const { code, owner } = await openedApproved(page, testInfo);
+    await page.route(MARK_ROUTE, async (route) => {
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/problem+json',
+        body: JSON.stringify({ type: 'about:blank', title: NOT_APPROVED_SENTENCE, status: 409, code: 'ESTIMATE_NOT_APPROVED' }),
+      });
+    });
+    const dialog = await openDialog(page, code);
+    await submitOf(dialog).click();
+    const alert = dialog.locator('#mark-quoted-alert');
+    await expect(alert).toContainText(NOT_APPROVED_SENTENCE);
+    await expect(alert).toBeFocused();
+    // The sentence stays: nothing redraws the page behind it, and a repeat is off.
+    await expect(submitOf(dialog)).toBeDisabled();
+    await expect(dialog).toBeVisible();
+    await expect(alert).toContainText(NOT_APPROVED_SENTENCE);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoAxeViolations(page);
+    expect(await readQuote(owner.id)).toMatchObject({ status: 'APPROVED', quotedBy: null, quotedAtSet: false, entries: 0 });
+
+    await notYetOf(dialog).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator('#review-actions')).toBeFocused();
+  });
+
+  test('no answer shows the "could not confirm" sentence and turns the button back on; a second press then marks it once', async ({ page }, testInfo) => {
+    const { code, owner, lead } = await openedApproved(page, testInfo);
+    await page.route(MARK_ROUTE, async (route) => {
+      await route.abort();
+    });
+    const dialog = await openDialog(page, code);
+    await submitOf(dialog).click();
+    await expect(dialog).toContainText(UNCONFIRMED_START);
+    await expect(dialog).toContainText('pressing again cannot mark it twice');
+    await expect(submitOf(dialog)).toBeEnabled();
+    expect(await readQuote(owner.id)).toMatchObject({ status: 'APPROVED', quotedBy: null, entries: 0 });
+
+    await page.unroute(MARK_ROUTE);
+    await submitOf(dialog).click();
+    await expect(noticeOf(page)).toBeVisible();
+    await expect(dialog).toHaveCount(0);
+    expect(await readQuote(owner.id)).toMatchObject({ status: 'QUOTED', quotedBy: lead.id, entries: 1 });
   });
 });
 

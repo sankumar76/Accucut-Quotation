@@ -1,7 +1,7 @@
 'use client';
 
 import { Send } from 'lucide-react';
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { DownloadChip } from '@/components/shared/download-chip';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { markEstimateQuoted } from '@/lib/estimates/mark-quoted-client';
 import type { DownloadChipData } from '@/lib/export/download-marker-view';
 
+import { MARK_QUOTED_ALERT_ID } from './mark-quoted-ids';
 import { ALREADY_QUOTED_CODE, MARK_QUOTED_NO_UNDO, MARK_QUOTED_SUBMIT_LABEL, MARK_QUOTED_UNCONFIRMED, MARKING_LABEL, markQuotedIntro, markQuotedTitle, NOT_YET_LABEL } from './mark-quoted-texts';
 
 /**
@@ -37,8 +38,10 @@ export interface MarkQuotedDialogProps {
   readonly download: DownloadChipData | 'unavailable';
   /** The mark worked, or the estimate was already quoted: the page is drawn again and shows the Quoted state. */
   readonly onMarked: () => void;
-  /** The page is out of date, or no usable answer came: read the estimate again so the page tells the truth. The dialog stays open with its sentence. */
+  /** No usable answer came and the mark may have gone through: read the estimate again so the page tells the truth. The dialog stays open with its sentence. */
   readonly onStale: () => void;
+  /** The server refused the mark with a sentence (the estimate changed elsewhere): the dialog keeps the sentence in view and the page is drawn again when the dialog is closed, not before. */
+  readonly onRefused: () => void;
   readonly onCloseAutoFocus: (event: Event) => void;
 }
 
@@ -52,13 +55,24 @@ type Phase =
 const IDLE: Phase = { kind: 'idle' };
 
 function Alert({ phase }: { readonly phase: Phase }) {
-  if (phase.kind === 'refused') return <Notice tone="danger">{phase.message}</Notice>;
+  const refusedAlert = useRef<HTMLDivElement>(null);
+  // The button that was pressed is now off, so focus would be lost: it goes to the alert, which is read out by its role (as the unlock dialog's blocked alert).
+  useEffect(() => {
+    if (phase.kind === 'refused') refusedAlert.current?.focus();
+  }, [phase.kind]);
+  if (phase.kind === 'refused') {
+    return (
+      <div id={MARK_QUOTED_ALERT_ID} ref={refusedAlert} tabIndex={-1} className="rounded-md">
+        <Notice tone="danger">{phase.message}</Notice>
+      </div>
+    );
+  }
   if (phase.kind === 'unconfirmed') return <Notice tone="danger">{MARK_QUOTED_UNCONFIRMED}</Notice>;
   return null;
 }
 
 function MarkQuotedForm({ props, inFlightRef }: { readonly props: MarkQuotedDialogProps; readonly inFlightRef: { current: boolean } }) {
-  const { estimateId, code, customerName, download, onMarked, onStale } = props;
+  const { estimateId, code, customerName, download, onMarked, onStale, onRefused } = props;
   const [phase, setPhase] = useState<Phase>(IDLE);
   const saving = phase.kind === 'saving';
 
@@ -74,8 +88,9 @@ function MarkQuotedForm({ props, inFlightRef }: { readonly props: MarkQuotedDial
     if (outcome.status === 'refused') {
       // A second press (another window, a double tap that got through): the estimate is quoted, which is what was asked for.
       if (outcome.httpStatus === 409 && outcome.code === ALREADY_QUOTED_CODE) return onMarked();
+      // Any other refusal means the estimate changed elsewhere (unlocked, cancelled, ignored): the sentence stays in the dialog, and the page is drawn again when the dialog is closed.
       setPhase({ kind: 'refused', message: outcome.title });
-      return onStale();
+      return onRefused();
     }
     setPhase({ kind: 'unconfirmed' });
     return onStale();
@@ -92,7 +107,7 @@ function MarkQuotedForm({ props, inFlightRef }: { readonly props: MarkQuotedDial
       <Alert phase={phase} />
       <AlertDialogFooter>
         <AlertDialogCancel disabled={saving}>{NOT_YET_LABEL}</AlertDialogCancel>
-        <Button type="submit" loading={saving}>
+        <Button type="submit" loading={saving} disabled={phase.kind === 'refused'}>
           <Icon icon={Send} size="large" />
           {saving ? MARKING_LABEL : MARK_QUOTED_SUBMIT_LABEL}
         </Button>

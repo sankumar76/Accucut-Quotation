@@ -10,7 +10,7 @@ import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { EARLY_INTENT_ATTRIBUTE } from '@/lib/ui/early-intent';
 
 import type { MarkQuotedDialogProps } from './mark-quoted-dialog';
-import { QUOTED_NOTICE_ID } from './mark-quoted-ids';
+import { QUOTED_NOTICE_ID, REVIEW_ACTIONS_ID } from './mark-quoted-ids';
 
 /**
  * The Mark as quoted button of an approved estimate on SCR-06 (CR-01 item 7C, AQP-400; AC-1, AC-4; UX spec SCR-06): a script as small as it can be (NFR-009, ADR-016: `/estimates/[code]` has a budget, and this page is
@@ -48,6 +48,8 @@ export function MarkQuotedButton({ id, label, failedLine, estimateId, code, cust
   const first = useFirstOpen<MarkQuotedDialogProps>({ id, load: loadDialog, onOpen: () => setOpen(true) });
   // Where focus goes when the dialog is gone: the Quoted notice after a mark, the button otherwise.
   const focusAfter = useRef<string>(id);
+  // The server refused the mark with a sentence: the page is out of date, and it is drawn again when the dialog is closed, so the sentence stays in view until then.
+  const refused = useRef(false);
 
   // The button leaves the page with the page being drawn again (a mark), taking the dialog and focus with it: hand focus to the place the person is going to.
   useEffect(
@@ -77,7 +79,15 @@ export function MarkQuotedButton({ id, label, failedLine, estimateId, code, cust
       {Dialog === null ? null : (
         <Dialog
           open={open}
-          onOpenChange={setOpen}
+          onOpenChange={(next) => {
+            setOpen(next);
+            if (!next && refused.current) {
+              refused.current = false;
+              // The button is probably leaving the page with the redraw: focus goes to the action bar, which stays.
+              focusAfter.current = REVIEW_ACTIONS_ID;
+              refresh();
+            }
+          }}
           estimateId={estimateId}
           code={code}
           customerName={customerName}
@@ -91,6 +101,9 @@ export function MarkQuotedButton({ id, label, failedLine, estimateId, code, cust
             // The page is out of date, or no answer came and the mark may have gone through: it is drawn again, and if it did the button goes and focus goes to the notice. The dialog stays open with its sentence until then.
             focusAfter.current = QUOTED_NOTICE_ID;
             refresh();
+          }}
+          onRefused={() => {
+            refused.current = true;
           }}
           onCloseAutoFocus={(event) => {
             // Radix has no trigger to return focus to, so it is placed here: where the person is going, or back on the button.

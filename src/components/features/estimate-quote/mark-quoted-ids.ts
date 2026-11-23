@@ -5,3 +5,9 @@
 
 /** The notice of a quoted estimate ("Quoted on ... by ..."): it holds focus when a mark has just worked (`tabIndex` -1), so focus is not lost with the button that was pressed. */
 export const QUOTED_NOTICE_ID = 'review-quoted-notice';
+
+/** The danger alert of a refused mark in the dialog: it holds focus when it appears (`tabIndex` -1), so the sentence is read and focus is not left on a control that is now off. */
+export const MARK_QUOTED_ALERT_ID = 'mark-quoted-alert';
+
+/** The action bar of SCR-06, where focus goes when the button leaves the page because the estimate changed elsewhere (a refusal): a stable place, so focus is not lost to the body (WCAG 2.4.3). */
+export const REVIEW_ACTIONS_ID = 'review-actions';

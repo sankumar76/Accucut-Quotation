@@ -99,7 +99,7 @@ const IMPORTERS: ReadonlyArray<readonly [module: RegExp, allowed: ReadonlyArray<
   [/from '[^']*[/]estimates[/]mark-quoted-client'/, ['src/components/features/estimate-quote/mark-quoted-dialog.tsx']],
   [/['"]\.[/]mark-quoted-dialog['"]/, ['src/components/features/estimate-quote/mark-quoted-button.tsx']],
   [/from '[^']*[/]estimate-quote[/]mark-quoted-button'/, ['src/components/features/estimate-review/review-actions.tsx']],
-  [/from '[^']*[/]estimate-quote[/]mark-quoted-ids'/, ['src/components/features/estimate-review/estimate-review.tsx']],
+  [/from '[^']*[/]estimate-quote[/]mark-quoted-ids'/, ['src/components/features/estimate-review/estimate-review.tsx', 'src/components/features/estimate-review/review-actions.tsx']],
 ];
 
 describe('AC-8: only the Lead\'s and the Admin\'s code imports Mark as quoted', () => {

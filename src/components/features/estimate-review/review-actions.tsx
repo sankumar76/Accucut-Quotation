@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ApproveButton } from '@/components/features/estimate-approve/approve-button';
 import { CancelButton } from '@/components/features/estimate-cancel/cancel-button';
 import { MarkQuotedButton } from '@/components/features/estimate-quote/mark-quoted-button';
+import { REVIEW_ACTIONS_ID } from '@/components/features/estimate-quote/mark-quoted-ids';
 import { RemoveButton } from '@/components/features/estimate-remove-price/remove-button';
 import { RecalculateButton } from '@/components/features/estimate-recalculate/recalculate-button';
 import { CALCULATED_LINE_ID } from '@/components/features/estimate-recalculate/recalculate-ids';
@@ -211,7 +212,7 @@ export function ReviewActions({ estimateId, code, state, status, calculated, app
   // is to Recalculate, so the button is there then (STORY-06.11).
   const showRecalculate = state !== 'current' || status === 'DRAFT' || ratesChanged;
   return (
-    <div role="group" aria-label={ACTIONS_LABEL} className="flex flex-col gap-s-3 rounded-md border border-border bg-surface px-s-4 py-s-3">
+    <div id={REVIEW_ACTIONS_ID} tabIndex={-1} role="group" aria-label={ACTIONS_LABEL} className="flex flex-col gap-s-3 rounded-md border border-border bg-surface px-s-4 py-s-3">
       {calculated === null ? null : (
         <p id={CALCULATED_LINE_ID} tabIndex={-1} className="text-label text-ink-2">
           {calculatedLine(calculated.at, calculated.configurationNumber)}
