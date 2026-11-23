@@ -33,6 +33,7 @@ function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
     loadFailed: false,
     selected: nodes?.[0] ?? null,
     busy: false,
+    waiting: false,
     problem: null,
     announcement: '',
     deleting: null,
@@ -49,7 +50,7 @@ function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
   };
 }
 
-const panel = (nodes: ReadonlyArray<PartItem> | null, editable: boolean): string => renderToStaticMarkup(createElement(TreePanel, { tree: treeState(nodes), editable }));
+const panel = (nodes: ReadonlyArray<PartItem> | null, editable: boolean, state: Partial<PartsTreeState> = {}): string => renderToStaticMarkup(createElement(TreePanel, { tree: { ...treeState(nodes), ...state }, editable }));
 
 describe('RowActions: the "+" of a row (AC-1, AC-2, 14.30)', () => {
   it('is a menu button under a Main Assembly and under a Sub-Assembly, named after its row', () => {
@@ -126,5 +127,75 @@ describe('TreePanel: where the actions are (AC-3, AC-5, AC-6)', () => {
     const html = panel(null, true);
     expect(html).not.toContain('Add main assembly');
     expect(html).not.toContain('data-row-actions');
+  });
+});
+
+/** The opening tag of the button with this name: its `aria-label`, or its words when it has none. */
+const buttonTag = (html: string, name: string): string => {
+  for (const button of html.match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? []) {
+    const tag = button.match(/^<button[^>]*>/)?.[0] ?? '';
+    if (tag.includes(`aria-label="${name}"`) || button.replace(/<[^>]+>/g, '') === name) return tag;
+  }
+  throw new Error(`no button named ${name}`);
+};
+/** The attribute `disabled` itself, not the `disabled:` classes. */
+const DISABLED = / disabled=""/;
+
+describe('AQP-343 (DEF-040, DL-340): the tree while a change is on its way', () => {
+  const WORDS = 'Updating the parts. This takes a moment.';
+  const waiting = { busy: true, waiting: true } as const;
+
+  it('shows the line above the tree once the wait is long enough, as plain text and not a live region, and in the empty tree too', () => {
+    for (const nodes of [NODES, []]) {
+      const html = panel(nodes, true, waiting);
+      expect(count(html, WORDS)).toBe(1);
+      expect(html).toContain(`<p id="parts-tree-changing" class="text-body text-ink-2">${WORDS}</p>`);
+      expect(html.indexOf(WORDS)).toBeLessThan(html.indexOf('aria-label="Parts tree"') === -1 ? html.length : html.indexOf('aria-label="Parts tree"'));
+    }
+    // The live line is the one that was always there, and it holds the usual announcement; the screen reader hears the same words from it (the hook sets both).
+    expect(panel(NODES, true, { ...waiting, announcement: WORDS })).toContain(`<p role="status" class="sr-only">${WORDS}</p>`);
+  });
+
+  it('keeps the move buttons, "Add main assembly" and the row buttons aria-disabled and described by that line, and none of them is disabled', () => {
+    const html = panel(NODES, true, waiting);
+    for (const name of ['Move up', 'Move down', 'Add main assembly', 'Add under 1 Hopper', 'Add fastener under 1.1.1 Plate', 'Delete 1 Hopper', 'Delete 1.1.1.1 Nut']) {
+      const tag = buttonTag(html, name);
+      expect(tag, name).toContain('aria-disabled="true"');
+      expect(tag, name).toContain('aria-describedby="parts-tree-changing"');
+      expect(tag, name).not.toMatch(DISABLED);
+    }
+    expect(html).toContain('>Move up<');
+  });
+
+  it('is aria-disabled for the first 300 ms too, but names no line that is not on screen yet', () => {
+    const html = panel(NODES, true, { busy: true });
+    expect(html).not.toContain('parts-tree-changing');
+    expect(buttonTag(html, 'Move down')).toContain('aria-disabled="true"');
+    expect(buttonTag(html, 'Move down')).not.toContain('aria-describedby');
+    expect(buttonTag(html, 'Add main assembly')).toContain('aria-disabled="true"');
+  });
+
+  it('is as it was when nothing is on its way: no line, no description, "Add main assembly" enabled', () => {
+    const html = panel(NODES, true);
+    expect(html).not.toContain('parts-tree-changing');
+    expect(html).not.toContain(WORDS);
+    expect(buttonTag(html, 'Add main assembly')).not.toContain('aria-disabled');
+    expect(buttonTag(html, 'Add main assembly')).not.toMatch(DISABLED);
+  });
+
+  it('puts "We could not load the parts" with "Try again" in the place of a tree that could not be read again, with no move buttons and no claim about the change', () => {
+    const html = panel(NODES, true, { problem: { kind: 'unconfirmed' } });
+    expect(html).toContain('We could not load the parts');
+    expect(html).toContain('Check your connection and try again. What you typed is kept.');
+    expect(html).toContain('>Try again<');
+    expect(html).not.toContain('data-part-id=');
+    expect(html).not.toContain('>Move up<');
+    expect(html).not.toContain('The change was not made');
+    expect(html).not.toContain('was saved');
+  });
+
+  it('keeps the words of the Notices that were there: not made, and changed by someone else', () => {
+    expect(panel(NODES, true, { problem: { kind: 'failed' } })).toContain('The change was not made');
+    expect(panel(NODES, true, { problem: { kind: 'changed' } })).toContain('The parts were changed by someone else. The tree has been refreshed. Check it and try again.');
   });
 });
