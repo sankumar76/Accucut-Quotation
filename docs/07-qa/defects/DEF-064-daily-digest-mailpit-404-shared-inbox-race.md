@@ -85,3 +85,22 @@ Answered by DL-325. Nothing new asked. QA's counts for the record: three occurre
 **The other failure in P3's run 2 is now DEF-071** (DL-333 (3)): PR #632 run 45125512077, `overdue-scan.test.ts` AC-1 `Test timed out in 5000ms` at :56, then a wrong row at :75, with `close-reopen` and `overdue-scan-rules` losing about 5 s in the same window. Master (DL-333): a shared stall (the DL-266 / DEF-052 shape), **product and #642's mail helper excluded**, so `master` is not exposed through #642 and **DEF-064's P2 and P3 are not affected**. Jira [AQP-414](https://sankumar76.atlassian.net/browse/AQP-414), GitHub [#644](https://github.com/sankumar76/Accucut-Quotation/issues/644), file `DEF-071-overdue-scan-ac1-5s-cut-and-leftover-row-at-75.md`.
 
 **Not closed.** DEF-064 closes when P3 has counted 10 runs with no recurrence (Verified step above); a recurrence reopens it the same day. The count is kept in this section and in test plan section 7. QA asked for no re-run.
+
+## P3 reading 2026-11-23, later (qa-engineer; DL-305 (5), DL-325 (F); Stage 11 job logs, ANSI stripped; no re-run, no ruling)
+
+**Counted CI runs created after the squash (06:38:17Z) whose branch contains `master` 06d5d56a (`compare` shows 0 commits of 06d5d56a missing), Stage 11 read: 10 of 10, 0 recurrences of the signature, 0 "Test timed out in 5000ms" in any database test.**
+
+| # | Run | Event, head | Stage 11 | "Mailpit answered" lines | 5 s cuts |
+|---|---|---|---|---|---|
+| 1 | 45125449394 | push master 06d5d56a | 638 files, 16225 tests passed | 0 | 0 |
+| 2 | 45125512077 | PR #632 9f59beb3 | 1 failed file (DEF-071) | 0 | the DEF-071 cut |
+| 3 | 45128502168 | PR #643 b56fbdfd | 638 / 16225 passed | 0 | 0 |
+| 4 | 45154741224 | PR `fix/AQP-415-review-axe-ac9` 080a7f69 | 638 / 16225 passed | 0 | 0 |
+| 5 | 45155456131 | PR `feat/AQP-400-mark-as-quoted` c7f5129c (cancelled run; Stage 11 finished red on the branch's own new tests: `download-marker-restricted.test.ts`, `audit-database.test.ts` reading a missing `mark-quoted.test.ts`) | 2 files, 3 tests failed | 0 | 0 |
+| 6 | 45156558678 | PR `fix/AQP-411-cost-details-route-warm-up` 42b3201f | 638 / 16225 passed | 0 | 0 |
+| 7 | 45157602768 | push master 425d2693 | 638 / 16225 passed | 0 | 0 |
+| 8 | 45157657813 | PR #632 85b07b86 | 638 / 16225 passed | 0 | 0 |
+| 9 | 45158142007 | PR `fix/AQP-415-review-axe-ac9` 3641f1a9 | 638 / 16225 passed | 0 | 0 |
+| 10 | 45158498796 | PR `feat/AQP-400-mark-as-quoted` 9edcb21f | 643 files, 16360 tests passed | 0 | 0 |
+
+**Counting note.** Run 5 is a cancelled run whose Stage 11 job completed (red on its own branch's unfinished tests, none of them the signature); QA counts it because the log was read to its end. **Without it, P3 is 9 of 10 and the tenth is run 45161052093 (PR `test/AQP-416-approve-step-timing`, 7a8b0df0), whose Stage 11 job was still running at this read.** Not counted: the Nightly 45143360826 (a different workflow), 45157447505 (cancelled, its Stage 11 job cancelled, no log), and every run before the squash. **P3 is met on 10 counted runs (or on 9 plus run 45161052093 once read); the Bug is NOT closed here:** QA closes it (this file, test plan, AQP-412 through transitions, `gh issue close 639` with a comment) when the orchestrator confirms the counting, or after run 45161052093's Stage 11 is read clean; a recurrence before then reopens it the same day.
