@@ -10,7 +10,7 @@ import { changesAValue, readOnlySelectProps } from '@/components/features/estima
 const key = (name: string, modifiers: { ctrl?: boolean; meta?: boolean; alt?: boolean } = {}) => ({ key: name, ctrlKey: modifiers.ctrl === true, metaKey: modifiers.meta === true, altKey: modifiers.alt === true });
 
 describe('which keys a read-only drop-down stops', () => {
-  it.each(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', ' ', 'Enter', 'a', 'Z', '7'])('stops %j, which would change the value or open the list', (name) => {
+  it.each(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', ' ', 'Enter', 'F4', 'a', 'Z', '7'])('stops %j, which would change the value or open the list', (name) => {
     expect(changesAValue(key(name))).toBe(true);
   });
 

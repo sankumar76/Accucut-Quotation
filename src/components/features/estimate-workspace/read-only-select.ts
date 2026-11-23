@@ -25,8 +25,8 @@ export function readOnlySelectProps(readOnly: boolean): {
   };
 }
 
-/** The keys of a `<select>` that move its value or open its list. */
-const VALUE_KEYS: ReadonlySet<string> = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', ' ', 'Enter']);
+/** The keys of a `<select>` that move its value or open its list (F4 opens it on Windows). */
+const VALUE_KEYS: ReadonlySet<string> = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown', ' ', 'Enter', 'F4']);
 
 /** A key that would change the value or open the list: not one with Ctrl or Cmd (a shortcut of the browser), and Alt only for Alt+ArrowDown (which opens the list), so Alt+Left and Alt+Right (back and forward) stay. */
 export function changesAValue(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'>): boolean {
