@@ -113,6 +113,9 @@ test.describe('AC-1, AC-2: the eight surface treatments as one multi-select', ()
     await toggle(page, 'Foam');
     await page.keyboard.press('Escape');
     await page.reload();
+    // The reload is a new page load: the form is built from the fields the page fetches once it is up, so the trigger is not on the page until the form is (DEF-070: it was absent when the test's
+    // 30 s ran out). Wait for the form as the other part-form specs do after a reload, so the next line judges what the form shows and not whether the form has arrived.
+    await waitForForm(page);
     await expect(trigger(page)).toContainText('1 selected: Foam');
   });
 
