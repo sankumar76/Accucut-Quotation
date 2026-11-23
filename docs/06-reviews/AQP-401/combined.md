@@ -94,3 +94,53 @@ n/a (round 1; the delta e03225bf is read in QLT-11).
 - Run 45264799032 on e03225bf is fully green, and the head is 0 behind `master` 02460fbe.
 - No finding is above Minor. Under CLAUDE.md section 9 item 2, only Blocker and Critical findings must be fixed before merge. QLT-01 to QLT-03 may be fixed now or in the hardening window.
 - If `master` moves before the squash, a clean merge commit that changes no PR file needs no re-review. Read the `/queue` and `/estimates/[code]` rows of the new run against the new `master` row.
+
+## Delta review (#663)
+
+| Field | Value |
+|-------|-------|
+| Review round | 2 (delta) |
+| PR | [#663](https://github.com/sankumar76/Accucut-Quotation/pull/663) `fix/AQP-401-review-minors`, base `master` 56ea5cb8 (#661 squash) |
+| Head | **f35f125ba539ea7813d05572395814d751acd67a** (one commit; 10 files, +251 −17) |
+| Run of record | **45275250265: success**, all six jobs (`Stages 1 to 11b` 138045270115, `Stages 1 to 11` 138058005461, E2E shards 138045270583, 138045270866, 138045270483, 138045270682) |
+| Date | 2026-11-23 |
+| **Verdict** | **APPROVE WITH COMMENTS** (all four prior findings fixed; one new Minor). Submitted as COMMENT (single-token): [review 6030488654](https://github.com/sankumar76/Accucut-Quotation/pull/663#pullrequestreview-6030488654); replies posted in the four #661 threads |
+
+### What changed
+- `read-only-select.ts`: `changesAValue` replaces the "everything but Tab and Escape" rule.
+- `picture-refusal.ts` (new): the picture's refusal words. `part-picture.tsx` uses it, and `part-fields.tsx` passes `onServerIgnored` down.
+- `announce.ts`: one module-level timer and a clear after `CLEAR_AFTER_MS` (7 s).
+- `ignore-codes.ts`: the comment is corrected.
+- Tests: `read-only-select.test.ts`, `picture-refusal.test.ts` and `announce.test.ts`, all new; one importer line in `estimate-review-architecture.test.ts`.
+- No server, route, schema or E2E file changed, so the security points of QLT-09 stand as read.
+
+### Checks run
+| Check | Source | Result |
+|-------|--------|--------|
+| Delta read | `git diff 56ea5cb8 f35f125b` | Done |
+| Unit, integration, security | job 138045270115 | unit **11,031 passed**; all **16,844 passed**. Changed-code coverage reports "0 of 0": every changed source file is under `src/components/**`, which the coverage scope excludes. The three new unit files cover them |
+| E2E | the four shard logs | 569 + 566 + 570 + 552 = **2,257 passed, 0 failed, 0 flaky, no retry line**; the count is unchanged from #661 |
+| First load | job 138045270115 against the `master` push of 56ea5cb8 (run 45273806439, job 138040217660), every row joined | Only `/estimates/[code]` differs: 189,189 → **189,186 (−3 B)**. `/queue` is 193,127, unchanged (headroom 6,873) |
+| #661 PR body | `gh pr view 661` | Test paths now read `tests/unit/tasks/…` |
+
+### Previous findings
+| ID | Severity | Status | Evidence |
+|----|----------|--------|----------|
+| QLT-01 | Minor | **Fixed** (one gap: QLT-13) | Ctrl/Cmd return `false` first. With Alt, only ArrowDown/ArrowUp (which open the list) are blocked, so Alt+Left/Right go through. Without modifiers, the arrows, Home, End, PageUp, PageDown, Space, Enter and **every single printable character (typeahead)** are blocked. F5, F10 (Shift+F10), ContextMenu, Tab and Escape go through. Unit-tested key by key, and through `readOnlySelectProps` |
+| QLT-02 | Minor | **Fixed** | 409 `ESTIMATE_IGNORED` → `onServerIgnored()` and no words; `PictureControl` maps `''` to no problem. The workspace freezes (`editable` false), so the picture controls go and the one alert shows. The part-changed path, the server's own words and the no-answer sentence are unchanged and tested |
+| QLT-03 | Minor | **Fixed** | Each call clears the previous timer, writes after 150 ms, then clears after 7 s; tested with fake timers (one node, last sentence wins, 0 timers left). **Unmount:** the timer belongs to the module, not to a component, on purpose: the region outlives the dialog and the redraw. It only empties the region and ends by itself, so nothing is left running or leaked |
+| QLT-04 | Info | **Fixed** | Comment and PR body corrected |
+| QLT-05 | Info | Unchanged | With the product-manager (thread reply) |
+| QLT-06 to QLT-12 | Info | Unchanged | No action was required |
+
+### Delta findings
+| ID | Severity | File:line | Issue | Impact | Suggested fix |
+|----|----------|-----------|-------|--------|---------------|
+| QLT-13 | Minor | `src/components/features/estimate-workspace/read-only-select.ts:29,36` (`VALUE_KEYS`, `changesAValue`) | **F4 is not blocked.** On Windows, Chromium (`PopsMenuByAltDownUpOrF4Key`) and Firefox open a `<select>` list with F4, with no Alt needed. The old handler blocked it, so this is a small regression from the QLT-01 fix, on the platform the portal's PCs run. | The list opens on a read-only field. Choosing an option changes nothing: `onChange` refuses it and React restores the controlled value. No data effect. | Add `'F4'` to `VALUE_KEYS` (the Alt branch already returns first), and `'F4'` to the "stops" `it.each` of `read-only-select.test.ts`. Now or in the hardening window. |
+
+**Counts after the delta:** 0 Blocker, 0 Critical, 0 Major. Minor: 1 open (QLT-13). Info: 9 (QLT-04 closed; QLT-05 to QLT-12 unchanged).
+
+### May #663 merge?
+**Yes, on a fully green, up-to-date run.**
+- Run 45275250265 on f35f125b is fully green, and nothing in this review blocks the merge (QLT-13 is Minor).
+- #662 (DEF-075) merges first, so this branch is updated once more. A clean merge commit that changes no file of this PR needs no re-review; read the `/estimates/[code]` and `/queue` rows of that run against the new `master` row.
