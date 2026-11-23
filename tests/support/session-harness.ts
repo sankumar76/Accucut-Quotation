@@ -19,6 +19,7 @@ import type { ConfigRepository } from '../../src/server/repositories/config-repo
 import type { EstimateNodeRepository } from '../../src/server/repositories/estimate-node-repository';
 import { createApprovalService, type ApprovalService } from '../../src/server/services/approval-service';
 import { createUnlockService, type UnlockService } from '../../src/server/services/unlock-service';
+import { createEstimateStatusService, type EstimateStatusService } from '../../src/server/services/estimate-status-service';
 import { createCancelApprovalService, type CancelApprovalService } from '../../src/server/services/cancel-approval-service';
 import { createRemovePriceService, type RemovePriceService } from '../../src/server/services/remove-price-service';
 import { createStepUpService, type StepUpService } from '../../src/server/services/step-up-service';
@@ -155,6 +156,8 @@ export interface SessionHarness {
   readonly approvalService: ApprovalService;
   /** Unlock and its preview (STORY-06.08) over the same estimates and approval records (`getUnlockService` in the composition mock). The canary estimate is never APPROVED, so a valid call of the recipe is the state machine's 409 and writes nothing. */
   readonly unlockService: UnlockService;
+  /** Mark as quoted (CR-01 item 7C, AQP-400) over the same estimates and the same audit sink (`getEstimateStatusService` in the composition mock). The canary estimate is a Draft at every state a test leaves it in, so the valid call of the recipe is the 409 "not approved" and writes nothing. */
+  readonly estimateStatusService: EstimateStatusService;
   /** Cancel approval (STORY-06.12) over the same estimates and approval records, with the real step-up check over the fake people (`HARNESS_PASSWORD` is every person's password) (`getCancelApprovalService` in the composition mock). */
   readonly cancelApprovalService: CancelApprovalService;
   /** Remove price (STORY-06.13) over the same estimates and approval records, with the same real step-up check (`getRemovePriceService` in the composition mock). */
@@ -327,6 +330,12 @@ export function createSessionHarness(): SessionHarness {
     transactions: calculationWorld.transactions,
     workflow: { transition: estimateService.transition, audit: calculationAudit.service },
   });
+  // Mark as quoted (CR-01 item 7C) over the same world and audit sink: the state machine moves the estimate (`transition`), and the entry is written in the same fake transaction.
+  const estimateStatusService = createEstimateStatusService({
+    estimates: calculationWorld.estimates,
+    transactions: calculationWorld.transactions,
+    workflow: { transition: estimateService.transition, audit: calculationAudit.service },
+  });
   // Cancel approval (STORY-06.12) over the same world, with the real step-up check over the fake people. The canary estimate has no approval at any state a test leaves it in, so the recipe's valid call is refused 409
     // (no approval) after the password and the reason pass, and writes nothing.
   const stepUpService = createStepUpService({ users, throttles, hasher, clock: { now: () => new Date() }, keySecret: THROTTLE_KEY_MATERIAL });
@@ -430,6 +439,7 @@ export function createSessionHarness(): SessionHarness {
     calculationWorld,
     approvalService,
     unlockService,
+    estimateStatusService,
     cancelApprovalService,
     removePriceService,
     stepUpService,

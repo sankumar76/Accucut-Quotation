@@ -44,8 +44,8 @@ const ALLOWED: ReadonlyArray<{ status: EstimateStatus; event: StatusEvent; to: E
   { status: 'PREPARED', event: 'CANCEL', to: 'PREPARED', roles: ['ADMIN'] },
   // CR-01 item 7B: Mark as quoted takes an APPROVED estimate to QUOTED (Lead, Admin).
   { status: 'APPROVED', event: 'MARK_QUOTED', to: 'QUOTED', roles: ['LEAD', 'ADMIN'] },
-  // A-CR01-1 (PENDING: to be confirmed with the customer on 2026-11-23; built as assumed): a QUOTED estimate can be unlocked or cancelled back to Draft. These two rows, and the two `QUOTED` cells of
-  // `followOn` in state-machine.ts, are the whole of that assumption: a "no" turns both into ESTIMATE_QUOTED_IS_FINAL (about 0.1 d).
+  // A-CR01-1 (confirmed 2026-11-23, AQP-1 comment 12832, "Yes, both, as built"): a QUOTED estimate can be unlocked or cancelled back to Draft. These two rows, and the two `QUOTED` cells of `followOn` in
+  // state-machine.ts, are the only way back from QUOTED: A-CR01-3 says there is no undo apart from Unlock, so `ESTIMATE_EVENTS` has no UNMARK_QUOTED (pinned below).
   { status: 'QUOTED', event: 'UNLOCK', to: 'DRAFT', roles: ['LEAD', 'ADMIN'] },
   { status: 'QUOTED', event: 'CANCEL', to: 'DRAFT', roles: ['ADMIN'] },
   { status: 'QUOTED', event: 'EXPORT', to: 'QUOTED', roles: ['LEAD', 'ADMIN'] },
