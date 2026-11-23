@@ -87,3 +87,71 @@ n/a (round 1).
 - QLT-02: either the split (each half without a mark, every assertion kept) or the figures recorded.
 - QLT-03 and QLT-04, if fixed now: the refusal sentence stays until the dialog is closed, focus lands on a real element, and the two new E2E cases exist and are green.
 - No change to the server path (route, service, repository, schemas). If any is changed, the security points of QLT-10 are re-read.
+
+## Delta review (12f910ec, then 379ebf05)
+
+| Field | Value |
+|-------|-------|
+| Review round | 2 (delta) |
+| Delta reviewed | `a4d96b61..12f910ec` (the developer's fix commit), plus the merge of `master` d6fe4e7b into the branch (`379ebf05`, which brings in only #643, #648 and #650, all test-only, and touches none of the PR's files) |
+| Head | **379ebf05fab562e2b03ad04dcc5f7fa7ff190aec** |
+| Run of record | **45169253678: success**, all seven jobs: `Stages 1 to 11b`, `Stages 1 to 11`, E2E shards 1 to 4. Run 45168972472 on 12f910ec was cancelled, because it was superseded |
+| Date | 2026-11-23 |
+| **Verdict** | **APPROVE** (all prior findings fixed; no new finding above Info). Submitted as COMMENT (single-token) |
+
+### What changed
+Six files, +104/−16. Nothing on the server path changed: no route, service, repository, schema or manifest, so QLT-10 stands as read.
+- `mark-quoted-dialog.tsx`:
+  - A refusal sets the `refused` phase and calls the new `onRefused`, not `onStale`.
+  - The danger `Notice` now sits in `#mark-quoted-alert` (`tabIndex -1`) and is focused when it appears.
+  - Submit is disabled in the `refused` phase.
+  - The no-answer branch still calls `onStale`, because the mark may have gone through.
+- `mark-quoted-button.tsx`: a `refused` ref. On close after a refusal, the button points `focusAfter` at `#review-actions` and refreshes the page.
+- `review-actions.tsx`: the action bar gets `id="review-actions"` and `tabIndex -1`.
+- `mark-quoted-ids.ts`: two new ids.
+- `quoted-restricted.test.ts`: `review-actions.tsx` is added to the `mark-quoted-ids` allow-list. It is a Lead/Admin server component, so this is a classification, not a weakening.
+- `mark-quoted.spec.ts`: the two marks removed, one split, two new cases.
+
+### Checks run
+| Check | Source | Result |
+|-------|--------|--------|
+| Delta read | `git diff a4d96b61 12f910ec`; `git diff 12f910ec 379ebf05 --name-only` (only `cost-details`, `estimate-review` and `estimate-treatments` specs, from master) | Done |
+| `test.slow()` left in the spec | `git show 379ebf05:tests/e2e/mark-quoted.spec.ts \| grep -c test.slow` | **0** |
+| Unit, integration, security, acceptance | run 45169253678, job 137674432478 | 476 files, 10,676 passed (unit); 643 files, **16,361 passed** (all). `quoted-restricted` 22, `integration/estimates/mark-quoted` 22. Coverage 96.13 % statements |
+| E2E | the four shard logs (`gh api --allow-escape-sequences …/jobs/<id>/logs`) | 535 + 549 + 555 + 552 passed. **0 failed, 0 flaky, no retry line** in any shard. `mark-quoted.spec.ts`: **27 of 27 passed** (9 cases at 3 widths) |
+| E2E durations of the 9 cases (mobile / tablet / desktop) | same logs | `:61` dialog 6.6 / 15.2 / 12.7 s · `:104` good mark 13.7 / 16.3 / **22.5 s** · `:157` Engineer (AC-8) 8.6 / 10.1 / 19.2 s · `:173` refused 6.9 / 8.5 / 11.2 s · `:200` no answer 8.8 / 10.2 / 14.5 s · `:221` second press 8.5 / 9.5 / 16.2 s · `:236` ignored 7.0 / 8.0 / 9.2 s · `:248` Engineer refused 6.8 / 8.1 / 11.0 s · `:261` Unlock 9.9 / 14.4 / 16.1 s. **Slowest 22.5 s**, 7.5 s under the 30 s budget, with no mark (QLT-12) |
+| First load | job 137674432478 rows, joined against the base (137528621551) and against round 1 (137652171835) | `/queue` **192,273** (unchanged from round 1; +12 on base; headroom 7,727). `/estimates/[code]` **186,948** (+45 on round 1; +243 on base; headroom 13,052). No other route differs (QLT-14) |
+| Master since the run's base | `git log d6fe4e7b..origin/master` | **1eae9353 (#652, AQP-343 DEF-040) has merged.** It changes `src/components/features/estimate-workspace/*` and `src/lib/estimates/tree-client.ts`, which is product code. There is no file overlap with this PR, but 379ebf05 is behind again (see "May #649 merge") |
+
+### Previous findings
+| ID | Severity | Status | Evidence |
+|----|----------|--------|----------|
+| QLT-01 | Major | **Fixed** | `test.slow()` deleted from the dialog test. CI on 379ebf05: 6.6 / 15.2 / 12.7 s, green at three widths |
+| QLT-02 | Minor | **Fixed** (the preferred route) | The Engineer half is its own test, "AC-8: what the Engineer is told" (`:157`). It marks through `markQuotedThroughTheApi` and keeps every assertion: the badge word, no notice, no name, no "Quoted on". The good-mark test (`:104`) keeps all of its own assertions. Neither test is marked |
+| QLT-03 | Minor | **Fixed** | On a refusal the sentence stays in the dialog (no refresh), is focused (`#mark-quoted-alert`), and the repeat is off. On close, the page is redrawn and focus goes to `#review-actions`, which stays on the page whatever the status. Both close paths use that stable id: `onCloseAutoFocus` for the dialog, and the unmount effect for a button that leaves with the redraw. So focus no longer falls to `<body>`. The no-answer branch still redraws at once, which is right, because the mark may have gone through. The unlock-button pattern is left for hardening, as recommended |
+| QLT-04 | Minor | **Fixed** | `:173`: a fulfilled 409 `ESTIMATE_NOT_APPROVED`, with the machine's exact sentence (`state-machine.ts:99`). The sentence is shown and focused, submit is off, the axe scan is clean, nothing is written, and focus lands on the bar after close. `:200`: `route.abort()` shows the unconfirmed sentence and turns submit on again; a second press gives `status QUOTED, entries: 1`. Green at three widths |
+| QLT-05 to QLT-11 | Info | Unchanged | No action was required. QLT-06 is acknowledged for 7D (thread reply) |
+
+### Delta findings
+| ID | Severity | File:line | Issue | Suggested fix |
+|----|----------|-----------|-------|---------------|
+| QLT-12 | Info | `tests/e2e/mark-quoted.spec.ts:104` | The good-mark case is still the longest: 22.5 s on desktop (75 % of the budget) without the Engineer half. Round 1 measured 24.3 s with that half included. The remaining time is the 800 ms injected delay, two axe scans and the Closed-tab load. It has no mark, and it is inside the budget. | None now. If it ever times out, it falls under DL-229 (4)(b): diagnose it, and do not mark it. |
+| QLT-13 | Info | `src/components/features/estimate-quote/mark-quoted-ids.ts:13` | `REVIEW_ACTIONS_ID` names an element of the review's action bar but lives in the quote folder. That is forced: the architecture test forbids the client button from importing any `estimate-review` path, and the server-side `review-actions.tsx` may import the quote folder's pure ids. It is also pinned by `quoted-restricted.test.ts:102`. 7D's Ignore/Restore buttons will want the same target. | 7D: reuse this id rather than declare a second one. If more actions need it, move it to a shared pure ids file. |
+| QLT-14 | Info | CI stage 11b | `/estimates/[code]` +45 B on round 1 (+243 B on base). The cause is the button's close handler and the second id import; the dialog stays lazy. `/queue` is unchanged at +12 B. **Accepted**, under the same reading as QLT-05. | None. |
+
+**Counts after the delta:** 0 Blocker, 0 Critical, 0 Major, 0 Minor open. Info: 10 (QLT-05 to QLT-14).
+
+### The E2E test-count freeze (DL-296 (3), as cited in DL-334 (B), DL-335, DL-339 (3) and DL-340)
+**My reading agrees with the orchestrator's: the freeze binds defect-fix PRs, not a new story's own spec.**
+- **What DL-296 (3) is.** It is a constraint on the DEF-062 fix: "the number of tests in the spec stays the same (no split)".
+- **How the later rulings use it.** Each of the four rulings repeats it inside the **scope of a test-only defect fix**: DEF-072 (DL-334), DEF-069 (DL-335), the approve-flow Bug (DL-339 (3)) and DEF-040 (DL-340). None of them states it as a suite-wide rule, and none names a story PR.
+- **Story PRs since then.** They have added E2E cases throughout without a ruling: 7E's `download-marker.spec.ts`, and this PR's own first round, which added 18 cases.
+- **Residual, for master if wanted.** The stated reason in DL-296 is that the count-based shard split should not move while DEF-057's observer (in `rates-changed.spec.ts`) is read. Any new E2E case in any spec can move that split, this PR's 18 + 9 included. If master wants the observer's conditions held strictly until its time-box ends (2026-11-26), that would bind every story PR, and no ruling says so today. Not a finding against #649.
+
+### May #649 merge?
+**Yes, on the quality side, on a fully green run of an up-to-date head.**
+- Run 45169253678 on 379ebf05 is fully green and meets every point of this review.
+- But `master` has moved to 1eae9353 (#652), which changes `src/` files of the Engineer's workspace. That code ships in the same `/estimates/[code]` route.
+- So, if branch protection or DL-236 (a) requires an up-to-date head, the orchestrator uses "Update branch", and #649 merges on that new run when it is fully green.
+- On the new run, read the `/estimates/[code]` and `/queue` rows against #652's own `master` figures, not against the rows above, because #652 may move `/estimates/[code]`.
+- No re-review is needed for a clean merge commit that changes no PR file.
