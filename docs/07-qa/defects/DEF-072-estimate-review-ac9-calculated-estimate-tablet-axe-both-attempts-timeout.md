@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (qa-engineer, 2026-11-23, on master's DL-334 (4)): fails closed (a red required check on `master`), a Test-type defect, no assertion failed, the case passes at the other two widths and on every earlier run read. Same grade as DEF-053 (the precedent master cites) |
 | Priority | P3 (Jira Medium, label `sev-3`). **Lane: the next free lane, ahead of new story work** (DL-334 (4); DL-233 (3), DL-235 (A): the case turned the one required check red on `master`). Lane 3 (aqp-402) can take it now (#632 needs no developer work). The fix never pauses a CR-01 story in build and never takes a lane promised to a CR-01 story whose answer has arrived. **Not a G8 blocker** (Sev-3 Test) |
 | Type | **Test, product NOT excluded** (DL-334 (4)). Two reasons: the scan did not finish, so AC-9's accessibility at 768 px was not checked on this run; and CR-01 items 7A, 7B, 3B and 7E have changed the review page since the earlier readings, so the cause step reads the page's size against 59a885d8 as one input (below) |
-| Status | **Open** (logged 2026-11-23). No fix PR. No re-run rule (DL-334 (7): RISK-031 is open, DL-326 (4)); 45125449394 is not re-run (DL-266 (1)). The next squash's push run is `master`'s run of record |
+| Status | **CLOSED 2026-11-23 (qa-engineer): fixed by #648 (squashed as `master` ad0f53c7); P1, P2 and P3 met (section "Verification" at the end). Watch until G8: any later attempt-1 time-out of the case reopens it; an axe violation list or a received value comes to master at once.** Earlier: **Open** (logged 2026-11-23). No fix PR. No re-run rule (DL-334 (7): RISK-031 is open, DL-326 (4)); 45125449394 is not re-run (DL-266 (1)). The next squash's push run is `master`'s run of record |
 | Jira / GitHub | [AQP-415](https://sankumar76.atlassian.net/browse/AQP-415) / [#646](https://github.com/sankumar76/Accucut-Quotation/issues/646). Jira "relates to" AQP-1 (Intake) and AQP-319 (the owner story of estimate-review AC-9); cross-linked (comment on AQP-415). Labels `ai-delivery`, `aiid-DEF-072`, `bug`, `sev-3`, `final-review`, `agent-qa-engineer`; priority Medium. DEF-072 was free: no file in `docs/07-qa/defects/`, JQL for `aiid-DEF-072` and for "DEF-072" in the summary found nothing, GitHub search found nothing |
 | Risk / rule | **RISK-031 trigger (a) is met** (a red required check on a `master` push, time-out mode, Stage 12), RISK-031 is already open at 9: no re-score (DL-334 (8)). Trigger (b) for 23 Nov (UTC): 7 + 2 = **9 on 3 runs** (this case and `approve.spec.ts:101` [tablet]; `estimate-tree.spec.ts:282` is not counted). **Close-out (DL-326 (5), amended by DL-334 (8)): item (iv) = DEF-072 closed on its proof, and the run read for (iii) contains DEF-072's fix.** A PR run red on this case is not re-run and comes to master; a `master` push red on it is recorded by the orchestrator in the daily update and on this Bug, and comes to master (DL-334 (7)) |
 | Found by / date | CI, `master` push run 45125449394; found by master reading the job logs (DL-334 (1)); logged by qa-engineer 2026-11-23. Log lines re-read by QA on 2026-11-23 (job 137528621668, ANSI stripped) |
@@ -69,9 +69,22 @@ Logs read 2026-11-23 (QA, from the Stage 12 job logs of 45125449394, ANSI stripp
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer (lane 3, ahead of new story work; not started) | | |
-| Regression test added | developer (the case itself; count unchanged) | | |
-| Verified (P1, P2, P3) | qa-engineer | | not started |
+| Fixed | developer (lane 3, ahead of new story work) | 2026-11-23 | PR #648 (AQP-415), head 3641f1a9, squashed as `master` ad0f53c7: set-up without the sign-in screens and the workspace page (`support/calculated-estimate.ts`: `signInAs`, `engineerWithEstimate`, `calculateWithoutThePage`) |
+| Regression test added | developer (the case itself; the same 9 cases, same titles and assertions, one axe scan; count unchanged) | 2026-11-23 | `tests/e2e/estimate-review.spec.ts` only (+14 -50) |
+| Verified (P1, P2, P3) | qa-engineer | 2026-11-23 | P1 and P2 met on PR run 45158142007 and on `master` push 45164384066; P3 met (PR body); see "Verification" |
 
 ## For master
 None asked. DL-334 (A) rules the grade, type, lane, limits and proof; QA records them. Open for the cause step: whether the page's size against 59a885d8 (input 3) is measured by the developer or by QA is not stated in DL-334 (it reads "the cause step reads"); QA assumes the developer, as for DEF-069.
+
+## Verification 2026-11-23 (qa-engineer; DL-334 (4); read from the Stage 12 job logs, ANSI stripped; no re-run)
+
+**The fix.** #648 (AQP-415; `tests/e2e/estimate-review.spec.ts` only, 14 insertions, 50 deletions; no `support/**`, config, CI, package or `src/` change; no skip, retry, budget, timeout or `test.slow()`; the file's 9 cases keep their titles and assertions). The case's set-up now signs in with the two calls the sign-in page makes and presses Calculate with the button's own request, so the page opens fall from 6 to 1 (the review page) and the one whole-page axe scan with the build panel open stays. The case is now at `:174` ("a calculated estimate: ..."), the not-calculated case at `:205`.
+
+| Proof (DL-334 (4)) | Reading | Met |
+|---|---|---|
+| **P1** attempt-1 pass at three widths on the fix PR's run of record | PR run **45158142007** (head 3641f1a9, the squashed head; every job `success`): `:174` attempt 1 **6.1 / 10.0 / 7.3 s** (mobile / tablet / desktop); the earlier run 45154741224 (head 080a7f69) is the PR body's 7.3 / 5.8 / 5.9 s | **Yes** |
+| **P1** and on the first `master` push after it | `master` push **45164384066** (ad0f53c7; every job `success`, shards `548 / 542 / 545 / 529 passed`, 0 flaky, 0 failed): `:174` attempt 1 **6.2 / 11.3 / 12.5 s**; `:205` 4.2 / 9.1 / 8.9 s | **Yes** |
+| **P2** each under 25 s | all six `:174` readings are between 5.8 and 12.5 s (the case read 17.7 to 30.2 s at tablet before) | **Yes** |
+| **P3** the PR body states the case's structure, with one axe scan | PR #648's table: page opens 6 to 1, sign-ins through the page 2 to 0 (2 by the sign-in calls), axe scans 1 to 1 (same scope, tags and rules) | **Yes** |
+
+No axe violation list and no received value in either run. **The Bug is closed** (this file, test plan section 7, Jira AQP-415 through the Done transition, GitHub #646). The watch trigger stays until G8: any later attempt-1 time-out of the case reopens it the same day; an axe violation list or a received value comes to master at once. RISK-031 close-out item (iv) (DL-334 (8)): DEF-072 is closed on its proof, and `master` push 45164384066 contains its fix.
