@@ -53,6 +53,38 @@
 3. Commands denied, not worked around: QA's `git merge origin/master` and `rm` in records-u; a developer's compound `cd … && git merge` (the approved `git -C` form was used); the GitHub MCP review, update-branch and comment tools return 403 (`gh` used).
 4. Follow-ups open: #619, #626, #627, #629, #606/#607.
 
+## Pre-G8 list (master's G8 conditions: DL-314, with the DL-321 (4) and DL-323 (5) deltas)
+
+> Copied by the orchestrator on 2026-11-22 (late), as DL-314 asks (RISK-026: one list, so that no condition is lost). The decision-log entries are the source; where they differ, the later entry wins (DL-323 replaces DL-321 (4) for DEF-038). Status column as of `master` d2771045.
+
+**Blocking defects (G8 mandatory item, no G8-C ID):**
+| Item | Owner | Closes on | Status |
+|---|---|---|---|
+| DEF-057 (Sev-2) | developer / qa-engineer / master | Observer reading names the stall and the fix is verified; **T4: master re-rules by 26 Nov** if no reading names it; open at the freeze → delivery lead with options (DL-295, DL-314) | Open (observer on `master` since #612) |
+| DEF-065 (Sev-2, AQP-407) | qa-engineer | P1 to P6 and QA's verification on #633's head (DL-319, DL-323 (5)) | Fix merged in #633 (d2771045, run 45103803921 green); QA verification under way |
+
+**Date-triggered:**
+| ID | Date | Condition | Status |
+|---|---|---|---|
+| T1 | 28 Nov, end of day | Q-18 (mail details). No answer → AQP-355 Deferred; known gap: e-mail stays off until the install send (DL-309) | Open (delivery lead) |
+| T2 | Freeze, about 3 Dec | G8-C-AC8: no PASS → a go-live condition named in the delivery lead's G8 sign-off; a FAIL is not covered (DL-310) | Open |
+| T3 | Freeze, about 3 Dec, before the final regression | #632 (replaces #476) merges after #633 and DEF-038's test fix, on DL-320 M1 to M7 and DL-323 (4); otherwise the release ships on 16.4.5 with #632 and #513 post-G8 (DL-321 (4), DL-323 (5)) | Open: #633 merged; #636 (DEF-038 fix) in CI; #632 next |
+| T4 | 26 Nov | DEF-057 re-ruling (see above) | Open |
+
+**Open conditions, owner and evidence:**
+| ID | Owner | Status |
+|---|---|---|
+| G8-C-NFR10 | (a) delivery lead: D1 / OQ-PM-05, needed by 26 Nov; (b) qa-engineer on the rehearsal machine after the freeze (DL-311) | Open |
+| G8-C-OQ15 | product-manager: release plan KG-1 wording, (a) to (c) of DL-318 (4); due before master's G8 recommendation | Open. Product-manager's PRD v0.40 / release plan v0.31 is on records-u; master's check not yet recorded |
+| G8-C-NFR9 | as DL-251 | Unchanged |
+| G8-C-581 | as DL-292 | Unchanged |
+| G8-C-CI | delivery lead's written acceptance at sign-off (DL-286) | Unchanged |
+| G8-C-FR064 | product-manager | **Closed (MET, DL-315)** |
+
+**At G8:** the DL-312 Minor list, with every line holding an issue; STD-F-03 listed as a waived Major (DL-298 (6)); RISK-034 and RISK-035 reviewed (RISK-035 score unchanged, DL-323); the install-check list (DL-311 (4)). QA test plan §7.1: if #632 merges, the final regression runs on a 16.4.6 head and reads one export download end to end (DL-321 (5)).
+
+**Not blocking, listed:** DEF-038 (Sev-3 Test; its reopen trigger stays on: any diagnostic line or first-read mismatch makes it provisional Sev-2 the same day and it then blocks G8; if not fixed by G8, listed with #462 and accepted in writing only if no diagnostic line has appeared on any `master` push run since DL-323). DEF-066 (Sev-4, fixed in #633, QA verification under way). DEF-067 (Sev-3, R14, DL-322). DEF-068 (`estimate-save` AC-5, DL-324). **Not a G8 condition:** QLT-08 (closes on AQP-390, DL-313).
+
 ## Resume point (2026-11-22, pause 5, orchestrator)
 
 > This section wins over everything below it. The delivery lead paused the run; all agents finished their current task and stopped. Nothing new was started.
