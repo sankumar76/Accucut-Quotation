@@ -2,7 +2,7 @@
 -- has gone to the customer (the button and the route are story 7C; this file adds the value only).
 --
 -- **One statement, in a file of its own.** PostgreSQL lets a value added by ALTER TYPE ... ADD VALUE be used only after the transaction that added it has committed, and Prisma runs
--- each migration file in one transaction. So no CHECK, default or index in this file may name 'QUOTED': the CHECKs that do are in the next file, 20261123120000_estimate_quoted_ignored.
+-- each migration file in one transaction. So no CHECK, default or index in this file may name 'QUOTED': the CHECKs that do are in the next file, 20261123160000_estimate_quoted_ignored.
 --
 -- Nothing is rewritten and no row changes status: no existing row can be QUOTED. The new value sorts after APPROVED.
 --

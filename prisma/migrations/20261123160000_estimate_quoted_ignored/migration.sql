@@ -4,7 +4,7 @@
 -- Ignored is a **layer over the status, not a status value**: "ignored_at", "ignored_by" and "ignore_remarks" are all NULL or all set, and the status underneath is never touched, so
 -- Restore (7D) cannot lose it. QUOTED is a real status with "quoted_at" and "quoted_by". Class Internal: none of these is cost data, and the remarks may reach the Engineer (A-CR01-2).
 --
--- This file names 'QUOTED' in a CHECK, which is allowed only because the value was added, and committed, by the earlier file 20261123110000_estimate_status_quoted.
+-- This file names 'QUOTED' in a CHECK, which is allowed only because the value was added, and committed, by the earlier file 20261123150000_estimate_status_quoted.
 --
 -- CHECKs (each refuses a row an application bug could otherwise write):
 --   ck_estimates_quoted                     "status" is QUOTED exactly when the quote columns are set, and the two quote columns are both NULL or both set. (Tighter than the
@@ -21,7 +21,7 @@
 -- One transaction (Prisma runs the file in one): a failure anywhere rolls the whole file back.
 --
 -- Rollback note (reverse order of the CR-01 migrations; run with the previous release). First, because the columns are about to go: run the UPDATE in the header of
--- 20261123110000_estimate_status_quoted (QUOTED back to APPROVED, quote columns cleared), and Restore every ignored estimate, here in SQL: the layer is cleared and **the status
+-- 20261123150000_estimate_status_quoted (QUOTED back to APPROVED, quote columns cleared), and Restore every ignored estimate, here in SQL: the layer is cleared and **the status
 -- underneath is not touched**, so an ignored Draft stays a Draft (never set a status to make a row pass a CHECK: that would forge an Approved estimate with no approval behind it). The
 -- state is lost from the row but kept in the audit log (the 7C and 7D events).
 --   UPDATE "estimates" SET "ignored_at" = NULL, "ignored_by" = NULL, "ignore_remarks" = NULL WHERE "ignored_at" IS NOT NULL;

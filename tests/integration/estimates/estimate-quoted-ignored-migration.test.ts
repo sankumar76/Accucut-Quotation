@@ -13,8 +13,8 @@ import { createMigratedScratchDatabase, type ScratchDatabase } from '../../suppo
  */
 
 const migrationDirectory = (name: string): string => fileURLToPath(new URL(`../../../prisma/migrations/${name}/migration.sql`, import.meta.url));
-const addValue = readFileSync(migrationDirectory('20261123110000_estimate_status_quoted'), 'utf8');
-const columns = readFileSync(migrationDirectory('20261123120000_estimate_quoted_ignored'), 'utf8');
+const addValue = readFileSync(migrationDirectory('20261123150000_estimate_status_quoted'), 'utf8');
+const columns = readFileSync(migrationDirectory('20261123160000_estimate_quoted_ignored'), 'utf8');
 /** The statements a header gives as its rollback note (the lines that begin with three spaces after the comment mark), read from the file and never copied. */
 const statementsOf = (sql: string): string[] =>
   sql
@@ -78,7 +78,7 @@ describe('AC-1: the two migration files', () => {
 
   it('puts the CHECKs that name QUOTED in the later file, which is the one that comes after in the migration order', () => {
     expect(columns).toMatch(/CHECK \(.*'QUOTED'/);
-    expect('20261123110000_estimate_status_quoted' < '20261123120000_estimate_quoted_ignored').toBe(true);
+    expect('20261123150000_estimate_status_quoted' < '20261123160000_estimate_quoted_ignored').toBe(true);
   });
 
   it('has the enum labels DRAFT, PREPARED, APPROVED and QUOTED, in that order, and the five columns, all nullable', async () => {
