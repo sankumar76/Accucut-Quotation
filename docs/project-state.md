@@ -8,13 +8,29 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target about 6 Dec 2026, range 5 to 8 Dec, freeze about 3 Dec, all agreed scope kept (DL-307, delivery lead, 2026-11-22; replaces DL-298's provisional 4 Dec). Date triggers: 28 Nov Q-18 (DL-309); freeze AC-8 (DL-310) and #476 (DL-308); G8 condition list DL-314** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-23 by orchestrator (resume point, pause 7) |
+| Last updated       | 2026-11-23 by orchestrator (daily update after pause 7) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-23, orchestrator, after pause 7)
+
+> This section wins over the pause-7 resume point below where they differ. Records on `docs/AQP-1-records-u`: 46f0bcdb, d38e5930, 3a54488e, e61eb13e, 039727ed, 95d2b005, e86d245e.
+
+**`master` = 06d5d56a** (unchanged). **Rulings this run:** DL-334 (push run 45125449394 red: `estimate-review` AC-9 [tablet] → **DEF-072** AQP-415 / #646, Sev-3 Test, product not excluded, takes lane 3 ahead of new story work; `approve.spec:101` second attempt-1 time-out → **DEF-073** AQP-416 / #647, cause step first, lane after DEF-072 and DEF-069; `estimate-tree :282` → DEF-040 occurrence; **no freeze**, no re-run; Nightly 45143360826 red only on the frozen "CI feedback time", RISK-023 note, no action). DL-335 (**DEF-069 = C1**: back to Sev-3 Test, off the blocking list, **G8-C-DEF069 met**; fix scope `tests/e2e/cost-details.spec.ts` only; QLT-01 Minor → GitHub **#645** `tech-debt`, D7 list). DL-336 (**#643 may squash-merge** on run 45128502168 if 0 behind, after the developer fills the PR body's "after this change" row; DEF-070 half 1 **not met** (desktop 25.8 s), DEF-070 stays open until a second test-only change). DL-337 (**customer review answers**, below). DL-338 (**DEF-040 provisional Sev-2**, G8 blocker; DL-275 A11 suspended; code-facts note first in 3D's lane; outcomes M1 → Sev-3, M2 → client fix PR before 3D merges, M3 → master at once; due by the freeze). DL-339 (DEF-073 proof: P1/P2 on the fix PR and the first two `master` pushes, cause by file:line, product-signal clause, `approve.spec.ts` only).
+
+**Customer review answers (delivery lead, chat to the main session, 23 Nov; AQP-1 12832; DL-337):** A-CR01-1 "Yes, both (as built)", A-CR01-2 "Yes, Ignored tab", A-CR01-3 "No undo (as designed)", A-CR01-5 "Same parent only", A-CR01-8 "Fully frozen" → ASSUMPTION-68 to 72 **confirmed** (catalogue 1.12, SPEC 1.19, PRD 0.41, release plan 0.32). OQ-PM-15 "Often" → option A stands for G8; "Return to Engineer" is post-G8 candidate BC-02; G8-C-OQ15 not affected. **3D AQP-406, 7C AQP-400, 7D AQP-401 released**, all three **Ready for Dev** with product-owner validation (7C PASS 12848; 3D and 7D after the scrum-master applied the PO's AC edits, 12853/12854). AQP-400 blocks AQP-401 (file overlap). `/queue` rule for 7C/7D: NFR-009's 200,000 B CI gate (Stage 11b) is pass/fail; the PR states `/queue` and `/estimates/[code]` first load before (base commit; 191,831 B) and after; the delta is checked in the §9 item 2 combined review.
+
+**G8 forecast (product-manager, release plan 0.32 §5.3): holds** at about 6 Dec, range 5 to 8 Dec, freeze about 3 Dec. Triggers that move it are in §5.3 (a lane lost by 25 Nov; the three stories not merged by 30 Nov; a Blocker/Critical in the 7C/7D review; DEF-057 unexplained at 26 Nov; DEF-040 M2/M3 large enough to move the range → delivery lead with options).
+
+**Lanes now (3 developers):** lane 1 (aqp-403): **7C AQP-400** (critical review before merge), then 7D. Lane 2 (aqp-398): #643's PR body row, then the **DEF-069 test-only fix** (AQP-411). Lane 3 (aqp-402): **DEF-072 test-only fix** (AQP-415). Next free lane: the DEF-040 code-facts note, then **3D AQP-406**. After that: DEF-073 cause step, DEF-070's second test-only change. #643 is untouched in aqp-403 (no local work needed); #632's branch is untouched in aqp-402 (its update needs no worktree: trial-merge, then GitHub update-branch).
+
+**Open PRs:** #643 (merge on DL-336 once the body row is filled and it is still 0 behind). #632 (after #643 merges: trial-merge, update, fresh run of record per DL-333). #476 (close after #632 merges).
+
+**Open for the main session / delivery lead:** who updates the UX spec for the confirmed answers (SCR-05 Engineer Ignored state, needed before 7D starts; SCR-06 Restore as a dialog; remarks error words; the no-undo line in the Mark-as-quoted dialog; §0.9 "to confirm" wording): the CR-01 UX session in the main checkout, or ux-expert in records-u (risk of a conflicting edit to `docs/03-ux/ux-spec.md`). Minor items for later: architecture §4.12 / ADR-020 stale after DL-337 (solution-architect); NFR-032 "2 constants" and the deadline-change reading under DL-304 (product-manager); BR-067 cites NFR-025 for NFR-032 (business-analyst).
 
 ## Resume point (2026-11-23, pause 7, orchestrator)
 
@@ -87,7 +103,9 @@
 3. Commands denied, not worked around: QA's `git merge origin/master` and `rm` in records-u; a developer's compound `cd … && git merge` (the approved `git -C` form was used); the GitHub MCP review, update-branch and comment tools return 403 (`gh` used).
 4. Follow-ups open: #619, #626, #627, #629, #606/#607.
 
-## Pre-G8 list (master's G8 conditions: DL-314, with the DL-321 (4), DL-323 (5), DL-325 to DL-328 and DL-329 to DL-332 deltas)
+## Pre-G8 list (master's G8 conditions: DL-314, with the DL-321 (4), DL-323 (5), DL-325 to DL-328, DL-329 to DL-332 and DL-334 to DL-339 deltas)
+
+> 23 Nov delta: DEF-069 off the blocking list and G8-C-DEF069 met (DL-335); DEF-040 on it as provisional Sev-2 (DL-338); open, not blocking: DEF-071 (AQP-414, #644), DEF-072 (AQP-415, #646), DEF-073 (AQP-416, #647); D7 Minor list gains QLT-01 (#645); RISK-031 close-out gains item (iv) DEF-072 closed on its proof (DL-334); G8-C-OQ15 unaffected by the OQ-PM-15 follow-up (DL-337).
 
 > Copied by the orchestrator on 2026-11-22 (late), as DL-314 asks (RISK-026: one list, so that no condition is lost). The decision-log entries are the source; where they differ, the later entry wins (DL-323 replaces DL-321 (4) for DEF-038). Status column as of `master` 06d5d56a (2026-11-23).
 
@@ -96,7 +114,8 @@
 |---|---|---|---|
 | DEF-057 (Sev-2) | developer / qa-engineer / master | Observer reading names the stall and the fix is verified; **T4: master re-rules by 26 Nov** if no reading names it; open at the freeze → delivery lead with options (DL-295, DL-314) | Open (observer on `master` since #612) |
 | DEF-065 (Sev-2, AQP-407) | qa-engineer | P1 to P6 and QA's verification on #633's head (DL-319, DL-323 (5)) | **Closed** (QA verified on d2771045, 9762cc18; AQP-407 Done) |
-| DEF-069 (provisional Sev-2, AQP-411, #638) | developer (code-facts note) → reviewer-quality (combined review, `docs/06-reviews/AQP-411/combined.md`) → qa-engineer → developer (fix) | DL-329: the 5 s forbidden-route trigger was met twice (5,472 / 5,104 ms, 403 each, no verdict failure). Combined-review outcome **C1** → back to Sev-3 Test the same day; **C2** → Sev-2 product fix; **C3** (cost data read or logged on refusal) → master and QA at once, Sev-1 if a cost value. Proof as DL-327 (6) | Open: code-facts note in progress |
+| DEF-069 (AQP-411, #638) | developer (test-only fix, lane 2) | **Off the blocking list (DL-335, 23 Nov): C1, back to Sev-3 Test** (QA, records e86d245e). Fix scope `tests/e2e/cost-details.spec.ts` only | **Not blocking** (row kept for the trail) |
+| DEF-040 (provisional Sev-2, AQP-343, #468) | developer (code-facts note first in 3D's lane) → master / qa-engineer | **DL-338 (23 Nov):** DL-234 (3)(iii) met on push 45125449394 (move request unanswered, no notice). M1 → Sev-3 the same day; M2 → client fix PR ahead of 3D's merge; M3 → master at once. Closes on no DEF-040 failure on the fix PR's run and the first two `master` pushes after it. Due by the freeze; else delivery lead with options. DL-275 A11 suspended | Open |
 
 **Date-triggered:**
 | ID | Date | Condition | Status |
@@ -115,7 +134,7 @@
 | G8-C-581 | as DL-292 | Unchanged |
 | G8-C-CI | delivery lead's written acceptance at sign-off (DL-286) | Unchanged |
 | G8-C-FR064 | product-manager | **Closed (MET, DL-315)** |
-| G8-C-DEF069 (DL-327 (7), amended DL-329) | developer / reviewer-quality / qa-engineer | By the freeze (about 3 Dec): DEF-069 closed on its proof, **or** a C1 release from the combined review together with the step reading (the tablet failing attempt already gives it). Otherwise → master, and the delivery lead with options before the G8 recommendation. **Not met** (observation merged in #640, 86cf64d3) |
+| G8-C-DEF069 (DL-327 (7), amended DL-329) | developer / reviewer-quality / qa-engineer | By the freeze (about 3 Dec): DEF-069 closed on its proof, **or** a C1 release from the combined review together with the step reading (the tablet failing attempt already gives it). Otherwise → master, and the delivery lead with options before the G8 recommendation. **MET (DL-335, 23 Nov: C1 plus the step reading)** |
 
 **At G8:** the DL-312 Minor list, with every line holding an issue; STD-F-03 listed as a waived Major (DL-298 (6)); RISK-034 and RISK-035 reviewed (RISK-035 score unchanged, DL-323); RISK-031 reviewed as reopened at 9 (DL-326; close-out needs the DEF-069 proof, the treatments `:86` Bug's proof, then one `master` push with 0 time-out flaky in every shard and Stage 11 green or red only on the DEF-064 signature); the install-check list (DL-311 (4)). QA test plan §7.1: if #632 merges, the final regression runs on a 16.4.6 head and reads one export download end to end (DL-321 (5)).
 
