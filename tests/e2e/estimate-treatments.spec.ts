@@ -8,7 +8,7 @@ import { defined } from '../support/defined';
 
 import { connectToTestDatabase, ensureCanaryCustomers, ensureCanaryMaterials, setCanaryCustomer, useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { control, expectFormAccessible, leastFieldHeight, nextSave, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
+import { control, expectFormAccessible, expectNothingUnsaved, leastFieldHeight, nextSave, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 import { deleteTreatment, insertTreatment, newTreatmentName, readPartInputs, renameTreatment, storeTreatmentInPart } from './support/treatment-rows';
 
@@ -51,6 +51,8 @@ async function toggle(page: Page, name: string): Promise<void> {
   const saved = nextSave(page);
   await list(page).getByRole('checkbox', { name: new RegExp(`${name}$`) }).click();
   expect(await saved).toBe(200);
+  // The next choice, of the same treatment or another, is made after the page has handled this answer, as a person's is (AQP-1 issue 513).
+  await expectNothingUnsaved(page);
 }
 
 async function optionNamesOfG(page: Page): Promise<string[]> {
