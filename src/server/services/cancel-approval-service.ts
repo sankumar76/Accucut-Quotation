@@ -11,7 +11,7 @@ import {
   NO_APPROVAL_TO_CANCEL_CODE,
   NO_APPROVAL_TO_CANCEL_MESSAGE,
 } from '../../lib/estimate/cancel-words';
-import { isLocked } from '../../lib/estimate/state-machine';
+import { isLocked, TRANSITION_REFUSALS } from '../../lib/estimate/state-machine';
 import type { ApprovalCancelling } from '../repositories/approval-repository';
 import type { EstimateUnlocking } from '../repositories/estimate-repository';
 import type { TransactionRunner } from '../repositories/transaction';
@@ -113,6 +113,8 @@ export function createCancelApprovalService({ estimates, approvals, transactions
       return await transactions.run(async (tx) => {
         const estimate = await estimates.lockEstimate(estimateId, tx);
         if (estimate === null) throw new NotFoundError();
+        // An ignored estimate is read-only until it is restored, the Admin's cancel included (CR-01 item 7D, AQP-401 AC-6; A-CR01-8): this route's own check under the lock, before the customer, the materials and the approval are looked at, so an ignored estimate with no approval says "ignored" and not "no approval". The state machine's code and words.
+        if (estimate.ignoredAt !== null) throw new ConflictError(TRANSITION_REFUSALS.IGNORED.message, { code: TRANSITION_REFUSALS.IGNORED.code });
         // The customer, then the materials in ascending ID order, each `FOR SHARE` after the estimate's and the task's lock (AC-9): the check Unlock shares, in the cancel's words. The state machine's own decision for
         // CANCEL is made by `transition` below, under the same lock; it allows the Admin in every status (AC-10), so there is no status for this check to wait for.
         await assertCustomerAndMaterialsExist(estimates, estimate, tx, CANCEL_WORDS);

@@ -24,6 +24,7 @@ const row = (overrides: Partial<QueueRowData> = {}): QueueRowData => ({
   deadlineAt: '2026-11-12T11:30:00.000Z',
   status: 'DRAFT',
   assignedByName: 'Invented Boss',
+  ignoredRemarks: null,
   ...overrides,
 });
 

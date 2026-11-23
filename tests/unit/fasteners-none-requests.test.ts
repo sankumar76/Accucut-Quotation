@@ -44,7 +44,7 @@ const NOTHING = (): void => undefined;
 async function open(held: Record<string, string>) {
   partServer.reset(held);
   const gate = createSaveGate();
-  const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields: [S, T, U], onSaved: NOTHING, onChanged: NOTHING, onWrote: NOTHING, gate };
+  const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields: [S, T, U], onSaved: NOTHING, onChanged: NOTHING, onServerIgnored: NOTHING, onWrote: NOTHING, gate };
   const hook = renderHook(usePartValues, props);
   hook.render();
   await settle();

@@ -71,6 +71,7 @@ export function createCostWorld(options: CostWorldOptions = {}): CostWorld {
   const current: ConfigVersion = { ...version, id: CURRENT_VERSION_ID, number: COST_CONFIGURATION_NUMBER + 1 };
   const basis: FigureBasis = {
     inputsRevision: options.inputsRevision ?? COST_CALCULATION_REVISION,
+    ignoredAt: null,
     calculation: calculated ? { id: CALCULATION_ID, inputsRevision: COST_CALCULATION_REVISION, configVersionId: VERSION_ID, createdAt: COST_CALCULATED_AT } : null,
   };
   const reads = { basis: readLog(), working: readLog(), nodes: readLog(), currentVersion: readLog(), versionById: readLog() };

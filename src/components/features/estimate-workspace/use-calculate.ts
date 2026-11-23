@@ -5,6 +5,8 @@ import { useRef, useState } from 'react';
 import type { AckRequestView } from '@/lib/estimates/calculate-client';
 import { type BlockedPartView, withoutFilled } from '@/lib/estimates/calculate-missing';
 
+import { ESTIMATE_IGNORED_CODE } from '../estimate-ignore/ignore-codes';
+
 
 /**
  * Why the last press did not submit anything: in the server's words (a refusal with no list: a 409 such as "choose the customer"), "it failed" (no usable answer came), or "unsaved" (a field
@@ -32,7 +34,18 @@ const ALREADY_PREPARED_CODE = 'ESTIMATE_ALREADY_PREPARED';
  *
  * `filled(partId, inputs)` is told what a saved part now holds, so a part leaves the list as its last missing field is filled and the triangle in the tree goes with it.
  */
-export function useCalculate({ estimateId, onPrepared, settle }: { readonly estimateId: string; readonly onPrepared: () => void; readonly settle: () => Promise<boolean> }) {
+export function useCalculate({
+  estimateId,
+  onPrepared,
+  onServerIgnored,
+  settle,
+}: {
+  readonly estimateId: string;
+  readonly onPrepared: () => void;
+  /** The 409 of an ignored estimate (CR-01 item 7D, AQP-401 AC-8): the page shows its one alert, and Calculate says nothing of its own. */
+  readonly onServerIgnored: () => void;
+  readonly settle: () => Promise<boolean>;
+}) {
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState<ReadonlyArray<BlockedPartView> | null>(null);
   const [problem, setProblem] = useState<CalculateProblem | null>(null);
@@ -68,6 +81,8 @@ export function useCalculate({ estimateId, onPrepared, settle }: { readonly esti
       setBlocked(null);
       setDone(outcome.value.message);
       onPrepared();
+    } else if (outcome.httpStatus === 409 && outcome.code === ESTIMATE_IGNORED_CODE) {
+      onServerIgnored();
     } else if (outcome.code === ALREADY_PREPARED_CODE) {
       // Another tab (or an earlier press whose answer was lost) already prepared it: the estimate is prepared, so the screen shows it as that, in the server's words.
       setDone(outcome.title);

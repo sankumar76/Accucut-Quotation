@@ -6,7 +6,9 @@ import { describeDeleteAfter, describeDeleteBefore } from '../../lib/config/fiel
 import { describeInsertAudit, describeInsertBefore } from '../../lib/config/field-insert-audit';
 import { describeRevertAfter, describeRevertBefore } from '../../lib/config/revert';
 import { MAX_REASON_LENGTH } from '../../lib/estimate/approve-price';
+import { IGNORE_REMARKS_MAX_LENGTH } from '../../lib/estimate/ignore-words';
 import { ESTIMATE_STATUSES, type EstimateStatus } from '../../lib/estimate/state-machine';
+import { taskStatusOf } from '../../lib/estimate/task-status';
 import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
 import { FIELD_KINDS } from '../../lib/fields/types';
 import { formatRupees } from '../../lib/money';
@@ -166,6 +168,19 @@ const describeOverride = (before: z.output<typeof overriddenBefore>, after: z.ou
 const unlockedBeforeState = z.strictObject({ approvedPrice: rupeesText });
 /** What an unlock keeps after: the Lead's reason, as stored (1 to 500 characters, trimmed). Who and when are the entry's own columns. */
 const unlockedAfterState = z.strictObject({ reason: z.string().min(1).max(500) });
+
+// ---- Shape of the Ignore and Restore events (CR-01 item 7D, AQP-401; SCR-16 "Task change") ------------------------------------------
+/** The status underneath the Ignored layer: a Draft, a Prepared or an Approved estimate (a Quoted one cannot be ignored, `ck_estimates_quoted_not_ignored`). */
+const ignoredStatusState = z.strictObject({ status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']) });
+/** The status and the Lead's remarks as stored (trimmed, 1 to `IGNORE_REMARKS_MAX_LENGTH` code points). The limit counts code points, as the column's CHECK does. */
+const ignoredRemarksState = z.strictObject({
+  status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
+  remarks: z
+    .string()
+    .min(1)
+    .refine((text) => Array.from(text).length <= IGNORE_REMARKS_MAX_LENGTH, { message: `Use ${IGNORE_REMARKS_MAX_LENGTH} characters or fewer.` }),
+});
+const describeStatus = (status: EstimateStatus): string => taskStatusOf(status).label;
 
 // ---- Shape of the cancel event (SCR-16 "Approval cancelled"; STORY-06.12) ---------------------------------------------------------
 /** The status of the estimate, before and after the cancel. Equal when the cancel did not move it (an approval kept through an unlock, on a Draft or a Prepared estimate: AC-10), so the entry shows that nothing moved. */
@@ -677,6 +692,27 @@ export const AUDIT_EVENTS = {
     before: z.strictObject({ status: z.literal('APPROVED') }),
     after: z.strictObject({ status: z.literal('QUOTED') }),
     describe: () => ({ before: 'Approved', after: 'Quoted' }),
+  }),
+
+  // ---- Wired in CR-01 item 7D (AQP-401): an estimate ignored, and restored ------------------------------------------------------------
+  // One entry for each, in the change's own transaction under the estimate's row lock. Ignore keeps the status underneath (the layer does not change it) before, and the status with the Lead's remarks after. Restore
+  // keeps the Ignore remarks before (they stay on record after the layer is cleared) and the status after: Restore has no remarks of its own (the product-manager, FR-109). The object is the task's code and the actor
+  // the Lead or the Admin who pressed. A refusal writes no entry. No figure has a key to sit in (NFR-002, NFR-007).
+  'estimate.ignored': defineEvent({
+    objectType: 'estimate',
+    category: 'task_change',
+    status: 'wired',
+    before: ignoredStatusState,
+    after: ignoredRemarksState,
+    describe: (before, after) => ({ before: describeStatus(before.status), after: `Ignored. Remarks: ${after.remarks}` }),
+  }),
+  'estimate.restored': defineEvent({
+    objectType: 'estimate',
+    category: 'task_change',
+    status: 'wired',
+    before: ignoredRemarksState,
+    after: ignoredStatusState,
+    describe: (before, after) => ({ before: `Ignored. Remarks: ${before.remarks}`, after: describeStatus(after.status) }),
   }),
 
   // ---- Wired in STORY-04.07: a task given to another Engineer, a new deadline, or both ----------------------------------------------

@@ -26,6 +26,8 @@ export interface ReassignTaskData {
   readonly notes: string | null;
   /** The status of the estimate. An approved one means the task is closed: the form is not shown (A-14). */
   readonly status: EstimateStatus;
+  /** The Ignored layer is set over the estimate (CR-01 item 7D, FR-040): an ignored task is read-only until it is restored, so the form is not shown. */
+  readonly ignored: boolean;
 }
 
 /** The form as the task is now: the stored Engineer, and the stored deadline as the date and the time it has in IST. */

@@ -111,6 +111,8 @@ export interface CalculationRecord extends Omit<NewCalculation, 'warnings'> {
  */
 export interface FigureBasis {
   readonly inputsRevision: number;
+  /** When the Ignored layer was set over the estimate, or null (CR-01 item 7D): read with the basis, so a route that reads it under a lock or a snapshot refuses an ignored estimate by its own check (AC-6). No figure. */
+  readonly ignoredAt: Date | null;
   readonly calculation: {
     readonly id: string;
     readonly inputsRevision: number;
@@ -316,9 +318,9 @@ export function createCalculationRepository(db: PrismaClient): CalculationReposi
         if (!isUuid(estimateId)) return null;
         const found = await clientFor(db, tx).estimate.findUnique({
           where: { id: estimateId },
-          select: { inputsRevision: true, currentCalculation: { select: { id: true, inputsRevision: true, configVersionId: true, createdAt: true } } },
+          select: { inputsRevision: true, ignoredAt: true, currentCalculation: { select: { id: true, inputsRevision: true, configVersionId: true, createdAt: true } } },
         });
-        return found === null ? null : { inputsRevision: found.inputsRevision, calculation: found.currentCalculation };
+        return found === null ? null : { inputsRevision: found.inputsRevision, ignoredAt: found.ignoredAt, calculation: found.currentCalculation };
       }),
 
     findReviewFigures: (calculationId) =>

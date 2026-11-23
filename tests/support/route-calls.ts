@@ -255,6 +255,13 @@ function estimateCall(method: HttpMethod, path: string, context: CallContext): V
     // and the row lock and the CHECKs are `tests/integration/estimates/mark-quoted.test.ts`.
     case 'POST /api/v1/estimates/[id]/quoted':
       return { id, status: 409 };
+    // CR-01 item 7D (AQP-401): an Ignore that passed would set the layer over the canary estimate, and every later call would be the 409 "already ignored", so the valid call is the one that cannot change anything: empty
+    // remarks are refused 422 under `remarks` after the role check, for the two roles that may call it, and write nothing (no layer, no audit entry). The canary estimate is never ignored, so Restore is refused 409
+    // `ESTIMATE_NOT_IGNORED` at every state it can be in and writes nothing. Both refusals hold a fixed sentence and no figure, so the scan reads them. The rest of the order is `ignore-restore-route.test.ts`'s.
+    case 'POST /api/v1/estimates/[id]/ignore':
+      return { id, body: { remarks: '' }, status: 422 };
+    case 'POST /api/v1/estimates/[id]/restore':
+      return { id, status: 409 };
     // STORY-06.12: Admin only. The canary estimate has no approval at any state it can be in, so a good reason, the person's own password (`HARNESS_PASSWORD`, the right one, so the step-up passes and clears its count) and an
     // approval that is none are refused 409 ("no approval to cancel") under the estimate's lock, for the one role that may call it, and write nothing (no cancel, no status move, no audit entry). The refusal holds a fixed
     // sentence and no figure, so the scan reads it. The rest of the order (the reason, the password, a deleted customer, a newer approval) is `cancel-approval-route.test.ts`'s, and the row lock is `tests/integration/approval/cancel.test.ts`.

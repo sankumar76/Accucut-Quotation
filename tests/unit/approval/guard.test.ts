@@ -27,6 +27,7 @@ const engineer = { id: 'engineer-1', role: 'ENGINEER' } as const;
 
 const basisAt = (inputsRevision: number, calculationRevision: number | null): FigureBasis => ({
   inputsRevision,
+  ignoredAt: null,
   calculation: calculationRevision === null ? null : { id: CURRENT_ID, inputsRevision: calculationRevision, configVersionId: 'config-1', createdAt: new Date('2026-11-14T05:00:00.000Z') },
 });
 const CURRENT = basisAt(4, 4);

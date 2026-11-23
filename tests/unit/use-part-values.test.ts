@@ -44,7 +44,7 @@ const flushMicrotasks = (): Promise<void> => new Promise((resolve) => setTimeout
 async function open(held: Record<string, string> = { a: '1.00', b: '1.00' }, fields: ReadonlyArray<FormField> = [A, B, C]) {
   partServer.reset(held);
   const gate = createSaveGate();
-  const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields, onSaved: NOTHING, onChanged: NOTHING, onWrote: NOTHING, gate };
+  const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields, onSaved: NOTHING, onChanged: NOTHING, onServerIgnored: NOTHING, onWrote: NOTHING, gate };
   const hook = renderHook(usePartValues, props);
   hook.render();
   await flushMicrotasks();

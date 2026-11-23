@@ -220,6 +220,9 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     'estimate.customer_changed': 'tests/integration/estimates/customer.test.ts',
     // CR-01 item 7C (AQP-400): an approved estimate marked as quoted; the one test is the mark's own, against the real estimate row lock.
     'estimate.quoted': 'tests/integration/estimates/mark-quoted.test.ts',
+    // CR-01 item 7D (AQP-401): an estimate ignored with remarks, and restored; the one test is theirs, against the real estimate row lock.
+    'estimate.ignored': 'tests/integration/estimates/ignore-restore.test.ts',
+    'estimate.restored': 'tests/integration/estimates/ignore-restore.test.ts',
     // STORY-04.07: a task given to another Engineer, a new deadline, or both; the one test is the reassign's own, against the real estimate and task row locks.
     'task.reassigned': 'tests/integration/tasks/reassign.test.ts',
     // STORY-08.02: a formula of the field registry changed; the one test is the save's own, against the real configuration table.

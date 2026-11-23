@@ -56,7 +56,9 @@ const render = (costs: CostsView, status: EstimateStatus): string =>
       viewerRole: 'LEAD',
       download: { kind: 'none' },
       quoted: null,
-      ignored: false,
+      ignored: null,
+      engineerName: 'Invented Engineer',
+      deadlinePassed: false,
     }),
   );
 

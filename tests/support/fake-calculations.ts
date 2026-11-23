@@ -75,6 +75,7 @@ export function createFakeCalculationWorld(estimateWorld: FakeEstimateWorld): Fa
       const linked = calculations.find((calculation) => calculation.id === estimate.currentCalculationId);
       return Promise.resolve({
         inputsRevision: estimate.inputsRevision,
+        ignoredAt: estimate.ignoredAt ?? null,
         calculation: linked === undefined ? null : { id: linked.id, inputsRevision: linked.inputsRevision, configVersionId: linked.configVersionId, createdAt: linked.createdAt },
       });
     },

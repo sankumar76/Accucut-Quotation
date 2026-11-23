@@ -401,7 +401,7 @@ describe('AC-8: who sees it now', () => {
     const queue = await service.listQueue(priya, { tab: 'open' });
     expect(queue.tasks.map((task) => task.code)).toEqual(['Q-2026-0001']);
     expect(Object.keys(defined(queue.tasks[0])).sort()).toEqual(
-      ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'status', 'title'],
+      ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'ignoredRemarks', 'status', 'title'],
     );
     expect(await service.getTask(priya, taskId)).toMatchObject({ code: 'Q-2026-0001', status: 'DRAFT', notes: 'Invented notes.' });
   });
