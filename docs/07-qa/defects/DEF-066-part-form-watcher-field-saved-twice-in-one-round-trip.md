@@ -6,7 +6,7 @@
 | Severity | **Sev-4 Minor** (qa-engineer, 2026-11-23; test plan section 6: no effect on use) |
 | Priority | P3. Lane: with DEF-065's fix if the developer takes it there (recommended); otherwise the backlog after G8. **Does not block G8** |
 | Type | **Product** |
-| Status | **Open** (logged 2026-11-23) |
+| Status | **Verified and Closed 2026-11-23** (fixed inside PR #633, `master` d2771045, commit e9ec27c1 of the PR; see "Verification 2026-11-23"). Logged 2026-11-23 |
 | Jira / GitHub | [AQP-408](https://sankumar76.atlassian.net/browse/AQP-408) / [#634](https://github.com/sankumar76/Accucut-Quotation/issues/634). Jira "relates to" AQP-313, AQP-341 (DEF-038), AQP-407 (DEF-065) and AQP-1. Labels `ai-delivery`, `aiid-DEF-066`, `sev-4`, `final-review`, `agent-qa-engineer`; priority Low |
 | Risk / rule | Same family as RISK-035 (a compare with a stale `heldRef`, at a different site). DEF-064 stays reserved for the Mailpit race (DL-305) |
 | Found by / date | qa-engineer, 2026-11-23, classifying DEF-038 (DL-321) on PR #632's run 45097669695 |
@@ -45,6 +45,18 @@ Send the watcher through the same dedupe as `queueSave` (compare with the value 
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer | | |
-| Regression test added (red on master first) | developer | | |
-| Verified | qa-engineer | | |
+| Fixed | developer | 2026-11-22 | PR #633 squash `d2771045` (`syncWatchers` compares with `settledValue` and sends as a ticketed on-its-way save) |
+| Regression test added (red on master first) | developer | 2026-11-22 | `use-part-values.test.ts` describe "AQP-408: Fasteners and its watchers within one save round trip" (three DEF-066 tests); red on `444d10b7`'s hook and on `43b6366f`'s, green on `d2771045` |
+| Verified | qa-engineer | 2026-11-23 | see "Verification 2026-11-23" |
+
+## Verification 2026-11-23 (qa-engineer; `master` d2771045 = PR #633 squash; run of record 45103803921)
+Method: QA reran the tests on a clean `git archive` copy of `master` d2771045 in the session scratchpad (project `node_modules` linked; Vitest 5.1.0 from that link; nothing committed, no worktree written). See DEF-065's verification section for the commands and the copy's limits.
+
+| Proof (this file's "Proof needed") | Evidence | Result |
+|---|---|---|
+| 1. A test of the steps above: exactly one request carries `t` and one carries `u`; fails on `master` before the fix | The describe "AQP-408: Fasteners and its watchers within one save round trip": "DEF-066: Qty and Cost typed and left right after Fasteners are sent once each, not a second time by their own saves" (QA's steps: S, then T and U typed within S's round trip), "Qty left while the save that follows Fasteners is on its way is not sent again" and "a Qty typed since the one a queued save carries is sent, and the earlier one is not sent after it". At `d2771045` all pass (`use-part-values` 34 of 34). The same three **fail** with the hook at `444d10b7` (the base) and at `43b6366f` (the head before the DEF-066 commit): the base run is `16 failed \| 21 passed (37)` with the three among the 16; the `43b6366f` run is `7 failed \| 27 passed (34)` with the three among the 7 | **Pass** |
+| QLT-09 of the combined review (on the base the same shape could store **stale** data: Qty `5` left, then `6` typed while the sync was queued, the server held `5.00`, the screen `6`) | The third test above is that shape; it passes at `d2771045` (the server ends with `6.00`) and fails at `444d10b7` and `43b6366f`. QA's own hook run of 2026-11-23 had found only the repeat (no wrong data); the stale-data shape is the review's and is now covered | **Pass** (note: "no wrong data" in the Actual Result held only for the steps as written; the base could also store a stale value, as QLT-09 says) |
+| 2. `fasteners-none-requests` (four requests, one per field left) and the `estimate-autosave*` tests unchanged and green; CI green | Local at `d2771045`: the 9 related files `Test Files 9 passed (9)`, `Tests 117 passed (117)`, `fasteners-none-requests` green. CI run of record 45103803921: all 6 jobs success, `Stages 1 to 11b` unit `10603 passed`, integration `16220 passed`; `estimate-fasteners.spec.ts:151` attempt-1 `✓` at mobile, tablet and desktop | **Pass** |
+| A watcher shown again after Fasteners goes back to "None" is still re-sent when nothing is on its way (review check 5) | Reviewer's probe Q1 on `febca143` (the PR head before the merge of master; the hook file is the same as `d2771045`'s) and the DEF-065 "Fasteners cleared" tests, which pass at `d2771045`; `fasteners-none-requests` green | Pass (as read; QA did not re-run Q1) |
+
+**Result: verified. DEF-066 is closed.** It was fixed inside #633 (the route this file recommended), so it did not wait for the backlog after G8.
