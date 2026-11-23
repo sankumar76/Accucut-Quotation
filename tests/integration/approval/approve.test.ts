@@ -338,8 +338,8 @@ describe('AC-9 (AQP-321 AC-4): BO is the approvals row, so clearing the calculat
     await db.owner.query("UPDATE approvals SET removed_by = $2::uuid, removed_at = $3::timestamptz WHERE estimate_id = $1::uuid AND approved_price = 600", [estimateId, db.personId, REMOVED_AT_WITH_600_MS]);
     const view = await review.getCosts(lead(), estimateId);
     expect(view.approval).toBeNull();
-    expect(view.priceRemoved).toMatchObject({ byName: expect.any(String) });
-    expect(JSON.stringify(view.priceRemoved)).not.toContain('600');
+    // The exact two keys: who and when, and no field for the price. A substring check over this JSON would also match the time's own digits (DEF-067).
+    expect(view.priceRemoved).toEqual({ at: REMOVED_AT_WITH_600_MS, byName: 'Invented Calculation Lead' });
     expect(await approvalCount(db, estimateId)).toBe(2);
   });
 });
