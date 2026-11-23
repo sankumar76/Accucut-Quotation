@@ -7,6 +7,7 @@ import { bundleExportWorker } from '../../scripts/lib/export-worker-bundle';
 import { buildTree500 } from './builders/tree500';
 import { incompressiblePicture } from './builders/export-pictures';
 import { createConfigRepository } from '../../src/server/repositories/config-repository';
+import { createDownloadRepository } from '../../src/server/repositories/download-repository';
 import { createExportRepository } from '../../src/server/repositories/export-repository';
 import { createImageRepository } from '../../src/server/repositories/image-repository';
 import { createConfigVersionCache, getCurrentVersion, getVersionById } from '../../src/server/services/config-service';
@@ -54,6 +55,7 @@ export async function openExportPerfWorld(): Promise<ExportPerfWorld> {
       exporter: (builder) =>
         createExportService({
           header: createExportRepository(db.prisma),
+          downloads: createDownloadRepository(db.prisma),
           nodes: db.nodes,
           calculations: db.calculations,
           approvals: db.approvals,

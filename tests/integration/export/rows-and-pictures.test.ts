@@ -7,6 +7,7 @@ import { Decimal } from '@/lib/decimal';
 import { NOT_APPLICABLE_MATERIAL_ID } from '@/lib/masters/system-entries';
 import { buildWorkbook } from '@/server/export/build-workbook';
 import { createConfigRepository } from '@/server/repositories/config-repository';
+import { createDownloadRepository } from '@/server/repositories/download-repository';
 import { createExportRepository } from '@/server/repositories/export-repository';
 import { createImageRepository, READ_MANY_LIMIT } from '@/server/repositories/image-repository';
 import { createConfigVersionCache, getCurrentVersion, getVersionById } from '@/server/services/config-service';
@@ -52,6 +53,7 @@ beforeAll(async () => {
   builder = inProcessBuilder(buildWorkbook);
   exporter = createExportService({
     header: createExportRepository(db.prisma),
+    downloads: createDownloadRepository(db.prisma),
     nodes: db.nodes,
     calculations: {
       findFigureBasis: (estimateId, tx) => db.calculations.findFigureBasis(estimateId, tx),

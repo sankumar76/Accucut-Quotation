@@ -97,9 +97,12 @@ describe('a change as the owner is refused by the triggers (AC-3)', () => {
     expect(await snapshotOfTable()).toEqual(before);
   });
 
+  // `estimate_downloads` (STORY-CR01.7E) has a foreign key to `approvals`, so PostgreSQL refuses a TRUNCATE of `approvals` alone for that reason, before any trigger runs. The statement therefore names both tables, with
+  // `approvals` first: PostgreSQL fires the statement triggers in the order the tables are listed, so the refusal that comes back is `trg_approvals_forbid_truncate`'s, and the message names `approvals`. The other table's
+  // own TRUNCATE trigger is proved by `tests/integration/export/download-log.test.ts`.
   it.each([
     ['DELETE', 'DELETE FROM approvals'],
-    ['TRUNCATE', 'TRUNCATE approvals'],
+    ['TRUNCATE', 'TRUNCATE approvals, estimate_downloads'],
   ])('%s', async (operation, statement) => {
     const before = await snapshotOfTable();
     await expect(db.owner.query(statement)).rejects.toMatchObject({ code: '23000', message: expect.stringContaining(`Table "approvals" is immutable: ${operation} is not allowed`) });

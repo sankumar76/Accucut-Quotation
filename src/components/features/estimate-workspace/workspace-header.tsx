@@ -43,6 +43,8 @@ export interface WorkspaceHeaderProps {
   readonly noCustomerText?: string;
   /** SCR-06's Change customer action, drawn first among the actions of the page header (at the top of the screen: a control inside the identity card sat under the sticky top bar once the page was scrolled to the end of a short review, and axe read it as a target too small and too close, AQP-390). */
   readonly customerAction?: ReactNode;
+  /** SCR-06's download marker chip (STORY-CR01.7E AC-5): drawn after the status, for a Lead and an Admin. SCR-05 passes none, so an Engineer's header has no marker (NFR-002). */
+  readonly downloadMarker?: ReactNode;
 }
 
 /** One labelled value of the identity card: the label is visible text, the value is text (not a disabled input). */
@@ -55,7 +57,7 @@ function Identity({ label, children }: { readonly label: string; readonly childr
   );
 }
 
-export function WorkspaceHeader({ view, noCustomerText = NO_CUSTOMER_SET_MESSAGE, customerAction }: WorkspaceHeaderProps) {
+export function WorkspaceHeader({ view, noCustomerText = NO_CUSTOMER_SET_MESSAGE, customerAction, downloadMarker }: WorkspaceHeaderProps) {
   return (
     <>
       <PageHeader
@@ -65,6 +67,7 @@ export function WorkspaceHeader({ view, noCustomerText = NO_CUSTOMER_SET_MESSAGE
           <div className="flex flex-wrap items-center gap-s-3">
             {customerAction}
             <StatusBadge status={view.status} variant="header" />
+            {downloadMarker}
             <span className="inline-flex items-center gap-s-1 text-body font-semibold text-ink">
               <Icon icon={CalendarClock} size="small" />
               {`Due ${view.deadlineLabel}`}

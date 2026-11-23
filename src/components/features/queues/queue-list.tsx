@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
+import { DownloadChip } from '@/components/shared/download-chip';
 import { FOLDER_LINK_NOTE, FolderPath } from '@/components/shared/folder-path';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { Button } from '@/components/ui/button';
@@ -8,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { RoleName } from '@/lib/auth/roles';
 import { cn } from '@/lib/cn';
 import { isTaskClosed } from '@/lib/estimate/task-status';
+import type { DownloadMarkers } from '@/lib/tasks/download-markers-client';
 import type { QueueRowData } from '@/lib/tasks/queue-client';
 import { formatIst } from '@/lib/time';
 
@@ -42,6 +44,11 @@ export interface QueueListProps {
   readonly tasks: ReadonlyArray<QueueRowData>;
   /** The server's instant (UTC text) that overdue is judged at (`QueuePageData.asOf`). */
   readonly asOf: string;
+  /**
+   * The download markers of the Closed tab's rows (STORY-CR01.7E AC-5), **for a Lead and an Admin only**: `undefined` draws none (an Engineer's list, and every other tab), and `'unavailable'` says the markers could not be
+   * read, so a row never says "Not downloaded" for a marker it does not have.
+   */
+  readonly markers?: DownloadMarkers | 'unavailable' | undefined;
 }
 
 /** The page address of a task: its code, in the workspace's path (SCR-05). */
@@ -97,7 +104,14 @@ function RowAction({ task }: { readonly task: QueueRowData }) {
   );
 }
 
-function TaskTable({ role, tasks, asOf }: QueueListProps) {
+/** The download chip under "Closed" for a Lead and an Admin (never drawn without `markers`, which an Engineer's list never has). */
+function DownloadMarker({ task, markers }: { readonly task: QueueRowData; readonly markers: QueueListProps['markers'] }) {
+  if (markers === undefined || !isTaskClosed(task.status)) return null;
+  // A marker that is not in the answer reads as unavailable, never as "Not downloaded".
+  return <DownloadChip marker={markers === 'unavailable' ? 'unavailable' : (markers[task.id] ?? 'unavailable')} className="mt-s-1" />;
+}
+
+function TaskTable({ role, tasks, asOf, markers }: QueueListProps) {
   const manager = role !== 'ENGINEER';
   return (
     <Table regionLabel={TABLE_REGION_LABEL} caption={TABLE_CAPTION}>
@@ -138,6 +152,7 @@ function TaskTable({ role, tasks, asOf }: QueueListProps) {
             {manager ? (
               <TableCell>
                 <RowAction task={task} />
+                <DownloadMarker task={task} markers={markers} />
               </TableCell>
             ) : null}
           </TableRow>
@@ -153,7 +168,7 @@ function CardOverdueMarker({ task, asOf }: { readonly task: QueueRowData; readon
   return late === null ? null : <OverdueMarker late={late} />;
 }
 
-function TaskCards({ role, tasks, asOf }: QueueListProps) {
+function TaskCards({ role, tasks, asOf, markers }: QueueListProps) {
   const manager = role !== 'ENGINEER';
   return (
     <ul aria-label={LIST_LABEL} className="flex flex-col md:hidden">
@@ -185,20 +200,21 @@ function TaskCards({ role, tasks, asOf }: QueueListProps) {
           </div>
           <Folder task={task} />
           {manager ? <RowAction task={task} /> : null}
+          {manager ? <DownloadMarker task={task} markers={markers} /> : null}
         </li>
       ))}
     </ul>
   );
 }
 
-export function QueueList({ role, tasks, asOf }: QueueListProps) {
+export function QueueList({ role, tasks, asOf, markers }: QueueListProps) {
   return (
     <>
       <p className="px-s-4 pt-s-4 text-label text-ink-2">{FOLDER_LINK_NOTE}</p>
       <div className="hidden md:block">
-        <TaskTable role={role} tasks={tasks} asOf={asOf} />
+        <TaskTable role={role} tasks={tasks} asOf={asOf} markers={markers} />
       </div>
-      <TaskCards role={role} tasks={tasks} asOf={asOf} />
+      <TaskCards role={role} tasks={tasks} asOf={asOf} markers={markers} />
     </>
   );
 }

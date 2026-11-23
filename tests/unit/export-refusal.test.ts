@@ -36,6 +36,7 @@ const summary = (state: ExportSummaryView['state']): ExportSummaryView => ({
   state,
   figures: null,
   warning: null,
+  download: { kind: 'none' },
 });
 
 const render = (view: ExportSummaryView): string => renderToStaticMarkup(createElement(EstimateExport, { summary: view, estimateId: ESTIMATE_ID, code: CODE }));
