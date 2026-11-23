@@ -115,7 +115,6 @@ beforeAll(async () => {
   transactions = createTransactionRunner(db.prisma);
   outbox = createEmailOutboxRepository(db.prisma);
   capture = openMailCapture();
-  await capture.clear();
   service = createTaskService({ tasks: createTaskRepository(db.prisma), transactions, clock, audit: db.audit, mail: taskMail() });
   sendDependencies = { store: outbox, mailer: createMailer(capture.transport), clock, log: () => undefined, jobRuns: { recordRun: () => Promise.resolve() } };
   customerId = await insertAssignCustomer(db.owner, 'Mail Customer');
