@@ -36,7 +36,7 @@ const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'app
 /** STORY-08.02: a formula of the field registry changed. Registry order puts it after the approval events and before the calculation event. */
 const WIRED_CONFIG: ReadonlyArray<AuditEventName> = ['config.formula_changed', 'config.field_inserted', 'config.field_deleted', 'config.reverted'];
 /** CR-01 item 6: the customer of an estimate changed (registry order puts it before the reassign); STORY-04.07: a task given to another Engineer, a new deadline, or both. */
-const WIRED_TASK: ReadonlyArray<AuditEventName> = ['estimate.customer_changed', 'task.reassigned'];
+const WIRED_TASK: ReadonlyArray<AuditEventName> = ['estimate.customer_changed', 'estimate.quoted', 'task.reassigned'];
 const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CONFIG, ...WIRED_CALCULATION, ...WIRED_TASK];
 /** With STORY-06.13 no event is declared and left unwired. */
 const RESERVED: ReadonlyArray<AuditEventName> = [];
@@ -493,6 +493,30 @@ describe('CR-01 item 6, AC-17 (SCR-16 "Task change"): the customer-changed event
     expect(event.after.safeParse({ customer: { name: '', shortName: 'MAS' } }).success).toBe(false);
     expect(event.after.safeParse({ customer: MAS, extra: true }).success).toBe(false);
     expect(event.describeStored({ customer: BWC }, { customer: { name: 'x' } })).toBeNull();
+  });
+});
+
+describe('CR-01 item 7C, AC-7 (AQP-400; SCR-16 "Task change"): the quoted event keeps the status before and after, and nothing else', () => {
+  const event = AUDIT_EVENTS['estimate.quoted'];
+
+  it('is wired, about the estimate, under the "Task change" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'task_change' });
+  });
+
+  it('keeps APPROVED before and QUOTED after, and says so in words', () => {
+    expect(event.describeStored({ status: 'APPROVED' }, { status: 'QUOTED' })).toEqual({ before: 'Approved', after: 'Quoted' });
+  });
+
+  it.each([
+    ['a figure (a price has no place here)', { status: 'APPROVED' }, { status: 'QUOTED', price: '1000.00' }],
+    ['an extra key on the before', { status: 'APPROVED', reason: 'x' }, { status: 'QUOTED' }],
+    ['a status other than QUOTED after', { status: 'APPROVED' }, { status: 'APPROVED' }],
+    ['a status other than APPROVED before', { status: 'PREPARED' }, { status: 'QUOTED' }],
+    ['a before that is null', null, { status: 'QUOTED' }],
+    ['an after that is null', { status: 'APPROVED' }, null],
+  ])('refuses %s', (_name, storedBefore, storedAfter) => {
+    expect(event.before.safeParse(storedBefore).success && event.after.safeParse(storedAfter).success).toBe(false);
+    expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
   });
 });
 

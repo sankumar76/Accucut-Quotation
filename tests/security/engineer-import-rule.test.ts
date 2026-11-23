@@ -135,6 +135,8 @@ const SERVICES = {
     // STORY-06.02 (AC-5, NFR-002): the review reads the calculation record and answers with every figure of an estimate, for the Lead and the Admin only.
     'estimate-review-service',
     'estimate-service',
+    // CR-01 item 7C (AQP-400, NFR-002): Mark as quoted, the status actions that follow (Ignore and Restore, 7D). For the Lead and the Admin alone: it refuses an Engineer by name, and no Engineer view imports it.
+    'estimate-status-service',
     // STORY-07.01 (AC-3, NFR-002): the Excel export builds the file of the worksheet's layout (its figures from STORY-07.02), for the Lead and the Admin only.
     'export-service',
     // STORY-05.07: the picture half of the estimate service (add, replace, remove, read). Built by the estimate service; no Engineer view has a use for it.

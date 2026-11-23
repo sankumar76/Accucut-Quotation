@@ -315,6 +315,10 @@ const ROWS: ReadonlyArray<RouteRow> = [
   // is refused 403 before the ID is looked at. The preview answers two version numbers and counts, the unlock a status and a time; neither is in any Engineer's list, so the cost scan calls both as routes an Engineer is refused (NFR-002).
   { path: '/api/v1/estimates/[id]/unlock-preview', kind: 'api', methods: ['GET'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   { path: '/api/v1/estimates/[id]/unlock', kind: 'api', methods: ['POST'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
+  // CR-01 item 7C (AQP-400; SCR-06's Mark as quoted; architecture section 4.12 c: A L, no step-up): a Lead or an Admin marks an APPROVED estimate as quoted once the quote has gone to the customer. Only the Lead and the Admin
+  // are listed, so an Engineer is refused 403 before the ID is looked at. The answer is the status QUOTED and the marker (a time and a name), so no figure and no ID leave and the cost scan calls it as a route an Engineer is
+  // refused (NFR-002). There is no route that un-marks a quote: the only way back is Unlock (A-CR01-3).
+  { path: '/api/v1/estimates/[id]/quoted', kind: 'api', methods: ['POST'], roles: ADMIN_AND_LEAD, status: 'implemented', stage: 'R1' },
   // STORY-06.12 (SCR-06's Cancel approval; architecture sections 4.10 and 6 "Cancel approval": A only, step-up): the Admin cancels an approval with a reason and their password, which the route checks in the same request
   // (`verifyStepUp`, STORY-06.14). Only the Admin is listed, so a Lead and an Engineer are refused 403 before the ID is looked at. The answer is a status and a time, with no price and no ID, so the cost scan calls it as a route an Engineer is refused (NFR-002).
   { path: '/api/v1/estimates/[id]/approval/cancel', kind: 'api', methods: ['POST'], roles: ADMIN_ONLY, status: 'implemented', stage: 'R1' },

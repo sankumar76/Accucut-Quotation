@@ -42,6 +42,7 @@ import { getCurrentVersion, getVersionById } from './services/config-service';
 import { createCostDetailsService, type CostDetailsService } from './services/cost-details-service';
 import { createEstimateReviewService, type EstimateReviewService } from './services/estimate-review-service';
 import { createEstimateService, type EstimateService } from './services/estimate-service';
+import { createEstimateStatusService, type EstimateStatusService } from './services/estimate-status-service';
 import { createMailService, type MailService } from './mail/mail-service';
 import { createMailer } from './mail/send';
 import { createMailTransport } from './mail/transport';
@@ -85,6 +86,7 @@ let calculationService: CalculationService | undefined;
 let estimateReviewService: EstimateReviewService | undefined;
 let approvalService: ApprovalService | undefined;
 let unlockService: UnlockService | undefined;
+let estimateStatusService: EstimateStatusService | undefined;
 let cancelApprovalService: CancelApprovalService | undefined;
 let removePriceService: RemovePriceService | undefined;
 let costDetailsService: CostDetailsService | undefined;
@@ -412,6 +414,19 @@ export function getUnlockService(): UnlockService {
     });
   }
   return unlockService;
+}
+
+/**
+ * The status actions of an estimate (CR-01 item 7C, AQP-400; story 7D adds Ignore and Restore): under the estimate's row lock in one transaction, the state machine's move (the estimate service's `transition`, in the same
+ * transaction, which writes the status with the quote marker) and the audit entry. Restricted (NFR-002): only the `/quoted` route asks for it here, for the Lead and the Admin alone.
+ */
+export function getEstimateStatusService(): EstimateStatusService {
+  estimateStatusService ??= createEstimateStatusService({
+    estimates: createEstimateRepository(runtimeClient()),
+    transactions: createTransactionRunner(runtimeClient()),
+    workflow: { transition: (viewer, estimateId, event, tx) => getEstimateService().transition(viewer, estimateId, event, tx), audit: getAuditService() },
+  });
+  return estimateStatusService;
 }
 
 /**

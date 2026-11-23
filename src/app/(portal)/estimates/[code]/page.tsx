@@ -50,7 +50,7 @@ export default async function EstimatePage({ params }: PageProps) {
     case 'ADMIN': {
       // SCR-06 is Restricted: it is loaded here, on the Lead's and the Admin's branch only, and never imported by this file (NFR-002).
       const { renderReview } = await import('./review-page');
-      return renderReview({ viewer: { id: user.id, role: user.role }, estimateId: workspace.estimateId, header, customer: workspace.customer });
+      return renderReview({ viewer: { id: user.id, role: user.role }, estimateId: workspace.estimateId, header, customer: workspace.customer, quoted: workspace.quoted, ignored: workspace.ignored });
     }
     default:
       return assertNever(user.role, 'role');

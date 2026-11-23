@@ -30,7 +30,6 @@ const OTHER_ID = '00000000-0000-4000-8000-000700000001';
 const NOT_APPLICABLE_ID = '00000000-0000-4000-8000-000700000002';
 const idOf = (letter: string): string => seedId(FIELD_ID_NAMESPACE, columnLetterToIndex(letter));
 const G = idOf('G');
-const PRIMER = idOf('AA');
 const FOAM = idOf('AF');
 const ALL_TREATMENTS = ['Hot Dip Galvanizing', 'Primer', 'Shot Blasting', 'Polishing', 'Plating', 'Powder Coating', 'Foam', 'Soft Anodize'];
 /** The Excel columns of the eight flags of section 07, in the order of the list (Z to AG). */
@@ -100,15 +99,15 @@ test.describe('AC-1, AC-2: the eight surface treatments as one multi-select', ()
     // Nothing was typed, and nothing is stored.
     expect(await readPartInputs(owner.id)).toEqual({});
 
+    // One treatment is the subject here: chosen it is stored as 1, left again it is stored as 0, and none chosen is valid. A second treatment, chosen and left again, was two more saves (DEF-070:
+    // the case ran 12 to 28 s on CI) for claims that are AC-2's: several chosen at once, the names in the order of the list and not of the clicks, each stored as 1.
     await toggle(page, 'Foam');
-    await toggle(page, 'Primer');
-    await expect(trigger(page)).toContainText('2 selected: Primer, Foam');
-    expect(await readPartInputs(owner.id)).toEqual({ [PRIMER]: '1', [FOAM]: '1' });
+    await expect(trigger(page)).toContainText('1 selected: Foam');
+    expect(await readPartInputs(owner.id)).toEqual({ [FOAM]: '1' });
 
-    await toggle(page, 'Primer');
     await toggle(page, 'Foam');
     await expect(trigger(page)).toContainText('None selected');
-    expect(await readPartInputs(owner.id)).toEqual({ [PRIMER]: '0', [FOAM]: '0' });
+    expect(await readPartInputs(owner.id)).toEqual({ [FOAM]: '0' });
 
     await toggle(page, 'Foam');
     await page.keyboard.press('Escape');
@@ -312,7 +311,8 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
   test('AC-2: with every treatment chosen the trigger shows every name as text and the page still does not scroll sideways', async ({ page }, testInfo) => {
     const owner = await openForm(page, testInfo);
     await openList(page);
-    for (const name of ALL_TREATMENTS) await toggle(page, name);
+    // Chosen from the last to the first, so the names in the trigger are shown in the order of the list and not of the clicks (AC-1 chooses one treatment only).
+    for (const name of [...ALL_TREATMENTS].reverse()) await toggle(page, name);
     await page.keyboard.press('Escape');
     await expect(trigger(page)).toContainText(`8 selected: ${ALL_TREATMENTS.join(', ')}`);
     expect(await readPartInputs(owner.id)).toEqual(EVERY_TREATMENT_STORED);

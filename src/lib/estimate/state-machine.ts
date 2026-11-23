@@ -14,7 +14,7 @@ import type { RoleName } from '../auth/roles';
  *   APPROVED   --UNLOCK (Lead, Admin) / CANCEL (Admin only)-->        DRAFT
  *   APPROVED   --EXPORT (Lead, Admin)-->                              APPROVED
  *   APPROVED   --MARK_QUOTED (Lead, Admin)-->                         QUOTED
- *   QUOTED     --UNLOCK (Lead, Admin) / CANCEL (Admin only)-->        DRAFT      (A-CR01-1, built as assumed: the two `QUOTED` cells of `followOn`)
+ *   QUOTED     --UNLOCK (Lead, Admin) / CANCEL (Admin only)-->        DRAFT      (A-CR01-1, confirmed 2026-11-23, AQP-1 comment 12832: the two `QUOTED` cells of `followOn`)
  *   QUOTED     --EXPORT (Lead, Admin)-->                              QUOTED
  *   DRAFT      --CANCEL (Admin only)-->                               DRAFT      (STORY-06.12 AC-10: an approval kept through an unlock is cancelled; the status stays)
  *   PREPARED   --CANCEL (Admin only)-->                               PREPARED   (the same)
@@ -101,6 +101,7 @@ export const TRANSITION_REFUSALS: Readonly<Record<RefusalReason, RefusalText>> =
   ALREADY_APPROVED: { code: 'ESTIMATE_ALREADY_APPROVED', message: 'This estimate has already been approved.' },
   // A QUOTED estimate is refused with the same code and words as an APPROVED one: the person is told it is locked and what to do about it.
   APPROVED_IS_LOCKED: { code: 'ESTIMATE_APPROVED_IS_LOCKED', message: 'This estimate is approved and locked. Unlock it first.' },
+  // The Mark as quoted dialog spells this code once more, in `mark-quoted-texts.ts`, so the browser need not import this table (NFR-009); a unit test holds the two equal.
   ALREADY_QUOTED: { code: 'ESTIMATE_ALREADY_QUOTED', message: 'This estimate has already been marked as quoted.' },
   QUOTED_IS_FINAL: { code: 'ESTIMATE_QUOTED_IS_FINAL', message: 'This estimate is quoted and cannot be ignored.' },
   ALREADY_IGNORED: { code: 'ESTIMATE_ALREADY_IGNORED', message: 'This estimate is already ignored.' },
@@ -204,8 +205,8 @@ function followOn(status: EstimateStatus, event: StatusEvent): TransitionDecisio
           return refuse('APPROVED_IS_LOCKED');
         case 'UNLOCK':
         case 'CANCEL':
-          // **A-CR01-1, the one assumption of these two cells** (built as assumed, to be confirmed with the customer): an Approved or Quoted estimate can be unlocked back to Draft. If the answer
-          // is "no", both cells become `refuse('QUOTED_IS_FINAL')`, and the service that clears the quote columns on leaving QUOTED is then never reached from here.
+          // **A-CR01-1, confirmed 2026-11-23 (AQP-1 comment 12832, "Yes, both, as built")**: an Approved or Quoted estimate can be unlocked back to Draft, and the Admin can cancel the approval from Quoted. These two cells
+          // are the **only** way back from QUOTED (A-CR01-3: no undo apart from Unlock, so there is no `UNMARK_QUOTED` event). `QUOTED_IS_FINAL` is kept for Ignore alone (`layerEvent`).
           return allow('QUOTED', 'DRAFT');
         case 'EXPORT':
           return allow('QUOTED', 'QUOTED');

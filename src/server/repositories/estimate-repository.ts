@@ -21,10 +21,20 @@ import { clientFor, type Transaction } from './transaction';
  * **What leaves.** A customer is an ID and a name here, and nothing else: no contact detail and no rate is ever selected (BR-003, NFR-002).
  */
 
-/** Who marked the estimate as quoted, and when (CR-01 item 7B): set exactly when the status is QUOTED (`ck_estimates_quoted`). Class Internal: no figure. */
+/**
+ * Who marked the estimate as quoted, and when (CR-01 item 7B): set exactly when the status is QUOTED (`ck_estimates_quoted`). `byName` is the person's name now (CR-01 item 7C: the Quoted notice of SCR-06
+ * names them). Class Internal: no figure.
+ */
 export interface QuoteMarker {
   readonly at: Date;
   readonly byId: string;
+  readonly byName: string;
+}
+
+/** What the answer of Mark as quoted needs of the marker just written: the database's own time and the person's name. No ID leaves. */
+export interface QuotedAt {
+  readonly at: Date;
+  readonly byName: string;
 }
 
 /** Who set the Ignored layer over the estimate, when, and the remarks the Lead or Admin gave: all three or none (`ck_estimates_ignored_all_or_none`). Class Internal: the remarks are not cost data. */
@@ -139,6 +149,11 @@ export interface EstimateRepository {
    */
   setStatus(estimateId: string, from: EstimateStatus, to: EstimateStatus, tx: Transaction, quotedBy?: string): Promise<boolean>;
   /**
+   * When the estimate was marked as quoted and the name of the person who marked it (CR-01 item 7C), read in the caller's transaction so the answer of Mark as quoted shows the marker that was just written.
+   * Null when the estimate is not QUOTED (or the ID is none). Nothing else is read.
+   */
+  findQuoteMarker(estimateId: string, tx: Transaction): Promise<QuotedAt | null>;
+  /**
    * Links the estimate to the calculation just stored for it and sets its status, in the caller's transaction (STORY-03.05; architecture sections 4.2 and 4.4).
    * It leaves `inputs_revision` alone: a calculation is not an input change. The statement links only a calculation that belongs to this very estimate, and
    * throws if it changed no row, so an estimate can never show another estimate's figures.
@@ -161,6 +176,15 @@ export interface EstimateCalculationStorage {
  */
 export interface EstimateLocking {
   readonly lockEstimate: EstimateRepository['lockEstimate'];
+}
+
+/**
+ * What Mark as quoted needs of the estimate repository (CR-01 item 7C): the lock, and the marker just written. A named interface and not a `Pick`, for the same reason as `EstimateLocking`: the
+ * audit-transaction check sees a repository type, declared in this directory, as the receiver of the lock the entry follows.
+ */
+export interface EstimateQuoting {
+  readonly lockEstimate: EstimateRepository['lockEstimate'];
+  readonly findQuoteMarker: EstimateRepository['findQuoteMarker'];
 }
 
 /**
@@ -194,6 +218,7 @@ const WORKSPACE_ROWS = z.array(
     assignedByName: z.string(),
     quotedAt: z.date().nullable(),
     quotedById: z.string().nullable(),
+    quotedByName: z.string().nullable(),
     ignoredAt: z.date().nullable(),
     ignoredById: z.string().nullable(),
     ignoreRemarks: z.string().nullable(),
@@ -202,6 +227,7 @@ const WORKSPACE_ROWS = z.array(
 const LOCK_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, customerId: z.string().nullable(), inputsRevision: z.number().int(), taskCode: z.string(), ignoredAt: z.date().nullable() }));
 const BASIS_ROWS = z.array(z.strictObject({ status: STATUS, configVersionId: z.string().nullable() }));
 const ACCESS_ROWS = z.array(z.strictObject({ id: z.string(), engineerId: z.string(), status: STATUS, ignoredAt: z.date().nullable() }));
+const QUOTE_MARKER_ROWS = z.array(z.strictObject({ at: z.date(), byName: z.string() }));
 const CUSTOMER_ROWS = z.array(z.strictObject({ id: z.string(), name: z.string(), shortName: z.string() }));
 const MATERIAL_ROWS = z.array(z.strictObject({ id: z.string(), deleted: z.boolean() }));
 
@@ -216,18 +242,19 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
           SELECT e.id::text AS "estimateId", e.status::text AS "status", c.id::text AS "customerId", c.name AS "customerName", c.short_name AS "customerShortName",
                  t.code AS "code", t.engineer_id::text AS "engineerId", t.folder_path AS "folderPath", t.deadline_at AS "deadlineAt",
                  t.title AS "title", t.subject AS "subject", t.notes AS "notes", u.name AS "assignedByName",
-                 e.quoted_at AS "quotedAt", e.quoted_by::text AS "quotedById", e.ignored_at AS "ignoredAt", e.ignored_by::text AS "ignoredById", e.ignore_remarks AS "ignoreRemarks"
+                 e.quoted_at AS "quotedAt", e.quoted_by::text AS "quotedById", qu.name AS "quotedByName", e.ignored_at AS "ignoredAt", e.ignored_by::text AS "ignoredById", e.ignore_remarks AS "ignoreRemarks"
           FROM tasks t
           JOIN estimates e ON e.task_id = t.id
           JOIN users u ON u.id = t.assigned_by
           LEFT JOIN customers c ON c.id = e.customer_id
+          LEFT JOIN users qu ON qu.id = e.quoted_by
           WHERE t.code = ${code}`;
         const [row] = WORKSPACE_ROWS.parse(rows);
         if (row === undefined) return null;
-        const { customerId, customerName, customerShortName, quotedAt, quotedById, ignoredAt, ignoredById, ignoreRemarks, ...rest } = row;
+        const { customerId, customerName, customerShortName, quotedAt, quotedById, quotedByName, ignoredAt, ignoredById, ignoreRemarks, ...rest } = row;
         const customer = customerId === null || customerName === null || customerShortName === null ? null : { id: customerId, name: customerName, shortName: customerShortName };
         // The CHECKs make each marker all-or-none, so a half-set row is a fault and reads as no marker rather than as a guess.
-        const quoted = quotedAt === null || quotedById === null ? null : { at: quotedAt, byId: quotedById };
+        const quoted = quotedAt === null || quotedById === null || quotedByName === null ? null : { at: quotedAt, byId: quotedById, byName: quotedByName };
         const ignored = ignoredAt === null || ignoredById === null || ignoreRemarks === null ? null : { at: ignoredAt, byId: ignoredById, remarks: ignoreRemarks };
         return { ...rest, customer, quoted, ignored };
       }),
@@ -326,6 +353,16 @@ export function createEstimateRepository(db: PrismaClient): EstimateRepository {
           UPDATE estimates SET status = ${to}::estimate_status, quoted_at = NULL, quoted_by = NULL, updated_at = now()
           WHERE id = ${estimateId}::uuid AND status = ${from}::estimate_status`;
         return changed === 1;
+      }),
+
+    findQuoteMarker: (estimateId, tx) =>
+      withDatabaseErrors(async () => {
+        if (!isUuid(estimateId)) return null;
+        const rows = await clientFor(db, tx).$queryRaw`
+          SELECT e.quoted_at AS "at", u.name AS "byName"
+          FROM estimates e JOIN users u ON u.id = e.quoted_by
+          WHERE e.id = ${estimateId}::uuid AND e.status = 'QUOTED'::estimate_status`;
+        return QUOTE_MARKER_ROWS.parse(rows)[0] ?? null;
       }),
 
     linkCalculation: (estimateId, calculationId, status, tx) =>
