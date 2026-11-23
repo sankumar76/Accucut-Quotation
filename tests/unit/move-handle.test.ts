@@ -207,6 +207,28 @@ describe('AC-5: what the pointer does before the drag\'s code has arrived is not
     expect(mocks.activate).toHaveBeenCalledTimes(1);
   });
 
+  it('stops listening at the release, not only when the code arrives: the next press on the handle is not part of the gesture that ended (it was marked as a drag and its click opened nothing)', async () => {
+    const held = handleOf();
+    const trigger = triggerOf(handle());
+    call(trigger.props, 'onPointerDown', pointerDown(held));
+    held.fire('pointermove', 200);
+    held.fire('pointerup', 200);
+    // The code has not arrived. The gesture is over, so nothing is listening any more.
+    expect([held.listening('pointermove'), held.listening('pointerup'), held.listening('pointercancel')]).toEqual([0, 0, 0]);
+    call(trigger.props, 'onClick', { detail: 1, currentTarget: held });
+    expect(mocks.activate).not.toHaveBeenCalled();
+    // The next press and release on the handle, with no movement: a click, which opens the menu.
+    call(trigger.props, 'onPointerDown', pointerDown(held));
+    held.fire('pointerup', 123);
+    expect('dragged' in held.dataset).toBe(false);
+    call(trigger.props, 'onClick', { detail: 1, currentTarget: held });
+    expect(mocks.activate).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(mocks.attach).toHaveBeenCalledTimes(2));
+    // The first gesture was handed over whole, and the second as a click.
+    expect(mocks.attach.mock.calls[0]?.[0]).toMatchObject({ seen: [{ kind: 'move', y: 200 }, { kind: 'up', y: 200 }] });
+    expect(mocks.attach.mock.calls[1]?.[0]).toMatchObject({ seen: [{ kind: 'up', y: 123 }] });
+  });
+
   it('does not mark a press that only wobbled: it is a click, and the click opens the menu', async () => {
     const held = handleOf();
     const trigger = triggerOf(handle());

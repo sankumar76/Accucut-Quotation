@@ -37,16 +37,19 @@ export function startDrag(event: PointerEvent<HTMLButtonElement>, onMoveTo: (ind
     (pointer: { readonly clientY: number }): void => {
       seen.push({ kind, y: pointer.clientY });
       if (Math.abs(pointer.clientY - clientY) >= DRAG_START_PX) moved = true;
-      if (kind !== 'move' && moved) handle.dataset['dragged'] = '';
+      if (kind === 'move') return;
+      if (moved) handle.dataset['dragged'] = '';
+      // The gesture is over: what comes next (the click, the next press) is not part of it, whether or not the code has arrived.
+      stop();
     };
   const onMove = keep('move');
   const onUp = keep('up');
   const onCancel = keep('cancel');
-  const stop = (): void => {
+  function stop(): void {
     handle.removeEventListener('pointermove', onMove);
     handle.removeEventListener('pointerup', onUp);
     handle.removeEventListener('pointercancel', onCancel);
-  };
+  }
   handle.addEventListener('pointermove', onMove);
   handle.addEventListener('pointerup', onUp);
   handle.addEventListener('pointercancel', onCancel);
