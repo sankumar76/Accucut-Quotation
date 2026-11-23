@@ -57,6 +57,8 @@ async function openDialog(page: Page, code: string): Promise<Locator> {
 
 test.describe('AC-1, AC-4, AC-9: the dialog', () => {
   test('opens with focus on "Not yet", says the quote has been sent, that only Unlock can reverse it and the download marker, keeps focus inside, scrolls no way sideways, has no axe violation and 44 px targets below 1024 px; Escape sends nothing and gives focus back', async ({ page }, testInfo) => {
+    // The first press fetches the dialog's code, which the development server compiles on demand, and the test scans the open dialog with axe: the budget of one test is not enough on a cold server (AQP-340).
+    test.slow();
     const { code, owner } = await openedApproved(page, testInfo);
     let sent = 0;
     await page.route(MARK_ROUTE, async (route) => {
