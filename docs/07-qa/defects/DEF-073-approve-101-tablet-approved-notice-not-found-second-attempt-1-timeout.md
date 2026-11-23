@@ -76,3 +76,24 @@ Logs read 2026-11-23 (QA, Stage 12 job logs of 45125449394, ANSI stripped); figu
 
 ## For master
 None open. The proof line asked for here was set by DL-339 (above).
+
+## Fix PR #651 read against DL-339 and DL-342 (B) (qa-engineer, 2026-11-23; Stage 12 job logs, ANSI stripped; no re-run)
+
+**The fix.** #651 (AQP-416; branch `test/AQP-416-approve-step-timing`, final head 45ce2723, squashed as `master` **151f42ca**; one file, `tests/e2e/approve.spec.ts` +190 -20; no `support/**`, config, CI, package or `src/` change; no budget, retry, timeout, trace, artifact, skip, `fixme` or `test.slow()` change; every assertion kept, including the 800 ms hold on the Approve route, the "Approving" state, the keyboard path, the axe scan, the notice and the stored-state read; 6 `test(` in the file, unchanged). The Engineer's set-up no longer loads the Engineer's estimate page: it signs in and sends the same Calculate request with the portal's `Origin` (the calls of `calculateWithoutThePage`), with the same two checks (200, then `PREPARED` with 1 calculation). The step-timing lines (`[AQP-416 step timing]`) stay until DEF-073 closes.
+
+**Cause in the PR body (DL-339 (2)(b), amended by DL-342 (B)).** The logs of the two failing attempts (PR #613 run 45016832555 [desktop] and push 45125449394 [tablet]) do not name the step (both ended at the 30 s timeout with under 15 s left for the notice wait; no `[WebServer]` line falls in either attempt), and the PR says so, cites the cause note (AQP-416 comment 12882) and gives the observation's step shares before and after. On the observation run (45161052093) the set-up before the dialog was 55 to 60 % of the case (desktop 14.9 s of 25.8 s) and every Approve and refresh request answered 200.
+
+| DL-339 proof | Reading | Met |
+|---|---|---|
+| **P1** attempt-1 pass at three widths on the fix PR's run of record | **PR run 45179146081** (final head 45ce2723; every job `success`; shards `529 / 542 / 545 / 548 passed`, 0 flaky, 0 failed): the AC-8 case (now `approve.spec.ts:262`) attempt 1 **18.5 / 17.8 / 14.1 s** (mobile / tablet / desktop); the PR body's earlier run of record 45165233683 (a4bccf6c, fully green) read 15.4 / 13.8 / 17.2 s | **Yes** |
+| **P2** each under 25 s | all six readings are between 13.8 and 18.5 s (the case read 25.8 s on desktop before the fix, and failed at 30 s twice) | **Yes** |
+| **(2)(a)** P1 and P2 also on the first **two** `master` pushes after the squash | push 1: `master` 151f42ca, CI run **45183160959** (in progress at this read); push 2: the next merge to `master` (none yet) | **Pending** |
+| **(2)(b)** the PR body names the step that used the time (or says the logs do not, citing the note) and states by file:line what happens between the Approve press and the notice; step lines report the Approve request's status and duration at three widths | the PR body does so (above); **Approve request on the PR run of record: 200 in 1,878 ms (mobile), 2,467 ms (tablet), 2,234 ms (desktop), each answered 1.1 to 1.7 s after the 800 ms hold was released; the notice wait 3.6 / 4.5 / 4.5 s; refresh request 200** | **Yes** |
+| **(2)(c)** a product signal comes to master before closing: an Approve request with no answer within the 15 s notice wait, or an answer other than the awaited status | none: every Approve and refresh request answered 200 within 2.5 s on the PR run (and on the observation run) | **None seen** |
+| **(3)** scope and every assertion kept | `tests/e2e/approve.spec.ts` only; assertions kept; count unchanged | **Yes** |
+
+**Not closed.** DEF-073 closes when P1 and P2 are also read on the first two `master` pushes after the squash (151f42ca and the next), with no product signal. The watch trigger (any later attempt-1 time-out of the case, or a received value on an approval assertion) stays until G8; the step lines stay until DEF-073 closes.
+
+## Push 1 after the squash read (qa-engineer, 2026-11-23; `master` push CI run 45183160959, 151f42ca; Stage 12 and Stage 11 job logs, ANSI stripped; no re-run)
+
+Every job `success` (Windows package 45183161124 `success`); shards `529 / 542 / 545 / 548 passed`, 0 flaky, 0 failed; 0 `[AQP-343 renumber diagnostic]` lines. The AC-8 case (`approve.spec.ts:262`) attempt 1 **12.0 / 19.5 / 18.1 s** (mobile / tablet / desktop): **P1 and P2 met on push 1.** Step lines: the Approve request answered **200 in 1,283 / 2,428 / 2,748 ms** (mobile / tablet / desktop), 0.5 to 1.9 s after the hold was released; no request without an answer, no other status, no "FAILED" line: **no product signal.** `:135` and `:172` were not in this read's set (unchanged cases). **Push 2 (the next merge to `master`) is pending; DEF-073 is not closed** until it is read clean.
