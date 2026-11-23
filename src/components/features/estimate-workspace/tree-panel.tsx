@@ -1,14 +1,16 @@
 'use client';
 
 import { ArrowDown, ArrowUp, CornerDownRight, Plus, Trash2, type LucideIcon } from 'lucide-react';
-import type { KeyboardEvent, ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
+import { PartsTreeList } from '@/components/shared/parts-tree-list';
+import { TreeLegend } from '@/components/shared/tree-legend';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
-import { rowsOf, stepOf } from '@/lib/estimates/tree-moves';
+import { stepOf } from '@/lib/estimates/tree-moves';
 
 import type { DeletePartDialogProps } from './delete-part-dialog';
 import {
@@ -35,7 +37,7 @@ export interface TreePanelProps {
   readonly tree: PartsTreeState;
   /** True while the estimate is a draft. Otherwise the part actions are not shown at all (UX-07): the server would refuse them. */
   readonly editable: boolean;
-  /** Enter on a part opens its form (STORY-05.03). Until that story passes it, Enter does nothing more than the selection that focus already made. */
+  /** Enter on a row's link opens its form (STORY-05.03, review SQR-11): the form takes the focus. A press with a mouse or a finger only chooses the row. */
   readonly onOpen?: (id: string) => void;
   /** The parts Calculate found a missing input in (STORY-05.09): each shows a triangle. Client state from the blocked answer. */
   readonly missingIds?: ReadonlySet<string>;
@@ -46,10 +48,10 @@ const TREE_ID = 'parts-tree';
 /** The delete dialog's code, fetched after the page is up (`use-lazy-component.ts`; NFR-009: the first load of this page has no room left in 200 KB). */
 const loadDeleteDialog = () => import('./delete-part-dialog').then((module) => module.DeletePartDialog);
 
-/** Where focus goes when the delete dialog closes: the tab stop of the tree. The deleted part has no element to return to. */
+/** Where focus goes when the delete dialog closes: the link of the open row. The deleted part has no element to return to. */
 function focusTree(event: Event): void {
   event.preventDefault();
-  document.querySelector<HTMLElement>(`#${TREE_ID} [role="treeitem"][tabindex="0"]`)?.focus();
+  document.querySelector<HTMLElement>(`#${TREE_ID} a[aria-current="true"]`)?.focus();
 }
 
 /**
@@ -66,45 +68,20 @@ function ToolbarButton({ icon, label, unavailable, onClick }: { readonly icon: L
 }
 
 /**
- * The parts tree and its actions (STORY-05.02 AC-1 to AC-3, AC-9; UX spec SCR-05 "Tree"): a `tree` of `treeitem`s, a toolbar of New item, Sub-part, Part beside, Move up,
- * Move down and Delete, and a live region that says what changed ("Part renumbered to 1.2"). Arrow keys move between parts (selection follows focus), Home and End go to the
- * first and last, Right goes to the first sub-part and Left to the parent, Alt with Up or Down moves the part (no dragging is needed), and Enter opens the part once its
- * form exists. All of it is the screen's: every rule is the server's, and what the tree shows is what the server last answered.
+ * The parts tree and its actions (STORY-05.02 AC-1 to AC-3, as changed by CR-01 item 3B): the tree is a `nav` with nested lists of row links, each row with an arrow that opens and closes its branch, a kind icon,
+ * the number and name and the status icon (`PartsTreeList`, `TreeNode`), and a legend of the four icons at its foot. Above it the toolbar of New item, Sub-part, Part beside, Move up, Move down and Delete stays
+ * until the row actions of 3C and 3D replace it, and a live region says what changed ("Part renumbered to 1.2"). There is no arrow-key navigation: Tab moves from row to row and to each arrow, and Enter on
+ * a row opens its form (PM ruling). All of it is the screen's: every rule is the server's, and what the tree shows is what the server last answered.
  */
 export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps) {
   const { nodes, selected, busy } = tree;
   const deleteDialog = useLazyComponent<DeletePartDialogProps>(loadDeleteDialog, tree.deleting !== null);
   const DeleteDialog = deleteDialog.Component;
-  const rows = nodes === null ? [] : rowsOf(nodes);
+  // The branches that are closed. The tree opens with every branch open; what a person closes stays closed while the panel is on screen (the state is this panel's, not the server's).
+  const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
+  const toggle = (id: string): void => setClosed((current) => (current.has(id) ? new Set([...current].filter((other) => other !== id)) : new Set([...current, id])));
   const canUp = selected !== null && nodes !== null && stepOf(nodes, selected, 'up') !== null;
   const canDown = selected !== null && nodes !== null && stepOf(nodes, selected, 'down') !== null;
-
-  function onKeyDown(event: KeyboardEvent<HTMLUListElement>): void {
-    const item = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[role="treeitem"]') : null;
-    if (item === null || event.target !== item) return;
-    if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-      event.preventDefault();
-      if (editable) tree.move(event.key === 'ArrowUp' ? 'up' : 'down');
-      return;
-    }
-    const items = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="treeitem"]')];
-    const index = items.indexOf(item);
-    const level = Number(item.getAttribute('aria-level'));
-    const toward = (target: HTMLElement | undefined): void => {
-      event.preventDefault();
-      target?.focus();
-    };
-    if (event.key === 'ArrowDown') toward(items[index + 1]);
-    else if (event.key === 'ArrowUp') toward(items[index - 1]);
-    else if (event.key === 'Home') toward(items[0]);
-    else if (event.key === 'End') toward(items[items.length - 1]);
-    else if (event.key === 'ArrowRight') toward(Number(items[index + 1]?.getAttribute('aria-level')) > level ? items[index + 1] : undefined);
-    else if (event.key === 'ArrowLeft') toward([...items.slice(0, index)].reverse().find((candidate) => Number(candidate.getAttribute('aria-level')) < level));
-    else if (event.key === 'Enter' && onOpen !== undefined) {
-      event.preventDefault();
-      onOpen(item.dataset['partId'] ?? '');
-    }
-  }
 
   let body: ReactNode;
   if (nodes === null && tree.loadFailed) {
@@ -127,12 +104,19 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
   } else if (nodes.length === 0) {
     body = <p className="text-body text-ink-2">{TREE_EMPTY}</p>;
   } else {
+    const choose = (id: string, byKeyboard: boolean): void => (byKeyboard && onOpen !== undefined ? onOpen(id) : tree.select(id));
     body = (
-      <ul id={TREE_ID} role="tree" aria-label={TREE_TITLE} onKeyDown={onKeyDown} className="flex flex-col gap-s-1">
-        {rows.map((row) => (
-          <TreeNode key={row.part.id} row={row} selected={row.part.id === selected?.id} missing={missingIds?.has(row.part.id) ?? false} onFocusPart={tree.select} />
-        ))}
-      </ul>
+      <>
+        <PartsTreeList
+          id={TREE_ID}
+          label={TREE_TITLE}
+          nodes={nodes}
+          closed={closed}
+          onToggle={toggle}
+          renderRow={(part, kindLabel) => <TreeNode part={part} kindLabel={kindLabel} selected={part.id === selected?.id} missing={missingIds?.has(part.id) ?? false} onChoose={choose} />}
+        />
+        <TreeLegend />
+      </>
     );
   }
 

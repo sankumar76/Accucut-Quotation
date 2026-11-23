@@ -13,7 +13,7 @@ import { E2E_LEAD } from './auth';
  * year `9998` is one no real task has, and the running number is random, so no two runs meet on a code.
  */
 
-export type SeededStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED';
+export type SeededStatus = 'DRAFT' | 'PREPARED' | 'APPROVED';
 
 export interface SeededQueueTask {
   /** The task's ID, for `GET /api/v1/tasks/{id}` (STORY-04.04). */

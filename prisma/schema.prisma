@@ -268,10 +268,10 @@ model CustomerRate {
   @@map("customer_rates")
 }
 
-/// The estimate status of architecture section 4.4. A new estimate is DRAFT; the other two arrive with EPIC-06.
+/// The estimate status of architecture section 4.4 and 4.12 a. A new estimate is DRAFT; PREPARED is the first value renamed in place (CR-01 item 7A, migration 20261123100000_estimate_status_prepared).
 enum EstimateStatus {
   DRAFT
-  SUBMITTED
+  PREPARED
   APPROVED
 
   @@map("estimate_status")

@@ -145,8 +145,8 @@ describe('AC-3: the rows', () => {
   });
 
   it('writes the status in words, and a title as text so markup in it is not run', () => {
-    const html = list('LEAD', [row({ status: 'SUBMITTED', title: '<script>alert(1)</script>' })]);
-    expect(html).toContain('Submitted');
+    const html = list('LEAD', [row({ status: 'PREPARED', title: '<script>alert(1)</script>' })]);
+    expect(html).toContain('Prepared');
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
   });

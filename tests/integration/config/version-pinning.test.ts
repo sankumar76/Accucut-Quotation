@@ -21,7 +21,7 @@ import { seedConfig, seedFieldAt } from '../../support/seed-config';
 
 /**
  * STORY-08.05 AC-3 to AC-6 (FR-077, FR-065; SPEC section 8.4 and section 14 item 8) against real PostgreSQL in a throwaway database, as the runtime role, through the real services: estimates are calculated on
- * version 1 (an approved one, one unlocked, one whose approval was cancelled, a Submitted one, a new Draft), then **the Admin's own screens' services store three more versions** (a formula saved, an input inserted
+ * version 1 (an approved one, one unlocked, one whose approval was cancelled, a Prepared one, a new Draft), then **the Admin's own screens' services store three more versions** (a formula saved, an input inserted
  * after AX, Part No. deleted), and what each estimate shows and stores is read again.
  *
  * - AC-3: the bar line of SCR-06 names the calculation's version, not the latest; the unlock preview reads "1 to 4"; "estimates in use" is the count of estimates whose current calculation uses the version.
@@ -45,7 +45,7 @@ const STORED_PART_NO = 'Invented-PN-0001';
 const configurations = () => createConfigRepository(world.db.prisma);
 
 /** The estimates of the file. `approved` stays approved; the others were approved first and then unlocked or cancelled, so each holds a calculation made on version 1. */
-const made: { approved: string; unlocked: string; cancelled: string; submitted: string; fresh: string } = { approved: '', unlocked: '', cancelled: '', submitted: '', fresh: '' };
+const made: { approved: string; unlocked: string; cancelled: string; prepared: string; fresh: string } = { approved: '', unlocked: '', cancelled: '', prepared: '', fresh: '' };
 /** What the approved estimate showed and stored, and its form, before any later version existed. */
 let before: Awaited<ReturnType<typeof approvedValuesOf>>;
 let formBefore: Awaited<ReturnType<EstimateService['getForm']>>;
@@ -119,7 +119,7 @@ beforeAll(async () => {
   partOfApproved = defined(approved.nodeIds[0]);
   made.unlocked = (await approvedWithPartNo()).estimateId;
   made.cancelled = (await approvedWithPartNo()).estimateId;
-  made.submitted = (await calculatedEstimateOf(world)).estimateId;
+  made.prepared = (await calculatedEstimateOf(world)).estimateId;
   made.fresh = await db.addEstimate({ engineer: true });
   before = await approvedValuesOf(world, made.approved);
   summaryBefore = await summaryWithoutMarker(world, made.approved);
@@ -157,7 +157,7 @@ describe('AC-3: each estimate records the version it was calculated with', () =>
 
   it("SCR-06's bar line names the calculation's version (1), not the latest (4); an estimate calculated now names the latest", async () => {
     expect((await world.review.getCosts(world.lead, made.approved)).configurationNumber).toBe(1);
-    expect((await world.review.getCosts(world.lead, made.submitted)).configurationNumber).toBe(1);
+    expect((await world.review.getCosts(world.lead, made.prepared)).configurationNumber).toBe(1);
     const fresh = await calculatedEstimateOf(world);
     expect((await world.review.getCosts(world.lead, fresh.estimateId)).configurationNumber).toBe(4);
   });
@@ -175,7 +175,7 @@ describe('AC-3: each estimate records the version it was calculated with', () =>
       return defined(rows[0]).n;
     };
     expect(await configurations().readVersionUse(firstVersionId)).toMatchObject({ estimatesInUse: await used(firstVersionId) });
-    // Four estimates of the file hold their current calculation on version 1 (approved, unlocked, cancelled, submitted).
+    // Four estimates of the file hold their current calculation on version 1 (approved, unlocked, cancelled, prepared).
     expect((await configurations().readVersionUse(firstVersionId)).estimatesInUse).toBe(4);
   });
 });
@@ -220,7 +220,7 @@ describe('AC-5: the form of an approved estimate is pinned; every other form is 
   });
 
   it.each([
-    ['a Submitted estimate that was never approved', 'submitted'],
+    ['a Prepared estimate that was never approved', 'prepared'],
     ['an unlocked Draft whose calculation is on version 1', 'unlocked'],
     ['a Draft after a cancelled approval, whose calculation is on version 1', 'cancelled'],
     ['a new Draft with no calculation', 'fresh'],

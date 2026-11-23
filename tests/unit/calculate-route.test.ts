@@ -76,20 +76,20 @@ async function bodyOf(response: Response): Promise<Record<string, unknown>> {
 }
 
 describe('AC-2: a good Calculate answers exactly {status, message}', () => {
-  it('is 200 with the status SUBMITTED and the fixed sentence, `no-store`, a request ID, and no other key', async () => {
+  it('is 200 with the status PREPARED and the fixed sentence, `no-store`, a request ID, and no other key', async () => {
     makeComplete();
     const response = await POST(request(), withId(owned()));
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(response.headers.get('X-Request-Id')).toMatch(/^req-[0-9a-f]{8}$/);
-    expect(await bodyOf(response)).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(await bodyOf(response)).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
   });
 
-  it('stores one record, submits the estimate and leaves the revision as it was', async () => {
+  it('stores one record, prepares the estimate and leaves the revision as it was', async () => {
     makeComplete();
     await POST(request(), withId(owned()));
     expect(harness.calculationWorld.calculations).toHaveLength(1);
-    expect(estimate()).toMatchObject({ status: 'SUBMITTED', inputsRevision: 0 });
+    expect(estimate()).toMatchObject({ status: 'PREPARED', inputsRevision: 0 });
     expect(defined(harness.calculationWorld.calculations[0]).createdById).toBe(harness.idOf.ENGINEER);
   });
 
@@ -149,7 +149,7 @@ describe('AC-1: a blocked Calculate is the 422 that lists parts and field names,
 describe('AC-4 and AC-7: the refusals are named, and never a partial write', () => {
   it.each([
     ['no customer chosen', () => undefined, 'CUSTOMER_NOT_CHOSEN'],
-    ['already submitted', () => (estimate().status = 'SUBMITTED'), 'ESTIMATE_ALREADY_SUBMITTED'],
+    ['already prepared', () => (estimate().status = 'PREPARED'), 'ESTIMATE_ALREADY_PREPARED'],
     ['approved', () => (estimate().status = 'APPROVED'), 'ESTIMATE_APPROVED_IS_LOCKED'],
   ])('%s is a 409 with the code %s', async (_name, change, code) => {
     makeComplete();
@@ -166,7 +166,7 @@ describe('AC-4 and AC-7: the refusals are named, and never a partial write', () 
     expect((await POST(request(), withId(owned()))).status).toBe(200);
     const again = await POST(request(), withId(owned()));
     expect(again.status).toBe(409);
-    expect(await bodyOf(again)).toMatchObject({ code: 'ESTIMATE_ALREADY_SUBMITTED' });
+    expect(await bodyOf(again)).toMatchObject({ code: 'ESTIMATE_ALREADY_PREPARED' });
     expect(harness.calculationWorld.calculations).toHaveLength(1);
   });
 
@@ -215,7 +215,7 @@ describe('AC-4 and AC-7: the refusals are named, and never a partial write', () 
 });
 
 describe('the one schema of the answer holds the line (NFR-002)', () => {
-  const good = { status: 'SUBMITTED', message: CALCULATE_MESSAGE };
+  const good = { status: 'PREPARED', message: CALCULATE_MESSAGE };
 
   it('accepts exactly the good answer', () => {
     expect(calculateAnswerSchema.safeParse(good).success).toBe(true);
@@ -225,7 +225,7 @@ describe('the one schema of the answer holds the line (NFR-002)', () => {
     ['an extra key', { ...good, total: '917373.37' }],
     ['another status', { ...good, status: 'APPROVED' }],
     ['a message with a figure in it', { ...good, message: `${CALCULATE_MESSAGE} Total 917373.37` }],
-    ['no message', { status: 'SUBMITTED' }],
+    ['no message', { status: 'PREPARED' }],
     ['no status', { message: CALCULATE_MESSAGE }],
   ])('refuses %s, so it can never leave', (_name, answer) => {
     expect(calculateAnswerSchema.safeParse(answer).success).toBe(false);
@@ -321,7 +321,7 @@ describe('STORY-05.12 AC-3: the acknowledged press', () => {
     makeWarned();
     const response = await POST(bodyRequest({ acknowledge: { inputsRevision: 0 } }), withId(owned()));
     expect(response.status).toBe(200);
-    expect(await bodyOf(response)).toEqual({ status: 'SUBMITTED', message: CALCULATE_MESSAGE });
+    expect(await bodyOf(response)).toEqual({ status: 'PREPARED', message: CALCULATE_MESSAGE });
     const record = defined(harness.calculationWorld.calculations[0]);
     expect(record.warnings).toEqual([{ code: 'QTY_ZERO', nodeId: part().id, slNo: '1', label: 'Invented text' }]);
     expect(record.createdById).toBe(harness.idOf.ENGINEER);

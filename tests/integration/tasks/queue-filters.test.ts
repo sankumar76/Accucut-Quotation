@@ -64,7 +64,7 @@ async function seed(
   engineerId: string,
   assignedById: string,
   deadlineAt: Date,
-  options: { readonly title?: string | null; readonly customerId?: string | null; readonly status?: 'DRAFT' | 'SUBMITTED' | 'APPROVED' } = {},
+  options: { readonly title?: string | null; readonly customerId?: string | null; readonly status?: 'DRAFT' | 'PREPARED' | 'APPROVED' } = {},
 ): Promise<void> {
   const task = await db.owner.query<{ id: string }>(
     'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, \'Invented subject\') RETURNING id::text',

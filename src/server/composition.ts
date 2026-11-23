@@ -333,7 +333,7 @@ export function getConfigCheckpointService(): ConfigCheckpointService {
 /**
  * The Engineer's Calculate (STORY-05.09): one transaction under the estimate's row lock, in which the state machine of the estimate service decides role, ownership and status, every part is
  * checked, the masters and the registry are read **inside that transaction** (so the request holds one pooled connection, review SQR-01 of AQP-293), the immutable record is stored and the
- * estimate is submitted. The service is the Restricted side (ADR-008): only a route handler asks for it here, and what it hands back is `{status, message}`.
+ * estimate is prepared. The service is the Restricted side (ADR-008): only a route handler asks for it here, and what it hands back is `{status, message}`.
  */
 export function getCalculationService(): CalculationService {
   if (calculationService === undefined) {

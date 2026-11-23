@@ -63,7 +63,7 @@ describe('approveEstimate', () => {
   });
 
   it.each([
-    ['a status that is not APPROVED', answer({ status: 'SUBMITTED' })],
+    ['a status that is not APPROVED', answer({ status: 'PREPARED' })],
     ['no status', answer({ approvedPrice: '1.00' })],
     ['a body that is not an object', answer('APPROVED')],
     ['a body that is not JSON', new Response('<html>', { status: 200 })],

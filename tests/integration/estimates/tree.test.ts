@@ -308,20 +308,20 @@ describe('AC-6: concurrency', () => {
 });
 
 describe('AC-7: who may write', () => {
-  it('another Engineer and an unknown estimate are 404, and a submitted estimate is 409, with nothing written', async () => {
+  it('another Engineer and an unknown estimate are 404, and a prepared estimate is 409, with nothing written', async () => {
     await setUpEstimates();
     const tree = await storyTree();
     await expect(service.addPart(priya, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toBeInstanceOf(NotFoundError);
     await expect(service.getTree(priya, estimateId)).rejects.toBeInstanceOf(NotFoundError);
     await expect(service.addPart(arjun, MISSING, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toBeInstanceOf(NotFoundError);
-    await db.owner.query(`UPDATE estimates SET status = 'SUBMITTED' WHERE id = $1::uuid`, [estimateId]);
+    await db.owner.query(`UPDATE estimates SET status = 'PREPARED' WHERE id = $1::uuid`, [estimateId]);
     const rows = JSON.stringify(await stored());
     await expect(service.addPart(arjun, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toBeInstanceOf(ConflictError);
     await expect(service.moveNode(arjun, estimateId, { nodeId: idOf(tree, '2'), revision: 1, parentId: null, index: 0 })).rejects.toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
     await expect(service.deleteNode(arjun, estimateId, { nodeId: idOf(tree, '2'), revision: 1, parts: 1, subtree: await seen(idOf(tree, '2')) })).rejects.toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
     expect(JSON.stringify(await stored())).toBe(rows);
     expect(await service.getTree(lead, estimateId)).toHaveLength(9);
-    // The shared rule (STORY-06.01): a Lead may still change a submitted estimate, nobody an approved one.
+    // The shared rule (STORY-06.01): a Lead may still change a prepared estimate, nobody an approved one.
     expect((await service.addPart(lead, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).nodes).toHaveLength(10);
     await db.owner.query(`UPDATE estimates SET status = 'APPROVED' WHERE id = $1::uuid`, [estimateId]);
     await expect(service.addPart(lead, estimateId, { parentId: null, nodeKind: 'MAIN_ASSEMBLY' })).rejects.toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });

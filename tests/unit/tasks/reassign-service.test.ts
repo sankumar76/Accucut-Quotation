@@ -240,7 +240,7 @@ describe('AC-6 (A-14): an approved task cannot be changed', () => {
     await expect(service.reassignTask(by(LEAD), taskId, { engineerId: MEERA.id })).rejects.toMatchObject({ code: TASK_CLOSED_CODE });
   });
 
-  it.each(['DRAFT', 'SUBMITTED'] as const)('lets a %s task be changed (A-3)', async (status) => {
+  it.each(['DRAFT', 'PREPARED'] as const)('lets a %s task be changed (A-3)', async (status) => {
     world.setStatus(taskId, status);
     const result = await service.reassignTask(by(LEAD), taskId, { engineerId: MEERA.id });
     expect(result.task).toMatchObject({ engineer: { id: MEERA.id }, status });

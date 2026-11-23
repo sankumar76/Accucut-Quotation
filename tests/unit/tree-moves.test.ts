@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { PartItem } from '@/lib/estimates/tree-client';
 import { subtreeFingerprint } from '@/lib/estimate/subtree-fingerprint';
-import { deleteGuardOf, partsRemoved, rowsOf, siblingsOf, stepOf } from '@/lib/estimates/tree-moves';
+import { branchesOf, deleteGuardOf, partsRemoved, siblingsOf, stepOf, type Branch } from '@/lib/estimates/tree-moves';
 
 /** STORY-05.02 AC-2, AC-3: what the screen works out from its tree to ask for a move or a delete. Every ID is invented. */
 
@@ -52,15 +52,29 @@ describe('siblingsOf', () => {
   });
 });
 
-describe('rowsOf', () => {
-  it('gives each part its level, its place and the number of its siblings, for the tree roles', () => {
-    expect(rowsOf(TREE).map((row) => `${row.part.slNo}: level ${row.level}, ${row.position} of ${row.size}`)).toEqual([
-      '1: level 1, 1 of 2',
-      '1.1: level 2, 1 of 2',
-      '1.1.1: level 3, 1 of 2',
-      '1.1.2: level 3, 2 of 2',
-      '1.2: level 2, 2 of 2',
-      '2: level 1, 2 of 2',
+describe('branchesOf (CR-01 3B: the tree is nesting, not aria counts)', () => {
+  const shape = (branches: ReadonlyArray<Branch<PartItem>>): unknown[] => branches.map((branch) => [branch.node.slNo, shape(branch.children)]);
+
+  it('nests every part under its parent, in reading order, so the level is told by the nesting and not by a count', () => {
+    expect(shape(branchesOf(TREE))).toEqual([
+      ['1', [['1.1', [['1.1.1', []], ['1.1.2', []]]], ['1.2', []]]],
+      ['2', []],
     ]);
+  });
+
+  it('carries no level, place or size: a branch is the node and its children and nothing else', () => {
+    for (const branch of branchesOf(TREE)) expect(Object.keys(branch).sort()).toEqual(['children', 'node']);
+  });
+
+  it('keeps a part whose parent is not in the list at the top, as an unknown parent was level 1 before, and an empty tree has no branches', () => {
+    expect(shape(branchesOf([part('x', 'gone', '9')]))).toEqual([['9', []]]);
+    expect(branchesOf([])).toEqual([]);
+  });
+
+  it('is built without recursion, so a deep legacy tree (200 levels) cannot overflow the stack', () => {
+    const deep = Array.from({ length: 200 }, (_, index) => part(String(index), index === 0 ? null : String(index - 1), String(index + 1)));
+    let depth = 0;
+    for (let branches: ReadonlyArray<Branch<PartItem>> = branchesOf(deep); branches.length > 0; branches = branches[0]?.children ?? []) depth += 1;
+    expect(depth).toBe(200);
   });
 });

@@ -222,8 +222,8 @@ describe('AC-6: 404, 409 and the order of the refusals', () => {
     expect(withoutRequestId(await unknownPart.json())).toMatchObject({ status: 404 });
   });
 
-  it('answers 409 to an Engineer on a submitted estimate, and to everyone on an approved one, and stores nothing', async () => {
-    estimate().status = 'SUBMITTED';
+  it('answers 409 to an Engineer on a prepared estimate, and to everyone on an approved one, and stores nothing', async () => {
+    estimate().status = 'PREPARED';
     const submitted = await send(fresh());
     expect(submitted.status).toBe(409);
     expect(record.parse(await submitted.json())).toMatchObject({ code: 'ESTIMATE_NOT_EDITABLE' });
@@ -315,9 +315,9 @@ describe('AC-5: GET /images/{id}', () => {
     expect(new Set(bodies).size).toBe(1);
   });
 
-  it('serves the picture of an estimate that is submitted or approved (a read is not a change)', async () => {
+  it('serves the picture of an estimate that is prepared or approved (a read is not a change)', async () => {
     const id = await addedPicture();
-    for (const status of ['SUBMITTED', 'APPROVED'] as const) {
+    for (const status of ['PREPARED', 'APPROVED'] as const) {
       estimate().status = status;
       expect((await fetchImage(id)).status).toBe(200);
     }

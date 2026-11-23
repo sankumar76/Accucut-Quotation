@@ -136,7 +136,7 @@ export interface MastersService extends CustomerOperations, ExchangeRateOperatio
   updateMaterial(context: AuditContext, id: string, changes: MaterialChanges): Promise<MaterialRecord>;
   /**
    * Soft-deletes the material and writes one `master.deleted` entry in the same transaction (STORY-02.07 AC-3). Refused with `MasterInUseError` (409, naming the
-   * estimates) while a Draft or Submitted estimate has the material in a part; 404 for an unknown, already deleted or hidden ID (the "Not applicable" row). Nothing
+   * estimates) while a Draft or Prepared estimate has the material in a part; 404 for an unknown, already deleted or hidden ID (the "Not applicable" row). Nothing
    * is written when it is refused.
    */
   deleteMaterial(context: AuditContext, id: string): Promise<void>;

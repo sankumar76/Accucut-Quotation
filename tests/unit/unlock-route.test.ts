@@ -137,13 +137,13 @@ describe('AC-2: a good unlock writes the status, the unlock and the audit entry 
     expect(defined(unlocks()[0])).toMatchObject({ actorId: harness.idOf.LEAD, actorLabel: 'Invented Lead', objectId: owned(), before: { approvedPrice: PRICE }, after: { reason: REASON } });
   });
 
-  it('an Admin unlocks too, and the estimate can be calculated again (a Recalculate on the Draft moves it to Submitted)', async () => {
+  it('an Admin unlocks too, and the estimate can be calculated again (a Recalculate on the Draft moves it to Prepared)', async () => {
     await approved();
     harness.signInAs('ADMIN');
     expect((await unlock()).status).toBe(200);
     expect(estimate().status).toBe('DRAFT');
     await harness.calculationService.recalculate({ id: harness.idOf.ADMIN, role: 'ADMIN' }, owned());
-    expect(estimate().status).toBe('SUBMITTED');
+    expect(estimate().status).toBe('PREPARED');
   });
 
   it('an audit entry that cannot be written takes the unlock and the status with it', async () => {
@@ -244,7 +244,7 @@ describe('AC-4 (DL-219): the reason refuses an invisible character, as the share
 describe('AC-5: a status that is not APPROVED, an estimate that is not there, a second unlock, and two at once', () => {
   it.each([
     ['DRAFT', false],
-    ['SUBMITTED', true],
+    ['PREPARED', true],
   ] as const)('%s is the machine\'s 409 "not approved", and nothing is written', async (status, calculate) => {
     estimate().customerId = CUSTOMER_RECIPE_ID;
     part().inputs = { ...completePartInputs(), [fieldIdOf('material-in-drawing')]: FIRST_MATERIAL.id };

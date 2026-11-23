@@ -6,7 +6,7 @@ import { isRecord, type Refusal } from '../api-client';
  * named by its task code and status, and nothing else (no figure, no title).
  */
 
-export type OpenEstimateStatus = 'DRAFT' | 'SUBMITTED';
+export type OpenEstimateStatus = 'DRAFT' | 'PREPARED';
 
 export interface EstimateUseRow {
   readonly code: string;
@@ -22,7 +22,7 @@ export interface EstimateUsesRow {
 function toEstimateUse(value: unknown): EstimateUseRow | null {
   if (!isRecord(value)) return null;
   const { code, status } = value;
-  return typeof code === 'string' && (status === 'DRAFT' || status === 'SUBMITTED') ? { code, status } : null;
+  return typeof code === 'string' && (status === 'DRAFT' || status === 'PREPARED') ? { code, status } : null;
 }
 
 /**
@@ -42,7 +42,7 @@ export function unnamedCount(uses: EstimateUsesRow): number {
   return uses.total - uses.estimates.length;
 }
 
-/** "Draft" and "Submitted": the status as the screen says it (the words of SCR-06's badge). */
+/** "Draft" and "Prepared": the status as the screen says it (the words of SCR-06's badge). */
 export function statusWords(status: OpenEstimateStatus): string {
-  return status === 'DRAFT' ? 'Draft' : 'Submitted';
+  return status === 'DRAFT' ? 'Draft' : 'Prepared';
 }

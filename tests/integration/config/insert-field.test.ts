@@ -190,7 +190,7 @@ describe('AC-8: what an insert does to the estimates', () => {
   it('calculates a Draft whose new mandatory inputs all have a default, and stores the new cost column with the default used', async () => {
     const before = await latestNumber();
     const answer = await db.service.calculate(engineer(), draftWithDefaults);
-    expect(answer.status).toBe('SUBMITTED');
+    expect(answer.status).toBe('PREPARED');
     const latest = await storedVersion(before);
     const cost = defined(latest.document.fields.find((field) => field.label === 'Invented Notch Cost'));
     const { rows } = await db.owner.query<{ number: number; cost: string | null }>(

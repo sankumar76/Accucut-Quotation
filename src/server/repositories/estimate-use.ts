@@ -6,7 +6,7 @@ import type { EstimateUse } from '../../lib/errors';
  * What the delete guard of a customer and of a material (STORY-02.07; architecture section 6, "409 with the open estimates using it") reads of the estimates that
  * use one, shared by `customer-repository.ts` and `material-repository.ts` so neither imports the other.
  *
- * An estimate is **open** while it is a Draft or Submitted (BR-053). An Approved estimate is not: it is a copy already (FR-065, NFR-026), so its customer or
+ * An estimate is **open** while it is a Draft or Prepared (BR-053). An Approved estimate is not: it is a copy already (FR-065, NFR-026), so its customer or
  * material may be deleted and it still shows and exports its own words and figures. Only the task's code and the estimate's status are read, never a figure.
  */
 
@@ -20,7 +20,7 @@ export interface EstimateUses {
 }
 
 /** The rows of the guard's query: each carries the total, which is counted over every open estimate before the limit applies. */
-const ESTIMATE_USE_ROWS = z.array(z.strictObject({ code: z.string(), status: z.enum(['DRAFT', 'SUBMITTED']), total: z.number().int().positive() }));
+const ESTIMATE_USE_ROWS = z.array(z.strictObject({ code: z.string(), status: z.enum(['DRAFT', 'PREPARED']), total: z.number().int().positive() }));
 
 /** The guard's rows as `EstimateUses`. No row means no open estimate: a total of 0. */
 export function toEstimateUses(rows: unknown): EstimateUses {

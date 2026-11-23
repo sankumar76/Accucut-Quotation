@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { FieldValidationError, NotFoundError } from '@/lib/errors';
+import { FieldValidationError, NotFoundError, TreeChangedError } from '@/lib/errors';
 import { ALLOWED_CHILDREN, NODE_KINDS, nodeKindLabel, type NodeKind, type ParentKind } from '@/lib/estimate/node-kinds';
 import { subtreeFingerprint } from '@/lib/estimate/subtree-fingerprint';
 import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, MOVE_ACROSS_PARENTS_CODE, NODE_KIND_NOT_ALLOWED_CODE, type EstimateViewer } from '@/server/services/estimate-service';
@@ -164,6 +164,18 @@ describe('AC-5 (A-CR01-5, 14.32): a row is reordered only among rows with the sa
     expect(setUpped.revision()).toBe(revision);
   });
 
+  it('a stale move to another parent is the 409 with the fresh tree first, and not the 422: the revision is judged before the content of the move (QLT-01 of the combined review)', async () => {
+    const setUpped = setUp([estimate()], KINDED);
+    const before = JSON.stringify(setUpped.world.nodes);
+    const revision = setUpped.revision();
+    const result = await moveTo(setUpped, id(5), id(2), 0, 9);
+    expect(result).toBeInstanceOf(TreeChangedError);
+    expect(result).toMatchObject({ httpStatus: 409 });
+    expect((result as TreeChangedError).tree).toHaveLength(KINDED.length);
+    expect(JSON.stringify(setUpped.world.nodes)).toBe(before);
+    expect(setUpped.revision()).toBe(revision);
+  });
+
   it('also refuses a parent of another estimate and one that does not exist, with the same code', async () => {
     const setUpped = setUp([estimate(), estimate({ id: OTHER_ESTIMATE, code: 'Q-2026-0319' })], [...KINDED, { id: FOREIGN_NODE, estimateId: OTHER_ESTIMATE, parentId: null, sortIndex: 0, nodeKind: 'MAIN_ASSEMBLY', revision: 1, inputs: {} }]);
     for (const parentId of [FOREIGN_NODE, id(99)]) expect(await moveTo(setUpped, id(5), parentId, 0)).toMatchObject({ code: MOVE_ACROSS_PARENTS_CODE });
@@ -246,9 +258,9 @@ describe('who may change the structure (PM ruling): the same rule as the inputs,
     ['an Engineer on their own Draft', arjun, 'DRAFT', true],
     ['a Lead on a Draft', lead, 'DRAFT', true],
     ['an Admin on a Draft', admin, 'DRAFT', true],
-    ['an Engineer on a Prepared estimate (submitted)', arjun, 'SUBMITTED', false],
-    ['a Lead on a Prepared estimate (submitted)', lead, 'SUBMITTED', true],
-    ['an Admin on a Prepared estimate (submitted)', admin, 'SUBMITTED', true],
+    ['an Engineer on a Prepared estimate', arjun, 'PREPARED', false],
+    ['a Lead on a Prepared estimate', lead, 'PREPARED', true],
+    ['an Admin on a Prepared estimate', admin, 'PREPARED', true],
     ['an Engineer on an Approved estimate', arjun, 'APPROVED', false],
     ['a Lead on an Approved estimate', lead, 'APPROVED', false],
     ['an Admin on an Approved estimate', admin, 'APPROVED', false],

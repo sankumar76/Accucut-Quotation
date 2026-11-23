@@ -69,7 +69,7 @@ export const assignedTaskSchema = z.strictObject({
   notes: z.string().nullable(),
   estimate: z.strictObject({
     id: z.string().min(1),
-    status: z.enum(['DRAFT', 'SUBMITTED', 'APPROVED']),
+    status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
     customerId: z.string().nullable(),
   }),
 });

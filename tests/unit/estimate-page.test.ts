@@ -112,11 +112,11 @@ describe('AC-1: the Engineer opens their task with no customer', () => {
     expect(await open(CODE)).not.toContain('Notes from');
   });
 
-  it('a submitted estimate is shown read-only: its status, the customer it has, and no control to change it', async () => {
-    estimate().status = 'SUBMITTED';
+  it('a prepared estimate is shown read-only: its status, the customer it has, and no control to change it', async () => {
+    estimate().status = 'PREPARED';
     estimate().customerId = CUSTOMER_RECIPE_ID;
     const html = await open(CODE);
-    expect(html).toContain('Submitted');
+    expect(html).toContain('Prepared');
     // The customer field and its locked hint are gone with the picker: the status and the customer are read-only text.
     expect(html).toContain('Canary-Customer-Alpha');
     expect(html).not.toContain('Choose the customer to start.');
@@ -146,10 +146,10 @@ describe('AC-5: who may open it', () => {
     }
   });
 
-  it('the Lead sees the customer by name and short name, with "Change customer" while the estimate is a draft or submitted, and none once it is approved (AC-12)', async () => {
+  it('the Lead sees the customer by name and short name, with "Change customer" while the estimate is a draft or prepared, and none once it is approved (AC-12)', async () => {
     estimate().customerId = CUSTOMER_RECIPE_ID;
     harness.signInAs('LEAD');
-    for (const status of ['DRAFT', 'SUBMITTED'] as const) {
+    for (const status of ['DRAFT', 'PREPARED'] as const) {
       estimate().status = status;
       const html = await open(CODE);
       expect(html).toContain('Canary-Customer-Alpha');
@@ -165,7 +165,7 @@ describe('AC-5: who may open it', () => {
   it('an Engineer\'s page never carries the dialog\'s words or the action, whatever the state', async () => {
     estimate().customerId = CUSTOMER_RECIPE_ID;
     harness.signInAs('ENGINEER');
-    for (const status of ['DRAFT', 'SUBMITTED', 'APPROVED'] as const) {
+    for (const status of ['DRAFT', 'PREPARED', 'APPROVED'] as const) {
       estimate().status = status;
       const html = await open(CODE);
       for (const word of ['Change the customer?', 'New customer', 'Change customer', 'review-change-customer']) expect(html, word).not.toContain(word);

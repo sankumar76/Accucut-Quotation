@@ -62,6 +62,12 @@ interface EventDefinition<Before extends StoredShape, After extends StoredShape>
   readonly kindLabel?: string;
   readonly before: Before;
   readonly after: After;
+  /**
+   * The schemas a **stored** entry is read through, when they differ from the write schemas above (default: the same). The log is immutable, so an entry written under
+   * an older vocabulary must stay readable while the writer accepts only today's: a read schema may map an old value to its new word (`approval.cancelled`, below).
+   */
+  readonly readBefore?: z.ZodType<z.output<Before>, unknown>;
+  readonly readAfter?: z.ZodType<z.output<After>, unknown>;
   /** `objectType` is the entry's own (`process_item`, `material`): a generic master event chooses its words by it. */
   describe(before: z.output<Before>, after: z.output<After>, objectType: string): AuditChangeText;
   /**
@@ -96,8 +102,8 @@ function defineEvent<Before extends StoredShape, After extends StoredShape>(
       return shape === undefined ? null : definition.forMasterShape(shape);
     },
     describeStored(before, after, objectType) {
-      const parsedBefore = definition.before.safeParse(before);
-      const parsedAfter = definition.after.safeParse(after);
+      const parsedBefore = (definition.readBefore ?? definition.before).safeParse(before);
+      const parsedAfter = (definition.readAfter ?? definition.after).safeParse(after);
       return parsedBefore.success && parsedAfter.success ? definition.describe(parsedBefore.data, parsedAfter.data, objectType ?? definition.objectType) : null;
     },
   };
@@ -162,14 +168,23 @@ const unlockedBeforeState = z.strictObject({ approvedPrice: rupeesText });
 const unlockedAfterState = z.strictObject({ reason: z.string().min(1).max(500) });
 
 // ---- Shape of the cancel event (SCR-16 "Approval cancelled"; STORY-06.12) ---------------------------------------------------------
-/** The status of the estimate, before and after the cancel. Equal when the cancel did not move it (an approval kept through an unlock, on a Draft or a Submitted estimate: AC-10), so the entry shows that nothing moved. */
+/** The status of the estimate, before and after the cancel. Equal when the cancel did not move it (an approval kept through an unlock, on a Draft or a Prepared estimate: AC-10), so the entry shows that nothing moved. */
 const estimateStatus = z.enum(ESTIMATE_STATUSES);
 /** What a cancel keeps before: the price the approval stood at (BO), which stays on record, and the status the estimate was in. */
 const cancelledBeforeState = z.strictObject({ approvedPrice: rupeesText, status: estimateStatus });
 /** What a cancel keeps after: the Admin's reason, as stored (1 to 500 characters, trimmed), and the status the estimate is in now. Who cancelled and when are the entry's own columns. The password is in no shape here. */
 const cancelledAfterState = z.strictObject({ reason: reasonText, status: estimateStatus });
 
-const STATUS_WORDS: Readonly<Record<EstimateStatus, string>> = { DRAFT: 'a Draft', SUBMITTED: 'Submitted', APPROVED: 'Approved' };
+/**
+ * LEGACY READ (AQP-398, CR-01 item 7; the one place the old status value survives in `src/`). Until then the stored status of a not-yet-approved estimate was `SUBMITTED`. The audit log is
+ * immutable, so `approval.cancelled` entries written before the rename still hold it. The **read** schemas turn it into `PREPARED`; the write schemas above accept only today's values.
+ */
+const LEGACY_SUBMITTED = 'SUBMITTED';
+const readEstimateStatus = z.preprocess((value) => (value === LEGACY_SUBMITTED ? 'PREPARED' : value), estimateStatus);
+const cancelledBeforeRead = z.strictObject({ approvedPrice: rupeesText, status: readEstimateStatus });
+const cancelledAfterRead = z.strictObject({ reason: reasonText, status: readEstimateStatus });
+
+const STATUS_WORDS: Readonly<Record<EstimateStatus, string>> = { DRAFT: 'a Draft', PREPARED: 'Prepared', APPROVED: 'Approved' };
 
 /**
  * "Approved at ₹ 4,750.00 to Cancelled. Reason: …" (SCR-16, UX-64). When the cancel did not move the estimate the entry says so, before the reason: "Cancelled, the estimate stayed a Draft. Reason: …" (an assumption of
@@ -555,6 +570,8 @@ export const AUDIT_EVENTS = {
     status: 'wired',
     before: cancelledBeforeState,
     after: cancelledAfterState,
+    readBefore: cancelledBeforeRead,
+    readAfter: cancelledAfterRead,
     describe: describeCancelled,
   }),
 

@@ -6,13 +6,13 @@ import type { RoleName } from '../auth/roles';
  * an estimate in this status, and what status follows?", and every server rule about status asks it, so no action can run in the wrong status and no input
  * can change when it must not.
  *
- *   DRAFT      --CALCULATE (Engineer) / RECALCULATE (Lead, Admin)-->  SUBMITTED
- *   SUBMITTED  --EDIT, RECALCULATE (Lead, Admin)-->                   SUBMITTED
- *   SUBMITTED  --APPROVE (Lead, Admin)-->                             APPROVED
+ *   DRAFT      --CALCULATE (Engineer) / RECALCULATE (Lead, Admin)-->  PREPARED
+ *   PREPARED   --EDIT, RECALCULATE (Lead, Admin)-->                   PREPARED
+ *   PREPARED   --APPROVE (Lead, Admin)-->                             APPROVED
  *   APPROVED   --UNLOCK (Lead, Admin) / CANCEL (Admin only)-->        DRAFT
  *   APPROVED   --EXPORT (Lead, Admin)-->                              APPROVED
  *   DRAFT      --CANCEL (Admin only)-->                               DRAFT      (STORY-06.12 AC-10: an approval kept through an unlock is cancelled; the status stays)
- *   SUBMITTED  --CANCEL (Admin only)-->                               SUBMITTED  (the same)
+ *   PREPARED   --CANCEL (Admin only)-->                               PREPARED   (the same)
  *
  * Every other (status, event) pair is refused, with a named reason. The two `switch` statements are exhaustive (`assertNever`), so a new status or a new event
  * does not type-check until each pair is decided. This file holds no cost figure and no person's data: an Engineer's page may import it (NFR-002).
@@ -22,18 +22,18 @@ import type { RoleName } from '../auth/roles';
  * is a fact of the row, and the service decides it before this is asked (an Engineer's other-person estimate is "not found", CR-33).
  */
 
-export const ESTIMATE_STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED'] as const;
+export const ESTIMATE_STATUSES = ['DRAFT', 'PREPARED', 'APPROVED'] as const;
 export type EstimateStatus = (typeof ESTIMATE_STATUSES)[number];
 
 /**
  * What can happen to an estimate. `CALCULATE` is the Engineer's first calculation; `RECALCULATE` is a Lead's or an Admin's. `EDIT` is a change of inputs made
- * while the estimate is SUBMITTED: an edit of a DRAFT needs no transition and is not an event (see `canEditInputs`). `EXPORT` leaves the status as it is.
+ * while the estimate is PREPARED: an edit of a DRAFT needs no transition and is not an event (see `canEditInputs`). `EXPORT` leaves the status as it is.
  */
 export const ESTIMATE_EVENTS = ['CALCULATE', 'RECALCULATE', 'EDIT', 'APPROVE', 'UNLOCK', 'CANCEL', 'EXPORT'] as const;
 export type EstimateEvent = (typeof ESTIMATE_EVENTS)[number];
 
 /** Why a pair is refused. Each is one 409 with its own code and words (`TRANSITION_REFUSALS`), so the answer says which step is missing. */
-export type RefusalReason = 'NOT_SUBMITTED' | 'NOT_APPROVED' | 'ALREADY_SUBMITTED' | 'ALREADY_APPROVED' | 'APPROVED_IS_LOCKED';
+export type RefusalReason = 'NOT_PREPARED' | 'NOT_APPROVED' | 'ALREADY_PREPARED' | 'ALREADY_APPROVED' | 'APPROVED_IS_LOCKED';
 
 export interface RefusalText {
   /** The `code` of the 409. */
@@ -43,16 +43,16 @@ export interface RefusalText {
 }
 
 export const TRANSITION_REFUSALS: Readonly<Record<RefusalReason, RefusalText>> = {
-  NOT_SUBMITTED: { code: 'ESTIMATE_NOT_SUBMITTED', message: 'This estimate has not been submitted.' },
+  NOT_PREPARED: { code: 'ESTIMATE_NOT_PREPARED', message: 'This estimate has not been prepared.' },
   NOT_APPROVED: { code: 'ESTIMATE_NOT_APPROVED', message: 'This estimate has not been approved.' },
-  ALREADY_SUBMITTED: { code: 'ESTIMATE_ALREADY_SUBMITTED', message: 'This estimate has already been submitted.' },
+  ALREADY_PREPARED: { code: 'ESTIMATE_ALREADY_PREPARED', message: 'This estimate has already been prepared.' },
   ALREADY_APPROVED: { code: 'ESTIMATE_ALREADY_APPROVED', message: 'This estimate has already been approved.' },
   APPROVED_IS_LOCKED: { code: 'ESTIMATE_APPROVED_IS_LOCKED', message: 'This estimate is approved and locked. Unlock it first.' },
 };
 
 /**
  * Who may apply each event (NFR-001, FR-064, FR-107). An Engineer may only Calculate (and only on their own task, which the service checks); a Lead and an
- * Admin may Recalculate, edit a submitted estimate, approve, unlock and export; only the Admin may cancel an approval. Export is the Lead's and the Admin's
+ * Admin may Recalculate, edit a prepared estimate, approve, unlock and export; only the Admin may cancel an approval. Export is the Lead's and the Admin's
  * because the file holds the costs (NFR-002); that is an assumption of STORY-06.01, as the story names no role for it.
  */
 const EVENT_ROLES: Readonly<Record<EstimateEvent, ReadonlyArray<RoleName>>> = {
@@ -80,10 +80,10 @@ function followOn(status: EstimateStatus, event: EstimateEvent): TransitionDecis
       switch (event) {
         case 'CALCULATE':
         case 'RECALCULATE':
-          return allow('DRAFT', 'SUBMITTED');
+          return allow('DRAFT', 'PREPARED');
         case 'EDIT':
         case 'APPROVE':
-          return refuse('NOT_SUBMITTED');
+          return refuse('NOT_PREPARED');
         case 'CANCEL':
           // An approval kept through an unlock (architecture sections 4.8 and 4.10): the Admin may cancel it and the status does not change. Admin only: `EVENT_ROLES` refuses every other role first.
           return allow('DRAFT', 'DRAFT');
@@ -93,17 +93,17 @@ function followOn(status: EstimateStatus, event: EstimateEvent): TransitionDecis
         default:
           return assertNever(event, 'estimate event');
       }
-    case 'SUBMITTED':
+    case 'PREPARED':
       switch (event) {
         case 'CALCULATE':
-          return refuse('ALREADY_SUBMITTED');
+          return refuse('ALREADY_PREPARED');
         case 'RECALCULATE':
         case 'EDIT':
-          return allow('SUBMITTED', 'SUBMITTED');
+          return allow('PREPARED', 'PREPARED');
         case 'APPROVE':
-          return allow('SUBMITTED', 'APPROVED');
+          return allow('PREPARED', 'APPROVED');
         case 'CANCEL':
-          return allow('SUBMITTED', 'SUBMITTED');
+          return allow('PREPARED', 'PREPARED');
         case 'UNLOCK':
         case 'EXPORT':
           return refuse('NOT_APPROVED');
