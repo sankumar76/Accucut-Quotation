@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (qa-engineer, 2026-11-23, on master's DL-328 (2)) |
 | Priority | P3. Lane: hardening window, behind DEF-064's fix and DEF-069's observation (DL-328 (3)), and only if the mechanism reading below does not hold. Does not block G8 as a Sev-3 |
 | Type | **Test, product not excluded** (cause not determined; the family reading is below) |
-| Status | **Open** (logged 2026-11-23). Proof route of DL-328 (3), "yes" branch: half 1 read (below), half 2 waits for #636's squash |
+| Status | **Open** (logged 2026-11-23). Proof route of DL-328 (3), "yes" branch: **half 1 read and half 2 read (2026-11-23, later; both met on the numbers)**. **Not closed by QA: master has not ruled whether the "yes" branch holds** (QA's mechanism reading has two stated limits, see "For master" item 1 and the half 2 reading below). The watch trigger stays until G8 |
 | Jira / GitHub | [AQP-413](https://sankumar76.atlassian.net/browse/AQP-413) / [#641](https://github.com/sankumar76/Accucut-Quotation/issues/641). Jira "relates to" AQP-1 (Intake) and AQP-314 (owner story). Labels `ai-delivery`, `aiid-DEF-070`, `bug`, `sev-3`, `final-review`, `agent-qa-engineer`; priority Medium. DEF-070 was free: no file in `docs/07-qa/defects/`, JQL `labels = "aiid-DEF-070"` found nothing, no GitHub issue named it |
 | Risk / rule | The trigger is DL-264 (5)(b): "any attempt-1 failure, or a reading of 29 s or more, means a Bug the same day" (no wave clause; triggers apply as written, DL-284). **No re-run rule** (W1 does not cover a watch-list case with a Bug trigger). RISK-031 (reopened at 9, DL-326): not a trigger (b) event (a PR run). The watch trigger stays until G8: any later attempt-1 failure of the case reopens this Bug the same day |
 | Found by / date | CI (PR run); wave reading by qa-engineer 2026-11-23 (14934a39); Bug logged on DL-328, 2026-11-23 |
@@ -67,9 +67,27 @@ Read on `master` d2771045 and on #636's head `b6396c11`. **What the two PRs add.
 |------|----|------|---------------------|
 | Fixed | developer (only on the "no" branch) | | |
 | Regression test added | developer | | |
-| Verified | qa-engineer | | half 1 read on 45111572570 (2026-11-23); half 2 waits for the first `master` push run after #636's squash |
+| Verified (numbers) | qa-engineer | 2026-11-23 | half 1 read on 45111572570; half 2 read on `master` push 45116869670 (ce7c8c21); **both under 25 s at all three widths, attempt 1**. The Bug is not closed: master rules on the "yes" branch first (see "Half 2 reading") |
 
 ## For master
 1. **Step 1 answer, with its two limits.** The wait is a page signal that comes after the save has settled (lines above), subject to the lazy guard (gap 1). Whether "the change that should remove the exposure is already in #636" holds is not shown by it: #636 adds no wait before the reload, and the failing symptom was the form absent after the reload (gap 2). QA has not ruled; the Bug stays open on the DL-328 proof either way.
 2. The after-#630 readings of this case are higher than the before-#630 ones (the added waits); one is 26.7 s [mobile] on d2771045. Below DL-264 (5)(b)'s 29 s, so nothing is triggered; reported as evidence.
 3. No ruling asked. W1 (d) reference wording is recorded in test plan section 7.
+
+## Half 2 reading 2026-11-23 (qa-engineer; DL-328 (3); read from the Stage 12 job logs of the run, ANSI stripped; no re-run, no ruling)
+
+**The first `master` push after #636's squash** is **45116869670** (head **ce7c8c21**, #636 squashed 05:17:43Z; `success` in all jobs). Case "AC-1: the list has the eight, each with its letter ..." (`estimate-treatments.spec.ts:92` on this head; bound by title), attempt 1 (no `✘` and no `(retry #` in any of the four Stage 12 jobs; `548 / 542 / 545 / 529 passed`, 0 flaky, 0 failed):
+
+| Run | Head | mobile (shard 1) | tablet (shard 2) | desktop (shard 4) | Under 25 s |
+|---|---|---|---|---|---|
+| PR run of record 45111572570, attempt 1 (half 1, read earlier) | b6396c11 | 18.4 s | 18.5 s | 23.0 s | yes |
+| `master` push 45116869670 (half 2) | ce7c8c21 | **13.4 s** | **14.4 s** | **18.3 s** | **yes** |
+
+All six readings are first-attempt passes under 25 s, and the tablet reading (the width that failed) is 14.4 s on the push, against 15.3 to 22.4 s on the five earlier `master` pushes in the table above. **The numbers of DL-328 (3), "yes" branch, are met. QA does not close the Bug**, because the "yes" branch itself is master's to confirm: QA's step 1 reading stops at two limits (the guard is installed lazily, gap 1; the wait speaks to the save while the failure was the form absent after the reload, gap 2), and #636 adds no wait before the reload. Two first-attempt passes can be had with or without the mechanism that failed. If master confirms the "yes" branch on that reading, the Bug closes on these two runs; if not, the "no" branch (a test-only fix by the developer, hardening window, behind DEF-064 and DEF-069's observation) applies.
+
+The watch trigger stays until G8: any later attempt-1 failure of the case reopens this Bug the same day. The push run on 86cf64d3 (the #640 squash, run 45122632176) is read in the test plan's section 7 note for this date; nothing from it changes the half 2 reading above.
+
+## For master (2026-11-23, half 2)
+1. Does the "yes" branch of DL-328 (3) hold on QA's step 1 reading (DEF-070 "For master" item 1, with its gaps 1 and 2)? If yes, DEF-070 closes on 45111572570 (18.4 / 18.5 / 23.0 s) and 45116869670 (13.4 / 14.4 / 18.3 s); QA closes it (file, section 7, `gh issue close 641`, AQP-413 through transitions) on that word. If no, the "no" branch applies.
+
+**Watch reading on the next push (QA, 2026-11-23, later).** `master` push run **45122632176** (86cf64d3, `success`, 0 flaky, 0 failed): "AC-1: the list has the eight ..." attempt 1 passed at **17.5 / 22.9 / 16.7 s** (mobile / tablet / desktop), no failure, under 25 s. The watch trigger is not met.
