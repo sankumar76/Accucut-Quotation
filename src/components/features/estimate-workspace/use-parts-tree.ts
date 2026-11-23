@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Outcome } from '@/lib/api-client';
 import type { NodeKind } from '@/lib/estimate/node-kinds';
 import { addPart, deletePart, loadTree, movePart, treeFromRefusal, type PartItem, type TreeAnswer } from '@/lib/estimates/tree-client';
-import { deleteGuardOf, partsRemoved, stepOf } from '@/lib/estimates/tree-moves';
+import { deleteGuardOf, partsRemoved, siblingsOf } from '@/lib/estimates/tree-moves';
 
 import { addedMessage, deletedMessage, renumberedMessage, TREE_CHANGING } from './estimate-texts';
 
@@ -103,6 +103,8 @@ export function usePartsTree(estimateId: string) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   // The row that took the focus after it was added (CR-01 item 3C AC-3): kept in a ref, because it is read once, when the new row's link is mounted, and is not something to draw.
   const focusAfterAdd = useRef<string | null>(null);
+  // The row that was moved, so that its move handle takes the focus once the tree is drawn in the new order (CR-01 item 3D, AC-8): a row that changes place in the page can lose the focus it had. A new object for every move, so the same row moved twice is two requests.
+  const [movedFocus, setMovedFocus] = useState<{ readonly id: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -235,14 +237,23 @@ export function usePartsTree(estimateId: string) {
     return true;
   }
 
-  function move(direction: 'up' | 'down'): void {
-    if (selected === null || nodes === null) return;
-    const index = stepOf(nodes, selected, direction);
-    if (index === null) return;
-    const { id, revision, parentId, slNo } = selected;
+  /**
+   * Moves the row `id` to the place `index` among the rows with the same parent, together with everything under it (CR-01 item 3D; A-CR01-5, confirmed 2026-11-23: never to another parent). It is what a drop of the
+   * move handle and Move up / Move down of its menu both end in, so the two give the same result (AC-2). Nothing is shown in the new order before the server has answered (AC-9): the tree on screen is the server's,
+   * and a 409 (the part or the tree changed under the person) or a failure leaves the row where it was, with the notice that already tells it. The moved row is announced by its new number.
+   */
+  function moveTo(id: string, index: number): void {
+    const row = nodes?.find((node) => node.id === id);
+    if (row === undefined || nodes === null) return;
+    // A place that is not among the siblings is not offered by the handle or the menu; this is the guard behind them.
+    if (!Number.isInteger(index) || index < 0 || index >= siblingsOf(nodes, row.parentId).length) return;
+    const { revision, parentId, slNo } = row;
     void change(
       (signal) => movePart(estimateId, { nodeId: id, revision, parentId, index }, undefined, signal),
-      (answer) => setAnnouncement(renumberedMessage(slNoOf(answer.nodes, id))),
+      (answer) => {
+        setMovedFocus({ id });
+        setAnnouncement(renumberedMessage(slNoOf(answer.nodes, id)));
+      },
       // A move always changes the part's number (it goes to another place among its siblings), so a part with the number it had was not moved.
       (fresh) => (slNoOf(fresh, id) !== '' && slNoOf(fresh, id) !== slNo ? { nodes: fresh, nodeId: null } : null),
     );
@@ -296,6 +307,7 @@ export function usePartsTree(estimateId: string) {
     selected,
     busy,
     waiting,
+    movedFocus,
     problem,
     announcement,
     deleting,
@@ -303,7 +315,7 @@ export function usePartsTree(estimateId: string) {
     select: setSelectedId,
     addUnder,
     wantsFocus,
-    move,
+    moveTo,
     askDelete,
     confirmDelete,
     cancelDelete,

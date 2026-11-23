@@ -34,5 +34,7 @@ export const addUnderLabel = (slNo: string, name: string): string => `Add under 
 export const addFastenerLabel = (slNo: string, name: string): string => `Add fastener under ${slNo} ${name}`;
 /** The tooltip and the spoken name of a "-": the row whose confirmation it opens. */
 export const deleteRowLabel = (slNo: string, name: string): string => `Delete ${slNo} ${name}`;
+/** The tooltip and the spoken name of the move handle of a row (CR-01 item 3D): the row it moves; a click on it opens Move up / Move down. */
+export const moveRowLabel = (slNo: string, name: string): string => `Move ${slNo} ${name}`;
 /** The button at the foot of the tree that adds another top-level Main Assembly. */
 export const ADD_MAIN_ASSEMBLY = 'Add main assembly';

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowDown, ArrowUp, Plus, type LucideIcon } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Icon } from '@/components/shared/icon';
@@ -25,8 +25,6 @@ import {
   TREE_CHANGING,
   TREE_CHANGING_ID,
   TREE_LOADING,
-  TREE_MOVE_DOWN,
-  TREE_MOVE_UP,
   TREE_TITLE,
   TRY_AGAIN,
 } from './estimate-texts';
@@ -57,24 +55,10 @@ function focusTree(event: Event): void {
 }
 
 /**
- * One action of the toolbar: an icon and its words, so it is never an icon alone. An action that cannot be taken is `aria-disabled`, not `disabled`: a button that is
- * pressed and then disabled (Move up on the way to the top) would drop the keyboard focus to the page, and the person would have to find their place again. The same holds while a change is on its way (AQP-343):
- * the buttons that would start another are `aria-disabled` and keep the focus.
- */
-function ToolbarButton({ icon, label, unavailable, describedBy, onClick }: { readonly icon: LucideIcon; readonly label: string; readonly unavailable: boolean; readonly describedBy: string | undefined; readonly onClick: () => void }) {
-  return (
-    <Button variant="secondary" aria-disabled={unavailable || undefined} aria-describedby={unavailable ? describedBy : undefined} className={cn(unavailable && UNAVAILABLE_LOOK)} onClick={unavailable ? undefined : onClick}>
-      <Icon icon={icon} />
-      {label}
-    </Button>
-  );
-}
-
-/**
  * The parts tree and its actions (STORY-05.02 AC-1 to AC-3, as changed by CR-01 items 3B and 3C): the tree is a `nav` with nested lists of row links, each row with an arrow that opens and closes its branch, a kind icon,
  * the number and name, the status icon and, where the person may change the inputs, the "+" and "-" of the row (`RowActions`, in the toolbar slot of `PartsTreeList`); "Add main assembly" and the legend of the four icons are
- * at its foot, and a live region says what changed ("Part renumbered to 1.2"). **Move up and Move down stay as two buttons above the tree until the move handle of 3D replaces them** (3D waits for the customer's
- * answer A-CR01-5); the Add and Delete buttons that sat there are gone. There is no arrow-key navigation: Tab moves from row to row, to each arrow and to the buttons of a row, and Enter on a row opens its form (PM
+ * at its foot, and a live region says what changed ("Part renumbered to 1.2"). **Reordering is the move handle of each row** (CR-01 item 3D, `MoveHandle`: a drag among the rows with the same parent, or a click for Move up /
+ * Move down); the buttons that sat above the tree for it, and for Add and Delete, are gone. While a change is on its way every control that would start another is `aria-disabled` and keeps the focus (AQP-343). There is no arrow-key navigation: Tab moves from row to row, to each arrow and to the buttons of a row, and Enter on a row opens its form (PM
  * ruling). All of it is the screen's: every rule is the server's, and what the tree shows is what the server last answered.
  */
 export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps) {
@@ -84,8 +68,6 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
   // The branches that are closed. The tree opens with every branch open; what a person closes stays closed while the panel is on screen (the state is this panel's, not the server's).
   const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
   const toggle = (id: string): void => setClosed((current) => (current.has(id) ? new Set([...current].filter((other) => other !== id)) : new Set([...current, id])));
-  const canUp = selected !== null && nodes !== null && stepOf(nodes, selected, 'up') !== null;
-  const canDown = selected !== null && nodes !== null && stepOf(nodes, selected, 'down') !== null;
   // While a change is on its way the buttons that would start another are not offered, and once the line above the tree is on screen they are described by it (AQP-343, DL-340).
   const describedBy = tree.waiting ? TREE_CHANGING_ID : undefined;
   // The tree could not be read (the first time, or after a change that nothing answered): the Notice takes the tree's place, and after a change that nothing answered the focus goes to its button.
@@ -94,6 +76,11 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
   useEffect(() => {
     if (notKnown) retry.current?.focus();
   }, [notKnown]);
+  // A row that was moved is drawn in its new place, and its move handle takes the focus (CR-01 item 3D, AC-8): the screen reader has the announcement, and the person keeps their place.
+  const moved = tree.movedFocus;
+  useEffect(() => {
+    if (moved !== null) document.querySelector<HTMLElement>(`#${TREE_ID} li[data-part-row="${CSS.escape(moved.id)}"] > div [data-move-handle]`)?.focus();
+  }, [moved]);
   const loadFailedNotice = (
     <Notice tone="danger" title={TREE_LOAD_FAILED_TITLE}>
       <p>{FAILED_BODY}</p>
@@ -149,7 +136,10 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
           renderRow={(part, kindLabel) => (
             <TreeNode part={part} kindLabel={kindLabel} selected={part.id === selected?.id} missing={missingIds?.has(part.id) ?? false} onChoose={choose} takesFocus={tree.wantsFocus} />
           )}
-          {...(editable ? { renderToolbar: (part: PartItem) => <RowActions part={part} onAdd={tree.addUnder} onDelete={tree.askDelete} busy={busy} describedBy={describedBy} /> } : {})}
+          {...(editable ? { renderToolbar: (part: PartItem) => (
+                <RowActions part={part} onAdd={tree.addUnder} onDelete={tree.askDelete} upTo={stepOf(nodes, part, 'up')} downTo={stepOf(nodes, part, 'down')} onMoveTo={tree.moveTo} busy={busy} describedBy={describedBy} />
+              ),
+            } : {})}
         />
         {editable ? addMainAssembly : null}
         <TreeLegend />
@@ -157,15 +147,8 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
     );
   }
 
-  const noPart = selected === null;
   return (
     <div className="flex min-w-0 flex-col gap-s-3">
-      {editable && nodes !== null && nodes.length > 0 && !notKnown ? (
-        <div className="flex flex-wrap gap-s-2">
-          <ToolbarButton icon={ArrowUp} label={TREE_MOVE_UP} unavailable={noPart || !canUp || busy} describedBy={describedBy} onClick={() => tree.move('up')} />
-          <ToolbarButton icon={ArrowDown} label={TREE_MOVE_DOWN} unavailable={noPart || !canDown || busy} describedBy={describedBy} onClick={() => tree.move('down')} />
-        </div>
-      ) : null}
       {tree.waiting ? (
         <p id={TREE_CHANGING_ID} className="text-body text-ink-2">
           {TREE_CHANGING}
