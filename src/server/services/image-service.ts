@@ -17,7 +17,7 @@ import { PART_CHANGED_CODE, PART_CHANGED_MESSAGE } from './estimate-inputs';
  * handed the estimate's lock and its rules for who may open or change an estimate, so those are written once, exactly as the part form's are (`estimate-inputs.ts`).
  *
  * **A picture is added, replaced or removed in one transaction, in the order of every write to an estimate:** the estimate is locked (404 when it is not this person's or does not
- * exist), this person must still be allowed to change its inputs (409, `assertEditable`: a draft for an Engineer, a draft or a submitted estimate for a Lead or an Admin, never an
+ * exist), this person must still be allowed to change its inputs (409, `assertEditable`: a draft for an Engineer, a draft or a prepared estimate for a Lead or an Admin, never an
  * approved one), the part must be in it (404), and only then is the file judged by its **content** (`lib/images`: 413 at 200 x 1024 bytes or more, 415 for anything that is not a PNG,
  * JPEG or GIF (a WebP too: the browser converts it before it is sent, DL-237), whatever its name or declared type). A picture that passes is stored once for the estimate (`sha256`, immutable, a replacement is a new row), the part is pointed at
  * it, the part's `revision` goes up, and so does the estimate's `inputs_revision` (section 4.8: a picture added, replaced or removed is an input change), all in the same transaction, so

@@ -23,7 +23,7 @@ import {
 import { checkUnlockReason } from '@/lib/estimate/unlock-words';
 
 /**
- * STORY-06.12 AC-2, AC-9, AC-10 (UX spec v0.31 SCR-06 "Cancel approval (Admin)", "Cancel approval on a Draft or Submitted estimate" and "customer or material deleted, final words"): the words of the Cancel approval dialog
+ * STORY-06.12 AC-2, AC-9, AC-10 (UX spec v0.31 SCR-06 "Cancel approval (Admin)", "Cancel approval on a Draft or Prepared estimate" and "customer or material deleted, final words"): the words of the Cancel approval dialog
  * and of the server's sentences. They are written out here from the spec, not copied from the product, so a changed sentence fails a test. Every name is invented.
  */
 
@@ -44,12 +44,12 @@ describe('the dialog (AC-2)', () => {
     );
   });
 
-  it('AC-10: a Draft or a Submitted estimate keeps its status and its task, in the ux-expert\'s words (v0.29)', () => {
+  it('AC-10: a Draft or a Prepared estimate keeps its status and its task, in the ux-expert\'s words (v0.29)', () => {
     expect(cancelIntro('DRAFT', 'Priya Nair')).toBe(
       'The estimate stays a Draft and its task does not change. The approved price stays on screen, marked "Approval cancelled", until you remove it. Neither step can be undone. A new approval brings a price back.',
     );
-    expect(cancelIntro('SUBMITTED', 'Priya Nair')).toBe(
-      'The estimate stays Submitted and its task does not change. The approved price stays on screen, marked "Approval cancelled", until you remove it. Neither step can be undone. A new approval brings a price back.',
+    expect(cancelIntro('PREPARED', 'Priya Nair')).toBe(
+      'The estimate stays Prepared and its task does not change. The approved price stays on screen, marked "Approval cancelled", until you remove it. Neither step can be undone. A new approval brings a price back.',
     );
   });
 

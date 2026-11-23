@@ -88,11 +88,11 @@ describe('AC-3, AC-13: a Lead or an Admin changes the customer', () => {
     expect(harness.estimateAudit.rows).toHaveLength(0);
   });
 
-  it('a submitted estimate may be changed by a Lead (their inputs); the estimate of another Engineer too', async () => {
-    estimate().status = 'SUBMITTED';
+  it('a prepared estimate may be changed by a Lead (their inputs); the estimate of another Engineer too', async () => {
+    estimate().status = 'PREPARED';
     estimate().engineerId = harness.targetId;
     expect((await PUT(request({ customerId: CUSTOMER_RECIPE_ID }), withId(owned()))).status).toBe(200);
-    expect(estimate().status).toBe('SUBMITTED');
+    expect(estimate().status).toBe('PREPARED');
   });
 });
 

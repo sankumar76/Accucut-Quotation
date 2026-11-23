@@ -92,11 +92,11 @@ export const deletedMessage = (parts: number): string => (parts === 1 ? 'Row del
 
 
 /**
- * Calculate (STORY-05.09; UX spec SCR-05 "Calculate blocked", "Submitted"). The sentence an Engineer is told after a good Calculate is the server's (`CALCULATE_MESSAGE`, in the answer); the
+ * Calculate (STORY-05.09; UX spec SCR-05 "Calculate blocked", "Prepared"). The sentence an Engineer is told after a good Calculate is the server's (`CALCULATE_MESSAGE`, in the answer); the
  * summary of a blocked one is built from the same function the server uses (`blockedSummary`), so the page and the 422 say one thing. None of these words names a rate, a price or a formula
  * (UX-24), and none holds a figure.
  */
-export const CALCULATE_SUBMITTED_TITLE = 'Submitted';
+export const CALCULATE_PREPARED_TITLE = 'Prepared';
 /** The state "Approved" of SCR-05 (STORY-06.06 AC-4; UX spec SCR-05 states and the G3 screen): read-only, and **no price** (NFR-002); a status is not a cost. */
 export const APPROVED_LOCKED_TITLE = 'Approved and locked.';
 export const APPROVED_LOCKED_BODY = 'This estimate is closed and the task has moved to Closed. Inputs cannot be changed.';

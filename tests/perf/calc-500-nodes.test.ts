@@ -87,12 +87,12 @@ describe('NFR-008 through the whole path: calculation-service.calculate of tree5
     const viewer = { id: db.engineerId, role: 'ENGINEER' as const };
     const samples: number[] = [];
     for (let run = 0; run < RUNS; run += 1) {
-      // The estimate of each run is built before the clock starts: a Calculate submits it, so each run needs a draft of its own.
+      // The estimate of each run is built before the clock starts: a Calculate prepares it, so each run needs a draft of its own.
       const estimateId = await addTree500Estimate(db);
       const started = performance.now();
       const answer = await db.service.calculate(viewer, estimateId);
       samples.push(performance.now() - started);
-      expect(answer.status).toBe('SUBMITTED');
+      expect(answer.status).toBe('PREPARED');
     }
     const summary = summarise(samples);
     process.stdout.write(`\n${formatReport(`NFR-008 tree500, ${TREE500_NODE_COUNT} nodes, the whole path of calculation-service.calculate (PostgreSQL)`, summary)}`);

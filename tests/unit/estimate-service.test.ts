@@ -131,14 +131,14 @@ describe('AC-3, AC-7: changing the customer (a Lead or an Admin)', () => {
     expect((await service.getWorkspace(arjun, 'Q-2026-0318'))?.customer?.name).toBe('Brightwater Controls');
   });
 
-  it('a Lead and an Admin may change the customer of a draft, and of a submitted estimate (their inputs, FR-064)', async () => {
+  it('a Lead and an Admin may change the customer of a draft, and of a prepared estimate (their inputs, FR-064)', async () => {
     const { stored, change } = setUp();
     await change(lead, ESTIMATE, BRIGHTWATER);
     expect(stored().customerId).toBe(BRIGHTWATER);
     await change(admin, ESTIMATE, MARLOW);
     expect(stored().customerId).toBe(MARLOW);
     expect(stored().inputsRevision).toBe(2);
-    stored().status = 'SUBMITTED';
+    stored().status = 'PREPARED';
     await change(lead, ESTIMATE, BRIGHTWATER);
     expect(stored().customerId).toBe(BRIGHTWATER);
     expect(stored().inputsRevision).toBe(3);
@@ -230,7 +230,7 @@ describe('AC-7: the refusals', () => {
   });
 
   it('an Engineer is refused at every status, a deleted or unknown customer included: the role is judged before the status and the customer', async () => {
-    for (const status of ['DRAFT', 'SUBMITTED', 'APPROVED'] as const) {
+    for (const status of ['DRAFT', 'PREPARED', 'APPROVED'] as const) {
       const { change } = setUp([estimate({ status })]);
       for (const customerId of [MARLOW, GONE, 'nonsense']) await expect(change(arjun, ESTIMATE, customerId)).rejects.toBeInstanceOf(ForbiddenError);
     }
@@ -252,7 +252,7 @@ describe('AC-7: the refusals', () => {
     expect(missing instanceof NotFoundError && malformed instanceof NotFoundError && missing.message === malformed.message && missing.code === malformed.code).toBe(true);
   });
 
-  it('an approved estimate is refused with 409 ESTIMATE_NOT_EDITABLE for a Lead and an Admin, and nothing changes: nobody changes an approved estimate (FR-064 lets them edit a submitted one)', async () => {
+  it('an approved estimate is refused with 409 ESTIMATE_NOT_EDITABLE for a Lead and an Admin, and nothing changes: nobody changes an approved estimate (FR-064 lets them edit a prepared one)', async () => {
     const { stored, change } = setUp([estimate({ status: 'APPROVED', customerId: BRIGHTWATER, inputsRevision: 3 })]);
     for (const viewer of [lead, admin]) {
       const refusal = await change(viewer, ESTIMATE, MARLOW).catch((error: unknown) => error);

@@ -22,7 +22,7 @@ export const PATCH = withRoute({
 });
 
 /**
- * `DELETE /api/v1/customers/{id}` (STORY-02.07 AC-1, AC-2, AC-6): soft-deletes a customer no Draft or Submitted estimate has, and answers 204 with no body.
+ * `DELETE /api/v1/customers/{id}` (STORY-02.07 AC-1, AC-2, AC-6): soft-deletes a customer no Draft or Prepared estimate has, and answers 204 with no body.
  * While one has it the answer is 409 with those estimates named (the first ten and the count) and nothing changes. Admin only, checked before the ID is
  * looked at, so a real ID and an invented one are refused alike (CR-33). An unknown or already deleted ID is 404.
  */

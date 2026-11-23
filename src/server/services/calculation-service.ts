@@ -4,7 +4,7 @@ import { Decimal } from '../../lib/decimal';
 import { CalculateBlockedError, ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
 import {
   CALCULATE_MESSAGE,
-  CALCULATE_SUBMITTED_STATUS,
+  CALCULATE_PREPARED_STATUS,
   CUSTOMER_NOT_CHOSEN_CODE,
   CUSTOMER_NOT_CHOSEN_MESSAGE,
   NO_PARTS_CODE,
@@ -122,7 +122,7 @@ export interface CalculationService {
   /** Every row's outputs, then BL, BN and the total Tool Cost. The same errors; a typed value is named with its row, `rows[1].<field ID>`. */
   calculateEstimate(request: EstimateCalculationRequest): Promise<EstimateCalculation>;
   /**
-   * Works the estimate out from the masters as they are now and stores the record, the estimate's status (DRAFT becomes SUBMITTED) and its link to the record,
+   * Works the estimate out from the masters as they are now and stores the record, the estimate's status (DRAFT becomes PREPARED) and its link to the record,
    * all or nothing. Every press writes a new record (history is kept). Pass `tx` to run in the caller's transaction (STORY-05.09 locks, validates and stores
    * in one); without it the service opens its own. Throws `NotFoundError` (unknown estimate, customer or material), `ConflictError` (approved estimate,
    * no customer, or `inputsRevision` out of date) and `FieldValidationError` (a value that is not valid), each before anything is written.
@@ -132,7 +132,7 @@ export interface CalculationService {
    * The Engineer's Calculate (`POST /api/v1/estimates/{id}/calculate`, STORY-05.09; architecture section 4.2), in **one transaction** under the estimate's row lock: the state machine decides
    * (`transition(viewer, id, 'CALCULATE', tx)`: 404 for another Engineer's estimate, 403 for a Lead or an Admin (the route's role list refuses them first), 409 for a status that is not DRAFT), every part is checked for missing inputs
    * (422 `CALCULATE_BLOCKED`, which lists parts and fields and writes nothing), the customer must be chosen (409), the masters are read, the record is stored (`storeCalculation`'s work, with the
-   * configuration read once for the check and the calculation) and the status is SUBMITTED, all or nothing. It answers `{status, message}`: **no number from the calculation leaves it** (NFR-002).
+   * configuration read once for the check and the calculation) and the status is PREPARED, all or nothing. It answers `{status, message}`: **no number from the calculation leaves it** (NFR-002).
    *
    * **The quantity warning (STORY-05.12; architecture section 4.3).** After the 422 and the customer check, and before any master is read, every row with 0 in QTY per Assy is listed. With one or more, the
    * request must carry `options.acknowledge.inputsRevision` equal to the estimate's revision under the lock; otherwise it is the 409 `CALCULATE_ACK_REQUIRED` (`CalculateAckRequiredError`, the current
@@ -143,7 +143,7 @@ export interface CalculationService {
   /**
    * A Lead's or an Admin's Recalculate (`POST /api/v1/estimates/{id}/recalculate`, STORY-06.04; FR-061; architecture sections 4.2, 4.4 and 4.8): **the same work as `calculate`, not a second path**, in one
    * transaction under the estimate's row lock, with the state machine's `RECALCULATE` event in place of `CALCULATE`. It makes a new immutable record from the masters as they are now, in the person's name, and links
-   * it, so the figures are `current` again. A DRAFT (unlocked) estimate becomes SUBMITTED, a SUBMITTED one stays so (the machine decides), an APPROVED one is the 409 `ESTIMATE_APPROVED_IS_LOCKED` and
+   * it, so the figures are `current` again. A DRAFT (unlocked) estimate becomes PREPARED, a PREPARED one stays so (the machine decides), an APPROVED one is the 409 `ESTIMATE_APPROVED_IS_LOCKED` and
    * nothing is written. The checks and their order, the 422 `CALCULATE_BLOCKED`, the 409 for a customer not chosen, the quantity warning and its acknowledgement are `calculate`'s own. It answers nothing: the
    * route reads the costs view afterwards, through the figure state, so no figure leaves this service (NFR-002). A role the machine does not allow is refused before the estimate's status is looked at.
    */
@@ -163,7 +163,7 @@ export interface CalculateOptions {
 
 /** The whole of an Engineer's good Calculate: the estimate's new status and the fixed sentence (FR-056). Nothing else, whatever the estimate costs. */
 export interface CalculateAnswer {
-  readonly status: typeof CALCULATE_SUBMITTED_STATUS;
+  readonly status: typeof CALCULATE_PREPARED_STATUS;
   readonly message: typeof CALCULATE_MESSAGE;
 }
 
@@ -368,8 +368,8 @@ export function createCalculationService(dependencies: CalculationServiceDepende
       rows,
       tx,
     );
-    // A first Calculate submits the estimate; a later one leaves the status as it is (architecture section 4.4).
-    await estimates.linkCalculation(estimate.id, stored.id, estimate.status === 'DRAFT' ? 'SUBMITTED' : estimate.status, tx);
+    // A first Calculate prepares the estimate; a later one leaves the status as it is (architecture section 4.4).
+    await estimates.linkCalculation(estimate.id, stored.id, estimate.status === 'DRAFT' ? 'PREPARED' : estimate.status, tx);
     return stored;
   }
 
@@ -462,7 +462,7 @@ export function createCalculationService(dependencies: CalculationServiceDepende
     },
     async calculate(viewer, estimateId, options = {}) {
       await press('CALCULATE', viewer, estimateId, options);
-      return { status: CALCULATE_SUBMITTED_STATUS, message: CALCULATE_MESSAGE };
+      return { status: CALCULATE_PREPARED_STATUS, message: CALCULATE_MESSAGE };
     },
     async recalculate(viewer, estimateId, options = {}) {
       await press('RECALCULATE', viewer, estimateId, options);

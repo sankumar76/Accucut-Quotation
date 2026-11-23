@@ -22,7 +22,7 @@ export const PATCH = withRoute({
 });
 
 /**
- * `DELETE /api/v1/materials/{id}` (STORY-02.07 AC-3, AC-6): soft-deletes a material no Draft or Submitted estimate has in a part, and answers 204 with no body.
+ * `DELETE /api/v1/materials/{id}` (STORY-02.07 AC-3, AC-6): soft-deletes a material no Draft or Prepared estimate has in a part, and answers 204 with no body.
  * While one has it the answer is 409 `MATERIAL_IN_USE` with those estimates named (the first ten and the count) and nothing changes. Admin only, checked before
  * the ID is looked at, so a real ID and an invented one are refused alike (CR-33). An unknown, already deleted or hidden ID ("Not applicable") is 404.
  */

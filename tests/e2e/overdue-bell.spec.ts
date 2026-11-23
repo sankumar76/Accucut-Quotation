@@ -49,11 +49,11 @@ async function openAs<T>(page: Page, testInfo: TestInfo, role: E2eUser['role'], 
   return { person, seeded };
 }
 
-/** Three overdue tasks (one of them submitted), and a task that is not due, and a closed one with a past deadline, which are not counted. */
+/** Three overdue tasks (one of them prepared), and a task that is not due, and a closed one with a past deadline, which are not counted. */
 async function seedForEngineer(engineerId: string): Promise<ReadonlyArray<string>> {
   const overdue = [
     await seedQueueTask(engineerId, ago(LATE), 'DRAFT', 'E2E late one'),
-    await seedQueueTask(engineerId, ago(2 * DAY_MS), 'SUBMITTED', 'E2E late two'),
+    await seedQueueTask(engineerId, ago(2 * DAY_MS), 'PREPARED', 'E2E late two'),
     await seedQueueTask(engineerId, ago(30 * 60_000), 'DRAFT', 'E2E late three'),
   ];
   await seedQueueTask(engineerId, AHEAD, 'DRAFT', 'E2E not due');
@@ -158,7 +158,7 @@ test.describe('a Lead', () => {
       // Two overdue tasks assigned by this Lead, one not due and one closed (not counted), and one overdue task assigned by the E2E Lead, which is not this Lead's.
       const mine = [
         await seedQueueTask(engineer.id, ago(LATE), 'DRAFT', 'E2E lead own one', lead.email),
-        await seedQueueTask(engineer.id, ago(DAY_MS), 'SUBMITTED', 'E2E lead own two', lead.email),
+        await seedQueueTask(engineer.id, ago(DAY_MS), 'PREPARED', 'E2E lead own two', lead.email),
       ];
       await seedQueueTask(engineer.id, AHEAD, 'DRAFT', 'E2E lead own not due', lead.email);
       await seedQueueTask(engineer.id, ago(5 * DAY_MS), 'APPROVED', 'E2E lead own closed', lead.email);

@@ -120,7 +120,7 @@ export interface CustomerMethods {
   /** A deleted Process Master item: its rate row of **every** customer is removed (SPEC section 4.2 rule 5). One statement. Returns the rows removed. */
   removeProcessItemFromCustomers(processItemId: string, tx: Transaction): Promise<number>;
   /**
-   * The Draft and Submitted estimates that have this customer (STORY-02.07 AC-2): how many, and the first ten by task code. A plain read: it takes no lock, so
+   * The Draft and Prepared estimates that have this customer (STORY-02.07 AC-2): how many, and the first ten by task code. A plain read: it takes no lock, so
    * it must run **after** `findCustomerForUpdate` in the same transaction. That lock waits for a request that is choosing this customer (it holds the
    * customer `FOR SHARE`) and, once it is granted, this statement (a new snapshot under READ COMMITTED) sees that request's estimate (AC-5).
    */
@@ -285,12 +285,12 @@ export function createCustomerMethods(db: PrismaClient): CustomerMethods {
       withDatabaseErrors(async () => {
         // Fails closed (SQR-02): an ID that is not a UUID is a programming fault, never "no open estimate", which would let a delete through.
         if (!isUuid(customerId)) throw new Error('The open-estimate check needs a customer ID.');
-        // Open means Draft or Submitted (BR-053). The total is counted over all of them before the limit; only a code and a status are read.
+        // Open means Draft or Prepared (BR-053). The total is counted over all of them before the limit; only a code and a status are read.
         const rows = await clientFor(db, tx).$queryRaw`
           SELECT t.code AS "code", e.status::text AS "status", (count(*) OVER ())::int AS "total"
           FROM estimates e
           JOIN tasks t ON t.id = e.task_id
-          WHERE e.customer_id = ${customerId}::uuid AND e.status IN ('DRAFT', 'SUBMITTED')
+          WHERE e.customer_id = ${customerId}::uuid AND e.status IN ('DRAFT', 'PREPARED')
           ORDER BY t.code, e.id
           LIMIT ${ESTIMATE_USE_LIMIT}::int`;
         return toEstimateUses(rows);

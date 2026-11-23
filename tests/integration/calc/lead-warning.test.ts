@@ -66,7 +66,7 @@ async function addWarnedEstimate(): Promise<{ readonly estimateId: string; reado
   return { estimateId, part, sub };
 }
 
-/** The same, which the Engineer has calculated by going ahead past the warning: SUBMITTED, one calculation, one audit entry. */
+/** The same, which the Engineer has calculated by going ahead past the warning: PREPARED, one calculation, one audit entry. */
 async function engineerWentAhead() {
   const warned = await addWarnedEstimate();
   await db.service.calculate(engineerOf(db), warned.estimateId, engineerAcknowledges(FIRST_REVISION));
@@ -103,7 +103,7 @@ describe('AC-1: a Lead or an Admin is asked about a 0 on every press, even if th
   it.each([
     ['a Lead', () => leadOf(db)],
     ['an Admin', () => adminOf(db)],
-  ])('%s: Recalculate on a submitted estimate the Engineer calculated by going ahead is the 409 with the current revision and the rows, and writes nothing', async (_name, viewer) => {
+  ])('%s: Recalculate on a prepared estimate the Engineer calculated by going ahead is the 409 with the current revision and the rows, and writes nothing', async (_name, viewer) => {
     const { estimateId, part, sub } = await engineerWentAhead();
     const before = await calculationsOf(estimateId);
     const entriesBefore = await entriesFor(db, estimateId);
@@ -119,10 +119,10 @@ describe('AC-1: a Lead or an Admin is asked about a 0 on every press, even if th
     expect(await calculationsOf(estimateId)).toEqual(before);
     expect(await currentCalculationOf(db, estimateId)).toBe(defined(before[0]).id);
     expect(await entriesFor(db, estimateId)).toEqual(entriesBefore);
-    expect(await statusOf(db, estimateId)).toBe('SUBMITTED');
+    expect(await statusOf(db, estimateId)).toBe('PREPARED');
   });
 
-  it('a Lead\'s first press on a Draft that holds a 0 (Calculate on a Draft) is the same 409, and the acknowledged press submits it in the Lead\'s name', async () => {
+  it('a Lead\'s first press on a Draft that holds a 0 (Calculate on a Draft) is the same 409, and the acknowledged press prepares it in the Lead\'s name', async () => {
     const { estimateId } = await addWarnedEstimate();
     expect(await statusOf(db, estimateId)).toBe('DRAFT');
     const failure = await askedToConfirm(db.service.recalculate(leadOf(db), estimateId, leadPresses()));
@@ -131,7 +131,7 @@ describe('AC-1: a Lead or an Admin is asked about a 0 on every press, even if th
     expect(await statusOf(db, estimateId)).toBe('DRAFT');
 
     await db.service.recalculate(leadOf(db), estimateId, leadAcknowledges(failure.inputsRevision));
-    expect(await statusOf(db, estimateId)).toBe('SUBMITTED');
+    expect(await statusOf(db, estimateId)).toBe('PREPARED');
     expect((await calculationsOf(estimateId)).map((calculation) => calculation.created_by)).toEqual([db.personId]);
   });
 
@@ -172,7 +172,7 @@ describe('AC-2: the acknowledged press makes the Lead\'s own calculation and lea
       { code: 'QTY_ZERO', nodeId: sub, slNo: '1.1.1', label: 'Invented spacer' },
     ]);
     expect(await currentCalculationOf(db, estimateId)).toBe(leads.id);
-    expect(await statusOf(db, estimateId)).toBe('SUBMITTED');
+    expect(await statusOf(db, estimateId)).toBe('PREPARED');
 
     // One new entry, and it is the Lead's: the person, the request, the estimate and each row, and no figure.
     const entries = await entriesFor(db, estimateId);

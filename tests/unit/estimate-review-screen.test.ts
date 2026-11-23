@@ -27,7 +27,7 @@ const LEAD = { id: '00000000-0000-4000-8000-0000000001ed', role: 'LEAD' } as con
 
 const HEADER: WorkspaceHeaderView = {
   code: 'Q-2026-0318',
-  status: 'SUBMITTED',
+  status: 'PREPARED',
   deadlineLabel: '12 Nov 2026, 17:00 IST',
   folderPath: '\\\\invented-server\\invented-share\\RFQ-0318',
   folderUrl: null,
@@ -283,7 +283,7 @@ describe('AC-9: the tiles show a skeleton while a recalculation is under way, wi
 describe('STORY-06.06 AC-1: Approve and lock is on only while the guard would let the press through', () => {
   const approveButton = (html: string): string => defined(/<button[^>]*id="review-approve"[^>]*>/.exec(html))[0];
 
-  it('a submitted estimate with current figures: the button is on (not disabled), opens a dialog, and the page holds no dialog code', async () => {
+  it('a prepared estimate with current figures: the button is on (not disabled), opens a dialog, and the page holds no dialog code', async () => {
     const html = render(await current());
     const button = approveButton(html);
     expect(button).not.toContain(' disabled=""');
@@ -304,7 +304,7 @@ describe('STORY-06.06 AC-1: Approve and lock is on only while the guard would le
     expect(html).toContain(reason);
   });
 
-  it('current figures on an estimate that is not submitted (a draft after an unlock, STORY-06.08): the button stays off, with the words of ux-spec v0.31', async () => {
+  it('current figures on an estimate that is not prepared (a draft after an unlock, STORY-06.08): the button stays off, with the words of ux-spec v0.31', async () => {
     const html = render(await current(), undefined, { ...HEADER, status: 'DRAFT' });
     expect(approveButton(html)).toContain(' disabled=""');
     expect(html).toContain('Recalculate first. Approving is available once this Draft has been calculated again.');
@@ -441,7 +441,7 @@ describe('STORY-06.08 AC-11: Recalculate is shown while the status is DRAFT, wha
     expect(html).not.toContain('>Calculate</button>');
   });
 
-  it('a Submitted estimate with current figures shows no Recalculate button: its way on is Approve and lock', async () => {
+  it('a Prepared estimate with current figures shows no Recalculate button: its way on is Approve and lock', async () => {
     const html = render(await current());
     expect(html).not.toContain('id="review-calculate"');
     expect(html).toContain('id="review-approve"');
@@ -530,7 +530,7 @@ describe('STORY-06.08 AC-3, AC-12 (UX spec SCR-06 "Draft after unlock" and "Unlo
     expect(html).not.toContain('Approved earlier');
   });
 
-  it("a Submitted estimate whose approval was unlocked earlier keeps the label on BO but no longer says the task is in the Engineer's queue", async () => {
+  it("a Prepared estimate whose approval was unlocked earlier keeps the label on BO but no longer says the task is in the Engineer's queue", async () => {
     const html = render(await current({ approval: { price: '12600.00', unlock: UNLOCK } }));
     expect(countOf(html, 'Approved earlier')).toBe(1);
     expect(html).not.toContain('review-unlocked-notice');
@@ -544,7 +544,7 @@ describe('STORY-06.08 AC-3, AC-12 (UX spec SCR-06 "Draft after unlock" and "Unlo
   });
 });
 
-describe('STORY-06.12 AC-1, AC-6, AC-10 (UX spec SCR-06 "Approved (Admin)", "Approval cancelled (Admin)" and "(Lead)", "Cancel approval on a Draft or Submitted estimate")', () => {
+describe('STORY-06.12 AC-1, AC-6, AC-10 (UX spec SCR-06 "Approved (Admin)", "Approval cancelled (Admin)" and "(Lead)", "Cancel approval on a Draft or Prepared estimate")', () => {
   const APPROVED_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'APPROVED' };
   const DRAFT_HEADER: WorkspaceHeaderView = { ...HEADER, status: 'DRAFT' };
   const UNLOCK = { unlockedAt: new Date('2026-11-05T06:35:00.000Z'), byName: 'Invented Kiran', reason: 'The customer changed the quantity.', engineerName: 'Invented Priya' };
@@ -569,7 +569,7 @@ describe('STORY-06.12 AC-1, AC-6, AC-10 (UX spec SCR-06 "Approved (Admin)", "App
     }
   });
 
-  it('AC-10: the Admin has the same button on a Draft or a Submitted estimate whose approval was kept through an unlock; a Lead has none and is told who can', async () => {
+  it('AC-10: the Admin has the same button on a Draft or a Prepared estimate whose approval was kept through an unlock; a Lead has none and is told who can', async () => {
     for (const header of [DRAFT_HEADER, HEADER]) {
       const admin = render(await current({ approval: { ...STANDING, unlock: UNLOCK } }), undefined, header, 'ADMIN');
       expect(admin).toContain('id="review-cancel"');
@@ -622,19 +622,19 @@ describe('STORY-06.12 AC-1, AC-6, AC-10 (UX spec SCR-06 "Approved (Admin)", "App
     expect(html).not.toContain('Only the Admin can cancel an approval.');
   });
 
-  it('AC-10 (ux-expert, v0.29): a cancel that did not move the estimate says it stays a Draft, or stays Submitted, and the task does not change', async () => {
+  it('AC-10 (ux-expert, v0.29): a cancel that did not move the estimate says it stays a Draft, or stays Prepared, and the task does not change', async () => {
     const draft = render(await current({ approval: { ...STANDING, unlock: UNLOCK, cancel: CANCEL } }), undefined, DRAFT_HEADER, 'ADMIN');
     expect(draft).toContain('The estimate stays a Draft and its task does not change.');
     expect(draft).not.toContain('Open queue');
-    const submitted = render(await current({ approval: { ...STANDING, unlock: UNLOCK, cancel: CANCEL } }), undefined, HEADER, 'ADMIN');
-    expect(submitted).toContain('The estimate stays Submitted and its task does not change.');
+    const prepared = render(await current({ approval: { ...STANDING, unlock: UNLOCK, cancel: CANCEL } }), undefined, HEADER, 'ADMIN');
+    expect(prepared).toContain('The estimate stays Prepared and its task does not change.');
     // The unlocked notice gives way to the cancelled one.
     expect(draft).not.toContain('review-unlocked-notice');
     expect(draft).not.toContain('Unlocked on');
     expect(countOf(draft, 'Approval cancelled</strong>')).toBe(1);
   });
 
-  it('a Submitted estimate whose approval was cancelled from Approved (and then recalculated) says nothing that is no longer true about its status or its queue', async () => {
+  it('a Prepared estimate whose approval was cancelled from Approved (and then recalculated) says nothing that is no longer true about its status or its queue', async () => {
     const html = render(await current({ approval: { ...STANDING, cancel: CANCEL } }), undefined, HEADER, 'ADMIN');
     expect(html).toContain('Approval cancelled on 05 Nov 2026, 13:05 IST by Invented Meera.');
     expect(html).not.toContain('The estimate is a Draft');
@@ -825,8 +825,8 @@ describe('STORY-07.07: Download .xlsx on SCR-06 is the way to SCR-10 while the f
   const NOT_CALCULATED = 'Calculate or Recalculate first. There is no file until a calculation is current.';
 
   it.each([
-    ['AC-1 Lead, Submitted', 'LEAD', 'SUBMITTED'],
-    ['AC-1 Admin, Submitted', 'ADMIN', 'SUBMITTED'],
+    ['AC-1 Lead, Prepared', 'LEAD', 'PREPARED'],
+    ['AC-1 Admin, Prepared', 'ADMIN', 'PREPARED'],
     ['AC-1 Lead, Draft after an unlock', 'LEAD', 'DRAFT'],
     ['AC-4 Lead, Approved', 'LEAD', 'APPROVED'],
     ['AC-4 Admin, Approved', 'ADMIN', 'APPROVED'],

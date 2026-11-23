@@ -24,7 +24,7 @@ export interface StatusBadgeProps {
 
 const LOOK: Readonly<Record<TaskStatusLabel, { readonly tone: BadgeTone; readonly icon: LucideIcon }>> = {
   Draft: { tone: 'neutral', icon: Pencil },
-  Submitted: { tone: 'info', icon: Send },
+  Prepared: { tone: 'info', icon: Send },
   Approved: { tone: 'success', icon: Lock },
 };
 

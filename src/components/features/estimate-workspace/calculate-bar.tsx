@@ -10,12 +10,12 @@ import type { CalculateState } from './use-calculate';
 const CALCULATE_BAR_LABEL = 'Calculate';
 const CALCULATE_LABEL = 'Calculate';
 const CALCULATING_LABEL = 'Calculating';
-const SUBMITTED_LABEL = 'Submitted';
+const PREPARED_LABEL = 'Prepared';
 const CALCULATE_HINT = 'Every part is checked. Nothing is submitted until all of them are complete.';
 
 export interface CalculateBarProps {
-  /** True once the estimate has been submitted (by this press or an earlier one): the button reads "Submitted" and is off. */
-  readonly submitted: boolean;
+  /** True once the estimate has been prepared (by this press or an earlier one): the button reads "Prepared" and is off. */
+  readonly prepared: boolean;
   /** What a press does and the state it leaves (`useCalculate`): whether one is in flight, and the quantity warning while its dialog is open (STORY-05.12). One prop, so the page's first load carries as little as possible (NFR-009). */
   readonly calculation: CalculateState;
   /** The page's save gate: Save draft sends again what the form shows and waits on it (STORY-05.08). */
@@ -25,12 +25,12 @@ export interface CalculateBarProps {
 }
 
 /**
- * The action bar of SCR-05 (STORY-05.09 AC-2, AC-9; UX spec SCR-05 "Submitted", UX-14): a bar that stays at the bottom edge of the workspace while the form scrolls, with the one button that
- * submits. It is a measured sticky bar (`data-sticky-bar`), so the page's `scroll-padding` keeps a focused field clear of it (WCAG 2.4.11), and it wraps on a phone with the button at full width.
- * After a good Calculate the button reads "Submitted" and is disabled. Nothing here knows a figure: it has none to show (NFR-002). Save draft (STORY-05.08, `save-bar.tsx`) sits beside it while the estimate can still be changed, with the line "Draft saved at 10:42 IST." under the hint.
+ * The action bar of SCR-05 (STORY-05.09 AC-2, AC-9; UX spec SCR-05 "Prepared", UX-14): a bar that stays at the bottom edge of the workspace while the form scrolls, with the one button that
+ * prepares. It is a measured sticky bar (`data-sticky-bar`), so the page's `scroll-padding` keeps a focused field clear of it (WCAG 2.4.11), and it wraps on a phone with the button at full width.
+ * After a good Calculate the button reads "Prepared" and is disabled. Nothing here knows a figure: it has none to show (NFR-002). Save draft (STORY-05.08, `save-bar.tsx`) sits beside it while the estimate can still be changed, with the line "Draft saved at 10:42 IST." under the hint.
  * The quantity warning's dialog (STORY-05.12) is drawn from here: it belongs to the press, and living in this file keeps it out of the page's first load.
  */
-export function CalculateBar({ submitted, calculation, gate, onChoosePart }: CalculateBarProps) {
+export function CalculateBar({ prepared, calculation, gate, onChoosePart }: CalculateBarProps) {
   const { busy, warning } = calculation;
   const draft = useSaveDraft(gate);
   return (
@@ -44,13 +44,13 @@ export function CalculateBar({ submitted, calculation, gate, onChoosePart }: Cal
       >
         <div className="flex min-w-0 flex-col gap-s-1">
           <p className="min-w-0 text-label text-ink-3">{CALCULATE_HINT}</p>
-          {submitted ? null : <SaveDraftNotice draft={draft} />}
+          {prepared ? null : <SaveDraftNotice draft={draft} />}
         </div>
         <div className="flex w-full gap-s-2 sm:w-auto">
-          {submitted ? null : <SaveDraftButton draft={draft} />}
-          {submitted ? (
+          {prepared ? null : <SaveDraftButton draft={draft} />}
+          {prepared ? (
             <Button id={CALCULATE_BUTTON_ID} variant="secondary" disabled className="flex-1 sm:flex-none">
-              {SUBMITTED_LABEL}
+              {PREPARED_LABEL}
             </Button>
           ) : (
             <Button id={CALCULATE_BUTTON_ID} loading={busy} onClick={() => void calculation.calculate()} className="flex-1 sm:flex-none">

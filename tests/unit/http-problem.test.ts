@@ -152,7 +152,7 @@ describe('the problem of an application error', () => {
   });
 
   it('STORY-02.07 AC-2, AC-3: the refusal to delete a customer or a material an open estimate uses is a 409 that names the estimates and counts them, and carries nothing else', () => {
-    const estimates = [{ code: 'Q-2026-0101', status: 'DRAFT' as const }, { code: 'Q-2026-0102', status: 'SUBMITTED' as const }];
+    const estimates = [{ code: 'Q-2026-0101', status: 'DRAFT' as const }, { code: 'Q-2026-0102', status: 'PREPARED' as const }];
     expect(problemFromAppError(new MasterInUseError(CUSTOMER_IN_USE_CODE, 'Invented Works', estimates, 12), ID)).toEqual({
       type: 'about:blank',
       title: 'Invented Works cannot be deleted while an open estimate uses it',

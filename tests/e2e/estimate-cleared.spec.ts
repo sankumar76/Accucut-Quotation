@@ -79,9 +79,9 @@ test.describe('AC-1 and AC-5: the cleared state', () => {
 });
 
 test.describe('AC-3: Recalculate from the screen', () => {
-  test('the press stores a new calculation, the estimate stays Submitted, and the figures, the Calculated line and the table come back', async ({ page }, testInfo) => {
+  test('the press stores a new calculation, the estimate stays Prepared, and the figures, the Calculated line and the table come back', async ({ page }, testInfo) => {
     const { owner } = await clearedEstimate(page, testInfo);
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
     await waitUntilHydrated(page, '#review-calculate');
 
     const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${owner.id}/recalculate`));
@@ -95,10 +95,10 @@ test.describe('AC-3: Recalculate from the screen', () => {
     await expect(page.getByText('How the total is built').first()).toBeVisible();
     // Focus goes to the line that says when the figures were calculated, not to the top of the page.
     await expect(page.locator('#review-calculated')).toBeFocused();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 2 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 2 });
   });
 
-  test('the first press of a Lead on an estimate nobody calculated is a Calculate: the estimate becomes Submitted and the figures show', async ({ page }, testInfo) => {
+  test('the first press of a Lead on an estimate nobody calculated is a Calculate: the estimate becomes Prepared and the figures show', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
     await openAsLead(page, code, testInfo);
     await expect(page.getByRole('status').filter({ hasText: 'The Engineer has not calculated this estimate yet.' })).toContainText(
@@ -114,7 +114,7 @@ test.describe('AC-3: Recalculate from the screen', () => {
 
     await expect(tiles(page).getByText(RUPEES)).toHaveCount(1);
     await expect(tiles(page).getByText(FIGURE).first()).toBeVisible();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 
   test("a 0 in QTY per Assy is asked about in the Lead's dialog (STORY-06.10), writes nothing and leaves the figures cleared; Go back closes it", async ({ page }, testInfo) => {
@@ -145,7 +145,7 @@ test.describe('AC-3: Recalculate from the screen', () => {
 
     await expect(page.getByRole('alert').filter({ hasText: sentence })).toBeVisible();
     await expect(button(page)).toBeVisible();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 });
 
@@ -167,7 +167,7 @@ test.describe('AC-9: loading', () => {
     expect((await answered).status()).toBe(200);
 
     await expect(tiles(page).getByText(RUPEES)).toHaveCount(1);
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 2 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 2 });
   });
 });
 
@@ -190,6 +190,6 @@ test.describe('AC-7 (NFR-002): an Engineer', () => {
     expect(refused.status).toBe(403);
     expect(JSON.parse(refused.body)).toMatchObject({ status: 403, code: 'FORBIDDEN' });
     expect(refused.body).not.toMatch(/state|totals|figures|totalPrice|nodes/);
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 });

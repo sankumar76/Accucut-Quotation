@@ -94,7 +94,7 @@ export interface CalculatedEstimate {
 }
 
 /**
- * An estimate of the Engineer's with two parts, calculated (SUBMITTED, the figures current). Its material and its treatment are new entries of the masters made through the Admin's services, used by no
+ * An estimate of the Engineer's with two parts, calculated (PREPARED, the figures current). Its material and its treatment are new entries of the masters made through the Admin's services, used by no
  * other estimate, so a test can rename and delete them. `materialId` names an existing material to use instead (a second estimate over the same material).
  */
 export async function calculatedEstimateOf(world: ApprovedWorld, options: { readonly materialId?: string } = {}): Promise<CalculatedEstimate> {

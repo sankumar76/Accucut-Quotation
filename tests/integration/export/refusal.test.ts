@@ -18,7 +18,7 @@ import { loadWorkbook } from '../../support/xlsx-parts';
 /**
  * STORY-07.04 (FR-070, FR-100, FR-101; D-28, D-30, D-37; NFR-002; architecture section 4.6 "No file exists until a calculation is current") against real PostgreSQL in a throwaway database, as the **runtime
  * role**: the file is refused while no calculation is current (409 `NOT_CALCULATED` for an estimate never calculated, at any status, 409 `EXPORT_OUT_OF_DATE` once an input changed) and given once it is, to a Lead and
- * an Admin, never to an Engineer, over the matrix of the story's testing notes: **none / current / out-of-date x DRAFT / SUBMITTED / APPROVED x Engineer / Lead / Admin** (signed-out is the route's 401, in
+ * an Admin, never to an Engineer, over the matrix of the story's testing notes: **none / current / out-of-date x DRAFT / PREPARED / APPROVED x Engineer / Lead / Admin** (signed-out is the route's 401, in
  * `tests/unit/export-route.test.ts` and `tests/e2e/export-refusal.spec.ts`). AC-4 is tested against the real database: the state and the figures are read in **one repeatable-read snapshot**, so a change another
  * connection commits between two reads is not seen by the second, and a state read for an earlier summary is never used. Every name and number is invented.
  */
@@ -30,7 +30,7 @@ let world: ApprovedWorld;
 let db: ApprovedWorld['db'];
 let exporter: ExportService;
 
-const STATUSES = ['DRAFT', 'SUBMITTED', 'APPROVED'] as const;
+const STATUSES = ['DRAFT', 'PREPARED', 'APPROVED'] as const;
 type Status = (typeof STATUSES)[number];
 
 beforeAll(async () => {
@@ -46,10 +46,10 @@ afterAll(async () => {
 /** An estimate that was never calculated, in this status. */
 const neverCalculated = (status: Status): Promise<string> => db.addEstimate({ status, engineer: true });
 
-/** An estimate with a current calculation, in this status: SUBMITTED as Calculate leaves it, APPROVED by the Lead, DRAFT by the unlock that keeps the figures (STORY-06.08). */
+/** An estimate with a current calculation, in this status: PREPARED as Calculate leaves it, APPROVED by the Lead, DRAFT by the unlock that keeps the figures (STORY-06.08). */
 async function current(status: Status): Promise<string> {
   const { estimateId } = await calculatedEstimate(db, 1);
-  if (status === 'SUBMITTED') return estimateId;
+  if (status === 'PREPARED') return estimateId;
   await db.approvalService.approve(leadOf(db), estimateId, requestFor(db, await currentCalculationOf(db, estimateId)));
   if (status === 'APPROVED') return estimateId;
   await world.unlock.unlock(leadOf(db), estimateId, { reason: 'Invented reason to unlock.', audit: auditOf(db) });
@@ -108,7 +108,7 @@ describe('AC-3: after Recalculate (state current) the file downloads for a Lead 
   });
 
   it('an estimate refused as out of date gets its file once the Lead recalculates it, and a second refusal does not come back', async () => {
-    const estimateId = await changed(await current('SUBMITTED'));
+    const estimateId = await changed(await current('PREPARED'));
     await expect(exporter.getFile(leadOf(db), estimateId)).rejects.toMatchObject({ code: 'EXPORT_OUT_OF_DATE' });
     await db.service.recalculate(leadOf(db), estimateId);
     exportFileSchema.parse(await exporter.getFile(leadOf(db), estimateId));
@@ -118,7 +118,7 @@ describe('AC-3: after Recalculate (state current) the file downloads for a Lead 
 
 describe('AC-6 (D-37): only the download is refused', () => {
   it('while the figures are not current the summary, the screens\' reads and Calculate or Recalculate all work as usual', async () => {
-    const estimateId = await changed(await current('SUBMITTED'));
+    const estimateId = await changed(await current('PREPARED'));
     const { lead } = people();
     expect(await exporter.getSummary(lead, estimateId)).toMatchObject({ state: 'out-of-date', figures: null, partCount: 1 });
     await expect(exporter.getFile(lead, estimateId)).rejects.toMatchObject({ httpStatus: 409 });
@@ -163,7 +163,7 @@ const revisionOf = async (estimateId: string): Promise<number> =>
 
 describe('AC-4 (race): the state is read in the same repeatable-read transaction that reads the figures', () => {
   it('a change another connection commits after the state was read is not seen by the later reads of the file: one snapshot', async () => {
-    const estimateId = await current('SUBMITTED');
+    const estimateId = await current('PREPARED');
     const start = await revisionOf(estimateId);
     const seen: Array<number | undefined> = [];
     const racing = exporterWithHooks({
@@ -180,7 +180,7 @@ describe('AC-4 (race): the state is read in the same repeatable-read transaction
   });
 
   it('the summary reads its state, its parts and its figures from one snapshot too', async () => {
-    const estimateId = await current('SUBMITTED');
+    const estimateId = await current('PREPARED');
     const start = await revisionOf(estimateId);
     const seen: Array<number | undefined> = [];
     const racing = exporterWithHooks({
@@ -194,7 +194,7 @@ describe('AC-4 (race): the state is read in the same repeatable-read transaction
   });
 
   it('a read without the snapshot would have seen the change: the runner\'s default is read committed, so the guard above is the snapshot and not luck', async () => {
-    const estimateId = await current('SUBMITTED');
+    const estimateId = await current('PREPARED');
     const start = await revisionOf(estimateId);
     const read = async (isolation: 'repeatable-read' | undefined): Promise<Array<number | undefined>> => {
       const seen: Array<number | undefined> = [];
@@ -210,7 +210,7 @@ describe('AC-4 (race): the state is read in the same repeatable-read transaction
   });
 
   it('a state read for an earlier summary is never used: the summary said current, an input changed, the download is refused', async () => {
-    const estimateId = await current('SUBMITTED');
+    const estimateId = await current('PREPARED');
     const { lead } = people();
     expect(await exporter.getSummary(lead, estimateId)).toMatchObject({ state: 'current' });
     await changed(estimateId);
@@ -218,7 +218,7 @@ describe('AC-4 (race): the state is read in the same repeatable-read transaction
   });
 
   it('the other way: the summary said cleared, a Recalculate made the figures current, the download is given', async () => {
-    const estimateId = await changed(await current('SUBMITTED'));
+    const estimateId = await changed(await current('PREPARED'));
     const { lead } = people();
     expect(await exporter.getSummary(lead, estimateId)).toMatchObject({ state: 'out-of-date', figures: null });
     await db.service.recalculate(leadOf(db), estimateId);

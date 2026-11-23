@@ -19,7 +19,7 @@ import { harness, holdSessionClock, releaseSessionClock } from '../support/sessi
 
 /**
  * STORY-06.05 AC-1 to AC-5, AC-7 and AC-8 (FR-101, D-20; NFR-002, NFR-007; architecture sections 4.8 and 6 "Approve") and STORY-06.06 AC-2, AC-6 and AC-7 (FR-062), through the real `withRoute`, the real session, the
- * real approval, calculation and estimate services over in-memory storage: the server refuses an approval unless the estimate is SUBMITTED, its figures are `current` and the request names the current calculation,
+ * real approval, calculation and estimate services over in-memory storage: the server refuses an approval unless the estimate is PREPARED, its figures are `current` and the request names the current calculation,
  * with a fixed sentence that names the missing step; every refusal writes nothing and records no audit entry; an estimate that passes the guard is approved: the status, the approvals row and the audit entry are
  * written together or not at all, and two approvals at once leave one row. Who may call the route is `tests/security/role-matrix.test.ts`; the PostgreSQL side (every writer of an input, the race with a save, the
  * grants) is `tests/integration/approval/`. Every name, ID and number is invented.
@@ -83,7 +83,7 @@ function makeComplete(): void {
   part().inputs = { ...completePartInputs(), [fieldIdOf('material-in-drawing')]: FIRST_MATERIAL.id };
 }
 
-/** The Engineer's Calculate: the estimate is SUBMITTED and its figures are `current`. */
+/** The Engineer's Calculate: the estimate is PREPARED and its figures are `current`. */
 async function calculated(): Promise<void> {
   makeComplete();
   await harness.calculationService.calculate(engineer(), owned());
@@ -125,9 +125,9 @@ afterEach(() => {
 });
 
 describe('AC-1: a never-calculated estimate is the 409 NOT_CALCULATED, naming the step, and nothing is written', () => {
-  it('a Submitted estimate with no calculation', async () => {
+  it('a Prepared estimate with no calculation', async () => {
     makeComplete();
-    estimate().status = 'SUBMITTED';
+    estimate().status = 'PREPARED';
     const before = snapshot();
     const response = await approve(UNKNOWN_CALCULATION_ID);
     expect(response.status).toBe(409);
@@ -176,13 +176,13 @@ describe('AC-3: a calculationId that is not the current calculation is a 409', (
     await harness.calculationService.recalculate(lead(), owned());
     expect(currentCalculation()).not.toBe(seen);
     expect(await bodyOf(await approve(seen))).toMatchObject({ status: 409, code: CALCULATION_CHANGED_CODE });
-    expect(estimate().status).toBe('SUBMITTED');
+    expect(estimate().status).toBe('PREPARED');
   });
 });
 
-describe('AC-4: a status that is not SUBMITTED is the state machine\'s 409', () => {
+describe('AC-4: a status that is not PREPARED is the state machine\'s 409', () => {
   it.each([
-    ['DRAFT', 'NOT_SUBMITTED'],
+    ['DRAFT', 'NOT_PREPARED'],
     ['APPROVED', 'ALREADY_APPROVED'],
   ] as const)('%s: the code and sentence of the machine, with current figures and the right ID', async (status, reason) => {
     await calculated();
@@ -229,9 +229,9 @@ describe('AC-5: the order of the checks is role, estimate, status, state, calcul
     expect(harness.calculationWorld.lockCount()).toBeGreaterThan(locks);
   });
 
-  it('the status comes before the state: a Draft that was never calculated is "not submitted"', async () => {
+  it('the status comes before the state: a Draft that was never calculated is "not prepared"', async () => {
     makeComplete();
-    expect(await bodyOf(await approve(UNKNOWN_CALCULATION_ID))).toMatchObject({ code: TRANSITION_REFUSALS.NOT_SUBMITTED.code });
+    expect(await bodyOf(await approve(UNKNOWN_CALCULATION_ID))).toMatchObject({ code: TRANSITION_REFUSALS.NOT_PREPARED.code });
   });
 
   it('the state comes before the calculationId: cleared figures with a wrong ID is TOTALS_OUT_OF_DATE', async () => {
@@ -281,7 +281,7 @@ describe('STORY-06.06 AC-2: an approval that passes the guard is written, in one
     vi.spyOn(harness.calculationWorld.approvalRepository, 'insertApproval').mockRejectedValueOnce(new Error('Invented insert failure.'));
     expect((await approve(currentCalculation())).status).toBe(500);
     expect(snapshot()).toEqual(before);
-    expect(estimate().status).toBe('SUBMITTED');
+    expect(estimate().status).toBe('PREPARED');
   });
 
   it('an audit entry that cannot be written takes the approval and the status with it', async () => {
@@ -318,7 +318,7 @@ describe('STORY-06.06 AC-7: nobody but a Lead or an Admin approves', () => {
     harness.signInAs(null);
     expect((await approve(calculationId)).status).toBe(401);
     expect(harness.calculationWorld.approvals).toHaveLength(0);
-    expect(estimate().status).toBe('SUBMITTED');
+    expect(estimate().status).toBe('PREPARED');
   });
 });
 
@@ -329,10 +329,10 @@ describe('AC-8 (NFR-007): a refusal writes no audit entry', () => {
     const entries = harness.calculationAudit.rows.length;
     // Each call must really be the refusal it is named for (SQR-03 of the review of AQP-322), so a call that stopped being refused cannot leave the audit check true by accident.
     estimate().status = 'DRAFT';
-    expect(await refusalOf(approve(calculationId))).toEqual({ status: 409, code: TRANSITION_REFUSALS.NOT_SUBMITTED.code });
+    expect(await refusalOf(approve(calculationId))).toEqual({ status: 409, code: TRANSITION_REFUSALS.NOT_PREPARED.code });
     estimate().status = 'APPROVED';
     expect(await refusalOf(approve(calculationId))).toEqual({ status: 409, code: TRANSITION_REFUSALS.ALREADY_APPROVED.code });
-    estimate().status = 'SUBMITTED';
+    estimate().status = 'PREPARED';
     expect(await refusalOf(approve(UNKNOWN_CALCULATION_ID))).toEqual({ status: 409, code: CALCULATION_CHANGED_CODE });
     estimate().inputsRevision += 1;
     expect(await refusalOf(approve(calculationId))).toEqual({ status: 409, code: TOTALS_OUT_OF_DATE_CODE });
@@ -420,7 +420,7 @@ describe('STORY-06.07 AC-3: the reason is kept, trimmed, with the approval and i
     expect((await approve(currentCalculation(), { price: '1.00', reason: REASON })).status).toBe(500);
     // The fake sink keeps every row that was appended, rolled back or not (the caller's fake rolls back its own state), so the audit count is the one thing not compared.
     expect({ ...snapshot(), audit: before.audit }).toEqual(before);
-    expect(estimate().status).toBe('SUBMITTED');
+    expect(estimate().status).toBe('PREPARED');
     expect(harness.calculationWorld.approvals).toHaveLength(0);
   });
 });
@@ -590,7 +590,7 @@ describe('NFR-002: no answer of the route holds a master value, rate name, formu
     estimate().inputsRevision -= 1;
     estimate().status = 'DRAFT';
     answers.push(await approve(calculationId));
-    estimate().status = 'SUBMITTED';
+    estimate().status = 'PREPARED';
     answers.push(await approve(calculationId));
     expect(answers.map((answer) => answer.status)).toEqual([409, 409, 409, 200]);
     const [good] = answers.slice(-1);

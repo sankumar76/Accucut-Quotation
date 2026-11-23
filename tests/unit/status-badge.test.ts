@@ -50,7 +50,7 @@ const occurrences = (html: string, text: string): number => html.split(text).len
 describe('AC-1: a badge with the word and an icon', () => {
   it.each([
     ['DRAFT', 'Draft'],
-    ['SUBMITTED', 'Submitted'],
+    ['PREPARED', 'Prepared'],
   ] as const)('%s is the word "%s", beside an icon, and the task is not closed', (status, word) => {
     const html = badge(status);
     expect(textOf(html).trim()).toBe(word);
@@ -71,7 +71,7 @@ describe('AC-1: a badge with the word and an icon', () => {
   it('the task header says "Approved and locked" for an approved task and the same word as a list for the other two', () => {
     expect(textOf(badge('APPROVED', 'header')).trim()).toBe('Approved and locked');
     expect(textOf(badge('DRAFT', 'header')).trim()).toBe('Draft');
-    expect(textOf(badge('SUBMITTED', 'header')).trim()).toBe('Submitted');
+    expect(textOf(badge('PREPARED', 'header')).trim()).toBe('Prepared');
   });
 
   it('the queue draws the badge in a table row and in a card, for every status', () => {
@@ -83,7 +83,7 @@ describe('AC-1: a badge with the word and an icon', () => {
   });
 
   it('the task header draws it too', () => {
-    expect(textOf(renderToStaticMarkup(createElement(WorkspaceHeader, { view: header('SUBMITTED') })))).toContain('Submitted');
+    expect(textOf(renderToStaticMarkup(createElement(WorkspaceHeader, { view: header('PREPARED') })))).toContain('Prepared');
     const approved = textOf(renderToStaticMarkup(createElement(WorkspaceHeader, { view: header('APPROVED') })));
     expect(approved).toContain('Approved and locked');
     expect(approved).not.toContain('Closed');
@@ -94,7 +94,7 @@ describe('AC-5: the same words for every role', () => {
   it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('%s reads the same status words in the queue', (role) => {
     const words = (status: EstimateStatus): string => (/data-slot="status-badge"[^>]*>(.*?)<\/span><\/td>/.exec(list(role, status)) ?? [])[1] ?? '';
     expect(textOf(words('DRAFT')).trim()).toBe('Draft');
-    expect(textOf(words('SUBMITTED')).trim()).toBe('Submitted');
+    expect(textOf(words('PREPARED')).trim()).toBe('Prepared');
     expect(textOf(words('APPROVED')).trim()).toBe('Approved');
   });
 });

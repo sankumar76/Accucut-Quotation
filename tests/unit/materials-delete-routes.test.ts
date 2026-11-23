@@ -80,11 +80,11 @@ describe('AC-3: a material no open estimate uses is soft-deleted', () => {
   });
 });
 
-describe('AC-3: a material a Draft or Submitted estimate has in a part is refused', () => {
+describe('AC-3: a material a Draft or Prepared estimate has in a part is refused', () => {
   it('answers 409 MATERIAL_IN_USE naming the estimates, and changes nothing and writes no entry', async () => {
     harness.masters.materialOpenEstimates.set(ALPHA, [
       { code: 'Q-2026-0101', status: 'DRAFT' },
-      { code: 'Q-2026-0102', status: 'SUBMITTED' },
+      { code: 'Q-2026-0102', status: 'PREPARED' },
     ]);
     const before = harness.auditWorld.audit.committed.length;
     const response = await DELETE(request('DELETE'), withId(ALPHA));
@@ -99,7 +99,7 @@ describe('AC-3: a material a Draft or Submitted estimate has in a part is refuse
       code: 'MATERIAL_IN_USE',
       estimates: [
         { code: 'Q-2026-0101', status: 'DRAFT' },
-        { code: 'Q-2026-0102', status: 'SUBMITTED' },
+        { code: 'Q-2026-0102', status: 'PREPARED' },
       ],
       estimateTotal: 2,
     });

@@ -51,13 +51,13 @@ describe('AC-5: a Closed row shows the word "Closed" in place of the row actions
   });
 
   it('says it once for each closed row in each layout, and not for an open row beside it', () => {
-    const html = list('LEAD', [row(), row({ id: '00000000-0000-4000-8000-000000000002', code: 'Q-2026-0043', status: 'SUBMITTED' }), row({ id: '00000000-0000-4000-8000-000000000003', code: 'Q-2026-0044' })]);
+    const html = list('LEAD', [row(), row({ id: '00000000-0000-4000-8000-000000000002', code: 'Q-2026-0043', status: 'PREPARED' }), row({ id: '00000000-0000-4000-8000-000000000003', code: 'Q-2026-0044' })]);
     expect(occurrences(tableOf(html), 'data-closed-action')).toBe(2);
     expect(occurrences(cardsOf(html), 'data-closed-action')).toBe(2);
   });
 
   it('draws no "Closed" for a list with no closed row; its Actions column holds the open rows\' action instead (STORY-04.07 AC-1)', () => {
-    const html = list('LEAD', [row({ status: 'DRAFT' }), row({ id: '00000000-0000-4000-8000-000000000002', code: 'Q-2026-0043', status: 'SUBMITTED' })]);
+    const html = list('LEAD', [row({ status: 'DRAFT' }), row({ id: '00000000-0000-4000-8000-000000000002', code: 'Q-2026-0043', status: 'PREPARED' })]);
     expect(html).toContain('Actions');
     expect(html).not.toContain('Closed');
     expect(occurrences(tableOf(html), 'data-reassign-action')).toBe(2);

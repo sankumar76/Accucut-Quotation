@@ -8,14 +8,14 @@ import { draftSavedText } from '@/components/features/estimate-workspace/save-te
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
 /**
- * STORY-05.08 AC-1, AC-5: the action bar draws "Save draft" beside Calculate while the estimate can still be changed, and not once it is submitted; the line "Draft saved at 10:42 IST." is a polite
+ * STORY-05.08 AC-1, AC-5: the action bar draws "Save draft" beside Calculate while the estimate can still be changed, and not once it is prepared; the line "Draft saved at 10:42 IST." is a polite
  * live region that is always on the page, and a draft that could not be saved is an alert. Rendered to markup with no browser: the press, the saves and the announcement are the page's own, in
  * `tests/e2e/estimate-save.spec.ts` at three widths.
  */
 
 const calculation = { busy: false, warning: null } as unknown as CalculateBarProps['calculation'];
-const bar = (submitted: boolean): string =>
-  renderToStaticMarkup(createElement(CalculateBar, { submitted, calculation, gate: createSaveGate(), onChoosePart: () => undefined }));
+const bar = (prepared: boolean): string =>
+  renderToStaticMarkup(createElement(CalculateBar, { prepared, calculation, gate: createSaveGate(), onChoosePart: () => undefined }));
 const control = (outcome: SaveDraftControl['outcome']): SaveDraftControl => ({ saving: false, outcome, press: () => Promise.resolve() });
 
 describe('AC-1: Save draft is in the action bar while the estimate can be changed', () => {
@@ -26,11 +26,11 @@ describe('AC-1: Save draft is in the action bar while the estimate can be change
     expect(markup).toMatch(/<p role="status"[^>]*data-draft-status=""[^>]*><\/p>/);
   });
 
-  it('draws neither the button nor the line once the estimate is submitted: there is nothing left to save', () => {
+  it('draws neither the button nor the line once the estimate is prepared: there is nothing left to save', () => {
     const markup = bar(true);
     expect(markup).not.toContain('Save draft');
     expect(markup).not.toContain('data-draft-status');
-    expect(markup).toContain('>Submitted<');
+    expect(markup).toContain('>Prepared<');
   });
 });
 

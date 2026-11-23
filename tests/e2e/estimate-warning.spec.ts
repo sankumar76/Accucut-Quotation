@@ -10,7 +10,7 @@ import { ALPHA_MATERIAL, control, expectFormAccessible, openForm, partForm } fro
 /**
  * STORY-05.12 T5 (AC-6, AC-9; UX-36; FR-104): the quantity warning on SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server. Each test signs in as a person of its own
  * with a complete draft whose one part has 0 in QTY per Assy. The first press is answered with the 409 and the alert dialog "Check the quantity on 1 row" opens with focus on "Go back"; "Go back" and
- * Escape change nothing and leave the estimate a draft; a row's link takes the person to its field; "Calculate anyway" turns the page to "Submitted" with the one message; a list that changed in between
+ * Escape change nothing and leave the estimate a draft; a row's link takes the person to its field; "Calculate anyway" turns the page to "Prepared" with the one message; a list that changed in between
  * is shown with the words that say so and nothing is calculated; axe finds 0 violations with the dialog open; all of it by keyboard alone. The words are the UX spec's and the story's, written out
  * here and not imported, so a changed sentence fails a test. What the database holds is judged in `tests/integration/calc/warn.test.ts`. Every name and path is invented.
  */
@@ -96,22 +96,22 @@ test.describe('AC-6: the dialog names the row and offers the two choices', () =>
     expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 0 });
   });
 
-  test('AC-6: "Calculate anyway" answers exactly {status, message} and turns the page to "Submitted" with the one message', async ({ page }, testInfo) => {
+  test('AC-6: "Calculate anyway" answers exactly {status, message} and turns the page to "Prepared" with the one message', async ({ page }, testInfo) => {
     const owner = await openWarned(page, testInfo);
     await pressAndExpectWarning(page);
     const answered = page.waitForResponse(isCalculate);
     await goAhead(page).click();
     const response = await answered;
     expect(response.status()).toBe(200);
-    expect(await response.json()).toEqual({ status: 'SUBMITTED', message: SENTENCE });
+    expect(await response.json()).toEqual({ status: 'PREPARED', message: SENTENCE });
 
     await expect(dialog(page)).toHaveCount(0);
-    const notice = page.locator('[data-calculate-submitted]');
+    const notice = page.locator('[data-calculate-prepared]');
     await expect(notice).toBeFocused();
     await expect(notice).toContainText(SENTENCE);
-    await expect(page.locator('[data-slot="status-badge"]').first()).toContainText('Submitted');
+    await expect(page.locator('[data-slot="status-badge"]').first()).toContainText('Prepared');
     await expect(calculateButton(page)).toBeDisabled();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 
   test('AC-6 (AC-4): when something changed after the 409, "Calculate anyway" shows the new list with the words that say so, and nothing is calculated; the next press goes through', async ({ page }, testInfo) => {
@@ -133,8 +133,8 @@ test.describe('AC-6: the dialog names the row and offers the two choices', () =>
     const answered = page.waitForResponse(isCalculate);
     await goAhead(page).click();
     expect((await answered).status()).toBe(200);
-    await expect(calculateButton(page)).toHaveText('Submitted');
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    await expect(calculateButton(page)).toHaveText('Prepared');
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 });
 
@@ -153,7 +153,7 @@ test.describe('AC-6: what happens while "Calculate anyway" is on its way, and wh
     expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 0 });
   });
 
-  test('AC-6 (review SQR-04 of AQP-318): while "Calculate anyway" is on its way a row link does nothing, so the person is not taken to a field while the estimate is submitted under them', async ({ page }, testInfo) => {
+  test('AC-6 (review SQR-04 of AQP-318): while "Calculate anyway" is on its way a row link does nothing, so the person is not taken to a field while the estimate is prepared under them', async ({ page }, testInfo) => {
     const owner = await openWarned(page, testInfo);
     await pressAndExpectWarning(page);
     // The acknowledged press is held at the server's door until the test lets it go.
@@ -172,8 +172,8 @@ test.describe('AC-6: what happens while "Calculate anyway" is on its way, and wh
     await expect(dialog(page)).toBeVisible();
     await expect(control(page, 'H')).not.toBeFocused();
     release();
-    await expect(calculateButton(page)).toHaveText('Submitted');
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    await expect(calculateButton(page)).toHaveText('Prepared');
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 });
 
@@ -204,8 +204,8 @@ test.describe('AC-9: keyboard, focus and accessibility', () => {
     const answered = page.waitForResponse(isCalculate);
     await page.keyboard.press('Enter');
     expect((await answered).status()).toBe(200);
-    await expect(page.locator('[data-calculate-submitted]')).toBeFocused();
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'SUBMITTED', calculations: 1 });
+    await expect(page.locator('[data-calculate-prepared]')).toBeFocused();
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 
   test('AC-9: axe finds 0 violations with the dialog open and in the list that changed, and the page does not scroll sideways', async ({ page }, testInfo) => {

@@ -196,8 +196,8 @@ describe('AC-5: closed tasks, deactivated people, unlocked and reassigned tasks'
     expect(await outboxRows()).toHaveLength(0);
   });
 
-  it('reports a SUBMITTED task (it is still open)', async () => {
-    await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), status: 'SUBMITTED' });
+  it('reports a PREPARED task (it is still open)', async () => {
+    await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), status: 'PREPARED' });
     await scan();
     expect(await outboxRows()).toHaveLength(1);
   });
@@ -238,7 +238,7 @@ describe('AC-5: closed tasks, deactivated people, unlocked and reassigned tasks'
     await minute();
     await setStatus(task.id, 'APPROVED');
     await minute();
-    await setStatus(task.id, 'SUBMITTED');
+    await setStatus(task.id, 'PREPARED');
     clock.advance(MILLISECONDS_PER_MINUTE);
     await minute();
     expect(await outboxRows()).toHaveLength(1);
