@@ -187,3 +187,65 @@ A later save or a conflict notice always exists when the ticket has moved on (`n
 
 ## Previous Findings (re-review only)
 n/a (round 1).
+
+---
+
+## Delta review (febca143)
+
+| Field | Value |
+|-------|-------|
+| Review round | 2 (delta) |
+| Commits reviewed | e9ec27c1 (DEF-066, `syncWatchers`), febca143 (QLT-01 to QLT-04). Merge 2e395b41 (brings in master 967e6337) excluded: it does not touch `use-part-form.ts`, `part-server.ts` or `use-part-values.test.ts` |
+| Head | febca1434bd7d615e8388423e6d8d68809afce55 |
+| Date | 2026-11-22 |
+| **Verdict** | **APPROVE** (no open Blocker, Critical, Major or Minor). The merge still waits for a fully green run of record (CLAUDE.md section 9 item 1); run 45102120443 was pending at the time of review |
+
+| Severity (delta) | Count |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 0 |
+| Info | 2 |
+
+### Checks run (private scratch copy of febca143; no worktree written)
+| Check | Result |
+|-------|--------|
+| `use-part-values`, `fasteners-none-requests`, estimate-autosave, estimate-autosave-part, part-conflict, save-gate, save-gate-dirty, part-form-lazy, part-completeness, plus my round-1 probes (P1, P1b, P2b, P3, P3b, DEF-066) | `Test Files 11 passed (11)`, `Tests 126 passed (126)`. `use-part-values` is 34 of 34, as the developer reports |
+| New tests against the hook at 444d10b7 | 16 fail, 21 pass (37, with `fasteners-none-requests`). The four-choices test is among the failures (QLT-04 met) |
+| New tests against the hook at 43b6366f | 7 fail: QLT-01 ×2, QLT-03 ×2, DEF-066 ×3 |
+| New tests against the hook at e9ec27c1 | 4 fail: QLT-01 ×2, QLT-03 ×2 (DEF-066 tests pass, so e9ec27c1 alone fixes DEF-066) |
+| febca143 with the value-based clear put back | only the QLT-02 test fails |
+| febca143 without the `send` guard | only the two QLT-03 tests fail |
+| `fasteners-none-requests` (four requests; DL-277 409 cases) | green on every hook version above |
+| Delta probe Q1: Qty kept while hidden (server holds `0.00`), Fasteners shows it again, nothing on its way | Sync re-sends: `[{rev1, s:'M6 bolt'}, {rev2, t:'5.00'}]`. The no-on-its-way path is unchanged (`settledValue` = held) |
+| Delta probe Q2: the sync's save of Qty is lost | Qty is reported (`unstored`), the on-its-way entry is cleared, and the next leave sends it; server `5.00` |
+
+### Previous findings
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| QLT-01 | Critical | **Fixed** | `reconcile` adopt loop: `newTicket` + delete the on-its-way entry. Flag and number tests fail on e9ec27c1, pass on febca143 |
+| QLT-02 | Major | **Fixed** | `failAfterHold()` in `part-server.ts`; the QLT-02 test is the only one that catches the value-based clear |
+| QLT-03 | Minor | **Fixed** | `send` reports a failure only for the field's latest save; flag and number tests fail without the guard |
+| QLT-04 | Minor | **Fixed** | Four-choices test fails on master |
+| QLT-05 | Info | unchanged | as before |
+| QLT-06 | Info | **Fixed** (DEF-066) | `syncWatchers` compares with `settledValue` and sends as a ticketed on-its-way save. The three DEF-066 tests fail on 43b6366f |
+| QLT-07 | Info | n/a | DEF-067, not this PR |
+| QLT-08 | Info | re-checked | no logging, no values in messages, no cost or rate path, no route, schema or auth change in either commit |
+
+### What the `syncWatchers` and `send` changes could break: read and probed
+- **A watcher shown again with nothing on its way** is still re-sent: `settledValue` returns the held value, which is the old compare (Q1, and the second DEF-066 test).
+- **A queued save of the watcher with older text** is made out of date by the sync's ticket, so it no longer lands after the newer text (the third DEF-066 test). A queued save of the same text makes the sync skip, so it goes in its own turn (the first DEF-066 test).
+- **The sync's save fails:** its `finally` clears the on-its-way entry (its ticket is still the latest), `explain` runs, and the next leave sends it (Q2).
+- **The sync and a conflict:** a watcher in conflict is never sent (`send` returns early); the sync's ticket also makes any older queued save out of date, which a conflict would have done anyway.
+- **The `send` guard:** an out-of-date save never sends, so the guard only affects a save that was current when sent and became out of date while in flight. A later save of the field is then always queued and reports for it, including a 404 (it meets the same missing part). Reconcile and resend calls take the latest ticket, so they still report. Saves run strictly one after another, so a reconcile cannot raise a ticket while another save of the field is in flight.
+- **The adopt fix** also makes an automatic save out of date; its `finally` still runs `trail.end`.
+
+### Delta findings
+| ID | Severity | File:line | Issue | Note |
+|----|----------|-----------|-------|------|
+| QLT-09 | Info | `use-part-form.ts:392-402` | On master the DEF-066 shape could also store **stale** data: Qty `5` left, then `6` typed while the sync was queued. The sync sent `6.00`, and the queued `5.00` was then sent after it, so the server held `5.00` while the screen showed `6` (the third DEF-066 test, failing on 444d10b7: `expected '5.00' to be '6.00'`). The field stayed marked, so the 30-second save would have mended it | For qa-engineer: DEF-066's "no wrong data" holds only for its own steps. e9ec27c1 closes this shape too; include it when verifying DEF-066 |
+| QLT-10 | Info | `use-part-form.ts:399` (`send` from the sync) | A good save sent by the sync does not clear an unsaved mark on the watcher (as before this PR). Not reachable in the page: a hidden watcher has its mark cleared, and a watcher left during the sync is cleared by `commit` | No action |
+
+### Hand-off for the merge
+No open finding at Blocker, Critical, Major or Minor. Merge when run 45102120443 (or a later run on the same head) is fully green. QA verifies DEF-065 (including the QLT-01 shape) and DEF-066 (including QLT-09) by rerunning the tests.
