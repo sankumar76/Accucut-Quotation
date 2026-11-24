@@ -141,11 +141,13 @@ export function createUnlockService({ estimates, approvals, calculations, master
         const unlockedAt = await approvals.markUnlocked({ approvalId: live.id, unlockedById: viewer.id, reason: checked.reason }, tx);
         // The lock makes this impossible (the approval was live a moment ago); the check keeps a skipped lock from recording an unlock that was not stored.
         if (unlockedAt === null) throw new Error('The approval was no longer live when it was unlocked.');
+        // The machine allows UNLOCK from APPROVED and from QUOTED alone (decided above, under the same lock), so this is the status the estimate leaves (QLT-C-03).
+        const leaving = estimate.status === 'QUOTED' ? 'QUOTED' : 'APPROVED';
         await workflow.audit.record(tx, {
           event: 'approval.unlocked',
           ...request.audit,
           object: { id: estimate.id, label: estimate.taskCode },
-          before: { approvedPrice: live.approvedPrice },
+          before: { approvedPrice: live.approvedPrice, status: leaving },
           after: { reason: checked.reason },
         });
         return { status: 'DRAFT', unlockedAt: unlockedAt.toISOString() };

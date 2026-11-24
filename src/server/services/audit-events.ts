@@ -164,8 +164,17 @@ const describeOverride = (before: z.output<typeof overriddenBefore>, after: z.ou
 });
 
 // ---- Shape of the unlock event (SCR-16 "Unlock"; STORY-06.08) --------------------------------------------------------------------
-/** What an unlock keeps before: the price the approval stood at (BO), which stays on record. */
-const unlockedBeforeState = z.strictObject({ approvedPrice: rupeesText });
+/** The status an unlock leaves: only a locked estimate can be unlocked, Approved or Quoted (FR-110; QLT-C-03 of the final review). */
+const unlockedFromStatus = z.enum(['APPROVED', 'QUOTED']);
+/** What an unlock keeps before: the price the approval stood at (BO), which stays on record, and the status the estimate left, as the cancel entry keeps it. */
+const unlockedBeforeState = z.strictObject({ approvedPrice: rupeesText, status: unlockedFromStatus });
+/**
+ * LEGACY READ (QLT-C-03). Entries written before the status was kept hold the price alone, and only an Approved estimate could be unlocked then (Quoted came with CR-01). The audit log is immutable, so the **read**
+ * schema reads a missing status as Approved; the write schema above requires it.
+ */
+const unlockedBeforeRead = z.strictObject({ approvedPrice: rupeesText, status: unlockedFromStatus.default('APPROVED') });
+/** "Approved at ₹ 4,750.00", or "Quoted at ₹ 4,750.00" for an estimate that had been marked as quoted: a quote taken back reads differently from an approval taken back. */
+const describeUnlockedFrom = (before: z.output<typeof unlockedBeforeState>): string => `${before.status === 'QUOTED' ? 'Quoted' : 'Approved'} at ${formatRupees(before.approvedPrice)}`;
 /** What an unlock keeps after: the Lead's reason, as stored (1 to 500 characters, trimmed). Who and when are the entry's own columns. */
 const unlockedAfterState = z.strictObject({ reason: z.string().min(1).max(500) });
 
@@ -565,7 +574,7 @@ export const AUDIT_EVENTS = {
   }),
 
   // ---- Wired in STORY-06.08: an approved estimate unlocked --------------------------------------------------------------------
-  // One entry, in the unlock's own transaction (under the estimate's row lock): the price the approval stood at and the reason. The price stays on record after the unlock (it is "approved earlier" until a new approval
+  // One entry, in the unlock's own transaction (under the estimate's row lock): the price the approval stood at, the status the estimate left (Approved or Quoted) and the reason. The price stays on record after the unlock (it is "approved earlier" until a new approval
   // replaces it). Who unlocked and when are the entry's own columns. The words follow the "Approval cancelled" entry of SCR-16 ("Approved at ₹ 4,750.00 to Cancelled. Reason: …"; assumption of STORY-06.08).
   'approval.unlocked': defineEvent({
     objectType: 'estimate',
@@ -573,7 +582,8 @@ export const AUDIT_EVENTS = {
     status: 'wired',
     before: unlockedBeforeState,
     after: unlockedAfterState,
-    describe: (before, after) => ({ before: `Approved at ${formatRupees(before.approvedPrice)}`, after: `Unlocked. Reason: ${after.reason}` }),
+    readBefore: unlockedBeforeRead,
+    describe: (before, after) => ({ before: describeUnlockedFrom(before), after: `Unlocked. Reason: ${after.reason}` }),
   }),
 
   // ---- Wired in STORY-06.12: an approval cancelled by the Admin ---------------------------------------------------------------

@@ -276,6 +276,8 @@ describe('AC-6, AC-7: Unlock and Cancel approval are the only way back from QUOT
     const unlocked = await entriesOf(estimateId, 'approval.unlocked');
     expect(unlocked).toHaveLength(1);
     expect(defined(unlocked[0]).after).toMatchObject({ reason: REASON });
+    // QLT-C-03 of the final review: the entry says the estimate left Quoted, as the cancel entry does, and keeps the price it stood at.
+    expect(defined(unlocked[0]).before).toEqual({ approvedPrice: '1000.00', status: 'QUOTED' });
     expect(await entriesOf(estimateId, 'estimate.quoted')).toHaveLength(1);
   });
 
