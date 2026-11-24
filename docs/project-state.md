@@ -8,13 +8,42 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Resume point (2026-11-24, pause 9, orchestrator)", then "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-24, after pause 9, orchestrator)", then "Resume point (2026-11-24, pause 9, orchestrator)", then "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target about 6 Dec 2026, range 5 to 8 Dec, freeze about 3 Dec, all agreed scope kept (DL-307, delivery lead, 2026-11-22; replaces DL-298's provisional 4 Dec). Date triggers: 28 Nov Q-18 (DL-309); freeze AC-8 (DL-310) and #476 (DL-308); G8 condition list DL-314** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-24 by orchestrator (pause 9 resume point) |
+| Last updated       | 2026-11-24 by orchestrator (daily update after pause 9) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-24, after pause 9, orchestrator)
+
+> Resumed after pause 9. This section wins over the pause 9 resume point below for anything it names.
+
+**`master` = c7faf76f** (#700). Merged after the resume (4, squash via `gh pr merge --squash --match-head-commit`, DL-361, each on its own fully green run of record at 0 behind): **#683** STD-C-02 at 26e1dd8e → 31015cce; **#698** DEF-079 at 39abf7d6 → 402c00bf; **#699** AQP-312 fallback Minors (+ QLT-699-01/02/04) at 859ea423 → 4bdfc1b2; **#700** DEF-080 at b50a8323 → c7faf76f.
+
+**`master` push runs (DL-366 (5)), all attempt 1, none re-run:**
+| Head | CI | Windows package | Flaky / failed lines |
+|---|---|---|---|
+| 9e3111c0 (#681) | 45352830027 **failure** | 45352830068 success | shard 4 `users.spec.ts:58` [desktop] 32.1 / 31.4 s (DEF-053); shard 1 `process-propagation:110` [mobile] flaky 30.3 / 26.4 s (DEF-080) |
+| 31015cce (#683) | 45387878703 success | 45387878802 success | none |
+| 402c00bf (#698) | 45391629607 **failure** | 45391629873 success | shard 4 DEF-053 32.2 / 32.0 s; shard 1 DEF-080 flaky 30.3 / 30.1 s |
+| 4bdfc1b2 (#699) | 45398883906 **failure** | 45398883822 success | shard 4 DEF-053 32.3 / 32.8 s; shard 1 DEF-080 flaky 30.1 / 29.7 s |
+| c7faf76f (#700) | 45406778292 success | 45406778181 success | none (users.spec.ts:58 passed at all three widths) |
+
+**Rulings and decisions:** DL-366 (9e3111c0 red = DEF-053, not a #681 regression; merges not blocked; RISK-031 reopened at 9); DL-367 (402c00bf red = DEF-053; re-ask trigger set); DL-368 (trigger fired on 4bdfc1b2; RISK-031 → 12); **DL-369 (delivery lead chose A: at G8 master may still recommend on a final run and repeat red only on DEF-053's desktop case, with conditions (a)–(c); release plan 0.41)**. RISK-031 open at 12; close-out count 1 of 2 after c7faf76f (QA confirms).
+
+**Closed:** DEF-079 (AQP-422 Done, #672), PRF-C-01 (#665: Workspace TBT 51 ms on Nightly 45379138587, the first after #666). **DEF-080:** QA reading the c7faf76f proof. No Sev-1 or Sev-2 open.
+
+**Records (records-u):** 8cb8841b (pr-699-combined.md, APPROVE WITH COMMENTS), 769b69c4 (DL-366), ae393fdd (architecture 0.67, `PRODUCT_WORDS` done in #683), 16eee381 and 2ffacb43 (QA, test plan 0.3.42/0.3.43), 8c573158 (DL-367), ecde9a05 (DL-368), 690e6dc7 (DL-369), 6f94d64d (release plan 0.41).
+
+**Follow-ups:** remove the `[AQP-423 step timing]` lines from `process-propagation.spec.ts` in a small PR after DEF-080 closes; `Test-AccucutBackupSetting 'pgHost'` uses case-insensitive `-match` (noted on #699, later sweep); `/queue` first-load headroom 6,296 B after #698.
+
+**Lanes / worktrees:** aqp-403, aqp-398, aqp-402 idle (their PRs merged; kept for reuse); qa-u2 (final regression); records-u; scratchpad `merged-count` (stale). C: about 11 GB free. Main checkout (CR-01 UX session) not touched; agents' memory notes went to its untracked `.claude/agent-memory/` only.
+
+**FYI from the coordinator (no decision yet):** the vendor's company mail is on a cPanel host, so Q-18 / step 09.08 likely need the password route (465/587), not OAuth; the delivery lead is testing OAuth on their own mailbox. Q-18 deadline 28 Nov stands.
+
+**Open for the delivery lead:** QLT-681-08; OQ-ARCH-15; OQ-PM-16 (a)(b), OQ-ARCH-H1-1/2; Dependabot #674–#678 (DL-360); freeze date (about 3 Dec); Q-18 revision; product-owner ruling on STORY-05.10 AC-7 (QLT-F-05, #687); UX-spec routing list.
 
 ## Resume point (2026-11-24, pause 9, orchestrator)
 
