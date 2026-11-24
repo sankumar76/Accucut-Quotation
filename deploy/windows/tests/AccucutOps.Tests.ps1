@@ -89,6 +89,23 @@ Describe 'secrets never reach a log (AC-5)' {
         try { Invoke-AccucutNative -FilePath $cmd -ArgumentList @('/c', "echo $($script:FakeSecret) & exit 3") } catch { $_.Exception.Message | Should -Not -BeLike "*$($script:FakeSecret)*" }
     }
 
+    It 'QLT-681-03: refuses -StdIn text with a character above 127 before any process starts, and does not repeat the text in the message' {
+        # The path does not exist: if the refusal were missing, the error would be about the program, not about the text.
+        $missing = Join-Path $TestDrive 'no-such-program.exe'
+        $text = 'abc ' + [char]0x20B9 + ' secret-' + [char]0xE9
+        $message = $null
+        try { Invoke-AccucutNative -FilePath $missing -StdIn $text } catch { $message = $_.Exception.Message }
+        $message | Should -BeLike '*-StdIn takes ASCII text only*'
+        $message | Should -Not -BeLike '*secret-*'
+        $message | Should -Not -BeLike '*no-such-program*'
+    }
+
+    It 'QLT-681-03: passes ASCII -StdIn text, including an empty one, to the child unchanged' {
+        $more = Join-Path $env:SystemRoot 'System32\findstr.exe'
+        (Invoke-AccucutNative -FilePath $more -ArgumentList @('^') -StdIn "-- first line`nSELECT 1;").Output | Should -Be "-- first line`nSELECT 1;"
+        (Invoke-AccucutNative -FilePath $more -ArgumentList @('^') -StdIn '' -AllowFailure).Output | Should -Be ''
+    }
+
     It 'invents long random values of letters and digits, different each time' {
         $first = New-AccucutSecret -Length 40
         $second = New-AccucutSecret -Length 40
