@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (qa-engineer, 2026-11-24; test plan section 6: a visual defect that leaves every action reachable and misleads about no price). Styling only: no behaviour, no figure, no cost data is involved |
 | Priority | P3 (Jira Medium, label `sev-3`); fixed before G8 or accepted in writing by master (section 6) |
 | Type | **Product (UI, styling only)**. Which side is right (mock-up or build) is **not decided here**: ux-expert rules, see "Ruling" below |
-| Status | **New** (qa-engineer, 2026-11-24). Waiting for the ux-expert's ruling per item, then a developer fix |
+| Status | **Open: ruled, fix assigned to lane 1** (qa-engineer, 2026-11-24). Opened as New the same day. The ux-expert's ruling is in (`docs/03-ux/rulings/parts-tree-vs-scr05-2026-11-24.md`, records-u 7840c5fb): the mock-up is right on items 1 to 6 and 7a, the build is right on 7 and 7b. The fix is assigned to lane 1 (relayed by the orchestrator; QA did not set the lane). Styling only |
 | Jira / GitHub | [AQP-424](https://sankumar76.atlassian.net/browse/AQP-424) / [#706](https://github.com/sankumar76/Accucut-Quotation/issues/706). Labels: Jira `ai-delivery`, `aiid-DEF-081`, `agent-qa-engineer`, `bug`, `sev-3`; GitHub `bug`, `sev-3`, `ai-delivery`. Relates to AQP-404 |
 | Found by / date | qa-engineer, 2026-11-24, at the delivery lead's request (relayed by the orchestrator, AQP-404 comment 13157) |
 | Build / commit | `origin/master` `c7faf76f` (all files read with `git show origin/master:<path>`; the main checkout's uncommitted edits to `docs/03-ux/screens/*` were not read) |
@@ -43,18 +43,20 @@ Source reads only, on `origin/master` `c7faf76f` (`git show origin/master:<path>
 ## Suspected Area (optional)
 `src/components/shared/node-kind-icon.tsx` (items 1 to 3, 7a), `src/components/features/estimate-workspace/tree-node.tsx` (items 4 to 6), `src/components/shared/parts-tree-list.tsx` (item 7, 7b). If the ruling changes the mock-up instead, the files are `docs/03-ux/screens/SCR-05.html`, `screens.css` and `docs/03-ux/ux-spec.md` (the "Built" column).
 
-## Ruling _(ux-expert; QA does not decide)_
-| # | Point | Ruling (mock-up right / build right / other) | By / date |
-|---|-------|----------------------------------------------|-----------|
-| 1 | Kind icon tile | | |
-| 2 | Glyphs | | |
-| 3 | Tints | | |
-| 4 | Open row | | |
-| 5 | Number font | | |
-| 6 | Complete-status icon | | |
-| 7 | Guide-line geometry | | |
-| 7a | Fastener glyph | | |
-| 7b | Arrow cell and row height | | |
+## Ruling _(ux-expert; QA copied the table from the ruling file and decided nothing)_
+Source: `docs/03-ux/rulings/parts-tree-vs-scr05-2026-11-24.md` (records-u 7840c5fb), last section. Its reasons, spec lines, contrast figures and the spec gaps it lists for the CR-01 UX session are in that file, not repeated here. On item 7 it agrees that the mock-up does draw guide lines (`screens.css:613-614`).
+
+| # | Point | Ruling | By / date |
+|---|---|---|---|
+| 1 | Kind icon tile | Mock-up right: 24 px tile, `rounded-sm`, 18 px glyph, stroke 1.75 | ux-expert, 2026-11-24 |
+| 2 | Glyphs | Mock-up right: Boxes, Blocks, Box, Bolt | ux-expert, 2026-11-24 |
+| 3 | Tints | Mock-up right: Sub accent, Fastener info (neutral slate) | ux-expert, 2026-11-24 |
+| 4 | Open row | Mock-up right: `--surface-2`, 4 px `--primary` bar, 600 | ux-expert, 2026-11-24 |
+| 5 | Number font | Mock-up right: mono, `text-label`, `text-ink-2` | ux-expert, 2026-11-24 |
+| 6 | Complete-status icon | Mock-up right: `CircleCheck`; partial `text-ink-2`; 18 px | ux-expert, 2026-11-24 |
+| 7 | Guide-line geometry | Build right: keep | ux-expert, 2026-11-24 |
+| 7a | Fastener glyph | Mock-up right: `Bolt`; `Nut` is a food nut | ux-expert, 2026-11-24 |
+| 7b | Arrow cell and row height | Build right on touch and below 1024 px (NFR-017); optional 24 x 36 at fine pointer 1024+ | ux-expert, 2026-11-24 |
 
 ## Fix route and proof (QA's recommendation; master routes)
 - A test-first, styling-only developer PR from `master` for the items the ux-expert rules to change; no behaviour change.
@@ -63,7 +65,7 @@ Source reads only, on `origin/master` `c7faf76f` (`git show origin/master:<path>
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Ruled | ux-expert | | |
+| Ruled | ux-expert | 2026-11-24 | `docs/03-ux/rulings/parts-tree-vs-scr05-2026-11-24.md` (records-u 7840c5fb) |
 | Fixed | developer | | |
 | Regression test added | developer | | |
 | Verified | qa-engineer | | |
