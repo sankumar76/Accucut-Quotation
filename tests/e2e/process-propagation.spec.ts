@@ -40,8 +40,9 @@ function watchRequests(page: Page): void {
   page.on('requestfinished', (request) => {
     const kind = request.resourceType();
     if (kind !== 'fetch' && kind !== 'xhr' && kind !== 'document') return;
-    const { startTime, responseEnd } = request.timing();
-    const took = responseEnd < 0 ? 'unknown' : `${String(Math.round(responseEnd - startTime))} ms`;
+    // `responseEnd` is milliseconds after `startTime` (it is -1 when the browser gave none).
+    const { responseEnd } = request.timing();
+    const took = responseEnd < 0 ? 'unknown' : `${String(Math.round(responseEnd))} ms`;
     void request.response().then((response) => {
       const info = test.info();
       const at = Date.now() - (startedAt.get(info.testId) ?? Date.now());
