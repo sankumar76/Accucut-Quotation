@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (qa-engineer, 2026-11-24; test plan section 6, same grade as the product-manager's suggestion): a layout defect at touch widths that leaves every action reachable (both links open what they should; the phone card link is small but works). WCAG 2.5.8 (AA) is not shown failed: axe `target-size` finds nothing (the 24 px rule passes by its spacing exception), so section 6's Sev-2 form "WCAG AA violation" is not met. **Re-grade to Sev-2** if a measurement shows one of the two links under 24 px high without the spacing exception, or a tap on the task-code link on a phone lands on the neighbouring row |
 | Priority | P3 (Jira Medium, label `sev-3`); fixed before G8 or accepted in writing by master (section 6) |
 | Type | **Product (layout)** |
-| Status | **Open** (new, 2026-11-24) |
+| Status | **Closed** (qa-engineer, 2026-11-24: fixed by #698, squash 402c00bf; verified on the first `master` push after the squash, CI 45391629607, and on #698's run of record 45387913685; Jira AQP-422 Done, GitHub #672 closed as completed). Opened 2026-11-24. |
 | Jira / GitHub | [AQP-422](https://sankumar76.atlassian.net/browse/AQP-422) / [#672](https://github.com/sankumar76/Accucut-Quotation/issues/672). Labels `ai-delivery`, `aiid-DEF-079`, `bug`, `sev-3`, `final-review`, `agent-qa-engineer`. Relates to AQP-1 (Intake), AQP-420 (DEF-077) and AQP-421 (DEF-078) as the same final-review pass |
 | Found by / date | qa-engineer (fresh QA session, final-review pass, `docs/07-qa/final-review-cr01.md` sections 5.2 and 7 (3)), 2026-11-24; ruled a defect by the product-manager's NFR-017 ruling the same day; logged by qa-engineer 2026-11-24 |
 | Build / commit | `master` `1fe1581b` (H) for the measurement; code read at `a7ff0a73` (records-u) |
@@ -42,5 +42,23 @@ Also affected by the same markup and so by the same fix, not separately measured
 - QA reads the two screens at 360, 768 and 1366 px by hand in the final regression (no sideways scroll, rows not made unreadable by the taller links).
 
 ## Fix & Verification  _(developer / qa-engineer)_
-- Fix PR: not started.
-- Verified by: -
+- Fix PR: [#698](https://github.com/sankumar76/Accucut-Quotation/pull/698) "make the task code, "Read all remarks" and "View cost details" 44 px controls on touch layouts [AQP-422]", squash **402c00bf** on `master` (changes `review-tree.tsx`, `queue-list.tsx`, new `src/components/shared/touch-link.ts`, `estimate-review.spec.ts`, `queue-actions-visible.spec.ts`, new `tests/e2e/support/touch-link.ts`, new `tests/unit/touch-link.test.ts`).
+- Verified by: qa-engineer, 2026-11-24, in the job logs (`gh api --allow-escape-sequences .../actions/jobs/<id>/logs`), attempt 1, nothing re-run.
+
+| Proof asked above | Result | Evidence |
+|---|---|---|
+| Bounding-box check in E2E at 360 and 768 px: every standalone link of the two screens at least 44 px high | **Pass** | Touch-width cases passed in every project on the push: `estimate-review.spec.ts:227` ("View cost details", at the width of the project) [mobile] no. 310 (shard 1), [tablet] no. 452 (shard 2), [desktop] no. 71 (shard 4); `queue-actions-visible.spec.ts:305` (task code and "Read all remarks", Ignored tab) [mobile] no. 539 (shard 1), [tablet] no. 104 (shard 3), [desktop] no. 372 (shard 4). `tests/unit/touch-link.test.ts` (5 tests) passed in `Stages 1 to 11b` (499 files, 11,169 tests) |
+| A coarse pointer at 1024 px or more (the desktop project) | **Pass** | `estimate-review.spec.ts:238` [desktop] no. 72 and `queue-actions-visible.spec.ts:317` [desktop] no. 373 passed (shard 4); both are skipped by design on [mobile] and [tablet] (the spec reads them once, in the desktop project; skip reasons in the spec) |
+| Attempt-1 pass at the three widths on the fix PR's run of record | **Pass** | #698 run 45387913685 (39abf7d6): every job `success`; the same cases (nos. 310, 452, 71, 72, 539, 104, 372, 373) passed in shards 1 to 4 |
+| Attempt-1 pass at the three widths on the first `master` push after the squash | **Pass** (the run itself is red for another reason) | CI **45391629607** (402c00bf): the cases above passed at attempt 1 (shard 1 job 138436572608, shard 2 job 138436572450, shard 3 job 138436573047, shard 4 job 138436572690). The run is red only because shard 4's `users.spec.ts:58` [desktop] failed both attempts (32.2 s, 32.0 s): DEF-053, ruled so by master (DL-367 (A)), not a #698 regression. No DEF-079 test failed; `Stages 1 to 11b` and shards 1 to 3 are `success` |
+| First-load budget headroom stated (under 200,000 B) | **Not read by QA** | The JS-budget checks run in `Stages 1 to 11b` (`js-budget*.test.ts` and the production-route check passed, the job is `success`); QA did not read a first-load figure from the log and states none |
+| QA reads the two screens at 360, 768 and 1366 px by hand (no sideways scroll, rows not made unreadable) | **Not done here; stays in the final regression** | The automated cases check no sideways scroll and axe at the project widths; the hand read is the final regression's item |
+
+The Copy path button exemption (section "Actual Result") is not changed by this closure.
+
+| Step | By | Date | Ref |
+|------|----|------|-----|
+| Fixed | developer | 2026-11-24 | #698, squash 402c00bf |
+| Regression test added | developer | 2026-11-24 | the E2E cases and `tests/unit/touch-link.test.ts` above |
+| Verified | qa-engineer | 2026-11-24 | CI 45391629607 and 45387913685 (above) |
+| Closed | qa-engineer | 2026-11-24 | Jira AQP-422 Done (comment 13124); GitHub #672 closed (completed) |
