@@ -254,7 +254,7 @@
 **Date-triggered:**
 | ID | Date | Condition | Status |
 |---|---|---|---|
-| T1 | 28 Nov, end of day | Q-18 (mail details). No answer → AQP-355 Deferred; known gap: e-mail stays off until the install send (DL-309) | Open (delivery lead) |
+| T1 | 28 Nov, end of day | Q-18 (mail details). No answer → AQP-355 Deferred; known gap: e-mail stays off until the install send (DL-309) | Open (delivery lead). **DL-371 (24 Nov):** the OAuth route is proven on the delivery lead's own Microsoft 365 tenant, which does not meet T1 or G3 condition 16. Open: the Q-18 revision (cPanel, `password`, 465/587?) by end of 28 Nov. Then one real send on the production mailbox with DL-371 (5) (i)–(v), preferably by end of 30 Nov; a pass is accepted until the G8 recommendation. Else AQP-355 is Deferred (DL-309) |
 | T2 | Freeze, about 3 Dec | G8-C-AC8: no PASS → a go-live condition named in the delivery lead's G8 sign-off; a FAIL is not covered (DL-310) | Open |
 | T3 | Freeze, about 3 Dec, before the final regression | #632 (replaces #476) merges after #633 and DEF-038's test fix, on DL-320 M1 to M7 and DL-323 (4); otherwise the release ships on 16.4.5 with #632 and #513 post-G8 (DL-321 (4), DL-323 (5)) | **Decided (DL-344, 23 Nov): fallback taken — the release ships on Next 16.4.5 / Vitest 5.0.5; #632 and #513 post-G8; #476 stays open.** One way back before the freeze only if DEF-074's cause is version-independent and its fix has merged |
 | T4 | 26 Nov | DEF-057 re-ruling (see above) | Open |
