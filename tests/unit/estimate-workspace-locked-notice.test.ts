@@ -26,9 +26,34 @@ const header = (status: EstimateStatus): WorkspaceHeaderView => ({
   assignedByName: 'Invented Lead',
 });
 
-const render = (status: EstimateStatus): string => renderToStaticMarkup(createElement(EstimateWorkspace, { header: header(status), estimateId: '00000000-0000-4000-8000-000000000001' }));
+const render = (status: EstimateStatus, ignored = false): string =>
+  renderToStaticMarkup(createElement(EstimateWorkspace, { header: header(status), estimateId: '00000000-0000-4000-8000-000000000001', ignored, notice: ignored ? createElement('p', null, 'INVENTED-IGNORED-NOTICE') : undefined }));
 
 const CLOSED_BODY = 'This estimate is closed and the task has moved to Closed. Inputs cannot be changed.';
+
+// DEF-078 (AQP-421; AQP-401 AC-8, UX 12944 section 4): an ignored task shows the Engineer's Ignored notice and no banner of the status underneath ("Prepared ... sent for review", "Approved and locked ... moved to Closed").
+describe('DEF-078: every status, with and without the Ignored layer, on the Engineer\'s page', () => {
+  const BANNER_WORDS = ['Cost will be calculated', 'and locked.', 'moved to Closed', 'data-calculate-prepared'];
+
+  it.each(['DRAFT', 'PREPARED', 'APPROVED', 'QUOTED'] as const)('%s and ignored: the Ignored notice and badge, and no status banner at all', (status) => {
+    const html = render(status, true);
+    expect(html).toContain('INVENTED-IGNORED-NOTICE');
+    expect(html).toContain('data-status="IGNORED"');
+    for (const words of BANNER_WORDS) expect(html, words).not.toContain(words);
+  });
+
+  it('PREPARED and not ignored keeps its banner, and APPROVED and QUOTED keep their locked notice (the layer is what removes them)', () => {
+    expect(render('PREPARED')).toContain('data-calculate-prepared');
+    expect(render('PREPARED')).not.toContain('INVENTED-IGNORED-NOTICE');
+    expect(render('APPROVED')).toContain('moved to Closed');
+    expect(render('QUOTED')).toContain('moved to Closed');
+  });
+
+  it('DRAFT and not ignored has no banner', () => {
+    const html = render('DRAFT');
+    for (const words of BANNER_WORDS) expect(html, words).not.toContain(words);
+  });
+});
 
 describe('QLT-C-02: the locked notice on the Engineer\'s page says the status the estimate has', () => {
   it('a Quoted estimate: "Quoted and locked." and the closed sentence, and the word Approved nowhere on the page', () => {

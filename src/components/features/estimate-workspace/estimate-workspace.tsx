@@ -143,7 +143,7 @@ export function EstimateWorkspace({ header, estimateId, ignored = false, notice 
           {calculation.problem.kind === 'failed' ? FAILED_BODY : null}
         </Notice>
       )}
-      {status === 'PREPARED' ? (
+      {status === 'PREPARED' && !frozen ? (
         // The state "Prepared": the one sentence the server answers with and nothing else. No number from the calculation is anywhere (NFR-002). Focus comes here after the press that prepared it.
         <div ref={preparedNotice} tabIndex={-1} data-calculate-prepared="" className="rounded-md">
           <Notice tone="success" title={CALCULATE_PREPARED_TITLE}>
@@ -151,7 +151,8 @@ export function EstimateWorkspace({ header, estimateId, ignored = false, notice 
           </Notice>
         </div>
       ) : null}
-      {isLocked(status) ? (
+      {isLocked(status) && !frozen ? (
+        // Neither banner is drawn while the estimate is ignored: the Engineer's notice says so and does not name the status underneath (DEF-078, UX 12944 section 4), and "the task has moved to Closed" would be false.
         // The state "Approved" or "Quoted": the words of the G3 screen and nothing else, so no price and no figure is anywhere (NFR-002). The title is the status's own word (QLT-C-02). Inputs are read-only because `canEditInputs` says so, and the server refuses a write.
         <Notice tone="success" title={lockedNoticeTitle(status)}>
           {APPROVED_LOCKED_BODY}
