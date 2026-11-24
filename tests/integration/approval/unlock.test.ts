@@ -199,7 +199,8 @@ describe('AC-2: the unlock is written in one piece', () => {
       actor_id: db.personId,
       actor_label: 'Calculation Lead',
       object_type: 'estimate',
-      before: { approvedPrice: '1000.00' },
+      // QLT-C-03: the price it stood at and the status it left.
+      before: { approvedPrice: '1000.00', status: 'APPROVED' },
       after: { reason: REASON },
       request_id: auditOf(db).requestId,
     });

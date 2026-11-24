@@ -1,12 +1,11 @@
 'use client';
 
 import { RotateCcw } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { startTransition } from 'react';
 
 import { Icon } from '@/components/shared/icon';
 import { PageHeader } from '@/components/shared/page-header';
 import { ErrorState } from '@/components/shared/states';
+import { useRetryRead } from '@/components/shared/use-retry-read';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
@@ -33,13 +32,7 @@ export interface RouteLoadErrorProps {
  * This file is part of the first load of every page that uses it: it imports only the shared parts the other error pages already load (NFR-009).
  */
 export function RouteLoadError({ pageTitle, title, description, reset }: Readonly<RouteLoadErrorProps>) {
-  const router = useRouter();
-  const retry = (): void => {
-    startTransition(() => {
-      router.refresh();
-      reset();
-    });
-  };
+  const retry = useRetryRead(reset);
   return (
     <>
       <PageHeader title={pageTitle} />

@@ -3,7 +3,10 @@ import { join } from 'node:path';
 
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// The error pages ask the router for a fresh read (DEF-033); there is no router in a static render.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined }) }));
 
 import CustomersError from '../../src/app/(portal)/masters/customers/error';
 import CustomerPageError from '../../src/app/(portal)/masters/customers/[id]/error';

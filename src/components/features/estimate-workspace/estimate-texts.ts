@@ -103,6 +103,10 @@ export const deletedMessage = (parts: number): string => (parts === 1 ? 'Row del
 export const CALCULATE_PREPARED_TITLE = 'Prepared';
 /** The state "Approved" of SCR-05 (STORY-06.06 AC-4; UX spec SCR-05 states and the G3 screen): read-only, and **no price** (NFR-002); a status is not a cost. */
 export const APPROVED_LOCKED_TITLE = 'Approved and locked.';
+/** The same notice on a Quoted estimate (QLT-C-02 of the final review; FR-102, FR-110): the word of the status the badge shows, so one status is never given two words. The body says nothing of a status and fits both. */
+export const QUOTED_LOCKED_TITLE = 'Quoted and locked.';
+/** The title of the locked notice by status: Quoted says Quoted, every other locked status is the Approved one. */
+export const lockedNoticeTitle = (status: 'APPROVED' | 'QUOTED'): string => (status === 'QUOTED' ? QUOTED_LOCKED_TITLE : APPROVED_LOCKED_TITLE);
 export const APPROVED_LOCKED_BODY = 'This estimate is closed and the task has moved to Closed. Inputs cannot be changed.';
 export const CALCULATE_FAILED_TITLE = 'Calculate did not go through';
 /** Nothing was sent because a field shows a value that is not saved (the form says which, under the field), and the button could not be loaded (the page needs a reload). */

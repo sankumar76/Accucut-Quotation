@@ -240,7 +240,10 @@ test.describe('a Lead', () => {
     const width = widthOf(page);
     if (width >= MINIMUM_MD) {
       await expect(page.getByRole('columnheader', { name: 'Engineer' })).toBeVisible();
-      for (const name of ['Customer', 'Folder', 'Assigned by']) await expect(page.getByRole('columnheader', { name })).toHaveCount(width >= MINIMUM_LG ? 1 : 0);
+      // DEF-077: the Customer, Folder and Assigned by of a Lead's row are lines of its Task and Engineer cells at every width, never columns.
+      for (const name of ['Customer', 'Folder', 'Assigned by']) await expect(page.getByRole('columnheader', { name })).toHaveCount(0);
+      await expect(row).toContainText('Customer: Not chosen yet');
+      await expect(row).toContainText('Assigned by: E2E Lead');
     }
   });
 
