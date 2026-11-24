@@ -1,10 +1,11 @@
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 import { defined } from '../support/defined';
 
 import { createDisposableUser, E2E_ADMIN, useFreshAddress } from './support/auth';
 import { calculateWithoutThePage, engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
+import { expectLinkTarget, isTouchLayout } from './support/touch-link';
 
 /**
  * STORY-06.02 T6 (AC-1 to AC-6, AC-9): the estimate review, SCR-06, for a Lead and an Admin at `/estimates/<code>`, at 360x800, 768x1024 and 1366x768 on the development server. Each test makes
@@ -207,5 +208,40 @@ test.describe('AC-9: layout and accessibility', () => {
     await openAsLead(page, testInfo, code);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
+  });
+});
+
+/**
+ * DEF-079 (AQP-422; NFR-017 as ruled on 2026-11-24): "View cost details" is the way from a row of the parts tree to SCR-07, so on a touch layout (below 1024 px, or a coarse pointer at any width) it is a control: at least
+ * 44 px high by a least height, a tap at its top or bottom edge lands on it, its text keeps its size, the page does not scroll sideways and axe is clean. With a mouse from 1024 px it keeps the height of its line.
+ * The desktop project reads it again with a finger at 1280 px, a landscape tablet.
+ */
+test.describe('DEF-079: "View cost details" is a 44 px control on a touch layout (NFR-017)', () => {
+  async function openCalculated(page: Page, testInfo: TestInfo): Promise<Locator> {
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    await calculateWithoutThePage(page, owner);
+    await openAsLead(page, testInfo, code);
+    return treePanel(page).getByRole('link', { name: /^View cost details for / });
+  }
+
+  test('at the width of the project: the link is a control on a touch layout and keeps its line with a mouse; no sideways scroll; axe finds nothing', async ({ page }, testInfo) => {
+    const link = await openCalculated(page, testInfo);
+    await expect(link).toHaveCount(1);
+    await expectLinkTarget(page, '"View cost details"', link);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoAxeViolations(page);
+  });
+
+  test.describe('with a coarse pointer at 1280 px', () => {
+    test.use({ hasTouch: true, viewport: { width: 1280, height: 800 } });
+
+    test('a landscape tablet: the link is 44 px high although the width is 1024 px or more', async ({ page }, testInfo) => {
+      test.skip(testInfo.project.name === 'mobile' || testInfo.project.name === 'tablet', 'the same 1280 px case in every project; read once, in the desktop project (the other two read their own width above)');
+      const link = await openCalculated(page, testInfo);
+      expect(await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches), 'the context has a coarse pointer').toBe(true);
+      expect(await isTouchLayout(page), 'a coarse pointer is a touch layout at any width').toBe(true);
+      await expectLinkTarget(page, '"View cost details"', link);
+      expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    });
   });
 });
