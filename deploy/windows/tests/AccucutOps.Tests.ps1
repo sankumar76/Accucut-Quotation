@@ -100,10 +100,22 @@ Describe 'secrets never reach a log (AC-5)' {
         $message | Should -Not -BeLike '*no-such-program*'
     }
 
+    It 'QLT-699-01: refuses the characters that the case-insensitive -match folds to ASCII (U+212A Kelvin sign, U+0130 capital I with dot)' {
+        # With -match, .NET folds these two to k and i, so they would pass the guard and be written as K and I. The case-sensitive -cmatch refuses them.
+        $missing = Join-Path $TestDrive 'no-such-program.exe'
+        foreach ($code in 0x212A, 0x0130) {
+            $text = 'abc ' + [char]$code + ' def'
+            $message = $null
+            try { Invoke-AccucutNative -FilePath $missing -StdIn $text } catch { $message = $_.Exception.Message }
+            $message | Should -BeLike '*-StdIn takes ASCII text only*'
+            $message | Should -Not -BeLike '*no-such-program*'
+        }
+    }
+
     It 'QLT-681-03: passes ASCII -StdIn text, including an empty one, to the child unchanged' {
-        $more = Join-Path $env:SystemRoot 'System32\findstr.exe'
-        (Invoke-AccucutNative -FilePath $more -ArgumentList @('^') -StdIn "-- first line`nSELECT 1;").Output | Should -Be "-- first line`nSELECT 1;"
-        (Invoke-AccucutNative -FilePath $more -ArgumentList @('^') -StdIn '' -AllowFailure).Output | Should -Be ''
+        $findstr = Join-Path $env:SystemRoot 'System32\findstr.exe'
+        (Invoke-AccucutNative -FilePath $findstr -ArgumentList @('^') -StdIn "-- first line`nSELECT 1;").Output | Should -Be "-- first line`nSELECT 1;"
+        (Invoke-AccucutNative -FilePath $findstr -ArgumentList @('^') -StdIn '' -AllowFailure).Output | Should -Be ''
     }
 
     It 'invents long random values of letters and digits, different each time' {

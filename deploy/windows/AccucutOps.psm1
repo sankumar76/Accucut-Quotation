@@ -367,7 +367,7 @@ function Invoke-AccucutNative {
     <#
     Runs a program and returns its exit code and its output, with registered secrets blanked.
     A secret goes in -Environment (set for the child only) or -StdIn, never in -ArgumentList.
-    -StdIn takes ASCII text only (QLT-681-03): the console-input guard below makes the standard input a code page 437 writer, so any other character would be changed to '?'.
+    -StdIn takes ASCII text only (QLT-681-03): the standard input is written in a console code page (437 while the console-input guard below is on), so a character above 127 may be changed to another one or read as a different one.
     Text with a character above 127 is refused before a process starts; for such text write UTF-8 bytes to StandardInput.BaseStream, as the key and dump pipes do.
     -ClearPgEnvironment drops every inherited PG* variable first, so that only what -Environment names reaches the child.
     Without -AllowFailure a non-zero exit code is an error that names the program and the code and shows the blanked output.
@@ -384,8 +384,8 @@ function Invoke-AccucutNative {
     )
 
     # The text itself is never put in the message: it may be a secret.
-    if ($PSBoundParameters.ContainsKey('StdIn') -and $StdIn -match '[^\x00-\x7F]') {
-        throw 'Invoke-AccucutNative -StdIn takes ASCII text only: the standard input is encoded in code page 437, so another character would be changed to a question mark. Write UTF-8 bytes to the standard input stream instead.'
+    if ($PSBoundParameters.ContainsKey('StdIn') -and $StdIn -cmatch '[^\x00-\x7F]') {
+        throw 'Invoke-AccucutNative -StdIn takes ASCII text only: the standard input is written in a console code page (437 while the guard is on), so a character above 127 may be changed to another one or read as a different one. Write UTF-8 bytes to the standard input stream instead.'
     }
 
     $info = New-Object System.Diagnostics.ProcessStartInfo

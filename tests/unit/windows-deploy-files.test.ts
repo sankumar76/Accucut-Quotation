@@ -996,8 +996,9 @@ describe('STORY-10.11: the guided restore and the Admin endpoint on Windows (ADR
     expect(body).toContain('try { [void]$process.Start() } finally { Restore-AccucutConsoleInput -Encoding $console }');
     expect(body.indexOf('Set-AccucutConsoleInputNoPreamble')).toBeLessThan(body.indexOf('$process.Start()'));
     expect(body).not.toContain('\n    [void]$process.Start()\n');
-    // QLT-681-03: the guard encodes standard input in code page 437, so text above 127 is refused before the process starts, and the message never holds the text.
-    expect(body).toContain("if ($PSBoundParameters.ContainsKey('StdIn') -and $StdIn -match '[^\\x00-\\x7F]')");
+    // QLT-681-03: the guard writes standard input in a console code page (437), so text above 127 is refused before the process starts, and the message never holds the text.
+    // QLT-699-01: the test is case-sensitive (-cmatch): -match folds U+212A and U+0130 to ASCII k and i and would let them through to be written as K and I.
+    expect(body).toContain("if ($PSBoundParameters.ContainsKey('StdIn') -and $StdIn -cmatch '[^\\x00-\\x7F]')");
     expect(body.indexOf('[^\\x00-\\x7F]')).toBeLessThan(body.indexOf('New-Object System.Diagnostics.ProcessStartInfo'));
     expect(body).toContain('-StdIn takes ASCII text only');
     const restoreSql = functionBody(read('deploy/windows/AccucutOps.psm1'), 'Invoke-AccucutRestoreSql');
