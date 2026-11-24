@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 import { createDisposableUser, E2E_ADMIN } from './support/auth';
-import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TABLET_MIN_WIDTH, TOUCH_TARGET, waitUntilHydrated, widthOf } from './support/design-system';
+import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TABLET_MIN_WIDTH, TOUCH_TARGET, waitForAnimationsToFinish, waitUntilHydrated, widthOf } from './support/design-system';
 import { ADMIN_STATE } from './support/servers';
 
 /**
@@ -36,6 +36,23 @@ const TOO_COMMON = 'That password is too common. Choose a different one.';
 const FIRST_PASSWORD = 'invented-first-password-1';
 const NEW_PASSWORD = 'invented-temporary-password-2';
 
+/**
+ * DIAGNOSTIC ONLY (AQP-383, DEF-053, DL-359), never merged: one line per phase of the list case, printed as each phase ends, so a timed-out attempt still shows how far it got.
+ * Each line: step, the time the step took, and the time since the body began (the fixtures before it are not counted: Playwright's own case time minus the last line is that).
+ */
+function startPhases(testInfo: TestInfo): { mark: (step: string, extra?: string) => void } {
+  const began = Date.now();
+  let last = began;
+  const prefix = `[AQP-383 phases] ${testInfo.project.name} | attempt ${String(testInfo.retry + 1)} | worker ${String(testInfo.workerIndex)}`;
+  const mark = (step: string, extra = ''): void => {
+    const now = Date.now();
+    process.stdout.write(`${prefix} | ${step} | ${String(now - last)} ms | at +${String(now - began)} ms${extra === '' ? '' : ` | ${extra}`}\n`);
+    last = Date.now();
+  };
+  mark('body started');
+  return { mark };
+}
+
 /** The row (table) or card (phone) of a person: whichever of the two is shown. */
 function rowOf(page: Page, name: string): Locator {
   return page.locator('[data-user-id]:visible').filter({ hasText: name });
@@ -56,13 +73,22 @@ async function pressWithKeyboard(button: Locator): Promise<void> {
 
 test.describe('the list', () => {
   test('AC-1, AC-7: shows name, e-mail, role and status, does not scroll sideways and has no axe violations', async ({ page }, testInfo) => {
+    const phases = startPhases(testInfo);
     const person = await createDisposableUser('managed', testInfo);
-    await openUsers(page);
+    phases.mark('disposable person made (argon2id + insert)');
+    await page.goto('/users');
+    phases.mark('page.goto answered');
+    await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
+    phases.mark('heading visible');
+    // The buttons are plain HTML until React has attached their handlers; a press before that is lost (DEF-011).
+    await waitUntilHydrated(page, 'main button[data-action="add"]');
+    phases.mark('hydrated');
     const row = rowOf(page, person.name);
     await expect(row).toContainText(person.email);
     await expect(row).toContainText('Engineer');
     await expect(row).toContainText('Active');
     await expect(rowOf(page, E2E_ADMIN.name)).toContainText('Admin');
+    phases.mark('row assertions done');
     // STORY-01.05 T7: on the phone card, and only there, the Admin's own row says in text why Reset password is disabled; no other card does.
     if ((await widthOf(page)) < TABLET_MIN_WIDTH) {
       await expect(rowOf(page, E2E_ADMIN.name).getByText(OWN_PHONE_LINE, { exact: true })).toBeVisible();
@@ -71,8 +97,17 @@ test.describe('the list', () => {
     } else {
       await expect(page.getByText(OWN_PHONE_LINE)).toBeHidden();
     }
+    phases.mark('phone-line check done');
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    phases.mark('overflow checked');
+    const inDom = await page.locator('[data-user-id]').count();
+    const shown = await page.locator('[data-user-id]:visible').count();
+    const nodes = await page.evaluate(() => document.querySelectorAll('*').length);
+    phases.mark('people counted', `people in the DOM (table rows + phone cards) ${String(inDom)} | shown ${String(shown)} | DOM nodes ${String(nodes)}`);
+    await waitForAnimationsToFinish(page);
+    phases.mark('animations settled (scan start)');
     await expectNoAxeViolations(page);
+    phases.mark('axe scan done (helper: animation wait + analyze)');
   });
 
   test('AC-7: controls are at least 44 px, and the icon buttons of a table row at least 36 px', async ({ page }, testInfo) => {
