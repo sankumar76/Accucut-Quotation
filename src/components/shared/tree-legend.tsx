@@ -21,7 +21,7 @@ export function TreeLegend() {
       <ul className="flex flex-wrap gap-x-s-4 gap-y-s-2">
         {LEGEND.map(({ kind, words }) => (
           <li key={kind} className="flex items-center gap-s-2 text-label text-ink-2">
-            <NodeKindIcon kind={kind} size="small" />
+            <NodeKindIcon kind={kind} />
             {words}
           </li>
         ))}

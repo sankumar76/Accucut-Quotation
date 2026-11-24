@@ -2,8 +2,7 @@
 
 import { useRef, useState } from 'react';
 
-import { Icon } from '@/components/shared/icon';
-import { NODE_KIND_ICON } from '@/components/shared/node-kind-icon';
+import { NodeKindIcon } from '@/components/shared/node-kind-icon';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { NODE_KIND_NAMES } from '@/lib/estimate/node-kinds';
 
@@ -48,7 +47,7 @@ export function AddNodeMenuPanel({ label, nodeKinds, onChoose, keyboard, unavail
       <DropdownMenuContent align="start" {...{ onOpenAutoFocus: focusOnOpen }}>
         {nodeKinds.map((nodeKind) => (
           <DropdownMenuItem key={nodeKind} disabled={unavailable === true} onSelect={() => onChoose(nodeKind)}>
-            <Icon icon={NODE_KIND_ICON[nodeKind]} size="large" />
+            <NodeKindIcon kind={nodeKind} />
             {NODE_KIND_NAMES[nodeKind]}
           </DropdownMenuItem>
         ))}
