@@ -15,6 +15,9 @@ import { JSON_HEADERS } from './support/treatments';
  * keys and the two "all" buttons move the radios, Save choices applies only what was chosen and the notice says the counts; a second change of the default then closes
  * the window with Escape, which keeps every customer's value and says so. The values are read back through the customers' API, so the screen is not the only witness.
  *
+ * Two cases (AQP-423, DEF-080): the first holds the first change of the default (AC-1 to AC-3, AC-5), the second the second change and Escape (AC-10). The second starts from the
+ * state the first one leaves (the rate at 1.52, bravo on it, charlie at 1.45), made through the API, so neither case carries the other's seconds on a slow runner.
+ *
  * The rate and the customers are the test's own (an invented name with the screen size, the repeat, the retry and a random part), made and removed through the API, so the
  * three screen sizes and the retries never meet on one rate. Other specs' customers also follow the new rate (they hold its default), which is why the number of customers
  * that move by themselves is read with a pattern and not written out. The words are the story's proposal (OQ-1), written out here. Names and numbers are invented (`n.37`, ADR-014).
@@ -98,21 +101,27 @@ async function makeCustomer(page: Page, name: string): Promise<Customer> {
   return { id: await post(page, CUSTOMERS_API, { name, shortName: shortNameOf(name) }), name };
 }
 
-/** A rate at 1.37, and three customers: alpha on its default, bravo at 1.50 and charlie at 1.45. Named so that the window lists bravo before charlie. */
-async function makeWorld(page: Page, testInfo: TestInfo): Promise<World> {
+/** The customers that may hold a value of their own, and the value each holds. */
+const OWN_VALUES = { bravo: BRAVO_OWN, charlie: CHARLIE_OWN } as const;
+
+/**
+ * A rate at `defaultValue`, and three customers: alpha on its default, and bravo at 1.50 and charlie at 1.45 when `own` names them (a customer not named follows the default).
+ * Named so that the window lists bravo before charlie.
+ */
+async function makeWorld(page: Page, testInfo: TestInfo, defaultValue: string, own: ReadonlyArray<keyof typeof OWN_VALUES>): Promise<World> {
   const tag = tagOf(testInfo);
   const name = `E2E-propagation-rate-${tag}`;
   // The rate and the three customers do not depend on each other, and the two values of their own only on the rate and on bravo and charlie: two rounds of requests sent together (DEF-080).
   const [rateId, alpha, bravo, charlie] = await Promise.all([
-    post(page, RATES_API, { name, unit: 'per kg', defaultValue: FIRST_DEFAULT }),
+    post(page, RATES_API, { name, unit: 'per kg', defaultValue }),
     makeCustomer(page, `E2E Alpha ${tag}`),
     makeCustomer(page, `E2E Bravo ${tag}`),
     makeCustomer(page, `E2E Charlie ${tag}`),
   ]);
   lap('rate and three customers made');
   const responses = await Promise.all(
-    ([[bravo, BRAVO_OWN], [charlie, CHARLIE_OWN]] as const).map(([customer, value]) =>
-      page.request.patch(`${CUSTOMERS_API}/${customer.id}`, { headers: JSON_HEADERS, data: { rates: [{ processItemId: rateId, value }] } }),
+    own.map((who) =>
+      page.request.patch(`${CUSTOMERS_API}/${(who === 'bravo' ? bravo : charlie).id}`, { headers: JSON_HEADERS, data: { rates: [{ processItemId: rateId, value: OWN_VALUES[who] }] } }),
     ),
   );
   lap('two own values set');
@@ -166,8 +175,8 @@ function choicesOf(window: Locator, customer: Customer): { apply: Locator; keep:
 }
 
 test.describe('a changed default reaches the customers (AC-1 to AC-3, AC-5, AC-10)', () => {
-  test('moves the customers on the old default, asks about the others by keyboard, saves only what was chosen, and Escape keeps every value', async ({ page }, testInfo) => {
-    const world = await makeWorld(page, testInfo);
+  test('moves the customers on the old default, asks about the others by keyboard, and saves only what was chosen (AC-1 to AC-3, AC-5)', async ({ page }, testInfo) => {
+    const world = await makeWorld(page, testInfo, FIRST_DEFAULT, ['bravo', 'charlie']);
     try {
       lap('world made');
       watchRequests(page);
@@ -233,9 +242,20 @@ test.describe('a changed default reaches the customers (AC-1 to AC-3, AC-5, AC-1
       if ((page.viewportSize()?.width ?? 0) >= TABLET_MIN_WIDTH) {
         await expect(page.locator('[data-item-id]:visible').filter({ hasText: world.name }).getByRole('cell').nth(OWN_VALUE_CELL)).toHaveText('1');
       }
-
-      // A second change, and Escape: the same as Keep all, nothing is sent, and the notice says so.
       lap('own-value column checked');
+    } finally {
+      await cleanUp(page, world);
+    }
+  });
+
+  // A second change, and Escape: the same as Keep all, nothing is sent, and the notice says so. It starts from the state the first case leaves (the rate at 1.52, bravo on it, charlie at 1.45).
+  test('a second change of the default is closed with Escape, which keeps every value and says so (AC-10)', async ({ page }, testInfo) => {
+    const world = await makeWorld(page, testInfo, SECOND_DEFAULT, ['charlie']);
+    try {
+      lap('world made');
+      watchRequests(page);
+      await openProcessMaster(page);
+      lap('Process Master opened');
       await saveDefault(page, world, THIRD_DEFAULT);
       const second = page.getByRole('dialog', { name: `${world.name} changed from ${SECOND_DEFAULT} to ${THIRD_DEFAULT}` });
       await expect(second).toBeVisible();
