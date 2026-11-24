@@ -972,7 +972,11 @@ describe('STORY-10.11: the guided restore and the Admin endpoint on Windows (ADR
     expect(restoreBody.indexOf('Restore run by $(Get-AccucutRunningAccount)')).toBeLessThan(restoreBody.indexOf('Get-AccucutRestoreChoice'));
     expect(restoreBody.indexOf('Restore run by $(Get-AccucutRunningAccount)')).toBeLessThan(restoreBody.indexOf("'Backup copies on this server, newest first"));
     const account = functionBody(restoreRegion, 'Get-AccucutRunningAccount');
-    expect(account).toContain('[System.Security.Principal.WindowsIdentity]::GetCurrent().Name');
+    // QLT-681-02: the identity call is an internal function that Pester mocks, not an exported parameter that runs a script block.
+    expect(account).toContain('Get-AccucutWindowsIdentityName');
+    expect(account).not.toMatch(/Source|\.Invoke\(/);
+    expect(functionBody(restoreRegion, 'Get-AccucutWindowsIdentityName')).toContain('[System.Security.Principal.WindowsIdentity]::GetCurrent().Name');
+    expect(read('deploy/windows/AccucutOps.psm1')).not.toMatch(/Export-ModuleMember[\s\S]*'Get-AccucutWindowsIdentityName'/);
     expect(account).toContain("'unknown account'");
     expect(account).toMatch(/catch \{ return 'unknown account' \}/);
     const event = functionBody(restoreRegion, 'Write-AccucutRestoreEvent');
@@ -992,6 +996,11 @@ describe('STORY-10.11: the guided restore and the Admin endpoint on Windows (ADR
     expect(body).toContain('try { [void]$process.Start() } finally { Restore-AccucutConsoleInput -Encoding $console }');
     expect(body.indexOf('Set-AccucutConsoleInputNoPreamble')).toBeLessThan(body.indexOf('$process.Start()'));
     expect(body).not.toContain('\n    [void]$process.Start()\n');
+    // QLT-681-03: the guard writes standard input in a console code page (437), so text above 127 is refused before the process starts, and the message never holds the text.
+    // QLT-699-01: the test is case-sensitive (-cmatch): -match folds U+212A and U+0130 to ASCII k and i and would let them through to be written as K and I.
+    expect(body).toContain("if ($PSBoundParameters.ContainsKey('StdIn') -and $StdIn -cmatch '[^\\x00-\\x7F]')");
+    expect(body.indexOf('[^\\x00-\\x7F]')).toBeLessThan(body.indexOf('New-Object System.Diagnostics.ProcessStartInfo'));
+    expect(body).toContain('-StdIn takes ASCII text only');
     const restoreSql = functionBody(read('deploy/windows/AccucutOps.psm1'), 'Invoke-AccucutRestoreSql');
     expect(restoreSql).toContain('-StdIn ("-- accucut restore`n" + $Sql)');
     expect(read('deploy/windows/tests/Restore.Tests.ps1')).toContain('SQR-04 (#516)');

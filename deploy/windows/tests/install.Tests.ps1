@@ -894,8 +894,11 @@ Describe 'the restore role in the install, and no Admin endpoint (STORY-10.11 AC
         $standardError = Join-Path $TestDrive 'binding-err.txt'
         $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + (Join-Path $script:WindowsDirectory 'install.ps1') + '"'), '-AdminAccount', 'TESTSRV\admin.test')
         $process = Start-Process -FilePath $powershell -ArgumentList $arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $standardOutput -RedirectStandardError $standardError
+        $null = $process.Handle
         if (-not $process.WaitForExit(120000)) { try { $process.Kill() } catch { Write-Verbose 'The child had already ended.' }; throw 'The child powershell.exe did not finish in 120 seconds.' }
-        $process.ExitCode | Should -Not -Be 0
+        # Windows PowerShell 5.1 gives $null for ExitCode of a Start-Process -PassThru object that was not waited for with its handle open (QLT-681-01), and $null is not 0: a bare
+        # "Should -Not -Be 0" passed whatever the child did. Reading the handle before the wait keeps the code, and a value above 0 is the only thing that passes here.
+        $process.ExitCode | Should -BeGreaterThan 0 -Because 'a refused parameter ends the child with a non-zero exit code (not $null, not 0)'
         $output = (Get-Content -LiteralPath $standardOutput -Raw) + (Get-Content -LiteralPath $standardError -Raw)
         # powershell.exe wraps its error text at the width of its console, even into a file: compare it with the white space squeezed.
         $squeezed = $output -replace '\s+', ' '
