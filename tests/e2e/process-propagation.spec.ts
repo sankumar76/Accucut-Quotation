@@ -22,6 +22,28 @@ import { JSON_HEADERS } from './support/treatments';
 
 test.use({ storageState: ADMIN_STATE });
 
+// AQP-423 (DEF-080) observation: one line per step, printed as the step ends, so a CI log shows where the seconds go. Removed with the fix.
+const STEP_TIMING = '[AQP-423 step timing]';
+const startedAt = new Map<string, number>();
+const lastLap = new Map<string, number>();
+function lap(label: string): void {
+  const info = test.info();
+  const now = Date.now();
+  const begin = startedAt.get(info.testId) ?? now;
+  const before = lastLap.get(info.testId) ?? begin;
+  startedAt.set(info.testId, begin);
+  lastLap.set(info.testId, now);
+  process.stdout.write(`${STEP_TIMING} ${info.project.name} | attempt ${String(info.retry + 1)} | ${label} | ${String(now - before)} ms | at +${String(now - begin)} ms\n`);
+}
+test.beforeEach(() => {
+  const info = test.info();
+  startedAt.set(info.testId, Date.now());
+  lastLap.set(info.testId, Date.now());
+});
+test.afterEach(() => {
+  lap(`end (${test.info().status ?? 'unknown'})`);
+});
+
 const RATES_API = `${DEVELOPMENT_URL}/api/v1/process-items`;
 const CUSTOMERS_API = `${DEVELOPMENT_URL}/api/v1/customers`;
 const FIRST_DEFAULT = '1.37';
@@ -51,6 +73,7 @@ const tagOf = (testInfo: TestInfo): string => `${testInfo.project.name}-r${testI
 
 async function post(page: Page, url: string, data: unknown): Promise<string> {
   const response = await page.request.post(url, { headers: JSON_HEADERS, data });
+  lap(`POST ${url.replace(DEVELOPMENT_URL, '')} -> ${String(response.status())}`);
   expect(response.status()).toBe(CREATED);
   return ((await response.json()) as { id: string }).id;
 }
@@ -69,6 +92,7 @@ async function makeWorld(page: Page, testInfo: TestInfo): Promise<World> {
   const charlie = await makeCustomer(page, `E2E Charlie ${tag}`);
   for (const [customer, value] of [[bravo, BRAVO_OWN], [charlie, CHARLIE_OWN]] as const) {
     const response = await page.request.patch(`${CUSTOMERS_API}/${customer.id}`, { headers: JSON_HEADERS, data: { rates: [{ processItemId: rateId, value }] } });
+    lap(`PATCH customer own value -> ${String(response.status())}`);
     expect(response.ok()).toBe(true);
   }
   return { rateId, name, alpha, bravo, charlie };
@@ -80,14 +104,20 @@ async function makeWorld(page: Page, testInfo: TestInfo): Promise<World> {
  */
 async function valueOf(page: Page, world: World, customer: Customer): Promise<number> {
   const response = await page.request.patch(`${CUSTOMERS_API}/${customer.id}`, { headers: JSON_HEADERS, data: { name: customer.name } });
+  lap(`valueOf PATCH -> ${String(response.status())}`);
   expect(response.ok()).toBe(true);
   const body = (await response.json()) as { rates: ReadonlyArray<{ processItemId: string; value: string }> };
   return Number(body.rates.find((rate) => rate.processItemId === world.rateId)?.value);
 }
 
 async function cleanUp(page: Page, world: World): Promise<void> {
-  for (const customer of [world.alpha, world.bravo, world.charlie]) await page.request.delete(`${CUSTOMERS_API}/${customer.id}`, { headers: JSON_HEADERS });
+  lap('cleanUp starts');
+  for (const customer of [world.alpha, world.bravo, world.charlie]) {
+    const deleted = await page.request.delete(`${CUSTOMERS_API}/${customer.id}`, { headers: JSON_HEADERS });
+    lap(`cleanUp DELETE customer -> ${String(deleted.status())}`);
+  }
   const gone = await page.request.delete(`${RATES_API}/${world.rateId}`, { headers: JSON_HEADERS });
+  lap(`cleanUp DELETE rate -> ${String(gone.status())}`);
   expect([NO_CONTENT, 404]).toContain(gone.status());
 }
 
@@ -96,8 +126,10 @@ async function saveDefault(page: Page, world: World, value: string): Promise<voi
   await pressWithKeyboard(rowButton(page, world.name, 'Edit'));
   const form = page.getByRole('dialog', { name: `Edit ${world.name}` });
   await form.getByLabel('Default value').fill(value);
+  lap('saveDefault: dialog open, filled');
   await form.getByRole('button', { name: 'Save' }).click();
   await expect(form).toBeHidden();
+  lap('saveDefault: Save pressed, dialog hidden');
 }
 
 /** The two radios of one customer's fieldset. */
@@ -110,15 +142,21 @@ test.describe('a changed default reaches the customers (AC-1 to AC-3, AC-5, AC-1
   test('moves the customers on the old default, asks about the others by keyboard, saves only what was chosen, and Escape keeps every value', async ({ page }, testInfo) => {
     const world = await makeWorld(page, testInfo);
     try {
+      lap('world made');
       await openProcessMaster(page);
+      lap('Process Master opened');
       await saveDefault(page, world, SECOND_DEFAULT);
 
       const window = page.getByRole('dialog', { name: `${world.name} changed from ${FIRST_DEFAULT} to ${SECOND_DEFAULT}` });
       await expect(window).toBeVisible();
+      lap('window visible');
       await expect(window.getByRole('heading', { level: 2 })).toBeFocused();
       await expect(window).toContainText(new RegExp(`customers? ha(?:d|s|ve) ${FIRST_DEFAULT} and now ha(?:s|ve) ${SECOND_DEFAULT}\\. 2 customers have a different value\\. Choose what to do for each one\\.`));
+      lap('window text checked');
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+      lap('overflow read');
       await expectNoAxeViolations(page);
+      lap('axe scan');
 
       // Every row starts on Keep, and only the two customers with a value of their own are asked about (alpha moved by itself).
       const bravo = choicesOf(window, world.bravo);
@@ -130,6 +168,7 @@ test.describe('a changed default reaches the customers (AC-1 to AC-3, AC-5, AC-1
       await expect(bravo.apply).toHaveAccessibleName(`Apply ${SECOND_DEFAULT}`);
 
       // Tab reaches the close icon and then the first customer's chosen radio; the arrow keys move the choice; the two "all" buttons set every radio and save nothing.
+      lap('radios checked');
       await page.keyboard.press('Tab');
       await expect(window.getByRole('button', { name: 'Close' })).toBeFocused();
       await page.keyboard.press('Tab');
@@ -139,12 +178,15 @@ test.describe('a changed default reaches the customers (AC-1 to AC-3, AC-5, AC-1
       await expect(bravo.apply).toBeFocused();
       await page.keyboard.up('ArrowLeft');
       await expect(bravo.apply).toBeChecked();
+      lap('arrow key moved the radio');
       await window.getByRole('button', { name: 'Apply to all 2' }).click();
       await expect(charlie.apply).toBeChecked();
       await window.getByRole('button', { name: 'Keep all 2' }).click();
       await expect(bravo.keep).toBeChecked();
       await expect(charlie.keep).toBeChecked();
+      lap('all-buttons done');
       expect([await valueOf(page, world, world.bravo), await valueOf(page, world, world.charlie)]).toEqual([Number(BRAVO_OWN), Number(CHARLIE_OWN)]);
+      lap('values read, nothing saved');
 
       // Apply for bravo only, then Save choices by keyboard.
       await bravo.apply.focus();
@@ -154,24 +196,30 @@ test.describe('a changed default reaches the customers (AC-1 to AC-3, AC-5, AC-1
       await window.getByRole('button', { name: 'Save choices' }).focus();
       await page.keyboard.press('Enter');
       await expect(window).toBeHidden();
+      lap('Save choices: window hidden');
       await expect(page.getByRole('status').filter({ hasText: '1 customer now has 1.52. 1 customer kept its own value. The changes are in the audit log.' })).toBeVisible();
       await expect(rowButton(page, world.name, 'Edit')).toBeFocused();
+      lap('notice and focus checked');
       expect([await valueOf(page, world, world.alpha), await valueOf(page, world, world.bravo), await valueOf(page, world, world.charlie)]).toEqual([1.52, 1.52, 1.45]);
+      lap('three values read');
       if ((page.viewportSize()?.width ?? 0) >= TABLET_MIN_WIDTH) {
         await expect(page.locator('[data-item-id]:visible').filter({ hasText: world.name }).getByRole('cell').nth(OWN_VALUE_CELL)).toHaveText('1');
       }
 
       // A second change, and Escape: the same as Keep all, nothing is sent, and the notice says so.
+      lap('own-value column checked');
       await saveDefault(page, world, THIRD_DEFAULT);
       const second = page.getByRole('dialog', { name: `${world.name} changed from ${SECOND_DEFAULT} to ${THIRD_DEFAULT}` });
       await expect(second).toBeVisible();
       await expect(second).toContainText('1 customer has a different value. Choose what to do for it.');
       await expect(second.getByRole('button', { name: 'Keep it' })).toBeVisible();
+      lap('second window checked');
       await page.keyboard.press('Escape');
       await expect(second).toBeHidden();
       await expect(page.getByRole('status').filter({ hasText: "1 customer kept its own value. Its rate changes only when you edit it on the customer's page." })).toBeVisible();
       await expect(rowButton(page, world.name, 'Edit')).toBeFocused();
       expect(await valueOf(page, world, world.charlie)).toBe(Number(CHARLIE_OWN));
+      lap('last value read');
     } finally {
       await cleanUp(page, world);
     }
