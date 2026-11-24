@@ -165,15 +165,6 @@ async function expectEveryControlShown(page: Page, row: Locator, code: string, a
   }
 }
 
-/** The page of a tab for one task, opened at one width, with its row. */
-async function openTab(page: Page, width: number, tab: string, code: string): Promise<Locator> {
-  await page.setViewportSize({ width, height: HEIGHT });
-  await page.goto(queueAddressOf(tab, code));
-  const row = page.locator(`[data-task-code="${code}"]:visible`);
-  await expect(row).toBeVisible();
-  return row;
-}
-
 /**
  * Every width the project reads, on one page load (the layout is CSS: the widths are the window's, set one after another, so a case costs one load of the queue and not one for each width): the page does not scroll
  * sideways, the region is not scrolled (back at its start after the last width's Tab walk), the checks run, axe is clean. axe scans at the project's own width only: a scan is the dearest step of a width, and the layout
@@ -245,41 +236,59 @@ test.describe('DEF-077: the Actions column of the queue stays visible (DL-357)',
     });
   });
 
-  test('a table forced wider than its region: the Actions column stays at the right edge, opaque, with the overdue tint, and the first link ends clear of it', async ({ page }, testInfo) => {
+  test('a table forced wider than its region: at every width the Actions column stays at the right edge, opaque, with the overdue tint, every control of the row is shown whole, and the first link ends clear of it', async ({ page }, testInfo) => {
     // The table is a table from 768 px; the cards below have no region to force.
     test.skip((page.viewportSize()?.width ?? 0) < TABLE_FROM, 'the cards of a phone have no table region');
     const { code, owner } = await estimateInStatus(page, testInfo, 'DRAFT');
     await moveDeadlineIntoThePast(owner.id);
-    const row = await openTab(page, page.viewportSize()?.width ?? TABLE_FROM, 'open', code);
+    const ownWidth = page.viewportSize()?.width;
+    await page.goto(queueAddressOf('open', code));
+    const row = page.locator(`[data-task-code="${code}"]:visible`);
+    await expect(row).toBeVisible();
     const region = page.getByRole('region', { name: REGION_NAME });
-    // The longest values each form accepts can widen the table without limit: force it, as the masters tables' test does.
-    await region.evaluate((element) => {
-      const table = element.querySelector('table');
-      if (table !== null) table.style.minWidth = '2400px';
-      element.scrollLeft = element.scrollWidth;
-    });
-    expect(await region.evaluate((element) => element.scrollLeft), 'the region scrolled').toBeGreaterThan(0);
-
-    const holder = await holderOf(page, row);
     const cell = row.locator('td').last();
     const head = page.getByRole('columnheader', { name: 'Actions' });
-    for (const target of [cell, head]) {
-      const edges = defined((await edgesOfTree(target))[0]);
-      expect(Math.abs(edges.right - holder.right), 'the Actions column ends at the region\'s right edge').toBeLessThanOrEqual(TOLERANCE);
-      expect(isOpaque(await target.evaluate((element) => getComputedStyle(element).backgroundColor)), 'opaque').toBe(true);
-    }
-    // The overdue row's tint carries over to its Actions cell, so the row's colour is unbroken.
-    const rowColour = await row.evaluate((element) => getComputedStyle(element).backgroundColor);
-    expect(await cell.evaluate((element) => getComputedStyle(element).backgroundColor), 'the cell has the row\'s tint').toBe(rowColour);
-    await expectWhole('Reassign or change deadline', row.getByRole('link', { name: `Reassign or change deadline, ${code}` }), holder);
+    const action = row.getByRole('link', { name: `Reassign or change deadline, ${code}` });
+    for (const width of widthsOf(testInfo.project.name)) {
+      await test.step(`${width} px`, async () => {
+        await page.setViewportSize({ width, height: HEIGHT });
+        // The longest values each form accepts can widen the table without limit: force it, as the masters tables' test does, and start at the region's start.
+        await region.evaluate((element) => {
+          const table = element.querySelector('table');
+          if (table !== null) table.style.minWidth = '2400px';
+          element.scrollLeft = 0;
+        });
+        expect(await region.evaluate((element) => element.scrollWidth - element.clientWidth), 'the table is wider than its region').toBeGreaterThan(0);
+        const holder = await holderOf(page, row);
 
-    // The first link, focused while the region is scrolled to its end, ends in view and clear of the sticky column.
-    await row.getByRole('link', { name: code, exact: true }).focus();
-    const link = defined((await edgesOfTree(row.getByRole('link', { name: code, exact: true })))[0]);
-    const cellEdges = defined((await edgesOfTree(cell))[0]);
-    expect(link.left).toBeGreaterThanOrEqual(holder.left - TOLERANCE);
-    expect(link.right).toBeLessThanOrEqual(cellEdges.left + TOLERANCE);
-    await expectNoAxeViolations(page);
+        // At the start of the region: the sticky column is at its right edge, the action is whole and on top, and the column is opaque with the row's tint.
+        for (const target of [cell, head]) {
+          const edges = defined((await edgesOfTree(target))[0]);
+          expect.soft(Math.abs(edges.right - holder.right), "the Actions column ends at the region's right edge").toBeLessThanOrEqual(TOLERANCE);
+          expect.soft(isOpaque(await target.evaluate((element) => getComputedStyle(element).backgroundColor)), 'opaque').toBe(true);
+        }
+        await expectWhole('Reassign or change deadline', action, holder);
+        expect.soft(await coveredBy(action), 'nothing covers the action').toBeNull();
+        // The overdue row's tint carries over to its Actions cell, so the row's colour is unbroken.
+        const rowColour = await row.evaluate((element) => getComputedStyle(element).backgroundColor);
+        expect.soft(await cell.evaluate((element) => getComputedStyle(element).backgroundColor), "the cell has the row's tint").toBe(rowColour);
+
+        // A Tab through every control of the row, from the start of the region.
+        await expectEveryControlShown(page, row, code, action);
+
+        // At the end of the region: the column is still at the right edge, and the first link, focused there, ends in view and clear of it.
+        await region.evaluate((element) => {
+          element.scrollLeft = element.scrollWidth;
+        });
+        const cellEdges = defined((await edgesOfTree(cell))[0]);
+        expect.soft(Math.abs(cellEdges.right - holder.right), 'at the end of the region too').toBeLessThanOrEqual(TOLERANCE);
+        await row.getByRole('link', { name: code, exact: true }).focus();
+        const link = defined((await edgesOfTree(row.getByRole('link', { name: code, exact: true })))[0]);
+        expect.soft(link.left, 'the first link is in view').toBeGreaterThanOrEqual(holder.left - TOLERANCE);
+        expect.soft(link.right, 'the first link is clear of the sticky column').toBeLessThanOrEqual(defined((await edgesOfTree(cell))[0]).left + TOLERANCE);
+        if (width === ownWidth) await expectNoAxeViolations(page);
+      });
+    }
   });
 });
 
