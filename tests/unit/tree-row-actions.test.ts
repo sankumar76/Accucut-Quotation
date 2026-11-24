@@ -113,6 +113,86 @@ describe('RowActions: the "+" of a row (AC-1, AC-2, 14.30)', () => {
   });
 });
 
+/** The class tokens of the opening tag that carries this attribute. */
+const classesOf = (html: string, marker: string): string[] => {
+  const tag = html.match(new RegExp(`<[^>]*${marker}[^>]*>`))?.[0] ?? '';
+  return (tag.match(/class="([^"]*)"/)?.[1] ?? '').split(/\s+/).filter((token) => token !== '');
+};
+const group = (html: string): string[] => classesOf(html, 'data-row-actions');
+/** The class tokens of the group of one row of the panel. */
+const groupTokens = (html: string, node: PartItem): string[] => classesOf(html, 'aria-label="Actions for ' + node.slNo + ' ' + node.label + '"');
+
+describe('AQP-418 (DEF-075): the toolbar of a row never floats over the row', () => {
+  it('is one group named after its row ("Actions for <number> <name>"), and names a row with no name "Part"', () => {
+    for (const node of NODES) {
+      const html = actions(node);
+      expect(html).toContain('role="group"');
+      expect(html).toContain(`aria-label="Actions for ${node.slNo} ${node.label}"`);
+    }
+    expect(actions(part('x', null, '3', 'MAIN_ASSEMBLY'))).toContain('aria-label="Actions for 3 Part"');
+  });
+
+  it('is clipped (sr-only) until the row is shown, never by opacity, display or visibility, and has no hover or touch variant', () => {
+    const classes = group(actions(NODES[1] as PartItem));
+    expect(classes).toContain('sr-only');
+    for (const token of classes) {
+      expect(token, token).not.toMatch(/opacity|invisible|pointer-coarse|hover|(^|:)hidden$|(^|:)collapse$/);
+    }
+    const html = actions(NODES[1] as PartItem);
+    expect(html).not.toContain('opacity-0');
+    expect(html).not.toContain('pointer-coarse');
+    expect(html).not.toContain('group-hover');
+  });
+
+  it('is shown by the open row, by focus that is visible in the row, and by a menu of the row that is open', () => {
+    const classes = group(actions(NODES[1] as PartItem));
+    expect(classes).toContain('group-has-[[aria-current=true]]/row:not-sr-only');
+    expect(classes).toContain('group-has-[:focus-visible]/row:not-sr-only');
+    // The branch arrows carry aria-expanded too: only a button that opens a menu (the move handle, the "+") keeps the toolbar shown.
+    expect(classes).toContain('group-has-[[aria-haspopup][aria-expanded=true]]/row:not-sr-only');
+    expect(classes.filter((token) => token.includes('aria-expanded') && !token.includes('aria-haspopup'))).toEqual([]);
+  });
+
+  it('is shown at once while the delete confirmation of this row is open (showing), and not otherwise', () => {
+    const shown = renderToStaticMarkup(createElement(RowActions, { part: NODES[2] as PartItem, onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop, showing: true }));
+    expect(group(shown)).toContain('not-sr-only');
+    expect(group(shown)).not.toContain('sr-only');
+    expect(group(actions(NODES[2] as PartItem))).not.toContain('not-sr-only');
+  });
+
+  it('never reads busy: the same classes with a change on its way, so nothing is clipped, moved or unmounted under a focused button (AQP-343)', () => {
+    const busy = renderToStaticMarkup(createElement(RowActions, { part: NODES[2] as PartItem, onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop, busy: true }));
+    expect(group(busy)).toEqual(group(actions(NODES[2] as PartItem)));
+    expect(busy).toContain('aria-label="Delete 1.1.1 Plate"');
+  });
+
+  it('keeps the order move, "+", "-" inside the group, with the group first, so the focus order is unchanged', () => {
+    const html = actions(NODES[2] as PartItem);
+    expect(html.indexOf('role="group"')).toBeLessThan(html.indexOf('aria-label="Move '));
+    expect(html.indexOf('aria-label="Move ')).toBeLessThan(html.indexOf('aria-label="Add fastener'));
+    expect(html.indexOf('aria-label="Add fastener')).toBeLessThan(html.indexOf('aria-label="Delete '));
+  });
+});
+
+describe('AQP-418 (DEF-075): the toolbar slot of a row in the panel', () => {
+  it('is under the name: one slot per row after its link, and the open row is the only one the panel marks open', () => {
+    const html = panel(NODES, true);
+    expect(count(html, 'data-row-toolbar=""')).toBe(NODES.length);
+    for (const node of NODES) {
+      const row = html.slice(html.indexOf(`data-part-id="${node.id}"`));
+      expect(row.indexOf('data-row-toolbar')).toBeGreaterThan(row.indexOf('</a>'));
+    }
+  });
+
+  it('passes showing to the row whose delete confirmation is open and to no other', () => {
+    const target = { id: 'p1', slNo: '1.1.1', revision: 1, parentId: 's1', parts: 2, subtree: 'x', removedIds: [] };
+    const standing = (html: string): string[] => NODES.filter((node) => groupTokens(html, node).includes('not-sr-only')).map((node) => node.slNo);
+    expect(standing(panel(NODES, true, { deleting: target, deleteOpen: true }))).toEqual(['1.1.1']);
+    expect(standing(panel(NODES, true, { deleting: target, deleteOpen: false }))).toEqual([]);
+    expect(standing(panel(NODES, true))).toEqual([]);
+  });
+});
+
 describe('TreePanel: where the actions are (AC-3, AC-5, AC-6)', () => {
   it('puts "Add main assembly" at the foot of the tree, before the legend, and a "+" and a "-" on each row', () => {
     const html = panel(NODES, true);
@@ -134,8 +214,9 @@ describe('TreePanel: where the actions are (AC-3, AC-5, AC-6)', () => {
     for (const gone of ['data-row-actions', 'Add main assembly', 'aria-label="Delete ', 'aria-label="Add', 'aria-label="Move ', '>Move up<', '>Move down<']) expect(html, gone).not.toContain(gone);
     expect(count(html, 'data-part-id=')).toBe(NODES.length);
     expect(html).toContain('data-tree-legend');
-    // The slot is still there, empty, so a later story does not lay the row out again.
-    expect(count(html, 'data-row-toolbar=""')).toBe(NODES.length);
+    // AQP-418 (DEF-075): no toolbar slot at all, so there is no empty line and no change of the row's height (acceptance check 9).
+    expect(html).not.toContain('data-row-toolbar');
+    expect(html).not.toContain('role="group"');
   });
 
   it('shows "Add main assembly" in an empty tree, in words that name it, and not to a person who may not edit', () => {
