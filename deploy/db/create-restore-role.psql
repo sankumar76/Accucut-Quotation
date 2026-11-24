@@ -9,8 +9,8 @@
 --                                                          every session of this role starts as accucut_owner, so the tables, functions and privileges that a restore
 --                                                          and a forward migration make belong to the owner exactly as at install. The statements that need CREATEDB
 --                                                          begin with SET ROLE NONE, which gives the role's own rights back for that one session.
---                    Its password is invented by the install and written only to config\restore.pgpass (Administrators, SYSTEM and, with -AdminAccount, the
---                    Admin endpoint's group may read it). It is never in .env, in migrate.env or in a log.
+--                    Its password is invented by the install and written only to config\restore.pgpass (Administrators and SYSTEM only; ADR-015 Amendment 3.4).
+--                    It is never in .env, in migrate.env or in a log.
 --
 -- Run by deploy/windows/install.ps1 after create-roles.psql, with psql connected as the PostgreSQL superuser and ON_ERROR_STOP set. The password comes from the
 -- environment and is read by psql itself, so it is never on a command line. Needs: DB_RESTORE_PASSWORD.
