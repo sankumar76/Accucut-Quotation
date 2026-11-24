@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { attachPressHold, CLICK_WAIT_MS, createPressHold, HOLD_ATTRIBUTE, HOLD_CEILING_MS } from '@/components/features/estimate-workspace/press-hold';
+import { attachPressHold, CLICK_WAIT_MS, createPressHold, createSettleGuard, HOLD_ATTRIBUTE, HOLD_CEILING_MS, ROW_OPEN_SETTLE_MS, ROW_OPEN_SETTLE_PX } from '@/components/features/estimate-workspace/press-hold';
 import { RowActions } from '@/components/features/estimate-workspace/row-actions';
 import type { PartItem } from '@/lib/estimates/tree-client';
 
@@ -233,6 +233,100 @@ describe('the press in the page', () => {
     attachPressHold(doc, win, 'parts-tree');
     fire('pointerdown', mouseDown());
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('rule P2: the second press of a double click on a name (acceptance check 4)', () => {
+  const at = (x: number, y: number, time: number) => ({ x, y, time });
+
+  it('blocks a press within 500 ms and 8 px of the click that opened a row, edges included, and no other', () => {
+    const guard = createSettleGuard();
+    expect(guard.blocks({ x: 100, y: 100 }, 0), 'no click yet').toBe(false);
+    guard.opened({ x: 100, y: 100 }, 1_000);
+    const cases = [
+      [at(100, 100, 1_000), true],
+      [at(100, 100, 1_000 + ROW_OPEN_SETTLE_MS), true],
+      [at(100, 100, 1_000 + ROW_OPEN_SETTLE_MS + 1), false],
+      [at(100 + ROW_OPEN_SETTLE_PX, 100, 1_100), true],
+      [at(100, 100 - ROW_OPEN_SETTLE_PX, 1_100), true],
+      [at(100 + ROW_OPEN_SETTLE_PX + 1, 100, 1_100), false],
+      [at(106, 106, 1_100), false],
+      [at(100, 100, 999), false],
+    ] as const;
+    for (const [{ x, y, time }, blocked] of cases) expect(guard.blocks({ x, y }, time), `${x},${y} at ${time}`).toBe(blocked);
+  });
+
+  it('keeps the latest click only', () => {
+    const guard = createSettleGuard();
+    guard.opened({ x: 10, y: 10 }, 0);
+    guard.opened({ x: 300, y: 300 }, 100);
+    expect(guard.blocks({ x: 10, y: 10 }, 200)).toBe(false);
+    expect(guard.blocks({ x: 300, y: 300 }, 200)).toBe(true);
+  });
+
+  const nameTarget = { closest: (selector: string) => (selector === '#parts-tree' || selector === '#parts-tree a' ? {} : null) };
+  const buttonTarget = { closest: (selector: string) => (selector === '#parts-tree' || selector === '[data-row-actions]' ? {} : null) };
+  const press = (target: object, x: number, y: number, timeStamp: number, extra: object = {}) => ({ ...mouseDown(target, extra), clientX: x, clientY: y, timeStamp, stopPropagation: vi.fn(), preventDefault: vi.fn() });
+  const click = (target: object, x: number, y: number, timeStamp: number, detail = 1) => ({ target, clientX: x, clientY: y, timeStamp, detail, stopPropagation: vi.fn(), preventDefault: vi.fn() });
+
+  /** The first click of a double click, on a name, and the toolbar that is in view for the second. */
+  function afterTheFirstClick() {
+    const shown = toolbar(42);
+    const { doc, win, fire } = page([shown]);
+    attachPressHold(doc, win, 'parts-tree');
+    fire('click', click(nameTarget, 200, 300, 5_000));
+    return { shown, fire };
+  }
+
+  it('stops the second press on a button of a toolbar before the button sees it, holds nothing for it, and stops the click that ends it', () => {
+    const { shown, fire } = afterTheFirstClick();
+    const down = press(buttonTarget, 202, 301, 5_120);
+    fire('pointerdown', down);
+    expect(down.stopPropagation).toHaveBeenCalledTimes(1);
+    expect(shown.held()).toBe(false);
+    fire('pointerup');
+    const second = click(buttonTarget, 202, 301, 5_130);
+    fire('click', second);
+    expect(second.stopPropagation).toHaveBeenCalledTimes(1);
+    expect(second.preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['a press 600 ms after the click', press(buttonTarget, 200, 300, 5_600)],
+    ['a press 30 px from the click (the person moved to the button)', press(buttonTarget, 230, 300, 5_100)],
+    ['a press on a name, which is not a button of a toolbar', press(nameTarget, 200, 300, 5_100)],
+  ])('lets %s through, as before', (_name, event) => {
+    const { shown, fire } = afterTheFirstClick();
+    fire('pointerdown', event);
+    expect(event.stopPropagation).not.toHaveBeenCalled();
+    expect(shown.held()).toBe(true);
+    const next = click(buttonTarget, 200, 300, 5_700);
+    fire('click', next);
+    expect(next.stopPropagation).not.toHaveBeenCalled();
+  });
+
+  it('does not stop a click from the keyboard, nor one after the press was cancelled', () => {
+    const { fire } = afterTheFirstClick();
+    fire('pointerdown', press(buttonTarget, 200, 300, 5_100));
+    const enter = click(buttonTarget, 0, 0, 5_150, 0);
+    fire('click', enter);
+    expect(enter.stopPropagation).not.toHaveBeenCalled();
+    fire('pointerdown', press(buttonTarget, 200, 300, 5_200));
+    fire('pointercancel');
+    const later = click(buttonTarget, 200, 300, 5_250);
+    fire('click', later);
+    expect(later.stopPropagation).not.toHaveBeenCalled();
+  });
+
+  it('counts only a click on a name as the click that opened a row, not a click on a button or elsewhere', () => {
+    const shown = toolbar(42);
+    const { doc, win, fire } = page([shown]);
+    attachPressHold(doc, win, 'parts-tree');
+    fire('click', click(buttonTarget, 200, 300, 5_000));
+    fire('click', click(outsideTree, 200, 300, 5_010));
+    const down = press(buttonTarget, 200, 300, 5_100);
+    fire('pointerdown', down);
+    expect(down.stopPropagation).not.toHaveBeenCalled();
   });
 });
 

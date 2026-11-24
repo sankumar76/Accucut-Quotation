@@ -117,14 +117,42 @@ async function toolbarHeightOf(page: Page, slNo: string): Promise<number> {
 }
 
 /**
+ * The box of an element once it has stopped moving: Radix scales a menu in when it opens, and the rows slide when a toolbar line comes or goes, so a box read at once is not the one a press meets. The wait is on the
+ * state (two reads in a row are the same), not on a time.
+ */
+async function settledBox(target: Locator): Promise<NonNullable<Awaited<ReturnType<Locator['boundingBox']>>>> {
+  let last = '';
+  await expect
+    .poll(async () => {
+      const now = JSON.stringify(await target.boundingBox());
+      const same = now === last;
+      last = now;
+      return same && now !== 'null';
+    }, 'the element has stopped moving')
+    .toBe(true);
+  return defined(await target.boundingBox());
+}
+
+/**
+ * Where a press can reach the name of a row while a menu of the row above it is open. The menu lies over the rows below its handle and is wider than a name at 1366 px, so a press at the centre of the name would be a
+ * press on a menu item; the strip of the name above the menu is the part of it that is still the row. The y of that strip, in the page's pixels.
+ */
+async function yAboveMenu(page: Page, slNo: string): Promise<number> {
+  const menu = await settledBox(page.getByRole('menu'));
+  const link = defined(await part(page, slNo).boundingBox());
+  expect(menu.y - link.y, 'a strip of the name of ' + slNo + ' lies above the open menu').toBeGreaterThanOrEqual(4);
+  return link.y + (menu.y - link.y) / 2;
+}
+
+/**
  * AQP-419 (DEF-076), rule P of the design (comment 13032): a press with the mouse on a row's name, whose row is where it was at the pointer-down and at the pointer-up. A press that moves the focus used to take the focus
  * ring off another row, that row's toolbar went back to the clip, and the pressed row moved up under the pointer, so the pointer-up was over something else and the click was lost. The hold is `holdMs` long (0 for a fast click);
- * `along` is where on the name the press is (0.5 is the centre; the menu of a handle lies over the left of the rows below it, so a press with a menu open is at the right).
+ * The press is at the centre of the name, or at `y` when the name is partly under an open menu (see `yAboveMenu`).
  */
-async function pressWithoutShift(page: Page, slNo: string, holdMs: number, along = 0.5): Promise<void> {
+async function pressWithoutShift(page: Page, slNo: string, holdMs: number, y?: number): Promise<void> {
   const link = part(page, slNo);
   const box = defined(await link.boundingBox());
-  await page.mouse.move(box.x + box.width * along, box.y + box.height / 2);
+  await page.mouse.move(box.x + box.width / 2, y ?? box.y + box.height / 2);
   await page.mouse.down();
   const atDown = await topOf(link);
   if (holdMs > 0) await page.evaluate((ms) => new Promise((resolve) => setTimeout(resolve, ms)), holdMs);
@@ -677,9 +705,9 @@ test.describe('AQP-405: the row actions', () => {
       await choose(page, '1.2');
       await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
     };
-    for (const [focus, holdMs, along] of [['link', 0, 0.5], ['link', 150, 0.5], ['handle', 0, 0.5], ['menu', 0, 0.9]] as const) {
+    for (const [focus, holdMs] of [['link', 0], ['link', 150], ['handle', 0], ['menu', 0]] as const) {
       await keyboardOnRow1(focus);
-      await pressWithoutShift(page, '1.1', holdMs, along);
+      await pressWithoutShift(page, '1.1', holdMs, focus === 'menu' ? await yAboveMenu(page, '1.1') : undefined);
       await settled();
     }
 
@@ -703,6 +731,36 @@ test.describe('AQP-405: the row actions', () => {
     await choose(page, '1.2');
     await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
 
+    // Check 4 and rule P2: a double click on the name of a row below the open row. The first click opens 1.1 and takes row 1's toolbar line away, so 1.1 sits one line higher and its own toolbar line is under the pointer;
+    // the second press would land on its "+" (a Part gets its Fastener at once). The pointer is put where the "+" of 1.1 is once 1.1 is open, which is on the name of 1.1 while row 1 is open; the second press comes 120 ms
+    // after the first, as a person's does. It must reach nothing: no add request, no menu, no dialog, and 1.1 stays the open row.
+    const added: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && /\/api\/v1\/estimates\/[^/]+\/nodes$/.test(new URL(request.url()).pathname)) added.push(request.url());
+    });
+    await choose(page, '1.1');
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    const plus = await settledBox(rowButton(page, 'Add fastener under', '1.1'));
+    await choose(page, '1');
+    await expect(part(page, '1')).toHaveAttribute('aria-current', 'true');
+    const name = await settledBox(part(page, '1.1'));
+    const [left, right] = [Math.max(plus.x, name.x), Math.min(plus.x + plus.width, name.x + name.width)];
+    const [top, bottom] = [Math.max(plus.y, name.y), Math.min(plus.y + plus.height, name.y + name.height)];
+    expect(right > left && bottom > top, 'the "+" of 1.1 once it is open lies over the name of 1.1 while row 1 is open').toBe(true);
+    await page.mouse.move((left + right) / 2, (top + bottom) / 2);
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 120)));
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    await expect(page.getByRole('menuitem')).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    await choose(page, '1.2');
+    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+
     await part(page, '1.1').focus();
     await page.keyboard.press('Tab');
     await expect(handleOf(page, '1.1')).toBeFocused();
@@ -717,6 +775,8 @@ test.describe('AQP-405: the row actions', () => {
     await expect(dialog).toHaveCount(0);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1']);
     await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    // Judged here, after the steps above have given a late request time to show: the second press of the double click above added nothing.
+    expect(added, 'the second press of a double click on a name added no Fastener').toEqual([]);
   });
 });
 
