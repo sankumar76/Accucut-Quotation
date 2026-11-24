@@ -13,7 +13,7 @@ import { createSaveGate } from '@/lib/estimates/save-gate';
 import type { AutosaveProps } from './autosave';
 import type { CalculateBarProps } from './calculate-bar';
 import type { CalculateSummaryProps } from './calculate-summary';
-import { APPROVED_LOCKED_BODY, APPROVED_LOCKED_TITLE, CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_PREPARED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_TITLE, FORM_AREA_TITLE_ID, LEAVE_GUARD_FAILED_TITLE } from './estimate-texts';
+import { APPROVED_LOCKED_BODY, CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_PREPARED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_TITLE, FORM_AREA_TITLE_ID, LEAVE_GUARD_FAILED_TITLE, lockedNoticeTitle } from './estimate-texts';
 import { focusFirstField } from './focus-field';
 import type { LeaveGuardProps } from './leave-guard';
 import { PartForm } from './part-form';
@@ -152,8 +152,8 @@ export function EstimateWorkspace({ header, estimateId, ignored = false, notice 
         </div>
       ) : null}
       {isLocked(status) ? (
-        // The state "Approved": the words of the G3 screen and nothing else, so no price and no figure is anywhere (NFR-002). Inputs are read-only because `canEditInputs` says so, and the server refuses a write.
-        <Notice tone="success" title={APPROVED_LOCKED_TITLE}>
+        // The state "Approved" or "Quoted": the words of the G3 screen and nothing else, so no price and no figure is anywhere (NFR-002). The title is the status's own word (QLT-C-02). Inputs are read-only because `canEditInputs` says so, and the server refuses a write.
+        <Notice tone="success" title={lockedNoticeTitle(status)}>
           {APPROVED_LOCKED_BODY}
         </Notice>
       ) : null}
