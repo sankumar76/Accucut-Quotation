@@ -75,10 +75,6 @@
   Only for a server in a domain whose Group Policy results cannot be read (RSoP logging is off). The install gives the local user AccucutBackup the right "Log on as a batch
   job"; a Group Policy that sets that right would remove it at its next refresh, so the install reads the policy first and stops if one does. With this switch you say that you
   have checked by hand that no policy sets the right, or that the policy lists <SERVER>\AccucutBackup. It skips only that read, and it is logged as a warning.
-.PARAMETER AdminAccount
-  The Admin's own Windows account (DOMAIN\user or user), which should NOT be an administrator (A-35). With it the install also sets up the JEA endpoint AccucutAdmin (STORY-10.11):
-  the only account that may open it is this one, it shows exactly two commands (Restore-AccucutBackup and Clear-AccucutCopies), and a shortcut "Accucut Admin" is put on the
-  desktop. Without it the restore is still there (restore.ps1, run as an administrator); only the limited account is missing.
 .PARAMETER VerifiedRelease
   Used by the script itself, never by you: the release folder under C:\Accucut\releases that the second half runs from.
 #>
@@ -101,7 +97,6 @@ param(
     [ValidateSet('Ask', 'Yes', 'No')][string]$DefenderExclusion = 'Ask',
     [ValidateRange(10, 1800)][int]$HealthTimeoutSeconds = 180,
     [switch]$BatchRightPolicyConfirmed,
-    [ValidatePattern('^(?:[A-Za-z0-9.][A-Za-z0-9._-]{0,63}\\)?[A-Za-z0-9][A-Za-z0-9._ -]{0,63}$')][string]$AdminAccount,
     [string]$VerifiedRelease
 )
 
@@ -899,25 +894,6 @@ function Undo-AccucutInstallDatabase {
 }
 
 
-function New-AccucutAdminShortcut {
-    # The desktop shortcut, for every user of the server, that opens the Admin's endpoint (STORY-10.11 AC-7): the Admin double-clicks it and types one command. It starts the
-    # checked powershell.exe by its full path and nothing else. Registered by the install only when -AdminAccount is given; Unregister-AccucutAdminEndpoint takes it away.
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$EndpointName,
-        [Parameter(Mandatory)][string]$PowerShellPath,
-        [string]$Folder = [Environment]::GetFolderPath('CommonDesktopDirectory')
-    )
-
-    if ($EndpointName -notmatch '^[A-Za-z0-9]{1,64}$') { throw "'$EndpointName' is not an endpoint name." }
-    $shell = New-Object -ComObject WScript.Shell
-    $link = $shell.CreateShortcut([System.IO.Path]::Combine($Folder, 'Accucut Admin.lnk'))
-    $link.TargetPath = $PowerShellPath
-    $link.Arguments = "-NoLogo -NoExit -Command `"Enter-PSSession -ComputerName localhost -ConfigurationName $EndpointName`""
-    $link.Description = 'Opens the Accucut Admin session: Restore-AccucutBackup and Clear-AccucutCopies.'
-    $link.Save()
-}
-
 function Invoke-AccucutFirstBackup {
     # Runs the weekly task once and waits up to 5 minutes (ADR-015 Amendment 3 point 2). Exit-code 0 and a job_runs row with job 'backup' and status ok are both needed.
     [CmdletBinding()]
@@ -959,7 +935,6 @@ function Invoke-AccucutInstall {
         [ValidateSet('Ask', 'Yes', 'No')][string]$DefenderExclusion = 'Ask',
         [ValidateRange(10, 1800)][int]$HealthTimeoutSeconds = 180,
         [switch]$BatchRightPolicyConfirmed,
-        [string]$AdminAccount,
         [Parameter(Mandatory)][string]$Release
     )
 
@@ -983,13 +958,6 @@ function Invoke-AccucutInstall {
         $psql = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($postgres.BinDirectory, 'psql.exe'))
         $psqlCheck = Test-AccucutPostgresVersion -VersionText (Invoke-AccucutNative -FilePath $psql -ArgumentList @('--version')).Output
         if (-not $psqlCheck.Ok) { throw $psqlCheck.Message }
-        # The Admin's account (if given) is looked up before anything is created, so a mistyped name costs nothing.
-        if (-not [string]::IsNullOrWhiteSpace($AdminAccount)) {
-            $adminCheck = Resolve-AccucutAdminAccount -Account $AdminAccount
-            # sc.exe sets the service entry of the endpoint group: by full path, checked like every program (ADR-015 Amendment 3.3 R4).
-            $scExe = Resolve-AccucutTrustedExecutable -Path ([System.IO.Path]::Combine($env:SystemRoot, 'System32\sc.exe'))
-            if ($adminCheck.IsAdministrator) { Write-AccucutLog -Message "The account '$AdminAccount' is a member of Administrators, so the limited endpoint does not limit it (A-35 is not met for this account)." -Level Warning -LogFile $logFile }
-        }
         if ($null -ne (Get-Service -Name (Get-AccucutServiceNames) -ErrorAction SilentlyContinue)) {
             throw 'The services of an Accucut install already exist on this server. To install a new release, run update.ps1. Nothing was changed.'
         }
@@ -1124,13 +1092,6 @@ function Invoke-AccucutInstall {
         # a copy to restore from at once. From here the portal is running, so a failure stops the script with exit code 1 and leaves everything in place.
         Invoke-AccucutFirstBackup -PsqlPath $psql -Connection $connection -LogFile $logFile
 
-        # The Admin's limited account (STORY-10.11 AC-7), last: the portal and its first backup are already working, so a problem here leaves them in place and says what to do.
-        if (-not [string]::IsNullOrWhiteSpace($AdminAccount)) {
-            [void](Register-AccucutAdminEndpoint -Paths $paths -AdminAccount $AdminAccount -ReleaseDirectory $Release -ScPath $scExe -LogFile $logFile)
-            New-AccucutAdminShortcut -EndpointName 'AccucutAdmin' -PowerShellPath $powershellExe
-            Write-AccucutLog -Message "The Admin can now open the shortcut 'Accucut Admin' on the desktop (as $AdminAccount) and type Restore-AccucutBackup or Clear-AccucutCopies." -LogFile $logFile
-        }
-
         # With a proxy: checks C2, C3 and C5 of the install guide ("Reverse proxy") against the address people will type, as this server sees it (#576). They never stop the install: the portal is running,
         # and the proxy may not be installed yet, so a check that fails is said loudly at the end and the IT person runs the checklist again after installing the proxy.
         $proxyFailed = @()
@@ -1220,7 +1181,7 @@ function Get-AccucutInstallChildArgument {
     param([Parameter(Mandatory)][hashtable]$Bound)
 
     $arguments = [System.Collections.Generic.List[string]]::new()
-    foreach ($name in 'Root', 'Port', 'ListenAddress', 'NodeExe', 'PgHost', 'PgPort', 'PgSuperuser', 'PgBinDirectory', 'PgDataDirectory', 'DefenderExclusion', 'HealthTimeoutSeconds', 'ValuesFile', 'AdminAccount') {
+    foreach ($name in 'Root', 'Port', 'ListenAddress', 'NodeExe', 'PgHost', 'PgPort', 'PgSuperuser', 'PgBinDirectory', 'PgDataDirectory', 'DefenderExclusion', 'HealthTimeoutSeconds', 'ValuesFile') {
         if ($Bound.ContainsKey($name) -and -not [string]::IsNullOrWhiteSpace([string]$Bound[$name])) { $arguments.Add("-$name"); $arguments.Add([string]$Bound[$name]) }
     }
     foreach ($name in 'NonInteractive', 'WithProxy', 'BatchRightPolicyConfirmed') { if ($Bound.ContainsKey($name) -and [bool]$Bound[$name]) { $arguments.Add("-$name") } }
@@ -1231,7 +1192,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     try {
         if (-not [string]::IsNullOrWhiteSpace($VerifiedRelease)) {
             $installParameter = @{ NonInteractive = $NonInteractive; WithProxy = $WithProxy; BatchRightPolicyConfirmed = $BatchRightPolicyConfirmed; Port = $Port; PgHost = $PgHost; PgPort = $PgPort; PgSuperuser = $PgSuperuser; DefenderExclusion = $DefenderExclusion; HealthTimeoutSeconds = $HealthTimeoutSeconds }
-            foreach ($pair in @{ ValuesFile = $ValuesFile; ListenAddress = $ListenAddress; NodeExe = $NodeExe; PgBinDirectory = $PgBinDirectory; PgDataDirectory = $PgDataDirectory; AdminAccount = $AdminAccount }.GetEnumerator()) {
+            foreach ($pair in @{ ValuesFile = $ValuesFile; ListenAddress = $ListenAddress; NodeExe = $NodeExe; PgBinDirectory = $PgBinDirectory; PgDataDirectory = $PgDataDirectory }.GetEnumerator()) {
                 if (-not [string]::IsNullOrWhiteSpace([string]$pair.Value)) { $installParameter[$pair.Key] = $pair.Value }
             }
             Invoke-AccucutInstallSecondHalf -Root $Root -VerifiedRelease $VerifiedRelease -ScriptPath $PSCommandPath -InstallParameter $installParameter
