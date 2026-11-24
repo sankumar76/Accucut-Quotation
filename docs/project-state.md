@@ -8,13 +8,72 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-24, after pause 9, orchestrator)", then "Resume point (2026-11-24, pause 9, orchestrator)", then "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Resume point (2026-11-24, pause 10, orchestrator)", then "Daily update (2026-11-24, after pause 9, orchestrator)", then "Resume point (2026-11-24, pause 9, orchestrator)", then "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target about 6 Dec 2026, range 5 to 8 Dec, freeze about 3 Dec, all agreed scope kept (DL-307, delivery lead, 2026-11-22; replaces DL-298's provisional 4 Dec). Date triggers: 28 Nov Q-18 (DL-309); freeze AC-8 (DL-310) and #476 (DL-308); G8 condition list DL-314** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-24 by orchestrator (daily update after pause 9) |
+| Last updated       | 2026-11-24 by orchestrator (pause 10 resume point) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Resume point (2026-11-24, pause 10, orchestrator)
+
+> This section wins over everything below it. The delivery lead asked for a graceful pause (chat, relayed by the coordinator, 24 Nov evening). Agents finished their current step; nothing new was started; every record is committed and pushed; no run was cancelled by an agent; no merge after the pause request. Read the in-progress runs first on resume.
+
+**`master` = a619a3ef** (#702, DEF-080 split). Push runs **CI 45440594713** and **Windows package 45440591634 were in progress** at the pause: read them first (conclusion and flaky lines go in the daily update). This push is DEF-080 proof run 1 of 2 (DL-370 (B): attempt-1 pass under 25 s at three widths for `process-propagation.spec.ts:178` and `:252`, shard minutes reported).
+
+**Merged after pause 9 (6, squash via `gh pr merge --squash --match-head-commit`, DL-361):** #683 STD-C-02 (31015cce), #698 DEF-079 (402c00bf), #699 AQP-312 Minors (4bdfc1b2), #700 DEF-080 fix (c7faf76f), #703 DEF-043 split (a15e60ce), #702 DEF-080 split (a619a3ef).
+
+**`master` push runs today:** 9e3111c0 red (DEF-053), 31015cce green, 402c00bf red (DEF-053), 4bdfc1b2 red (DEF-053), c7faf76f green, a15e60ce **green** (CI 45433129065, Windows 45433129127; 0 flaky, no retry), a619a3ef in progress. **RISK-031 (12): close-out reads 2 of 2 (c7faf76f, a15e60ce)** on the orchestrator's reading; QA confirmation and master's closing ruling pending.
+
+**Rulings today (records-u):** DL-366 (9e3111c0 red = DEF-053, merges not blocked), DL-367 (402c00bf red, re-ask trigger), DL-368 (trigger fired, RISK-031 to 12), **DL-369 (delivery lead chose A on DEF-053: at G8 master may still recommend on a final run and repeat red only on DEF-053's desktop case if (a) to (c) hold; release plan 0.41)**, DL-370 (lane plan to the freeze; DEF-080 reopened; cut-off: last start end of Mon 30 Nov, last merge end of Wed 2 Dec, or F-3 / F-1), DL-371 (G8 e-mail condition, below), DL-372 (#702 and #703 DEF-053 reds meet R10; serial group accepted).
+
+**Open PRs and exact next steps:**
+
+| PR | What | Head / run at the pause | Next step |
+|---|---|---|---|
+| #704 (draft) | DEF-018 (AQP-225): `playwright-system-deps.test.ts` one hook per scenario; lane 2, aqp-398 | **c734c2ac** (updated to a619a3ef); CI **45440635848 in progress**; green before at 408717b5 and 1a8fe9d6 | If fully green at 0 behind: `gh pr ready 704`, squash pinned. Red only on DEF-053 with the R10 signature at 0 behind: one R10 re-run. Linux count 27/27 kept; local Windows run figures in the body |
+| #705 (ready) | Q-18b cPanel mail request, docs only (AQP-355) | **77a383b2** (updated to a619a3ef); CI **45440683526 in progress**; master's GO given (DL-371 (10)) after the two text fixes (51ef44dc) | Squash pinned on fully green at 0 behind (docs-auto). Same file on records-u (273360bb). Scratch worktree `scratchpad/q18b` can be removed after the merge |
+| #707 (draft) | DEF-081 (AQP-424, #706) parts tree items 1 to 6 and 7a; lane 1, aqp-403 | **4df117e5**, behind; CI 45436052010 **red**: DEF-053 [desktop] and **`estimate-save.spec.ts:304` [tablet] axe `target-size` on both attempts, likely introduced by #707** (passes on `master`) | **Held.** Do NOT start until the delivery lead has seen the complete ruled list (below). Then the developer diagnoses `:304` (tablet run with a screenshot at the axe call; ux-expert: the legend likely makes the tree 8 px taller and a form-panel button lands under the sticky top bar, so fix the scroll margin, no tile change) and folds in the items the delivery lead accepts |
+| #701 (draft) | Removes the DEF-080 `[AQP-423 step timing]` lines | 4ea839b6 | **Held** (DL-370 (C)) until DEF-080 closes on the new proof; then update and merge |
+| #632 / #476 | Next 16.4.6 | none | Post-G8 (DL-344) |
+| #674 to #678 | Dependabot | none | **Human only.** DL-360: #675 may merge pre-freeze; the others after G8 |
+
+**DEF-080 (AQP-423, #697): reopened** by DL-370 (B) after #701's PR run (mobile 30.3 s). Cause step = route G1 (time spread over all steps on a slow shard; the POST about 20 %). Fix #702 merged (a619a3ef). **Closes** when the first two `master` pushes after #702 read `:178` and `:252` attempt 1 under 25 s at three widths (a619a3ef = run 1, in progress). Then #701 (timing-lines clean-up) merges. #568 stays open.
+
+**DEF-053:** accepted at G8 (DL-365) with the delivery lead's **option A (DL-369)**. Occurrence rows 1 to 10 and the R10 re-run list are in its file (records-u 42ad1960).
+
+**New flaky: DEF-082 (DRAFT file, QA, PARTIAL at the pause; no Jira Bug or GitHub issue yet).** `queue-actions-visible.spec.ts:227` [desktop] (DEF-077 case) failed attempt 1 at about 240 ms on #702 run 45433342408 (shard-4 job 138584714448): FK `fk_customer_rates_process_item_id` at `tests/e2e/support/customer-canary-loader.ts:25`. Cause per QA (DB log): the canary loader's `INSERT ... SELECT FROM process_items` takes no lock and raced `process-propagation.spec.ts:252`'s `cleanUp` DELETE of the same rate 5 ms later. Sev-3, type Test; product excluded by a static read (customer create takes `LOCK TABLE process_items`). **#702 is not the cause but doubles the exposure**; an earlier hit on 22 Nov (PR run 44975646581, `rates-changed.spec.ts:252` against the old unsplit case). Scan: 1,001 of 1,212 shard jobs read (since 21 Nov 12:07Z), 2 hits. **Next on resume:** qa-engineer creates the Jira Bug and GitHub issue (DEF-082, linked AQP-420, AQP-423, AQP-1) and may finish the scan; **master rules** on its lane (lead fix: a transaction with `SHARE ROW EXCLUSIVE` on `process_items` in the loader, which touches `tests/e2e/support/**` and needs master's word under DL-366 (6)) and on **closing RISK-031** (QA confirms 2 of 2: c7faf76f and a15e60ce clean; a15e60ce draw by shard 0.97 / 1.25 / 0.68 / 1.15). DEF-080 margin reading on a15e60ce: unsplit case 26.4 s [mobile].
+
+**E-mail (STORY-09.08, AQP-355; DL-371):** the delivery lead ran a real-mail test on the demo copy (6d85f555) on **their own Microsoft 365 tenant** (`oauth2-client-credentials`, smtp.office365.com:587, shared mailbox through an Entra app): password reset end to end and assignment e-mails arrived (relayed by the coordinator, not observed by the team). Recorded as **partial evidence** (test plan 0.3.46; architecture 0.69, OQ-ARCH-11). It proves the OAuth route, **not** the vendor's set-up. G8 condition unchanged: one real send on the vendor's cPanel mailbox (`SMTP_AUTH_MODE=password`, 465 or 587) showing the Settings test mail, an assignment mail through the worker, a password reset, password ownership, and an inbox-or-spam record. Q-18 revision due end of **Sat 28 Nov** (else AQP-355 Deferred, DL-309); the real send preferably by end of **Mon 30 Nov**. **Q-18b** (`docs/01-discovery/Q-18b-mail-settings-request-cpanel.md`, business-analyst done, master GO after two fixes) is in PR #705. `Q-18-mail-settings-request.md` (Microsoft 365) is unchanged; the delivery lead has **not yet answered** whether Q-18 may get one cross-reference line.
+
+**Parts tree deviation (DEF-081, AQP-424, GitHub #706; the delivery lead's request).** ux-expert's ruling: `docs/03-ux/rulings/parts-tree-vs-scr05-2026-11-24.md` (records-u da22f62b); screenshots in the session scratchpad `tree-compare/` (a static render of the real components with the compiled CSS, not the running page). The delivery lead's items 1 to 10 plus ux-expert's 11 to 15:
+
+| # | Element | Ruling | In #707 |
+|---|---|---|---|
+| 1 to 6 | Kind tile, glyphs (Boxes, Blocks, Box), tints (Sub accent, Fastener info), open row (surface-2 plus 4 px primary bar), mono ink-2 number, CircleCheck | Change build to mock-up | Done |
+| 7 | Guide lines | Keep build (real border shows in Windows high contrast; the mock-up has lines too) | n/a |
+| 7a | Fastener glyph | `Bolt` (lucide `Nut` is a food nut) | Done |
+| 7b / 12 | Arrow cell, row height, indent | Mouse at 1024 px and wider: 24 x 36, 20 px step; keep 44 px on touch and below 1024 px (NFR-017) | No |
+| 8 | Row toolbar place and visibility | **Keep build** (under the name, open or focused row): the mock-up's floating toolbar hides the hovered row's name and status (DEF-075, DEF-076); SCR-05 and spec row 3 are stale | n/a |
+| 9 | Toolbar icon colour | Change: ink-2 at rest, "-" danger on hover | No |
+| 10 | Tree header | Change: tree in its own card, head "Parts tree" and "N rows" | No |
+| 11 | Tree column width | Change: 320 px (the spec's 288 wraps names) | No |
+| 13 | "Add main assembly" | Change: ghost button under a hairline | No |
+| 14 | Legends | Change: no visible "Row kinds" title; add the status legend | No |
+| 15 | Resizable tree | Not styling; raised, not ruled (needs a decision) | n/a |
+
+**The complete ruled list goes to the delivery lead BEFORE the developer starts** (the coordinator's instruction). Also open: product-manager on telling the customer about the toolbar (AQP-406 comment 12939, section 7); the CR-01 UX session to update SCR-05 and ux-spec row 3 (toolbar, tablet touch media query, legend size); QA to add rows 8 to 15 to DEF-081's Ruling table.
+
+**Other records today:** pr-699-combined.md; architecture 0.67 to 0.69 (`PRODUCT_WORDS` done; CR-01 rollback runbook in section 5.6 for #627, which closes when the records PR merges; OQ-ARCH-11 note); test plan 0.3.42 to 0.3.47; PRF-C-01 closed (#665); #573 and #410 closed (DL-370 (2)); DEF-079 closed.
+
+**Lanes / worktrees at the pause:** lane 1 aqp-403 (`fix/AQP-424-parts-tree-mockup` 4df117e5, clean, pushed); lane 2 aqp-398 (`fix/AQP-225-playwright-deps-hooks`, local branch behind its remote by the update-branch merge, nothing unpushed; untracked `pw.aqp411.local.config.ts`, never commit); lane 3 aqp-402 (detached at b7bb6f6e = merged #702; untracked `tests/e2e/zz-race-tmp.spec.ts`, never commit; free for the next item); records-u (`docs/AQP-1-records-u`; untracked `.claude/agent-memory/`, never commit); **qa-u2** (QA's final-regression worktree, detached at efc6d7e2, untracked QA scratch); scratchpad worktree `q18b` (`docs/AQP-355-q18b-cpanel`, nothing unpushed); stale scratchpad worktree `merged-count`. **No records PR is open yet** for records-u (it must resolve the `deploy/windows/README.md` conflict with `master` and add a pointer there to architecture section 5.6). Containers: only `accucut-demo-db` (the delivery lead's demo; untouched). **C: 12 GB free.** Leftover the permission system would not let agents delete: scratchpad `aqp627.dump` (about 21 MB, invented demo data).
+
+**Lane order after the pause (DL-370):** DEF-081 per the delivery lead's answer on the ruled list (their request, ahead of the lane items); then DEF-068 observation, STD-C-03 #692, QLT-F-08 #690, QLT-F-04 #686, STD-C-04 #693. Cut-off: last start end of 30 Nov, last merge end of 2 Dec.
+
+**Open for the delivery lead (via the main session):** (1) **Parts tree ruled list** (above): accept the rulings, especially item 8 (keep the under-the-name toolbar), item 10 (tree in its own card, the largest change) and item 15 (resizable tree, not styling). (2) **Go-live mailbox (DL-371):** A, the cPanel mailbox with a password on 465 or 587 and one real send by 30 Nov (recommended); B, Microsoft 365 after all; C, undecided by 28 Nov, so AQP-355 is Deferred. (3) May Q-18 get one cross-reference line to Q-18b (default: no)? (4) Should Q-18b name a cPanel fallback (only if the solution-architect confirms one)? (5) QLT-681-08 (any server installed with `-AdminAccount`?). (6) OQ-ARCH-15 (the AC-8 output). (7) Hosting: OQ-PM-16 (a)(b), OQ-ARCH-H1-1 and H1-2. (8) Dependabot #674 to #678 (DL-360). (9) Freeze date (about 3 Dec). (10) Product-owner ruling on STORY-05.10 AC-7 (#687), which blocks nothing.
+
+**GitHub tooling:** the MCP token returns 403 on writes; `gh` under DL-361 and DL-363 (merges pinned to the run-of-record head, comments, reviews as COMMENT, labels, issues). No `--admin`.
 
 ## Daily update (2026-11-24, after pause 9, orchestrator)
 

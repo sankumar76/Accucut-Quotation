@@ -80,6 +80,8 @@ Build notes. Keep `data-node-kind` on the svg (tests read it) and put the tint c
 
 # 1280 px comparison (added 2026-11-24, at the delivery lead's request relayed by QA)
 
+**Status at the pause (2026-11-24): PARTIAL as to evidence, COMPLETE as to rulings.** All 15 items below are ruled. The evidence is a static render of the real components with the real CSS (no running page, no E2E run, states other than default, hover and focus not rendered), and the cause of the #707 tablet axe failure is not proven. Screenshots listed below all exist. Nothing is committed by me.
+
 Rule used here, as the delivery lead set it: **the built tree looks like the SCR-05 mock-up on `master` unless there is a stated reason** (an accessibility rule such as WCAG 2.2 AA or NFR-017, or a defect fix). Every "keep build" below gives its reason in plain words.
 
 ## How the two were compared, and what is not shown
