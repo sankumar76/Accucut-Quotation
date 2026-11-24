@@ -31,9 +31,9 @@
 | 4bdfc1b2 (#699) | 45398883906 **failure** | 45398883822 success | shard 4 DEF-053 32.3 / 32.8 s; shard 1 DEF-080 flaky 30.1 / 29.7 s |
 | c7faf76f (#700) | 45406778292 success | 45406778181 success | none (users.spec.ts:58 passed at all three widths) |
 
-**Rulings and decisions:** DL-366 (9e3111c0 red = DEF-053, not a #681 regression; merges not blocked; RISK-031 reopened at 9); DL-367 (402c00bf red = DEF-053; re-ask trigger set); DL-368 (trigger fired on 4bdfc1b2; RISK-031 → 12); **DL-369 (delivery lead chose A: at G8 master may still recommend on a final run and repeat red only on DEF-053's desktop case, with conditions (a)–(c); release plan 0.41)**. RISK-031 open at 12; close-out count 1 of 2 after c7faf76f (QA confirms).
+**Rulings and decisions:** DL-366 (9e3111c0 red = DEF-053, not a #681 regression; merges not blocked; RISK-031 reopened at 9); DL-367 (402c00bf red = DEF-053; re-ask trigger set); DL-368 (trigger fired on 4bdfc1b2; RISK-031 → 12); **DL-369 (delivery lead chose A: at G8 master may still recommend on a final run and repeat red only on DEF-053's desktop case, with conditions (a)–(c); release plan 0.41)**. RISK-031 open at 12; close-out count **1 of 2** after c7faf76f (QA confirmed: 0 failed, 0 flaky, no retry or time-out line). users.spec.ts:58 on c7faf76f: 15.9 / 16.8 / 7.2 s (desktop / tablet / mobile).
 
-**Closed:** DEF-079 (AQP-422 Done, #672), PRF-C-01 (#665: Workspace TBT 51 ms on Nightly 45379138587, the first after #666). **DEF-080:** QA reading the c7faf76f proof. No Sev-1 or Sev-2 open.
+**Closed:** DEF-079 (AQP-422 Done, #672), PRF-C-01 (#665: Workspace TBT 51 ms on Nightly 45379138587, the first after #666). **DEF-080 closed** (AQP-423 Done, #697): c7faf76f push read 27.5 / 21.3 / 15.5 s (mobile / tablet / desktop), no time-out, no retry; mobile margin 2.5 s noted (propagation POST 5.9 s on the slowest shard, #568). No Sev-1 or Sev-2 open.
 
 **Records (records-u):** 8cb8841b (pr-699-combined.md, APPROVE WITH COMMENTS), 769b69c4 (DL-366), ae393fdd (architecture 0.67, `PRODUCT_WORDS` done in #683), 16eee381 and 2ffacb43 (QA, test plan 0.3.42/0.3.43), 8c573158 (DL-367), ecde9a05 (DL-368), 690e6dc7 (DL-369), 6f94d64d (release plan 0.41).
 
