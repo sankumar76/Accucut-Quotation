@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (qa-engineer, 2026-11-24; test plan section 6: wrong wording or state that does not mislead about a price; here it misleads about where the task is, not about a price; no cost, rate or formula is shown, NFR-002 holds) |
 | Priority | P3 (Jira Medium, label `sev-3`); fixed before G8 or accepted in writing by master (section 6) |
 | Type | **Product** |
-| Status | **Open** (new, 2026-11-24) |
+| Status | **Closed** (2026-11-24; fixed by #669, `master` 9697d6a5; verified by qa-engineer) |
 | Jira / GitHub | [AQP-421](https://sankumar76.atlassian.net/browse/AQP-421) / [#671](https://github.com/sankumar76/Accucut-Quotation/issues/671) (labels bug, sev-3, ai-delivery, final-review; Jira also aiid-DEF-078, agent-qa-engineer). Relates to AQP-401, AQP-1 |
 | Found by / date | qa-engineer, 2026-11-24 (by-hand look at the Engineer's read-only view, `tests/e2e-qa/ro.qa.ts`, `ro2.qa.ts`; screenshot `qa-out/engineer-ignored-prepared.png`) |
 | Build / commit | `master` `1fe1581b` (H) |
@@ -33,8 +33,10 @@ The part form also says "This estimate can no longer be changed." (true, and acc
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref |
 |------|----|------|-----|
-| Fixed (no status banner while ignored; regression case: Engineer view of an Ignored task that was Prepared and Approved has only the ignored notice) | developer | | |
-| Verified | qa-engineer | | |
+| Fixed (no status banner while ignored; regression case: Engineer view of an Ignored task that was Prepared and Approved has only the ignored notice) | developer | 2026-11-24 | PR #669, squash `9697d6a5` (`estimate-workspace.tsx`: the Prepared banner and the locked notice are drawn only when not frozen; regression `tests/unit/estimate-workspace-locked-notice.test.ts`: DRAFT, PREPARED, APPROVED and QUOTED with the Ignored layer show the notice and badge and no status banner; banners kept when not ignored) |
+| Verified | qa-engineer | 2026-11-24 | Fix read in the squash; PR run of record 45330500791 (head f3229c2d) green on attempt 1; first `master` push CI 45334499369 (9697d6a5) green in every job on attempt 1 (Stage 11 `667 files, 16,917 passed`, 0 flaky, 0 failed in four shards) and Windows package 45334499367 `success`. Closing proof met; test plan section 7.1 E and section 7 ledger |
 
 ## Records
 Jira Bug AQP-421; GitHub issue #671.
+
+Closed 2026-11-24: Jira AQP-421 to Done; GitHub #671 closed as completed (DL-363).
