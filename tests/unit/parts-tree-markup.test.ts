@@ -132,10 +132,25 @@ describe('AC-1, AC-4 (14.32): the workspace tree is a list of links, not a tree'
     expect(count(html, 'border-l border-border')).toBe(3);
   });
 
-  it('keeps an empty toolbar slot at the end of every row for 3C and 3D, so neither lays a row out again (AC-9)', () => {
+  it('draws no toolbar slot where no toolbar is given (the review tree, a person who may not edit): no empty line under the name and no change of the row height (AQP-418 acceptance check 9)', () => {
     const html = workspaceTree();
+    expect(html).not.toContain('data-row-toolbar');
+  });
+
+  it('lays a row out as two columns, the arrow and then the link, with the toolbar on its own line under the link and in the same column (AQP-418 acceptance checks 1 and 2)', () => {
+    const row = (node: PartItem, kindLabel: string) => createElement(TreeNode, { part: node, kindLabel, selected: false, onChoose: () => undefined });
+    const html = renderToStaticMarkup(createElement(PartsTreeList<PartItem>, { nodes: NODES, label: 'Parts tree', renderRow: row, renderToolbar: (node: PartItem) => createElement('span', { 'data-toolbar-of': node.id }) }));
     expect(count(html, 'data-row-toolbar=""')).toBe(NODES.length);
-    expect(html).toMatch(/<div data-row-toolbar="" class="[^"]*"><\/div>/);
+    const slot = html.match(/<div data-row-toolbar="" class="([^"]*)">/)?.[1] ?? '';
+    expect(slot).toContain('col-start-2');
+    expect(slot).not.toMatch(/absolute|right-0|opacity|pointer-coarse|hover/);
+    const line = html.match(/<div class="(group\/row [^"]*)">/)?.[1] ?? '';
+    expect(line).toContain('grid');
+    expect(line).not.toMatch(/\bflex\b/);
+    for (const node of NODES) {
+      const after = html.slice(html.indexOf(`data-part-id="${node.id}"`));
+      expect(after.indexOf('</a>')).toBeLessThan(after.indexOf(`data-toolbar-of="${node.id}"`));
+    }
   });
 
   it('never indents a legacy tree deeper than the kinds allow any further, so it cannot grow wider than its panel', () => {

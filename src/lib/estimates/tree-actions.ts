@@ -36,5 +36,7 @@ export const addFastenerLabel = (slNo: string, name: string): string => `Add fas
 export const deleteRowLabel = (slNo: string, name: string): string => `Delete ${slNo} ${name}`;
 /** The tooltip and the spoken name of the move handle of a row (CR-01 item 3D): the row it moves; a click on it opens Move up / Move down. */
 export const moveRowLabel = (slNo: string, name: string): string => `Move ${slNo} ${name}`;
+/** The name of the group that holds a row's three buttons (AQP-418): "Actions for 1.1 Frame", the number and name as in the button names. */
+export const actionsLabel = (slNo: string, name: string): string => `Actions for ${slNo} ${name}`;
 /** The button at the foot of the tree that adds another top-level Main Assembly. */
 export const ADD_MAIN_ASSEMBLY = 'Add main assembly';

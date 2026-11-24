@@ -134,7 +134,8 @@ describe('the loaded menu', () => {
 describe('the "+" and the "-" of a row', () => {
   const part = (nodeKind: PartItem['nodeKind']): PartItem => ({ id: 'p1', parentId: 'm1', slNo: '1.1', label: 'Plate', nodeKind, completeness: 'EMPTY', revision: 1 });
   const PLACES = { upTo: 0, downTo: 2, onMoveTo: vi.fn() };
-  const buttons = (tree: ReactNode) => elementsIn(tree).filter((element) => typeof element.props['aria-label'] === 'string' || element.type === AddNodeTrigger);
+  // The buttons of the row, not the group that holds them (AQP-418: `role="group"`, named "Actions for ...").
+  const buttons = (tree: ReactNode) => elementsIn(tree).filter((element) => (typeof element.props['aria-label'] === 'string' && element.props['role'] !== 'group') || element.type === AddNodeTrigger);
 
   it('puts the direct "+" and the "-" out of reach while a change is on its way: aria-disabled, the look, described by the line, and a press does nothing', () => {
     const onAdd = vi.fn();

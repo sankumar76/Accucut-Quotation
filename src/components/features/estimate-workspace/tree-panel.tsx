@@ -137,7 +137,7 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
             <TreeNode part={part} kindLabel={kindLabel} selected={part.id === selected?.id} missing={missingIds?.has(part.id) ?? false} onChoose={choose} takesFocus={tree.wantsFocus} />
           )}
           {...(editable ? { renderToolbar: (part: PartItem) => (
-                <RowActions part={part} onAdd={tree.addUnder} onDelete={tree.askDelete} upTo={stepOf(nodes, part, 'up')} downTo={stepOf(nodes, part, 'down')} onMoveTo={tree.moveTo} busy={busy} describedBy={describedBy} />
+                <RowActions part={part} onAdd={tree.addUnder} onDelete={tree.askDelete} upTo={stepOf(nodes, part, 'up')} downTo={stepOf(nodes, part, 'down')} onMoveTo={tree.moveTo} busy={busy} describedBy={describedBy} showing={tree.deleteOpen && tree.deleting?.id === part.id} />
               ),
             } : {})}
         />
