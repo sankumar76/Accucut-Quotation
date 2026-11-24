@@ -5,7 +5,7 @@ import { CUSTOMER_DELETED_CODE, MATERIAL_DELETED_CODE } from '@/lib/estimate/cal
 import { TRANSITION_REFUSALS, type EstimateStatus } from '@/lib/estimate/state-machine';
 import { checkUnlockReason, UNLOCK_CUSTOMER_DELETED_MESSAGE, UNLOCK_MATERIAL_DELETED_MESSAGE, UNLOCK_REASON_MAX, UNLOCK_REASON_REQUIRED_MESSAGE, UNLOCK_REASON_TOO_LONG_MESSAGE } from '@/lib/estimate/unlock-words';
 import { TEXT_CHARACTERS_MESSAGE } from '@/lib/estimate/validation';
-import { assertMayUnlock, createUnlockService, type UnlockDependencies } from '@/server/services/unlock-service';
+import { assertMayUnlock, createUnlockService, lockedStatusLeft, type UnlockDependencies } from '@/server/services/unlock-service';
 
 import { FIXTURE_CUSTOMER_ID, FIXTURE_MATERIAL_ID, mastersNow, storedSnapshot } from '../../support/rate-change-fixture';
 import { seedConfig } from '../../support/seed-config';
@@ -190,6 +190,14 @@ describe('AC-2: a good unlock writes the status, the unlock and the audit entry,
     await service.unlock(lead, ESTIMATE_ID, { reason: REASON, audit });
     expect(writes).toEqual(['lock', 'customer', 'materials', 'transition', 'mark', 'audit']);
     expect(audited).toEqual([expect.objectContaining({ event: 'approval.unlocked', before: { approvedPrice: '12600.00', status }, after: { reason: REASON } })]);
+  });
+
+  // QLT-669-01: a status that is not a locked one is a fault, never recorded as Approved.
+  it('QLT-669-01: the status left is the locked status itself, and any other status is refused instead of being recorded as Approved', () => {
+    expect(lockedStatusLeft('APPROVED')).toBe('APPROVED');
+    expect(lockedStatusLeft('QUOTED')).toBe('QUOTED');
+    expect(() => lockedStatusLeft('DRAFT')).toThrow('approved or a quoted');
+    expect(() => lockedStatusLeft('PREPARED')).toThrow('approved or a quoted');
   });
 
   it('an audit entry that cannot be written fails the unlock (the transaction takes the rest back)', async () => {
