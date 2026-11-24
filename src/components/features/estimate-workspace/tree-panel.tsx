@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { ADD_MAIN_ASSEMBLY } from '@/lib/estimates/tree-actions';
 import type { PartItem } from '@/lib/estimates/tree-client';
-import { stepOf } from '@/lib/estimates/tree-moves';
+import { stepsAt, type SiblingPlace } from '@/lib/estimates/tree-moves';
 
 import { UNAVAILABLE_LOOK } from './add-node-trigger';
 import type { DeletePartDialogProps } from './delete-part-dialog';
@@ -136,8 +136,8 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
           renderRow={(part, kindLabel) => (
             <TreeNode part={part} kindLabel={kindLabel} selected={part.id === selected?.id} missing={missingIds?.has(part.id) ?? false} onChoose={choose} takesFocus={tree.wantsFocus} />
           )}
-          {...(editable ? { renderToolbar: (part: PartItem) => (
-                <RowActions part={part} onAdd={tree.addUnder} onDelete={tree.askDelete} upTo={stepOf(nodes, part, 'up')} downTo={stepOf(nodes, part, 'down')} onMoveTo={tree.moveTo} busy={busy} describedBy={describedBy} showing={tree.deleteOpen && tree.deleting?.id === part.id} />
+          {...(editable ? { renderToolbar: (part: PartItem, _kindLabel: string, place: SiblingPlace) => (
+                <RowActions part={part} onAdd={tree.addUnder} onDelete={tree.askDelete} {...stepsAt(place)} onMoveTo={tree.moveTo} busy={busy} describedBy={describedBy} showing={tree.deleteOpen && tree.deleting?.id === part.id} />
               ),
             } : {})}
         />

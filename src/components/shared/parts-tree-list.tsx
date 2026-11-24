@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Icon } from '@/components/shared/icon';
 import { cn } from '@/lib/cn';
 import { nodeKindLabel, type NodeKind } from '@/lib/estimate/node-kinds';
-import { branchesOf, type Branch } from '@/lib/estimates/tree-moves';
+import { branchesOf, siblingPlacesOf, type Branch, type SiblingPlace } from '@/lib/estimates/tree-moves';
 
 /**
  * What a row of the parts tree needs of a node (CR-01 item 3B): where it sits, its number and its stored kind. Both the workspace tree (SCR-05) and the review tree (SCR-06) draw their rows through this one
@@ -20,6 +20,12 @@ export interface PartsTreeItem {
 /** What a caller draws inside a row: the node, and the name of its kind (`nodeKindLabel`: "Part" or "Sub-part" by its siblings). */
 export type RenderPartsTreeRow<T extends PartsTreeItem> = (node: T, kindLabel: string) => ReactNode;
 
+/**
+ * What a caller draws in the toolbar slot of a row: the row's node, the name of its kind and **its place among the rows with the same parent** (AQP-406, PRF-C-01). The list works every place out once for the whole tree, so a
+ * toolbar that needs to know where its row sits (Move up and Move down) reads it here and never scans the list itself.
+ */
+export type RenderPartsTreeToolbar<T extends PartsTreeItem> = (node: T, kindLabel: string, place: SiblingPlace) => ReactNode;
+
 export interface PartsTreeListProps<T extends PartsTreeItem> {
   /** The nodes in reading order. */
   readonly nodes: ReadonlyArray<T>;
@@ -31,7 +37,7 @@ export interface PartsTreeListProps<T extends PartsTreeItem> {
    * that floated over the row took the press that was meant for the name). With no toolbar (the review tree, a person who may not edit) there is no slot, so no empty line. When the toolbar is in view is its own rule
    * (`RowActions`): the slot only gives it its place.
    */
-  readonly renderToolbar?: RenderPartsTreeRow<T>;
+  readonly renderToolbar?: RenderPartsTreeToolbar<T>;
   /** The ID of the `nav`, for a caller that moves focus into it. */
   readonly id?: string;
   /**
@@ -84,7 +90,9 @@ interface BranchItemProps<T extends PartsTreeItem> {
   readonly siblings: ReadonlyArray<T>;
   readonly level: number;
   readonly renderRow: RenderPartsTreeRow<T>;
-  readonly renderToolbar: RenderPartsTreeRow<T> | undefined;
+  readonly renderToolbar: RenderPartsTreeToolbar<T> | undefined;
+  /** The place of every row among its siblings, worked out once for the tree. Only there when there is a toolbar to give it to. */
+  readonly places: ReadonlyMap<string, SiblingPlace> | undefined;
   readonly closed: ReadonlySet<string> | undefined;
   readonly onToggle: ((id: string) => void) | undefined;
 }
@@ -95,27 +103,33 @@ interface BranchItemProps<T extends PartsTreeItem> {
  */
 const TOOLBAR_SLOT = 'relative col-start-2 min-w-0';
 
-function BranchItem<T extends PartsTreeItem>({ branch, siblings, level, renderRow, renderToolbar, closed, onToggle }: BranchItemProps<T>) {
+/** The place of a row the list has no place for. Never reached (every row of the list has one); a row with neither Move up nor Move down is the safe answer if it ever were. */
+const ONLY_CHILD: SiblingPlace = { index: 0, count: 1 };
+
+function BranchItem<T extends PartsTreeItem>({ branch, siblings, level, renderRow, renderToolbar, places, closed, onToggle }: BranchItemProps<T>) {
   const { node, children } = branch;
+  const kindLabel = nodeKindLabel(node, siblings);
   const interactive = closed !== undefined && onToggle !== undefined;
   const open = !(closed?.has(node.id) ?? false);
   const childrenId = `parts-tree-branch-${node.id}`;
+  // The nodes of this level, made once for all its rows (a copy for each row made the list of a wide branch grow with the square of its rows).
+  const childNodes = children.length > 0 && open ? children.map((child) => child.node) : [];
   return (
     <li data-part-row={node.id}>
       {/* The row: two columns, the arrow cell and then the link, with the toolbar slot on a line of its own under the link (AQP-418). */}
       <div className="group/row relative grid grid-cols-[auto_minmax(0,1fr)] items-start">
         <ArrowCell branch={branch} open={open} interactive={interactive} onToggle={interactive ? () => onToggle(node.id) : undefined} controls={childrenId} />
-        <div className="min-w-0">{renderRow(node, nodeKindLabel(node, siblings))}</div>
+        <div className="min-w-0">{renderRow(node, kindLabel)}</div>
         {renderToolbar === undefined ? null : (
           <div data-row-toolbar="" className={TOOLBAR_SLOT}>
-            {renderToolbar(node, nodeKindLabel(node, siblings))}
+            {renderToolbar(node, kindLabel, places?.get(node.id) ?? ONLY_CHILD)}
           </div>
         )}
       </div>
       {children.length > 0 && open ? (
         <ul id={childrenId} className={cn('flex flex-col', level < LAST_INDENTED_LEVEL && 'ml-s-5 border-l border-border')}>
           {children.map((child) => (
-            <BranchItem key={child.node.id} branch={child} siblings={children.map((sibling) => sibling.node)} level={level + 1} renderRow={renderRow} renderToolbar={renderToolbar} closed={closed} onToggle={onToggle} />
+            <BranchItem key={child.node.id} branch={child} siblings={childNodes} level={level + 1} renderRow={renderRow} renderToolbar={renderToolbar} places={places} closed={closed} onToggle={onToggle} />
           ))}
         </ul>
       ) : null}
@@ -130,11 +144,13 @@ function BranchItem<T extends PartsTreeItem>({ branch, siblings, level, renderRo
  */
 export function PartsTreeList<T extends PartsTreeItem>({ nodes, label, renderRow, renderToolbar, id, closed, onToggle }: PartsTreeListProps<T>) {
   const top = branchesOf(nodes);
+  const topNodes = top.map((branch) => branch.node);
+  const places = renderToolbar === undefined ? undefined : siblingPlacesOf(nodes);
   return (
     <nav aria-label={label} {...(id === undefined ? {} : { id })}>
       <ul className="flex flex-col">
         {top.map((branch) => (
-          <BranchItem key={branch.node.id} branch={branch} siblings={top.map((sibling) => sibling.node)} level={1} renderRow={renderRow} renderToolbar={renderToolbar} closed={closed} onToggle={onToggle} />
+          <BranchItem key={branch.node.id} branch={branch} siblings={topNodes} level={1} renderRow={renderRow} renderToolbar={renderToolbar} places={places} closed={closed} onToggle={onToggle} />
         ))}
       </ul>
     </nav>
