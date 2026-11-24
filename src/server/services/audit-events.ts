@@ -169,7 +169,7 @@ const unlockedFromStatus = z.enum(['APPROVED', 'QUOTED']);
 /** What an unlock keeps before: the price the approval stood at (BO), which stays on record, and the status the estimate left, as the cancel entry keeps it. */
 const unlockedBeforeState = z.strictObject({ approvedPrice: rupeesText, status: unlockedFromStatus });
 /**
- * LEGACY READ (QLT-C-03). Entries written before the status was kept hold the price alone. They read as Approved: that is true of every entry written before a Quoted estimate could be unlocked (#624, 2026-11-22).
+ * LEGACY READ (QLT-C-03). Entries written before the status was kept hold the price alone. They read as Approved: that is true of every entry written before a Quoted estimate could be unlocked (PR 624, 2026-11-22).
  * The window since then (an unlock of a Quoted estimate stored without a status) holds development, CI and demo data only, no production data, so no entry can read wrongly. The audit log is immutable,
  * so the **read** schema reads a missing status as Approved; the write schema above requires it.
  */
