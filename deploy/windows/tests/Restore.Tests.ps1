@@ -29,6 +29,8 @@ BeforeAll {
     Import-Module (Join-Path $script:WindowsDirectory 'AccucutOps.psm1') -Force -DisableNameChecking
     # Dot-sourcing defines the functions (the trust block and the helpers) and does not run the script.
     . (Join-Path $script:WindowsDirectory 'restore.ps1')
+    # The real Write-AccucutRestoreEvent, taken before a test mocks it: the restore tests route the mock through it, so that the text of each event is the real one (ADR-015 Amendment 3.4).
+    $script:RealWriteRestoreEvent = Get-Command -Name Write-AccucutRestoreEvent -Module AccucutOps
 
     $script:BackupSid = 'S-1-5-21-1111111111-2222222222-3333333333-1005'
     $script:EndpointSid = 'S-1-5-21-1111111111-2222222222-3333333333-1010'
@@ -277,7 +279,10 @@ Describe 'the guided restore, with real age and a stand-in pg_restore (AC-1 to A
         Mock Switch-AccucutRestoreDatabase -ModuleName AccucutOps { $script:Trace.Add("swap:$Replacement>$Previous") }
         Mock Remove-AccucutRestoreDatabase -ModuleName AccucutOps { $script:Trace.Add("drop:$Name") }
         Mock Invoke-AccucutMigration -ModuleName AccucutOps { $script:Trace.Add('migrate'); $script:MigrationUrl = $MigrateDatabaseUrl; $script:MigrationNode = $NodeExe }
-        Mock Write-AccucutRestoreEvent -ModuleName AccucutOps { $script:Events.Add("$EntryType|$EventId|$Message") }
+        # The events go through the real Write-AccucutRestoreEvent (so that the account ending is the real one); only the call that writes to the Application log is replaced.
+        Mock Get-AccucutRunningAccount -ModuleName AccucutOps { 'TESTSRV\admin.test' }
+        Mock Write-AccucutApplicationEvent -ModuleName AccucutOps { $script:Events.Add("$EntryType|$EventId|$Text") }
+        Mock Write-AccucutRestoreEvent -ModuleName AccucutOps { & $script:RealWriteRestoreEvent -EntryType $EntryType -EventId $EventId -Message $Message }
         Mock Add-AccucutRestoreLogLine -ModuleName AccucutOps { $script:LogLines.Add($Line) }
         Mock Write-AccucutLog -ModuleName AccucutOps { $script:Screen.Add($Message) }
         Mock Write-Host -ModuleName AccucutOps { $script:Screen.Add(($Object -join ' ')) }
@@ -376,6 +381,44 @@ Describe 'the guided restore, with real age and a stand-in pg_restore (AC-1 to A
             $script:Answers.Enqueue('1'); $script:Answers.Enqueue('2026-11-15')
             [void](Invoke-TestRestore)
             (Get-Content -LiteralPath $env:FAKE_RESTORE_LOG -Raw) | Should -Not -Match 'AGE-SECRET'
+        }
+    }
+
+    Context 'ADR-015 Amendment 3.4: the restore names the Windows account that ran it' {
+        It 'a good run: the first line of restore.log, before the copy list, is "Restore run by the account." and the event of the run ends with " Run by the account."' {
+            $script:Answers.Enqueue('1'); $script:Answers.Enqueue('2026-11-15')
+            [void](Invoke-TestRestore)
+            $script:LogLines.Count | Should -BeGreaterThan 1
+            $script:LogLines[0] | Should -Match 'INFO\s+Restore run by TESTSRV\\admin\.test\.$'
+            $script:LogLines[1] | Should -Match 'Restore started for the copy'
+            $done = @($script:Events | Where-Object { $_ -like 'Information|1100|*' })
+            $done.Count | Should -Be 1
+            $done[0].EndsWith(' Run by TESTSRV\admin.test.') | Should -BeTrue -Because $done[0]
+        }
+
+        It 'a stop by the Admin at the copy list: the last two lines of restore.log are the account and the stop, and the event 1101 ends with the account' {
+            $script:Answers.Enqueue('')
+            $result = Invoke-TestRestore
+            $result.Cancelled | Should -BeTrue
+            $lines = @($script:LogLines)
+            $lines.Count | Should -Be 2
+            $lines[0] | Should -Match 'Restore run by TESTSRV\\admin\.test\.$'
+            $lines[1] | Should -Match 'Stopped by the Admin before a copy was chosen'
+            $stopped = @($script:Events | Where-Object { $_ -like 'Information|1101|*' })
+            $stopped.Count | Should -Be 1
+            $stopped[0].EndsWith(' Run by TESTSRV\admin.test.') | Should -BeTrue -Because $stopped[0]
+        }
+
+        It 'a check failure (a changed copy): the event 1110 ends with the account' {
+            $bytes = [System.IO.File]::ReadAllBytes($script:New)
+            $bytes[$bytes.Length - 1] = [byte](($bytes[$bytes.Length - 1] + 1) % 256)
+            [System.IO.File]::WriteAllBytes($script:New, $bytes)
+            $script:Answers.Enqueue('1')
+            { Invoke-TestRestore } | Should -Throw
+            $failed = @($script:Events | Where-Object { $_ -like 'Error|1110|*' })
+            $failed.Count | Should -Be 1
+            $failed[0].EndsWith(' Run by TESTSRV\admin.test.') | Should -BeTrue -Because $failed[0]
+            $script:LogLines[0] | Should -Match 'Restore run by TESTSRV\\admin\.test\.$'
         }
     }
 
@@ -766,14 +809,21 @@ Describe 'R2: the rules of the restore.pgpass check, on invented descriptors (AD
 Describe 'R2: who may read restore.pgpass is checked before it is used (ADR-015 Amendment 3.3)' -Skip:(-not $script:IsAdmin) {
     BeforeAll {
         $script:StandInGroup = 'S-1-5-32-547'   # Power Users: a stand-in for the endpoint group, a SID that exists on every machine
+        function Add-TestFileReadAccess {
+            # One more Read entry on a file whose list is protected (a stand-in for the endpoint group of the earlier design; the module no longer has a function that does this).
+            param([string]$Path, [string]$Sid)
+            $security = [System.IO.File]::GetAccessControl($Path)
+            $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new($Sid), [System.Security.AccessControl.FileSystemRights]::Read, [System.Security.AccessControl.AccessControlType]::Allow))
+            [System.IO.File]::SetAccessControl($Path, $security)
+        }
         function New-PassFile {
             param([switch]$GroupRead, [switch]$UsersRead, [switch]$GroupModify, [switch]$Deny, [switch]$Unprotected)
             $path = Join-Path $TestDrive ('pgpass-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
             [System.IO.File]::WriteAllText($path, '127.0.0.1:5432:*:accucut_restore:FAKEpassword12345')
             if (-not $Unprotected) {
                 Set-AccucutLockedFileAcl -Path $path
-                if ($GroupRead) { Add-AccucutFileReadAccess -Path $path -Sid $script:StandInGroup }
-                if ($UsersRead) { Add-AccucutFileReadAccess -Path $path -Sid 'S-1-5-32-545' }
+                if ($GroupRead) { Add-TestFileReadAccess -Path $path -Sid $script:StandInGroup }
+                if ($UsersRead) { Add-TestFileReadAccess -Path $path -Sid 'S-1-5-32-545' }
                 if ($GroupModify -or $Deny) {
                     $security = [System.IO.File]::GetAccessControl($path)
                     if ($GroupModify) { $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new($script:StandInGroup), [System.Security.AccessControl.FileSystemRights]::Modify, [System.Security.AccessControl.AccessControlType]::Allow)) }
@@ -930,5 +980,133 @@ Describe 'the whole restore on the real install of stage 13 (AC-9: real services
         (Invoke-AccucutRestoreSql -PsqlPath $program.Psql -Settings $settings -PassFile $paths.RestorePgpass -Database 'accucut' -Sql "SELECT count(DISTINCT tableowner) || ':' || min(tableowner) FROM pg_tables WHERE schemaname = 'public';").Trim() | Should -Be '1:accucut_owner'
         (Invoke-AccucutRestoreSql -PsqlPath $program.Psql -Settings $settings -PassFile $paths.RestorePgpass -Database 'accucut' -Sql "SELECT has_table_privilege('accucut_app', 'public.job_runs', 'INSERT');").Trim() | Should -Be 't'
         Get-AccucutHttpStatus -Url "http://127.0.0.1:$($state.Port)/api/health" | Should -Be 200
+    }
+}
+
+Describe 'Get-AccucutRunningAccount (ADR-015 Amendment 3.4)' {
+    It 'returns the account that Windows says is running this script' {
+        $account = Get-AccucutRunningAccount
+        $account | Should -Be ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name)
+        $account | Should -Not -BeNullOrEmpty
+        $account | Should -Not -Be 'unknown account'
+    }
+
+    It 'returns "unknown account" when the identity call throws, and never throws itself' {
+        { Get-AccucutRunningAccount -Source { throw 'no identity here' } } | Should -Not -Throw
+        Get-AccucutRunningAccount -Source { throw 'no identity here' } | Should -Be 'unknown account'
+    }
+
+    It 'returns "unknown account" when Windows gives an empty name' {
+        Get-AccucutRunningAccount -Source { '' } | Should -Be 'unknown account'
+        Get-AccucutRunningAccount -Source { $null } | Should -Be 'unknown account'
+    }
+}
+
+Describe 'Write-AccucutRestoreEvent names the account (ADR-015 Amendment 3.4)' {
+    BeforeEach {
+        $script:Written = [System.Collections.Generic.List[string]]::new()
+        Mock Get-AccucutRunningAccount -ModuleName AccucutOps { 'TESTSRV\admin.test' }
+        Mock Write-AccucutApplicationEvent -ModuleName AccucutOps { $script:Written.Add("$EntryType|$EventId|$Text") }
+    }
+
+    It 'ends the text of the event with " Run by the account." and keeps the type and the number' {
+        Write-AccucutRestoreEvent -EntryType Information -EventId 1100 -Message 'Restore finished.'
+        $script:Written.Count | Should -Be 1
+        $script:Written[0] | Should -Be 'Information|1100|Restore finished. Run by TESTSRV\admin.test.'
+    }
+
+    It 'cuts a long message before the ending, so the text is 1000 characters and still ends with the account' {
+        Write-AccucutRestoreEvent -EntryType Error -EventId 1111 -Message ('x' * 3000)
+        $text = ($script:Written[0] -split '\|', 3)[2]
+        $text.Length | Should -Be 1000
+        $text.EndsWith(' Run by TESTSRV\admin.test.') | Should -BeTrue
+        $text.StartsWith('xxxx') | Should -BeTrue
+    }
+
+    It 'says "unknown account" when the account could not be read' {
+        Mock Get-AccucutRunningAccount -ModuleName AccucutOps { 'unknown account' }
+        Write-AccucutRestoreEvent -EntryType Information -EventId 1101 -Message 'Stopped.'
+        $script:Written[0] | Should -Be 'Information|1101|Stopped. Run by unknown account.'
+    }
+}
+
+Describe 'the JEA wrapper is gone, and the restore keeps its controls (ADR-015 Amendment 3.4)' {
+    It 'creates no group, endpoint, shortcut or jea folder: none of their functions, paths or files exist' {
+        $names = @((Get-Module AccucutOps).ExportedFunctions.Keys)
+        foreach ($name in 'Resolve-AccucutAdminAccount', 'Get-AccucutAdminGroupMember', 'New-AccucutAdminGroup', 'Add-AccucutFileReadAccess', 'New-AccucutAdminFolder', 'Grant-AccucutServiceControl',
+            'Grant-AccucutAdminEndpointAccess', 'New-AccucutAdminEndpointFiles', 'Register-AccucutPSSessionConfiguration', 'Register-AccucutAdminEndpoint', 'Unregister-AccucutAdminEndpoint') {
+            $names | Should -Not -Contain $name
+        }
+        $paths = Get-AccucutPaths -Root 'C:\Accucut'
+        $paths.PSObject.Properties.Name | Should -Not -Contain 'JeaConfig'
+        $paths.PSObject.Properties.Name | Should -Not -Contain 'JeaLogs'
+        Test-Path -LiteralPath (Join-Path $script:WindowsDirectory 'jea') | Should -BeFalse
+        Test-Path -LiteralPath (Join-Path $script:WindowsDirectory 'manual\AC-8-jea-prompt-check.md') | Should -BeFalse
+        Test-Path -LiteralPath (Join-Path $script:WindowsDirectory 'tests\Jea.Tests.ps1') | Should -BeFalse
+    }
+
+    It 'keeps the inert group look-up, which finds no group on a server where no install made one' {
+        $names = @((Get-Module AccucutOps).ExportedFunctions.Keys)
+        $names | Should -Contain 'Get-AccucutAdminGroupSid'
+        Get-AccucutAdminGroupSid | Should -BeNullOrEmpty
+    }
+
+    It 'writes restore.pgpass for Administrators and SYSTEM only (two entries, protected, owned by Administrators)' -Skip:(-not $script:IsAdmin) {
+        $root = Join-Path $TestDrive 'pgpass-two'
+        $paths = Get-AccucutPaths -Root $root
+        New-Item -ItemType Directory -Path $paths.Config -Force | Out-Null
+        Write-AccucutRestoreConfig -Paths $paths -RestorePassword 'FAKErestorePassword0001' -PgHost '127.0.0.1' -PgPort 5432
+        $security = [System.IO.File]::GetAccessControl($paths.RestorePgpass)
+        $security.AreAccessRulesProtected | Should -BeTrue
+        $security.GetOwner([System.Security.Principal.SecurityIdentifier]).Value | Should -Be 'S-1-5-32-544'
+        $entries = @($security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) | ForEach-Object { '{0}|0x{1:X}|{2}' -f $_.IdentityReference.Value, [int]$_.FileSystemRights, $_.AccessControlType } | Sort-Object)
+        ($entries -join ';') | Should -Be ((@('S-1-5-32-544|0x1F01FF|Allow', 'S-1-5-18|0x1F01FF|Allow') | Sort-Object) -join ';')
+    }
+}
+
+Describe 'SQR-04 (#516): psql never receives a byte order mark in front of the restore''s SQL (ADR-015 Amendment 3.4)' {
+    It 'in a console whose input encoding is UTF-8 with a byte order mark, the first bytes that psql reads are the two dashes of "-- accucut restore"' {
+        # The probe runs in a child powershell.exe in a console of its own (hidden), so the case never depends on whether this session has a console: setting the input
+        # encoding of a console needs one. The stand-in psql is the fake pg_restore of this file, which keeps every byte of its standard input.
+        $folder = Join-Path $TestDrive 'sqr04'
+        New-Item -ItemType Directory -Path $folder -Force | Out-Null
+        $probe = Join-Path $folder 'probe.ps1'
+        $keptInput = Join-Path $folder 'psql-input.bin'
+        $done = Join-Path $folder 'done.txt'
+        $module = Join-Path $script:WindowsDirectory 'AccucutOps.psm1'
+        $lines = @(
+            '$ErrorActionPreference = ''Stop'''
+            'try {'
+            ('    Import-Module -Name ''' + $module + ''' -Force -DisableNameChecking')
+            '    [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($true)'
+            '    if (-not ([Console]::InputEncoding.GetPreamble().Length -eq 3)) { throw ''The console input encoding could not be set to UTF-8 with a byte order mark.'' }'
+            ('    $env:FAKE_RESTORE_OUT = ''' + $keptInput + '''')
+            '    Remove-Item Env:\FAKE_RESTORE_EXIT -ErrorAction SilentlyContinue'
+            '    Remove-Item Env:\FAKE_RESTORE_LOG -ErrorAction SilentlyContinue'
+            '    $settings = [pscustomobject]@{ PgHost = ''127.0.0.1''; PgPort = 5432 }'
+            ('    [void](Invoke-AccucutRestoreSql -PsqlPath ''' + $script:FakePgRestore + ''' -Settings $settings -PassFile ''C:\fake\restore.pgpass'' -Database ''postgres'' -Sql ''SELECT 1;'')')
+            ('    [System.IO.File]::WriteAllText(''' + $done + ''', ''done'')')
+            '}'
+            'catch {'
+            ('    [System.IO.File]::WriteAllText(''' + $done + ''', (''failed: '' + $_.Exception.Message))')
+            '}'
+        )
+        [System.IO.File]::WriteAllText($probe, ($lines -join ([string][char]13 + [char]10)))
+        $powershell = [System.IO.Path]::Combine($env:SystemRoot, 'System32\WindowsPowerShell\v1.0\powershell.exe')
+        $process = Start-Process -FilePath $powershell -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $probe + '"')) -WindowStyle Hidden -PassThru
+        if (-not $process.WaitForExit(120000)) { try { $process.Kill() } catch { Write-Verbose 'The probe had already ended.' }; throw 'The SQR-04 probe did not finish in 120 seconds.' }
+        (Get-Content -LiteralPath $done -Raw) | Should -Be 'done'
+        $bytes = [System.IO.File]::ReadAllBytes($keptInput)
+        $bytes.Length | Should -BeGreaterThan 20
+        [System.BitConverter]::ToString($bytes, 0, 2) | Should -Be '2D-2D' -Because 'psql must read "--" first, not EF BB BF'
+        [System.Text.Encoding]::ASCII.GetString($bytes, 0, 17) | Should -Be '-- accucut restor'
+    }
+
+    It 'Invoke-AccucutNative with -StdIn starts the process under the console-input guard, and puts the encoding back' {
+        $body = (Get-Command Invoke-AccucutNative -Module AccucutOps).ScriptBlock.ToString()
+        $body | Should -Match 'Set-AccucutConsoleInputNoPreamble'
+        $body | Should -Match 'Restore-AccucutConsoleInput'
+        $body.IndexOf('Set-AccucutConsoleInputNoPreamble') | Should -BeLessThan $body.IndexOf('$process.Start()')
+        $body.IndexOf('$process.Start()') | Should -BeLessThan $body.IndexOf('Restore-AccucutConsoleInput')
     }
 }
