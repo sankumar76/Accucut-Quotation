@@ -992,13 +992,21 @@ Describe 'Get-AccucutRunningAccount (ADR-015 Amendment 3.4)' {
     }
 
     It 'returns "unknown account" when the identity call throws, and never throws itself' {
-        { Get-AccucutRunningAccount -Source { throw 'no identity here' } } | Should -Not -Throw
-        Get-AccucutRunningAccount -Source { throw 'no identity here' } | Should -Be 'unknown account'
+        Mock Get-AccucutWindowsIdentityName -ModuleName AccucutOps { throw 'no identity here' }
+        { Get-AccucutRunningAccount } | Should -Not -Throw
+        Get-AccucutRunningAccount | Should -Be 'unknown account'
     }
 
     It 'returns "unknown account" when Windows gives an empty name' {
-        Get-AccucutRunningAccount -Source { '' } | Should -Be 'unknown account'
-        Get-AccucutRunningAccount -Source { $null } | Should -Be 'unknown account'
+        Mock Get-AccucutWindowsIdentityName -ModuleName AccucutOps { '' }
+        Get-AccucutRunningAccount | Should -Be 'unknown account'
+        Mock Get-AccucutWindowsIdentityName -ModuleName AccucutOps { $null }
+        Get-AccucutRunningAccount | Should -Be 'unknown account'
+    }
+
+    It 'takes no parameter that could run code (QLT-681-02) and exports no identity helper' {
+        (Get-Command Get-AccucutRunningAccount).Parameters.Keys | Where-Object { $_ -notin [System.Management.Automation.PSCmdlet]::CommonParameters } | Should -BeNullOrEmpty
+        Get-Command Get-AccucutWindowsIdentityName -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
     }
 }
 

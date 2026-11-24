@@ -367,6 +367,8 @@ function Invoke-AccucutNative {
     <#
     Runs a program and returns its exit code and its output, with registered secrets blanked.
     A secret goes in -Environment (set for the child only) or -StdIn, never in -ArgumentList.
+    -StdIn takes ASCII text only (QLT-681-03): the standard input is written in a console code page (437 while the console-input guard below is on), so a character above 127 may be changed to another one or read as a different one.
+    Text with a character above 127 is refused before a process starts; for such text write UTF-8 bytes to StandardInput.BaseStream, as the key and dump pipes do.
     -ClearPgEnvironment drops every inherited PG* variable first, so that only what -Environment names reaches the child.
     Without -AllowFailure a non-zero exit code is an error that names the program and the code and shows the blanked output.
     #>
@@ -380,6 +382,11 @@ function Invoke-AccucutNative {
         [switch]$ClearPgEnvironment,
         [switch]$AllowFailure
     )
+
+    # The text itself is never put in the message: it may be a secret.
+    if ($PSBoundParameters.ContainsKey('StdIn') -and $StdIn -cmatch '[^\x00-\x7F]') {
+        throw 'Invoke-AccucutNative -StdIn takes ASCII text only: the standard input is written in a console code page (437 while the guard is on), so a character above 127 may be changed to another one or read as a different one. Write UTF-8 bytes to the standard input stream instead.'
+    }
 
     $info = New-Object System.Diagnostics.ProcessStartInfo
     $info.FileName = $FilePath
@@ -2616,17 +2623,24 @@ function Test-AccucutRestoreRoom {
     return [pscustomobject]@{ Ok = $ok; FreeBytes = $FreeBytes; TotalBytes = $TotalBytes; NeededBytes = $needed; MinimumFreeBytes = $minimum; Message = $message }
 }
 
+function Get-AccucutWindowsIdentityName {
+    <# The one call that asks Windows who is running this session (a function of its own so that Pester can make it throw or answer empty). Not exported. #>
+    [CmdletBinding()]
+    param()
+
+    return [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+}
+
 function Get-AccucutRunningAccount {
     <#
     The Windows account that is running this script (DOMAIN\user or COMPUTER\user), for the restore's record (ADR-015 Amendment 3.4 decision 3): the Admin and the IT person are both
-    administrators, so the record itself must say who ran a restore. Never throws; the text 'unknown account' stands in when Windows cannot say. -Source is a seam for Pester.
+    administrators, so the record itself must say who ran a restore. Never throws; the text 'unknown account' stands in when Windows cannot say.
     #>
     [CmdletBinding()]
-    param([scriptblock]$Source = { [System.Security.Principal.WindowsIdentity]::GetCurrent().Name })
+    param()
 
     try {
-        # .Invoke(), not the call operator: the module has no load site (a test of the trust block checks that on its syntax tree).
-        $name = [string]($Source.Invoke())
+        $name = [string](Get-AccucutWindowsIdentityName)
         if ([string]::IsNullOrWhiteSpace($name)) { return 'unknown account' }
         return $name
     }
