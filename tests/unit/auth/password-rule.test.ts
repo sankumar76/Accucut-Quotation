@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { isCommonPassword } from '@/lib/auth/common-passwords';
+import { PRODUCT_NAME } from '@/lib/product-name';
 import {
   checkPasswordRule,
   passwordLength,
@@ -179,6 +180,16 @@ describe('the list of common passwords', () => {
     expect(checkPasswordRule('my-Accucut-pass-9', SERVER)).toBe('TOO_COMMON');
     expect(checkPasswordRule('Quotation#42Zy', SERVER)).toBe('TOO_COMMON');
     expect(checkPasswordRule('My-RFQ-pass-1', { email: EMAIL, subject: 'self' })).toBeNull();
+  });
+
+  // QLT-683-01: the words are written by hand, apart from the name, which is how STD-C-02 arose. This reads the name from its one file, so a
+  // rename fails here until the product words are reviewed.
+  it('QLT-683-01: the product name, spaced, run together or by its first word, is a product word', () => {
+    const [firstWord] = PRODUCT_NAME.split(/\s+/);
+    expect(isCommonPassword(`${PRODUCT_NAME} 2026!`)).toBe(true);
+    expect(isCommonPassword(`${PRODUCT_NAME.replace(/\s+/g, '')}#2026`)).toBe(true);
+    expect(isCommonPassword(`${PRODUCT_NAME.toLowerCase().replace(/\s+/g, '')}#2026`)).toBe(true);
+    expect(isCommonPassword(`x9-${firstWord ?? ''}-lasers`)).toBe(true);
   });
 
   // The word `rfq` is short, so the match is checked against its neighbours: only the three letters together, in a row, refuse. A
