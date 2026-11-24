@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (qa-engineer, 2026-11-23, on master's DL-333 (3)): a Test-type defect that fails closed (a red Stage 11 on a PR run), one occurrence, no product behaviour affected. Same grade as DEF-052 (the same class) |
 | Priority | P3 (Jira Medium, label `sev-3`). **No lane now** (DL-333 (3), DL-266 (5): one occurrence, PR runs pass, the budget is not thin). Not a G8 blocker: it goes on the "open, not blocking, listed" line, and test plan section 6 applies at G8 (DL-333 (5)) |
 | Type | **Test, product excluded** (DL-333 (2)): #632 changes nothing under `src/` (2 files, `package.json` and `package-lock.json`); the same cases passed on the same code on both green runs read; #642's mail helper is not on the failing path |
-| Status | **Open** (logged 2026-11-23). No fix PR. **Second-occurrence trigger is armed** (below) |
+| Status | **CLOSED 2026-11-24 (UTC; qa-engineer): fixed by #664 (AQP-414, head c3b102bc, squash `d17f0e3f`); the proof of DL-333 (3) is met (section "Closing reading" at the end). Two known limits stated by the PR are recorded there. Watch to G8: a 5 s cut in `overdue-scan*.test.ts`, or a wrong-row failure in the file, reopens it and comes to master.** Earlier: **Open** (logged 2026-11-23), second-occurrence trigger armed |
 | Jira / GitHub | [AQP-414](https://sankumar76.atlassian.net/browse/AQP-414) / [#644](https://github.com/sankumar76/Accucut-Quotation/issues/644). Jira "relates to" AQP-1 (Intake) and AQP-382 (DEF-052); cross-linked (comment on AQP-414). Labels `ai-delivery`, `aiid-DEF-071`, `bug`, `sev-3`, `final-review`, `agent-qa-engineer`; priority Medium. DEF-071 was free: no file in `docs/07-qa/defects/`, JQL `labels = "aiid-DEF-071"` found nothing, GitHub search for "DEF-071" found nothing |
 | Risk / rule | RISK-031 (open at 9): run 45125512077 is a **PR run**, so it counts on neither trigger (a) nor trigger (b), which read `master` push runs; no re-score (DL-333 (5)). QA lists it in the ledger as a Stage 11 time-out-mode occurrence on a PR run (test plan section 7, a later task). A `master` push red on this file would be a Stage 11 time-out-mode red under trigger (a) |
 | Found by / date | CI (PR run), found by master reading the log (DL-333 (1)); logged by qa-engineer 2026-11-23. Log lines re-read by QA on 2026-11-23 (job 137528825530, ANSI stripped) |
@@ -80,3 +80,21 @@ A shared stall of the CI host or PostgreSQL in one Stage 11 window (DL-266 shape
 
 ## For master
 None asked. DL-333 (B) rules the grade, the scope, the trigger and the fix limits; QA only records them. Open for QA's later task: test plan section 7 ledger line for run 45125512077 and the "Vitest 5.0.5 to 5.1.0" wording fix (DL-333 (5)).
+
+## Closing reading (qa-engineer, 2026-11-24 UTC): fix PR #664 and the first `master` push after the squash
+**CLOSED.** Fix PR #664 (AQP-414, branch `fix/AQP-414-overdue-scan-own-rows`, head c3b102bc) was squash-merged as `d17f0e3f` on its run of record 45305826763 (every job `success`, 0 behind). Its scope is the one DL-333 (3) set: test files only (`tests/integration/jobs/overdue-scan*.test.ts`, `tests/support/overdue-world.ts`; a new `ownOutboxRows`, the old `outboxRows` kept because five other files import it); no `scratch-database.ts`, `auth-database.ts`, `src/`, config, CI or package change; no budget, retry, skip or `.concurrent` change.
+
+| Reading | Result |
+|---|---|
+| First `master` push after the squash: run **45310834947** (`d17f0e3f`, 2026-11-24 02:13Z) | `run_attempt` 1; every job `success`; "Windows package" `success` |
+| Stage 12 | shards `570 / 570 / 552 / 567 passed` (skips 4 / 4 / 21 / 7 as before), **0 flaky, 0 failed**; 0 `[AQP-341 stored-values diagnostic]`, 0 `[AQP-343 renumber diagnostic]` lines |
+| Stage 11 ("Stages 1 to 11b") | unit 494 files / 11,041 tests; overall **665 files / 16,854 tests passed** in 206.8 s; **0 five-second cuts**, 0 Mailpit lines |
+| The files of DL-333 (4) (iii) | `tests/integration/jobs/overdue-scan.test.ts` (17 tests) **1,533 ms**; `tests/integration/jobs/overdue-scan-rules.test.ts` (11 tests) **1,530 ms**; `tests/integration/tasks/close-reopen.test.ts` (14 tests) **1,201 ms**; `tests/unit/jobs/overdue-scan.test.ts` (20 tests) 18 ms: all green |
+
+**Proof met:** the file is green on the fix PR's run of record and on the first `master` push after the squash; the PR body shows that a planted leftover row from another task does not change a case's result (per the PR body, not re-run by QA). Earlier push 45303206514 (`1fe1581b`) was also clean (shards `570 / 567 / 570 / 552`, 0 flaky, 0 failed).
+
+**Two known limits, stated by the PR and kept here (not defects, not hidden):**
+1. **`jobRuns()` is not scoped to a case.** A `job_runs` row holds counts and a status and, by design (AC-8), nothing about a task, so nothing tells its owner. The cases that read it (AC-3, AC-6, AC-8) are not changed. A late scan from an earlier, timed-out case could still add a `job_runs` row to those three cases. The failure seen on the run (PR #632, 45125512077) did not touch it. No ticket is proposed (Sev-3 test hygiene, no failure seen on it).
+2. **A seed made after the reset counts as the current case's.** "Own" means "a code reserved after this case's reset". A late write by a timed-out case that makes a new `seed()` call after the reset (reserving a code in the new generation) would count as own; the shape in the log (one late `seed` plus `scan`, tasks reserved before the reset) is covered. A case cannot know which case a late helper call belongs to without a case identity, which would need a Vitest-level change (master first, DL-266 (4)).
+
+**Watch to G8 (the DL-333 (3) trigger stays armed):** a 5 s cut in `overdue-scan.test.ts` or `overdue-scan-rules.test.ts`, or a wrong-row failure at its old `:75` shape, on any run, reopens DEF-071 and comes to master. QA reads every Stage 11 log for 5 s cuts.
