@@ -42,6 +42,8 @@ describe('AC-1: the case table of the story (the server form)', () => {
     ['Password1! (common after the ends are stripped)', 'Password1!', 'TOO_COMMON'],
     ['Welcome@123 (common after the ends are stripped)', 'Welcome@123', 'TOO_COMMON'],
     ['a word with the product name', 'my-Accucut-pass-9', 'TOO_COMMON'],
+    ['a word with the new product name, RFQ Portal (STD-C-02)', 'My RFQ Portal 2026!', 'TOO_COMMON'],
+    ['the new product name run together (STD-C-02)', 'rfqportal#2026', 'TOO_COMMON'],
     ['one valid password', 'Tn4#vLm8@Qz', null],
   ];
 
@@ -156,6 +158,38 @@ describe('the list of common passwords', () => {
     expect(isCommonPassword('x9-ACCUCUT-lasers')).toBe(true);
     expect(isCommonPassword('Quotation#42Zy')).toBe(true);
   });
+
+  // STD-C-02 (FR-098, PRD 0.48): CR-01 item 2 renamed the product "RFQ Portal", so `rfq` is a product word like `accucut` and `quotation`.
+  // It is matched as a substring in any letter case, exactly as the other two are, so "RFQ Portal" and "rfqportal" are caught by the one word.
+  it.each([
+    'My-RFQ-pass-1',
+    'rfq#Secret2026',
+    'RFQ Portal 2026!',
+    'rfqportal#2026',
+    'RFQPORTAL-77-x',
+    'Rfq_Portal-9x',
+    'x9!MyRfQ-lasers',
+    'Welcome-to-the-RFQ-Portal-1',
+  ])('STD-C-02: refuses %s, a password built on the new product name', (password) => {
+    expect(isCommonPassword(password)).toBe(true);
+    expect(checkPasswordRule(password, SERVER)).toBe('TOO_COMMON');
+  });
+
+  it('STD-C-02: the old product words still refuse, and the page form (no list) leaves the word to the server', () => {
+    expect(checkPasswordRule('my-Accucut-pass-9', SERVER)).toBe('TOO_COMMON');
+    expect(checkPasswordRule('Quotation#42Zy', SERVER)).toBe('TOO_COMMON');
+    expect(checkPasswordRule('My-RFQ-pass-1', { email: EMAIL, subject: 'self' })).toBeNull();
+  });
+
+  // The word `rfq` is short, so the match is checked against its neighbours: only the three letters together, in a row, refuse. A
+  // password that holds r, f and q apart, or any two of them, or a longer word that merely resembles the name, is not a product word.
+  it.each(['Tn4#vLm8@Qz', 'r-f-q#Purple9Zy', 'rf#Quartz-77-ab', 'Fq-Rock8!Tango', 'Rfp#Portal-2026-zy', 'Portal#7-Kestrel-9'])(
+    'STD-C-02: accepts %s, which holds no run of r, f, q',
+    (password) => {
+      expect(isCommonPassword(password)).toBe(false);
+      expect(checkPasswordRule(password, SERVER)).toBeNull();
+    },
+  );
 
   it('accepts a password that is not a common word once its ends are stripped', () => {
     expect(isCommonPassword('Tn4#vLm8@Qz')).toBe(false);
