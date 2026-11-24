@@ -257,9 +257,9 @@ describe('STORY-06.07 AC-2, AC-3 (SCR-16): the price-override event keeps the ca
   });
 });
 
-describe('STORY-06.08 AC-2: the unlock event keeps the price it stood at and the reason, and nothing else', () => {
+describe('STORY-06.08 AC-2: the unlock event keeps the price it stood at, the status it left and the reason, and nothing else', () => {
   const event = AUDIT_EVENTS['approval.unlocked'];
-  const before = { approvedPrice: '12600.00' };
+  const before = { approvedPrice: '12600.00', status: 'APPROVED' };
   const after = { reason: 'The customer asked for a thicker plate.' };
 
   it('is wired, about the estimate, under the "Unlock" filter', () => {
@@ -271,11 +271,30 @@ describe('STORY-06.08 AC-2: the unlock event keeps the price it stood at and the
     expect(event.describeStored(before, after)).toEqual({ before: 'Approved at ₹ 12,600.00', after: 'Unlocked. Reason: The customer asked for a thicker plate.' });
   });
 
+  // QLT-C-03 of the final review (FR-110: "Unlock on a QUOTED estimate returns DRAFT ... the audit record has the entry"): the entry says which status the estimate left, as the cancel entry does.
+  it('QLT-C-03: says "Quoted at" for an estimate unlocked from Quoted, so the history tells a quote taken back from an approval taken back', () => {
+    expect(event.describeStored({ ...before, status: 'QUOTED' }, after)).toEqual({ before: 'Quoted at ₹ 12,600.00', after: 'Unlocked. Reason: The customer asked for a thicker plate.' });
+  });
+
+  it('QLT-C-03: an entry stored before the status was kept (only the price) still reads, as an unlock from Approved (the log is immutable)', () => {
+    expect(event.describeStored({ approvedPrice: '12600.00' }, after)).toEqual({ before: 'Approved at ₹ 12,600.00', after: 'Unlocked. Reason: The customer asked for a thicker plate.' });
+  });
+
+  it('QLT-C-03: the writer needs the status and takes only Approved and Quoted: a Draft, a Prepared, a missing one and an old word are refused', () => {
+    const schemas = event.schemasFor('estimate');
+    expect(schemas).not.toBeNull();
+    for (const status of ['APPROVED', 'QUOTED']) expect(schemas?.before.safeParse({ ...before, status }).success, status).toBe(true);
+    for (const status of ['DRAFT', 'PREPARED', 'SUBMITTED', 'approved', '', null, 1]) expect(schemas?.before.safeParse({ ...before, status }).success, String(status)).toBe(false);
+    expect(schemas?.before.safeParse({ approvedPrice: '12600.00' }).success).toBe(false);
+  });
+
   it.each([
     ['an extra key in the before (a rate has no place here)', { ...before, rate: '0.37' }, after],
     ['an extra key in the after', before, { ...after, rate: '0.37' }],
-    ['a price as a number', { approvedPrice: 12600 }, after],
-    ['a negative price', { approvedPrice: '-1.00' }, after],
+    ['a price as a number', { ...before, approvedPrice: 12600 }, after],
+    ['a negative price', { ...before, approvedPrice: '-1.00' }, after],
+    ['a status that an unlock never leaves', { ...before, status: 'DRAFT' }, after],
+    ['a status that is not text', { ...before, status: 1 }, after],
     ['no reason', before, {}],
     ['an empty reason', before, { reason: '' }],
     ['a reason over 500 characters', before, { reason: 'x'.repeat(501) }],
