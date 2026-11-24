@@ -134,7 +134,7 @@ describe('AC-2: a good unlock writes the status, the unlock and the audit entry 
     expect(row).toMatchObject({ approvedPrice: PRICE, unlock: { reason: REASON } });
     expect(harness.calculationAudit.rows).toHaveLength(entries + 1);
     expect(unlocks()).toHaveLength(1);
-    expect(defined(unlocks()[0])).toMatchObject({ actorId: harness.idOf.LEAD, actorLabel: 'Invented Lead', objectId: owned(), before: { approvedPrice: PRICE }, after: { reason: REASON } });
+    expect(defined(unlocks()[0])).toMatchObject({ actorId: harness.idOf.LEAD, actorLabel: 'Invented Lead', objectId: owned(), before: { approvedPrice: PRICE, status: 'APPROVED' }, after: { reason: REASON } });
   });
 
   it('an Admin unlocks too, and the estimate can be calculated again (a Recalculate on the Draft moves it to Prepared)', async () => {
