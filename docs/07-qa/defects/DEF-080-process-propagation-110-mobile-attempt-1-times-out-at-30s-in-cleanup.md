@@ -1,4 +1,4 @@
-# DEF-080: `process-propagation.spec.ts:110` [mobile] ("a changed default reaches the customers", AC-1 to AC-3, AC-5, AC-10) fails attempt 1 at the 30 s test budget, in the time-out mode, with a retry that passes at 25.5 s (the second such attempt-1 failure on record, after :109 [tablet] on PR #605; DL-294 (2) trigger met; DL-364 (8) (i))
+# DEF-080: `process-propagation.spec.ts:110` [mobile] ("a changed default reaches the customers", AC-1 to AC-3, AC-5, AC-10) fails attempt 1 at the 30 s test budget, in the time-out mode, with a retry that passes at 25.5 s (three attempt-1 failures on record: :109 [tablet] on PR #605, then :110 [mobile] on commit 6d92d76b and on `master` push 45352830027; DL-294 (2) trigger met; DL-364 (8) (i); DL-366)
 
 | Field | Value |
 |-------|-------|
@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (qa-engineer, 2026-11-24; test plan section 6: a flaky test, type Test, that has not turned a required check red; DL-294 (2) names Sev-3 and type Test). Not a G8 blocker as Sev-3 (fixed before G8 or accepted in writing by master, section 6). |
 | Priority | P3 (Jira Medium, label `sev-3`). Lane: DL-354 (5)'s Sev-3 order, after DEF-079 and STD-C-02 (DL-364 (8) (i)); a cause step comes first. |
 | Type | **Test** (a flaky E2E case). Product cause **not excluded** (DL-364 (8) (i)): DEF-057's open shared-cause question (DL-294 (1)) and #568 (propagation holds the Process Master lock; AQP-365) are leads to read, not findings. |
-| Status | **Open** (new, 2026-11-24; logged under DL-294 (2) and DL-364 (8) (i)) |
+| Status | **Open** (new, 2026-11-24; logged under DL-294 (2) and DL-364 (8) (i)). **2026-11-24, later (qa-engineer, DL-366): a second commit's occurrence, on a `master` push (row 2 of "Occurrences" below); master kept the lane and the binding (DL-366 (E)): the next free lane after #683, #698 and #699, cause step first; no change of grade.** |
 | Jira / GitHub | [AQP-423](https://sankumar76.atlassian.net/browse/AQP-423) / [#697](https://github.com/sankumar76/Accucut-Quotation/issues/697) (labels bug, sev-3, ai-delivery; Jira also aiid-DEF-080, agent-qa-engineer). Relates to AQP-1, AQP-387 (DEF-057), AQP-383 (DEF-053, where the diagnostic run was taken) |
 | Found by / date | qa-engineer, 2026-11-24, on master's notice DL-364 (8) (i) (the orchestrator's brief); the case is on QA's watch list since 2026-11-22 |
 | Build / commit | PR #682 (draft, "AQP-383: DEF-053 diagnostic (phase print, never merged)", closed unmerged), head `6d92d76b`, `pull_request` run **45342140601**, run attempts 1 and 2 (the second is a re-run of all jobs on a draft that never merges). **The diff touches only `tests/e2e/users.spec.ts` (+38 / -3), so the failing case is unchanged by it.** |
@@ -26,9 +26,18 @@ The case passes on attempt 1 inside its 30 s budget, as it does on most runs (re
 ## Actual Result
 Attempt 1 ended with `Test timeout of 30000ms exceeded.` at **30.2 s** on both run attempts (the report line is `✘ 532 [mobile] ... (30.2s)`). The retry passed at **25.5 s** both times. Playwright counted it as flaky in the run's summary (`1 flaky` in the shard). Run attempt 2's log names the place: `Error: apiRequestContext.delete: Test timeout of 30000ms exceeded.` at `cleanUp` `process-propagation.spec.ts:89` (the customer `DELETE` loop), called from :176. Run attempt 1's log gives `Test timeout of 30000ms exceeded.` with an error-context file and no code frame (QA read the job log only; the attached context was not downloaded).
 
+## Occurrences (one per commit, DL-364 (3) (c))
+| # | Date | Run (head) | Result | Counts as |
+|---|------|-----------|--------|-----------|
+| 1 | 2026-11-24 | Diagnostic PR #682 run 45342140601 (6d92d76b), run attempts 1 and 2, shard 1, `[mobile]` | attempt 1 failed **30.2 s**, retry passed 25.5 s, on both run attempts (the two attempts are one commit) | One occurrence (the section above) |
+| 2 | 2026-11-24 | **`master` push run 45352830027** (9e3111c0, #681's squash, `push`, run attempt 1, created 08:03Z), shard 1 (job 138303255995), `[mobile]`, test no. 532 | attempt 1 failed **30.3 s** (08:25:20Z), a bare `Test timeout of 30000ms exceeded.` (no call line, no `expect` message; an error-context file only, so the place in the case is not named, unlike run attempt 2 of row 1, which named `cleanUp` :89). **Retry (no. 544) passed 26.4 s** (08:25:50Z). Shard 1: `1 flaky, 571 passed (21.8m)`; the run stayed `success` for shard 1. The run is red for another reason (DEF-053, `users.spec.ts:58` in shard 4) | A **second occurrence of this Bug** (the PR #605 failure at :109 is earlier history), the first on a `master` push. Master found it in the log and the brief had not listed it (DL-366 (1)); DL-366 (E) keeps its lane and binding and does not fold it into DEF-053 (another test and another failing part: the scan there, the `cleanUp` delete loop here). Not re-run (DL-365 (2)(c)). Not a RISK-031 trigger by itself: it is a flaky retry that passed |
+
+The case now reads, attempt 1 on `[mobile]`: 30.3 s (row 2, failed), 30.2 s (row 1, failed), 29.9 s (`master` push 45346776822, passed). The three are within 0.1 s of the 30 s budget or over it. No product cause is shown; DEF-057's open shared-cause question and #568 stay the leads (section "Suspected Area").
+
 ## Evidence
 Job logs read by QA (ANSI stripped; no re-run, no change):
 ```
+run 45352830027 (master push, 9e3111c0), shard 1 (job 138303255995): 08:25:20Z  X 532 [mobile] process-propagation.spec.ts:110 (30.3s) ; retry 08:25:50Z  ok 544 (26.4s) ; shard: "1 flaky, 571 passed (21.8m)" ; error: "Test timeout of 30000ms exceeded." + error-context file only (read by QA on 2026-11-24, later)
 run 45342140601, run attempt 1, shard 1 (job 138268070492): 07:00:59Z  X 532 [mobile] process-propagation.spec.ts:110 (30.2s) ; retry 07:01:27Z  ok 544 (25.5s) ; shard: "1 flaky, 571 passed (21.2m)"
 run 45342140601, run attempt 2, shard 1 (job 138277660212): 07:25:02Z  X 532 [mobile] process-propagation.spec.ts:110 (30.2s) ; retry 07:25:32Z  ok 545 (25.5s) ; shard: "1 flaky, 571 passed (21.3m)"
    attempt 2 error: apiRequestContext.delete: Test timeout of 30000ms exceeded.  at cleanUp (process-propagation.spec.ts:89:94), called from :176
