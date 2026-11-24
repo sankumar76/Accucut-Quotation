@@ -8,13 +8,31 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target about 6 Dec 2026, range 5 to 8 Dec, freeze about 3 Dec, all agreed scope kept (DL-307, delivery lead, 2026-11-22; replaces DL-298's provisional 4 Dec). Date triggers: 28 Nov Q-18 (DL-309); freeze AC-8 (DL-310) and #476 (DL-308); G8 condition list DL-314** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-23 by orchestrator (daily update after pause 7) |
+| Last updated       | 2026-11-24 by orchestrator (daily update) |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-24, orchestrator)
+
+> This section wins over the pause-8 resume point below where they differ. Read it first.
+
+**`master` = efc6d7e2** (#680). Push runs, each attempt 1: 1ab13781 CI 45319179466 / Windows 45319179465 success; 9697d6a5 (#669) CI 45334499369 / Windows 45334499367 success, 0 flaky, 0 failed; efc6d7e2 (#680) CI 45341274136 / Windows 45341274129 success, 0 flaky, 0 failed. Trigger (b) count 24 Nov: 0. Watch: `users.spec.ts:58` [desktop] 29.1 s on 9697d6a5 (DEF-053 floor).
+
+**Merged (2, squash via `gh pr merge --squash --match-head-commit`, DL-361):** #669 QLT-C-01..03 + DEF-078 (9697d6a5; run of record 45330500791; combined review APPROVE WITH COMMENTS, QLT-669-01..03 folded in; ux-expert confirmed "Quoted and locked."); **#680 DEF-077** (efc6d7e2; run of record 45336871656; plant 4 of 4; `/queue` 193,348 → 193,674 B).
+
+**Defects closed:** DEF-033 (AQP-287, #345), DEF-078 (AQP-421, #671), **DEF-077 Sev-2** (AQP-420, #670; DL-358 (5) (a)–(e), 24 of 24 by-hand readings). **No Sev-1 or Sev-2 open.** The red run 45318168404 on #669 was a DEF-053 occurrence (DL-359; no re-run; DEF-053's G8 acceptance suspended, master re-decides at the freeze).
+
+**Rulings:** DL-358 (DEF-077 Sev-2, tightened proof), DL-359 (#669 red; DEF-053), DL-360 (Dependabot advice: #675 may merge pre-freeze; #674, #676, #677, #678 after G8 — the delivery lead decides), **DL-361** (gh CLI merges, comments, reviews, labels while the GitHub MCP token returns 403; delivery lead option B), **DL-362** (AC-8 full-administrator fallback, delivery lead 24 Nov: G8-C-AC8 closed by the fallback, T2 retired, new G8-C-ADMFB and G8-C-R018, RISK-018 held at 10, RISK-034 9 → 12), **DL-363** (gh issue create/close too). Docs: architecture v0.66 §9.9 change spec S1–S8 + ADR-015 Amendment 3.4 (JEA code removed, the restore records the Windows account, SQR-04 in scope, ~1.75 dev-days); PRD v0.50, release plan v0.39 (KG-3, UP-3; forecast holds at about 6 Dec, 5 Dec not promised); test plan 0.3.39 (§14.8 rehearsal as a full administrator). GitHub #679 created (tech-debt: inert group checks, after G8); #502 closed as not planned.
+
+**Lanes now:** lane 1 (aqp-403) #673 DEF-076, then DEF-079 / STD-C-02. Lane 2 (aqp-398) **AC-8 fallback** `fix/AQP-312-admin-fallback` (G8-C-ADMFB; PR by 26 Nov, warn master if not open by 28 Nov, not merged by Mon 30 Nov → forecast leans 7–8 Dec; combined review before merge). Lane 3 (aqp-402) **DEF-053 cause step** (phase print; outcomes F1/F2/F3; took lane 3 because it freed first).
+
+**Open for the delivery lead / main session:** OQ-ARCH-15 (AC-8 output, requested; reopens nothing for G8); Dependabot #674–#678 (DL-360 advice); UX-spec routing list adds the SCR-05 Quoted row and mock-ups and the SCR-06 Lead Quoted notice gap (ux-expert, AQP-1 13059); architecture wording for `approval.unlocked` `before` (reviewer note in `docs/06-reviews/final-cr01/pr-669-combined.md`).
+
+**Housekeeping (delivery lead):** QA's worktree `.claude/worktrees/qa-u2` (registered, detached at efc6d7e2, full node_modules; keep it for the final regression or `git worktree remove`), `qa-u2-nm-old1` and `qa-u2-*.log`; master's untracked memory notes in the main checkout's `.claude/agent-memory/master/`; merged branches `fix/AQP-1-final-review-quality-minors`, `fix/AQP-420-queue-actions-visible`; containers aqp401-db and aqp406-db stopped (not removed); `aqp419-db` belongs to lane 1. C: about 11 GB free.
 
 ## Resume point (2026-11-23, pause 8, orchestrator)
 
