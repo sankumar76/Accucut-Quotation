@@ -9,7 +9,7 @@
 
 ## Why we are asking
 
-The portal sends quotation-related e-mail: a new-task alert, an overdue alert, a daily 11:00 AM digest and the password-reset link. We have tested all of it against a dummy mail server. One real test through your real mailbox is still needed (our step 09.08). It has to happen before 1 December 2026, when we ask for release sign-off, so we need your answers by 28 November to leave a few days for the test.
+The portal sends quotation-related e-mail: a new-task alert, an overdue alert, a daily 11:00 AM digest and the password-reset link. We have tested all of it against a dummy mail server. One real test through your real mailbox is still needed (our step 09.08). We plan to run it by 30 November 2026, so that anything it shows can still be put right before we ask for release sign-off in early December. That is why we need your answers by 28 November.
 
 We understand the company mail is hosted on webhostbox.net and managed in cPanel. If that is wrong, say so in the "Your answer" column and we will adjust.
 
@@ -33,7 +33,7 @@ Please fill in the right-hand column. Write "not applicable" where it does not a
 | 4 | **Outgoing mail server (SMTP host name).** We would normally try `mail.` followed by your domain. If the security certificate does not cover that name, cPanel's "Connect Devices" page for the mailbox shows the server's own host name instead (it may look like `serverNNN.webhostbox.net`, but please copy exactly what your page shows). Which name does cPanel give for outgoing mail? | If the name does not match the certificate, the portal refuses to send (see above). | |
 | 5 | **Port.** cPanel's "Connect Devices" page lists the outgoing port, normally 465 (SSL/TLS) or 587. Which does your page show, and which do you want us to use? | Decides how the connection is encrypted (see above). | |
 | 6 | **Account user name** that signs in. We expect it to be the full mailbox address from row 1, not just the part before the @. Please confirm. Not the password. | The host decides which form of user name it accepts. | |
-| 7 | **Sending limit.** Does the host limit how many messages the account or the domain may send per hour? If so, what is the number? | The portal sends in batches of at most 25 messages. A daily digest to 50 Engineers, for example, is 50 messages, plus alerts and password-reset mail. We will stay under your limit. | |
+| 7 | **Sending limit.** Does the host limit how many messages the account or the domain may send per hour? If so, what is the number? | The portal sends at most 25 messages a minute. A daily digest to 50 Engineers, for example, is 50 messages, plus alerts and password-reset mail. We will check our volume against your limit before the test. | |
 | 8 | **Outward access.** Can the server that will run the portal reach the mail host outward on the port in row 5? Please check with whoever manages the network or firewall there. | If the port is blocked, the first real test fails. | |
 | 9 | **SPF and DKIM.** In cPanel, under "Email Deliverability", are SPF and DKIM set up for the sender domain, and does the page report no problems? If not, can you set them up? | Without them, mail from the portal may be marked as spam or rejected. | |
 | 10 | A **test recipient mailbox** that your team controls and that is not a real employee's, for the 09.08 check. | We send one real message to it and check that it arrives in the inbox and not in junk. | |
