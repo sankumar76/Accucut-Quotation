@@ -24,7 +24,7 @@ The spec (row 3) says only: an icon per kind (Main "stacked blocks", Sub "groupe
 | 6 | Complete status | **Change build to match mock-up** | `COMPLETE = CircleCheck` (lucide: ring r10 with a tick), kept `text-success`. As in the mock-up, also: `PARTIAL = Contrast` stays but moves from `text-ink-3` to `text-ink-2`; `EMPTY = Circle` stays `text-ink-3`; all three at `size="default"` (18 px) instead of `small` (16). The three share one outer ring, so the column reads as one set. Keep `aria-hidden` and the `sr-only` words (the E2E asserts both). |
 | 7 | Guide lines | **Keep build** (the mock-up has lines too; only the geometry differs) | No change: `ml-s-5 border-l border-border` on each nested `ul` (1 px `--border`, 24 px indent). A real border is sturdier than the mock-up's gradient and follows the 44 px arrow cell. See 7b if the desktop row is compacted. |
 | 7a | Fastener glyph | **Change build** (mock-up right; matches spec "hex nut") | `Bolt` (hexagon with a round bore). Lucide `Nut` is a food nut at 1.66.0 and unchanged at 1.73.0 (organic outline and a stem stroke, no six-sided shape), so it contradicts the spec words "hex nut". Lucide has no true hex-nut glyph; a custom SVG would be a new asset and needs the delivery lead. |
-| 7b | Arrow cell and row height | **Keep build on touch and below 1024 px; optional compaction on desktop** | Keep the 44 x 44 arrow cell and 44 px row on a touch screen or one narrower than 1024 px (NFR-017; spec section 0.9 row 1: "touch screens and anything narrower keep the 44 px target", OQ-PM-12). Optional, Minor: at `fine-wide:` (1024 px and wider with a mouse) make `ARROW_CELL` `fine-wide:min-h-(--compact-field-h) fine-wide:w-s-5` (24 x 36, meets WCAG 2.5.8), so the row is 36 px as the link already intends; today the 44 px arrow cell holds the row at 44 px even where the link asks for 36. If done, set the nested list to `fine-wide:ml-s-3 fine-wide:pl-s-2` so the guide line stays under the arrow's centre. Defer if the window is tight. |
+| 7b | Arrow cell and row height | **Keep build on touch and below 1024 px; change build for a mouse at 1024 px and wider (updated 2026-11-24 after the 1280 px comparison: see item 12)** | Keep the 44 x 44 arrow cell and 44 px row on a touch screen or one narrower than 1024 px (NFR-017; spec section 0.9 row 1: "touch screens and anything narrower keep the 44 px target", OQ-PM-12). Required for a mouse (was optional; see item 12): at `fine-wide:` (1024 px and wider with a mouse) make `ARROW_CELL` `fine-wide:min-h-(--compact-field-h) fine-wide:w-s-5` (24 x 36, meets WCAG 2.5.8), so the row is 36 px as the link already intends; today the 44 px arrow cell holds the row at 44 px even where the link asks for 36. If done, set the nested list to `fine-wide:ml-s-3 fine-wide:pl-s-2` so the guide line stays under the arrow's centre.  |
 
 ## Reasons, spec lines and accessibility, item by item
 
@@ -73,4 +73,100 @@ Build notes. Keep `data-node-kind` on the svg (tests read it) and put the tint c
 | 6 | Complete-status icon | Mock-up right: `CircleCheck`; partial `text-ink-2`; 18 px | ux-expert, 2026-11-24 |
 | 7 | Guide-line geometry | Build right: keep | ux-expert, 2026-11-24 |
 | 7a | Fastener glyph | Mock-up right: `Bolt`; `Nut` is a food nut | ux-expert, 2026-11-24 |
-| 7b | Arrow cell and row height | Build right on touch and below 1024 px (NFR-017); optional 24 x 36 at fine pointer 1024+ | ux-expert, 2026-11-24 |
+| 7b | Arrow cell and row height | Build right on touch and below 1024 px (NFR-017); change to 24 x 36 at fine pointer 1024+ (item 12) | ux-expert, 2026-11-24 |
+
+
+---
+
+# 1280 px comparison (added 2026-11-24, at the delivery lead's request relayed by QA)
+
+Rule used here, as the delivery lead set it: **the built tree looks like the SCR-05 mock-up on `master` unless there is a stated reason** (an accessibility rule such as WCAG 2.2 AA or NFR-017, or a defect fix). Every "keep build" below gives its reason in plain words.
+
+## How the two were compared, and what is not shown
+
+| | |
+|---|---|
+| Mock-up | `docs/03-ux/screens/SCR-05.html` and `screens.css` from `master` `c7faf76f` (`git archive`), opened in headless Chromium at 1280 x 900, device scale 2. The main checkout's working copy was not used. |
+| Build, `master` | The **real** components (`PartsTreeList`, `TreeNode`, `RowActions`, `TreeLegend`, `Button`, `Card`) of `master` `c7faf76f`, rendered to static markup with the same twelve rows as the mock-up (same names, kinds, completeness, row 1.1 open), and styled with the project's **own compiled Tailwind and `globals.css`**, in the same Chromium at 1280 px. IBM Plex fonts were loaded from the mock-up's `fonts/` folder, because the real page gets them from `next/font`. |
+| Build, #707 | The same, from `4df117e5` (branch `fix/AQP-424-parts-tree-mockup`). |
+| **Not a running page** | I could not run the E2E set-up: it needs the lane worktree (`aqp-398`, not mine to change) and a test database and servers, and the Playwright and Chrome servers were down. Nothing was started, so nothing needed stopping. So this is **not** the page with the sidebar, top bar, live data, sticky bars or scrolling. It shows the tree column faithfully, in its default state, hover and focus. States not rendered: Calculate blocked (triangle), drag line, "+" menu, delete dialog, read-only, the Lead's figures. |
+| The delivery lead's observations | All confirmed by the render of `master` (below). |
+
+Screenshots, all in `C:\Users\sanku\AppData\Local\Temp\claude\859e50c63dd2e28b\7796688b-a5ea-486d-ad8c-2c45e904009d\scratchpad\tree-compare\`:
+
+| File | Shows |
+|---|---|
+| `mockup-1280-tree.png`, `mockup-1280-full.png` | Mock-up tree card, and the whole screen |
+| `mockup-1280-tree-hover-1.1.1.png`, `mockup-1280-tree-hover-1.1.3.png` | Mock-up with the pointer on a row: the floating toolbar |
+| `build-master-1280-tree.png`, `build-master-1280-full.png` | Build on `master` |
+| `build-master-1280-tree-hover-1.1.1.png`, `build-master-1280-tree-focus-1.1.1.png` | Build on `master`: hover (only a tint) and keyboard focus |
+| `build-707-1280-tree.png`, `build-707-1280-full.png`, `build-707-1280-tree-hover-1.1.1.png`, `build-707-1280-tree-focus-1.1.1.png` | The same for PR #707 |
+| `build-master-768-tree.png`, `build-707-768-tree.png`, `build-master-1023-tree.png`, `build-707-1023-tree.png` | Tablet widths |
+| `build-master.html`, `build-707.html`, `shoot.mjs`, `shoot.json` | The rendered pages, the script and the measurements |
+
+## What was measured (CSS pixels, row 1.1.1)
+
+| Thing | Mock-up | Build on `master` | PR #707 |
+|---|---|---|---|
+| Tree column width | **320** (`screens.css:673`, `.ws:has(.tree-row) { --tree-w: 320px }`) | 288 (`--tree-w`) | 288 |
+| Header | Card head "**Parts tree**" and "**12 rows**" | **None.** The only heading in the area is "Parts and inputs", the title of the card that holds both tree and form | none |
+| Kind icon | 24 px tile, 18 px glyph | bare 20 px icon | 24 px tile, 18 px glyph |
+| Number | Plex Mono 12 px | Plex Sans 14 px | Plex Mono 12 px |
+| Status icon | 18 px circled check | 16 px plain check | 18 px circled check |
+| Open row | `rgb(238,238,240)` fill, `rgb(222,48,48) 4px inset` bar | `rgb(253,236,236)` fill, `rgb(242,184,184)` 1 px edge | as the mock-up |
+| Arrow, row height | 24 px arrow, 36 px row | 44 px arrow, row 44 px | 44 px, 44 px |
+| Toolbar | floating, 92 x 32, right 2 px, top 4 px, on hover of any row | own 42 px line under the open or focused row only, red icons | as `master` |
+| Tree column height (12 rows) | 743 (card) | 777 | **797** (+20) |
+| Tree column height at 768 and 1023 px | not drawn | 699 | **707** (+8, the legend only) |
+
+## The complete ruled list (items 1 to 7b as ruled above, and the new items 8 to 15)
+
+"#707" says whether PR #707 (`4df117e5`) already does it. I read its diff and rendered it: it implements my rulings 1, 2, 3, 4, 5, 6 and 7a and nothing else.
+
+| # | Element | Verdict | Exact target | Reason when keeping the build | #707 |
+|---|---|---|---|---|---|
+| 1 | Kind icon tile | Change build | 24 px tile, `rounded-sm`, 18 px glyph, stroke 1.75 | | Done |
+| 2 | Kind glyphs | Change build | Boxes, Blocks, Box | | Done |
+| 3 | Kind tints | Change build | Sub accent, Fastener info | | Done |
+| 4 | Open row | Change build | `bg-surface-2`, 4 px `--primary` inset bar, 600 | | Done |
+| 5 | Row number | Change build | `font-mono text-label text-ink-2` | | Done |
+| 6 | Status icons | Change build | `CircleCheck`, `Contrast` in `text-ink-2`, `Circle`; 18 px | | Done |
+| 7 | Guide lines | Keep build (geometry per item 12 on a mouse) | `border-l border-border` | The mock-up has them too; the build's real border shows in Windows high-contrast mode, a gradient may not | n/a |
+| 7a | Fastener glyph | Change build | `Bolt` | | Done (the render of `master` shows `Nut` as an acorn-like shape) |
+| 7b / **12** | Arrow cell, row height, indent | **Change build for a mouse at 1024 px and wider; keep 44 px on touch and below 1024 px** | See item 12 | 44 px stays where a finger is the pointer (NFR-017; spec section 0.9 row 1: touch and anything narrower keep 44 px) | **No** |
+| **8** | Row toolbar: place and when it shows | **Keep build.** Mock-up and spec are the ones to change | Under the name, on the open row and on a row with keyboard focus, no hover reveal (ux-expert design, AQP-406 comment 12939, DL-346). Update SCR-05 and spec row 3 | Hovering a row in the mock-up hides the name and the status icon behind the toolbar (see `mockup-1280-tree-hover-1.1.1.png`: "Corn" and no status). In the build's 288 px column a floating toolbar (3 x 36 px buttons, about 110 px) would cover most of a deep row's name, so a press on the name lands on a button; that is DEF-075, where a press at the centre of a Part opened the move menu. Showing it on hover in line makes the rows below jump under the pointer (DEF-076). | n/a |
+| **9** | Toolbar icon colour | **Change build to match mock-up** | Handle, "+" and "-" at rest: `text-ink-2` (8.43:1 on `--surface`). Hover: `hover:bg-surface-2 hover:text-ink`; pressed: `active:bg-border active:text-ink active:shadow-pressed` (the secondary look, spec 7.3.1). "-" on hover: `hover:bg-danger-soft hover:text-danger` (5.74:1). Today the three use the `ghost` variant (`text-primary-ink`) and the "-" `text-danger-ink`, so they are red at rest | | **No** |
+| **10** | Tree header and count | **Change build to match mock-up** | The tree sits in a **card of its own** beside the form's card: head with "Parts tree" (`text-sub font-semibold`, an `h2`) on the left and "12 rows" on the right (`text-label text-ink-3`; "1 row" for one), a hairline under the head. Keep the form's card and its title "Parts and inputs" (the rows' links point to it). Count is every row, open or closed. Optionally name the `nav` "Parts tree, 12 rows" as the mock-up does. On tablet and phone the same head sits above the list inside the panel and the drawer | | **No** |
+| **11** | Tree column width | **Change build to match mock-up** (the spec's 288 px is the thing to update) | `--tree-w: 320px` | Names wrap at 288 px (see `build-707-1280-tree.png`: "Control cabinet assembly" and "Corner gusset" take two lines, and #707 made it worse than `master`, where the first took one; in the mock-up at 320 px both take one). This is evidence for width, not an accessibility rule, so I rule for the mock-up, which the delivery lead calls the agreed design. The spec (SCR-05 "Layout") says 288 px and resizable 240 to 400; the mock-up's own CSS says 320 | | **No** |
+| **12** | Arrow cell, row height and indent on a mouse | **Change build** | At `fine-wide:` (1024 px and wider, mouse): `ARROW_CELL` becomes `fine-wide:w-s-5 fine-wide:min-h-(--compact-field-h)` (24 wide, 36 high, meets WCAG 2.5.8) so the row is 36 px, as the link already asks; nested list `fine-wide:ml-s-3 fine-wide:pl-s-2` so the guide line stays under the arrow's centre and each level steps about 20 px. Below 1024 px and on touch: unchanged (44 px, 24 px indent) | Touch size only (see 7b). On a mouse there is no reason to keep 44 px: today the 44 px arrow holds the row at 44 px although the link asks for 36 | **No** |
+| **13** | "Add main assembly" | **Change build to match mock-up** | A hairline (`border-t border-border`, space above and below) then a `ghost` Button with the "+" icon, left-aligned (`primary-ink` text, 6.48:1; the words and the "+" are the cue). Height stays 44 px (`--control-h`), as the mock-up's. Today it is an outlined `secondary` button with no line above | | **No** |
+| **14** | Legends at the foot | **Change build to match mock-up** (words stay the build's) | (a) No visible "Row kinds" title and no line above the legend; keep `aria-label="Row kinds"` on the section. (b) Add the **status legend** the mock-up has under it: the same icons at 18 px in the same inks (`CircleCheck` `text-success`, `Contrast` `text-ink-2`, `Circle` `text-ink-3`, `TriangleAlert` `text-danger`) with the words the build already speaks to screen readers: "All inputs entered", "Some inputs entered", "No inputs yet", "Missing inputs" (STORY-05.11 AC-4, `estimate-texts.ts`). (c) Kind legend uses the same 24 px tile as the rows (the mock-up's 22 px is not kept; see ruling 1) | Words: the mock-up says "Complete / In progress / Not started / Missing data", but the build's words are an accepted acceptance criterion and a key that differs from what a screen reader says is confusing. Mock-up wording to be aligned by the CR-01 session | **No** (#707 only puts the tile in the kind legend) |
+| **15** | Tree resize handle | **Not a styling item; raised, not ruled** | Spec SCR-05 asks for a resizable tree (240 to 400 px, mouse or arrow keys); the mock-up has `.tree-handle`; the build has no handle (`lg:w-(--tree-w)` fixed) | | n/a |
+
+### Why items 8 to 15 are not in #707 and what to do
+
+Items 9, 10, 12, 13, 14 and 11 are small styling changes. They can go into #707 or a second styling PR, as the delivery lead and the orchestrator choose. Item 10 changes the page frame (`estimate-workspace.tsx`, a second card), so it is the largest. **Item 8 must not be built:** it would bring back DEF-075 and DEF-076. If the delivery lead wants the floating toolbar anyway, the least-bad version is the mock-up's own: 28 px buttons, `pointer-events: none` while hidden, shown on hover and focus-within, only at `fine-wide:` with the compact 24 px arrow and 320 px column, and the delivery lead accepts that the name and status are covered while the pointer is on the row. It would need the test of AQP-418 (centre press on a short row at 1366 px) to pass again, and DEF-076's press-hold. I advise against it.
+
+**Decision still open for the product-manager** (from comment 12939, section 7): the customer saw the floating toolbar, so the next customer review should show the under-the-name toolbar, or the customer is told. The ux-spec row 3 text ("floats over the end of the row on hover") and SCR-05 are still the old version; the CR-01 UX session owns them.
+
+## PR #707: the red tablet test (`estimate-save.spec.ts:304`, axe `target-size`)
+
+What I can say from the render, not from the failing run (no artefact was kept, and I could not run the spec):
+
+1. **#707 does make the tree column taller:** +8 px at 768 and 1023 px (699 to 707), +20 px at 1280. At tablet the whole 8 px is the **legend**: its tiles are 24 px, the old icons 16 px. The rows do not change height at 768 px: each is 44 px (the arrow cell) and the tile is 24 px. So the form below the tree moves down by 8 px at tablet. The tree is above the form at that width, which fits the developer's suspicion.
+2. **The tile cannot itself fail WCAG 2.5.8.** It is not a control; the rule counts buttons and links. Every tree control is 44 x 44 px at tablet (arrow, link row, toolbar buttons), well above 24 px.
+3. The flagged target is the form panel's notice button, with the top bar's "Open menu" and two header elements as the overlapped neighbours. That is a button **under the sticky top bar**, a position that depends on the scroll offset. An 8 px shift can move a button into or out of that band. So the shift is the trigger, and the likely cause is a button that can sit beneath the sticky bar after a scroll. That would be a defect of its own (spec: the sticky bar must not hide a focused field, WCAG 2.4.11 and the scroll padding of UX-14), present on `master` and uncovered by the shift. **Not proven.**
+4. **Ruling on tile size and spacing: keep the 24 px tile and the spacing as ruled. No change is needed for WCAG 2.5.8 at any width.** Making the legend smaller would not remove the cause: the mock-up's own 22 px legend tile still adds 6 px, and any change of height above the form can move that button. Do not shrink the tiles to make this test pass.
+5. **Next step, for the developer:** run `estimate-save.spec.ts:304` on the tablet project of #707 with a screenshot at the axe call, and read which element covers the button. If it is the sticky top bar, fix it in the form panel (scroll margin for the notice's buttons equal to the top bar's height, so a scrolled-to button is never under it), not in the tree. If it is something else, send me the screenshot.
+
+## Mock-up, spec and build disagreements found in this round (for the CR-01 UX session; I have not edited them)
+
+1. **Toolbar** (item 8): SCR-05 and spec row 3 still describe the floating hover toolbar; the design since 2026-11-23 (comment 12939, DL-346) is under the name on the open and focused row.
+2. **Width** (item 11): spec says 288 px resizable, mock-up draws 320 px.
+3. **Status words** (item 14): mock-up "Complete / In progress / Not started / Missing data", build and AC-4 "All inputs entered / Some inputs entered / No inputs yet / Missing inputs".
+4. **Tablet touch size** (round one): mock-up raises the arrow and buttons to 44 px only below 768 px.
+5. **Spec gap** (round one): the spec does not state the tile, glyph names, tints, open-row look, number font, header and count, legends or the "Add main assembly" style, which is why the build and mock-up drifted. One paragraph in row 3 would close it.
+
+## What I started and stopped
+
+Nothing was started that needs stopping: no container, no server, no E2E, no change to `aqp-398`, `aqp-403`, the demo copy or `accucut-demo-db`. In the scratchpad folder above I created two folders (`b-master`, `b-707`) holding `git archive` copies of `src` and `package.json` from the two commits, each with a directory junction named `node_modules` pointing at `aqp-398`'s (read only; the junctions were removed afterwards, the target was not touched), and ran Tailwind's PostCSS plugin, Vitest (to render markup) and Playwright's Chromium (screenshots) from there. No file in any repository was written except this one.
