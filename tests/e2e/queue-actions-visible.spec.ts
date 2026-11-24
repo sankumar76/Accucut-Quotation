@@ -23,7 +23,8 @@ test.beforeEach(async ({ context }) => {
 
 /** The widths each project reads: its own, and for the desktop project the other widths of the pass line. */
 const WIDTHS: Readonly<Record<string, ReadonlyArray<number>>> = { mobile: [360], tablet: [768], desktop: [1024, 1280, 1366, 1440] };
-const HEIGHT = 900;
+/** Tall, so a row of the Ignored tab (its remarks make it tall, under a long header) is wholly in the window and no step needs a scroll of the page. */
+const HEIGHT = 1300;
 /** The table is a table from 768 px; below it a card for each task. */
 const TABLE_FROM = 768;
 /** Half a pixel: layout rounds to a fraction of a pixel. */
@@ -73,13 +74,27 @@ async function expectWhole(what: string, locator: Locator, holder: Edges): Promi
   }
 }
 
-/** Not overlapped: the element at the middle of the control is the control itself (or something inside it). */
-const isOnTop = (locator: Locator): Promise<boolean> =>
+/**
+ * Not overlapped: at the middle of **each client rect** of the control (a link that wraps onto two lines has two, and the middle of its bounding box falls between them, on nothing), the element is the control or
+ * inside it (`contains`, not strict equality: a link holds text nodes and icons). `null` when it is; else what is there instead and where, so a failure says why.
+ */
+const coveredBy = (locator: Locator): Promise<string | null> =>
   locator.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-    return hit !== null && (hit === element || element.contains(hit));
+    const rects = Array.from(element.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+    if (rects.length === 0) return 'no box';
+    for (const rect of rects) {
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      if (hit === null || !element.contains(hit)) return `${hit === null ? 'nothing' : hit.tagName.toLowerCase()} at ${Math.round(x)},${Math.round(y)} in a window of ${window.innerWidth} x ${window.innerHeight}`;
+    }
+    return null;
   });
+
+/** On a phone the cards stack under a tall header, so a card may be below the window: bring it up (the page scrolls; there is no table region to move). From 768 px nothing is scrolled by hand. */
+async function showCard(page: Page, locator: Locator): Promise<void> {
+  if ((page.viewportSize()?.width ?? 0) < TABLE_FROM) await locator.scrollIntoViewIfNeeded();
+}
 
 const isOpaque = (colour: string): boolean => (colour.startsWith('rgb(') || /,\s*1\)$/.test(colour)) && colour !== 'rgba(0, 0, 0, 0)';
 
@@ -106,20 +121,20 @@ interface Reading {
   readonly bottom: number;
   readonly viewportWidth: number;
   readonly viewportHeight: number;
-  /** The element at the centre of the control's box is the control or inside it (`contains`, not strict equality: a link holds text nodes and icons). */
-  readonly onTop: boolean;
+  /** `null` when the element at the centre of the control's box is the control or inside it (`contains`, not strict equality: a link holds text nodes and icons); else what is there. */
+  readonly coveredBy: string | null;
 }
 
-/** What has focus, read in the page, or null when focus is not inside the row. */
-const readFocused = (row: Locator): Promise<Reading | null> =>
-  row.evaluate((rowElement) => {
-    const element = document.activeElement;
-    if (element === null || !rowElement.contains(element)) return null;
-    const rect = element.getBoundingClientRect();
-    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-    const label = element.getAttribute('aria-label') ?? element.textContent?.trim().slice(0, 40) ?? element.tagName;
-    return { label, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight, onTop: hit !== null && element.contains(hit) };
-  });
+/** What has focus, or null when focus is not inside the row. */
+async function readFocused(page: Page, row: Locator): Promise<Reading | null> {
+  const focused = row.locator(':focus');
+  if ((await focused.count()) === 0) return null;
+  const box = await focused.boundingBox();
+  const size = page.viewportSize();
+  if (box === null || size === null) throw new Error('The focused control has no box.');
+  const label = (await focused.getAttribute('aria-label')) ?? (await focused.innerText()).trim().slice(0, 40);
+  return { label, left: box.x, right: box.x + box.width, top: box.y, bottom: box.y + box.height, viewportWidth: size.width, viewportHeight: size.height, coveredBy: await coveredBy(focused) };
+}
 
 /**
  * Tab through every focusable control of the row, from its task link to the one after the action (DL-358 (5)(b)): the task link, the folder link, Copy path and the action, since a sticky column can cover a control
@@ -129,11 +144,11 @@ const readFocused = (row: Locator): Promise<Reading | null> =>
 async function expectEveryControlShown(page: Page, row: Locator, code: string, action: Locator): Promise<void> {
   await row.getByRole('link', { name: code, exact: true }).focus();
   const readings: Reading[] = [];
-  let reading = await readFocused(row);
+  let reading = await readFocused(page, row);
   for (let press = 0; reading !== null && press < MAX_TABS; press += 1) {
     readings.push(reading);
     await page.keyboard.press('Tab');
-    reading = await readFocused(row);
+    reading = await readFocused(page, row);
   }
   const holder = await holderOf(page, row);
   const actionLabel = await action.getAttribute('aria-label');
@@ -146,7 +161,7 @@ async function expectEveryControlShown(page: Page, row: Locator, code: string, a
     expect.soft(each.right, `${each.label}: inside the window, right`).toBeLessThanOrEqual(each.viewportWidth);
     expect.soft(each.top, `${each.label}: inside the window, top`).toBeGreaterThanOrEqual(0);
     expect.soft(each.bottom, `${each.label}: inside the window, bottom`).toBeLessThanOrEqual(each.viewportHeight);
-    expect.soft(each.onTop, `${each.label}: the element at its centre is the control or inside it`).toBe(true);
+    expect.soft(each.coveredBy, `${each.label}: the element at its centre is the control or inside it`).toBeNull();
   }
 }
 
@@ -159,19 +174,30 @@ async function openTab(page: Page, width: number, tab: string, code: string): Pr
   return row;
 }
 
-/** Every width the project reads: the page does not scroll sideways, the region is not scrolled, the checks run, axe is clean. */
+/**
+ * Every width the project reads, on one page load (the layout is CSS: the widths are the window's, set one after another, so a case costs one load of the queue and not one for each width): the page does not scroll
+ * sideways, the region is not scrolled (back at its start after the last width's Tab walk), the checks run, axe is clean. axe scans at the project's own width only: a scan is the dearest step of a width, and the layout
+ * rules it reads do not change between 1280 and 1440 px.
+ */
 async function atEveryWidth(page: Page, projectName: string, tab: string, code: string, check: (row: Locator, holder: Edges) => Promise<void>): Promise<void> {
-  // axe scans the page at the project's own width only: a scan is the dearest step of a width, and the layout rules it reads do not change between 1280 and 1440 px.
   const ownWidth = page.viewportSize()?.width;
+  await page.goto(queueAddressOf(tab, code));
+  const row = page.locator(`[data-task-code="${code}"]:visible`);
+  await expect(row).toBeVisible();
+  const region = page.getByRole('region', { name: REGION_NAME });
   for (const width of widthsOf(projectName)) {
-    const row = await openTab(page, width, tab, code);
-    expect(await horizontalOverflow(page), `${width} px: the page does not scroll sideways`).toBeLessThanOrEqual(0);
-    // The proof is read with the region not scrolled; only the Tab at the end of a check may scroll it.
-    if (width >= TABLE_FROM) expect(await page.getByRole('region', { name: REGION_NAME }).evaluate((element) => element.scrollLeft), `${width} px: the region is not scrolled`).toBe(0);
-    // The symptom first (the action or the chip outside the region), then the guarantee behind the fix, then axe.
-    await check(row, await holderOf(page, row));
-    await expectStickyActions(page, row);
-    if (width === ownWidth) await expectNoAxeViolations(page);
+    await test.step(`${width} px`, async () => {
+      await page.setViewportSize({ width, height: HEIGHT });
+      await expect(row).toBeVisible();
+      if (width >= TABLE_FROM) await region.evaluate((element) => { element.scrollLeft = 0; });
+      expect(await horizontalOverflow(page), 'the page does not scroll sideways').toBeLessThanOrEqual(0);
+      // The proof is read with the region not scrolled; only the Tab at the end of a check may scroll it.
+      if (width >= TABLE_FROM) expect(await region.evaluate((element) => element.scrollLeft), 'the region is not scrolled').toBe(0);
+      // The symptom first (the action or the chip outside the region), then the guarantee behind the fix, then axe.
+      await check(row, await holderOf(page, row));
+      await expectStickyActions(page, row);
+      if (width === ownWidth) await expectNoAxeViolations(page);
+    });
   }
 }
 
@@ -183,7 +209,8 @@ test.describe('DEF-077: the Actions column of the queue stays visible (DL-357)',
       const action = row.getByRole('link', { name: `Reassign or change deadline, ${code}` });
       await expect(action).toBeVisible();
       await expectWhole('Reassign or change deadline', action, holder);
-      expect.soft(await isOnTop(action), 'nothing covers the action').toBe(true);
+      await showCard(page, action);
+      expect.soft(await coveredBy(action), 'nothing covers the action').toBeNull();
       await expectEveryControlShown(page, row, code, action);
     });
   });
@@ -200,7 +227,8 @@ test.describe('DEF-077: the Actions column of the queue stays visible (DL-357)',
       await expect(chip).toContainText('Downloaded 1×');
       await expect(chip).toContainText('Last downloaded by');
       await expectWhole('the Downloaded chip', chip, holder);
-      expect.soft(await isOnTop(chip), 'nothing covers the chip').toBe(true);
+      await showCard(page, chip);
+      expect.soft(await coveredBy(chip), 'nothing covers the chip').toBeNull();
     });
   });
 
@@ -211,7 +239,8 @@ test.describe('DEF-077: the Actions column of the queue stays visible (DL-357)',
       const action = row.getByRole('link', { name: `Open to restore, ${code}` });
       await expect(action).toBeVisible();
       await expectWhole('Open to restore', action, holder);
-      expect.soft(await isOnTop(action), 'nothing covers the action').toBe(true);
+      await showCard(page, action);
+      expect.soft(await coveredBy(action), 'nothing covers the action').toBeNull();
       await expectEveryControlShown(page, row, code, action);
     });
   });

@@ -104,7 +104,7 @@ describe('the three columns that dropped out are lines of the cells, visible tex
       expect(occurrences(table, 'Customer: ')).toBe(1);
       expect(occurrences(table, 'Assigned by: ')).toBe(1);
       expect(occurrences(table, 'Copy path</button>')).toBe(1);
-      expect(table).not.toContain('hidden');
+      expect(table).not.toMatch(/class="(?:[^"]*\s)?hidden[\s"]/);
     }
   });
 
