@@ -11,7 +11,7 @@ import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './
  * of the approval. What it checks: the dialog opens from the Unlock button with focus on the safe choice, the required reason and the notice of what changed since the approval, keeps focus inside, has no
  * sideways scroll and no axe violation; an empty reason and a reason over 500 characters show the spec's sentence under the field and send nothing; a good unlock shows "Unlocking", then the Draft with the
  * notice (who, when, why, the figures still the approval's, the price approved earlier, whose queue), BO labelled "Approved earlier", Recalculate as the primary action and Approve off; the Engineer then
- * sees the estimate editable and no price; an input changed after the unlock clears every figure but not BO, and a Recalculate brings the estimate back to Prepared; a deleted customer stops the dialog
+ * sees the estimate editable and no price (a test of its own, after the Lead's, on the same estimate: DEF-043); an input changed after the unlock clears every figure but not BO, and a Recalculate brings the estimate back to Prepared; a deleted customer stops the dialog
  * before the reason is typed; and an estimate unlocked in another window while the dialog was open is not unlocked twice. The unlocks are made by Leads of the tests' own, never by the Admin, so the audit
  * screen's list of "Approval cancelled" (no story has raised it yet) is not touched. The words are the UX spec's (v0.31), written out here and not imported. Every name and path is invented.
  */
@@ -131,58 +131,74 @@ test.describe('AC-4: the reason', () => {
 });
 
 test.describe('AC-2, AC-3, AC-7, AC-11: a good unlock', () => {
-  test('shows "Unlocking" while it is under way, then the Draft with the notice, BO "Approved earlier", Recalculate and Approve off; the Engineer then sees the estimate editable and no price', async ({ page }, testInfo) => {
-    const { code, owner, lead } = await openedApproved(page, testInfo);
-    await page.route(UNLOCK_ROUTE, async (route) => {
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, SLOW_MILLISECONDS);
+  // DEF-043 (AQP-346, DL-370): one test did the Lead's unlock through the dialog and then the Engineer's page load, and at 360 px on a loaded runner the whole of it passed 30 s at the Engineer's
+  // last step (`#calculate-button`). The two halves are now two tests, each with its own 30 s, and every assertion of the one test is in one of them. They are a serial group because the Engineer half
+  // reads the estimate the Lead half unlocked: a test of its own would make two more people (an Engineer and a Lead) in a shard whose `users.spec.ts:58` counts every person made before it (DEF-053,
+  // DL-367). A serial group retries together, so a retry makes its estimate again. No other test of the file reads the variable.
+  let unlocked: { readonly code: string; readonly owner: Awaited<ReturnType<typeof approvedEstimate>>['owner'] } | undefined;
+
+  test.describe('the Lead, then the Engineer', () => {
+    test.describe.configure({ mode: 'serial' });
+
+    test('shows "Unlocking" while it is under way, then the Draft with the notice, BO "Approved earlier", Recalculate and Approve off', async ({ page }, testInfo) => {
+      const { code, owner, lead } = await openedApproved(page, testInfo);
+      await page.route(UNLOCK_ROUTE, async (route) => {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, SLOW_MILLISECONDS);
+        });
+        await route.continue();
       });
-      await route.continue();
+      const dialog = await openDialog(page, code);
+      await reasonOf(dialog).fill(`  ${REASON}  `);
+      const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${owner.id}/unlock`));
+      await submitOf(dialog).click();
+      await expect(dialog.getByRole('button', { name: 'Unlocking' })).toBeDisabled();
+      // The dialog cannot be dismissed while the request is under way.
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeVisible();
+      const response = await answered;
+      expect(response.status()).toBe(200);
+      expect(Object.keys((await response.json()) as object).sort()).toEqual(['status', 'unlockedAt']);
+
+      await expect(dialog).toHaveCount(0);
+      const notice = noticeOf(page);
+      await expect(notice).toBeVisible();
+      await expect(notice).toContainText(`by ${lead.name}.`);
+      await expect(notice).toContainText(/Unlocked on \d{2} \w{3} \d{4}, \d{2}:\d{2} IST by /);
+      await expect(notice).toContainText(`Reason: ${REASON}`);
+      await expect(notice).toContainText(FIGURES_CURRENT);
+      await expect(notice).toContainText(PRICE_STAYS);
+      await expect(notice).toContainText(`The task is back in ${owner.name}'s Open queue.`);
+      await expect(notice).toBeFocused();
+      // BO is the price approved earlier, labelled so; Approve is off until the figures are made again; Recalculate is the way on, though the figures are current (AC-11).
+      await expect(tiles(page)).toContainText(RUPEES_APPROVED);
+      await expect(tiles(page)).toContainText('Approved earlier');
+      await expect(page.locator('#review-approve')).toBeDisabled();
+      await expect(page.locator('#review-calculate')).toHaveText('Recalculate');
+      await expect(page.locator('#review-calculate')).toBeEnabled();
+      await expect(unlockButton(page)).toHaveCount(0);
+      expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 1 });
+      expect(await readUnlock(owner.id)).toEqual({ approvedPrice: APPROVED_PRICE, unlockedBy: lead.id, reason: REASON, entries: 1 });
+      unlocked = { code, owner };
+      // STORY-07.07: Download is now the link (no reason line under it), so the page is shorter and the focused notice leaves the folder link half behind the sticky top bar at 768 px. The scan reads the page where it stands, so it is made from the top, as after a page load (the same step as insert-field.spec.ts).
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await expectNoAxeViolations(page);
     });
-    const dialog = await openDialog(page, code);
-    await reasonOf(dialog).fill(`  ${REASON}  `);
-    const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${owner.id}/unlock`));
-    await submitOf(dialog).click();
-    await expect(dialog.getByRole('button', { name: 'Unlocking' })).toBeDisabled();
-    // The dialog cannot be dismissed while the request is under way.
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeVisible();
-    const response = await answered;
-    expect(response.status()).toBe(200);
-    expect(Object.keys((await response.json()) as object).sort()).toEqual(['status', 'unlockedAt']);
 
-    await expect(dialog).toHaveCount(0);
-    const notice = noticeOf(page);
-    await expect(notice).toBeVisible();
-    await expect(notice).toContainText(`by ${lead.name}.`);
-    await expect(notice).toContainText(/Unlocked on \d{2} \w{3} \d{4}, \d{2}:\d{2} IST by /);
-    await expect(notice).toContainText(`Reason: ${REASON}`);
-    await expect(notice).toContainText(FIGURES_CURRENT);
-    await expect(notice).toContainText(PRICE_STAYS);
-    await expect(notice).toContainText(`The task is back in ${owner.name}'s Open queue.`);
-    await expect(notice).toBeFocused();
-    // BO is the price approved earlier, labelled so; Approve is off until the figures are made again; Recalculate is the way on, though the figures are current (AC-11).
-    await expect(tiles(page)).toContainText(RUPEES_APPROVED);
-    await expect(tiles(page)).toContainText('Approved earlier');
-    await expect(page.locator('#review-approve')).toBeDisabled();
-    await expect(page.locator('#review-calculate')).toHaveText('Recalculate');
-    await expect(page.locator('#review-calculate')).toBeEnabled();
-    await expect(unlockButton(page)).toHaveCount(0);
-    expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 1 });
-    expect(await readUnlock(owner.id)).toEqual({ approvedPrice: APPROVED_PRICE, unlockedBy: lead.id, reason: REASON, entries: 1 });
-    // STORY-07.07: Download is now the link (no reason line under it), so the page is shorter and the focused notice leaves the folder link half behind the sticky top bar at 768 px. The scan reads the page where it stands, so it is made from the top, as after a page load (the same step as insert-field.spec.ts).
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await expectNoAxeViolations(page);
-
-    // AC-7: the Engineer, on the same address, finds the estimate editable again and sees no price (NFR-002).
-    await signInAs(page, owner);
-    const own = await page.goto(`/estimates/${code}`);
-    expect(own?.status()).toBe(200);
-    await expect(page.locator('#calculate-button')).toHaveText('Calculate');
-    await expect(page.getByText('Approved and locked.', { exact: true })).toHaveCount(0);
-    await expect(page.getByText('48,271.37')).toHaveCount(0);
-    await expect(page.getByText('Approved Quote Price')).toHaveCount(0);
-    await expect(page.getByText('Approved earlier')).toHaveCount(0);
+    test('AC-7: the Engineer finds the estimate the Lead unlocked editable again and sees no price', async ({ page }) => {
+      const left = unlocked;
+      if (left === undefined) throw new Error('The Lead half left no unlocked estimate to read.');
+      const { code, owner } = left;
+      // AC-7: the Engineer, on an address of its own and with no page of the Lead's before it, finds the estimate editable again and sees no price (NFR-002).
+      await signInAs(page, owner);
+      const own = await page.goto(`/estimates/${code}`);
+      expect(own?.status()).toBe(200);
+      await expect(page.locator('#calculate-button')).toHaveText('Calculate');
+      await expect(page.getByText('Approved and locked.', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('48,271.37')).toHaveCount(0);
+      await expect(page.getByText('Approved Quote Price')).toHaveCount(0);
+      await expect(page.getByText('Approved earlier')).toHaveCount(0);
+    });
   });
 
   test('an input changed after the unlock clears every figure but not BO; a Recalculate brings the estimate back to Prepared with Approve on', async ({ page }, testInfo) => {
