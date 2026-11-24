@@ -19,6 +19,35 @@ export function stepOf(nodes: ReadonlyArray<PartItem>, part: PartItem, direction
   return target < 0 || target >= siblings.length ? null : target;
 }
 
+/** Where a part sits among the parts with the same parent: its place (from 0) and how many there are. */
+export interface SiblingPlace {
+  readonly index: number;
+  readonly count: number;
+}
+
+/**
+ * The place of every part among the parts with the same parent, from one pass over the list (AQP-406, PRF-C-01): the screen asks it once for the whole tree and gives each row its place, where
+ * `stepOf` scanned the whole list for each row (two scans a row, so a render that grew with the square of the parts). It follows the rule of `stepOf` and `siblingsOf` exactly: the parts that count
+ * are those with the same `parentId`, in the order of the list.
+ */
+export function siblingPlacesOf(nodes: ReadonlyArray<{ readonly id: string; readonly parentId: string | null }>): Map<string, SiblingPlace> {
+  const counts = new Map<string | null, number>();
+  const indexes = new Map<string, number>();
+  for (const node of nodes) {
+    const index = counts.get(node.parentId) ?? 0;
+    indexes.set(node.id, index);
+    counts.set(node.parentId, index + 1);
+  }
+  const places = new Map<string, SiblingPlace>();
+  for (const node of nodes) places.set(node.id, { index: indexes.get(node.id) ?? 0, count: counts.get(node.parentId) ?? 1 });
+  return places;
+}
+
+/** The places Move up and Move down take a part to, from its place: null on the first sibling for up, on the last for down, and for both on an only child. The one-row form of this is `stepOf`. */
+export function stepsAt(place: SiblingPlace): { readonly upTo: number | null; readonly downTo: number | null } {
+  return { upTo: place.index > 0 ? place.index - 1 : null, downTo: place.index < place.count - 1 ? place.index + 1 : null };
+}
+
 /** The parts a delete of this part removes: the part and every sub-part at any depth. */
 export function partsRemoved(nodes: ReadonlyArray<PartItem>, id: string): PartItem[] {
   const gone = new Set([id]);
