@@ -22,7 +22,7 @@ import { JSON_HEADERS } from './support/treatments';
 
 test.use({ storageState: ADMIN_STATE });
 
-// AQP-423 (DEF-080) observation: one line per step, printed as the step ends, so a CI log shows where the seconds go. Removed with the fix.
+// AQP-423 (DEF-080) step lines: one line per step, printed as the step ends, so a CI log shows where the seconds go. Kept until DEF-080 closes.
 const STEP_TIMING = '[AQP-423 step timing]';
 const startedAt = new Map<string, number>();
 const lastLap = new Map<string, number>();
@@ -34,6 +34,21 @@ function lap(label: string): void {
   startedAt.set(info.testId, begin);
   lastLap.set(info.testId, now);
   process.stdout.write(`${STEP_TIMING} ${info.project.name} | attempt ${String(info.retry + 1)} | ${label} | ${String(now - before)} ms | at +${String(now - begin)} ms\n`);
+}
+/** Passive: one line for each request the page itself makes to the API or asks for a page, with the time it took, so a slow step can be told from a slow answer. */
+function watchRequests(page: Page): void {
+  page.on('requestfinished', (request) => {
+    const kind = request.resourceType();
+    if (kind !== 'fetch' && kind !== 'xhr' && kind !== 'document') return;
+    const { startTime, responseEnd } = request.timing();
+    const took = responseEnd < 0 ? 'unknown' : `${String(Math.round(responseEnd - startTime))} ms`;
+    void request.response().then((response) => {
+      const info = test.info();
+      const at = Date.now() - (startedAt.get(info.testId) ?? Date.now());
+      process.stdout.write(`${STEP_TIMING} ${info.project.name} | attempt ${String(info.retry + 1)} | page request ${request.method()} ${new URL(request.url()).pathname} -> ${String(response?.status() ?? 'none')} | ${took} | ended at +${String(at)} ms
+`);
+    });
+  });
 }
 test.beforeEach(() => {
   const info = test.info();
@@ -86,15 +101,21 @@ async function makeCustomer(page: Page, name: string): Promise<Customer> {
 async function makeWorld(page: Page, testInfo: TestInfo): Promise<World> {
   const tag = tagOf(testInfo);
   const name = `E2E-propagation-rate-${tag}`;
-  const rateId = await post(page, RATES_API, { name, unit: 'per kg', defaultValue: FIRST_DEFAULT });
-  const alpha = await makeCustomer(page, `E2E Alpha ${tag}`);
-  const bravo = await makeCustomer(page, `E2E Bravo ${tag}`);
-  const charlie = await makeCustomer(page, `E2E Charlie ${tag}`);
-  for (const [customer, value] of [[bravo, BRAVO_OWN], [charlie, CHARLIE_OWN]] as const) {
-    const response = await page.request.patch(`${CUSTOMERS_API}/${customer.id}`, { headers: JSON_HEADERS, data: { rates: [{ processItemId: rateId, value }] } });
-    lap(`PATCH customer own value -> ${String(response.status())}`);
-    expect(response.ok()).toBe(true);
-  }
+  // The rate and the three customers do not depend on each other, and the two values of their own only on the rate and on bravo and charlie: two rounds of requests sent together (DEF-080).
+  const [rateId, alpha, bravo, charlie] = await Promise.all([
+    post(page, RATES_API, { name, unit: 'per kg', defaultValue: FIRST_DEFAULT }),
+    makeCustomer(page, `E2E Alpha ${tag}`),
+    makeCustomer(page, `E2E Bravo ${tag}`),
+    makeCustomer(page, `E2E Charlie ${tag}`),
+  ]);
+  lap('rate and three customers made');
+  const responses = await Promise.all(
+    ([[bravo, BRAVO_OWN], [charlie, CHARLIE_OWN]] as const).map(([customer, value]) =>
+      page.request.patch(`${CUSTOMERS_API}/${customer.id}`, { headers: JSON_HEADERS, data: { rates: [{ processItemId: rateId, value }] } }),
+    ),
+  );
+  lap('two own values set');
+  for (const response of responses) expect(response.ok()).toBe(true);
   return { rateId, name, alpha, bravo, charlie };
 }
 
@@ -104,18 +125,23 @@ async function makeWorld(page: Page, testInfo: TestInfo): Promise<World> {
  */
 async function valueOf(page: Page, world: World, customer: Customer): Promise<number> {
   const response = await page.request.patch(`${CUSTOMERS_API}/${customer.id}`, { headers: JSON_HEADERS, data: { name: customer.name } });
-  lap(`valueOf PATCH -> ${String(response.status())}`);
   expect(response.ok()).toBe(true);
   const body = (await response.json()) as { rates: ReadonlyArray<{ processItemId: string; value: string }> };
   return Number(body.rates.find((rate) => rate.processItemId === world.rateId)?.value);
 }
 
+/** The values of several customers, read together: each read is its own request and none depends on another (DEF-080). */
+async function valuesOf(page: Page, world: World, customers: readonly Customer[]): Promise<number[]> {
+  const values = await Promise.all(customers.map((customer) => valueOf(page, world, customer)));
+  lap(`${String(customers.length)} value(s) read`);
+  return values;
+}
+
 async function cleanUp(page: Page, world: World): Promise<void> {
   lap('cleanUp starts');
-  for (const customer of [world.alpha, world.bravo, world.charlie]) {
-    const deleted = await page.request.delete(`${CUSTOMERS_API}/${customer.id}`, { headers: JSON_HEADERS });
-    lap(`cleanUp DELETE customer -> ${String(deleted.status())}`);
-  }
+  // The three customers go together, and the rate after them, as before (the order of customers then rate is kept).
+  await Promise.all([world.alpha, world.bravo, world.charlie].map((customer) => page.request.delete(`${CUSTOMERS_API}/${customer.id}`, { headers: JSON_HEADERS })));
+  lap('cleanUp: three customers removed');
   const gone = await page.request.delete(`${RATES_API}/${world.rateId}`, { headers: JSON_HEADERS });
   lap(`cleanUp DELETE rate -> ${String(gone.status())}`);
   expect([NO_CONTENT, 404]).toContain(gone.status());
@@ -143,6 +169,7 @@ test.describe('a changed default reaches the customers (AC-1 to AC-3, AC-5, AC-1
     const world = await makeWorld(page, testInfo);
     try {
       lap('world made');
+      watchRequests(page);
       await openProcessMaster(page);
       lap('Process Master opened');
       await saveDefault(page, world, SECOND_DEFAULT);
@@ -185,7 +212,7 @@ test.describe('a changed default reaches the customers (AC-1 to AC-3, AC-5, AC-1
       await expect(bravo.keep).toBeChecked();
       await expect(charlie.keep).toBeChecked();
       lap('all-buttons done');
-      expect([await valueOf(page, world, world.bravo), await valueOf(page, world, world.charlie)]).toEqual([Number(BRAVO_OWN), Number(CHARLIE_OWN)]);
+      expect(await valuesOf(page, world, [world.bravo, world.charlie])).toEqual([Number(BRAVO_OWN), Number(CHARLIE_OWN)]);
       lap('values read, nothing saved');
 
       // Apply for bravo only, then Save choices by keyboard.
@@ -200,7 +227,7 @@ test.describe('a changed default reaches the customers (AC-1 to AC-3, AC-5, AC-1
       await expect(page.getByRole('status').filter({ hasText: '1 customer now has 1.52. 1 customer kept its own value. The changes are in the audit log.' })).toBeVisible();
       await expect(rowButton(page, world.name, 'Edit')).toBeFocused();
       lap('notice and focus checked');
-      expect([await valueOf(page, world, world.alpha), await valueOf(page, world, world.bravo), await valueOf(page, world, world.charlie)]).toEqual([1.52, 1.52, 1.45]);
+      expect(await valuesOf(page, world, [world.alpha, world.bravo, world.charlie])).toEqual([1.52, 1.52, 1.45]);
       lap('three values read');
       if ((page.viewportSize()?.width ?? 0) >= TABLET_MIN_WIDTH) {
         await expect(page.locator('[data-item-id]:visible').filter({ hasText: world.name }).getByRole('cell').nth(OWN_VALUE_CELL)).toHaveText('1');
