@@ -4,6 +4,7 @@ import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { NodeKindIcon } from '@/components/shared/node-kind-icon';
 import { PartsTreeList } from '@/components/shared/parts-tree-list';
 import { QuantityTag } from '@/components/shared/quantity-tag';
+import { TOUCH_LINK } from '@/components/shared/touch-link';
 import { TreeLegend } from '@/components/shared/tree-legend';
 import { cn } from '@/lib/cn';
 import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
@@ -59,7 +60,7 @@ function TreeRow({ node, kindLabel, state, code, warned }: { readonly node: Cost
         <span className="text-body font-semibold text-ink tabular-nums">{figureOf(state, node)}</span>
         {state === 'current' && node.figures !== null ? <span className="text-ink-3 tabular-nums">{rowCurrencies(formatFigure(node.figures.unitPriceUsd), formatFigure(node.figures.unitPriceEur))}</span> : null}
         {warned ? <QuantityTag /> : null}
-        <a href={costDetailsHref(code, node.slNo)} className="font-semibold text-primary-ink underline underline-offset-2">
+        <a href={costDetailsHref(code, node.slNo)} className={cn(TOUCH_LINK, 'font-semibold text-primary-ink underline underline-offset-2')}>
           {COST_DETAILS_LINK}
           <span className="sr-only">{` for ${node.slNo} ${name}`}</span>
         </a>
