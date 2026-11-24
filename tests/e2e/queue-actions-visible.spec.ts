@@ -5,6 +5,7 @@ import { useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
 import { withExportTurn } from './support/export-slot';
 import { estimateInStatus, ignoreThroughTheApi, moveDeadlineIntoThePast, queueAddressOf } from './support/ignored';
+import { expectLinkTarget, isTouchLayout } from './support/touch-link';
 
 /**
  * DEF-077 (AQP-420; DL-357; UX 13044; UX spec section 6.0 "Masters tables", OQ-UX-20 closed: the pass line binds the Lead's and Admin's queue): the Actions column of the task queue stays visible. On the Open,
@@ -289,6 +290,41 @@ test.describe('DEF-077: the Actions column of the queue stays visible (DL-357)',
         if (width === ownWidth) await expectNoAxeViolations(page);
       });
     }
+  });
+});
+
+/** Remarks longer than the 140 characters of the preview, so the row of the Ignored tab offers "Read all remarks" (a link of its own under the text). */
+const LONG_REMARKS = 'Not taken forward because the customer chose another supplier, after the second round of prices and a call with their buyer, and asked us to keep the file closed until next year. Nothing was lost.';
+
+/**
+ * DEF-079 (AQP-422; NFR-017 as ruled on 2026-11-24): on a touch layout (below 1024 px, or a coarse pointer at any width) the task code, which is the one way to open a task on a phone card, and "Read all remarks" are
+ * controls: each is at least 44 px high by a least height, a tap at its top or bottom edge lands on it, its text keeps its size, the page does not scroll sideways and axe is clean (the widths and the Actions column
+ * are checked as for DEF-077 above). With a mouse from 1024 px the links keep the height of their line. The desktop project reads the 1024 to 1440 px widths with a mouse and again with a finger.
+ */
+test.describe('DEF-079: the task code and "Read all remarks" are 44 px controls on a touch layout (NFR-017)', () => {
+  test('Ignored tab: the task code and "Read all remarks" at every width of the project', async ({ page }, testInfo) => {
+    const { code, owner } = await estimateInStatus(page, testInfo, 'DRAFT');
+    expect(await ignoreThroughTheApi(page, owner.id, LONG_REMARKS)).toBe(200);
+    await atEveryWidth(page, testInfo.project.name, 'ignored', code, async (row) => {
+      await expectLinkTarget(page, 'the task code', row.getByRole('link', { name: code, exact: true }));
+      await expectLinkTarget(page, 'Read all remarks', row.getByRole('link', { name: `Read all remarks, ${code}` }));
+    });
+  });
+
+  test.describe('with a coarse pointer', () => {
+    test.use({ hasTouch: true });
+
+    test('Open tab: the task code is 44 px high at 1024 to 1440 px when the pointer is a finger', async ({ page }, testInfo) => {
+      // The same case in every project would read the 1024 to 1440 px widths three times: the desktop project reads them, the other two are touch at their own width and read it in the case above.
+      test.skip(testInfo.project.name === 'mobile' || testInfo.project.name === 'tablet', 'read once, in the desktop project');
+      const { code, owner } = await estimateInStatus(page, testInfo, 'DRAFT');
+      await moveDeadlineIntoThePast(owner.id);
+      await atEveryWidth(page, testInfo.project.name, 'open', code, async (row) => {
+        expect(await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches), 'the context has a coarse pointer').toBe(true);
+        expect(await isTouchLayout(page), 'a coarse pointer is a touch layout at any width').toBe(true);
+        await expectLinkTarget(page, 'the task code', row.getByRole('link', { name: code, exact: true }));
+      });
+    });
   });
 });
 

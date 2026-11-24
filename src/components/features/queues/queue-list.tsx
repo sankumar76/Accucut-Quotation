@@ -4,6 +4,7 @@ import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { DownloadChip } from '@/components/shared/download-chip';
 import { FOLDER_LINK_NOTE, FolderPath } from '@/components/shared/folder-path';
 import { StatusBadge } from '@/components/shared/status-badge';
+import { TOUCH_LINK } from '@/components/shared/touch-link';
 import { Button } from '@/components/ui/button';
 import { Table, TableActionsCell, TableActionsHead, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { RoleName } from '@/lib/auth/roles';
@@ -74,7 +75,7 @@ function Folder({ task }: { readonly task: QueueRowData }) {
 function TaskCell({ task }: { readonly task: QueueRowData }) {
   return (
     <>
-      <Link href={taskHref(task.code)} className="font-semibold text-primary-ink underline-offset-2 hover:underline">
+      <Link href={taskHref(task.code)} className={cn(TOUCH_LINK, 'font-semibold text-primary-ink underline-offset-2 hover:underline')}>
         {task.code}
       </Link>
       {task.title === null ? null : <div className={cn('text-body text-ink', BREAK_LONG_NAMES)}>{task.title}</div>}
@@ -145,7 +146,7 @@ function IgnoredRemarks({ task, width = 'max-w-[280px]' }: { readonly task: Queu
     <div data-ignored-remarks="" className={cn('mt-s-2 text-body text-ink-2', width, BREAK_LONG_NAMES)}>
       <p>{preview.text}</p>
       {preview.cut ? (
-        <Link href={taskHref(task.code)} aria-label={readAllRemarksLabel(task.code)} className="font-semibold text-primary-ink underline-offset-2 hover:underline">
+        <Link href={taskHref(task.code)} aria-label={readAllRemarksLabel(task.code)} className={cn(TOUCH_LINK, 'font-semibold text-primary-ink underline-offset-2 hover:underline')}>
           {READ_ALL_REMARKS}
         </Link>
       ) : null}
