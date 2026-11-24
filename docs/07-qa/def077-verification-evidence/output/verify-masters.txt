@@ -1,0 +1,14 @@
+
+Running 1 test using 1 worker
+
+QA4| SCR-14 Admin 1366px STATIC {"rows":8,"controls":24,"outside":0,"cellsSticky":8,"cellsOpaque":8,"headText":"Actions","headWidth":156,"headSticky":"sticky","headOpaque":true,"endsAtEdge":true,"overflow":0}
+QA4| SCR-14 Admin 1366px SUMMARY {"rows":8,"controls":24,"outside":0,"cellsSticky":8,"cellsOpaque":8,"headText":"Actions","headWidth":156,"headSticky":"sticky","headOpaque":true,"endsAtEdge":true,"overflow":0,"tabStops":22,"notWhole":0,"axe":"axe clean"}
+QA4| SCR-14 Admin 1280px STATIC {"rows":8,"controls":24,"outside":0,"cellsSticky":8,"cellsOpaque":8,"headText":"Actions","headWidth":156,"headSticky":"sticky","headOpaque":true,"endsAtEdge":true,"overflow":0}
+QA4| SCR-14 Admin 1280px SUMMARY {"rows":8,"controls":24,"outside":0,"cellsSticky":8,"cellsOpaque":8,"headText":"Actions","headWidth":156,"headSticky":"sticky","headOpaque":true,"endsAtEdge":true,"overflow":0,"tabStops":22,"notWhole":0,"axe":"axe clean"}
+QA4| SCR-14 Admin 1024px STATIC {"rows":8,"controls":24,"outside":0,"cellsSticky":8,"cellsOpaque":8,"headText":"Actions","headWidth":156,"headSticky":"sticky","headOpaque":true,"endsAtEdge":true,"overflow":0}
+QA4| SCR-14 Admin 1024px SUMMARY {"rows":8,"controls":24,"outside":0,"cellsSticky":8,"cellsOpaque":8,"headText":"Actions","headWidth":156,"headSticky":"sticky","headOpaque":true,"endsAtEdge":true,"overflow":0,"tabStops":22,"notWhole":0,"axe":"axe clean"}
+QA4| SCR-14 Admin 1440px STATIC {"rows":8,"controls":24,"outside":0,"cellsSticky":8,"cellsOpaque":8,"headText":"Actions","headWidth":156,"headSticky":"sticky","headOpaque":true,"endsAtEdge":true,"overflow":0}
+QA4| SCR-14 Admin 1440px SUMMARY {"rows":8,"controls":24,"outside":0,"cellsSticky":8,"cellsOpaque":8,"headText":"Actions","headWidth":156,"headSticky":"sticky","headOpaque":true,"endsAtEdge":true,"overflow":0,"tabStops":22,"notWhole":0,"axe":"axe clean"}
+  ✓  1 [desktop] › tests\e2e-qa\masters.qa.ts:12:1 › T15 SCR-14 Users (Admin): Actions column sticky, opaque, 156 px, every row action whole, Tab walk whole, at 1024 / 1280 / 1366 / 1440 (55.7s)
+
+  1 passed (1.1m)

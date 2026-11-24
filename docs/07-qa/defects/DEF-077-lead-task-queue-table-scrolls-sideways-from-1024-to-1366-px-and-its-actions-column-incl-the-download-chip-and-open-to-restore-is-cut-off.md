@@ -6,7 +6,7 @@
 | Severity | **Sev-2 Major from 2026-11-24 (DL-357 trigger met by the keyboard focus check below; was Sev-3 Moderate)** (original grade: Sev-3 Moderate (qa-engineer, 2026-11-24; test plan section 6: a layout defect at a range of widths that leaves every action reachable, by scrolling inside the table's own region). Master may regrade it to Sev-2 if the pass line of section 6.0 is ruled to bind the queue (an AC that fails with a workaround). |
 | Priority | **P2 (Jira High, labels `sev-2` on #670), per master DL-358 (A)** (was P3, Jira Medium, `sev-3`). A **G8 blocker** with lane priority over every Sev-3 and Minor item (DL-358 (C)); if it cannot merge by the freeze, master brings it to the delivery lead with options (DL-358 (4)). |
 | Type | **Product (layout)**, with a **Requirement** question for the product-owner (OQ-UX-20: does section 6.0's pass line bind SCR-03?) |
-| Status | **Open, Sev-2 from 2026-11-24 (master DL-358)**; fix in lane 3 (`fix/AQP-420-queue-actions-visible`) to the ux-expert's design (AQP-420 comment 13044). Proof (a) to (e) of DL-358 (D). OQ-UX-20 closed "yes" (DL-357 (A)). **Scope check of 2026-11-24 (below): SCR-17 and the Engineer's list pass and do not join; the queue's Open tab also fails at 1440 px (22 px hidden).** |
+| Status | **CLOSED 2026-11-24 (qa-engineer): fixed by PR #680, `master` efc6d7e2; DL-358 (5) (a) to (e) all met (section "Verification on the fix" below).** Was: Open, Sev-2 from 2026-11-24 (master DL-358); fix in lane 3 (`fix/AQP-420-queue-actions-visible`) to the ux-expert's design (AQP-420 comment 13044). Proof (a) to (e) of DL-358 (D). OQ-UX-20 closed "yes" (DL-357 (A)). **Scope check of 2026-11-24 (below): SCR-17 and the Engineer's list pass and do not join; the queue's Open tab also fails at 1440 px (22 px hidden).** |
 | Jira / GitHub | [AQP-420](https://sankumar76.atlassian.net/browse/AQP-420) / [#670](https://github.com/sankumar76/Accucut-Quotation/issues/670) (labels bug, sev-3, ai-delivery, final-review; Jira also aiid-DEF-077, agent-qa-engineer). Relates to AQP-402, AQP-401, AQP-1 |
 | Found by / date | qa-engineer, 2026-11-24, while looking at the Closed tab chip at 1366 px (the final review) |
 | Build / commit | `master` `1fe1581b` (H) |
@@ -77,14 +77,45 @@ The Engineer has no Actions column (the manager columns, including Actions, are 
 - Tell lane 3 before the fix PR's run of record (DL-358 (D)): the case should be able to fail at 1366 and 1280 on the base (it does: 96 and 182 px for Reassign, 27 and 113 px for Open to restore) and 1440 for Open (22 px).
 - For the by-hand reading after the fix, QA reuses `focus2.qa.ts` unchanged (it reads every focusable control of the row, SCR-17 and the Engineer's list as well, at 1024, 1280, 1366 and 1440 on the three tabs).
 
+## Verification on the fix (qa-engineer, 2026-11-24; DL-358 (5) (a) to (e))
+Fix: PR #680, squash `efc6d7e2` on `master` (head of record `40302a14`, run of record 45336871656). Code read in the squash: `queue-list.tsx` `ManagerTable` (five columns; Customer, Folder and "Assigned by" are lines inside the Task and Engineer cells), `ui/table.tsx` (`actionButtons="wide"`, `--actions-w: 200px`, read by the sticky Actions column and by `scroll-padding-inline-end`; `TableActionsHead` may carry a visible word), `overdue-marker.tsx` (`OVERDUE_TINT_CLASS`, so the opaque cell repeats the row's tint). `git diff 40302a14 efc6d7e2` is empty: the squash has the head's tree. Against its parent `9697d6a5` the squash changes 7 files (560 insertions, 46 deletions).
+
+| Part | Requirement (DL-358 (5)) | Result | Evidence |
+|---|---|---|---|
+| (a) | The focus assertion runs in the desktop project and, inside the same case, at 1280 | **Met** | `tests/e2e/queue-actions-visible.spec.ts`: the desktop project reads 1024, 1280, 1366 and 1440 px in one case per tab (`WIDTHS`); the tablet project reads 768 and the mobile project the 360 px card. The base fails at 1366 and 1280 (the plant, below, fails there). *Note:* the spec's window is 1300 px high (so that no step needs a page scroll), where DL-358 (a) names 1366 x 768 and 1280 x 800. The failure guarded is horizontal, so the height does not change what a width can show; QA's own reading below ran at 800 px high. Not a defect. |
+| (b) | Tabs through every focusable control of a row on the Open and Ignored tabs; each inside the region and the window; `control.contains(hit)` at the centre of its box | **Met** | `expectEveryControlShown` (task link, folder link, Copy path, action: at least 4 controls, the action among them), used by the Open case, the Ignored case and the forced-wide case; the hit test is `coveredBy` at the centre of each client rect, with `contains`. 11 passes in the run of record (mobile 3, tablet 4, desktop 4; the forced-wide case is skipped on the 360 px card, as its code says). |
+| (c) | Red before, green after, by a plant of the sticky and scroll-padding CSS (a script that throws unless each anchor occurs once) | **Met** | PR #680 body "Red then green": the base (tests of `24e08580` on the base source) fails with a right edge of 1410.875 against a limit of 967.5 (1024) and 1223.5 (1280), the chip and "Open to restore" outside the region, "the Actions cell is sticky: Expected sticky, Received static", and the Tab walk's hit test. The plant (revert `sticky right-0` in `STICKY_ACTIONS` and `scroll-pe-(--actions-w)` in `Table`) fails **4 of 4** cases on the final head with the assertions printed per width (1024 / 1280 / 1366 / 1440): the Actions column not at the region's edge (1738 and 1482 px), "Reassign or change deadline" right edge 2693 against 967.5 / 1223.5 / 1309.5 / 1383.5, "nothing covers the action" (nothing at 2605,802 and 2605,634), "the Actions cell is sticky" and "the Actions heading is sticky" (12 each). The plant is not in any commit. |
+| (d) | QA's by-hand reading on the fix head at 1024, 1280, 1366 and 1440 px, Open, Closed, Ignored, `contains` hit test | **Met** | Below. |
+| (e) | The rest of DL-357 (4): the pass line 768 to 1440 px on the three tabs with scrollLeft 0 (else sticky and opaque); axe clean; `/queue` first load before and after; the fix PR's run of record and the first `master` push all fully green | **Met** | The spec passes at 768 (tablet), 1024, 1280, 1366, 1440 (desktop) and 360 (mobile card) in the run of record, axe clean at each project's own width. First load `/queue` 193,348 B (base, push 45319179466) to **193,674 B** (headroom 6,326 B of 200,000; +326 B); `/estimates/[code]` 189,452 to 189,479 B. Run of record 45336871656: `success`, `run_attempt` 1, shards 572 / 570 / 573 / 555 passed (5 / 7 / 4 / 21 skipped), **0 flaky, 0 failed**, Stage 6 11,115 passed. **First `master` push after the merge: CI 45341274136 `success` (attempt 1; shards 572 / 570 / 573 / 555 passed, 5 / 7 / 4 / 21 skipped, 0 flaky, 0 failed; Stage 6 11,115 and Stage 11 16,928 passed; `/queue` 193,674 B) and Windows package 45341274129 `success` (attempt 1).** |
+
+### (d) The by-hand reading
+Conditions: `efc6d7e2`, Chromium 1.65 on Windows 11, `next dev` (port 3377), throwaway Postgres 17, invented data; Lead and Engineer renamed to short names ("Kiran Bose", "Priya Nair", "Arun Rao", "Meena Iyer") as in the base reading; the Open task's deadline moved into the past (so the sticky cell carries the overdue tint); window 800 px high; region `scrollLeft` 0, set before each reading; nothing scrolled by hand in the 24 natural readings. Probe `docs/07-qa/def077-verification-evidence/scripts/verify.qa.ts` (output `output/verify-queue.txt`). For each role, width and tab it reads (1) every control of the row, the whole Actions cell, the Downloaded chip and the word "Closed" against the region's inner edges, with the `contains` hit test at the centre of every client rect; (2) the Actions cell and heading: `position` and an opaque background; (3) any focusable control outside the Actions cell that reaches under it; (4) axe (the suite's own tags); (5) a Tab walk from the region, 500 ms after each press, each control inside the region and the window with the hit test true at every client rect.
+
+| Width (px) | Tab | Admin | Lead |
+|---|---|---|---|
+| 1024 | Open | overflow 0, 0 outside, 0 covered, sticky and opaque, 4 Tab stops whole, axe clean | same |
+| 1024 | Closed | same (the chip and "Closed" inside; 3 Tab stops whole, none is a row action) | same |
+| 1024 | Ignored | same (4 stops whole, "Open to restore" last) | same |
+| 1280 | Open, Closed, Ignored | same as 1024 on each tab | same |
+| 1366 | Open, Closed, Ignored | same as 1024 on each tab | same |
+| 1440 | Open, Closed, Ignored | same as 1024 on each tab | same |
+
+**24 of 24 readings (2 roles x 4 widths x 3 tabs) pass.** The region's overflow is 0 px; every row action and the whole Downloaded chip lie inside the region with scrollLeft 0; the Actions cell and heading are sticky and opaque; nothing to their left reaches under the Actions column; all 88 Tab stops (11 for each of the 8 role and width pairs: 4 + 3 + 4) are whole with the hit test true; axe is clean in all 24. On the base the same rows read 112 / 198 / 454 px of overflow (Open) and 96 and 182 px of "Reassign or change deadline" hidden at 1366 and 1280 px (this file, above): the fix removes the symptom at every width, not only at the ones the spec reads.
+
+**Forced-wide table** (the sticky guarantee: a long name widens the table; `min-width: 2400px` on the table; Admin; Open and Ignored tabs; 4 widths = 8 readings): region overflow 1322 to 1738 px; the Actions cell ends at the region's right edge (within 0.5 px) at scrollLeft 0 and again at the region's end; it is opaque; the action is whole and nothing covers it; the Tab walk (4 stops) is whole at every width, with the browser's own focus scroll only. **8 of 8 pass.**
+
+**Masters table spot-check (UX spec 6.0, the `ui/table.tsx` change):** SCR-14 Users, Admin, at 1024, 1280, 1366 and 1440 (`masters.qa.ts`, `output/verify-masters.txt`): 8 rows, 24 row actions, 0 outside the region, 8 of 8 cells sticky and opaque, heading "Actions" **156 px wide** (the 3-button width, as before), ending at the region's right edge, region overflow 0, 22 Tab stops whole, axe clean: **4 of 4 pass, no regression.** SCR-17 (Fields and formulas, 67 rows): region overflow 0 and the first 24 Tab stops whole at the four widths (its last column is "Formula", not a sticky Actions column, as on the base). The suite's own masters guards also passed: `masters-table-actions.spec.ts` 62 of 62 and `aqp-234-qa.spec.ts` 30 of 30 in the run of record, and `masters-table-actions.spec.ts` 62 of 62 on the push.
+
+**Result: DL-358 (5) (a) to (e) are all met. DEF-077 is closed.** No new defect. Observation (not a defect): the pass line is read with short names; with a long name the queue scrolls inside its own region and the Actions column stays at the right edge (the forced-wide readings), which is the design.
+
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| OQ-UX-20 answered | product-owner | | |
-| Design | ux-expert | | |
-| Fixed | developer | | |
-| Regression test added | developer | | |
-| Verified | qa-engineer | | |
+| OQ-UX-20 answered | product-owner | 2026-11-24 | closed "yes" (DL-357 (A)) |
+| Design | ux-expert | 2026-11-24 | AQP-420 comment 13044 |
+| Fixed | developer | 2026-11-24 | PR #680, `master` efc6d7e2 |
+| Regression test added | developer | 2026-11-24 | `tests/e2e/queue-actions-visible.spec.ts`, `tests/unit/tasks/queue-actions-column.test.ts` |
+| Verified | qa-engineer | 2026-11-24 | DL-358 (5) (a) to (e) met; this file, "Verification on the fix"; push runs 45341274136 and 45341274129 `success` |
 
 ## Records
 Jira Bug AQP-420; GitHub issue #670.
