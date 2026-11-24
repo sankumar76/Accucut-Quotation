@@ -28,6 +28,7 @@ import {
   TREE_TITLE,
   TRY_AGAIN,
 } from './estimate-texts';
+import { attachPressHold } from './press-hold';
 import { RowActions } from './row-actions';
 import { TreeNode } from './tree-node';
 import { useLazyComponent } from './use-lazy-component';
@@ -63,6 +64,8 @@ function focusTree(event: Event): void {
  */
 export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps) {
   const { nodes, selected, busy } = tree;
+  // Rule P (AQP-419, DEF-076): a press in the tree never moves a row between its pointer-down and its end, so the toolbars in view at the pointer-down are held until the click has run.
+  useEffect(() => attachPressHold(document, window, TREE_ID), []);
   const deleteDialog = useLazyComponent<DeletePartDialogProps>(loadDeleteDialog, tree.deleting !== null);
   const DeleteDialog = deleteDialog.Component;
   // The branches that are closed. The tree opens with every branch open; what a person closes stays closed while the panel is on screen (the state is this panel's, not the server's).

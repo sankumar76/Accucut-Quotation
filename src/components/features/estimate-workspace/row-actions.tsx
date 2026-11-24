@@ -37,9 +37,11 @@ export interface RowActionsProps {
  * When the toolbar is in view (AQP-418, DEF-075; UX design of AQP-406 comment 12939). It is `sr-only`: clipped to 1 px with no hit area, and still in the tab order and in the accessibility tree (never `opacity-0`,
  * `hidden`, `invisible` or `display: none`, which either take presses or take the buttons away). It is in view (`not-sr-only`) on the open row (`aria-current`), while focus is visible anywhere in the row
  * (Tab onto the link shows it before Tab reaches a button), and while a menu of the row is open (the move handle's or the "+": `aria-haspopup`, so the arrows, which also carry `aria-expanded`, do not count).
- * There is no hover look and no touch variant: hover only tints the row. The classes read `group/row`, the row of `PartsTreeList`.
+ * There is no hover look and no touch variant: hover only tints the row. The classes read `group/row`, the row of `PartsTreeList`. It is also in view while a press holds it (`data-hold`, `press-hold.ts`, AQP-419 rule P): the
+ * toolbars that were in view when a pointer went down stay as they were until the press is over, so a press that moves the focus does not move the row it is aimed at.
  */
-const HIDDEN_UNTIL_NEEDED = 'sr-only group-has-[[aria-current=true]]/row:not-sr-only group-has-[:focus-visible]/row:not-sr-only group-has-[[aria-haspopup][aria-expanded=true]]/row:not-sr-only';
+const HIDDEN_UNTIL_NEEDED =
+  'sr-only data-hold:not-sr-only group-has-[[aria-current=true]]/row:not-sr-only group-has-[:focus-visible]/row:not-sr-only group-has-[[aria-haspopup][aria-expanded=true]]/row:not-sr-only';
 
 /**
  * The toolbar of one row of the parts tree (CR-01 item 3C, UX spec section 0.9 row 3): the **move handle** (3D: a drag among the rows with the same parent, or a click for Move up / Move down), the **"+"** and the **"-"**, in a group named after the

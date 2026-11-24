@@ -107,6 +107,33 @@ const toolbarBoxes = (page: Page): Promise<ToolbarBox[]> =>
     }),
   );
 
+/** The top of a row's link, in the page's own pixels. */
+const topOf = (link: Locator): Promise<number> => link.evaluate((element) => element.getBoundingClientRect().top);
+
+/** The height of the toolbar group of one row: more than 1 px when it is in view, 1 px or less when it is the `sr-only` clip. */
+async function toolbarHeightOf(page: Page, slNo: string): Promise<number> {
+  const row = (await toolbarBoxes(page)).find((box) => box.slNo === slNo);
+  return defined(row).height;
+}
+
+/**
+ * AQP-419 (DEF-076), rule P of the design (comment 13032): a press with the mouse on a row's name, whose row is where it was at the pointer-down and at the pointer-up. A press that moves the focus used to take the focus
+ * ring off another row, that row's toolbar went back to the clip, and the pressed row moved up under the pointer, so the pointer-up was over something else and the click was lost. The hold is `holdMs` long (0 for a fast click);
+ * `along` is where on the name the press is (0.5 is the centre; the menu of a handle lies over the left of the rows below it, so a press with a menu open is at the right).
+ */
+async function pressWithoutShift(page: Page, slNo: string, holdMs: number, along = 0.5): Promise<void> {
+  const link = part(page, slNo);
+  const box = defined(await link.boundingBox());
+  await page.mouse.move(box.x + box.width * along, box.y + box.height / 2);
+  await page.mouse.down();
+  const atDown = await topOf(link);
+  if (holdMs > 0) await page.evaluate((ms) => new Promise((resolve) => setTimeout(resolve, ms)), holdMs);
+  const atUp = await topOf(link);
+  await page.mouse.up();
+  expect(atDown, `row ${slNo} does not move at the pointer-down`).toBe(box.y);
+  expect(atUp, `row ${slNo} does not move before the pointer-up`).toBe(box.y);
+}
+
 /**
  * AQP-343 / DEF-040, master's DL-234 D2: a diagnostic and nothing else. A wait for "Part renumbered to ..." has failed on the first attempt only, twice, with no trace kept.
  * When it fails again, `expectRenumbered` prints what the screen and the move request were doing (to stdout, so it lands in the job log, and as an attachment), then re-throws
@@ -619,9 +646,60 @@ test.describe('AQP-405: the row actions', () => {
     await expectNoAxeViolations(page);
   });
 
-  test('AQP-405 AC-4 (AQP-418): the "-" of a row that is not the open one, reached by the keyboard (Tab from its link), deletes that row after the confirmation, and the open row stays open and is renumbered', async ({ page }, testInfo) => {
+  test('AQP-405 AC-4 (AQP-418): the "-" of a row that is not the open one, reached by the keyboard (Tab from its link), deletes that row after the confirmation, and the open row stays open and is renumbered; and a press on a row below a row that has the keyboard focus is never lost (AQP-419)', async ({ page }, testInfo) => {
     // The toolbar of a row that is not open is clipped, so a press cannot reach it (AQP-418, DEF-075): a person reaches it with Tab from the row's link, on every screen. 1.1 is a Part: the handle, the "+" and the "-".
     await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.2');
+    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+
+    // AQP-419 (DEF-076), acceptance checks 1, 2, 3, 5, 7 and 10 of the design (comment 13032). 1.2 is the open row. Row 1 is given the keyboard focus ring, so its toolbar is in view under its name and every row below it is
+    // one toolbar line lower; a press with the mouse on 1.1 then moves the focus, and used to take that line away under the pointer, so the row jumped up and the click was lost. Rule P: nothing moves between the
+    // pointer-down and the pointer-up, 1.1 is open after the click, and row 1's toolbar goes back to the clip once the press is over. Each start state is asserted (WebKit's Tab can skip), then put back.
+    const keyboardOnRow1 = async (focus: 'link' | 'handle' | 'menu'): Promise<void> => {
+      await tree(page).getByRole('button', { name: 'Close branch 1' }).focus();
+      await page.keyboard.press('Tab');
+      await expect(part(page, '1')).toBeFocused();
+      if (focus !== 'link') {
+        await page.keyboard.press('Tab');
+        await expect(handleOf(page, '1')).toBeFocused();
+      }
+      if (focus === 'menu') {
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toBeVisible();
+      }
+      expect(await toolbarHeightOf(page, '1'), 'row 1 shows its toolbar by the keyboard focus').toBeGreaterThan(1);
+    };
+    const settled = async (): Promise<void> => {
+      await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+      await expect(part(page, '1.2')).not.toHaveAttribute('aria-current', 'true');
+      await expect.poll(() => toolbarHeightOf(page, '1'), 'row 1 settles once the press is over').toBeLessThanOrEqual(1);
+      await expect(page.getByRole('menuitem')).toHaveCount(0);
+      await choose(page, '1.2');
+      await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+    };
+    for (const [focus, holdMs, along] of [['link', 0, 0.5], ['link', 150, 0.5], ['handle', 0, 0.5], ['menu', 0, 0.9]] as const) {
+      await keyboardOnRow1(focus);
+      await pressWithoutShift(page, '1.1', holdMs, along);
+      await settled();
+    }
+
+    // Check 5: a press that is dragged off the row and released elsewhere is no click, and the held line is let go of when it is over: nothing stays in the way.
+    await keyboardOnRow1('link');
+    const pressed = defined(await part(page, '1.1').boundingBox());
+    await page.mouse.move(pressed.x + pressed.width / 2, pressed.y + pressed.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(2, 2, { steps: 4 });
+    await page.mouse.up();
+    await expect.poll(() => toolbarHeightOf(page, '1'), 'a press that ends elsewhere lets the held line go').toBeLessThanOrEqual(1);
+    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+
+    // Check 7: the keyboard holds nothing. Tab from row 1's link through its buttons to row 1.1 takes row 1's toolbar away at once.
+    await keyboardOnRow1('link');
+    for (const next of [handleOf(page, '1'), rowButton(page, 'Add under', '1'), rowButton(page, 'Delete', '1'), part(page, '1.1')]) {
+      await page.keyboard.press('Tab');
+      await expect(next).toBeFocused();
+    }
+    expect(await toolbarHeightOf(page, '1'), 'Tab away collapses row 1 at once').toBeLessThanOrEqual(1);
     await choose(page, '1.2');
     await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
 
