@@ -10031,8 +10031,9 @@ eyphed
  * Words of the product. A password that contains one is refused, whatever surrounds it ("Accucut@2026!", "my-accucut-pass-1"):
  * every person who signs in knows them, so they are the first guess.
  *
- * `rfq` is the product's name since CR-01 item 2 ("RFQ Portal", which also covers "rfqportal"); `quotation` is the old name and stays,
- * because it stays guessable (FR-098, PRD 0.48; STD-C-02). `rfq` is only three letters and is matched like the others, as a plain
+ * `rfq` is the start of the product's name since CR-01 item 2 (`src/lib/product-name.ts`; the name itself is written only there, so a
+ * password that runs the two words together is caught by this one word too); `quotation` is the old name and stays, because it stays
+ * guessable (FR-098, PRD 0.48; STD-C-02). `rfq` is only three letters and is matched like the others, as a plain
  * substring of the lower-cased password: a longer word that happens to hold the three letters in a row is refused too, which is the
  * cost of the rule as the product manager wrote it ("contains `rfq` anywhere"). The words stay lower case: the password is lower-cased
  * before the match.
