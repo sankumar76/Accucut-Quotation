@@ -4,13 +4,15 @@ import { cn } from '@/lib/cn';
 
 /**
  * The width of the Actions column of a masters table by the number of 36 px buttons in it: the buttons, an 8 px gap between them and 16 px
- * of padding on each side (68, 112 and 156 px; UX spec 6.0 "Masters tables", Width). The class sets `--actions-w` on the region, which the
+ * of padding on each side (68, 112 and 156 px; UX spec 6.0 "Masters tables", Width). `wide` is the one fixed width of 200 px for a column of text buttons that wrap to two
+ * lines (the Lead's task queue, DEF-077; UX 13044). The class sets `--actions-w` on the region, which the
  * sticky column and `scroll-padding-inline-end` read. Written out in full so Tailwind finds the class names.
  */
 const ACTIONS_WIDTH = {
   1: '[--actions-w:68px]',
   2: '[--actions-w:112px]',
   3: '[--actions-w:156px]',
+  wide: '[--actions-w:200px]',
 } as const;
 
 export interface TableProps extends ComponentProps<'table'> {
@@ -82,11 +84,14 @@ export function TableCell({ className, ...props }: ComponentProps<'td'>) {
 /** The classes of the Actions heading and its cells: the last column, sticky at the right edge of the region with a hairline on its left. */
 const STICKY_ACTIONS = 'sticky right-0 z-(--z-sticky-cell) w-(--actions-w) min-w-(--actions-w) shadow-[inset_1px_0_0_var(--border)]';
 
-/** The heading of the Actions column of a masters table; its `Table` needs `actionButtons`. The word "Actions" is for assistive technology only. */
-export function TableActionsHead({ className, ...props }: Omit<ComponentProps<'th'>, 'children'>) {
+/**
+ * The heading of the Actions column of a masters table; its `Table` needs `actionButtons`. Without children the word "Actions" is for assistive technology only; a table whose column has text buttons
+ * (the task queue, DEF-077) passes the word, which then shows.
+ */
+export function TableActionsHead({ className, children, ...props }: ComponentProps<'th'>) {
   return (
     <TableHead className={cn(STICKY_ACTIONS, 'text-right', className)} {...props}>
-      <span className="sr-only">Actions</span>
+      {children ?? <span className="sr-only">Actions</span>}
     </TableHead>
   );
 }

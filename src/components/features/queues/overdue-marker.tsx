@@ -13,8 +13,11 @@ import { OVERDUE_BY } from './queue-texts';
  * "Overdue" is judged at `asOf`, the instant the server judged the counts at (never the browser's clock), so the first paint and the hydrated page say the same words.
  */
 
+/** The tint of an overdue row, which its opaque Actions cell repeats so the row's colour is unbroken (DEF-077). */
+export const OVERDUE_TINT_CLASS = 'bg-accent-soft';
+
 /** The row of the table: an amber bar down its left edge (on its first cell, which a collapsed table border draws reliably) and a tint. */
-export const OVERDUE_ROW_CLASS = 'bg-accent-soft [&>:first-child]:border-l-4 [&>:first-child]:border-l-accent';
+export const OVERDUE_ROW_CLASS = `${OVERDUE_TINT_CLASS} [&>:first-child]:border-l-4 [&>:first-child]:border-l-accent`;
 
 /** The card of a phone: the same bar and tint. */
 export const OVERDUE_CARD_CLASS = 'border-l-4 border-l-accent bg-accent-soft';

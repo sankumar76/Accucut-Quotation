@@ -108,12 +108,14 @@ describe('AC-3: the rows', () => {
     expect(html).not.toContain('Copy path</button>');
   });
 
-  it('gives a Lead and an Admin the Engineer and Customer columns and "Assigned by", and the "Assign task" button', () => {
+  it('gives a Lead and an Admin the Engineer column, the Customer and "Assigned by" as lines of the cells (DEF-077), and the "Assign task" button', () => {
     for (const role of ['LEAD', 'ADMIN'] as const) {
       const html = screen(role, page([row()]));
       expect(html).toMatch(/<th[^>]*>Engineer<\/th>/);
-      expect(html).toMatch(/<th[^>]*>Customer<\/th>/);
-      expect(html).toMatch(/<th[^>]*>Assigned by<\/th>/);
+      expect(html).not.toMatch(/<th[^>]*>Customer<\/th>/);
+      expect(html).not.toMatch(/<th[^>]*>Assigned by<\/th>/);
+      expect(html).toContain('Customer: ');
+      expect(html).toContain('Assigned by: ');
       expect(html).toContain('Invented Arjun');
       expect(html).toContain('href="/assign"');
       expect(html).toContain('Assign task');
@@ -132,11 +134,20 @@ describe('AC-3: the rows', () => {
     expect(html).toContain('Invented Boss');
   });
 
-  it('keeps the Task, Engineer, Deadline and Status columns at every width and drops Customer, Folder and Assigned by below 1024 px', () => {
-    const html = list('LEAD', [row()]);
-    for (const name of ['Customer', 'Folder', 'Assigned by']) expect(html).toMatch(new RegExp(`<th[^>]*hidden lg:table-cell[^>]*>${name}</th>`));
-    for (const name of ['Task', 'Engineer', 'Deadline \\(IST\\)', 'Status']) expect(html).toMatch(new RegExp(`<th[^>]*>${name}</th>`));
-    expect(html).not.toMatch(/<th[^>]*hidden[^>]*>(Task|Engineer|Deadline|Status)/);
+  it('keeps the Task, Deadline and Status columns of an Engineer at every width and drops Folder and Assigned by below 1024 px (their list has no Actions column to protect, DEF-077)', () => {
+    const html = list('ENGINEER', [row()]);
+    for (const name of ['Folder', 'Assigned by']) expect(html).toMatch(new RegExp(`<th[^>]*hidden lg:table-cell[^>]*>${name}</th>`));
+    for (const name of ['Task', 'Deadline \\(IST\\)', 'Status']) expect(html).toMatch(new RegExp(`<th[^>]*>${name}</th>`));
+    expect(html).not.toMatch(/<th[^>]*hidden[^>]*>(Task|Deadline|Status)/);
+  });
+
+  it('gives a Lead and an Admin five columns at every width, none of them hidden: the three columns that used to drop out are lines of the Task and Engineer cells (DEF-077)', () => {
+    for (const role of ['LEAD', 'ADMIN'] as const) {
+      const html = list(role, [row()]);
+      const table = html.slice(html.indexOf('<table'), html.indexOf('</table>'));
+      expect(Array.from(table.matchAll(/<th\s[^>]*>(.*?)<\/th>/g), (match) => match[1])).toEqual(['Task', 'Engineer', 'Deadline (IST)', 'Status', 'Actions']);
+      expect(table).not.toMatch(/<th[^>]*hidden/);
+    }
   });
 
   it('draws a table from 768 px and a card for each task below it', () => {
