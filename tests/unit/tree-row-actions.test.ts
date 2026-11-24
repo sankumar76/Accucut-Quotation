@@ -302,3 +302,36 @@ describe('AQP-343 (DEF-040, DL-340): the tree while a change is on its way', () 
     expect(panel(NODES, true, { problem: { kind: 'changed' } })).toContain('The parts were changed by someone else. The tree has been refreshed. Check it and try again.');
   });
 });
+
+describe('AQP-406 PRF-C-01 (#665): the panel draws every row\'s toolbar in a number of reads that grows with the rows, not with their square', () => {
+  /** Nodes whose `id`, `parentId` and `nodeKind` count how often they are read. A scan of the whole list for each row would read each of them 1,000 times. */
+  function countedTree(size: number, parentOf: (index: number) => string | null): { readonly nodes: PartItem[]; readonly reads: () => number } {
+    let reads = 0;
+    const nodes = Array.from({ length: size }, (_, index): PartItem => {
+      const id = `n${String(index)}`;
+      const parentId = parentOf(index);
+      const nodeKind: NodeKind = index === 0 ? 'MAIN_ASSEMBLY' : 'PART';
+      return Object.defineProperties(part(id, parentId, id, nodeKind), {
+        id: { get: () => ((reads += 1), id), enumerable: true },
+        parentId: { get: () => ((reads += 1), parentId), enumerable: true },
+        nodeKind: { get: () => ((reads += 1), nodeKind), enumerable: true },
+      });
+    });
+    return { nodes, reads: () => reads };
+  }
+
+  const SHAPES: Record<string, (index: number) => string | null> = {
+    'one parent with 999 parts': (index) => (index === 0 ? null : 'n0'),
+    'a legacy chain 150 deep with 850 parts at its foot': (index) => (index === 0 ? null : `n${String(Math.min(index, 150) - 1)}`),
+    '30 groups of 32 parts under one assembly': (index) => (index === 0 ? null : index <= 30 ? 'n0' : `n${String(1 + ((index - 31) % 30))}`),
+  };
+
+  it.each(Object.entries(SHAPES))('%s: 1,000 rows, a fixed number of reads for each row', (_name, parentOf) => {
+    const { nodes, reads } = countedTree(1000, parentOf);
+    const before = reads();
+    const html = panel(nodes, true);
+    expect(count(html, 'data-row-actions')).toBe(1000);
+    // Each row is read by its place, its kind name, its link and its toolbar. A full scan for Move up and another for Move down would be 2 x 1,000 x 1,000 reads at least.
+    expect(reads() - before).toBeLessThanOrEqual(1000 * 40);
+  }, 30_000);
+});
