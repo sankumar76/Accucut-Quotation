@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { exportFileName } from '@/lib/export/file-name';
+import { API_CONTENT_SECURITY_POLICY } from '@/lib/security/csp';
 import { attachmentDisposition } from '@/server/http/content-disposition';
 import { fileResponse } from '@/server/http/file-response';
 
@@ -77,6 +78,13 @@ describe('fileResponse (the one place a portal-made name reaches a header)', () 
 
   it('keeps the inline answer with no name for a picture', () => {
     expect(fileResponse({ mime: 'image/png', bytes: BYTES }, 'req-1').headers.get('Content-Disposition')).toBe('inline');
+  });
+
+  it('sends the shared API policy as its Content-Security-Policy, with frame-ancestors, for a picture and for an export (STD-C-03)', () => {
+    for (const file of [{ mime: 'image/png', bytes: BYTES }, { mime: 'application/octet-stream', bytes: BYTES, fileName: nameOf('MAS', 'Kühler') }]) {
+      expect(fileResponse(file, 'req-1').headers.get('Content-Security-Policy')).toBe(API_CONTENT_SECURITY_POLICY);
+    }
+    expect(API_CONTENT_SECURITY_POLICY).toContain("frame-ancestors 'none'");
   });
 
   it('throws for a name holding a control character, a quote or a path (a mistake in the code)', () => {
