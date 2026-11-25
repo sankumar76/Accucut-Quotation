@@ -334,11 +334,11 @@ html[data-tree-resizing] * {
   user-select: none !important;
 }
 
-html[data-tree-resizing] [data-tree-handle] [data-tree-grip] {
+html[data-tree-resizing] [data-tree-hit] [data-tree-grip] {
   background-color: var(--primary);
 }
 
-html[data-tree-resizing] [data-tree-handle] [role='tooltip'] {
+html[data-tree-resizing] [data-tree-hit] [role='tooltip'] {
   display: none;
 }
 
