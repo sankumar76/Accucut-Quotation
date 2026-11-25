@@ -51,7 +51,7 @@ For an install with no one at the keyboard, copy `values.example.txt`, fill it i
 
 Useful switches: `-Root` (not `C:\Accucut`; exactly one folder below a drive, such as `D:\Accucut`), `-Port` (not 3000), `-NodeExe` (not
 `C:\Program Files\nodejs\node.exe`), `-WithProxy` (a TLS proxy such as Caddy or IIS will stand in front: the portal
-listens on 127.0.0.1 only and Windows Firewall opens TCP 80 and 443; **you install the proxy, as "Reverse proxy" below says. Use this switch on every server that people use**: without it the portal answers plain http on every address, sign-in works only in a browser on the server itself, and the sign-in limits can be dodged), `-DefenderExclusion Yes|No|Ask`, `-AdminAccount <DOMAIN\user>` (the Admin's own, limited Windows account: sets up the JEA endpoint of the guided restore, see "Restore a backup").
+listens on 127.0.0.1 only and Windows Firewall opens TCP 80 and 443; **you install the proxy, as "Reverse proxy" below says. Use this switch on every server that people use**: without it the portal answers plain http on every address, sign-in works only in a browser on the server itself, and the sign-in limits can be dodged), `-DefenderExclusion Yes|No|Ask`.
 
 ### Why the install runs in two halves
 
@@ -104,7 +104,7 @@ account instead, the trust rule would refuse them, and the install would stop wi
 | Logs | `C:\Accucut\logs\`: the services write a new file each day. The install and update logs are new files with unpredictable names (`install-<time>-<random>.log`), created fresh and never appended to, because the two service accounts can write in this folder. There is no scheduled task and no other account for the clean-up: **AccucutWorker deletes the service, install and update logs older than 30 days itself, once a day at 03:30 India time** (its `log-prune` job; the install writes the folder into `LOG_DIRECTORY` in `.env`). It deletes only regular files directly in that folder that have the portal's own log names, and never follows a link. |
 | Defender | **Offers to exclude PostgreSQL's data folder from Windows Defender real-time scanning, and says so.** PostgreSQL advises it. You may refuse (`-DefenderExclusion No`, or answer no). Undo it with `Remove-MpPreference -ExclusionPath <folder>`. |
 | Backups | The local user `AccucutBackup` (for the weekly task only), the task **Accucut weekly backup** (Sunday 02:00), the protected folder `C:\Accucut\backups`, the protected files `config\backup.pgpass` and `config\backup-settings.json`, and the first backup. See "Backups". |
-| Restore (STORY-10.11) | The database role `accucut_restore` (it can create a database and act as the owner; it is not a superuser), its password in `config\restore.pgpass` (Administrators, and the endpoint group with `-AdminAccount`), and, with `-AdminAccount`, the Admin's limited account: a local group, the JEA endpoint `AccucutAdmin` and a desktop shortcut. See "Restore a backup". |
+| Restore (STORY-10.11) | The database role `accucut_restore` (it can create a database and act as the owner; it is not a superuser) and its password in `config\restore.pgpass`, which only Administrators and SYSTEM can read. Nothing else: the Admin runs the restore as an administrator (see "Restore a backup"). |
 
 If a step fails before the services are registered, the install drops what it created (the database and the two roles, which are new and empty),
 copies its log to your temp folder (`%TEMP%\accucut-failed-install-<time>.log`) and removes the whole install folder that this run made, so that you can
@@ -116,18 +116,13 @@ run it again. Read the message, fix the cause, run it again. The log is `C:\Accu
 C:\Accucut\
   releases\<tag>\   the running release and the previous one (nothing older is kept)
   current           a junction to the running release
-  config\           .env, migrate.env, backup.pgpass, backup-settings.json, restore.pgpass, install-state.json (no secret in the two .json files); jea\ with -AdminAccount
+  config\           .env, migrate.env, backup.pgpass, backup-settings.json, restore.pgpass, install-state.json (no secret in the two .json files)
   services\         the WinSW programs and their XML files
-  logs\             install, update and service logs; restore.log (every restore); jea\ (the transcripts of the Admin's session)
+  logs\             install, update and service logs; restore.log (every restore)
   backups\          the encrypted backup copies and their manifests (the backup account and Administrators only)
 ```
 
-`C:\Accucut` is closed to ordinary users: only Administrators and SYSTEM can write, and only the two service accounts and `AccucutBackup` can read the
-program files (read and execute: five entries in all, none inherited; **six with an Admin endpoint**: Administrators and SYSTEM full control, then read and execute for the two service accounts, `AccucutBackup` and the endpoint group `AccucutAdminRunAs`). `.env` can be read by Administrators and the two service accounts only;
-`migrate.env` by Administrators only. `backup.pgpass` and `backup-settings.json` by Administrators and `AccucutBackup` only; `restore.pgpass` by Administrators only. With `-AdminAccount` (see "Restore a backup") the root gets a sixth entry, read and execute for one local group,
-and that group may also read the three settings files above (so `backup.pgpass` and `backup-settings.json` then have four entries, `restore.pgpass` three). **Do not add anyone to `AccucutAdminRunAs`: the Admin is named in the endpoint, not in the group.** A member of the group could read the restore's database password, so `restore.ps1` and `clear-copies.ps1` refuse to start (nothing is changed) while it has a member or its members cannot be read, and the install refuses an existing group that has members. `backups` is protected
-too: Administrators and SYSTEM full control, `AccucutBackup` Modify, and **no entry for the portal's own services**, so a taken-over portal can neither read
-nor delete a backup.
+`C:\Accucut` is closed to ordinary users: only Administrators and SYSTEM can write, and only the two service accounts and `AccucutBackup` can read the program files (read and execute: five entries in all, none inherited). `.env` can be read by Administrators and the two service accounts only; `migrate.env` and `restore.pgpass` by Administrators only; `backup.pgpass` and `backup-settings.json` by Administrators and `AccucutBackup` only. `backups` is protected too: Administrators and SYSTEM full control, `AccucutBackup` Modify, and **no entry for the portal's own services**, so a taken-over portal can neither read nor delete a backup. An account that is not an administrator cannot open `C:\Accucut` at all.
 
 ## Reverse proxy (required on every server people use)
 
@@ -363,6 +358,21 @@ takes a **release backup** (`backup.ps1 -Reason release`), copies the zip into t
 two services, checks the new release again, migrates, moves the `current` junction, starts, and waits for `/api/health`. Afterwards only the new and
 the previous release are kept.
 
+**Before you run it: check where the migrations will go (DL-317).** The update migrates whatever database `MIGRATE_DATABASE_URL` in
+`C:\Accucut\config\migrate.env` names, whatever you meant. Nothing else changes the target: the release's own Prisma settings (`migrate\prisma.config.mjs`) read
+no `.env` file, Prisma 7 reads none by itself, and the script hands the value to the one process that migrates. So a `.env` left in a release folder
+cannot change it; only `migrate.env` can. In Windows PowerShell as administrator, run these three lines. They print the host, the port and the database name,
+**never the password**:
+
+```powershell
+$line = (Select-String -LiteralPath C:\Accucut\config\migrate.env -Pattern '^MIGRATE_DATABASE_URL=').Line
+$u = [Uri]$line.Substring($line.IndexOf('=') + 1).Trim([char]39, [char]34)
+"Migrations will go to: host {0}, port {1}, database {2}" -f $u.Host, $u.Port, $u.AbsolutePath.TrimStart('/')
+```
+
+It must say the server's own PostgreSQL (normally host `127.0.0.1`, port `5432`, database `accucut`). If it names anything else, stop and call your IT person. Do not
+print `$line` or `$u` themselves: they hold the password.
+
 - **No backup, no update.** The release backup runs first (`backup.ps1 -Reason release`, through the same trust checks); if it fails, nothing has been
   changed and the update stops. If you accept that nothing can be restored if it goes wrong, add `-NoBackup`; it says so in the log.
 - **If the migrations fail**, the junction is not moved and the previous release starts again.
@@ -372,6 +382,61 @@ the previous release are kept.
 - **If the new release is not healthy**, the junction moves back, the previous release starts, and the script says **"Call your IT person"**.
   Migrations only add things (expand, then contract: architecture section 9.7), so the previous release still works on the migrated database.
 - **To go back to an older release on purpose**, run `update.ps1` with that release's zip.
+- **Going back past the CR-01 migrations is different.** Those migrations do not only add things, so running `update.ps1` with the older zip is not enough. Use the
+  rollback runbook in architecture section 5.6, "CR-01 release rollback runbook" ([architecture.md](../../docs/04-architecture/architecture.md)). It applies to a
+  database that has applied some of the CR-01 migrations and must go back to a release without them. Its server steps have not been rehearsed: rehearse them first.
+- **Never run `prisma migrate deploy` by hand on the server.** `install.ps1` and `update.ps1` are the only ways the server's database is migrated. If a
+  developer ever has to run Prisma by hand somewhere else (a copy, a test machine), the rule in "Migrating by hand" below applies.
+
+### Migrating by hand (developers, copies and the rehearsal machine only)
+
+From a checkout of the repository, `npx prisma migrate deploy` reads `prisma.config.ts`, which loads a `.env` file **from the folder you run it in**, for any
+variable not already set in the shell. So the target is the shell's `MIGRATE_DATABASE_URL` if it is set, and otherwise the one in that `.env`, whatever you
+meant. That is how a planned rehearsal on a throwaway copy went to the demo database on 22 Nov (DL-317; no harm, there was a backup). Before **any**
+`migrate deploy` by hand:
+
+1. In the same window and folder, run `npx prisma migrate status`. Its first line names the target without the password:
+   `Datasource "db": PostgreSQL database "<name>", schema "public" at "<host>:<port>"`. Check the database name, the host and the port. Its list of
+   migrations "not yet applied" must be exactly the ones you expect.
+2. Take a backup of that database (`pg_dump -Fc`), and keep it outside the repository until the result is confirmed.
+3. Only then run `npx prisma migrate deploy`, in the same window and folder.
+
+On the delivery PC this matters most: it holds the development `.env` and several Docker databases.
+
+**Rehearsing on a throwaway copy.** Restore the dump with its **original owners** (`pg_restore` without `--no-owner`, into a new database owned by the
+owner role). With `--no-owner`, `_prisma_migrations` belongs to `postgres`, and `migrate deploy` as the owner role fails with "migration persistence is not
+initialized" (seen in the DL-317 rehearsal, 22 Nov). Then run the three steps above against the copy. Step 1 must name the copy, not the original.
+
+## At install, before go-live (DL-311, DL-317)
+
+The release is rehearsed on the delivery PC (Windows 11, Docker Desktop), not on a Windows Server (DL-311, RISK-034). So the IT person, with the delivery
+lead, runs this list on the real server at install and **before people start using the portal**. Go-live waits until every line is done or the delivery lead
+has accepted, in writing, the line that is not.
+
+| # | Check | How | Pass |
+|---|-------|-----|------|
+| 1 | **Which PostgreSQL the install will use** (DL-317) | Before `install.ps1`: the install creates its database on the PostgreSQL at `-PgHost` and `-PgPort` (default `127.0.0.1`, `5432`). Run `Get-NetTCPConnection -LocalPort 5432 -State Listen \| ForEach-Object { Get-Process -Id $_.OwningProcess }` with your port | The answer is `postgres` (the PostgreSQL 17 of "What you need"), not another program such as a Docker container. No backup is needed first: the install refuses a database called `accucut` that already exists |
+| 2 | **Where every later migration goes** (DL-317) | Before every `update.ps1`: the three lines in "Before you run it: check where the migrations will go" (under Update). Keep the release backup on: never `-NoBackup` for a release that holds migrations | Host, port and database are the server's own (`127.0.0.1`, `5432`, `accucut`), and the update log shows the release backup |
+| 3 | **The steps the rehearsal had to do differently** (DL-311 (2)) | The rehearsal record (qa-engineer, R-release tier of the test plan) lists each step the delivery PC forced to differ, for example Windows 11 instead of Windows Server, a port clash, IIS not available, administrator rights. Run each of those steps here as this guide says | Each step works as written on the server |
+| 4 | **The reverse-proxy checklist C1 to C10** (DL-292 (3)), if IIS is the proxy | The IIS checklist in the reverse-proxy section of this guide | All ten lines pass |
+| 5 | **The Admin's account** (ADR-015 Amendment 3.4) | Create the Admin's own Windows account and add it to the local Administrators group, as "Restore a backup", "For the IT person" says | The Admin can sign in, open Windows PowerShell as administrator and run `cd C:\Accucut\current` without an error |
+| 6 | **`FEATURE_EMAIL` is off on web and worker** (DL-378) | In Windows PowerShell as an administrator: (a) `Select-String -Path C:\Accucut\config\.env -Pattern '^FEATURE_EMAIL='`; (b) `[Environment]::GetEnvironmentVariable('FEATURE_EMAIL','Machine')`; (c) `Select-String -Path C:\Accucut\services\*.xml -Pattern 'FEATURE_EMAIL'`; (d) `Restart-Service AccucutWorker, AccucutApp`, wait a minute, then `Select-String -Path C:\Accucut\logs\AccucutWorker.*.out.log -Pattern 'mail jobs are off: FEATURE_EMAIL is not on' \| Select-Object -Last 1`; (e) open the portal's sign-in page | (a) prints nothing, `FEATURE_EMAIL=` or `FEATURE_EMAIL=off`, never `on`; (b) and (c) print nothing; (d) shows a line from today with `"msg":"mail jobs are off: FEATURE_EMAIL is not on, so outbox-send is not scheduled"`; (e) shows "Forgot your password? Ask the Admin to reset it." and no "Forgot your password?" link. `SMTP_AUTH_MODE` is `none` and no mailbox password is in `.env`. E-mail stays off (alerts, password reset by e-mail, backup-watch e-mail), as the release notes say (KG-2) |
+| 7 | **One 50-node export timing on the server** (NFR-010, DL-311 (4)) | Sign in as a Lead, open an estimate with 50 parts and 50 pictures (invented test data, removed afterwards), and time Download Excel from the click to the file | Within **10 s**. Over 10 s is a defect against NFR-010; record the figure, the release and the server in the install record |
+| 8 | **The first backup and the Admin's restore rehearsal** (NFR-013, DL-035, DL-253) | "Backups" and "Restore a backup" below | A new `.age` file in `C:\Accucut\backups`; the rehearsal finished from this guide alone |
+| 9 | **A forgotten password, with e-mail off** (DL-378, FR-004) | Sign in as the Admin, open Users, choose Reset password for a test user (invented, removed afterwards) and set a temporary password. Sign in as that user in a private window | The user is taken to "Set a new password", sets one, and reaches the portal. The old password no longer works |
+
+## After go-live: switching e-mail on (DL-378 (3))
+
+E-mail goes live only after one real send from **this server** on the chosen mailbox. It is not a go-live check. Do it when the delivery lead has chosen the mailbox and Accucut IT has given the mail settings.
+
+| # | Step | How | Pass |
+|---|------|-----|------|
+| 1 | **Mail settings** | Edit `C:\Accucut\config\.env` as an administrator: `SMTP_AUTH_MODE` (`password` for a cPanel mailbox, `oauth2-client-credentials` for Microsoft 365), `SMTP_HOST`, `SMTP_PORT` (465 or 587), `SMTP_USER`, and `SMTP_PASSWORD` or the three `SMTP_OAUTH_*` values. Leave `FEATURE_EMAIL` off. Then `Restart-Service AccucutWorker, AccucutApp` | Both services run (`Get-Service AccucutApp, AccucutWorker`) and `http://127.0.0.1:3000/api/health` answers `{"status":"ok"}`. The password is in this file only: never in an e-mail, chat, Jira or GitHub |
+| 2 | **The real send** (DL-371 (5) (i) to (v)) | As the Admin, Settings, E-mail alerts: save the sender name and address, then Send test e-mail | The test e-mail arrives in the Admin's inbox (not junk), from the chosen sender. Record the date, who, mode, port, and inbox or junk, with no address or password. This send meets G3 condition 16 |
+| 3 | **Switch on** | Set `FEATURE_EMAIL=on` in `C:\Accucut\config\.env`, then `Restart-Service AccucutWorker, AccucutApp` | The newest worker start in `AccucutWorker.*.out.log` shows `outbox-send scheduled every minute`, `overdue-scan scheduled every minute` and `daily-digest scheduled at 11:00 Asia/Kolkata`. The sign-in page shows the "Forgot your password?" link |
+| 4 | **First real alert and reset** | Assign a task to a test Engineer whose address the team controls, and ask for one password reset by e-mail for a test user | Both e-mails arrive within a few minutes, and the reset link sets a new password that works |
+
+**To switch off again:** set `FEATURE_EMAIL=off` and restart both services. Nothing new is queued while it is off. Rows already queued wait: an unsent assignment e-mail expires 24 hours after it was written and a reset link 60 minutes after it was asked for, so neither goes out late. Overdue, digest and backup e-mails that were queued but not sent go out when e-mail is switched on again.
 
 ## Look and fix
 
@@ -472,15 +537,12 @@ files are already encrypted. Give your copy account **Read** on `C:\Accucut\back
 
 ### When Settings says "Disk nearly full" (for the Admin)
 
-It means the disk has less than 20 % free and the portal may stop if nothing is done. The Admin clears the oldest copies with one command. Sign in to the server
-(Remote Desktop), open **Windows PowerShell as administrator** and run:
+It means the disk has less than 20 % free and the portal may stop if nothing is done. The Admin clears the oldest copies with one command. Sign in to the server (Remote Desktop) with your own Windows account, open **Windows PowerShell as administrator** (right-click it, choose **Run as administrator**, and say Yes when Windows asks) and run:
 
 ```powershell
 cd C:\Accucut\current
 .\clear-copies.ps1
 ```
-
-(When the Admin's limited account is set up (see "Restore a backup", below), it is one command, `Clear-AccucutCopies`, in the Admin's own window; the questions are the same.)
 
 1. It lists the copies **oldest first** with date, kind and size, and the free space. The **newest 4 copies are always kept** and are marked KEEP.
 2. It asks you to **type the date** (`YYYY-MM-DD`, as listed, in UTC) of the **newest** copy to remove. Every older copy goes with it, oldest first. If what you
@@ -494,8 +556,7 @@ Call your IT person.
 
 ## Restore a backup (STORY-10.11)
 
-**Who this is for.** The Admin, who is **not** a system administrator, with the IT person on hand but not helping. You do not need to know Windows Server, PostgreSQL or
-PowerShell: you open one window, type one command, answer four questions in plain words, and read what it says.
+**Who this is for.** The Admin, who is **not** a system administrator, with the IT person on hand but not helping. Your Windows account on the server is an administrator account (your IT person sets it up), but you need no Windows Server, PostgreSQL or PowerShell knowledge: you open one window, type two lines, answer four questions in plain words, and read what it says.
 
 **When to use it.** After a bad update, or when data in the portal has been damaged and cannot be put right inside the portal. A restore puts the whole portal back to
 the day of a backup copy. **Everything entered after that day is lost: every estimate, every approval, every master value, and the audit rows too.** A copy is made once a
@@ -504,16 +565,23 @@ often survives inside the portal: ask first.
 
 **What you need before you start.**
 
-1. **The backup key**: the one line that starts with `AGE-SECRET-`, from the place where you keep it (never on this server). **Without it no backup can be read.**
-2. **Your IT person**, on hand. They are not there to help you type; they are there if the command stops.
-3. **A quiet time.** The portal is stopped while it restores, usually for a few minutes (longer for a big database). Tell the people who use it.
+1. **Your own Windows account on the server, in the Administrators group.** Your IT person sets it up. Never use a shared account: the server records who ran each restore.
+2. **The backup key**: the one line that starts with `AGE-SECRET-`, from the place where you keep it (never on this server). **Without it no backup can be read.**
+3. **Your IT person**, on hand. They are not there to help you type; they are there if the command stops.
+4. **A quiet time.** The portal is stopped while it restores, usually for a few minutes (longer for a big database). Tell the people who use it. Do not start a restore while an update or another restore is running, or while your IT person is working on the portal: one at a time. **Close every program that is connected to the portal's database as a PostgreSQL administrator** (pgAdmin, or `psql` as `postgres`): the restore cannot end such a connection, so it stops, with nothing changed, if one is open.
 
 ### How to do it
 
 1. **Sign in to the server with your own Windows account** (Remote Desktop, as your IT person set up for you).
-2. **Double-click "Accucut Admin" on the desktop.** A window opens and connects. (If there is no shortcut, your IT person has not set up your limited account yet: they
-   open Windows PowerShell **as administrator**, run `cd C:\Accucut\current` and `.\restore.ps1`, and the questions below are the same.)
-3. **Type `Restore-AccucutBackup` and press Enter.** It takes no arguments.
+2. **Open Windows PowerShell as administrator.** Click Start, type `PowerShell`, right-click **Windows PowerShell** (the blue one, not PowerShell 7) and choose **Run as administrator**. Say **Yes** when Windows asks. The window's title starts with **Administrator:**. If it does not, close it and do this step again.
+3. **Type these two lines, pressing Enter after each:**
+
+   ```powershell
+   cd C:\Accucut\current
+   .\restore.ps1
+   ```
+
+   It takes no arguments. If `cd` says that access is denied or that the path does not exist, the window was not opened as administrator: close it and go back to step 2.
 4. **It lists the copies, newest first**, with the date (UTC), the kind (`weekly` or `release`) and the size. **Type the number** of the copy you want and press Enter (Enter on
    its own stops everything). A copy marked CANNOT BE USED has no matching record and cannot be chosen.
 5. **It checks the copy before it touches anything:** that the file is exactly what was written (its SHA-256 against its manifest), that the PostgreSQL version that made it is the same as
@@ -533,55 +601,73 @@ Every stop ends with **"Call your IT person."** What the portal is doing is in t
 
 | It says | What it means | What happens to the portal |
 |---------|---------------|----------------------------|
+| `Access to the path ... is denied`, or `Cannot find path 'C:\Accucut\current'` | The window was not opened with **Run as administrator**. | Nothing was changed. Close the window and open Windows PowerShell as administrator (step 2). |
 | `does not match the checksum in its manifest` | That copy has been changed or damaged. | Nothing was changed; the portal is running as before. Choose another copy with your IT person. |
 | `can be restored only into the same or a newer PostgreSQL` | The copy was made by a newer PostgreSQL than this server has. | Nothing was changed. |
 | `not enough free disk space for a restore` | A restore needs room for a safety copy and the new database. | Nothing was changed. Clear old copies (see "Disk nearly full") or ask IT for a bigger disk. |
 | `not the date of the copy` | You typed a different date. | Nothing was changed. Run the command again and type the date exactly as shown. |
 | `does not open the copy` | The key is not the one that belongs to this server's backups. | Nothing was changed. Find the right key (two copies are kept apart). |
 | `made by a newer release of the portal than the one installed` | The copy has applied a database change that the installed release does not know (it was made after a newer release was installed). A copy from an **older** release is fine: it is brought up to date as part of the restore. | The restore stops before the swap; the portal is running on the old database. Ask your IT person to install that release, then run the restore again. |
-| `The group AccucutAdminRunAs has members` | Someone was added to the endpoint group, which must stay empty (a member could read the restore's database password). | Nothing was changed. Ask your IT person to remove the member. |
+| `Someone is connected to the portal's database as a PostgreSQL administrator` | pgAdmin, or `psql` as `postgres`, has the portal's database open. The restore's own database role is not a PostgreSQL administrator, so it cannot end that connection. It looks for one before it stops the portal, and again just before the swap. | Close that connection and run the restore again. Said before the portal is stopped: nothing was changed. Said later (inside "The restore of ... failed"): the portal is running on the old database, and a safety copy was made. If an administrator connection was on the **new** database, that database cannot be dropped either: `restore.log` then names an `accucut_new_...` database for your IT person to drop. |
+| `Another connection to the database could not be ended` | A connection to the portal's database stayed open through four tries (about 20 seconds), although the restore ended every connection it may end. | The database names were not swapped; the portal is running on the old database. Close the connection and run the restore again. |
+| `The group AccucutAdminRunAs has members` | A group of that name was made on this server by hand. This version of the portal does not use it. | Nothing was changed. Ask your IT person to delete the group (`Remove-LocalGroup AccucutAdminRunAs`, as administrator). |
 | `The restore of ... failed ... The portal is running on the old database` | Something failed after the portal was stopped. The old database was put back and the portal started again. | The portal is running as before the restore. The safety copy is in the backups folder. |
 | `... may not be running: look at the services first` | A step failed and the old database could not be put back, or the portal could not be started. | **The portal may be down.** Tell your IT person at once. |
 
 **Where it is recorded.** Every restore, good or not, is written to `C:\Accucut\logs\restore.log` and as one event in the Windows Application log, source `Accucut`
 (1100 done, 1101 stopped by the Admin, 1110 a check failed and nothing was done, 1111 it failed and the portal runs on the old database, 1112 it failed and the old database could not be put
 back). That record is **outside the database**, because restoring an older copy rolls the database's own audit rows back. Look at it with
-`Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut' }`.
+`Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut' }`. The first line of each restore in `restore.log`, and each event, names the Windows account that ran it. When a connection is in the way of the swap, `restore.log` names its database and its database role (and its type, when PostgreSQL shows it to the restore role), never what it ran.
 
 **The key.** You paste it at a secure prompt. It goes to `age` on standard input only. It is never written to a disk, a log, a transcript or the temp folder, and it is blanked from every message.
 
-### For the IT person: the Admin's limited account (A-35)
+### For the IT person: the Admin's account (full administrator)
 
-The Admin should not be an administrator (the Admin already sees every cost in the portal; what an administrator account would add is `.env`, the database and the audit tables).
-`install.ps1 -AdminAccount <DOMAIN\user>` sets up **one JEA endpoint, `AccucutAdmin`**, which that one account may open (give the account Remote Desktop rights as you see fit):
+The Admin runs the restore and the clearing as **a local administrator**. Give the Admin **a Windows account of their own**, add it to the local **Administrators** group, and allow it to sign in by Remote Desktop. Do not let them use a shared or the built-in Administrator account: the Windows Security log and the restore's own record (`restore.log` and the Application events) name the account, and that is the only record of who did it.
 
-- It shows **exactly two commands**, `Restore-AccucutBackup` and `Clear-AccucutCopies`, each of which runs the installed `restore.ps1` or `clear-copies.ps1` (checked like every script that loads
-  or runs code). The Admin can reach nothing else.
-- It runs as a **virtual account that is in one new local group, `AccucutAdminRunAs`, and nothing else** (never a local administrator). The group is given: read and execute on `C:\Accucut` (the sixth
-  entry of the root), Modify on `backups`, read on `backup.pgpass`, `backup-settings.json` and `restore.pgpass`, Modify on `logs\jea` and on the one file `logs\restore.log` (the `logs` folder itself gets
-  no entry), and start and stop on the two services. Nothing on `.env`, `migrate.env` or the database's own roles.
-- It writes a **transcript of every session** to `C:\Accucut\logs\jea\`. The key is read as a secure string, so it is not in them.
-- A shortcut **Accucut Admin** is put on the desktop. It runs `Enter-PSSession -ComputerName localhost -ConfigurationName AccucutAdmin`, so Windows Remote Management (WinRM) must be running
-  (`Enable-PSRemoting -Force` if it is not; the install does not switch it on).
-- **A restore needs a database role of its own.** The install makes `accucut_restore` (CREATEDB, acts as the owner, **not** a superuser) with its password only in `config\restore.pgpass`.
-  A restore itself replaces the database, so the account that runs it can do what the owner can do; the endpoint is what keeps the Admin from using that directly. `restore.ps1` also checks, before it uses `restore.pgpass`, that only Administrators, SYSTEM and the group (Read) can read it.
+**What this means (accepted by Accucut's delivery lead on 2026-11-24).** An administrator account can do anything on this server: read `.env`, `migrate.env` and the password files in `C:\Accucut\config`, use the database directly, change the audit records and delete the backups. Nothing in the portal or in these scripts can limit it. A limited account was designed (a JEA endpoint), but it failed its check on a test server that is not in a Windows domain, so it is not part of this release (architecture A-35, RISK-018). Keep the number of administrator accounts small, keep the backup key away from the server, and keep the off-server copy (see "Backups"): an administrator can delete the copies on this server.
 
-**If the Admin's account cannot be limited** (Accucut IT declines A-35, or the check in `deploy/windows/manual/AC-8-jea-prompt-check.md` fails on your server), leave `-AdminAccount` off: the scripts are
-the same, `restore.ps1` and `clear-copies.ps1` run as a full administrator from `C:\Accucut\current`, and the Admin's risk (RISK-018) is the full one.
+**A restore needs a database role of its own.** The install makes `accucut_restore` (CREATEDB, acts as the owner, **not** a superuser) with its password only in `config\restore.pgpass`. Before `restore.ps1` uses that file, it checks that only Administrators and SYSTEM can read it, and it stops if anyone else can.
 
-**Hand-over of the Admin's role.** The portal cannot do this for you. (1) Pass the **backup key** to the new Admin, and keep two copies apart. (2) Remove the old account's access:
-`Unregister-PSSessionConfiguration -Name AccucutAdmin -Force`, delete the desktop shortcut, and register the endpoint again for the new account (`install.ps1` is not run twice: ask for a re-registration
-change, or follow `Register-AccucutAdminEndpoint` in the module). (3) Check that the old Admin's Windows account is disabled.
+**Hand-over of the Admin's role.** The portal cannot do this for you. (1) Pass the **backup key** to the new Admin, and keep two copies apart. (2) Create the new Admin's own account and add it to Administrators. (3) Remove the old Admin's account from Administrators and disable it.
 
 **Before go-live the Admin does one restore rehearsal**, from this chapter alone, timed, with you on hand and not helping unless it stops (NFR-013, DL-035). Do it on the staging copy, with a copy made on
 staging. A restore from the oldest copy once a year is recommended: a 2-year copy is worth only what can still be read.
 
-**Not covered here:** an off-server copy (yours to set up, see "Backups"), the timed walk-through of NFR-030 and the interactive proof in a real JEA session (it is by hand, with the script in
-`deploy/windows/manual/`).
+**Not covered here:** an off-server copy (yours to set up, see "Backups") and the timed walk-through of NFR-030.
+
+## If the Admin forgets their password
+
+E-mail is off at go-live, so the Admin cannot use a reset link, and nobody else can reset the Admin. A server administrator can set a temporary password for the one Admin, on the server:
+
+1. Sign in to the server with your own Windows account (a member of Administrators) and open **Windows PowerShell** with **Run as administrator**.
+2. Run these four lines:
+   ```
+   $node = (Select-Xml -Path C:\Accucut\services\AccucutApp.xml -XPath '/service/executable').Node.InnerText
+   cd C:\Accucut\current\app
+   $env:NODE_ENV = 'production'
+   & $node --env-file=C:\Accucut\config\.env bootstrap-admin.mjs --reset-admin-password
+   ```
+3. Check the name and e-mail it shows, type `RESET`, then type a temporary password twice (10 to 128 characters, with a number and a symbol; nothing shows as you type).
+4. Give the Admin the temporary password in person or by phone, never by e-mail or chat. At their next sign-in they must choose their own. Every session they had has ended.
+
+The portal's audit log records it as "System: server command" with your Windows account name. The command never runs from the web, never reactivates a deactivated Admin, and changes nothing if it stops.
+
+**Note the date and your Windows account in the server's operations record.** The Windows name in the audit entry comes from the process that ran the command and is not proof of who it was; your own note, and the server's Windows Security log if process auditing is on, are (DL-381 (3)(b)). Never write the temporary password in chat, Jira, GitHub or the record: it is shared with the Admin only, in person or by phone.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | Done |
+| 1 | `.env` was read, but `DATABASE_URL` or `AUTH_SECRET` is missing or invalid, or the database cannot be reached: check `Get-Service postgresql-x64-17` |
+| 2 | Not exactly one active Admin, or "The Admin account changed while this ran. Nothing was changed. Run it again.": nothing was changed |
+| 3 | The password was refused (empty, the two entries differ, or the rule): run it again |
+| 4 | Stopped: not an interactive window, an unknown argument, `RESET` not typed, or Ctrl+C |
+
+A window that is not elevated never reaches the command: PowerShell cannot open `C:\Accucut`, and Node stops with its own exit 9 (`.env` not found). Open Windows PowerShell with Run as administrator.
 
 ## The shared module (`AccucutOps.psm1`)
 
-STORY-10.05 (backup) and STORY-10.11 (restore, JEA) import this module and add their own functions to it. The module is loaded only **after** it has passed
+STORY-10.05 (backup) and STORY-10.11 (restore) import this module and add their own functions to it. The module is loaded only **after** it has passed
 the trust check, so it holds no trust, install-folder, zip, or script-running function (those are in the trust block of `install.ps1` and `update.ps1`),
 and it does nothing when it is loaded except define functions and constants (a test checks this on its syntax tree). New scripts that load or run code must
 use `Import-AccucutTrustedModule` and `Invoke-AccucutTrustedScript` from the trust block, not `Import-Module` or `&`. What it offers today:
@@ -597,8 +683,7 @@ use `Import-AccucutTrustedModule` and `Invoke-AccucutTrustedScript` from the tru
 | Services and health | `Get-AccucutServiceNames`, `Get-AccucutPostgresServiceName`, `Initialize-AccucutServiceFiles`, `Set-AccucutServiceIdentity`, `Assert-AccucutServiceIdentity`, `Start-AccucutServices`, `Stop-AccucutServices`, `Get-AccucutHttpStatus`, `Wait-AccucutHealth`, `Invoke-AccucutMigration` |
 | The backup account and task (the install) | `Register-AccucutBackupTask` (the local user and the weekly task; the password is made in memory and never leaves it), `Remove-AccucutBackupAccount`, `Wait-AccucutBackupTask`, `Test-AccucutLogonTypeFailure`, `Get-AccucutBackupAccountSid`, `New-AccucutComplexPassword`, `Grant-AccucutBackupRootAccess`, `New-AccucutBackupFolder`, `Write-AccucutBackupConfig` (`backup.pgpass`, `backup-settings.json`), `Read-AccucutBackupSettings` |
 | The backup (`backup.ps1`, `clear-copies.ps1`) | `Invoke-AccucutBackup`, `Invoke-AccucutBackupPipe` (`pg_dump` to `age` to a file, both exit codes checked), `Test-AccucutBackupRoom` (the 20 % rule), `Get-AccucutBackupCopy`, `Get-AccucutBackupKeepSet` (the newest 4), `Get-AccucutBackupPruneCandidate`, `Invoke-AccucutBackupPrune`, `Remove-AccucutBackupCopy` (the only delete of a copy), `Clear-AccucutCopies` (the guided clear), `Add-AccucutJobRun` (INSERT only, values quoted by psql), `Get-AccucutDatabaseInfo`, `Get-AccucutVolumeSpace`, `Format-AccucutSize` |
-| The restore (`restore.ps1`) | `Invoke-AccucutRestore` (the whole guided restore), `Invoke-AccucutRestorePipe` (`age -d` to `pg_restore`, as bytes, both exit codes checked), `Test-AccucutBackupKey`, `Test-AccucutRestoreVersion`, `Test-AccucutRestoreRoom`, `New-AccucutRestoreDatabase`, `Switch-AccucutRestoreDatabase` (the swap), `Remove-AccucutRestoreDatabase`, `Add-AccucutRestoreLogLine` (restore.log), `Write-AccucutRestoreEvent`, `Read-AccucutKeyInput` (the secure prompt) |
-| The Admin endpoint (the install, `-AdminAccount`) | `Register-AccucutAdminEndpoint`, `Unregister-AccucutAdminEndpoint`, `Grant-AccucutAdminEndpointAccess`, `Grant-AccucutServiceControl`, `New-AccucutAdminEndpointFiles`, `Write-AccucutRestoreConfig` |
+| The restore (`restore.ps1`) | `Invoke-AccucutRestore` (the whole guided restore), `Invoke-AccucutRestorePipe` (`age -d` to `pg_restore`, as bytes, both exit codes checked), `Test-AccucutBackupKey`, `Test-AccucutRestoreVersion`, `Test-AccucutRestoreRoom`, `New-AccucutRestoreDatabase`, `Switch-AccucutRestoreDatabase` (the swap: it ends only the sessions of roles that are not superusers, and tries a rename again, at most 3 times, only when PostgreSQL answers SQLSTATE 55006), `Get-AccucutRestoreSession`, `Assert-AccucutRestoreNoSuperuserSession` (the plain refusal when a PostgreSQL administrator is connected), `Remove-AccucutRestoreDatabase`, `Add-AccucutRestoreLogLine` (restore.log), `Write-AccucutRestoreEvent`, `Read-AccucutKeyInput` (the secure prompt), `Write-AccucutRestoreConfig` (`restore.pgpass`), `Get-AccucutRunningAccount` (the account named in the record), `Get-AccucutAdminGroupSid` (inert: ADR-015 Amendment 3.4) |
 
 `backup.ps1`, `clear-copies.ps1` and `restore.ps1` carry the same trust block as `install.ps1` and `update.ps1` (a test keeps the five copies equal) because they load the module.
 
@@ -618,7 +703,5 @@ decrypts with the run's own throwaway key and restores into a scratch database),
 For STORY-10.11, `Restore.Tests.ps1` restores a small invented dump with the **real `age`** and a key that `age-keygen` made for that test (a stand-in `pg_restore` keeps what it receives), answers every prompt by a
 mock, and proves the four failures that stop before anything is touched (a changed SHA-256, a newer PostgreSQL, a wrong key, a mismatched date), the failures after the portal was stopped (the old database is put back and
 the portal started again), and that the key is on no disk, no screen line and no log line. Its last group restores the install's own newest copy on the real install of stage 13 (real services, PostgreSQL, `pg_restore`
-and migrations, with only the two prompts mocked). `Jea.Tests.ps1` reads the two endpoint templates, and on the runner registers a real endpoint, opens a session, lists what it offers (exactly the two commands) and runs
-them as a virtual account that is not an administrator.
-Not tested in CI: the interactive proof that the prompts, including pasting the key as a secure string, work inside a real JEA session on a real Windows Server (AC-8, by hand first, with the script in
-`deploy/windows/manual/AC-8-jea-prompt-check.md`), the timed walk-through of NFR-030 and a real Windows Update reboot (all by hand).
+and migrations, with only the two prompts mocked; its R3 case, a copy one migration behind, runs 5 times in the job). DEF-087 (AQP-443): on stage 13 the swap is also run on scratch databases that have a live autovacuum worker, or a session of another role, or a held `postgres` session (a plain refusal, both names as they were), and the restore refuses plainly with a held `postgres` session on the live database. Stage 13 also runs the installed `restore.ps1` as an administrator up to the copy list (Enter stops it, nothing is changed, the event names the account), and checks that the install made no JEA endpoint, group, shortcut or `jea` folder.
+Not tested in CI: a full restore through `restore.ps1` with a pasted key (the Admin's rehearsal, NFR-013), the timed walk-through of NFR-030 and a real Windows Update reboot (all by hand).

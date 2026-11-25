@@ -13,6 +13,8 @@ import { EARLY_INTENT_ATTRIBUTE } from '@/lib/ui/early-intent';
 import { TREE_HIDE, treeButtonLabel } from './estimate-texts';
 import type { PartsTreeDrawerProps } from './parts-tree-drawer';
 import { TreePanel } from './tree-panel';
+import { LazyTreeResizeHandle, LazyTreeWidthMenu } from './tree-resize-slots';
+import { TREE_COLUMN_ID, useMounted, type TreeWidth } from './use-tree-width';
 import type { PartsTreeState } from './use-parts-tree';
 
 export interface PartsTreeAreaProps {
@@ -23,6 +25,10 @@ export interface PartsTreeAreaProps {
   readonly onOpenPart: () => void;
   /** The parts Calculate found a missing input in (STORY-05.09). */
   readonly missingIds?: ReadonlySet<string>;
+  /** The width of the column and what changes it (AQP-426): from 1024 px, in the browser, the column has its resize handle and the head its "Tree width" button. */
+  readonly resize: TreeWidth;
+  /** True once the part form has shown (or there is no part to show it for): only then are the handle's and the menu's code fetched, so it never competes with the form's. Their places are kept meanwhile. */
+  readonly controlsReady: boolean;
 }
 
 const DRAWER_FAILURE_ID = 'parts-tree-first-open-failure';
@@ -40,8 +46,10 @@ const loadDrawer = () => import('./parts-tree-drawer').then((module) => module.P
  * The drawer is not in the first load (AQP-188, ADR-016 E1): its code is fetched on the first press of the button, through the loader every overlay uses (`useFirstOpen`), and stays mounted
  * afterwards. The button is plain and owns `open`; a press before the page was interactive is kept (`data-early-intent`). Nothing of the drawer is requested at 768 px or wider.
  */
-export function PartsTreeArea({ tree, editable, onOpenPart, missingIds }: PartsTreeAreaProps) {
+export function PartsTreeArea({ tree, editable, onOpenPart, missingIds, resize, controlsReady }: PartsTreeAreaProps) {
   const viewport = useViewport();
+  // The handle and the button are drawn from 1024 px and only once the page is in the browser: the server assumes `desktop`, and a separator it drew would be announced at the wrong size on a phone (UX-AC-15.11).
+  const resizable = useMounted() && viewport === 'desktop';
   const [panelOpen, setPanelOpen] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerButton = useRef<HTMLButtonElement>(null);
@@ -57,7 +65,11 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds }: PartsT
       onOpenPart();
     }
   };
-  const panel = <TreePanel tree={tree} editable={editable} onOpen={open} {...(missingIds === undefined ? {} : { missingIds })} />;
+  // The panel is a card of its own beside the form and above it on a tablet; in the phone drawer, which is a surface of its own, it keeps its head and has no card around it (DEF-081 item 10).
+  // The button's place is held from the first paint at 1024 px and wider (the server draws the desktop shape): a box, then the button in it once the form has shown (DL-391 (1)).
+  const headAction = viewport === 'desktop' ? <LazyTreeWidthMenu resize={resize} announce={tree.announce} ready={resizable && controlsReady} /> : undefined;
+  const panel = <TreePanel tree={tree} editable={editable} onOpen={open} {...(missingIds === undefined ? {} : { missingIds })} {...(headAction === undefined ? {} : { headAction })} />;
+  const drawerPanel = <TreePanel tree={tree} editable={editable} onOpen={open} framed={false} {...(missingIds === undefined ? {} : { missingIds })} />;
   const label = treeButtonLabel(tree.selected?.slNo ?? null);
 
   if (viewport === 'phone') {
@@ -96,7 +108,7 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds }: PartsT
               }
             }}
           >
-            {panel}
+            {drawerPanel}
           </Drawer>
         )}
       </>
@@ -104,7 +116,7 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds }: PartsT
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-s-3 lg:w-(--tree-w) lg:shrink-0">
+    <div id={TREE_COLUMN_ID} className="relative flex min-w-0 flex-col gap-s-3 lg:w-(--tree-w) lg:shrink-0">
       {viewport === 'tablet' ? (
         <Button variant="secondary" className="justify-start" aria-expanded={panelOpen} aria-controls="parts-tree-panel" onClick={() => setPanelOpen((open) => !open)}>
           <Icon icon={ListTree} />
@@ -116,6 +128,8 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds }: PartsT
           {panel}
         </div>
       ) : null}
+      {/* Outside the panel and after it, so the handle is next in the tab order after the tree's last control, and is not inside anything that scrolls or clips (UX-AC-15.2). */}
+      {resizable ? <LazyTreeResizeHandle resize={resize} announce={tree.announce} ready={controlsReady} /> : null}
     </div>
   );
 }

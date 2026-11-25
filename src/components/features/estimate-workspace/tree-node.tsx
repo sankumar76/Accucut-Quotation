@@ -1,21 +1,14 @@
-import { Check, Circle, Contrast, TriangleAlert, type LucideIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { Icon } from '@/components/shared/icon';
 import { NodeKindIcon } from '@/components/shared/node-kind-icon';
+import { TREE_ROW_NUMBER } from '@/components/shared/tree-row-number';
 import { cn } from '@/lib/cn';
 import type { PartItem } from '@/lib/estimates/tree-client';
 
-import { FORM_AREA_TITLE_ID, TREE_ALL_INPUTS, TREE_MISSING_INPUTS, TREE_NO_INPUTS, TREE_PART_NAME, TREE_SOME_INPUTS } from './estimate-texts';
-
-const COMPLETENESS_TEXT = { EMPTY: TREE_NO_INPUTS, PARTIAL: TREE_SOME_INPUTS, COMPLETE: TREE_ALL_INPUTS } as const;
-
-/**
- * The icon of each word (STORY-05.11 AC-4; UX spec SCR-05 "Content": check, half circle, empty circle): a different shape for each, so the state is never told by colour alone. The icons are decorative
- * (lucide hides one that has no name from assistive technology); the words stay beside them for a screen reader.
- */
-const COMPLETENESS_ICON: Record<keyof typeof COMPLETENESS_TEXT, LucideIcon> = { EMPTY: Circle, PARTIAL: Contrast, COMPLETE: Check };
+import { COMPLETENESS_ICON, COMPLETENESS_INK, COMPLETENESS_TEXT, MISSING_ICON, MISSING_INK } from './completeness-look';
+import { FORM_AREA_TITLE_ID, TREE_MISSING_INPUTS, TREE_PART_NAME } from './estimate-texts';
 
 export interface TreeNodeProps {
   readonly part: PartItem;
@@ -53,20 +46,20 @@ export function TreeNode({ part, kindLabel, selected, missing = false, onChoose,
       }}
       onClick={choose}
       className={cn(
-        'flex min-h-(--control-h) fine-wide:min-h-(--compact-field-h) cursor-pointer items-center gap-s-2 rounded-md border border-transparent py-s-1 pr-s-2 pl-s-1 text-body text-ink no-underline hover:bg-surface-2',
-        'aria-[current=true]:border-primary-line aria-[current=true]:bg-primary-soft aria-[current=true]:font-semibold',
+        'flex min-h-(--control-h) fine-wide:min-h-(--compact-field-h) cursor-pointer items-center gap-s-2 rounded-md py-s-1 pr-s-2 pl-s-1 text-body text-ink no-underline hover:bg-surface-2',
+        'aria-[current=true]:bg-surface-2 aria-[current=true]:font-semibold aria-[current=true]:shadow-[inset_var(--s-1)_0_0_var(--primary)]',
         BREAK_LONG_NAMES,
       )}
     >
       <NodeKindIcon kind={part.nodeKind} label={kindLabel} />
-      <span data-sl-no="" className="shrink-0 tabular-nums">
+      <span data-sl-no="" className={TREE_ROW_NUMBER}>
         {part.slNo}
       </span>
       <span className="min-w-0 flex-1">{part.label === '' ? TREE_PART_NAME : part.label}</span>
-      <Icon icon={COMPLETENESS_ICON[part.completeness]} size="small" data-completeness={part.completeness} className={cn('shrink-0', part.completeness === 'COMPLETE' ? 'text-success' : 'text-ink-3')} />
+      <Icon icon={COMPLETENESS_ICON[part.completeness]} size="default" data-completeness={part.completeness} className={cn('shrink-0', COMPLETENESS_INK[part.completeness])} />
       {missing ? (
         <>
-          <Icon icon={TriangleAlert} size="small" className="shrink-0 text-danger" />
+          <Icon icon={MISSING_ICON} size="small" className={cn('shrink-0', MISSING_INK)} />
           <span className="sr-only">{TREE_MISSING_INPUTS}</span>
         </>
       ) : null}

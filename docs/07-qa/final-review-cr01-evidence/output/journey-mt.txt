@@ -1,0 +1,109 @@
+QA| mobile estimate Q-9999-154987338
+QA| mobile short name of customer 2ed51d80b3
+QA| mobile SCR-06 approved: buttons ["Download .xlsx","Unlock","Mark as quoted","Ignore RFQ"] chip: Not downloaded
+QA| mobile OVERFLOW SCR-06 approved ok (360<=360)
+QA| mobile AXE SCR-06 approved 0 violations
+QA| mobile quote dialog text Mark Q-9999-154987338 as quoted? Do this once the quote has been sent to Canary-Customer-Alpha. The status becomes Quoted, with your name and the time. This cannot be undone, except by Unlock. Not downloaded Not yet Mark as quoted
+QA| mobile AXE quote dialog open 0 violations
+QA| mobile quoted notice Quoted on 24 Nov 2026, 08:10 IST by E2E axe.mobile.r0.t0.ff4c22. The quote was sent to Canary-Customer-Alpha. This is the last status; the estimate stays locked at the approved figures.
+QA| mobile focus after quote DIV:Quoted on 24 Nov 2026, 08:10 I
+QA| mobile OVERFLOW SCR-06 quoted ok (360<=360)
+QA| mobile AXE SCR-06 quoted 0 violations
+QA| mobile SCR-06 quoted: buttons ["Download .xlsx","Unlock"]
+QA| STEP FAILED closed tab expect(locator).toBeVisible() failed
+QA| mobile SCR-10 text Excel export Back to the estimate Not downloaded The file File name 2ed51d80b3_Frame---Base--plate--A---1--2-3-_24-11-2026.xlsx Rows in the file 1 part Columns A to BO Download .xlsx The rows in the file Every row holds its own count for the whole order (H) and its own BG. The file has no per-item totals and nothing is multiplied by the rows above. Count (H), Unit Production Price (BG) and Tool Cost (BM) per row in the file SL. NO PART QTY (H), FOR THE WHOLE ORDER IN THE FILE: BG IN THE FILE: TOOL COST (BM) 1 Invented text 12.5 1,68,89,808.07 12.50 BG column added up: BL2, the same as the total on screen 1,68,89,808.07 Total Tool Cost: file row 4, one empty row below the last part, with the label in the cell to the left of the Tool Cost column 12.50 The Total Tool Cost sits below the parts
+QA| mobile OVERFLOW SCR-10 ok (360<=360)
+QA| mobile AXE SCR-10 0 violations
+QA| mobile DOWNLOAD suggested file name 2ed51d80b3_Frame---Base--plate--A---1--2-3-_24-11-2026.xlsx
+QA| mobile SCR-10 after download Not downloaded
+QA| mobile second download status 200 attachment; filename="2ed51d80b3_Frame---Base--plate--A---1--2-3-_24-11-2026.xlsx"; filename*=UTF-8''2ed51d80b3_Frame---Base--plate--A---1--2-3-_24-11-2026.xlsx
+QA| mobile SCR-06 header chip after 2 downloads Downloaded 2× Last downloaded by E2E axe.mobile.r0.t0.ff4c22, 24 Nov 2026, 08:13 IST
+QA| mobile ENGINEER PAGE QUOTED status badge: Quoted | forbidden-word hits: []
+QA| mobile ENGINEER API workspace QUOTED 404 cost-ish keys: []
+QA| mobile ENGINEER FORBIDDEN ROUTES QUOTED costs=403 export=403 quoted=403 ignore=403 restore=403
+QA| mobile after unlock Draft | chip: Downloaded 2× Last downloaded by E2E axe.mobile.r0.t0.ff4c22, 24 Nov 2026, 08:13 IST
+QA| mobile ENGINEER PAGE DRAFT-after-unlock status badge: Draft | forbidden-word hits: []
+QA| mobile ENGINEER API workspace DRAFT-after-unlock 404 cost-ish keys: []
+QA| mobile ENGINEER FORBIDDEN ROUTES DRAFT-after-unlock costs=403 export=403 quoted=403 ignore=403 restore=403
+QA| mobile AXE ignore dialog 0 violations
+QA| mobile ignore with empty remarks error an read this in their Ignored tab, and it is kept in the audit log. Up to 500 characters. Enter remarks. They are kept in the audit log. Keep it open Ignore RFQ
+QA| mobile ignored notice Ignored on 24 Nov 2026, 08:13 IST by E2E axe.mobile.r0.t0.ff4c22. Remarks: Not taken forward. Customer chose another supplier. <b>x</b> This RFQ is read-only. It cannot be changed, calculated, approved, marked as quoted or downloaded until it is restored. It was Draft when it was ignored. Restore puts it back as Draft. Restore RFQ
+QA| mobile focus after ignore H1:Q-9999-154987338 | announcer: Q-9999-154987338 ignored. It is now in the Ignored tab.
+QA| mobile SCR-06 ignored: buttons ["Restore RFQ","\\\\invented-server\\invented-share\\RFQ-canary","Copy path","View cost details\nfor 1 Invented text"]
+QA| mobile OVERFLOW SCR-06 ignored ok (360<=360)
+QA| mobile AXE SCR-06 ignored 0 violations
+QA| STEP FAILED lead ignored tab expect(locator).toBeVisible() failed
+QA| mobile ENGINEER PAGE IGNORED status badge: Ignored | forbidden-word hits: []
+QA| mobile ENGINEER API workspace IGNORED 404 cost-ish keys: []
+QA| mobile ENGINEER FORBIDDEN ROUTES IGNORED costs=403 export=403 quoted=403 ignore=403 restore=403
+QA| mobile ENGINEER ignored page notice This task was ignored on 24 Nov 2026, 08:13 IST by E2E axe.mobile.r0.t0.ff4c22. Remarks: Not taken forward. Customer chose another supplier. <b>x</b> You can read everything here, but nothing can be changed. A Lead or Admin can restore it, and it then comes back to your tasks with the status it had. // // 
+QA| mobile ENGINEER ignored controls ["Copy path","Parts tree, part 1"] inputs disabled: 0 readonly: 0
+QA| mobile OVERFLOW engineer ignored ok (360<=360)
+QA| mobile AXE engineer ignored workspace 0 violations
+QA| mobile IGNORED tab (Engineer) My tasks Tasks assigned to you. Open one to start entering part data. Search tasks Open 0 Closed 0 Overdue 0 Ignored 1 Sorted by deadline, earliest first. Tasks that a Lead or Admin set aside. You can read them but not change them. Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer. Q-9999-154987338 Canary task Ignored Not taken forward. Customer chose another supplier. <b>x</b> Due: 01 Jan 2099, 10:00 IST Assigned by: E2E Lead \\invented-server\invented-share\RFQ-canary Copy path
+QA| mobile OVERFLOW queue ignored engineer ok (360<=360)
+QA| mobile AXE queue ignored engineer 0 violations
+QA| mobile restore dialog Restore Q-9999-154987338? It goes back to Draft, the status it had when it was ignored, and returns to E2E scan.mobile.r0.t0.290ce1's Open queue. Nothing in the estimate changes. Keep it ignored Restore RFQ
+QA| mobile AXE restore dialog 0 violations
+QA| mobile after restore Draft announcer: Q-9999-154987338 restored. It is back as Draft, in Open. focus: H1
+QA| mobile ENGINEER PAGE RESTORED(draft) status badge: Draft | forbidden-word hits: []
+QA| mobile ENGINEER API workspace RESTORED(draft) 404 cost-ish keys: []
+QA| mobile ENGINEER FORBIDDEN ROUTES RESTORED(draft) costs=403 export=403 quoted=403 ignore=403 restore=403
+  ✓  1 [mobile] › tests\e2e-qa\journey.qa.ts:54:1 › T2 lead journey: approved, quoted, export, marker, unlock, ignore, restore + Engineer view at each step (6.7m)
+QA| tablet estimate Q-9999-252491278
+QA| tablet short name of customer 2ed51d80b3
+QA| tablet SCR-06 approved: buttons ["Download .xlsx","Unlock","Mark as quoted","Ignore RFQ"] chip: Not downloaded
+QA| tablet OVERFLOW SCR-06 approved ok (768<=768)
+QA| tablet AXE SCR-06 approved 0 violations
+QA| tablet quote dialog text Mark Q-9999-252491278 as quoted? Do this once the quote has been sent to Canary-Customer-Alpha. The status becomes Quoted, with your name and the time. This cannot be undone, except by Unlock. Not downloaded Not yet Mark as quoted
+QA| tablet AXE quote dialog open 0 violations
+QA| tablet quoted notice Quoted on 24 Nov 2026, 08:17 IST by E2E axe.tablet.r0.t0.7eba00. The quote was sent to Canary-Customer-Alpha. This is the last status; the estimate stays locked at the approved figures.
+QA| tablet focus after quote DIV:Quoted on 24 Nov 2026, 08:17 I
+QA| tablet OVERFLOW SCR-06 quoted ok (768<=768)
+QA| tablet AXE SCR-06 quoted 0 violations
+QA| tablet SCR-06 quoted: buttons ["Download .xlsx","Unlock"]
+QA| tablet CLOSED tab row Task queue All tasks assigned to Engineers. Assign task Search tasks Engineer All Engineers E2E Engineer E2E scan.desktop.r0.t0.1452e7 E2E scan.desktop.r0.t0.384930 E2E scan.desktop.r0.t0.562f76 E2E scan.desktop.r0.t0.6ef47c E2E scan.desktop.r0.t0.9234d9 E2E scan.desktop.r0.t0.94a5d5 E2E scan.desktop.r0.t0.da1503 E2E scan.desktop.r0.t0.edd37b E2E scan.desktop.r0.t0.f55627 E2E scan.firefox.r0.t0.1426a0 E2E scan.firefox.r0.t0.1439b2 E2E scan.firefox.r0.t0.4cbe1d E2E scan.firefox.r0.t0.5a4aae E2E scan.firefox.r0.t0.687a61 E2E scan.firefox.r0.t0.ab0975 E2E scan.firefox.r0.t0.bdfc29 E2E scan.firefox.r0.t0.bfd7c1 E2E scan.mobile.r0.t0.021588 E2E scan.mobile.r0.t0.05f215 E2E scan.mobile.r0.t0.290ce
+QA| tablet OVERFLOW queue closed ok (768<=768)
+QA| tablet AXE queue closed 0 violations
+QA| tablet SCR-10 text Excel export Back to the estimate Not downloaded The file File name 2ed51d80b3_Frame---Base--plate--A---1--2-3-_24-11-2026.xlsx Rows in the file 1 part Columns A to BO Download .xlsx The rows in the file Every row holds its own count for the whole order (H) and its own BG. The file has no per-item totals and nothing is multiplied by the rows above. Count (H), Unit Production Price (BG) and Tool Cost (BM) per row in the file SL. NO PART QTY (H), FOR THE WHOLE ORDER IN THE FILE: BG IN THE FILE: TOOL COST (BM) 1 Invented text 12.5 1,68,89,808.07 12.50 BG column added up: BL2, the same as the total on screen 1,68,89,808.07 Total Tool Cost: file row 4, one empty row below the last part, with the label in the cell to the left of the Tool Cost column 12.50 The Total Tool Cost sits below the parts
+QA| tablet OVERFLOW SCR-10 ok (768<=768)
+QA| tablet AXE SCR-10 0 violations
+QA| tablet DOWNLOAD suggested file name 2ed51d80b3_Frame---Base--plate--A---1--2-3-_24-11-2026.xlsx
+QA| tablet SCR-10 after download Not downloaded
+QA| tablet second download status 200 attachment; filename="2ed51d80b3_Frame---Base--plate--A---1--2-3-_24-11-2026.xlsx"; filename*=UTF-8''2ed51d80b3_Frame---Base--plate--A---1--2-3-_24-11-2026.xlsx
+QA| tablet SCR-06 header chip after 2 downloads Downloaded 2× Last downloaded by E2E axe.tablet.r0.t0.7eba00, 24 Nov 2026, 08:18 IST
+QA| tablet ENGINEER PAGE QUOTED status badge: Quoted | forbidden-word hits: []
+QA| tablet ENGINEER API workspace QUOTED 404 cost-ish keys: []
+QA| tablet ENGINEER FORBIDDEN ROUTES QUOTED costs=403 export=403 quoted=403 ignore=403 restore=403
+QA| tablet after unlock Draft | chip: Downloaded 2× Last downloaded by E2E axe.tablet.r0.t0.7eba00, 24 Nov 2026, 08:18 IST
+QA| tablet ENGINEER PAGE DRAFT-after-unlock status badge: Draft | forbidden-word hits: []
+QA| tablet ENGINEER API workspace DRAFT-after-unlock 404 cost-ish keys: []
+QA| tablet ENGINEER FORBIDDEN ROUTES DRAFT-after-unlock costs=403 export=403 quoted=403 ignore=403 restore=403
+QA| tablet AXE ignore dialog 0 violations
+QA| tablet ignore with empty remarks error an read this in their Ignored tab, and it is kept in the audit log. Up to 500 characters. Enter remarks. They are kept in the audit log. Keep it open Ignore RFQ
+QA| tablet ignored notice Ignored on 24 Nov 2026, 08:18 IST by E2E axe.tablet.r0.t0.7eba00. Remarks: Not taken forward. Customer chose another supplier. <b>x</b> This RFQ is read-only. It cannot be changed, calculated, approved, marked as quoted or downloaded until it is restored. It was Draft when it was ignored. Restore puts it back as Draft. Restore RFQ
+QA| tablet focus after ignore H1:Q-9999-252491278 | announcer: Q-9999-252491278 ignored. It is now in the Ignored tab.
+QA| tablet SCR-06 ignored: buttons ["Restore RFQ","\\\\invented-server\\invented-share\\RFQ-canary","Copy path","View cost details\nfor 1 Invented text"]
+QA| tablet OVERFLOW SCR-06 ignored ok (768<=768)
+QA| tablet AXE SCR-06 ignored 0 violations
+QA| tablet IGNORED tab (Lead) Task queue All tasks assigned to Engineers. Assign task Search tasks Engineer All Engineers E2E Engineer E2E scan.desktop.r0.t0.1452e7 E2E scan.desktop.r0.t0.384930 E2E scan.desktop.r0.t0.562f76 E2E scan.desktop.r0.t0.6ef47c E2E scan.desktop.r0.t0.9234d9 E2E scan.desktop.r0.t0.94a5d5 E2E scan.desktop.r0.t0.da1503 E2E scan.desktop.r0.t0.edd37b E2E scan.desktop.r0.t0.f55627 E2E scan.firefox.r0.t0.1426a0 E2E scan.firefox.r0.t0.1439b2 E2E scan.firefox.r0.t0.4cbe1d E2E scan.firefox.r0.t0.5a4aae E2E scan.firefox.r0.t0.687a61 E2E scan.firefox.r0.t0.ab0975 E2E scan.firefox.r0.t0.bdfc29 E2E scan.firefo
+QA| tablet OVERFLOW queue ignored lead ok (768<=768)
+QA| tablet AXE queue ignored lead 0 violations
+QA| tablet ENGINEER PAGE IGNORED status badge: Ignored | forbidden-word hits: []
+QA| tablet ENGINEER API workspace IGNORED 404 cost-ish keys: []
+QA| tablet ENGINEER FORBIDDEN ROUTES IGNORED costs=403 export=403 quoted=403 ignore=403 restore=403
+QA| tablet ENGINEER ignored page notice This task was ignored on 24 Nov 2026, 08:18 IST by E2E axe.tablet.r0.t0.7eba00. Remarks: Not taken forward. Customer chose another supplier. <b>x</b> You can read everything here, but nothing can be changed. A Lead or Admin can restore it, and it then comes back to your tasks with the status it had. // // // 
+QA| tablet ENGINEER ignored controls ["Copy path","Hide parts tree"] inputs disabled: 0 readonly: 0
+QA| tablet OVERFLOW engineer ignored ok (768<=768)
+QA| tablet AXE engineer ignored workspace 0 violations
+QA| tablet IGNORED tab (Engineer) My tasks Tasks assigned to you. Open one to start entering part data. Search tasks Open 0 Closed 0 Overdue 0 Ignored 1 Sorted by deadline, earliest first. Tasks that a Lead or Admin set aside. You can read them but not change them. Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer. Tasks sorted by deadline, earliest first TASK DEADLINE (IST) STATUS Q-9999-252491278 Canary task 01 Jan 2099, 10:00 IST Ignored Not taken forward. Customer chose another supplier. <b>x</b>
+QA| tablet OVERFLOW queue ignored engineer ok (768<=768)
+QA| tablet AXE queue ignored engineer 0 violations
+QA| tablet restore dialog Restore Q-9999-252491278? It goes back to Draft, the status it had when it was ignored, and returns to E2E scan.tablet.r0.t0.cd6b14's Open queue. Nothing in the estimate changes. Keep it ignored Restore RFQ
+QA| tablet AXE restore dialog 0 violations
+QA| tablet after restore Draft announcer: Q-9999-252491278 restored. It is back as Draft, in Open. focus: H1
+QA| tablet ENGINEER PAGE RESTORED(draft) status badge: Draft | forbidden-word hits: []
+QA| tablet ENGINEER API workspace RESTORED(draft) 404 cost-ish keys: []
+QA| tablet ENGINEER FORBIDDEN ROUTES RESTORED(draft) costs=403 export=403 quoted=403 ignore=403 restore=403
+  ✓  2 [tablet] › tests\e2e-qa\journey.qa.ts:54:1 › T2 lead journey: approved, quoted, export, marker, unlock, ignore, restore + Engineer view at each step (2.6m)
+  2 passed (9.9m)

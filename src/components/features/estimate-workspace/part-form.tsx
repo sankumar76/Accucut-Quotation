@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -7,6 +9,7 @@ import type { SaveGate } from '@/lib/estimates/save-gate';
 
 import { FAILED_BODY, FORM_LOAD_FAILED_TITLE, FORM_LOADING, FORM_NO_PART, TRY_AGAIN } from './estimate-texts';
 import type { PartFieldsProps } from './part-fields';
+import { partFormShown } from './tree-controls-ready';
 import { useFormDefinition } from './use-form-definition';
 import { useLazyComponent } from './use-lazy-component';
 import type { PartTarget, SavedPart } from './use-part-form';
@@ -30,6 +33,8 @@ export interface PartFormProps {
   readonly missing: ReadonlySet<string>;
   /** What Calculate waits for: the saves in flight and the fields that show a value that is not saved (STORY-05.09). */
   readonly gate: SaveGate;
+  /** Called once the form has something to show for the part (its fields, or the notice that they could not be read): the workspace then lets the tree-width controls load, so their code never competes with the form's (AQP-426, DEF-085). */
+  readonly onShown?: () => void;
 }
 
 /**
@@ -38,10 +43,14 @@ export interface PartFormProps {
  * nothing typed into one can land in another. Skeleton cards while it loads, a notice with "Try again" when it cannot be read. No rate, cost or formula is requested, held or drawn: the
  * server's form has none, and the materials are IDs and names.
  */
-export function PartForm({ estimateId, part, editable, onSaved, onChanged, onServerIgnored, missing, gate }: PartFormProps) {
+export function PartForm({ estimateId, part, editable, onSaved, onChanged, onServerIgnored, missing, gate, onShown }: PartFormProps) {
   const definition = useFormDefinition(estimateId);
   const fields = useLazyComponent<PartFieldsProps>(loadFields, true);
   const Fields = fields.Component;
+  const shown = partFormShown({ hasPart: part !== null, definition: definition.form.status, fieldsCodeFailed: fields.failed, fieldsCodeHere: Fields !== null });
+  useEffect(() => {
+    if (shown) onShown?.();
+  }, [shown, onShown]);
 
   if (part === null) return <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_NO_PART}</p>;
   if (definition.form.status === 'failed') {

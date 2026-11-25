@@ -5,7 +5,7 @@ import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 
 import { connectToTestDatabase, createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, setCanaryCustomer, signInWithoutThePage, useFreshAddress } from './support/auth';
-import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
+import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
 
 /**
  * STORY-05.02 T7 (AC-1 to AC-3, AC-6, AC-9): the parts tree of SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server. Each test signs in
@@ -106,6 +106,61 @@ const toolbarBoxes = (page: Page): Promise<ToolbarBox[]> =>
       };
     }),
   );
+
+/** The top of a row's link, in the page's own pixels. */
+const topOf = (link: Locator): Promise<number> => link.evaluate((element) => element.getBoundingClientRect().top);
+
+/** The height of the toolbar group of one row: more than 1 px when it is in view, 1 px or less when it is the `sr-only` clip. */
+async function toolbarHeightOf(page: Page, slNo: string): Promise<number> {
+  const row = (await toolbarBoxes(page)).find((box) => box.slNo === slNo);
+  return defined(row).height;
+}
+
+/**
+ * The box of an element once it has stopped moving: Radix scales a menu in when it opens, and the rows slide when a toolbar line comes or goes, so a box read at once is not the one a press meets. The wait is on the
+ * state (two reads in a row are the same), not on a time.
+ */
+async function settledBox(target: Locator): Promise<NonNullable<Awaited<ReturnType<Locator['boundingBox']>>>> {
+  let last = '';
+  await expect
+    .poll(async () => {
+      const now = JSON.stringify(await target.boundingBox());
+      const same = now === last;
+      last = now;
+      return same && now !== 'null';
+    }, 'the element has stopped moving')
+    .toBe(true);
+  return defined(await target.boundingBox());
+}
+
+/**
+ * Where a press can reach the name of a row while a menu of the row above it is open. The menu lies over the rows below its handle and is wider than a name at 1366 px, so a press at the centre of the name would be a
+ * press on a menu item; the strip of the name above the menu is the part of it that is still the row. The y of that strip, in the page's pixels.
+ */
+async function yAboveMenu(page: Page, slNo: string): Promise<number> {
+  const menu = await settledBox(page.getByRole('menu'));
+  const link = defined(await part(page, slNo).boundingBox());
+  expect(menu.y - link.y, 'a strip of the name of ' + slNo + ' lies above the open menu').toBeGreaterThanOrEqual(4);
+  return link.y + (menu.y - link.y) / 2;
+}
+
+/**
+ * AQP-419 (DEF-076), rule P of the design (comment 13032): a press with the mouse on a row's name, whose row is where it was at the pointer-down and at the pointer-up. A press that moves the focus used to take the focus
+ * ring off another row, that row's toolbar went back to the clip, and the pressed row moved up under the pointer, so the pointer-up was over something else and the click was lost. The hold is `holdMs` long (0 for a fast click);
+ * The press is at the centre of the name, or at `y` when the name is partly under an open menu (see `yAboveMenu`).
+ */
+async function pressWithoutShift(page: Page, slNo: string, holdMs: number, y?: number): Promise<void> {
+  const link = part(page, slNo);
+  const box = defined(await link.boundingBox());
+  await page.mouse.move(box.x + box.width / 2, y ?? box.y + box.height / 2);
+  await page.mouse.down();
+  const atDown = await topOf(link);
+  if (holdMs > 0) await page.evaluate((ms) => new Promise((resolve) => setTimeout(resolve, ms)), holdMs);
+  const atUp = await topOf(link);
+  await page.mouse.up();
+  expect(atDown, `row ${slNo} does not move at the pointer-down`).toBe(box.y);
+  expect(atUp, `row ${slNo} does not move before the pointer-up`).toBe(box.y);
+}
 
 /**
  * AQP-343 / DEF-040, master's DL-234 D2: a diagnostic and nothing else. A wait for "Part renumbered to ..." has failed on the first attempt only, twice, with no trace kept.
@@ -425,8 +480,10 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     const leaf = await part(page, '2').boundingBox();
     const branch = await part(page, '1').boundingBox();
     expect(leaf?.x, 'a leaf row starts where a branch row does').toBeCloseTo(branch?.x ?? -1, 0);
-    expect((await arrow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
-    expect((await arrow.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    // A mouse at 1024 px and wider gets the 24 x 36 arrow (WCAG 2.5.8); a finger and anything narrower keep 44 px (NFR-017; DEF-081 ruling 12).
+    const wideMouse = (page.viewportSize()?.width ?? 0) >= 1024;
+    expect((await arrow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(wideMouse ? ROW_TARGET : TOUCH_TARGET);
+    expect((await arrow.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(wideMouse ? 24 : TOUCH_TARGET);
 
     // Tab goes arrow, row, the row's own move handle, "+" and "-", next row, and so on: the order of the page, with no roving stop (UX spec section 0.9 row 3: "Keyboard: Tab moves between a row and its "+""). The buttons of a row
     // that is not open are clipped, not removed (AQP-418), so this holds on a touch screen too.
@@ -619,9 +676,90 @@ test.describe('AQP-405: the row actions', () => {
     await expectNoAxeViolations(page);
   });
 
-  test('AQP-405 AC-4 (AQP-418): the "-" of a row that is not the open one, reached by the keyboard (Tab from its link), deletes that row after the confirmation, and the open row stays open and is renumbered', async ({ page }, testInfo) => {
+  test('AQP-405 AC-4 (AQP-418): the "-" of a row that is not the open one, reached by the keyboard (Tab from its link), deletes that row after the confirmation, and the open row stays open and is renumbered; and a press on a row below a row that has the keyboard focus is never lost (AQP-419)', async ({ page }, testInfo) => {
     // The toolbar of a row that is not open is clipped, so a press cannot reach it (AQP-418, DEF-075): a person reaches it with Tab from the row's link, on every screen. 1.1 is a Part: the handle, the "+" and the "-".
     await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.2');
+    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+
+    // AQP-419 (DEF-076), acceptance checks 1, 2, 3, 5, 7 and 10 of the design (comment 13032). 1.2 is the open row. Row 1 is given the keyboard focus ring, so its toolbar is in view under its name and every row below it is
+    // one toolbar line lower; a press with the mouse on 1.1 then moves the focus, and used to take that line away under the pointer, so the row jumped up and the click was lost. Rule P: nothing moves between the
+    // pointer-down and the pointer-up, 1.1 is open after the click, and row 1's toolbar goes back to the clip once the press is over. Each start state is asserted (WebKit's Tab can skip), then put back.
+    const keyboardOnRow1 = async (focus: 'link' | 'handle' | 'menu'): Promise<void> => {
+      await tree(page).getByRole('button', { name: 'Close branch 1' }).focus();
+      await page.keyboard.press('Tab');
+      await expect(part(page, '1')).toBeFocused();
+      if (focus !== 'link') {
+        await page.keyboard.press('Tab');
+        await expect(handleOf(page, '1')).toBeFocused();
+      }
+      if (focus === 'menu') {
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toBeVisible();
+      }
+      expect(await toolbarHeightOf(page, '1'), 'row 1 shows its toolbar by the keyboard focus').toBeGreaterThan(1);
+    };
+    const settled = async (): Promise<void> => {
+      await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+      await expect(part(page, '1.2')).not.toHaveAttribute('aria-current', 'true');
+      await expect.poll(() => toolbarHeightOf(page, '1'), 'row 1 settles once the press is over').toBeLessThanOrEqual(1);
+      await expect(page.getByRole('menuitem')).toHaveCount(0);
+      await choose(page, '1.2');
+      await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+    };
+    for (const [focus, holdMs] of [['link', 0], ['link', 150], ['handle', 0], ['menu', 0]] as const) {
+      await keyboardOnRow1(focus);
+      await pressWithoutShift(page, '1.1', holdMs, focus === 'menu' ? await yAboveMenu(page, '1.1') : undefined);
+      await settled();
+    }
+
+    // Check 5: a press that is dragged off the row and released elsewhere is no click, and the held line is let go of when it is over: nothing stays in the way.
+    await keyboardOnRow1('link');
+    const pressed = defined(await part(page, '1.1').boundingBox());
+    await page.mouse.move(pressed.x + pressed.width / 2, pressed.y + pressed.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(2, 2, { steps: 4 });
+    await page.mouse.up();
+    await expect.poll(() => toolbarHeightOf(page, '1'), 'a press that ends elsewhere lets the held line go').toBeLessThanOrEqual(1);
+    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+
+    // Check 7: the keyboard holds nothing. Tab from row 1's link through its buttons to row 1.1 takes row 1's toolbar away at once.
+    await keyboardOnRow1('link');
+    for (const next of [handleOf(page, '1'), rowButton(page, 'Add under', '1'), rowButton(page, 'Delete', '1'), part(page, '1.1')]) {
+      await page.keyboard.press('Tab');
+      await expect(next).toBeFocused();
+    }
+    expect(await toolbarHeightOf(page, '1'), 'Tab away collapses row 1 at once').toBeLessThanOrEqual(1);
+    await choose(page, '1.2');
+    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+
+    // Check 4 and rule P2: a double click on the name of a row below the open row. The first click opens 1.1 and takes row 1's toolbar line away, so 1.1 sits one line higher and its own toolbar line is under the pointer;
+    // the second press would land on its "+" (a Part gets its Fastener at once). The pointer is put where the "+" of 1.1 is once 1.1 is open, which is on the name of 1.1 while row 1 is open; the second press comes 120 ms
+    // after the first, as a person's does. It must reach nothing: no add request, no menu, no dialog, and 1.1 stays the open row.
+    const added: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && /\/api\/v1\/estimates\/[^/]+\/nodes$/.test(new URL(request.url()).pathname)) added.push(request.url());
+    });
+    await choose(page, '1.1');
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    const plus = await settledBox(rowButton(page, 'Add fastener under', '1.1'));
+    await choose(page, '1');
+    await expect(part(page, '1')).toHaveAttribute('aria-current', 'true');
+    const name = await settledBox(part(page, '1.1'));
+    const [left, right] = [Math.max(plus.x, name.x), Math.min(plus.x + plus.width, name.x + name.width)];
+    const [top, bottom] = [Math.max(plus.y, name.y), Math.min(plus.y + plus.height, name.y + name.height)];
+    expect(right > left && bottom > top, 'the "+" of 1.1 once it is open lies over the name of 1.1 while row 1 is open').toBe(true);
+    await page.mouse.move((left + right) / 2, (top + bottom) / 2);
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 120)));
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    await expect(page.getByRole('menuitem')).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
     await choose(page, '1.2');
     await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
 
@@ -639,6 +777,8 @@ test.describe('AQP-405: the row actions', () => {
     await expect(dialog).toHaveCount(0);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1']);
     await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    // Judged here, after the steps above have given a late request time to show: the second press of the double click above added nothing.
+    expect(added, 'the second press of a double click on a name added no Fastener').toEqual([]);
   });
 });
 

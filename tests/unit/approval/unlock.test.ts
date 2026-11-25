@@ -5,7 +5,7 @@ import { CUSTOMER_DELETED_CODE, MATERIAL_DELETED_CODE } from '@/lib/estimate/cal
 import { TRANSITION_REFUSALS, type EstimateStatus } from '@/lib/estimate/state-machine';
 import { checkUnlockReason, UNLOCK_CUSTOMER_DELETED_MESSAGE, UNLOCK_MATERIAL_DELETED_MESSAGE, UNLOCK_REASON_MAX, UNLOCK_REASON_REQUIRED_MESSAGE, UNLOCK_REASON_TOO_LONG_MESSAGE } from '@/lib/estimate/unlock-words';
 import { TEXT_CHARACTERS_MESSAGE } from '@/lib/estimate/validation';
-import { assertMayUnlock, createUnlockService, type UnlockDependencies } from '@/server/services/unlock-service';
+import { assertMayUnlock, createUnlockService, lockedStatusLeft, type UnlockDependencies } from '@/server/services/unlock-service';
 
 import { FIXTURE_CUSTOMER_ID, FIXTURE_MATERIAL_ID, mastersNow, storedSnapshot } from '../../support/rate-change-fixture';
 import { seedConfig } from '../../support/seed-config';
@@ -180,8 +180,24 @@ describe('AC-2: a good unlock writes the status, the unlock and the audit entry,
     expect(statusNow()).toBe('DRAFT');
     expect(marked).toEqual([{ approvalId: APPROVAL_ID, unlockedById: viewer.id, reason: REASON }]);
     expect(audited).toEqual([
-      { event: 'approval.unlocked', ...audit, object: { id: ESTIMATE_ID, label: 'Q-2026-0001' }, before: { approvedPrice: '12600.00' }, after: { reason: REASON } },
+      { event: 'approval.unlocked', ...audit, object: { id: ESTIMATE_ID, label: 'Q-2026-0001' }, before: { approvedPrice: '12600.00', status: 'APPROVED' }, after: { reason: REASON } },
     ]);
+  });
+
+  // QLT-C-03 of the final review: the entry says which status the estimate left, from the row the lock read (the same status the machine decided on).
+  it.each(['APPROVED', 'QUOTED'] as const)('QLT-C-03: unlocking a %s estimate writes that status into the "before" of the entry, in the same transaction as the move', async (status) => {
+    const { service, writes, audited } = build({ status });
+    await service.unlock(lead, ESTIMATE_ID, { reason: REASON, audit });
+    expect(writes).toEqual(['lock', 'customer', 'materials', 'transition', 'mark', 'audit']);
+    expect(audited).toEqual([expect.objectContaining({ event: 'approval.unlocked', before: { approvedPrice: '12600.00', status }, after: { reason: REASON } })]);
+  });
+
+  // QLT-669-01: a status that is not a locked one is a fault, never recorded as Approved.
+  it('QLT-669-01: the status left is the locked status itself, and any other status is refused instead of being recorded as Approved', () => {
+    expect(lockedStatusLeft('APPROVED')).toBe('APPROVED');
+    expect(lockedStatusLeft('QUOTED')).toBe('QUOTED');
+    expect(() => lockedStatusLeft('DRAFT')).toThrow('approved or a quoted');
+    expect(() => lockedStatusLeft('PREPARED')).toThrow('approved or a quoted');
   });
 
   it('an audit entry that cannot be written fails the unlock (the transaction takes the rest back)', async () => {

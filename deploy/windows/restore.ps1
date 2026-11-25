@@ -3,11 +3,10 @@
   The Admin's guided command that restores a backup (STORY-10.11; architecture sections 9.5 and 9.9; ADR-015 Amendments 2, 2.1 and 3).
 
 .DESCRIPTION
-  Run it from the Admin's endpoint (the shortcut "Accucut Admin" opens it; the command is Restore-AccucutBackup) or, when the endpoint is not set up, as an administrator
-  from the installed folder:
+  Run it in Windows PowerShell opened with Run as administrator, from the installed folder (ADR-015 Amendment 3.4):
       cd C:\Accucut\current
       .\restore.ps1
-  Windows PowerShell 5.1. It takes no arguments. It does not depend on the endpoint: the same script runs the same way as a full administrator.
+  Windows PowerShell 5.1. It takes no arguments and needs no endpoint, session or virtual account.
 
   What it does (architecture 9.5, the restore step table):
     1.  Checks (the trust block below, never the module) where it is running from, the install folder chain, this script, the module, the settings files, the backups

@@ -316,6 +316,7 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
     movedFocus,
     problem,
     announcement,
+    announce: setAnnouncement,
     deleting,
     deleteOpen,
     select: setSelectedId,

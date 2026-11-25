@@ -22,7 +22,7 @@ test.beforeEach(async ({ context }) => {
 const LARGE_VIEWPORT = 1024;
 const CARD_MINIMUM = 232;
 const GAP = 16;
-const TREE_WIDTH = 288;
+const TREE_WIDTH = 320;
 const OVERRIDE = 340;
 const HEIGHT = 900;
 /** Sub-pixel layout: widths are compared within one pixel. */
@@ -106,7 +106,7 @@ test.describe('AC-1, AC-3, AC-4: the region at the width of the project', () => 
       expect(measured.regionWidth).toBe(0);
       await expect(region).toBeHidden();
     } else {
-      // AC-1: at 1024 px and wider the token is 0px: the region has a box of no width and the page is as it was: the tree is 288 px, the form follows it after one gap, and the zero-width
+      // AC-1: at 1024 px and wider the token is 0px: the region has a box of no width and the page is as it was: the tree is 320 px, the form follows it after one gap, and the zero-width
       // item took no gap of its own (the form is as wide as it is with the region out of the layout).
       expect(measured.regionDisplay).toBe('block');
       expect(measured.regionWidth).toBe(0);

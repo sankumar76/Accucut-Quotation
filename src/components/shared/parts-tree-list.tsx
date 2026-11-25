@@ -57,8 +57,11 @@ export const branchToggleLabel = (open: boolean, slNo: string): string => `${ope
  */
 const LAST_INDENTED_LEVEL = 5;
 
-/** The width an arrow takes, kept by a leaf row too, so the icons of a level line up whether or not a row has a branch below it. At least 44 px wide and tall: it is a touch target (NFR-017). */
-const ARROW_CELL = 'flex min-h-(--control-h) w-(--control-h) shrink-0 items-center justify-center';
+/**
+ * The width an arrow takes, kept by a leaf row too, so the icons of a level line up whether or not a row has a branch below it. At least 44 px wide and tall: it is a touch target (NFR-017). For a mouse at 1024 px and
+ * wider (`fine-wide:`) it is 24 x 36 (WCAG 2.5.8 holds), so the row is 36 px, as its link already asks (DEF-081 ruling items 7b and 12); a finger, and anything narrower than 1024 px, keep 44 px.
+ */
+const ARROW_CELL = 'flex min-h-(--control-h) w-(--control-h) shrink-0 items-center justify-center fine-wide:min-h-(--compact-field-h) fine-wide:w-s-5';
 
 function ArrowCell({ branch, open, interactive, onToggle, controls }: { readonly branch: Branch<PartsTreeItem>; readonly open: boolean; readonly interactive: boolean; readonly onToggle: (() => void) | undefined; readonly controls: string }) {
   if (branch.children.length === 0) return <span aria-hidden="true" className={ARROW_CELL} data-branch-arrow="none" />;
@@ -127,7 +130,7 @@ function BranchItem<T extends PartsTreeItem>({ branch, siblings, level, renderRo
         )}
       </div>
       {children.length > 0 && open ? (
-        <ul id={childrenId} className={cn('flex flex-col', level < LAST_INDENTED_LEVEL && 'ml-s-5 border-l border-border')}>
+        <ul id={childrenId} className={cn('flex flex-col', level < LAST_INDENTED_LEVEL && 'ml-s-5 border-l border-border fine-wide:ml-s-3 fine-wide:pl-s-2')}>
           {children.map((child) => (
             <BranchItem key={child.node.id} branch={child} siblings={childNodes} level={level + 1} renderRow={renderRow} renderToolbar={renderToolbar} places={places} closed={closed} onToggle={onToggle} />
           ))}

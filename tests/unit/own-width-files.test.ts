@@ -49,7 +49,10 @@ const FILE_LEVEL_DESKTOP_ONLY = /^test\.beforeEach\(\(\{\}, testInfo\) => \{\n {
  * `testIgnore` would drop tests that must run in `mobile` and `tablet`. They are not own-width files. Adding a file here is
  * a ruling in test strategy 10.5, like an entry in the list.
  */
-const PARTLY_DESKTOP_ONLY: ReadonlyArray<string> = ['shell.spec.ts'];
+/**
+ * `estimate-tree-width.spec.ts` (AQP-426, DL-387): ten of its eleven cases set their own widths and skip outside `desktop`; the eleventh (below 1024 px) runs in `mobile` and `tablet`. It is listed here by master's ruling DL-387, not in `OWN_WIDTH_FILES`.
+ */
+const PARTLY_DESKTOP_ONLY: ReadonlyArray<string> = ['shell.spec.ts', 'estimate-tree-width.spec.ts'];
 
 const specFiles = (): string[] =>
   readdirSync(E2E_DIRECTORY, { recursive: true, encoding: 'utf8' })

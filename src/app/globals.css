@@ -52,8 +52,8 @@
   --topbar-h: 64px;
   --side-w: 248px;
   --drawer-w: 288px;
-  /* The parts tree beside the form from 1024 px (UX spec SCR-05 "Layout rules": 288 px). */
-  --tree-w: 288px;
+  /* The parts tree beside the form from 1024 px: 320 px, as the SCR-05 mock-up draws it (DEF-081 ruling item 11; the spec's 288 px is the thing to update). Names wrap at 288 px. */
+  --tree-w: 320px;
   /* The reserved drawing region after the form of SCR-05 (STORY-10.06, FR-087, UD-4): 0px now, 340px when a drawing viewer is added. The one place its width is set; nothing in the product overrides it. */
   --drawing-region-width: 0px;
   --page-max: 1320px;
@@ -65,9 +65,10 @@
   --drawer-max: 88vw;
 
   /* Stacking order, lowest to highest: the sticky Actions column of a masters table (inside the isolated scroll region of its
-     table, so it never competes with the rest), the sticky bar, the dim behind a drawer, the drawer, menus and pickers (which
+     table, so it never competes with the rest), the resize handle of the parts tree (above the form beside it, below every bar), the sticky bar, the dim behind a drawer, the drawer, menus and pickers (which
      may open from inside a drawer), and the skip link. Used as `z-(--z-bar)` and so on. */
   --z-sticky-cell: 1;
+  --z-handle: 2;
   --z-bar: 30;
   --z-overlay: 40;
   --z-drawer: 50;
@@ -324,6 +325,21 @@
   [hidden] {
     display: none !important;
   }
+}
+
+/* The parts tree's resize handle while it is dragged (AQP-426, UX-AC-15.9): the cursor is col-resize over the whole page, text cannot be selected, the grip is the primary colour and its tooltip is gone. Set on <html> by the handle for the length of the gesture. */
+html[data-tree-resizing],
+html[data-tree-resizing] * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+html[data-tree-resizing] [data-tree-hit] [data-tree-grip] {
+  background-color: var(--primary);
+}
+
+html[data-tree-resizing] [data-tree-hit] [role='tooltip'] {
+  display: none;
 }
 
 /* The loading shimmer of the Skeleton component. */

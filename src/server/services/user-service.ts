@@ -7,6 +7,7 @@ import type { TransactionRunner } from '../repositories/transaction';
 import {
   normaliseEmail,
   UserConstraintError,
+  type AdminAccount,
   type UserChanges,
   type UserRepository,
   type UserRole,
@@ -36,6 +37,12 @@ import { assertPasswordRule } from './password-policy';
  * person's row locked, so it is the state the change really replaced even if a second request arrives at the same time. The
  * password is hashed before the transaction opens, for a new person and for a reset (PRF-03), so no lock is held while argon2id
  * works. Nothing in a result, an error or an entry carries a password or its hash (AC-4).
+ *
+ * **The server command** (STORY-01.10, DL-380 to DL-382; architecture section 8 "Emergency Admin password reset"): `findAdminForServerReset` and `resetAdminPasswordOnServer` serve the packaged
+ * `bootstrap-admin` step with `--reset-admin-password`, run on the server for the one Admin who cannot use the e-mailed link while e-mail is off. They are named by that command's runner and by no
+ * page or route (`tests/security/admin-password-reset-no-web-route.test.ts`). The reset is one transaction: the Admin rows are locked in ID order and the rule "exactly one active Admin" is checked again, then the
+ * password, the flag and the session version are set, the three throttle keys are cleared, and the audit entry is written; any failure undoes all of it. Its entry names the Admin as actor (the log has no other
+ * user to name) and carries the command's label, which says it was a system action and from which Windows account.
  *
  * What is audited, six events (AC-3): a person added (`user.created`), a name changed (`user.renamed`), a role changed, a person
  * deactivated or activated, a password reset. Each attribute that changes on one save raises its own event, in one transaction;
@@ -70,6 +77,30 @@ export interface UserServiceDependencies {
 }
 
 /**
+ * Why the server command refused: there is no Admin, the one Admin is deactivated (the command never reactivates), more than one is active (the database makes that impossible; it is checked anyway), or the single
+ * active Admin is no longer the one the operator confirmed (a hand-over or a change of the Admin rows while the prompts were answered; QLT-715-01).
+ */
+export type ServerResetRefusal = 'NO_ADMIN' | 'ADMIN_INACTIVE' | 'MULTIPLE_ADMINS' | 'ADMIN_CHANGED';
+
+/** The Admin the operator is shown before they confirm, or the reason there is nobody to reset. */
+export type ServerResetAdmin =
+  | { readonly status: 'ready'; readonly id: string; readonly name: string; readonly email: string }
+  | { readonly status: 'refused'; readonly refusal: ServerResetRefusal };
+
+/** The result of the reset: the Admin it was done for, or the refusal (nothing was written). A password that breaks the rule is not a result: it throws the 422 `PASSWORD_RULE`, as the web reset does. */
+export type ServerResetResult =
+  | { readonly status: 'reset'; readonly id: string; readonly name: string }
+  | { readonly status: 'refused'; readonly refusal: ServerResetRefusal };
+
+/** What the audit entry of the server command needs besides the Admin: the label that says it was a system action from a Windows account, and a fresh request ID. */
+export interface ServerResetContext {
+  readonly actorLabel: string;
+  readonly requestId: string;
+  /** The ID of the Admin the operator was shown and confirmed (`findAdminForServerReset`). The reset acts on that account or on none (QLT-715-01). */
+  readonly expectedAdminId: string;
+}
+
+/**
  * Every change takes the `AuditContext` first: `actorId` is the Admin making the change and `requestId` the request it came in
  * on. Both go into the audit entry.
  */
@@ -80,6 +111,22 @@ export interface UserService {
   update(context: AuditContext, targetId: string, changes: UserChanges): Promise<UserSummary>;
   /** Resetting one's own password is refused (409). */
   resetPassword(context: AuditContext, targetId: string, password: string): Promise<void>;
+  /** The one active Admin for the server command to show, without locking anything, or why there is none (STORY-01.10 AC-2). */
+  findAdminForServerReset(): Promise<ServerResetAdmin>;
+  /**
+   * Sets a temporary password for the one active Admin, on the server (STORY-01.10 AC-3, AC-5, AC-6): the rule (FR-098, with the Admin's e-mail) before any hash, the hash before the transaction,
+   * then one transaction. The password is never kept, logged, returned or put in an entry.
+   */
+  resetAdminPasswordOnServer(context: ServerResetContext, password: string): Promise<ServerResetResult>;
+}
+
+/** Who is there to reset: exactly one active Admin, or the reason it cannot be done. Deactivated Admin rows beside the active one do not matter. */
+function judgeAdmins(rows: ReadonlyArray<AdminAccount>): { readonly admin: AdminAccount } | { readonly refusal: ServerResetRefusal } {
+  if (rows.length === 0) return { refusal: 'NO_ADMIN' };
+  const active = rows.filter((row) => row.isActive);
+  if (active.length > 1) return { refusal: 'MULTIPLE_ADMINS' };
+  const [admin] = active;
+  return admin === undefined ? { refusal: 'ADMIN_INACTIVE' } : { admin };
 }
 
 /**
@@ -221,6 +268,47 @@ export function createUserService({ users, throttles, hasher, transactions, audi
       await throttles.clear(passwordChangeThrottleKey(keySecret, asked.id));
       // And the step-up block (STORY-06.14 assumption A-1): the reset lifts every block that follows from a forgotten password.
       await throttles.clear(stepUpThrottleKey(keySecret, asked.id));
+    },
+
+    async findAdminForServerReset() {
+      const judged = judgeAdmins(await users.listAdminAccounts());
+      if ('refusal' in judged) return { status: 'refused', refusal: judged.refusal };
+      return { status: 'ready', id: judged.admin.id, name: judged.admin.name, email: judged.admin.email };
+    },
+
+    async resetAdminPasswordOnServer({ actorLabel, requestId, expectedAdminId }, password) {
+      const first = judgeAdmins(await users.listAdminAccounts());
+      if ('refusal' in first) return { status: 'refused', refusal: first.refusal };
+      // The operator confirmed one account; if another is the Admin now, nothing is hashed or written (QLT-715-01).
+      if (!isSamePerson(expectedAdminId, first.admin.id)) return { status: 'refused', refusal: 'ADMIN_CHANGED' };
+      assertPasswordRule(password, { email: first.admin.email, subject: 'other', field: 'password' });
+      // Hashed before the transaction opens (PRF-03), so the row locks are not held while argon2id works.
+      const passwordHash = await hasher.hash(password);
+      return transactions.run(async (tx): Promise<ServerResetResult> => {
+        // The Admin rows are locked in ID order and looked at again: the state may have changed since the first look (AC-2, AC-5).
+        const locked = judgeAdmins(await users.listAdminAccounts(tx));
+        if ('refusal' in locked) return { status: 'refused', refusal: locked.refusal };
+        const { admin } = locked;
+        // Still the confirmed account, with the e-mail the rule was checked against (QLT-715-01).
+        if (!isSamePerson(expectedAdminId, admin.id) || admin.email !== first.admin.email) return { status: 'refused', refusal: 'ADMIN_CHANGED' };
+        const email = await users.setPassword(admin.id, passwordHash, tx);
+        if (email === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);
+        // The three blocks of a forgotten password, cleared inside the transaction (the web reset clears them after its commit): all of it is one change, or none.
+        await throttles.clear(accountThrottleKey(keySecret, email), tx);
+        await throttles.clear(passwordChangeThrottleKey(keySecret, admin.id), tx);
+        await throttles.clear(stepUpThrottleKey(keySecret, admin.id), tx);
+        // The log has no system user: the Admin is the actor the row can name, and the label says what really acted (DL-381 (3)).
+        await audit.record(tx, {
+          event: 'user.password_reset',
+          actorId: admin.id,
+          actorLabel,
+          requestId,
+          object: { id: admin.id, label: admin.name },
+          before: { mustChangePassword: admin.mustChangePassword },
+          after: { mustChangePassword: true },
+        });
+        return { status: 'reset', id: admin.id, name: admin.name };
+      });
     },
   };
 }

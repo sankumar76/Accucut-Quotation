@@ -35,7 +35,7 @@ const HEADER: WorkspaceHeaderView = {
   assignedByName: 'Invented Lead',
 };
 
-const render = (customer: { name: string; shortName: string } | null): string => renderToStaticMarkup(createElement(EstimateWorkspace, { header: { ...HEADER, customer }, estimateId: '00000000-0000-4000-8000-000000000001' }));
+const render = (customer: { name: string; shortName: string } | null): string => renderToStaticMarkup(createElement(EstimateWorkspace, { header: { ...HEADER, customer }, estimateId: '00000000-0000-4000-8000-000000000001', userId: 'invented-user' }));
 
 /** Every element that carries the marker, as its opening tag and its inner text: a static render has no DOM, so the markup is read with a pattern that the one marker makes exact. */
 function regionsOf(html: string): { readonly tag: string; readonly inner: string }[] {

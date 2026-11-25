@@ -5,7 +5,7 @@ import { Icon } from '@/components/shared/icon';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 
-import { ROW_ACTION_SIZE, UNAVAILABLE_LOOK } from './add-node-trigger';
+import { ROW_ACTION_LOOK, ROW_ACTION_SIZE, UNAVAILABLE_LOOK } from './add-node-trigger';
 import type { GestureEvent } from './tree-reorder';
 
 /** How far the pointer must go before a press on the handle is a drag and not a click (it opens the menu). Here, and not in `tree-reorder.ts`, because the handle needs it before that code has arrived. */
@@ -90,7 +90,7 @@ export function MoveHandleTrigger({ label, className, unavailable, onPointerEnte
     onFocus?.(event);
   };
   return (
-    <Button variant="ghost" size="icon" aria-label={label} title={label} data-move-handle="" onPointerEnter={comes} onFocus={focused} className={cn(ROW_ACTION_SIZE, 'touch-none', unavailable === true ? UNAVAILABLE_LOOK : 'cursor-grab', className)} {...props} {...(unavailable === true ? { 'aria-disabled': true } : {})}>
+    <Button variant="ghost" size="icon" aria-label={label} title={label} data-move-handle="" onPointerEnter={comes} onFocus={focused} className={cn(ROW_ACTION_SIZE, ROW_ACTION_LOOK, 'touch-none', unavailable === true ? UNAVAILABLE_LOOK : 'cursor-grab', className)} {...props} {...(unavailable === true ? { 'aria-disabled': true } : {})}>
       <Icon icon={GripVertical} size="large" />
     </Button>
   );

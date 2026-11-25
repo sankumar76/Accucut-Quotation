@@ -8,6 +8,7 @@ import { Notice } from '@/components/shared/notice';
 import { PartsTreeList } from '@/components/shared/parts-tree-list';
 import { TreeLegend } from '@/components/shared/tree-legend';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { ADD_MAIN_ASSEMBLY } from '@/lib/estimates/tree-actions';
@@ -26,9 +27,12 @@ import {
   TREE_CHANGING_ID,
   TREE_LOADING,
   TREE_TITLE,
+  treeRowsLabel,
   TRY_AGAIN,
 } from './estimate-texts';
+import { attachPressHold } from './press-hold';
 import { RowActions } from './row-actions';
+import { StatusLegend } from './status-legend';
 import { TreeNode } from './tree-node';
 import { useLazyComponent } from './use-lazy-component';
 import type { PartsTreeState } from './use-parts-tree';
@@ -41,6 +45,13 @@ export interface TreePanelProps {
   readonly onOpen?: (id: string) => void;
   /** The parts Calculate found a missing input in (STORY-05.09): each shows a triangle. Client state from the blocked answer. */
   readonly missingIds?: ReadonlySet<string>;
+  /**
+   * The panel is a card of its own, with its head over a hairline (DEF-081 ruling item 10, SCR-05): the panel beside the form and the tablet's panel. False where the panel sits on a surface of its own (the phone drawer): the
+   * same head, with no card around it. True when left out.
+   */
+  readonly framed?: boolean;
+  /** Something at the right end of the card head, after the row count: the "Tree width" button, from 1024 px (AQP-426). Not drawn in the unframed head of the drawer. */
+  readonly headAction?: ReactNode;
 }
 
 const TREE_ID = 'parts-tree';
@@ -61,8 +72,10 @@ function focusTree(event: Event): void {
  * Move down); the buttons that sat above the tree for it, and for Add and Delete, are gone. While a change is on its way every control that would start another is `aria-disabled` and keeps the focus (AQP-343). There is no arrow-key navigation: Tab moves from row to row, to each arrow and to the buttons of a row, and Enter on a row opens its form (PM
  * ruling). All of it is the screen's: every rule is the server's, and what the tree shows is what the server last answered.
  */
-export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps) {
+export function TreePanel({ tree, editable, onOpen, missingIds, framed = true, headAction }: TreePanelProps) {
   const { nodes, selected, busy } = tree;
+  // Rule P (AQP-419, DEF-076): a press in the tree never moves a row between its pointer-down and its end, so the toolbars in view at the pointer-down are held until the click has run.
+  useEffect(() => attachPressHold(document, window, TREE_ID), []);
   const deleteDialog = useLazyComponent<DeletePartDialogProps>(loadDeleteDialog, tree.deleting !== null);
   const DeleteDialog = deleteDialog.Component;
   // The branches that are closed. The tree opens with every branch open; what a person closes stays closed while the panel is on screen (the state is this panel's, not the server's).
@@ -90,11 +103,12 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
     </Notice>
   );
 
-  // "Add main assembly" at the foot of the tree (and in the empty tree): another top-level Main Assembly, last. Not offered while the tree is still being read.
+  // "Add main assembly" at the foot of the tree (and in the empty tree): another top-level Main Assembly, last. Not offered while the tree is still being read. A ghost button, as in the mock-up (DEF-081 item 13): red
+  // words and "+", no outline, still 44 px high.
   const addMainAssembly = (
     <div>
       <Button
-        variant="secondary"
+        variant="ghost"
         className={cn(busy && UNAVAILABLE_LOOK)}
         {...(busy ? { 'aria-disabled': true, ...(describedBy === undefined ? {} : { 'aria-describedby': describedBy }) } : {})}
         onClick={busy ? undefined : () => tree.addUnder(null, 'MAIN_ASSEMBLY')}
@@ -141,13 +155,17 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
               ),
             } : {})}
         />
-        {editable ? addMainAssembly : null}
-        <TreeLegend />
+        {/* The foot: a hairline, "Add main assembly" under it, and then the two legends (DEF-081 items 13 and 14). */}
+        <div data-tree-foot="" className="flex flex-col gap-s-3 border-t border-border pt-s-3">
+          {editable ? addMainAssembly : null}
+          <TreeLegend />
+          <StatusLegend />
+        </div>
       </>
     );
   }
 
-  return (
+  const content = (
     <div className="flex min-w-0 flex-col gap-s-3">
       {tree.waiting ? (
         <p id={TREE_CHANGING_ID} className="text-body text-ink-2">
@@ -167,5 +185,29 @@ export function TreePanel({ tree, editable, onOpen, missingIds }: TreePanelProps
         <DeleteDialog target={tree.deleting} open={tree.deleteOpen} deleting={busy} onConfirm={() => void tree.confirmDelete()} onCancel={tree.cancelDelete} onCloseAutoFocus={focusTree} />
       )}
     </div>
+  );
+
+  // The head: "Parts tree" on the left and the number of rows on the right, once the tree is known (DEF-081 item 10).
+  const count = nodes === null ? null : <span className="ml-auto text-label text-ink-3">{treeRowsLabel(nodes.length)}</span>;
+  if (!framed) {
+    return (
+      <div className="flex min-w-0 flex-col gap-s-3">
+        <div className="flex items-center gap-s-3 border-b border-border pb-s-3">
+          <CardTitle>{TREE_TITLE}</CardTitle>
+          {count}
+        </div>
+        {content}
+      </div>
+    );
+  }
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{TREE_TITLE}</CardTitle>
+        {count}
+        {headAction === undefined ? null : <div className={cn(count === null && 'ml-auto')}>{headAction}</div>}
+      </CardHeader>
+      <CardContent>{content}</CardContent>
+    </Card>
   );
 }

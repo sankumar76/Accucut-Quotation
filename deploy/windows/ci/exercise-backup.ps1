@@ -10,6 +10,8 @@
      not provably its own, and writes a job_runs row. The answers come in on standard input, as an Admin would type them.
   4. A module that has been replaced (a marker-writing module, and a write permission for the Users group) is never loaded by backup.ps1 or by clear-copies.ps1: each
      exits 1 naming the permission, and the marker is absent. The module and its permissions are put back afterwards.
+  5. restore.ps1 as an elevated administrator, up to the copy list (ADR-015 Amendment 3.4): Enter at the list stops it, nothing is changed, restore.log and the one
+     event 1101 name the account that ran it, and the services and /api/health are as they were.
 .PARAMETER Root
   The install folder. Default C:\Accucut.
 .PARAMETER ValuesFile
@@ -166,6 +168,33 @@ finally {
 }
 Assert-That ((Get-AccucutFileSha256 -Path $module) -eq $originalHash) 'the module was put back byte for byte'
 Assert-That ((Get-Acl -LiteralPath $module).Sddl -eq $originalSddl) 'the permissions of the module were put back'
+# ---- 5. restore.ps1 as an elevated administrator, up to the copy list (ADR-015 Amendment 3.4; architecture 9.9 change spec S6) ------------------------
+# The Admin runs restore.ps1 from Windows PowerShell opened with Run as administrator. This runs the release's own script, through its own trust checks, as a child
+# powershell.exe of this elevated job, and answers the first question (which copy) with Enter, which stops the restore before anything is changed. The full restore
+# with a pasted key stays a human step (the NFR-013 rehearsal).
+$runner = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$restoreStarted = Get-Date
+$restoreRun = Invoke-Script -Name 'restore.ps1' -Answer @('')
+Write-Host $restoreRun.Output
+# Invoke-AccucutRestore returns (does not throw) when the Admin presses Enter at the list, and restore.ps1 then ends with exit 0.
+Assert-That ($restoreRun.Code -eq 0) 'restore.ps1, run by an administrator and stopped with Enter at the copy list, exits 0'
+Assert-That ($restoreRun.Output.Contains('Backup copies on this server, newest first') -and $restoreRun.Output -match '(?m)^\s+\d+\s+\d{4}-\d{2}-\d{2} ') 'restore.ps1 lists at least one copy'
+Assert-That ($restoreRun.Output.Contains('Stopped by the Admin before a copy was chosen')) 'restore.ps1 says it was stopped by the Admin before a copy was chosen'
+Assert-That ($restoreRun.Output -notmatch 'Refusing') 'restore.ps1 refused nothing: every trust check passed on the real install'
+$restoreLines = @(Get-Content -LiteralPath $paths.RestoreLog -Tail 2)
+Assert-That ($restoreLines.Count -eq 2 -and $restoreLines[0].EndsWith("Restore run by $runner.") -and $restoreLines[1].Contains('Stopped by the Admin before a copy was chosen')) "the last two lines of restore.log are 'Restore run by $runner.' and the stop line (found: $($restoreLines -join ' / '))"
+$restoreEvents = @()
+foreach ($attempt in 1..10) {
+    $restoreEvents = @(Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Accucut'; Id = 1100..1112; StartTime = $restoreStarted } -ErrorAction SilentlyContinue)
+    if ($restoreEvents.Count -ge 1) { break }
+    Start-Sleep -Seconds 1
+}
+Assert-That ($restoreEvents.Count -eq 1) "exactly one Application event 1100 to 1112 was written by the restore (found $($restoreEvents.Count))"
+Assert-That ($restoreEvents[0].Id -eq 1101) "that event is 1101, a restore stopped by the Admin (found $($restoreEvents[0].Id))"
+$eventText = [string]$restoreEvents[0].Properties[0].Value
+Assert-That ($eventText.EndsWith(" Run by $runner.")) "the event names the account that ran it: it ends with ' Run by $runner.' (found: $eventText)"
+foreach ($name in Get-AccucutServiceNames) { Assert-That ((Get-Service -Name $name).Status -eq 'Running') "$name is still Running after the stopped restore" }
+Assert-That ((Get-AccucutHttpStatus -Url "http://127.0.0.1:$($state.port)/api/health") -eq 200) '/api/health still answers 200 after the stopped restore'
 Write-Host 'All backup exercises passed.'
 # The last native program may have left a non-zero exit code behind; the assertions above throw on any real failure, so reaching here means success.
 $global:LASTEXITCODE = 0

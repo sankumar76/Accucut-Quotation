@@ -6,7 +6,7 @@
  *
  * The front changes nothing the portal sees except the scheme the browser used: the headers (the client address of `useFreshAddress`, `Origin`, `Host`, cookies) go through as they came,
  * so the portal's origin check, which compares `Origin` with `APP_ORIGIN`, sees `https://localhost:<port>` on both sides. It is a test tool: the certificate is self-signed, valid for two days,
- * made in the job's own folder and never committed (`*.pem` is ignored), and the front listens for the life of one run.
+ * made in the job's own folder and never committed (`*.pem` is ignored), and the front listens on the loopback address only, for the life of one run.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
@@ -26,6 +26,12 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 /** A certificate older than this is made again, so a folder left from an earlier day never serves one that is about to expire. */
 const REUSE_MAX_AGE_MS = ONE_DAY_MS / 2;
 const UPSTREAM_HOST = '127.0.0.1';
+/**
+ * The front listens on the loopback address only (STD-C-04, #693): it passes every request, unauthenticated, to a portal that holds the sweep's invented accounts, so a run by hand on an office or Wi-Fi network must not open the port
+ * to it. IPv4 loopback, because that is where the portal under test is reached too (`UPSTREAM_HOST`) and one name cannot be bound to both families. The browsers still use `https://localhost:<port>`: where `localhost` resolves to
+ * `::1` first (Windows, some Linux), they try the next address when it refuses, and `127.0.0.1` answers; the certificate holds both names.
+ */
+const LISTEN_HOST = '127.0.0.1';
 
 /**
  * The key and certificate in `directory`, made with `openssl` when they are missing or older than half a day: a self-signed certificate for `localhost` and `127.0.0.1`. The browsers of the sweep
@@ -77,6 +83,6 @@ export function startTlsFront({ port, upstreamPort, material }: TlsFrontOptions)
   const server = https.createServer({ key: material.key, cert: material.cert }, (request, response) => pass(request, response, upstreamPort));
   return new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(port, () => resolve(server));
+    server.listen(port, LISTEN_HOST, () => resolve(server));
   });
 }
