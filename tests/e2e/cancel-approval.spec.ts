@@ -61,6 +61,17 @@ async function openDialog(page: Page, code: string): Promise<Locator> {
   return dialog;
 }
 
+/**
+ * An estimate approved through the API by a Lead of the test's own and then cancelled through the API by the Admin, with the Admin signed in when this returns. It is the world the views of a cancelled approval start
+ * from (AC-6, AC-7), so the Lead's case and the Engineer's case spend their 30 s on the view and not on a second cancel through the dialog, which the Admin's case makes (DEF-084).
+ */
+async function cancelledByTheAdmin(page: Page, testInfo: Parameters<typeof approvedEstimate>[1]) {
+  const approved = await approvedEstimate(page, testInfo);
+  const admin = await signInAsTheAdmin(page);
+  expect(await cancelThroughTheApi(page, approved.owner.id, REASON), 'the Admin\'s cancel').toBe(200);
+  return { ...approved, admin };
+}
+
 test.describe('AC-1, AC-2, AC-8: the button and the dialog', () => {
   test('a Lead has no button and is told who can, and a direct request is the 403; the Admin has a danger button beside Unlock, and the dialog opens with focus on "Keep the approval", asks for the reason and the password, keeps focus inside, scrolls no way sideways, has no axe violation, and Escape sends nothing', async ({ page }, testInfo) => {
     const approved = await approvedEstimate(page, testInfo);
@@ -127,8 +138,8 @@ test.describe('AC-1, AC-2, AC-8: the button and the dialog', () => {
 });
 
 test.describe('AC-3, AC-6, AC-7: a good cancel', () => {
-  test('shows "Cancelling" while it is under way, then the Draft with the notice, BO "Approval cancelled", Recalculate and Approve off; a Lead sees the same with no button; the Engineer sees no price; the password is in no audit row', async ({ page }, testInfo) => {
-    const { code, owner, lead, admin } = await openedAsAdmin(page, testInfo);
+  test('the Admin\'s cancel shows "Cancelling" while it is under way, then the Draft with the notice, BO "Approval cancelled", Recalculate and Approve off; the password is in no audit row', async ({ page }, testInfo) => {
+    const { code, owner, admin } = await openedAsAdmin(page, testInfo);
     await page.route(CANCEL_ROUTE, async (route) => {
       await new Promise<void>((resolve) => {
         setTimeout(resolve, SLOW_MILLISECONDS);
@@ -170,16 +181,20 @@ test.describe('AC-3, AC-6, AC-7: a good cancel', () => {
     // STORY-07.07: Download is now the link (no reason line under it), so the page is shorter and the focused notice leaves the folder link half behind the sticky top bar at 768 px. The scan reads the page where it stands, so it is made from the top, as after a page load (the same step as insert-field.spec.ts).
     await page.evaluate(() => window.scrollTo(0, 0));
     await expectNoAxeViolations(page);
+  });
 
-    // AC-6: a Lead sees the same, with no button, and is told only the Admin can remove it.
+  test('AC-6: a Lead sees the same, with no button, and is told only the Admin can remove it', async ({ page }, testInfo) => {
+    const { code, lead, admin } = await cancelledByTheAdmin(page, testInfo);
     await signInAs(page, lead);
     await page.goto(`/estimates/${code}`);
     await expect(noticeOf(page)).toContainText(`by ${admin.name}.`);
     await expect(noticeOf(page)).toContainText('Only the Admin can remove it.');
     await expect(tiles(page)).toContainText('Approval cancelled');
     await expect(cancelButton(page)).toHaveCount(0);
+  });
 
-    // The Engineer, on the same address, finds the estimate editable again and sees no price (NFR-002).
+  test('AC-7 (NFR-002): the Engineer finds the estimate editable again and sees no price', async ({ page }, testInfo) => {
+    const { code, owner } = await cancelledByTheAdmin(page, testInfo);
     await signInAs(page, owner);
     const own = await page.goto(`/estimates/${code}`);
     expect(own?.status()).toBe(200);
