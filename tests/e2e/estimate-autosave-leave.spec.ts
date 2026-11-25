@@ -5,7 +5,7 @@ import { control, nextSave, openForm, partForm, waitForForm } from './support/pa
 
 /**
  * STORY-05.10 AC-7a to AC-7c (amended 2026-11-25, QLT-F-05, #687): the save at once when the tab is hidden and when the page is left, for an Engineer, at 360x800, 768x1024 and 1366x768. It is a case of its
- * own, apart from the 30-second tick's (`estimate-autosave.spec.ts`, unchanged), so neither case needs more than the default time: one sign-in, one part form, two saves and one reload, and no wait on time.
+ * own, apart from the 30-second tick's (`estimate-autosave.spec.ts`, unchanged), so this case keeps the project's default time (no `setTimeout`, DL-404 (1)): one sign-in, one part form, two saves and one reload, and no wait on time.
  * The page is sent `visibilitychange` to hidden and `pagehide` by script, and no clock is moved, so a request that follows is not a tick's. Playwright cannot see a request's `keepalive`, so a recorder
  * wrapped round the page's `fetch` says which saves asked for it. Closing a real tab is not used: it raises the browser's own prompt on leaving. What a hide with nothing unsaved, a duplicate, a
  * conflict, a failure and a read-only estimate do is judged in `tests/unit/estimate-autosave*.test.ts`. Every name and path is invented.
@@ -14,7 +14,6 @@ import { control, nextSave, openForm, partForm, waitForForm } from './support/pa
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test.beforeEach(async ({ context }) => {
-  test.setTimeout(60_000);
   await useFreshAddress(context);
 });
 
