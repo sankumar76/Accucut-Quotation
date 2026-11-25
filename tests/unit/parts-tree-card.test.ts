@@ -43,7 +43,6 @@ function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
     movedFocus: null,
     problem: null,
     announcement: '',
-    announce: noop,
     deleting: null,
     deleteOpen: false,
     select: noop,
@@ -233,7 +232,6 @@ describe('item 10: in the workspace the tree card sits beside the form card, not
     createElement(EstimateWorkspace, {
       header: { code: 'Q-2026-0318', status: 'DRAFT', deadlineLabel: '12 Nov 2026, 17:00 IST', folderPath: '\\invented-server\invented-share\RFQ-0318', folderUrl: null, title: 'Invented cabinet', subject: 'Invented subject', customer: null, notes: null, assignedByName: 'Invented Lead' },
       estimateId: '00000000-0000-4000-8000-000000000001',
-      userId: 'invented-user',
     }),
   );
   const formCard = html.slice(html.indexOf('data-form-area'));

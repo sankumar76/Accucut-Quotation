@@ -98,6 +98,25 @@ describe('downloadExport', () => {
     expect(save).not.toHaveBeenCalled();
   });
 
+  // QLT-F-04 (#686; FR-070, architecture 4.6): a full build place is a limit of the moment, not a fault, so its own words are shown and nobody is sent to the administrator.
+  const BUSY_TITLE = 'Other files are being built right now. Try again in a moment.';
+  it('shows the own title of the server, with its reference, for 503 EXPORT_BUSY (a temporary limit, not a fault), and saves nothing', async () => {
+    const save = vi.fn<SaveFile>();
+    const doFetch = vi.fn<typeof fetch>().mockResolvedValue(problem(503, { code: 'EXPORT_BUSY', title: BUSY_TITLE }));
+    expect(await downloadExport(ESTIMATE_ID, FALLBACK, doFetch, save)).toEqual({ status: 'refused', title: BUSY_TITLE, reference: REFERENCE });
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('keeps every other 5xx a fault: a 503 with another code, and a 503 with no code, give no title', async () => {
+    const save = vi.fn<SaveFile>();
+    for (const body of [{ code: 'SERVICE_UNAVAILABLE', title: 'Not ready.' }, { title: BUSY_TITLE }]) {
+      expect(await downloadExport(ESTIMATE_ID, FALLBACK, vi.fn<typeof fetch>().mockResolvedValue(problem(503, body)), save), JSON.stringify(body)).toEqual({ status: 'failed', reference: REFERENCE });
+    }
+    // The code alone decides, not the status: EXPORT_BUSY on a 500 is not the busy answer.
+    expect(await downloadExport(ESTIMATE_ID, FALLBACK, vi.fn<typeof fetch>().mockResolvedValue(problem(500, { code: 'EXPORT_BUSY', title: BUSY_TITLE })), save)).toEqual({ status: 'failed', reference: REFERENCE });
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['a server fault', () => problem(500, { code: 'INTERNAL', title: 'Something went wrong.' }), REFERENCE],
     ['an answer that is not a problem', () => new Response('<html>', { status: 502, headers: { 'X-Request-Id': REFERENCE } }), REFERENCE],
