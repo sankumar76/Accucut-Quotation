@@ -59,9 +59,9 @@ const DRAWING_REGION = 'hidden lg:block lg:shrink-0 lg:w-(--drawing-region-width
 /**
  * The form's card from 1024 px, where the tree has a card of its own beside it (DEF-081 ruling item 10): it keeps its title, "Parts and inputs", which the rows' links point to, and its group role, but draws no border, fill or padding, as the
  * SCR-05 mock-up draws the form on the page itself. The tree is 320 px now, and a form card with 24 px of padding and a border would cost the form 50 px: at 1280 px the section cards would fall from two columns to one, and a 340 px
- * drawing region would no longer have its whole width (STORY-10.06 AC-2). Below 1024 px the form is a card, as it was. With a finger at 1024 px and wider the resize handle is 44 px wide from the tree's edge (AQP-426, UX-AC-15.10): the form track gets the part of it that the gap does not cover as left padding, so no control lies under the handle.
+ * drawing region would no longer have its whole width (STORY-10.06 AC-2). Below 1024 px the form is a card, as it was.
  */
-const FORM_CARD = 'lg:flex-1 lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none lg:pointer-coarse:pl-[calc(44px_-_var(--s-4))]';
+const FORM_CARD = 'lg:flex-1 lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none';
 const FORM_CARD_HEAD = 'lg:border-b-0 lg:px-0 lg:pt-0';
 const FORM_CARD_BODY = 'flex lg:p-0';
 

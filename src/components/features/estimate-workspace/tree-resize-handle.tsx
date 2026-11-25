@@ -19,7 +19,7 @@ const DRAGGING_ATTRIBUTE = 'data-tree-resizing';
 
 /**
  * The handle on the tree card's right edge (AQP-426, STORY-CR01.3E, UX-AC-15.2 to 15.5, 15.9, 15.10, 15.12): a `div` with `role="separator"` that can take the focus (a `button` may not carry that role), full height of the
- * column, **24 px wide** with a mouse and **44 px** with a finger, `touch-action: none`, inside the column's `position: relative` wrapper and **not** inside the box that scrolls. The grip is a 4 x 40 px bar in `--border-strong`
+ * column, **24 px wide** with a mouse (from the card's right edge: the gap and 8 px of the form's side) and **44 px** with a finger (the gap and the 28 px of the card's own padding before it, so nothing of the form lies under it), `touch-action: none`, inside the column's `position: relative` wrapper and **not** inside the box that scrolls. The grip is a 4 x 40 px bar in `--border-strong`
  * (3:1 on the page and the card), `--primary` on hover, focus and drag; keyboard focus draws the 3 px `--focus` ring around a 12 x 48 px pill behind the grip, not around the strip. Nothing is animated.
  *
  * Mouse and finger: a drag follows the pointer between 240 px and the effective maximum, writes `--tree-w` in an animation frame (no React render per pixel), and is stored once, when the pointer goes up. Escape restores
@@ -115,7 +115,7 @@ export function TreeResizeHandle({ resize, announce }: TreeResizeHandleProps) {
       aria-describedby={TREE_RESIZE_HINT_ID}
       data-tree-handle=""
       data-preset={presetOfWidth(width)?.id}
-      className="group absolute top-0 bottom-0 left-full z-(--z-handle) flex w-s-5 cursor-col-resize touch-none justify-center focus-visible:outline-none pointer-coarse:w-[44px]"
+      className="group absolute top-0 bottom-0 left-full z-(--z-handle) flex w-s-5 cursor-col-resize touch-none justify-center focus-visible:outline-none pointer-coarse:left-[calc(100%_-_28px)] pointer-coarse:w-[44px]"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -125,8 +125,8 @@ export function TreeResizeHandle({ resize, announce }: TreeResizeHandleProps) {
       onDoubleClick={reset}
     >
       {/* The pill behind the grip: it carries the focus ring, so the ring is a small shape around the grip and not the full-height strip. */}
-      <span aria-hidden="true" className="absolute top-1/2 left-[2px] h-[48px] w-[12px] -translate-y-1/2 rounded-full group-focus-visible:bg-surface group-focus-visible:outline-[3px] group-focus-visible:outline-offset-2 group-focus-visible:outline-focus" />
-      <span aria-hidden="true" data-tree-grip="" className="absolute top-1/2 left-[6px] h-[40px] w-[4px] -translate-y-1/2 rounded-full bg-border-strong group-hover:bg-primary group-focus-visible:bg-primary" />
+      <span aria-hidden="true" className="absolute top-1/2 left-[2px] pointer-coarse:left-[30px] h-[48px] w-[12px] -translate-y-1/2 rounded-full group-focus-visible:bg-surface group-focus-visible:outline-[3px] group-focus-visible:outline-offset-2 group-focus-visible:outline-focus" />
+      <span aria-hidden="true" data-tree-grip="" className="absolute top-1/2 left-[6px] pointer-coarse:left-[34px] h-[40px] w-[4px] -translate-y-1/2 rounded-full bg-border-strong group-hover:bg-primary group-focus-visible:bg-primary" />
       <span id={TREE_RESIZE_HINT_ID} role="tooltip" className="absolute top-s-2 left-full ml-s-2 hidden w-[240px] rounded-md border border-border bg-surface px-s-3 py-s-2 text-label text-ink shadow-overlay group-hover:block group-focus-visible:block">
         {TREE_RESIZE_HINT}
       </span>
