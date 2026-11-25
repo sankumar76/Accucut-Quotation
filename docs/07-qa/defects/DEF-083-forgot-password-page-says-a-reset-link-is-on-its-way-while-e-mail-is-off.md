@@ -1,4 +1,4 @@
-# DEF-083: `/forgot-password`, opened by typing its address while `FEATURE_EMAIL` is off, shows "Check your e-mail. If that address is registered, a reset link is on its way." although no token, no row and no mail are made (Product; wording and behaviour; Sev-3; Jira AQP-427, GitHub #712)
+# DEF-083: `/forgot-password`, opened by typing its address while `FEATURE_EMAIL` is off, shows "Check your e-mail. If that address is registered, a reset link is on its way." although no token, no row and no mail are made (Product; wording and behaviour; Sev-3; Jira AQP-427, GitHub #712; CLOSED 2026-11-25)
 
 | Field | Value |
 |-------|-------|
@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate (qa-engineer, 2026-11-24, agreeing with master's proposal in DL-379 (C)).** Reasons: a false statement to the person on a security-adjacent screen, a person who has forgotten their password and is waiting for a mail that never comes; but it is reached only by a typed address or bookmark (nothing links to it while the flag is off, sign-in shows the Ask-the-Admin line), no data is wrong or exposed (FR-001 intact), no cost or role boundary involved, and a workaround exists and is documented (ask the Admin; SCR-14 Reset password, FR-004). Not Sev-4 because the wrong sentence is the only guidance the person gets on that page. Not a G8 blocker as Sev-3 (test plan section 6); master has said so (DL-379 (C)). |
 | Priority | P3 (Jira Medium, label `sev-3`). Lane per DL-379: fixed in the G-1 PR if the delivery lead picks option B, otherwise after G8 with a workaround line in KG-2. |
 | Type | **Product** (wording and behaviour of one public page). Not a test defect, not an environment issue. |
-| Status | **Open (new), 2026-11-24, later (qa-engineer).** Verified from the code on `origin/master` `3637ec7f` (read, not run: no browser test was run for this record). |
+| Status | **CLOSED (Verified, Closed), 2026-11-25 (qa-engineer), on #715's merge (squash `810da064`, AQP-428 + DEF-083); AQP-427 Done, GitHub #712 closed (completed).** QA read the code on `origin/master` `810da064`: `src/app/(public)/forgot-password/page.tsx` reads `FEATURE_EMAIL` on every request (`dynamic = 'force-dynamic'`, `loadEmailFeature()`) and, with e-mail off, renders `EmailOffExplanation` (an information notice and 'Back to sign in', no form, no field, no request, no live region) instead of the form; the route behind the form (`POST /api/v1/account/password/forgot`) is not changed (the same 202 for every address, FR-001, D-1). Tests: `tests/unit/forgot-password-page.test.ts` (flag absent, empty and off; no form; same for every visitor; a `?mail=on` does nothing) and `tests/e2e/password-reset.spec.ts` (the page with e-mail off at three widths with axe, a 44 px link, no sideways scroll at 320 px, the route unchanged); the PR's run 45557600259 was green (per the PR body) and the push run 45581854986 (810da064) is `success` with the four page cases of `password-reset.spec.ts` (:55, :85, :95, :112) passing at mobile, tablet and desktop (test plan 0.3.59). QA did not open the page by hand. Earlier: Open (new), 2026-11-24 (verified from the code on `origin/master` `3637ec7f`). |
 | Jira / GitHub | [AQP-427](https://sankumar76.atlassian.net/browse/AQP-427) / [#712](https://github.com/sankumar76/Accucut-Quotation/issues/712) (labels bug, sev-3, ai-delivery; Jira also aiid-DEF-083, agent-qa-engineer). Relates to AQP-1, AQP-354 (STORY-09.07) and AQP-355 (STORY-09.08, Deferred; the go-live without e-mail, DL-374). Raised by architecture v0.70 section 4.7 G-2 and master's DL-379; GitHub #710 holds the architecture risk G-1 (a different item). |
 | Found by / date | solution-architect (architecture v0.70, G-2); verified and graded by qa-engineer, 2026-11-24 |
 | Build / commit | `origin/master` `3637ec7f` (the files below are as on that commit) |
@@ -42,9 +42,9 @@ The form is shown and accepted. The server answers 202 with `FORGOT_ACCEPTED_MES
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer | | |
-| Regression test added | developer | | |
-| Verified | qa-engineer | | |
+| Fixed | developer | 2026-11-25 | PR #715 `AQP-428: STORY-01.10 emergency server command ...; DEF-083 forgot-password page`, squash `810da064` (`forgot-password/page.tsx`, `email-off-explanation.tsx`, `password-reset.ts`) |
+| Regression test added | developer | 2026-11-25 | `tests/unit/forgot-password-page.test.ts`, `tests/unit/reset-password-page.test.ts`, `tests/e2e/password-reset.spec.ts` (page with e-mail off at three widths, axe) |
+| Verified | qa-engineer | 2026-11-25 | Code read at `810da064`; push run 45581854986 `success` (0 flaky; the four page cases pass at three widths); QA's proof proposal (flag-off page case at three widths, flag-on route unchanged) met in the PR's tests |
 
 Proof proposed for QA: on the fix PR's run of record, the new flag-off page case passes at three widths and the flag-on e2e (`password-reset.spec.ts`) is unchanged; QA reads the page once with the flag off in a run or locally before closing.
 
