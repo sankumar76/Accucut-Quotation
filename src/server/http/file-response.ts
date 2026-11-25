@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { API_CONTENT_SECURITY_POLICY } from '../../lib/security/csp';
+
 import { attachmentDisposition } from './content-disposition';
 import { NO_STORE, REQUEST_ID_HEADER } from './problem';
 
@@ -11,9 +13,9 @@ import { NO_STORE, REQUEST_ID_HEADER } from './problem';
  *   - `Cache-Control: private, no-store`, as every answer of the API: a picture is confidential and is not kept by a shared cache or the disk;
  *   - `Content-Disposition: inline` with **no file name**: the stored name is display text and is never put in a header, so no name can break one. The one exception is a file the portal **makes** and
  *     names itself (the export, STORY-07.01 AC-2): it passes `fileName`, the answer is then an `attachment` of that name (`content-disposition.ts`: an ASCII `filename=` and a percent-encoded `filename*=`), and a name that is not one the export makes (`isExportFileName`) is refused;
- *   - `Content-Security-Policy: default-src 'none'; sandbox`, so the address opened as a page can run nothing; and `Cross-Origin-Resource-Policy: same-origin`, so another site cannot embed it. Behind the proxy the
- *     policy on the wire for this answer is the proxy's own (`API_CONTENT_SECURITY_POLICY`, which also holds `sandbox`): Next.js keeps a header the proxy set and drops the route's of the same name
- *     (DEF-054, AQP-384). This one stays so the answer is safe by itself, and `tests/unit/security-headers.test.ts` pins the policy that reaches the browser.
+ *   - `Content-Security-Policy: API_CONTENT_SECURITY_POLICY` (`lib/security/csp.ts`: `default-src 'none'; frame-ancestors 'none'; sandbox`), so the address opened as a page can run nothing and nothing can frame it; and
+ *     `Cross-Origin-Resource-Policy: same-origin`, so another site cannot embed it. It is the same constant the proxy sets: behind the proxy the one on the wire is the proxy's, because Next.js keeps a header the proxy set and
+ *     drops the route's of the same name (DEF-054, AQP-384). The route sets it too so the answer is safe by itself, and `tests/unit/security-headers.test.ts` pins the policy that reaches the browser.
  */
 
 export interface StoredFile {
@@ -37,7 +39,7 @@ export function fileResponse(file: StoredFile, requestId: string): Response {
       'X-Content-Type-Options': 'nosniff',
       'Cache-Control': NO_STORE,
       'Content-Disposition': disposition,
-      'Content-Security-Policy': "default-src 'none'; sandbox",
+      'Content-Security-Policy': API_CONTENT_SECURITY_POLICY,
       'Cross-Origin-Resource-Policy': 'same-origin',
       [REQUEST_ID_HEADER]: requestId,
     },
