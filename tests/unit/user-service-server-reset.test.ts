@@ -12,7 +12,8 @@ import { createUserServiceFixture, KEY_SECRET } from '../support/user-service-fi
  * the lock, and what an audit entry and the throttle clearing receive. The real transaction, the lock and the rollback are `tests/integration/auth/admin-password-reset-on-server.test.ts`.
  */
 
-const CONTEXT = { actorLabel: 'System: server command (Windows account ACCUCUT\\it.person)', requestId: 'request-aqp-428' } as const;
+const ADMIN_ID = '00000000-0000-4000-8000-abcdef000001';
+const CONTEXT = { actorLabel: 'System: server command (Windows account ACCUCUT\\it.person)', requestId: 'request-aqp-428', expectedAdminId: ADMIN_ID } as const;
 const PASSWORD = 'Invented-Temp-Pass-7!';
 
 const admin = (overrides: Partial<AdminAccount> = {}): AdminAccount => ({
@@ -65,6 +66,49 @@ describe('AC-2: exactly one active Admin', () => {
     expect(fixture.users.records.find((record) => record.id === fixture.adminId)?.passwordHash).toBe('hash:x');
     // The hash was made before the transaction (PRF-03), and is thrown away.
     expect(fixture.hasher.hashed).toEqual([PASSWORD]);
+  });
+});
+
+describe('QLT-715-01: the reset is bound to the Admin the operator confirmed', () => {
+  const OTHER_ID = '00000000-0000-4000-8000-abcdef000009';
+
+  it('a different active Admin at the first look is refused as ADMIN_CHANGED: no hash, nothing written', async () => {
+    const fixture = createUserServiceFixture();
+    const service = withAdmins(fixture, () => [admin({ id: OTHER_ID, email: 'other.admin@example.test' })]);
+    expect(await service.resetAdminPasswordOnServer(CONTEXT, PASSWORD)).toEqual({ status: 'refused', refusal: 'ADMIN_CHANGED' });
+    expect(fixture.hasher.hashed).toEqual([]);
+    expect(fixture.world.audit.appended).toEqual([]);
+  });
+
+  it('a different active Admin under the lock (a hand-over after the confirmation) is refused: no setPassword, no entry, no block cleared', async () => {
+    const fixture = createUserServiceFixture();
+    let setPasswordCalls = 0;
+    const repository: UserRepository = {
+      ...fixture.users,
+      listAdminAccounts: (tx) => Promise.resolve(tx === undefined ? [admin({ id: fixture.adminId })] : [admin({ id: OTHER_ID, email: 'other.admin@example.test' })]),
+      setPassword: (...args) => {
+        setPasswordCalls += 1;
+        return fixture.users.setPassword(...args);
+      },
+    };
+    const result = await fixture.build(repository).resetAdminPasswordOnServer(CONTEXT, PASSWORD);
+    expect(result).toEqual({ status: 'refused', refusal: 'ADMIN_CHANGED' });
+    expect(setPasswordCalls).toBe(0);
+    expect(fixture.world.audit.appended).toEqual([]);
+    expect(fixture.users.records.find((record) => record.id === fixture.adminId)?.passwordHash).toBe('hash:x');
+  });
+
+  it('the same Admin ID with another e-mail under the lock is refused too (the rule was checked against the first e-mail)', async () => {
+    const fixture = createUserServiceFixture();
+    const service = withAdmins(fixture, (locked) => [admin({ id: fixture.adminId, email: locked ? 'changed@example.test' : 'admin@example.test' })]);
+    expect(await service.resetAdminPasswordOnServer(CONTEXT, PASSWORD)).toEqual({ status: 'refused', refusal: 'ADMIN_CHANGED' });
+    expect(fixture.world.audit.appended).toEqual([]);
+  });
+
+  it('the ID is compared the way the database compares it, ignoring letter case', async () => {
+    const fixture = createUserServiceFixture();
+    const result = await fixture.service.resetAdminPasswordOnServer({ ...CONTEXT, expectedAdminId: fixture.adminId.toUpperCase() }, PASSWORD);
+    expect(result).toEqual({ status: 'reset', id: fixture.adminId, name: 'Invented Admin' });
   });
 });
 

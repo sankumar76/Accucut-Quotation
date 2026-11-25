@@ -165,6 +165,13 @@ describe('AC-2: exactly one active Admin', () => {
     expect(result.events).toEqual(['open', 'find', 'close']);
   });
 
+  it('an Admin who is not the one the operator confirmed (QLT-715-01) exits 2 with new words, and nothing was changed', async () => {
+    const result = await run({ reset: () => Promise.resolve({ status: 'refused', refusal: 'ADMIN_CHANGED' }) });
+    expect(result.code).toBe(2);
+    expect(result.err).toContain('The Admin account changed while this ran. Nothing was changed. Run it again.');
+    expect(result.all).not.toContain(PASSWORD);
+  });
+
   it('a refusal under the row lock (the Admin changed meanwhile) exits 2 with the same words', async () => {
     const result = await run({ reset: () => Promise.resolve({ status: 'refused', refusal: 'ADMIN_INACTIVE' }) });
     expect(result.code).toBe(2);
@@ -274,7 +281,8 @@ describe('AC-6: the label and the request the audit entry gets', () => {
   it('passes the label "System: server command (Windows account <domain>\\<user>)" and a fresh request ID', async () => {
     expect(SERVER_COMMAND_LABEL_PREFIX).toBe('System: server command (Windows account ');
     const result = await run({ account: 'ACCUCUT\\it.person' });
-    expect(result.resetCalls[0]?.context).toEqual({ actorLabel: 'System: server command (Windows account ACCUCUT\\it.person)', requestId: 'request-0001' });
+    // The Admin the operator was shown and confirmed is the one the reset is bound to (QLT-715-01).
+    expect(result.resetCalls[0]?.context).toEqual({ actorLabel: 'System: server command (Windows account ACCUCUT\\it.person)', requestId: 'request-0001', expectedAdminId: ADMIN.id });
   });
 
   it('cuts the label to 200 characters', () => {
@@ -289,6 +297,16 @@ describe('AC-6: the label and the request the audit entry gets', () => {
 
   it('turns a control character in the account name into a space, so the audit screen never shows one', () => {
     expect(serverCommandActorLabel('A\\b\u0007c\nd')).toBe('System: server command (Windows account A\\b c d)');
+  });
+
+  it('also turns format characters (a right-to-left override, a zero-width space, a line separator) into spaces (SEC-715-02)', () => {
+    expect(serverCommandActorLabel('A\\b\u202Ec\u200Bd\u2028e')).toBe('System: server command (Windows account A\\b c d e)');
+  });
+
+  it('shows the Admin name and e-mail without a format character that could make the line read differently from what is stored (SEC-715-02)', async () => {
+    const result = await run({ find: () => Promise.resolve({ ...ADMIN, name: 'Invented\u202E Admin' }) });
+    expect(result.out).toContain('Name:   Invented  Admin');
+    expect(result.out).not.toContain('\u202E');
   });
 
   it('the account is the domain and the user name, or the user name alone when there is no domain', () => {

@@ -24,7 +24,8 @@ const hasher = createTestHasher();
 const OLD_PASSWORD = 'Invented-Old-Pass-1!';
 const NEW_PASSWORD = 'Invented-Temp-Pass-7!';
 const ACCOUNT = 'ACCUCUT\\it.person';
-const CONTEXT = { actorLabel: serverCommandActorLabel(ACCOUNT), requestId: 'request-aqp-428' } as const;
+/** The Admin the operator confirmed is the one the reset is bound to (QLT-715-01). */
+const context = (expectedAdminId: string = adminId) => ({ actorLabel: serverCommandActorLabel(ACCOUNT), requestId: 'request-aqp-428', expectedAdminId }) as const;
 const BLOCK_POLICY = { limit: 2, windowMilliseconds: null, blockMilliseconds: 900_000 } as const;
 const NOW = new Date('2026-11-30T09:00:00.000Z');
 
@@ -131,7 +132,7 @@ describe('AC-5, AC-6, AC-7: a valid run', () => {
     const before = await userState(db, adminId);
     const auditBefore = await entryCount(db);
 
-    const result = await service.resetAdminPasswordOnServer(CONTEXT, NEW_PASSWORD);
+    const result = await service.resetAdminPasswordOnServer(context(), NEW_PASSWORD);
 
     expect(result).toEqual({ status: 'reset', id: adminId, name: 'Invented Admin' });
     const after = await userState(db, adminId);
@@ -167,12 +168,25 @@ describe('AC-5, AC-6, AC-7: a valid run', () => {
   it('a second run is a new reset: a newer password, one more audit entry, the session version raised again', async () => {
     const before = await userState(db, adminId);
     const second = 'Invented-Second-Pass-8#';
-    expect(await service.resetAdminPasswordOnServer(CONTEXT, second)).toEqual({ status: 'reset', id: adminId, name: 'Invented Admin' });
+    expect(await service.resetAdminPasswordOnServer(context(), second)).toEqual({ status: 'reset', id: adminId, name: 'Invented Admin' });
     const after = await userState(db, adminId);
     expect(await hasher.verify(after.password_hash, second)).toBe(true);
     expect(await hasher.verify(after.password_hash, NEW_PASSWORD)).toBe(false);
     expect(after.session_version).toBe(before.session_version + 1);
     expect((await entriesFor(db, adminId)).filter((entry) => entry.event === 'user.password_reset')).toHaveLength(2);
+  });
+});
+
+describe('QLT-715-01: the reset is bound to the Admin the operator confirmed', () => {
+  it('another Admin ID than the one in the database is refused as ADMIN_CHANGED and writes nothing', async () => {
+    await blockTheThreeKeys();
+    const before = await userState(db, adminId);
+    const auditBefore = await entryCount(db);
+    const result = await service.resetAdminPasswordOnServer(context('00000000-0000-4000-8000-00000000dead'), NEW_PASSWORD);
+    expect(result).toEqual({ status: 'refused', refusal: 'ADMIN_CHANGED' });
+    expect(await userState(db, adminId)).toEqual(before);
+    expect(await entryCount(db)).toBe(auditBefore);
+    await expectBlocked();
   });
 });
 
@@ -186,7 +200,7 @@ describe('AC-3, AC-5: a refusal writes nothing', () => {
     await blockTheThreeKeys();
     const before = await userState(db, adminId);
     const auditBefore = await entryCount(db);
-    const error: unknown = await service.resetAdminPasswordOnServer(CONTEXT, password).catch((caught: unknown) => caught);
+    const error: unknown = await service.resetAdminPasswordOnServer(context(), password).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(FieldValidationError);
     expect((error as FieldValidationError).code).toBe(PASSWORD_RULE_CODE);
     expect(await userState(db, adminId)).toEqual(before);
@@ -207,9 +221,9 @@ describe('AC-3, AC-5: a refusal writes nothing', () => {
         createUserService({ users: database.users, throttles: database.throttles, hasher, transactions: database.transactions, audit: database.audit, keySecret: KEY_SECRET });
 
       expect(await withDb(none).findAdminForServerReset()).toEqual({ status: 'refused', refusal: 'NO_ADMIN' });
-      expect(await withDb(none).resetAdminPasswordOnServer(CONTEXT, NEW_PASSWORD)).toEqual({ status: 'refused', refusal: 'NO_ADMIN' });
+      expect(await withDb(none).resetAdminPasswordOnServer(context(), NEW_PASSWORD)).toEqual({ status: 'refused', refusal: 'NO_ADMIN' });
       expect(await withDb(inactive).findAdminForServerReset()).toEqual({ status: 'refused', refusal: 'ADMIN_INACTIVE' });
-      expect(await withDb(inactive).resetAdminPasswordOnServer(CONTEXT, NEW_PASSWORD)).toEqual({ status: 'refused', refusal: 'ADMIN_INACTIVE' });
+      expect(await withDb(inactive).resetAdminPasswordOnServer(context(), NEW_PASSWORD)).toEqual({ status: 'refused', refusal: 'ADMIN_INACTIVE' });
 
       expect(await userState(inactive, sleepingId)).toEqual(sleepingBefore);
       expect(sleepingBefore.is_active).toBe(false);
@@ -241,7 +255,7 @@ describe('AC-5: any failure rolls back the hash, the flag, the session version, 
         return calls === 3 ? Promise.reject(failure) : db.throttles.clear(keyHash, tx);
       },
     };
-    await expect(buildService({ throttles }).resetAdminPasswordOnServer(CONTEXT, NEW_PASSWORD)).rejects.toBe(failure);
+    await expect(buildService({ throttles }).resetAdminPasswordOnServer(context(), NEW_PASSWORD)).rejects.toBe(failure);
     expect(calls).toBe(3);
     await expectNothingChanged(before, auditBefore);
   });
@@ -251,7 +265,7 @@ describe('AC-5: any failure rolls back the hash, the flag, the session version, 
     const before = await userState(db, adminId);
     const auditBefore = await entryCount(db);
     const audit: AuditDatabase['audit'] = { ...db.audit, record: () => Promise.reject(new AuditEntryRefusedError('shape', 'after')) };
-    await expect(buildService({ audit }).resetAdminPasswordOnServer(CONTEXT, NEW_PASSWORD)).rejects.toBeInstanceOf(AuditEntryRefusedError);
+    await expect(buildService({ audit }).resetAdminPasswordOnServer(context(), NEW_PASSWORD)).rejects.toBeInstanceOf(AuditEntryRefusedError);
     await expectNothingChanged(before, auditBefore);
   });
 
@@ -261,7 +275,7 @@ describe('AC-5: any failure rolls back the hash, the flag, the session version, 
     const auditBefore = await entryCount(db);
     const late = new Error('failed after the last step');
     const transactions = createLateFailingRunner(db.transactions, late);
-    await expect(buildService({ transactions }).resetAdminPasswordOnServer(CONTEXT, NEW_PASSWORD)).rejects.toBe(late);
+    await expect(buildService({ transactions }).resetAdminPasswordOnServer(context(), NEW_PASSWORD)).rejects.toBe(late);
     await expectNothingChanged(before, auditBefore);
   });
 });

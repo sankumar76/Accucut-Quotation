@@ -47,10 +47,20 @@ describe('AC-9: the README section for a forgotten Admin password', () => {
     expect(section).toMatch(/Never write the temporary password in chat, Jira, GitHub/);
   });
 
+  it('says a window that is not elevated never reaches the command, and that exit 1 is for settings and the database (QLT-715-02)', () => {
+    expect(section).toContain('A window that is not elevated never reaches the command: PowerShell cannot open `C:\\Accucut`, and Node stops with its own exit 9 (`.env` not found). Open Windows PowerShell with Run as administrator.');
+    expect(section).toContain('| 1 | `.env` was read, but `DATABASE_URL` or `AUTH_SECRET` is missing or invalid, or the database cannot be reached: check `Get-Service postgresql-x64-17` |');
+    expect(section).not.toContain('and that the window is elevated');
+  });
+
+  it('names every case of the exit codes 2, 3 and 4 the command gives, with the words of the new refusal (QLT-715-01, QLT-715-02)', () => {
+    expect(section).toContain('| 2 | Not exactly one active Admin, or "The Admin account changed while this ran. Nothing was changed. Run it again.": nothing was changed |');
+    expect(section).toContain('| 3 | The password was refused (empty, the two entries differ, or the rule): run it again |');
+    expect(section).toContain('| 4 | Stopped: not an interactive window, an unknown argument, `RESET` not typed, or Ctrl+C |');
+  });
+
   it('lists the five exit codes', () => {
-    for (const row of ['| 0 | Done |', '| 2 | Not exactly one active Admin: nothing was changed |', '| 4 | Stopped: not an interactive window, `RESET` not typed, or Ctrl+C |']) {
-      expect(section).toContain(row);
-    }
+    expect(section).toContain('| 0 | Done |');
     expect(section.match(/^\| [0-4] \|/gm)).toHaveLength(5);
   });
 });
