@@ -49,6 +49,7 @@ const REFUSAL_MESSAGE: Readonly<Record<ServerResetRefusal, string>> = {
   NO_ADMIN: 'No Admin account exists. Nothing was changed.',
   ADMIN_INACTIVE: 'The Admin account is deactivated. This command does not reactivate it. Nothing was changed.',
   MULTIPLE_ADMINS: 'More than one active Admin. Nothing was changed.',
+  ADMIN_CHANGED: 'The Admin account changed while this ran. Nothing was changed. Run it again.',
 };
 
 const CONFIRM_WORD = 'RESET';
@@ -61,9 +62,12 @@ export const SERVER_COMMAND_LABEL_PREFIX = 'System: server command (Windows acco
 /** The longest `actor_label` the audit log takes. */
 const LABEL_MAX_LENGTH = 200;
 
-/** Text that is printed or stored comes from the machine or the database, so a control character in it becomes a space and cannot move the cursor or clear the screen. */
+/**
+ * Text that is printed or stored comes from the machine or the database, so a control character in it becomes a space and cannot move the cursor or clear the screen, and neither can a format character
+ * (a right-to-left override, a zero-width space) make the line read differently from what is stored (SEC-715-02). The set is the project's own (`src/lib/estimate/validation.ts`).
+ */
 function printable(text: string): string {
-  return text.replace(/\p{Cc}/gu, ' ');
+  return text.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\p{Cs}]/gu, ' ');
 }
 
 /** `System: server command (Windows account <domain>\<user>)`, cut to 200 characters (never in the middle of a character). */
@@ -131,7 +135,8 @@ async function converse(deps: AdminPasswordResetDependencies, service: AdminPass
     return EXIT_PASSWORD;
   }
   const result = await service.resetAdminPasswordOnServer(
-    { actorLabel: serverCommandActorLabel(deps.windowsAccount), requestId: deps.newRequestId() },
+    // The reset is bound to the Admin the operator confirmed: it acts on that account or on none (QLT-715-01).
+    { actorLabel: serverCommandActorLabel(deps.windowsAccount), requestId: deps.newRequestId(), expectedAdminId: found.id },
     first,
   );
   if (result.status === 'refused') {

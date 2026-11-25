@@ -656,10 +656,12 @@ The portal's audit log records it as "System: server command" with your Windows 
 | Exit code | Meaning |
 |---|---|
 | 0 | Done |
-| 1 | The settings or the database could not be read: check `Get-Service postgresql-x64-17` and that the window is elevated |
-| 2 | Not exactly one active Admin: nothing was changed |
-| 3 | The password was refused (the rule, or the two entries differ): run it again |
-| 4 | Stopped: not an interactive window, `RESET` not typed, or Ctrl+C |
+| 1 | `.env` was read, but `DATABASE_URL` or `AUTH_SECRET` is missing or invalid, or the database cannot be reached: check `Get-Service postgresql-x64-17` |
+| 2 | Not exactly one active Admin, or "The Admin account changed while this ran. Nothing was changed. Run it again.": nothing was changed |
+| 3 | The password was refused (empty, the two entries differ, or the rule): run it again |
+| 4 | Stopped: not an interactive window, an unknown argument, `RESET` not typed, or Ctrl+C |
+
+A window that is not elevated never reaches the command: PowerShell cannot open `C:\Accucut`, and Node stops with its own exit 9 (`.env` not found). Open Windows PowerShell with Run as administrator.
 
 ## The shared module (`AccucutOps.psm1`)
 

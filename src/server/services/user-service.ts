@@ -76,8 +76,11 @@ export interface UserServiceDependencies {
   readonly keySecret: string;
 }
 
-/** Why the server command refused: there is no Admin, the one Admin is deactivated (the command never reactivates), or more than one is active (the database makes that impossible; it is checked anyway). */
-export type ServerResetRefusal = 'NO_ADMIN' | 'ADMIN_INACTIVE' | 'MULTIPLE_ADMINS';
+/**
+ * Why the server command refused: there is no Admin, the one Admin is deactivated (the command never reactivates), more than one is active (the database makes that impossible; it is checked anyway), or the single
+ * active Admin is no longer the one the operator confirmed (a hand-over or a change of the Admin rows while the prompts were answered; QLT-715-01).
+ */
+export type ServerResetRefusal = 'NO_ADMIN' | 'ADMIN_INACTIVE' | 'MULTIPLE_ADMINS' | 'ADMIN_CHANGED';
 
 /** The Admin the operator is shown before they confirm, or the reason there is nobody to reset. */
 export type ServerResetAdmin =
@@ -93,6 +96,8 @@ export type ServerResetResult =
 export interface ServerResetContext {
   readonly actorLabel: string;
   readonly requestId: string;
+  /** The ID of the Admin the operator was shown and confirmed (`findAdminForServerReset`). The reset acts on that account or on none (QLT-715-01). */
+  readonly expectedAdminId: string;
 }
 
 /**
@@ -271,9 +276,11 @@ export function createUserService({ users, throttles, hasher, transactions, audi
       return { status: 'ready', id: judged.admin.id, name: judged.admin.name, email: judged.admin.email };
     },
 
-    async resetAdminPasswordOnServer({ actorLabel, requestId }, password) {
+    async resetAdminPasswordOnServer({ actorLabel, requestId, expectedAdminId }, password) {
       const first = judgeAdmins(await users.listAdminAccounts());
       if ('refusal' in first) return { status: 'refused', refusal: first.refusal };
+      // The operator confirmed one account; if another is the Admin now, nothing is hashed or written (QLT-715-01).
+      if (!isSamePerson(expectedAdminId, first.admin.id)) return { status: 'refused', refusal: 'ADMIN_CHANGED' };
       assertPasswordRule(password, { email: first.admin.email, subject: 'other', field: 'password' });
       // Hashed before the transaction opens (PRF-03), so the row locks are not held while argon2id works.
       const passwordHash = await hasher.hash(password);
@@ -282,6 +289,8 @@ export function createUserService({ users, throttles, hasher, transactions, audi
         const locked = judgeAdmins(await users.listAdminAccounts(tx));
         if ('refusal' in locked) return { status: 'refused', refusal: locked.refusal };
         const { admin } = locked;
+        // Still the confirmed account, with the e-mail the rule was checked against (QLT-715-01).
+        if (!isSamePerson(expectedAdminId, admin.id) || admin.email !== first.admin.email) return { status: 'refused', refusal: 'ADMIN_CHANGED' };
         const email = await users.setPassword(admin.id, passwordHash, tx);
         if (email === null) throw new NotFoundError(USER_NOT_FOUND_MESSAGE);
         // The three blocks of a forgotten password, cleared inside the transaction (the web reset clears them after its commit): all of it is one change, or none.
