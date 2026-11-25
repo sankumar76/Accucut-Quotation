@@ -53,7 +53,7 @@ describe('AC-2 (NFR-018): the kind icons', () => {
   it('draws a different shape for Main Assembly, Sub-Assembly, Part and Fastener, so the kind is told with no colour at all', () => {
     const shapes = NODE_KINDS.map((kind) => renderToStaticMarkup(createElement(NodeKindIcon, { kind })).match(/lucide-([a-z-]+)/)?.[1]);
     expect(new Set(shapes).size).toBe(4);
-    expect(shapes).toEqual(['layers', 'boxes', 'box', 'nut']);
+    expect(shapes).toEqual(['boxes', 'blocks', 'box', 'bolt']);
     expect(Object.keys(NODE_KIND_ICON).sort()).toEqual([...NODE_KINDS].sort());
   });
 
