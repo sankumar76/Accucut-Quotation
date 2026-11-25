@@ -50,7 +50,7 @@ export default async function EstimatePage({ params }: PageProps) {
   switch (user.role) {
     case 'ENGINEER':
       // The Engineer's notice of an ignored task is a server component with no script, handed in as an element: drawn at first paint, outside the client form (UX 12944 section 4).
-      return <EstimateWorkspace header={header} estimateId={workspace.estimateId} ignored={ignored !== null} notice={ignored === null ? undefined : <EngineerIgnoredNotice ignored={ignored} />} />;
+      return <EstimateWorkspace header={header} estimateId={workspace.estimateId} userId={user.id} ignored={ignored !== null} notice={ignored === null ? undefined : <EngineerIgnoredNotice ignored={ignored} />} />;
     case 'LEAD':
     case 'ADMIN': {
       // SCR-06 is Restricted: it is loaded here, on the Lead's and the Admin's branch only, and never imported by this file (NFR-002).
