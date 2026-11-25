@@ -50,8 +50,6 @@ export interface TreePanelProps {
    * same head, with no card around it. True when left out.
    */
   readonly framed?: boolean;
-  /** Something at the right end of the card head, after the row count: the "Tree width" button, from 1024 px (AQP-426). Not drawn in the unframed head of the drawer. */
-  readonly headAction?: ReactNode;
 }
 
 const TREE_ID = 'parts-tree';
@@ -72,7 +70,7 @@ function focusTree(event: Event): void {
  * Move down); the buttons that sat above the tree for it, and for Add and Delete, are gone. While a change is on its way every control that would start another is `aria-disabled` and keeps the focus (AQP-343). There is no arrow-key navigation: Tab moves from row to row, to each arrow and to the buttons of a row, and Enter on a row opens its form (PM
  * ruling). All of it is the screen's: every rule is the server's, and what the tree shows is what the server last answered.
  */
-export function TreePanel({ tree, editable, onOpen, missingIds, framed = true, headAction }: TreePanelProps) {
+export function TreePanel({ tree, editable, onOpen, missingIds, framed = true }: TreePanelProps) {
   const { nodes, selected, busy } = tree;
   // Rule P (AQP-419, DEF-076): a press in the tree never moves a row between its pointer-down and its end, so the toolbars in view at the pointer-down are held until the click has run.
   useEffect(() => attachPressHold(document, window, TREE_ID), []);
@@ -205,7 +203,6 @@ export function TreePanel({ tree, editable, onOpen, missingIds, framed = true, h
       <CardHeader>
         <CardTitle>{TREE_TITLE}</CardTitle>
         {count}
-        {headAction === undefined ? null : <div className={cn(count === null && 'ml-auto')}>{headAction}</div>}
       </CardHeader>
       <CardContent>{content}</CardContent>
     </Card>
