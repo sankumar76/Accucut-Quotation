@@ -292,6 +292,8 @@ Describe 'the guided restore, with real age and a stand-in pg_restore (AC-1 to A
         foreach ($migration in '20260101000000_first', '20260102000000_second') { New-Item -ItemType Directory -Path (Join-Path $script:Root "releases\t1\migrate\prisma\migrations\$migration") -Force | Out-Null }
         $script:Applied = "20260101000000_first`n20260102000000_second`n"
         Mock Invoke-AccucutRestoreSql -ModuleName AccucutOps { return $script:Applied }
+        # DEF-087: no PostgreSQL session is in the way unless a test says so (Invoke-AccucutRestoreSql above answers every query with the migration list).
+        Mock Get-AccucutRestoreSession -ModuleName AccucutOps { return @() }
     }
 
     AfterEach {
@@ -511,6 +513,56 @@ Describe 'the guided restore, with real age and a stand-in pg_restore (AC-1 to A
             $stop = Get-StopCode { Invoke-TestRestore }
             $stop.Code | Should -Be 'bad-key-format'
             $stop.Message | Should -Not -Match 'this is not a key'
+        }
+    }
+
+    Context 'DEF-087: a PostgreSQL administrator session on the portal''s database is refused plainly, before the portal is stopped and again before the swap' {
+        BeforeEach {
+            $script:AdminSession = [pscustomobject]@{ Database = 'accucut'; UserName = 'postgres'; Superuser = $true; BackendType = '' }
+            $script:SessionChecks = [System.Collections.Generic.List[string]]::new()
+        }
+
+        It 'DEF-087: with no such session, the databases are checked twice (the live one before the portal is stopped, the live and the new one just before the swap) and the swap goes on' {
+            Mock Get-AccucutRestoreSession -ModuleName AccucutOps { $script:Trace.Add("sessions:$($Database -join ',')"); return @() }
+            $script:Answers.Enqueue('1'); $script:Answers.Enqueue('2026-11-15')
+            $result = Invoke-TestRestore
+            $result.Restored | Should -BeTrue
+            $steps = (@($script:Trace) -join ' ') -replace 'accucut_(new|old)_\d{14}', 'accucut_$1_T'
+            $steps | Should -Be 'info:accucut_restore sessions:accucut stop safety:release|before-restore|accucut_restore|restore.pgpass new:accucut_new_T migrate sessions:accucut,accucut_new_T swap:accucut_new_T>accucut_old_T start health:http://127.0.0.1:3000/api/health drop:accucut_old_T'
+        }
+
+        It 'DEF-087: with an administrator session on the live database, it stops before the portal is stopped: a plain message with no psql error, nothing touched, Error 1110' {
+            Mock Get-AccucutRestoreSession -ModuleName AccucutOps { $script:Trace.Add("sessions:$($Database -join ',')"); return @($script:AdminSession) }
+            $script:Answers.Enqueue('1'); $script:Answers.Enqueue('2026-11-15')
+            $stop = Get-StopCode { Invoke-TestRestore }
+            $stop.Code | Should -Be 'superuser-session'
+            $stop.Message | Should -Match 'Someone is connected to the portal''s database as a PostgreSQL administrator \(for example pgAdmin, or psql as postgres\)'
+            $stop.Message | Should -Match 'Close that connection and run the restore again'
+            $stop.Message | Should -Match 'Nothing was changed, and the portal is still running on its old database'
+            $stop.Message | Should -Not -Match 'ERROR|psql:|pg_terminate_backend|permission denied|SQLSTATE'
+            (@($script:Trace) -join ' ') | Should -Be 'info:accucut_restore sessions:accucut'
+            @($script:Events | Where-Object { $_ -like 'Error|1110|*' }).Count | Should -Be 1
+            @($script:Events | Where-Object { $_ -like 'Error|1111|*' }).Count | Should -Be 0
+            # the next occurrence is observed: restore.log names the role and the database of the session, and never a query
+            $log = $script:LogLines -join "`n"
+            $log | Should -Match "A PostgreSQL administrator session is connected to the database 'accucut': role 'postgres'"
+            $log | Should -Not -Match 'SELECT|pg_sleep'
+        }
+
+        It 'DEF-087: an administrator session that connects after the portal was stopped is found just before the swap: no swap, the new database is dropped, the portal starts again on the old one, Error 1111, a plain message' {
+            Mock Get-AccucutRestoreSession -ModuleName AccucutOps { $script:SessionChecks.Add(($Database -join ',')); $script:Trace.Add("sessions:$($Database -join ',')"); if ($script:SessionChecks.Count -ge 2) { return @($script:AdminSession) }; return @() }
+            $script:Answers.Enqueue('1'); $script:Answers.Enqueue('2026-11-15')
+            $stop = Get-StopCode { Invoke-TestRestore }
+            $stop.Code | Should -Be 'restore-failed'
+            $stop.Message | Should -Match 'Someone is connected to the portal''s database as a PostgreSQL administrator'
+            $stop.Message | Should -Match 'Close that connection and run the restore again'
+            $stop.Message | Should -Match 'The portal is running on the old database. Nothing was lost, and a safety copy of it was made'
+            $stop.Message | Should -Not -Match 'ERROR|psql:|pg_terminate_backend|permission denied|SQLSTATE'
+            $steps = (@($script:Trace) -join ' ') -replace 'accucut_(new|old)_\d{14}', 'accucut_$1_T'
+            $steps | Should -Be 'info:accucut_restore sessions:accucut stop safety:release|before-restore|accucut_restore|restore.pgpass new:accucut_new_T migrate sessions:accucut,accucut_new_T stop drop:accucut_new_T start'
+            @($script:Trace | Where-Object { $_ -like 'swap:*' }).Count | Should -Be 0
+            @($script:Events | Where-Object { $_ -like 'Error|1111|*' }).Count | Should -Be 1
+            ($script:LogLines -join "`n") | Should -Match 'The portal was started again on the old database'
         }
     }
 
@@ -917,7 +969,8 @@ Describe 'the whole restore on the real install of stage 13 (AC-9: real services
         $hits.Count | Should -Be 0 -Because "found in: $($hits -join ', ')"
     }
 
-    It 'R3: restores a copy that is one migration BEHIND the installed release, and migrates it forward as accucut_restore: afterwards the live _prisma_migrations matches the release' -Skip:(-not $script:RealInstall) {
+    # DEF-087 (AQP-443): R3 runs 5 times in one job. Its failure was a race with an autovacuum worker, which one run shows only now and then. It may go back to one run when QA closes DEF-087.
+    It 'R3: restores a copy that is one migration BEHIND the installed release, and migrates it forward as accucut_restore: afterwards the live _prisma_migrations matches the release (run <_> of 5)' -ForEach @(1, 2, 3, 4, 5) -Skip:(-not $script:RealInstall) {
         $paths = Get-AccucutPaths -Root 'C:\Accucut'
         $settings = Read-AccucutBackupSettings -Path $paths.BackupSettings
         $state = Read-AccucutInstallState -Path $paths.StateFile
@@ -1116,5 +1169,463 @@ Describe 'SQR-04 (#516): psql never receives a byte order mark in front of the r
         $body | Should -Match 'Restore-AccucutConsoleInput'
         $body.IndexOf('Set-AccucutConsoleInputNoPreamble') | Should -BeLessThan $body.IndexOf('$process.Start()')
         $body.IndexOf('$process.Start()') | Should -BeLessThan $body.IndexOf('Restore-AccucutConsoleInput')
+    }
+}
+
+Describe 'DEF-087 (AQP-443): the swap of the databases ends only the sessions it may end, and tries a rename again only when another session is in the way' {
+    BeforeAll {
+        # What psql prints, with -v ON_ERROR_STOP=1 and VERBOSITY verbose, when ALTER DATABASE ... RENAME finds another session (checked on PostgreSQL 17.11 and on the real install of stage 13).
+        $script:InUse = "'psql.exe' failed with exit code 3.`npsql:<stdin>:7: ERROR:  55006: database ""accucut"" is being accessed by other users`nDETAIL:  There is 1 other session using the database.`nLOCATION:  RenameDatabase, dbcommands.c:1932"
+        $script:Denied = "'psql.exe' failed with exit code 3.`npsql:<stdin>:3: ERROR:  42501: permission denied to terminate process`nDETAIL:  Only roles with the SUPERUSER attribute may terminate processes of roles with the SUPERUSER attribute."
+        $script:SwapSettings = [pscustomobject]@{ PgHost = '127.0.0.1'; PgPort = 5432; Database = 'accucut' }
+        $script:SwapPaths = [pscustomobject]@{ RestoreLog = 'C:\fake\restore.log' }
+        function Invoke-TestSwap {
+            param([switch]$NoPaths)
+            $arguments = @{ PsqlPath = 'C:\fake\pg\bin\psql.exe'; Settings = $script:SwapSettings; PassFile = 'C:\fake\restore.pgpass'; Replacement = 'accucut_new_20261125115310'; Previous = 'accucut_old_20261125115310' }
+            if (-not $NoPaths) { $arguments['Paths'] = $script:SwapPaths }
+            Switch-AccucutRestoreDatabase @arguments
+        }
+        function Get-SwapStop {
+            try { Invoke-TestSwap } catch { return [pscustomobject]@{ Code = [string]$_.Exception.Data['accucutCode']; Message = $_.Exception.Message } }
+            return $null
+        }
+    }
+
+    BeforeEach {
+        $script:SwapSql = [System.Collections.Generic.List[string]]::new()
+        $script:SwapRecords = [System.Collections.Generic.List[string]]::new()
+        $script:SwapOutcomes = [System.Collections.Queue]::new()
+        Mock Invoke-AccucutRestoreSql -ModuleName AccucutOps {
+            $script:SwapSql.Add($Sql)
+            $next = 'ok'
+            if ($script:SwapOutcomes.Count -gt 0) { $next = [string]$script:SwapOutcomes.Dequeue() }
+            if ($next -ne 'ok') { throw $next }
+            return ''
+        }
+        Mock Write-AccucutRestoreRecord -ModuleName AccucutOps { $script:SwapRecords.Add("$Level|$Message") }
+        Mock Get-AccucutRestoreSession -ModuleName AccucutOps { return @([pscustomobject]@{ Database = 'accucut'; UserName = 'postgres'; Superuser = $true; BackendType = '' }, [pscustomobject]@{ Database = 'accucut_new_20261125115310'; UserName = ''; Superuser = $false; BackendType = '' }) }
+    }
+
+    It 'the SQL ends the sessions of roles that are not superusers (joined to pg_roles), never every PID, and never one it may not end: it names no backend_type, which the restore role cannot read in another role''s session' {
+        $script:SwapOutcomes.Enqueue('ok')
+        Invoke-TestSwap
+        $script:SwapSql.Count | Should -Be 1
+        $sql = $script:SwapSql[0]
+        $sql | Should -Match 'FROM pg_stat_activity a JOIN pg_roles r ON r\.oid = a\.usesysid'
+        $sql | Should -Match 'NOT r\.rolsuper'
+        $sql | Should -Match 'a\.pid <> pg_backend_pid\(\)'
+        $sql | Should -Match "a\.datname IN \('accucut', 'accucut_new_20261125115310'\)"
+        ([regex]::Matches($sql, 'pg_terminate_backend')).Count | Should -Be 1
+        $sql | Should -Not -Match 'FROM pg_stat_activity WHERE datname'
+        $sql | Should -Not -Match 'backend_type' -Because 'for any session of another role pg_stat_activity.backend_type is NULL to the restore role: a filter on it would end nothing'
+        # the same transaction as before: both renames or neither
+        $sql.IndexOf('SET ROLE NONE;') | Should -BeLessThan $sql.IndexOf('pg_terminate_backend')
+        $sql.IndexOf('pg_terminate_backend') | Should -BeLessThan $sql.IndexOf('BEGIN;')
+        $sql.IndexOf('BEGIN;') | Should -BeLessThan $sql.IndexOf('ALTER DATABASE "accucut" RENAME TO "accucut_old_20261125115310";')
+        $sql.IndexOf('ALTER DATABASE "accucut" RENAME TO "accucut_old_20261125115310";') | Should -BeLessThan $sql.IndexOf('ALTER DATABASE "accucut_new_20261125115310" RENAME TO "accucut";')
+        $sql.IndexOf('ALTER DATABASE "accucut_new_20261125115310" RENAME TO "accucut";') | Should -BeLessThan $sql.IndexOf('COMMIT;')
+        # the SQLSTATE is printed, so that the retry can tell a busy database from any other failure
+        $sql | Should -Match '(?m)^\\set VERBOSITY verbose\s*$'
+        $sql.IndexOf('\set VERBOSITY verbose') | Should -BeLessThan $sql.IndexOf('ALTER DATABASE')
+        @($script:SwapRecords).Count | Should -Be 0
+    }
+
+    It 'a rename that finds another session (SQLSTATE 55006) is tried again, and the third retry may be the one that works' {
+        1..3 | ForEach-Object { $script:SwapOutcomes.Enqueue($script:InUse) }
+        Invoke-TestSwap
+        $script:SwapSql.Count | Should -Be 4
+        # every try ends the sessions it may end again, then renames
+        @($script:SwapSql | Where-Object { $_ -match 'pg_terminate_backend' -and $_ -match 'RENAME TO' }).Count | Should -Be 4
+        $records = $script:SwapRecords -join "`n"
+        $records | Should -Match 'retry 1 of 3'
+        $records | Should -Match 'retry 3 of 3'
+        $records | Should -Not -Match 'retry 4'
+    }
+
+    It 'it stops trying after 3 retries (4 runs of psql in all), and says so plainly: no psql text, no SQLSTATE, and the blocking sessions are in restore.log with role and type, never a query' {
+        1..10 | ForEach-Object { $script:SwapOutcomes.Enqueue($script:InUse) }
+        $stop = Get-SwapStop
+        $script:SwapSql.Count | Should -Be 4
+        $stop.Code | Should -Be 'database-in-use'
+        $stop.Message | Should -Match 'Another connection to the database could not be ended'
+        $stop.Message | Should -Match 'so the database names were not swapped'
+        $stop.Message | Should -Match 'Close any program that is connected to the portal''s database as a PostgreSQL administrator'
+        $stop.Message | Should -Not -Match 'psql|ERROR|55006|DETAIL|LOCATION|RenameDatabase|accessed by other users'
+        $records = $script:SwapRecords -join "`n"
+        $records | Should -Match "Still connected to the database 'accucut': role 'postgres' \(a PostgreSQL superuser\)"
+        $records | Should -Match "Still connected to the database 'accucut_new_20261125115310': no role \(a PostgreSQL background process, for example autovacuum\)"
+        $records | Should -Not -Match 'SELECT|pg_sleep|query'
+    }
+
+    It 'only SQLSTATE 55006 is tried again: any other failure is raised after one run, as it was' -ForEach @(
+        @{ Why = 'a permission error'; Text = 'denied' }
+        @{ Why = 'a lost connection'; Text = 'psql: error: connection to server at "127.0.0.1", port 5432 failed: Connection refused' }
+        @{ Why = 'a lock timeout (55P03)'; Text = "psql:<stdin>:7: ERROR:  55P03: canceling statement due to lock timeout" }
+        @{ Why = 'a text that only mentions 55006'; Text = "psql:<stdin>:7: ERROR:  42501: role ""x55006"" may not do this" }
+    ) {
+        $text = $Text
+        if ($Text -eq 'denied') { $text = $script:Denied }
+        $script:SwapOutcomes.Enqueue($text)
+        $script:SwapOutcomes.Enqueue('ok')
+        $thrown = $null
+        try { Invoke-TestSwap } catch { $thrown = $_.Exception }
+        $thrown | Should -Not -BeNullOrEmpty -Because $Why
+        $thrown.Message | Should -Be $text
+        $script:SwapSql.Count | Should -Be 1
+    }
+
+    It 'QLT-730-01: a rename that finds another session is tried again whatever language the server prints the severity in (the SQLSTATE is read, not the word ERROR)' -ForEach @(
+        @{ Severity = 'FEHLER' }
+        @{ Severity = 'ERREUR' }
+        @{ Severity = 'ERRO' }
+        @{ Severity = 'CJK' }
+    ) {
+        $word = $Severity
+        if ($Severity -eq 'CJK') { $word = [string][char]0x9519 + [char]0x8BEF }
+        $script:SwapOutcomes.Enqueue($script:InUse.Replace('ERROR:', ($word + ':')))
+        $script:SwapOutcomes.Enqueue('ok')
+        Invoke-TestSwap
+        $script:SwapSql.Count | Should -Be 2
+    }
+
+    It 'QLT-730-01: a translated severity in front of another SQLSTATE, or a name that only holds 55006, is still not retried' -ForEach @(
+        @{ Text = "psql:<stdin>:7: FEHLER:  42501: keine Berechtigung" }
+        @{ Text = 'psql:<stdin>:7: ERREUR:  42501: le role x55006 n''est pas permis' }
+        @{ Text = "psql:<stdin>:7: ERROR:  42501: role 55006: not allowed" }
+    ) {
+        $script:SwapOutcomes.Enqueue($Text)
+        $script:SwapOutcomes.Enqueue('ok')
+        $thrown = $null
+        try { Invoke-TestSwap } catch { $thrown = $_.Exception }
+        $thrown | Should -Not -BeNullOrEmpty
+        $thrown.Message | Should -Be $Text
+        $script:SwapSql.Count | Should -Be 1
+    }
+
+    It 'a diagnostic query that fails does not hide the plain message' {
+        Mock Get-AccucutRestoreSession -ModuleName AccucutOps { throw 'the diagnostic query failed' }
+        1..10 | ForEach-Object { $script:SwapOutcomes.Enqueue($script:InUse) }
+        $stop = Get-SwapStop
+        $stop.Code | Should -Be 'database-in-use'
+        $script:SwapSql.Count | Should -Be 4
+    }
+
+    It 'without -Paths it works the same and writes no record' {
+        $script:SwapOutcomes.Enqueue($script:InUse)
+        Invoke-TestSwap -NoPaths
+        $script:SwapSql.Count | Should -Be 2
+        @($script:SwapRecords).Count | Should -Be 0
+    }
+}
+
+Describe 'DEF-087 (AQP-443): Get-AccucutRestoreSession and Assert-AccucutRestoreNoSuperuserSession read the sessions the way the restore role sees them' {
+    BeforeAll {
+        $script:SessSettings = [pscustomobject]@{ PgHost = '127.0.0.1'; PgPort = 5432; Database = 'accucut' }
+        $script:SessPaths = [pscustomobject]@{ RestoreLog = 'C:\fake\restore.log' }
+    }
+
+    BeforeEach {
+        $script:SessSql = [System.Collections.Generic.List[string]]::new()
+        $script:SessDatabase = [System.Collections.Generic.List[string]]::new()
+        $script:SessAnswer = ''
+        $script:SessRecords = [System.Collections.Generic.List[string]]::new()
+        Mock Invoke-AccucutRestoreSql -ModuleName AccucutOps { $script:SessSql.Add($Sql); $script:SessDatabase.Add($Database); return $script:SessAnswer }
+        Mock Write-AccucutRestoreRecord -ModuleName AccucutOps { $script:SessRecords.Add("$Level|$Message") }
+    }
+
+    It 'asks for the sessions of the named databases without the query text, from a LEFT JOIN (a session with no role is still a row), and the superuser filter only on request' {
+        # database | superuser | backend type | role (the role is last: it is the only free text, and the reader keeps whatever follows the third bar)
+        $script:SessAnswer = "accucut|true||postgres`naccucut|false||accucut_backup`naccucut_new_20261125115310|false||`n"
+        $all = @(Get-AccucutRestoreSession -PsqlPath 'C:\fake\psql.exe' -Settings $script:SessSettings -PassFile 'C:\fake\restore.pgpass' -Database @('accucut', 'accucut_new_20261125115310'))
+        $script:SessDatabase[0] | Should -Be 'postgres'
+        $sql = $script:SessSql[0]
+        $sql | Should -Match "a\.datname IN \('accucut', 'accucut_new_20261125115310'\)"
+        $sql | Should -Match 'LEFT JOIN pg_roles r ON r\.oid = a\.usesysid'
+        # SEC-730-01: the role is the last column and is cleaned in SQL (no bar, no control character such as a line break), so it cannot shift a field or forge a line of restore.log
+        $sql | Should -Match ([regex]::Escape("coalesce(a.backend_type, ''), regexp_replace(coalesce(a.usename, ''), '[[:cntrl:]|]', '?', 'g'))"))
+        $sql | Should -Match 'a\.pid <> pg_backend_pid\(\)'
+        $sql | Should -Not -Match 'a\.query|\.query\b|state_change'
+        $sql | Should -Not -Match 'AND r\.rolsuper'
+        $all.Count | Should -Be 3
+        $all[0].UserName | Should -Be 'postgres'
+        $all[0].Superuser | Should -BeTrue
+        $all[0].Database | Should -Be 'accucut'
+        $all[1].Superuser | Should -BeFalse
+        $all[2].UserName | Should -Be ''
+        $all[2].Database | Should -Be 'accucut_new_20261125115310'
+        $null = Get-AccucutRestoreSession -PsqlPath 'C:\fake\psql.exe' -Settings $script:SessSettings -PassFile 'C:\fake\restore.pgpass' -Database @('accucut') -SuperuserOnly
+        $script:SessSql[1] | Should -Match 'AND r\.rolsuper'
+    }
+
+    It 'SEC-730-01: a role name that holds a bar cannot move the superuser flag: one row, the right flag, the whole name' {
+        $script:SessAnswer = "accucut|true||we|ird`n"
+        $rows = @(Get-AccucutRestoreSession -PsqlPath 'C:\fake\psql.exe' -Settings $script:SessSettings -PassFile 'C:\fake\restore.pgpass' -Database @('accucut') -SuperuserOnly)
+        $rows.Count | Should -Be 1
+        $rows[0].Superuser | Should -BeTrue
+        $rows[0].Database | Should -Be 'accucut'
+        $rows[0].UserName | Should -Be 'we|ird'
+    }
+
+    It 'no rows is an empty answer, and a database name that is not a plain name is refused before any SQL is sent' {
+        $script:SessAnswer = ''
+        @(Get-AccucutRestoreSession -PsqlPath 'C:\fake\psql.exe' -Settings $script:SessSettings -PassFile 'C:\fake\restore.pgpass' -Database @('accucut')).Count | Should -Be 0
+        $script:SessSql.Clear()
+        { Get-AccucutRestoreSession -PsqlPath 'C:\fake\psql.exe' -Settings $script:SessSettings -PassFile 'C:\fake\restore.pgpass' -Database @("accucut');DROP DATABASE x;--") } | Should -Throw
+        $script:SessSql.Count | Should -Be 0
+    }
+
+    It 'with no administrator session the check passes and writes nothing' {
+        Mock Get-AccucutRestoreSession -ModuleName AccucutOps { return @() }
+        { Assert-AccucutRestoreNoSuperuserSession -PsqlPath 'C:\fake\psql.exe' -Settings $script:SessSettings -PassFile 'C:\fake\restore.pgpass' -Paths $script:SessPaths -Database @('accucut') } | Should -Not -Throw
+        $script:SessRecords.Count | Should -Be 0
+    }
+
+    It 'with one it stops with the code superuser-session and the plain message, and records the role and the database of every session (at most 5), never a query' {
+        Mock Get-AccucutRestoreSession -ModuleName AccucutOps { return @(1..8 | ForEach-Object { [pscustomobject]@{ Database = 'accucut'; UserName = "admin$_"; Superuser = $true; BackendType = '' } }) }
+        $thrown = $null
+        try { Assert-AccucutRestoreNoSuperuserSession -PsqlPath 'C:\fake\psql.exe' -Settings $script:SessSettings -PassFile 'C:\fake\restore.pgpass' -Paths $script:SessPaths -Database @('accucut') } catch { $thrown = $_.Exception }
+        $thrown | Should -Not -BeNullOrEmpty
+        $thrown.Data['accucutCode'] | Should -Be 'superuser-session'
+        $thrown.Message | Should -Be 'Someone is connected to the portal''s database as a PostgreSQL administrator (for example pgAdmin, or psql as postgres). Close that connection and run the restore again.'
+        @($script:SessRecords | Where-Object { $_ -like "Warning|A PostgreSQL administrator session is connected to the database 'accucut': role 'admin*" }).Count | Should -Be 5
+        ($script:SessRecords -join "`n") | Should -Match 'and 3 more'
+        ($script:SessRecords -join "`n") | Should -Not -Match 'SELECT|pg_sleep|query'
+    }
+
+    It 'a backend type that the restore role can read is recorded with the role; one it cannot read is said so' {
+        Mock Get-AccucutRestoreSession -ModuleName AccucutOps { return @([pscustomobject]@{ Database = 'accucut'; UserName = 'postgres'; Superuser = $true; BackendType = 'client backend' }, [pscustomobject]@{ Database = 'accucut'; UserName = 'admin2'; Superuser = $true; BackendType = '' }) }
+        try { Assert-AccucutRestoreNoSuperuserSession -PsqlPath 'C:\fake\psql.exe' -Settings $script:SessSettings -PassFile 'C:\fake\restore.pgpass' -Paths $script:SessPaths -Database @('accucut') } catch { Write-Verbose 'expected' }
+        $text = $script:SessRecords -join "`n"
+        $text | Should -Match "role 'postgres', session type 'client backend'"
+        $text | Should -Match "role 'admin2', session type not shown to the restore role"
+    }
+}
+
+Describe 'DEF-087 (AQP-443): a database that a restore made is dropped with WITH (FORCE), as before, and only by a name that a restore made' {
+    BeforeEach {
+        $script:DropSql = [System.Collections.Generic.List[string]]::new()
+        Mock Invoke-AccucutRestoreSql -ModuleName AccucutOps { $script:DropSql.Add($Sql); return '' }
+    }
+
+    It 'sends DROP DATABASE IF EXISTS with the name of the database and WITH (FORCE) as the restore role, once' {
+        Remove-AccucutRestoreDatabase -PsqlPath 'C:\fake\psql.exe' -Settings ([pscustomobject]@{ PgHost = '127.0.0.1'; PgPort = 5432; Database = 'accucut' }) -PassFile 'C:\fake\restore.pgpass' -Name 'accucut_new_20261125115310'
+        $script:DropSql.Count | Should -Be 1
+        $script:DropSql[0] | Should -Match 'DROP DATABASE IF EXISTS "accucut_new_20261125115310" WITH \(FORCE\);'
+    }
+
+    It 'refuses a name that is not one of the restore''s (the live database can never be dropped here)' {
+        { Remove-AccucutRestoreDatabase -PsqlPath 'C:\fake\psql.exe' -Settings ([pscustomobject]@{ PgHost = '127.0.0.1'; PgPort = 5432; Database = 'accucut' }) -PassFile 'C:\fake\restore.pgpass' -Name 'accucut' } | Should -Throw
+        $script:DropSql.Count | Should -Be 0
+    }
+}
+
+Describe 'DEF-087 (AQP-443) on the real install of stage 13: sessions that are in the way of the swap and of the restore (real PostgreSQL 17; the swap runs on scratch databases, never on the live one)' {
+    BeforeAll {
+        $script:HeldName = 'accucut-def087-held'
+        # The variables of BeforeDiscovery are not there when the tests run: the same test of the real install, made again.
+        $script:DReal = [bool]((Test-Path -LiteralPath 'C:\Accucut\config\restore.pgpass') -and $env:ACCUCUT_AGE_KEY -and $env:ACCUCUT_VALUES -and (Test-Path -LiteralPath $env:ACCUCUT_VALUES))
+        if ($script:DReal) {
+            $script:DPaths = Get-AccucutPaths -Root 'C:\Accucut'
+            $script:DSettings = Read-AccucutBackupSettings -Path $script:DPaths.BackupSettings
+            $script:DState = Read-AccucutInstallState -Path $script:DPaths.StateFile
+            $script:DPsql = [System.IO.Path]::Combine($script:DSettings.PgBinDirectory, 'psql.exe')
+            # The superuser password of the run's own PostgreSQL (invented by stage 13, in the values file), used only to hold sessions and to read the catalogue.
+            $script:DSuperPassword = [string](Read-AccucutValuesFile -Path $env:ACCUCUT_VALUES)['PG_SUPERUSER_PASSWORD']
+        }
+
+        function Invoke-TestSuperPsql {
+            param([Parameter(Mandatory)][string]$Database, [Parameter(Mandatory)][string]$Sql)
+            $arguments = @('-X', '-w', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '--host', $script:DSettings.PgHost, '--port', [string]$script:DSettings.PgPort, '--username', 'postgres', '--dbname', $Database, '--file', '-')
+            $result = Invoke-AccucutNative -FilePath $script:DPsql -ArgumentList $arguments -Environment @{ PGPASSWORD = $script:DSuperPassword; PGCONNECT_TIMEOUT = '15' } -ClearPgEnvironment -StdIn ($Sql + "`n")
+            return $result.Output.Trim()
+        }
+
+        # A session that stays open on a database: psql runs pg_sleep. Role 'postgres' (a superuser) or 'accucut_backup' (not a superuser, and another role than the restore role: the restore role cannot read its backend_type).
+        function Start-TestHeldSession {
+            param([Parameter(Mandatory)][string]$Database, [Parameter(Mandatory)][ValidateSet('postgres', 'accucut_backup')][string]$Role)
+            $info = New-Object System.Diagnostics.ProcessStartInfo
+            $info.FileName = $script:DPsql
+            $info.Arguments = '-X -w -q --host ' + $script:DSettings.PgHost + ' --port ' + [string]$script:DSettings.PgPort + ' --username ' + $Role + ' --dbname ' + $Database + ' --command "SELECT pg_sleep(600)"'
+            $info.UseShellExecute = $false
+            $info.CreateNoWindow = $true
+            $info.RedirectStandardOutput = $true
+            $info.RedirectStandardError = $true
+            foreach ($variable in @($info.EnvironmentVariables.Keys | Where-Object { $_ -like 'PG*' })) { [void]$info.EnvironmentVariables.Remove($variable) }
+            $info.EnvironmentVariables['PGAPPNAME'] = $script:HeldName
+            # backup.pgpass names the database accucut only, so the password is read from it and given to psql by its environment.
+            if ($Role -eq 'postgres') { $info.EnvironmentVariables['PGPASSWORD'] = $script:DSuperPassword } else { $info.EnvironmentVariables['PGPASSWORD'] = (Read-AccucutPgpassPassword -Path $script:DPaths.BackupPgpass -Role 'accucut_backup') }
+            $process = New-Object System.Diagnostics.Process
+            $process.StartInfo = $info
+            [void]$process.Start()
+            $seen = $false
+            for ($i = 0; $i -lt 30 -and -not $seen; $i++) {
+                $seen = ([int](Invoke-TestSuperPsql -Database 'postgres' -Sql "SELECT count(*) FROM pg_stat_activity WHERE application_name = '$($script:HeldName)' AND datname = '$Database' AND usename = '$Role';") -ge 1)
+                if (-not $seen) { Start-Sleep -Seconds 1 }
+            }
+            if (-not $seen) { try { $process.Kill() } catch { Write-Verbose 'The held session had already ended.' }; throw "The held session of $Role on $Database did not open in 30 seconds." }
+            return $process
+        }
+
+        function Stop-TestHeldSession {
+            param($Process)
+            if ($null -eq $Process) { return }
+            try { $Process.Kill() } catch { Write-Verbose 'The held session had already ended.' }
+            [void]$Process.WaitForExit(15000)
+            $Process.Dispose()
+            for ($i = 0; $i -lt 15; $i++) {
+                if ([int](Invoke-TestSuperPsql -Database 'postgres' -Sql "SELECT count(*) FROM pg_stat_activity WHERE application_name = '$($script:HeldName)';") -eq 0) { return }
+                Start-Sleep -Seconds 1
+            }
+            [void](Invoke-TestSuperPsql -Database 'postgres' -Sql "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = '$($script:HeldName)';")
+        }
+
+        function Get-TestDatabaseNames {
+            param([Parameter(Mandatory)][string]$Pattern)
+            return @((Invoke-TestSuperPsql -Database 'postgres' -Sql "SELECT datname FROM pg_database WHERE datname LIKE '$Pattern' ORDER BY 1;") -split "`r?`n" | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+        }
+
+        function Remove-TestScratchDatabase {
+            param([Parameter(Mandatory)][string[]]$Name)
+            foreach ($one in $Name) { try { [void](Invoke-TestSuperPsql -Database 'postgres' -Sql "DROP DATABASE IF EXISTS `"$one`" WITH (FORCE);") } catch { Write-Host "The scratch database $one could not be dropped: $($_.Exception.Message)" } }
+        }
+
+        function New-TestScratchSettings {
+            param([Parameter(Mandatory)][string]$Live)
+            return [pscustomobject]@{ AgeRecipient = $script:DSettings.AgeRecipient; PgHost = $script:DSettings.PgHost; PgPort = $script:DSettings.PgPort; Database = $Live; PgBinDirectory = $script:DSettings.PgBinDirectory }
+        }
+
+        function Get-TestSwapStop {
+            param([scriptblock]$Run)
+            try { & $Run } catch { return [pscustomobject]@{ Code = [string]$_.Exception.Data['accucutCode']; Message = $_.Exception.Message } }
+            return $null
+        }
+    }
+
+    It 'the values file of the run holds the PostgreSQL administrator password that these tests use (a job on the real install fails here, it never skips)' -Skip:(-not ($env:CI -eq 'true' -and $env:ACCUCUT_VALUES)) {
+        $script:DReal | Should -BeTrue
+        $script:DSuperPassword.Length | Should -BeGreaterThan 8
+        Invoke-TestSuperPsql -Database 'postgres' -Sql 'SELECT 1;' | Should -Be '1'
+    }
+
+    It 'DEF-087: with a PostgreSQL administrator connected to the live database, the restore stops before anything is stopped, with a plain message; the live database, the services and the backups folder are as they were' -Skip:(-not $script:RealInstall) {
+        $paths = $script:DPaths; $settings = $script:DSettings; $state = $script:DState
+        $release = [System.IO.Path]::Combine($paths.Releases, (Get-AccucutCurrentRelease -Paths $paths))
+        $program = @{
+            Age       = [System.IO.Path]::Combine($release, 'bin\age.exe')
+            PgDump    = [System.IO.Path]::Combine($settings.PgBinDirectory, 'pg_dump.exe')
+            PgRestore = [System.IO.Path]::Combine($settings.PgBinDirectory, 'pg_restore.exe')
+            Psql      = $script:DPsql
+            Node      = $state.NodeExe
+        }
+        $first = @(Get-AccucutRestoreChoice -Directory $paths.Backups | Where-Object { $_.Copy.Verified } | Select-Object -First 1)
+        $first.Count | Should -Be 1
+        $keyLine = (Get-Content -LiteralPath $env:ACCUCUT_AGE_KEY | Where-Object { $_ -like 'AGE-SECRET-*' } | Select-Object -First 1).Trim()
+        $script:RealKey = ConvertTo-SecureString -String $keyLine -AsPlainText -Force
+        $script:RealAnswers = [System.Collections.Queue]::new()
+        $script:RealAnswers.Enqueue([string]$first[0].Number); $script:RealAnswers.Enqueue($first[0].Copy.CreatedUtc.ToString('yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture))
+        Mock Read-AccucutHostInput -ModuleName AccucutOps { return [string]$script:RealAnswers.Dequeue() }
+        Mock Read-AccucutKeyInput -ModuleName AccucutOps { return $script:RealKey }
+        $namesBefore = @(Get-TestDatabaseNames -Pattern 'accucut%')
+        $migrationsBefore = Invoke-TestSuperPsql -Database $settings.Database -Sql 'SELECT count(*) FROM _prisma_migrations;'
+        $backupsBefore = @(Get-AccucutBackupCopy -Directory $paths.Backups).Count
+
+        $held = Start-TestHeldSession -Database $settings.Database -Role 'postgres'
+        $stop = $null
+        try {
+            $stop = Get-TestSwapStop { Invoke-AccucutRestore -Paths $paths -Settings $settings -Program $program -ReleaseDirectory $release -HealthUrl "http://127.0.0.1:$($state.Port)/api/health" -HealthTimeoutSeconds 240 }
+        }
+        finally { Stop-TestHeldSession -Process $held }
+
+        $stop | Should -Not -BeNullOrEmpty
+        $stop.Code | Should -Be 'superuser-session'
+        $stop.Message | Should -Match 'Someone is connected to the portal''s database as a PostgreSQL administrator'
+        $stop.Message | Should -Match 'Close that connection and run the restore again'
+        $stop.Message | Should -Not -Match 'ERROR|psql:|psql[.]exe|permission denied|terminate'
+        foreach ($name in (Get-AccucutServiceNames)) { (Get-Service -Name $name).Status | Should -Be 'Running' }
+        Get-AccucutHttpStatus -Url "http://127.0.0.1:$($state.Port)/api/health" | Should -Be 200
+        @(Get-TestDatabaseNames -Pattern 'accucut%') | Should -Be $namesBefore
+        Invoke-TestSuperPsql -Database $settings.Database -Sql 'SELECT count(*) FROM _prisma_migrations;' | Should -Be $migrationsBefore
+        @(Get-AccucutBackupCopy -Directory $paths.Backups).Count | Should -Be $backupsBefore -Because 'no safety copy is made: the refusal comes before anything is touched'
+        ((Get-Content -LiteralPath $paths.RestoreLog) -join "`n") | Should -Match "A PostgreSQL administrator session is connected to the database '$($settings.Database)': role 'postgres'"
+    }
+
+    It 'DEF-087: with a live autovacuum worker on the new database the swap goes through (the old swap failed here with "permission denied to terminate process"), and DROP DATABASE ... WITH (FORCE) removes a database that has one' -Skip:(-not $script:RealInstall) {
+        $paths = $script:DPaths; $psql = $script:DPsql
+        $live = 'accucut_swaptest_live'; $new = 'accucut_new_20200101000031'; $old = 'accucut_old_20200101000031'; $doomed = 'accucut_new_20200101000032'
+        Remove-TestScratchDatabase -Name @($live, $new, $old, $doomed)
+        try {
+            [void](Invoke-TestSuperPsql -Database 'postgres' -Sql ("CREATE DATABASE $live OWNER accucut_owner;`nCREATE DATABASE $new OWNER accucut_owner;`nCREATE DATABASE $doomed OWNER accucut_owner;"))
+            # A table with dead rows and a deliberately slow autovacuum (a pause of 100 ms for every unit of cost): the worker that picks it up stays for minutes.
+            $slow = "CREATE TABLE def087_dead (id int, pad text) WITH (autovacuum_vacuum_threshold = 0, autovacuum_vacuum_scale_factor = 0, autovacuum_vacuum_cost_delay = 100, autovacuum_vacuum_cost_limit = 1);`nINSERT INTO def087_dead SELECT g, repeat('x', 200) FROM generate_series(1, 100000) g;`nDELETE FROM def087_dead;"
+            [void](Invoke-TestSuperPsql -Database $new -Sql $slow)
+            [void](Invoke-TestSuperPsql -Database $doomed -Sql $slow)
+            # The runner's PostgreSQL is the job's own: its autovacuum naptime is brought down to 1 second for this test and put back after it.
+            [void](Invoke-TestSuperPsql -Database 'postgres' -Sql "ALTER SYSTEM SET autovacuum_naptime = 1;`nSELECT pg_reload_conf();")
+            $workers = 0
+            for ($i = 0; $i -lt 150 -and $workers -lt 2; $i++) {
+                $workers = [int](Invoke-TestSuperPsql -Database 'postgres' -Sql "SELECT count(DISTINCT datname) FROM pg_stat_activity WHERE backend_type = 'autovacuum worker' AND datname IN ('$new', '$doomed');")
+                if ($workers -lt 2) { Start-Sleep -Seconds 1 }
+            }
+            $workers | Should -Be 2 -Because 'an autovacuum worker has to be on both scratch databases for this test to mean anything'
+
+            Switch-AccucutRestoreDatabase -PsqlPath $psql -Settings (New-TestScratchSettings -Live $live) -PassFile $paths.RestorePgpass -Replacement $new -Previous $old -Paths $paths
+            @(Get-TestDatabaseNames -Pattern 'accucut_%') | Should -Contain $live
+            @(Get-TestDatabaseNames -Pattern 'accucut_old_20200101000031') | Should -Be @($old)
+            @(Get-TestDatabaseNames -Pattern 'accucut_new_20200101000031') | Should -BeNullOrEmpty
+            Invoke-TestSuperPsql -Database $live -Sql "SELECT count(*) FROM pg_class WHERE relname = 'def087_dead';" | Should -Be '1' -Because 'the new database took the live name'
+            Invoke-TestSuperPsql -Database $old -Sql "SELECT count(*) FROM pg_class WHERE relname = 'def087_dead';" | Should -Be '0' -Because 'the old live database is the one that was renamed away'
+
+            Remove-AccucutRestoreDatabase -PsqlPath $psql -Settings $script:DSettings -PassFile $paths.RestorePgpass -Name $doomed
+            @(Get-TestDatabaseNames -Pattern $doomed) | Should -BeNullOrEmpty
+        }
+        finally {
+            try { [void](Invoke-TestSuperPsql -Database 'postgres' -Sql "ALTER SYSTEM RESET autovacuum_naptime;`nSELECT pg_reload_conf();") } catch { Write-Host "autovacuum_naptime could not be reset: $($_.Exception.Message)" }
+            Remove-TestScratchDatabase -Name @($live, $new, $old, $doomed)
+        }
+    }
+
+    It 'DEF-087: a session of another role than the restore role (accucut_backup, whose backend_type the restore role cannot read) is ended by the swap' -Skip:(-not $script:RealInstall) {
+        $paths = $script:DPaths
+        $live = 'accucut_swaptest_live'; $new = 'accucut_new_20200101000033'; $old = 'accucut_old_20200101000033'
+        Remove-TestScratchDatabase -Name @($live, $new, $old)
+        $held = $null
+        try {
+            [void](Invoke-TestSuperPsql -Database 'postgres' -Sql ("CREATE DATABASE $live OWNER accucut_owner;`nCREATE DATABASE $new OWNER accucut_owner;`nGRANT CONNECT ON DATABASE $live TO accucut_backup;"))
+            $held = Start-TestHeldSession -Database $live -Role 'accucut_backup'
+            Switch-AccucutRestoreDatabase -PsqlPath $script:DPsql -Settings (New-TestScratchSettings -Live $live) -PassFile $paths.RestorePgpass -Replacement $new -Previous $old -Paths $paths
+            $held.WaitForExit(15000) | Should -BeTrue -Because 'the swap ended the session before the rename'
+            @(Get-TestDatabaseNames -Pattern 'accucut_old_20200101000033') | Should -Be @($old)
+            @(Get-TestDatabaseNames -Pattern 'accucut_new_20200101000033') | Should -BeNullOrEmpty
+        }
+        finally {
+            Stop-TestHeldSession -Process $held
+            Remove-TestScratchDatabase -Name @($live, $new, $old)
+        }
+    }
+
+    It 'DEF-087: a PostgreSQL administrator session that appears after the checks is a rename that finds another session: tried again 3 times, then a plain message, and neither name was changed (real psql: this also proves that the SQLSTATE is printed the way the retry reads it)' -Skip:(-not $script:RealInstall) {
+        $paths = $script:DPaths
+        $live = 'accucut_swaptest_live'; $new = 'accucut_new_20200101000034'; $old = 'accucut_old_20200101000034'
+        Remove-TestScratchDatabase -Name @($live, $new, $old)
+        $held = $null
+        try {
+            [void](Invoke-TestSuperPsql -Database 'postgres' -Sql ("CREATE DATABASE $live OWNER accucut_owner;`nCREATE DATABASE $new OWNER accucut_owner;"))
+            $held = Start-TestHeldSession -Database $new -Role 'postgres'
+            $stop = Get-TestSwapStop { Switch-AccucutRestoreDatabase -PsqlPath $script:DPsql -Settings (New-TestScratchSettings -Live $live) -PassFile $paths.RestorePgpass -Replacement $new -Previous $old -Paths $paths }
+            $stop | Should -Not -BeNullOrEmpty
+            $stop.Code | Should -Be 'database-in-use'
+            $stop.Message | Should -Match 'Another connection to the database could not be ended'
+            $stop.Message | Should -Not -Match 'psql|ERROR|55006|DETAIL|LOCATION|accessed by other users'
+            @(Get-TestDatabaseNames -Pattern 'accucut_swaptest_live') | Should -Be @($live)
+            @(Get-TestDatabaseNames -Pattern 'accucut_new_20200101000034') | Should -Be @($new)
+            @(Get-TestDatabaseNames -Pattern 'accucut_old_20200101000034') | Should -BeNullOrEmpty
+            $log = (Get-Content -LiteralPath $paths.RestoreLog) -join "`n"
+            $log | Should -Match 'retry 3 of 3'
+            $log | Should -Match "Still connected to the database '$new': role 'postgres' \(a PostgreSQL superuser\)"
+        }
+        finally {
+            Stop-TestHeldSession -Process $held
+            Remove-TestScratchDatabase -Name @($live, $new, $old)
+        }
     }
 }
