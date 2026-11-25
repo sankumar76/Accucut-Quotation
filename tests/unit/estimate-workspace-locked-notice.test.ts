@@ -27,7 +27,7 @@ const header = (status: EstimateStatus): WorkspaceHeaderView => ({
 });
 
 const render = (status: EstimateStatus, ignored = false): string =>
-  renderToStaticMarkup(createElement(EstimateWorkspace, { header: header(status), estimateId: '00000000-0000-4000-8000-000000000001', ignored, notice: ignored ? createElement('p', null, 'INVENTED-IGNORED-NOTICE') : undefined }));
+  renderToStaticMarkup(createElement(EstimateWorkspace, { header: header(status), estimateId: '00000000-0000-4000-8000-000000000001', userId: 'invented-user', ignored, notice: ignored ? createElement('p', null, 'INVENTED-IGNORED-NOTICE') : undefined }));
 
 const CLOSED_BODY = 'This estimate is closed and the task has moved to Closed. Inputs cannot be changed.';
 
