@@ -92,12 +92,17 @@ const CHUNK = /\/_next\/static\/chunks\/.*\.js(\?.*)?$/;
  */
 export async function holdControlsCode(page: Page, mode: { readonly release: Promise<void> } | 'refuse'): Promise<RegExp> {
   await page.route(CHUNK, async (route) => {
-    const response = await route.fetch();
-    const body = await response.text();
-    if (!CONTROLS_MARKERS.some((marker) => body.includes(marker))) return route.fulfill({ response, body });
-    if (mode === 'refuse') return route.fulfill({ status: 503, contentType: 'text/plain', body: 'refused' });
-    await mode.release;
-    return route.fulfill({ response, body });
+    try {
+      const response = await route.fetch();
+      const body = await response.text();
+      if (!CONTROLS_MARKERS.some((marker) => body.includes(marker))) return await route.fulfill({ response, body });
+      if (mode === 'refuse') return await route.fulfill({ status: 503, contentType: 'text/plain', body: 'refused' });
+      await mode.release;
+      return await route.fulfill({ response, body });
+    } catch (error) {
+      // The page was reloaded while the answer was being made: the browser has dropped that request, and there is nothing to answer. Any other fault is the test's.
+      if (!(error instanceof Error) || !/already handled|has been closed|closed/i.test(error.message)) throw error;
+    }
   });
   return CHUNK;
 }

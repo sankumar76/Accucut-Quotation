@@ -10,8 +10,6 @@ export const TREE_RESIZE_LABEL = 'Resize parts tree';
 /** The hidden hint the handle is described by; the same words show as a tooltip on hover and keyboard focus. */
 export const TREE_RESIZE_HINT = 'Drag, or use the left and right arrow keys. Enter resets to the standard width.';
 export const TREE_RESIZE_HINT_ID = 'parts-tree-resize-hint';
-/** The ID of the tree's column: the handle's `aria-controls`, the element whose width changes. */
-export const TREE_COLUMN_ID = 'parts-tree-column';
 export const treeWidthValueText = (pixels: number): string => `Parts tree ${pixels} pixels wide`;
 
 /** The button in the tree card's head, the group of choices it opens, and the reason a choice is turned off. */

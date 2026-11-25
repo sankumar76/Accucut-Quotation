@@ -4,6 +4,9 @@ import { useCallback, useEffect, useLayoutEffect, useState, useSyncExternalStore
 
 import { clampTreeWidth, clearStoredTreeWidth, readStoredTreeWidth, TREE_WIDTH_DEFAULT, treeWidthCeiling, writeStoredTreeWidth } from '@/lib/ui/tree-width';
 
+/** The ID of the tree's column: the handle's `aria-controls`, the element whose width changes. It is here and not with the words, so the words (which only the controls' lazy code uses) stay out of the first load. */
+export const TREE_COLUMN_ID = 'parts-tree-column';
+
 /** The custom property the tree's column, the drawing region and the form's track read (`globals.css`: `--tree-w`). */
 const WIDTH_PROPERTY = '--tree-w';
 

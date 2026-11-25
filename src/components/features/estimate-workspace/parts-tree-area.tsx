@@ -14,8 +14,7 @@ import { TREE_HIDE, treeButtonLabel } from './estimate-texts';
 import type { PartsTreeDrawerProps } from './parts-tree-drawer';
 import { TreePanel } from './tree-panel';
 import { LazyTreeResizeHandle, LazyTreeWidthMenu } from './tree-resize-slots';
-import { TREE_COLUMN_ID } from './tree-width-texts';
-import { useMounted, type TreeWidth } from './use-tree-width';
+import { TREE_COLUMN_ID, useMounted, type TreeWidth } from './use-tree-width';
 import type { PartsTreeState } from './use-parts-tree';
 
 export interface PartsTreeAreaProps {

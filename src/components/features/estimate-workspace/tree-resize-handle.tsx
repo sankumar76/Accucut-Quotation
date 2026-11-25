@@ -5,8 +5,8 @@ import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from 'react'
 import { clampTreeWidth, TREE_WIDTH_DEFAULT, TREE_WIDTH_MIN } from '@/lib/ui/tree-width';
 import { dragCancel, dragEnd, dragMove, dragStart, presetOfWidth, treeWidthForKey, type DragState } from '@/lib/ui/tree-width-gestures';
 
-import { TREE_COLUMN_ID, TREE_RESIZE_HINT, TREE_RESIZE_HINT_ID, TREE_RESIZE_LABEL, treeWidthAnnouncement, treeWidthValueText } from './tree-width-texts';
-import type { TreeWidth } from './use-tree-width';
+import { TREE_RESIZE_HINT, TREE_RESIZE_HINT_ID, TREE_RESIZE_LABEL, treeWidthAnnouncement, treeWidthValueText } from './tree-width-texts';
+import { TREE_COLUMN_ID, type TreeWidth } from './use-tree-width';
 
 export interface TreeResizeHandleProps {
   readonly resize: TreeWidth;
