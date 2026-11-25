@@ -10,7 +10,7 @@ import type { PartItem } from '@/lib/estimates/tree-client';
 import { actionsLabel, addActionOf, addFastenerLabel, addUnderLabel, deleteRowLabel, moveRowLabel } from '@/lib/estimates/tree-actions';
 
 import { AddNodeMenu } from './add-node-menu';
-import { AddNodeTrigger, ROW_ACTION_SIZE, UNAVAILABLE_LOOK } from './add-node-trigger';
+import { AddNodeTrigger, ROW_ACTION_LOOK, ROW_ACTION_SIZE, UNAVAILABLE_LOOK } from './add-node-trigger';
 import { TREE_PART_NAME } from './estimate-texts';
 import { MoveHandle } from './move-handle';
 
@@ -67,7 +67,7 @@ export function RowActions({ part, onAdd, onDelete, upTo, downTo, onMoveTo, busy
           size="icon"
           aria-label={remove}
           title={remove}
-          className={cn('text-danger-ink', ROW_ACTION_SIZE, busy && UNAVAILABLE_LOOK)}
+          className={cn(ROW_ACTION_SIZE, ROW_ACTION_LOOK, 'hover:bg-danger-soft hover:text-danger', busy && UNAVAILABLE_LOOK)}
           {...(busy ? { 'aria-disabled': true } : {})}
           {...why}
           onClick={busy ? undefined : () => onDelete(part.id)}

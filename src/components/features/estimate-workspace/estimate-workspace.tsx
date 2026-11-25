@@ -55,6 +55,15 @@ const stay = (): void => undefined;
  */
 const DRAWING_REGION = 'hidden lg:block lg:shrink-0 lg:w-(--drawing-region-width) lg:ml-[min(0px,calc(var(--drawing-region-width)_-_var(--s-4)))] lg:max-w-[calc(100%_-_var(--tree-w)_-_14.5rem_-_2*var(--s-4))]';
 
+/**
+ * The form's card from 1024 px, where the tree has a card of its own beside it (DEF-081 ruling item 10): it keeps its title, "Parts and inputs", which the rows' links point to, and its group role, but draws no border, fill or padding, as the
+ * SCR-05 mock-up draws the form on the page itself. The tree is 320 px now, and a form card with 24 px of padding and a border would cost the form 50 px: at 1280 px the section cards would fall from two columns to one, and a 340 px
+ * drawing region would no longer have its whole width (STORY-10.06 AC-2). Below 1024 px the form is a card, as it was.
+ */
+const FORM_CARD = 'lg:flex-1 lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none';
+const FORM_CARD_HEAD = 'lg:border-b-0 lg:px-0 lg:pt-0';
+const FORM_CARD_BODY = 'flex lg:p-0';
+
 /** The alert of an estimate that was ignored while the Engineer worked (CR-01 item 7D): fetched only when the server says so, by a bare `import()`, so it is in no first load (NFR-009). */
 const loadIgnoredAlert = () => import('../estimate-ignore/engineer-ignored-alert').then((module) => module.EngineerIgnoredAlert);
 
@@ -158,16 +167,19 @@ export function EstimateWorkspace({ header, estimateId, ignored = false, notice 
           {APPROVED_LOCKED_BODY}
         </Notice>
       ) : null}
-      <Card role="group" aria-labelledby={FORM_AREA_TITLE_ID}>
-        <CardHeader>
-          <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-s-4 lg:flex-row">
-          <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} />
-          <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} />
-          <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />
-        </CardContent>
-      </Card>
+      {/* The form area: the parts tree is a card of its own (its head, "Parts tree", is its own) beside the form's card, "Parts and inputs", which the rows' links point to (DEF-081 ruling item 10, SCR-05). */}
+      <div className="flex flex-col gap-s-4 lg:flex-row lg:items-start">
+        <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} />
+        <Card role="group" aria-labelledby={FORM_AREA_TITLE_ID} data-form-area="" className={FORM_CARD}>
+          <CardHeader className={FORM_CARD_HEAD}>
+            <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>
+          </CardHeader>
+          <CardContent className={FORM_CARD_BODY}>
+            <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} />
+          </CardContent>
+        </Card>
+        <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />
+      </div>
       {isLocked(status) || frozen ? null : Bar !== null ? (
         <Bar prepared={status === 'PREPARED'} calculation={calculation} gate={saves} onChoosePart={guardedTree.select} />
       ) : bar.failed ? (

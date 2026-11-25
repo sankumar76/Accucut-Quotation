@@ -6,6 +6,7 @@ import { PartsTreeList } from '@/components/shared/parts-tree-list';
 import { QuantityTag } from '@/components/shared/quantity-tag';
 import { TOUCH_LINK } from '@/components/shared/touch-link';
 import { TreeLegend } from '@/components/shared/tree-legend';
+import { TREE_ROW_NUMBER } from '@/components/shared/tree-row-number';
 import { cn } from '@/lib/cn';
 import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
 import type { CostNode, CostsView } from '@/server/views/schemas/costs';
@@ -46,7 +47,7 @@ function TreeRow({ node, kindLabel, state, code, warned }: { readonly node: Cost
     <div className="flex min-h-(--control-h) flex-col justify-center gap-s-1 py-s-1 pr-s-2 pl-s-1">
       <div className="flex items-center gap-s-2 text-body text-ink">
         <NodeKindIcon kind={node.nodeKind} label={kindLabel} />
-        <span data-sl-no="" className="shrink-0 text-ink-2 tabular-nums">
+        <span data-sl-no="" className={TREE_ROW_NUMBER}>
           {node.slNo}
         </span>
         <span className={cn('min-w-0 flex-1', BREAK_LONG_NAMES)}>{name}</span>

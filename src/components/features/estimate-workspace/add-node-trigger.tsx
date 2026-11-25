@@ -8,6 +8,13 @@ import { cn } from '@/lib/cn';
 /** The size of a row's action button: the 44 px square, and 36 px from 1024 px with a fine pointer (UX row 3; NFR-017). */
 export const ROW_ACTION_SIZE = 'fine-wide:h-(--control-h-row) fine-wide:w-(--control-h-row)';
 
+/**
+ * The look of a row's toolbar buttons (DEF-081 ruling item 9; the secondary look of UX spec 7.3.1): the icon is quiet `ink-2` at rest (8.43:1 on white) and not the brand red, grey on hover and when pressed. It goes after the
+ * button's own variant, so it wins over the ghost's red (`cn` keeps the later class). The "-" adds its own red hover on top (`row-actions.tsx`).
+ */
+export const ROW_ACTION_LOOK =
+  'text-ink-2 hover:bg-surface-2 hover:text-ink active:bg-border active:text-ink active:shadow-pressed enabled:aria-busy:bg-border enabled:aria-busy:text-ink enabled:aria-busy:shadow-pressed';
+
 /** The look of an action that cannot be taken at the moment (`aria-disabled`, not `disabled`: the button keeps the keyboard focus). */
 export const UNAVAILABLE_LOOK = 'cursor-not-allowed opacity-60';
 
@@ -24,7 +31,7 @@ export interface AddNodeTriggerProps extends Omit<ComponentProps<'button'>, 'chi
  */
 export function AddNodeTrigger({ label, className, unavailable, ...props }: AddNodeTriggerProps) {
   return (
-    <Button variant="ghost" size="icon" aria-label={label} title={label} className={cn(ROW_ACTION_SIZE, unavailable && UNAVAILABLE_LOOK, className)} {...props} {...(unavailable === true ? { 'aria-disabled': true } : {})}>
+    <Button variant="ghost" size="icon" aria-label={label} title={label} className={cn(ROW_ACTION_SIZE, ROW_ACTION_LOOK, unavailable && UNAVAILABLE_LOOK, className)} {...props} {...(unavailable === true ? { 'aria-disabled': true } : {})}>
       <Icon icon={Plus} size="large" />
     </Button>
   );
