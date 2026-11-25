@@ -22,7 +22,7 @@ test.beforeEach(async ({ context }) => {
 const LARGE_VIEWPORT = 1024;
 const CARD_MINIMUM = 232;
 const GAP = 16;
-const TREE_WIDTH = 288;
+const TREE_WIDTH = 320;
 const OVERRIDE = 340;
 const HEIGHT = 900;
 /** Sub-pixel layout: widths are compared within one pixel. */
@@ -37,6 +37,8 @@ interface Measure {
   readonly treeRight: number;
   readonly formWidth: number;
   readonly formLeft: number;
+  /** The left edge of the form's own card ("Parts and inputs"), which follows the tree's card after one gap (DEF-081). */
+  readonly formCardLeft: number;
   /** The distinct left edges of the section cards: the columns the grid uses. */
   readonly columns: number;
   readonly narrowestCard: number;
@@ -59,6 +61,7 @@ async function measure(page: Page): Promise<Measure> {
       treeRight: treeBox.getBoundingClientRect().right,
       formWidth: rect('form[data-part-form]').width,
       formLeft: rect('form[data-part-form]').left,
+      formCardLeft: rect('[data-form-area]').left,
       columns: new Set(cards.map((card) => Math.round(card.left))).size,
       narrowestCard: Math.min(...cards.map((card) => card.width)),
       widestCardRight: Math.max(...cards.map((card) => card.right)),
@@ -106,12 +109,12 @@ test.describe('AC-1, AC-3, AC-4: the region at the width of the project', () => 
       expect(measured.regionWidth).toBe(0);
       await expect(region).toBeHidden();
     } else {
-      // AC-1: at 1024 px and wider the token is 0px: the region has a box of no width and the page is as it was: the tree is 288 px, the form follows it after one gap, and the zero-width
+      // AC-1: at 1024 px and wider the token is 0px: the region has a box of no width and the page is as it was: the tree is 320 px, the form's card follows it after one gap, and the zero-width
       // item took no gap of its own (the form is as wide as it is with the region out of the layout).
       expect(measured.regionDisplay).toBe('block');
       expect(measured.regionWidth).toBe(0);
       expect(measured.treeWidth).toBeCloseTo(TREE_WIDTH, 0);
-      expect(measured.formLeft - measured.treeRight).toBeCloseTo(GAP, 0);
+      expect(measured.formCardLeft - measured.treeRight).toBeCloseTo(GAP, 0);
       expect(Math.abs(measured.formWidth - (await formWidthWithoutRegion(page)))).toBeLessThan(TOLERANCE);
       await expect(tree(page)).toBeVisible();
     }

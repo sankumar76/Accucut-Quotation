@@ -1,4 +1,3 @@
-import { Circle, CircleCheck, Contrast, TriangleAlert, type LucideIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
@@ -8,18 +7,8 @@ import { TREE_ROW_NUMBER } from '@/components/shared/tree-row-number';
 import { cn } from '@/lib/cn';
 import type { PartItem } from '@/lib/estimates/tree-client';
 
-import { FORM_AREA_TITLE_ID, TREE_ALL_INPUTS, TREE_MISSING_INPUTS, TREE_NO_INPUTS, TREE_PART_NAME, TREE_SOME_INPUTS } from './estimate-texts';
-
-const COMPLETENESS_TEXT = { EMPTY: TREE_NO_INPUTS, PARTIAL: TREE_SOME_INPUTS, COMPLETE: TREE_ALL_INPUTS } as const;
-
-/**
- * The icon of each word (STORY-05.11 AC-4; UX spec SCR-05 "Content": check, half circle, empty circle; DEF-081: a circled check, all three 18 px on one ring): a different shape for each, so the state is never told by colour alone. The icons are decorative
- * (lucide hides one that has no name from assistive technology); the words stay beside them for a screen reader.
- */
-const COMPLETENESS_ICON: Record<keyof typeof COMPLETENESS_TEXT, LucideIcon> = { EMPTY: Circle, PARTIAL: Contrast, COMPLETE: CircleCheck };
-
-/** The ink of each status icon (DEF-081 ruling 6): the three share one outer ring, so the column reads as one set; green for done, the darker grey for half and the lighter grey for none. The shape, not the ink, tells them apart. */
-const COMPLETENESS_INK: Record<keyof typeof COMPLETENESS_TEXT, string> = { EMPTY: 'text-ink-3', PARTIAL: 'text-ink-2', COMPLETE: 'text-success' };
+import { COMPLETENESS_ICON, COMPLETENESS_INK, COMPLETENESS_TEXT, MISSING_ICON, MISSING_INK } from './completeness-look';
+import { FORM_AREA_TITLE_ID, TREE_MISSING_INPUTS, TREE_PART_NAME } from './estimate-texts';
 
 export interface TreeNodeProps {
   readonly part: PartItem;
@@ -70,7 +59,7 @@ export function TreeNode({ part, kindLabel, selected, missing = false, onChoose,
       <Icon icon={COMPLETENESS_ICON[part.completeness]} size="default" data-completeness={part.completeness} className={cn('shrink-0', COMPLETENESS_INK[part.completeness])} />
       {missing ? (
         <>
-          <Icon icon={TriangleAlert} size="small" className="shrink-0 text-danger" />
+          <Icon icon={MISSING_ICON} size="small" className={cn('shrink-0', MISSING_INK)} />
           <span className="sr-only">{TREE_MISSING_INPUTS}</span>
         </>
       ) : null}

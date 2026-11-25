@@ -49,11 +49,11 @@ const stay = (): void => undefined;
  * browser test sets it and no component or setting does. Below 1024 px it is `hidden`: no box, no accessibility tree.
  * Two traps are handled here and nowhere else, so the form and the tree stay as they were:
  * 1. A zero-width flex item still takes the row's gap, so the margin `min(0, width - gap)` gives the gap back while the region is narrower than one gap and is 0 from one gap of width.
- * 2. The token never squeezes the form below one section card (14.5rem, the minimum of the card grid in `part-fields.tsx`): the region is held to what is left after the tree, one card and the
- *    two gaps. At 1024 px a 340px region therefore shows as less, and the cards stay 232 px wide; from 1280 px it has its whole width.
+ * 2. The token never squeezes the form below one section card (14.5rem, the minimum of the card grid in `part-fields.tsx`): the region is held to what is left after the tree, one card, the form card's own
+ *    padding and border (two `--s-5` and 2 px, since the form has a card of its own beside the tree's, DEF-081) and the two gaps. At 1024 px a 340px region therefore shows as less, and the cards stay 232 px wide; from 1280 px it has its whole width.
  * The Tailwind spacing scale is replaced (`globals.css`), so the sums are written with the tokens as arbitrary values (`_` is a space).
  */
-const DRAWING_REGION = 'hidden lg:block lg:shrink-0 lg:w-(--drawing-region-width) lg:ml-[min(0px,calc(var(--drawing-region-width)_-_var(--s-4)))] lg:max-w-[calc(100%_-_var(--tree-w)_-_14.5rem_-_2*var(--s-4))]';
+const DRAWING_REGION = 'hidden lg:block lg:shrink-0 lg:w-(--drawing-region-width) lg:ml-[min(0px,calc(var(--drawing-region-width)_-_var(--s-4)))] lg:max-w-[calc(100%_-_var(--tree-w)_-_14.5rem_-_2*var(--s-4)_-_2*var(--s-5)_-_2px)]';
 
 /** The alert of an estimate that was ignored while the Engineer worked (CR-01 item 7D): fetched only when the server says so, by a bare `import()`, so it is in no first load (NFR-009). */
 const loadIgnoredAlert = () => import('../estimate-ignore/engineer-ignored-alert').then((module) => module.EngineerIgnoredAlert);
@@ -158,16 +158,19 @@ export function EstimateWorkspace({ header, estimateId, ignored = false, notice 
           {APPROVED_LOCKED_BODY}
         </Notice>
       ) : null}
-      <Card role="group" aria-labelledby={FORM_AREA_TITLE_ID}>
-        <CardHeader>
-          <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-s-4 lg:flex-row">
-          <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} />
-          <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} />
-          <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />
-        </CardContent>
-      </Card>
+      {/* The form area: the parts tree is a card of its own (its head, "Parts tree", is its own) beside the form's card, "Parts and inputs", which the rows' links point to (DEF-081 ruling item 10, SCR-05). */}
+      <div className="flex flex-col gap-s-4 lg:flex-row lg:items-start">
+        <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} />
+        <Card role="group" aria-labelledby={FORM_AREA_TITLE_ID} data-form-area="" className="lg:flex-1">
+          <CardHeader>
+            <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex">
+            <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} />
+          </CardContent>
+        </Card>
+        <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />
+      </div>
       {isLocked(status) || frozen ? null : Bar !== null ? (
         <Bar prepared={status === 'PREPARED'} calculation={calculation} gate={saves} onChoosePart={guardedTree.select} />
       ) : bar.failed ? (

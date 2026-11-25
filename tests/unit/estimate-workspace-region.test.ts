@@ -76,9 +76,9 @@ describe('AC-1: one reserved region, the third track of the form area', () => {
     expect(region?.tag).toContain('lg:ml-[min(0px,calc(var(--drawing-region-width)_-_var(--s-4)))]');
   });
 
-  it('AC-2: the region is held to what is left after the tree, one 232 px card and two gaps, so a 340px token never squeezes the form below one card at 1024 px', () => {
+  it('AC-2: the region is held to what is left after the tree, one 232 px card, the padding and border of the form card, and two gaps, so a 340px token never squeezes the form below one card at 1024 px', () => {
     const [region] = regionsOf(render({ name: 'Invented Customer', shortName: 'INV' }));
-    expect(region?.tag).toContain('lg:max-w-[calc(100%_-_var(--tree-w)_-_14.5rem_-_2*var(--s-4))]');
+    expect(region?.tag).toContain('lg:max-w-[calc(100%_-_var(--tree-w)_-_14.5rem_-_2*var(--s-4)_-_2*var(--s-5)_-_2px)]');
   });
 
   it('AC-1: the product sets no override: the region has no inline style (the browser test sets the token itself, A-2)', () => {
