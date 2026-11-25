@@ -22,6 +22,7 @@ import { useCalculate } from './use-calculate';
 import { useLazyComponent } from './use-lazy-component';
 import type { SavedPart } from './use-part-form';
 import { usePartsTree, type PartsTreeState } from './use-parts-tree';
+import { useTreeWidth } from './use-tree-width';
 import { WorkspaceHeader, type WorkspaceHeaderView } from './workspace-header';
 
 /**
@@ -70,6 +71,8 @@ const loadIgnoredAlert = () => import('../estimate-ignore/engineer-ignored-alert
 export interface EstimateWorkspaceProps {
   readonly header: WorkspaceHeaderView;
   readonly estimateId: string;
+  /** The signed-in user: the key under which this browser keeps the width of the parts tree (AQP-426, FR-112). The ID is the page's own (the server read it for the page); no call is made for it. */
+  readonly userId: string;
   /** The Ignored layer is set over the estimate (CR-01 item 7D, AQP-401 AC-8): the page is read-only, with no action bar, and the badge says so. */
   readonly ignored?: boolean;
   /**
@@ -78,7 +81,7 @@ export interface EstimateWorkspaceProps {
   readonly notice?: ReactNode;
 }
 
-export function EstimateWorkspace({ header, estimateId, ignored = false, notice }: EstimateWorkspaceProps) {
+export function EstimateWorkspace({ header, estimateId, userId, ignored = false, notice }: EstimateWorkspaceProps) {
   // The status is the server's: it starts as the page was rendered and becomes PREPARED when Calculate says it did.
   const [status, setStatus] = useState<EstimateStatus>(header.status);
   // A save, an auto-save or a Calculate was refused 409 because the estimate was ignored while the Engineer worked (CR-01 item 7D): the page turns read-only on the spot, stops its timer and says so in one alert.
@@ -89,6 +92,8 @@ export function EstimateWorkspace({ header, estimateId, ignored = false, notice 
   const editable = canEditInputs({ status, ignored: frozen }, 'ENGINEER');
   // The tree lives here: the form beside it is for the part chosen in it, and a save of the form gives the tree the part's new revision.
   const tree = usePartsTree(estimateId, serverIgnored);
+  // The width of the tree's column (FR-112): set as `--tree-w` on the form area below, which the column, the drawing region and this file's own clamp read.
+  const [treeWidth, attachWorkspace] = useTreeWidth(userId);
   const selected = tree.selected === null ? null : { id: tree.selected.id, slNo: tree.selected.slNo, revision: tree.selected.revision };
   // What Calculate waits for: the part form's saves in flight, and the fields that show a value that is not saved (review SQR-01 of AQP-317).
   const [saves] = useState(createSaveGate);
@@ -168,8 +173,8 @@ export function EstimateWorkspace({ header, estimateId, ignored = false, notice 
         </Notice>
       ) : null}
       {/* The form area: the parts tree is a card of its own (its head, "Parts tree", is its own) beside the form's card, "Parts and inputs", which the rows' links point to (DEF-081 ruling item 10, SCR-05). */}
-      <div className="flex flex-col gap-s-4 lg:flex-row lg:items-start">
-        <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} />
+      <div ref={attachWorkspace} className="flex flex-col gap-s-4 lg:flex-row lg:items-start">
+        <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} resize={treeWidth} />
         <Card role="group" aria-labelledby={FORM_AREA_TITLE_ID} data-form-area="" className={FORM_CARD}>
           <CardHeader className={FORM_CARD_HEAD}>
             <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>

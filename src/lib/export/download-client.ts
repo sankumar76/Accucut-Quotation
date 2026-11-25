@@ -60,12 +60,18 @@ export const saveInBrowser: SaveFile = (blob, fileName) => {
 
 const exportPath = (estimateId: string): string => `/api/v1/estimates/${encodeURIComponent(estimateId)}/export`;
 
+/** The refusal of a build place that is not free (architecture section 4.6): 503 with this code and the words "Other files are being built right now. Try again in a moment.". It carries Retry-After, which the button does not use: the person presses again. */
+const EXPORT_BUSY_STATUS = 503;
+const EXPORT_BUSY_CODE = 'EXPORT_BUSY';
+
 async function refusalTitle(response: Response): Promise<string | null> {
   try {
     const body: unknown = await response.json();
     if (!isRecord(body) || typeof body['title'] !== 'string' || typeof body['code'] !== 'string') return null;
     handleSessionEnded(response.status, body['code']);
-    return response.status >= 500 ? null : body['title'];
+    // A server fault gives no title (the person is sent to the administrator with the reference). The one 5xx that is not a fault is 503 EXPORT_BUSY, a temporary capacity limit with fixed words (QLT-F-04, FR-070).
+    const busy = response.status === EXPORT_BUSY_STATUS && body['code'] === EXPORT_BUSY_CODE;
+    return response.status >= 500 && !busy ? null : body['title'];
   } catch {
     return null;
   }
