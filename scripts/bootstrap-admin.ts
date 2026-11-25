@@ -15,7 +15,8 @@
  * Usage: npx tsx scripts/bootstrap-admin.ts
  * Local use: set the two variables in `.env` (see `.env.example`), start the database, run `npx prisma migrate
  * deploy`, run this command, then sign in at http://localhost:3000/sign-in and remove the password from `.env`.
- * Emergency reset, locally: npx tsx --env-file=.env scripts/bootstrap-admin.ts --reset-admin-password (in a real terminal).
+ * Emergency reset, locally (a real terminal): node --conditions=react-server --import tsx --env-file=.env scripts/bootstrap-admin.ts --reset-admin-password
+ * The condition is how the packaged bundle is built too (`scripts/package-windows.ps1`): the audit service reaches modules that import `server-only`, which only that condition lets load outside Next.js.
  */
 import { randomUUID } from 'node:crypto';
 import { userInfo } from 'node:os';
