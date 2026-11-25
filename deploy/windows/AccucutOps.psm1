@@ -2842,7 +2842,7 @@ function Get-AccucutRestoreSession {
     $list = (@($Database | ForEach-Object { "'$_'" })) -join ', '
     $only = ''
     if ($SuperuserOnly) { $only = ' AND r.rolsuper' }
-    $sql = "SET ROLE NONE;`nSELECT a.datname || '|' || coalesce(a.usename, '') || '|' || coalesce(r.rolsuper, false)::text || '|' || coalesce(a.backend_type, '') FROM pg_stat_activity a LEFT JOIN pg_roles r ON r.oid = a.usesysid WHERE a.datname IN ($list) AND a.pid <> pg_backend_pid()$only ORDER BY a.pid;`n"
+    $sql = "SET ROLE NONE;`nSELECT format('%s|%s|%s|%s', a.datname, coalesce(a.usename, ''), coalesce(r.rolsuper, false)::text, coalesce(a.backend_type, '')) FROM pg_stat_activity a LEFT JOIN pg_roles r ON r.oid = a.usesysid WHERE a.datname IN ($list) AND a.pid <> pg_backend_pid()$only ORDER BY a.pid;`n"
     $answer = Invoke-AccucutRestoreSql -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database 'postgres' -Sql $sql
     $rows = New-Object System.Collections.Generic.List[object]
     foreach ($line in (([string]$answer) -split "`r?`n")) {

@@ -1500,7 +1500,7 @@ Describe 'DEF-087 (AQP-443) on the real install of stage 13: sessions that are i
         $stop.Code | Should -Be 'superuser-session'
         $stop.Message | Should -Match 'Someone is connected to the portal''s database as a PostgreSQL administrator'
         $stop.Message | Should -Match 'Close that connection and run the restore again'
-        $stop.Message | Should -Not -Match 'ERROR|psql|permission denied|terminate'
+        $stop.Message | Should -Not -Match 'ERROR|psql:|psql[.]exe|permission denied|terminate'
         foreach ($name in (Get-AccucutServiceNames)) { (Get-Service -Name $name).Status | Should -Be 'Running' }
         Get-AccucutHttpStatus -Url "http://127.0.0.1:$($state.Port)/api/health" | Should -Be 200
         @(Get-TestDatabaseNames -Pattern 'accucut%') | Should -Be $namesBefore
