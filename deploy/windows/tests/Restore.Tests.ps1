@@ -1274,6 +1274,34 @@ Describe 'DEF-087 (AQP-443): the swap of the databases ends only the sessions it
         $script:SwapSql.Count | Should -Be 1
     }
 
+    It 'QLT-730-01: a rename that finds another session is tried again whatever language the server prints the severity in (the SQLSTATE is read, not the word ERROR)' -ForEach @(
+        @{ Severity = 'FEHLER' }
+        @{ Severity = 'ERREUR' }
+        @{ Severity = 'ERRO' }
+        @{ Severity = 'CJK' }
+    ) {
+        $word = $Severity
+        if ($Severity -eq 'CJK') { $word = [string][char]0x9519 + [char]0x8BEF }
+        $script:SwapOutcomes.Enqueue($script:InUse.Replace('ERROR:', ($word + ':')))
+        $script:SwapOutcomes.Enqueue('ok')
+        Invoke-TestSwap
+        $script:SwapSql.Count | Should -Be 2
+    }
+
+    It 'QLT-730-01: a translated severity in front of another SQLSTATE, or a name that only holds 55006, is still not retried' -ForEach @(
+        @{ Text = "psql:<stdin>:7: FEHLER:  42501: keine Berechtigung" }
+        @{ Text = 'psql:<stdin>:7: ERREUR:  42501: le role x55006 n''est pas permis' }
+        @{ Text = "psql:<stdin>:7: ERROR:  42501: role 55006: not allowed" }
+    ) {
+        $script:SwapOutcomes.Enqueue($Text)
+        $script:SwapOutcomes.Enqueue('ok')
+        $thrown = $null
+        try { Invoke-TestSwap } catch { $thrown = $_.Exception }
+        $thrown | Should -Not -BeNullOrEmpty
+        $thrown.Message | Should -Be $Text
+        $script:SwapSql.Count | Should -Be 1
+    }
+
     It 'a diagnostic query that fails does not hide the plain message' {
         Mock Get-AccucutRestoreSession -ModuleName AccucutOps { throw 'the diagnostic query failed' }
         1..10 | ForEach-Object { $script:SwapOutcomes.Enqueue($script:InUse) }
@@ -1306,12 +1334,15 @@ Describe 'DEF-087 (AQP-443): Get-AccucutRestoreSession and Assert-AccucutRestore
     }
 
     It 'asks for the sessions of the named databases without the query text, from a LEFT JOIN (a session with no role is still a row), and the superuser filter only on request' {
-        $script:SessAnswer = "accucut|postgres|true|`naccucut|accucut_backup|false|`naccucut_new_20261125115310||false|`n"
+        # database | superuser | backend type | role (the role is last: it is the only free text, and the reader keeps whatever follows the third bar)
+        $script:SessAnswer = "accucut|true||postgres`naccucut|false||accucut_backup`naccucut_new_20261125115310|false||`n"
         $all = @(Get-AccucutRestoreSession -PsqlPath 'C:\fake\psql.exe' -Settings $script:SessSettings -PassFile 'C:\fake\restore.pgpass' -Database @('accucut', 'accucut_new_20261125115310'))
         $script:SessDatabase[0] | Should -Be 'postgres'
         $sql = $script:SessSql[0]
         $sql | Should -Match "a\.datname IN \('accucut', 'accucut_new_20261125115310'\)"
         $sql | Should -Match 'LEFT JOIN pg_roles r ON r\.oid = a\.usesysid'
+        # SEC-730-01: the role is the last column and is cleaned in SQL (no bar, no control character such as a line break), so it cannot shift a field or forge a line of restore.log
+        $sql | Should -Match ([regex]::Escape("coalesce(a.backend_type, ''), regexp_replace(coalesce(a.usename, ''), '[[:cntrl:]|]', '?', 'g'))"))
         $sql | Should -Match 'a\.pid <> pg_backend_pid\(\)'
         $sql | Should -Not -Match 'a\.query|\.query\b|state_change'
         $sql | Should -Not -Match 'AND r\.rolsuper'
@@ -1324,6 +1355,15 @@ Describe 'DEF-087 (AQP-443): Get-AccucutRestoreSession and Assert-AccucutRestore
         $all[2].Database | Should -Be 'accucut_new_20261125115310'
         $null = Get-AccucutRestoreSession -PsqlPath 'C:\fake\psql.exe' -Settings $script:SessSettings -PassFile 'C:\fake\restore.pgpass' -Database @('accucut') -SuperuserOnly
         $script:SessSql[1] | Should -Match 'AND r\.rolsuper'
+    }
+
+    It 'SEC-730-01: a role name that holds a bar cannot move the superuser flag: one row, the right flag, the whole name' {
+        $script:SessAnswer = "accucut|true||we|ird`n"
+        $rows = @(Get-AccucutRestoreSession -PsqlPath 'C:\fake\psql.exe' -Settings $script:SessSettings -PassFile 'C:\fake\restore.pgpass' -Database @('accucut') -SuperuserOnly)
+        $rows.Count | Should -Be 1
+        $rows[0].Superuser | Should -BeTrue
+        $rows[0].Database | Should -Be 'accucut'
+        $rows[0].UserName | Should -Be 'we|ird'
     }
 
     It 'no rows is an empty answer, and a database name that is not a plain name is refused before any SQL is sent' {

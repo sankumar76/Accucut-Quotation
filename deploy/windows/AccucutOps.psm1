@@ -2492,9 +2492,9 @@ $script:RestoreDatabasePattern = '^accucut_(new|old|failed)_\d{14}$'
 $script:RestoreStampFormat = 'yyyyMMddHHmmss'
 
 # DEF-087 (AQP-443). The swap ends only the sessions that the restore role may end (see Switch-AccucutRestoreDatabase). A rename that still finds another session is tried again when
-# PostgreSQL says so (SQLSTATE 55006, printed because the swap runs psql with VERBOSITY verbose), at most this many times after the first try, and never for any other error.
+# PostgreSQL says so (SQLSTATE 55006, printed because the swap runs psql with VERBOSITY verbose; it is read after the psql line prefix, whatever word the server prints for the severity, which it translates), at most this many times after the first try, and never for any other error.
 $script:RestoreSwapRetries = 3
-$script:RestoreInUsePattern = 'ERROR:\s+55006:'
+$script:RestoreInUsePattern = '(?m)^psql:[^\r\n]*?:\s\S+:\s+55006:'
 # How many sessions one record writes to restore.log (the next ones are counted).
 $script:RestoreSessionRecordLimit = 5
 # What the Admin reads when a PostgreSQL administrator is connected to the portal's database: a superuser's session cannot be ended by the restore role (it is no superuser), and it
@@ -2823,6 +2823,7 @@ function New-AccucutRestoreDatabase {
 function Get-AccucutRestoreSession {
     <#
     The other sessions on the named databases, as the restore role can see them: Database, UserName ('' for a process that has no role, such as an autovacuum worker), Superuser and BackendType.
+    The role is the last of four columns and is cleaned in SQL (a bar or a control character, such as a line break, becomes a question mark), so that a strange role name cannot move a field or forge a line of restore.log.
     The restore role sees the backend_type of its own session only: for the session of any other role pg_stat_activity shows it NULL, which is returned as '' (so nothing filters on it, and
     a log line says when it is not shown). The query text is never read. -SuperuserOnly keeps the sessions of PostgreSQL superusers, which the restore role (no superuser) cannot end.
     The restore's own session is left out.
@@ -2842,14 +2843,14 @@ function Get-AccucutRestoreSession {
     $list = (@($Database | ForEach-Object { "'$_'" })) -join ', '
     $only = ''
     if ($SuperuserOnly) { $only = ' AND r.rolsuper' }
-    $sql = "SET ROLE NONE;`nSELECT format('%s|%s|%s|%s', a.datname, coalesce(a.usename, ''), coalesce(r.rolsuper, false)::text, coalesce(a.backend_type, '')) FROM pg_stat_activity a LEFT JOIN pg_roles r ON r.oid = a.usesysid WHERE a.datname IN ($list) AND a.pid <> pg_backend_pid()$only ORDER BY a.pid;`n"
+    $sql = "SET ROLE NONE;`nSELECT format('%s|%s|%s|%s', a.datname, coalesce(r.rolsuper, false)::text, coalesce(a.backend_type, ''), regexp_replace(coalesce(a.usename, ''), '[[:cntrl:]|]', '?', 'g')) FROM pg_stat_activity a LEFT JOIN pg_roles r ON r.oid = a.usesysid WHERE a.datname IN ($list) AND a.pid <> pg_backend_pid()$only ORDER BY a.pid;`n"
     $answer = Invoke-AccucutRestoreSql -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database 'postgres' -Sql $sql
     $rows = New-Object System.Collections.Generic.List[object]
     foreach ($line in (([string]$answer) -split "`r?`n")) {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
         $parts = $line.Trim().Split([char[]]@('|'), 4)
         if ($parts.Count -ne 4) { continue }
-        $rows.Add([pscustomobject]@{ Database = $parts[0]; UserName = $parts[1]; Superuser = ($parts[2] -ceq 'true'); BackendType = $parts[3] })
+        $rows.Add([pscustomobject]@{ Database = $parts[0]; UserName = $parts[3]; Superuser = ($parts[1] -ceq 'true'); BackendType = $parts[2] })
     }
     return $rows.ToArray()
 }
