@@ -30,7 +30,7 @@ import {
  * time; the clamping, step, storage and drag-state rules are the unit tests of `tests/unit/tree-width*.test.ts` (a storage that throws is unit-only); every case clears the stored width at its end.
  *
  * ONE person, a serial group (DL-386, DL-388 (6)): `beforeAll` makes one disposable Engineer and signs in once; each case starts from a fresh load of the same estimate with the stored width cleared, and a case that
- * needs a finger opens a second context from the first one's saved session, so no second person and no second sign-in. Three cases run in the desktop project and each is judged on its own time; the fourth, below
+ * needs a finger opens a second context from the first one's saved session, so no second person and no second sign-in. Seven small cases run in the desktop project and each is judged on its own time (attempt 1 under 25 s on the runner, DL-388 (6)(c)); the eighth, below
  * 1024 px, runs at the width of the phone and of the tablet project. A failure skips the cases after it, and its retry repeats the group. The file sorts before `users.spec.ts`. Every ID and name is invented.
  */
 
@@ -99,7 +99,7 @@ test('AC-11, AC-15: with 400 px stored, a phone and a tablet have no separator a
   await expectFormAccessible(page);
 });
 
-test('AC-1 to AC-6, AC-9, AC-3, AC-10, AC-11, AC-12: 320 px by default; the separator, its keys, its own ring and its hit area; the one drag at 1280 px; the form keeps 232 px from 1280 down to 1024 px and the handle is there at 1024 and not at 1023; with a finger the hit area is 44 px, the separator 44 x 48 and nothing of the form lies under it', async ({ browser }) => {
+test('AC-1, AC-2, AC-4, AC-5, AC-9, AC-10, AC-12: 320 px by default; the separator, its keys, its own ring and its hit area', async () => {
   const testInfo = test.info();
   test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
   const handle = handleOf(page);
@@ -216,6 +216,15 @@ test('AC-1 to AC-6, AC-9, AC-3, AC-10, AC-11, AC-12: 320 px by default; the sepa
   expect(await column(page).evaluate((element) => getComputedStyle(element).transitionDuration)).toBe('0s');
   expect(await grip.evaluate((element) => getComputedStyle(element).transitionDuration)).toBe('0s');
 
+});
+
+test('AC-3, AC-6, AC-11: the one drag at 1280 px (a press on the hit area focuses the separator, the value follows, stored once at the end); the form keeps 232 px from 1280 down to 1024 px and the handle is there at 1024 and not at 1023', async () => {
+  const testInfo = test.info();
+  test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+  const handle = handleOf(page);
+  const hitArea = hitAreaOf(page);
+  await expect(handle).toBeVisible();
+
   // AC-3: the one drag, at 1280 px. A press on the hit area focuses the separator; the value follows the mouse; nothing is stored while it moves; the width is stored once, when the button goes up.
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole('button', { name: 'Add main assembly' }).focus();
@@ -267,6 +276,12 @@ test('AC-1 to AC-6, AC-9, AC-3, AC-10, AC-11, AC-12: 320 px by default; the sepa
   await expect(widthButton(page)).toBeVisible();
   await expectWidth(page, MAXIMUM);
 
+});
+
+test('AC-9, AC-10: with a finger at 1024 px the hit area is 44 px, the separator 44 x 48, the button 44 px, and nothing of the form lies under the hit area', async ({ browser }) => {
+  const testInfo = test.info();
+  test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+
   // The finger: a second context made from the first one's session (no second sign-in), 1024 x 768, touch.
   const touch = await browser.newContext({ baseURL, storageState: await context.storageState(), viewport: { width: 1024, height: 768 }, hasTouch: true });
   try {
@@ -298,7 +313,7 @@ test('AC-1 to AC-6, AC-9, AC-3, AC-10, AC-11, AC-12: 320 px by default; the sepa
   }
 });
 
-test('AC-7, AC-13, AC-6, AC-8: the Tree width button and its three choices, a choice that does not fit, a stored 400 on a narrow workspace, and what a reload brings back', async () => {
+test('AC-7, AC-13, AC-6: the Tree width button and its three choices (axe with the group open), a choice that does not fit, a stored 400 on a narrow workspace', async () => {
   const testInfo = test.info();
   test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
   const handle = handleOf(page);
@@ -319,6 +334,7 @@ test('AC-7, AC-13, AC-6, AC-8: the Tree width button and its three choices, a ch
   await expect(group.getByRole('radio')).toHaveCount(3);
   await expect(standard).toBeChecked();
   await expect(standard).toHaveAccessibleDescription('default');
+  await expectNoAxeViolations(page);
 
   const announcement = page.getByRole('status').filter({ hasText: 'Parts tree width' });
   await wide.click();
@@ -367,7 +383,18 @@ test('AC-7, AC-13, AC-6, AC-8: the Tree width button and its three choices, a ch
   expect(await stored(page, ownerId), 'the stored 400 comes back with the room').toBe('400');
   await page.keyboard.press('Escape');
 
-  // AC-8, two reloads: the width is back after a reload; a value that is not a width, and the width stored under another person's key, give 320 and no message. (The other values, and a storage that throws, are unit tests.)
+});
+
+test('AC-8: the width is back after a reload; a value that is not a width, and a width stored under the key of another person, give 320 with no message', async () => {
+  const testInfo = test.info();
+  test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+  const handle = handleOf(page);
+  await expect(handle).toBeVisible();
+  await handle.focus();
+  await page.keyboard.press('End');
+  await expectWidth(page, MAXIMUM);
+
+  // Two reloads: the width is back after a reload; a value that is not a width, and the width stored under another person's key, give 320 and no message. (The other values, and a storage that throws, are unit tests.)
   await page.reload();
   await waitForForm(page);
   await expect(handle).toBeVisible();
@@ -381,7 +408,23 @@ test('AC-7, AC-13, AC-6, AC-8: the Tree width button and its three choices, a ch
   await expect(textAlerts(page)).toHaveCount(0);
 });
 
-test('AC-15, AC-6: axe finds nothing at 256, 320 and 400 px and with the Tree width group open; a press at the centre of a row still chooses it at 240 and 400 px, and a long name wraps with no sideways scroll', async () => {
+test('AC-15: axe finds nothing at the narrowest (240 px) and the widest (400 px) tree; the standard width is scanned with the Tree width group open in the case of the button', async () => {
+  const testInfo = test.info();
+  test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+  const handle = handleOf(page);
+  await expect(handle).toBeVisible();
+  await handle.focus();
+  for (const [key, width] of [
+    ['Home', MINIMUM],
+    ['End', MAXIMUM],
+  ] as const) {
+    await page.keyboard.press(key);
+    await expectWidth(page, width);
+    await expectFormAccessible(page);
+  }
+});
+
+test('AC-6, AC-11: a press at the centre of a row still chooses it at 240 and 400 px, and a long name wraps with no sideways scroll (the status icon stays at the right)', async () => {
   const testInfo = test.info();
   test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
 
@@ -402,12 +445,11 @@ test('AC-15, AC-6: axe finds nothing at 256, 320 and 400 px and with the Tree wi
 
   for (const [key, width] of [
     ['Home', MINIMUM],
-    ['Enter', DEFAULT_WIDTH],
     ['End', MAXIMUM],
   ] as const) {
     await page.keyboard.press(key);
     await expectWidth(page, width);
-    if (width !== DEFAULT_WIDTH) {
+    {
       const fits = await page.evaluate(() => {
         const card = document.querySelector('#parts-tree-panel [data-slot="card"]');
         return { overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth, card: card === null ? -1 : card.scrollWidth - card.clientWidth };
@@ -425,11 +467,6 @@ test('AC-15, AC-6: axe finds nothing at 256, 320 and 400 px and with the Tree wi
       await expect(row).toHaveAttribute('aria-current', 'true');
       await handle.focus();
     }
-    await expectFormAccessible(page);
   }
-  // The Tree width group open: its radios are 44 px and its text is read.
-  await widthButton(page).click();
-  await expect(page.getByRole('radiogroup', { name: 'Tree width' })).toBeVisible();
-  await expectNoAxeViolations(page);
   await page.unroute('**/api/v1/estimates/*/tree');
 });

@@ -21,6 +21,7 @@ import { PartsTreeArea } from './parts-tree-area';
 import { useCalculate } from './use-calculate';
 import { useLazyComponent } from './use-lazy-component';
 import type { SavedPart } from './use-part-form';
+import { treeControlsReady } from './tree-controls-ready';
 import { usePartsTree, type PartsTreeState } from './use-parts-tree';
 import { useTreeWidth } from './use-tree-width';
 import { WorkspaceHeader, type WorkspaceHeaderView } from './workspace-header';
@@ -94,6 +95,10 @@ export function EstimateWorkspace({ header, estimateId, userId, ignored = false,
   const tree = usePartsTree(estimateId, serverIgnored);
   // The width of the tree's column (FR-112): set as `--tree-w` on the form area below, which the column, the drawing region and this file's own clamp read.
   const [treeWidth, attachWorkspace] = useTreeWidth(userId);
+  // The tree-width controls (handle, Tree width menu) are fetched only once the form has shown, or there is nothing to show it for: the form comes first on a slow network and on a cold development server (DEF-085).
+  const [formReported, setFormReported] = useState(false);
+  const formShown = treeControlsReady({ formShown: formReported, treeLoadFailed: tree.loadFailed, treeRows: tree.nodes === null ? null : tree.nodes.length });
+  const reportFormShown = useCallback((): void => setFormReported(true), []);
   const selected = tree.selected === null ? null : { id: tree.selected.id, slNo: tree.selected.slNo, revision: tree.selected.revision };
   // What Calculate waits for: the part form's saves in flight, and the fields that show a value that is not saved (review SQR-01 of AQP-317).
   const [saves] = useState(createSaveGate);
@@ -174,13 +179,13 @@ export function EstimateWorkspace({ header, estimateId, userId, ignored = false,
       ) : null}
       {/* The form area: the parts tree is a card of its own (its head, "Parts tree", is its own) beside the form's card, "Parts and inputs", which the rows' links point to (DEF-081 ruling item 10, SCR-05). */}
       <div ref={attachWorkspace} className="flex flex-col gap-s-4 lg:flex-row lg:items-start">
-        <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} resize={treeWidth} />
+        <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} resize={treeWidth} controlsReady={formShown} />
         <Card role="group" aria-labelledby={FORM_AREA_TITLE_ID} data-form-area="" className={FORM_CARD}>
           <CardHeader className={FORM_CARD_HEAD}>
             <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>
           </CardHeader>
           <CardContent className={FORM_CARD_BODY}>
-            <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} />
+            <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} onShown={reportFormShown} />
           </CardContent>
         </Card>
         <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />
