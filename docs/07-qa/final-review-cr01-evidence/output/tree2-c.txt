@@ -1,0 +1,47 @@
+QA| mobile chromium viewport {"width":360,"height":800} initial 1=MAIN
+QA| mobile tree built 1=MAIN 1.1=SUB_ 1.1.1=PART 1.1.1.1=FAST 1.1.2=PART 1.2=FAST 2=MAIN
+QA| mobile OVERFLOW tree built ok (360<=360)
+QA| mobile REVEAL selected(1.1) 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+QA| mobile REVEAL after keyboard focus on 1.1.2 link active= Sub-part1.1.2PartNo  1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| mobile REVEAL tab to handle of 1.1.2 (not open) active= Move 1.1.2 Part 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| mobile CLICK ON + OF 2 FAILED {"cur":["1:null","1.1:true","1.1.1:null","1.1.1.1:null","1.1.2:null","1.2:null","2:null"],"btn":[16,372,44,44],"vh":800,"scrollY":419,"hitRow":"2","hitTag":"SPAN","groupClass":"sr-only group-has-[[aria-current=true]]/","active":"A"}
+QA| mobile REVEAL menu open on 2 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+  ✘  1 [mobile] › tests\e2e-qa\tree2.qa.ts:53:1 › T3 tree functions, :has() reveal, overflow (51.1s)
+QA| tablet chromium viewport {"width":768,"height":1024} initial 1=MAIN
+QA| tablet tree built 1=MAIN 1.1=SUB_ 1.1.1=PART 1.1.1.1=FAST 1.1.2=PART 1.2=FAST 2=MAIN
+QA| tablet OVERFLOW tree built ok (768<=768)
+QA| tablet REVEAL selected(1.1) 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+QA| tablet REVEAL after keyboard focus on 1.1.2 link active= Sub-part1.1.2PartNo  1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| tablet REVEAL tab to handle of 1.1.2 (not open) active= Move 1.1.2 Part 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| tablet CLICK ON + OF 2 FAILED {"cur":["1:null","1.1:true","1.1.1:null","1.1.1.1:null","1.1.2:null","1.2:null","2:null"],"btn":[70,513,44,44],"vh":1024,"scrollY":499,"hitRow":"2","hitTag":"SPAN","groupClass":"sr-only group-has-[[aria-current=true]]/","active":"A"}
+QA| tablet REVEAL menu open on 2 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+QA| tablet MOVE menu items on 1.1.2 Move up:null Move down:true
+QA| tablet after Move up of 1.1.2 1=MAIN 1.1=SUB_ 1.1.1=PART 1.1.1.1=FAST 1.1.2=PART 1.2=FAST 2=MAIN | announcer:  // Updating the parts. This takes a moment. //  //  | requests: POST /api/v1/estimates/:id/tree/move
+QA| tablet OVERFLOW after move ok (768<=768)
+QA| tablet DELETE dialog Delete row 1.1? This also deletes the 3 rows under it, and everything typed into them. This cannot be undone. Cancel Delete 4 rows
+QA| tablet after cancel delete, focus on null | rows 7
+QA| tablet after delete 1.1 (4 rows go) 1=MAIN 1.1=FAST 2=MAIN | announcer:  // 4 rows deleted //  // 
+QA| tablet two Parts under 1 (Sub-part naming) Main Assembly1PartAll in / Fastener1.1PartNo inputs / Sub-part1.2PartNo inputs / Sub-part1.3PartNo inputs / Main Assembly2PartNo inp
+QA| tablet after deleting one of two Parts (other turns back to Part) Main Assembly1PartAll in / Fastener1.1PartNo inputs / Part1.2PartNo inputs yet / Main Assembly2PartNo inp
+QA| tablet OVERFLOW end ok (768<=768)
+  ✓  2 [tablet] › tests\e2e-qa\tree2.qa.ts:53:1 › T3 tree functions, :has() reveal, overflow (1.4m)
+QA| w320 chromium viewport {"width":320,"height":568} initial 1=MAIN
+QA| w320 tree built 1=MAIN 1.1=SUB_ 1.1.1=PART 1.1.1.1=FAST 1.1.2=PART 1.2=FAST 2=MAIN
+QA| w320 OVERFLOW tree built ok (320<=320)
+QA| w320 REVEAL selected(1.1) 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+QA| w320 REVEAL after keyboard focus on 1.1.2 link active= Sub-part1.1.2PartNo  1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| w320 REVEAL tab to handle of 1.1.2 (not open) active= Move 1.1.2 Part 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| w320 CLICK ON + OF 2 FAILED {"cur":["1:null","1.1:true","1.1.1:null","1.1.1.1:null","1.1.2:null","1.2:null","2:null"],"btn":[16,394,44,44],"vh":568,"scrollY":535,"hitRow":"2","hitTag":"SPAN","groupClass":"sr-only group-has-[[aria-current=true]]/","active":"A"}
+QA| w320 REVEAL menu open on 2 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+  ✘  3 [w320] › tests\e2e-qa\tree2.qa.ts:53:1 › T3 tree functions, :has() reveal, overflow (1.0m)
+QA| z400 chromium viewport {"width":320,"height":256} initial 1=MAIN
+QA| z400 tree built 1=MAIN 1.1=SUB_ 1.1.1=PART 1.1.1.1=FAST 1.1.2=PART 1.2=FAST 2=MAIN
+QA| z400 OVERFLOW tree built ok (320<=320)
+QA| z400 REVEAL selected(1.1) 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+QA| z400 REVEAL after keyboard focus on 1.1.2 link active= Sub-part1.1.2PartNo  1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| z400 REVEAL tab to handle of 1.1.2 (not open) active= Move 1.1.2 Part 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| z400 CLICK ON + OF 2 FAILED {"cur":["1:null","1.1:true","1.1.1:null","1.1.1.1:null","1.1.2:null","1.2:null","2:null"],"btn":[16,212,44,44],"vh":256,"scrollY":707,"hitTag":"NEXTJS-PORTAL","groupClass":"sr-only group-has-[[aria-current=true]]/","active":"A"}
+QA| z400 REVEAL menu open on 2 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+  ✘  4 [z400] › tests\e2e-qa\tree2.qa.ts:53:1 › T3 tree functions, :has() reveal, overflow (1.0m)
+  3 failed
+  1 passed (5.9m)

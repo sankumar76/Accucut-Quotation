@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (workaround: reload the page). Test plan section 6 |
 | Priority | P3 (Jira Medium). Fixed before G8 or accepted by master in writing |
 | Type | Product, **pre-existing** (Process master on `master` shows it; not caused by AQP-142) |
-| Status | New. Routed by master in DL-192: a separate `fix/AQP-287-<slug>` PR from `master` **after #297 merges**, every error boundary, reviewed by reviewer-quality and reviewer-standards, **due before G8**. Not part of round F2 |
+| Status | **CLOSED 2026-11-24 (qa-engineer)**: fixed by PR #668 (squashed as `1ab13781`, AQP-287), verified in a real browser and on the push runs (Closure below). Earlier: New, routed by master in DL-192 to a separate `fix/AQP-287-<slug>` PR after #297, due before G8 |
 | Jira / GitHub | [AQP-287](https://sankumar76.atlassian.net/browse/AQP-287) / [#345](https://github.com/sankumar76/Accucut-Quotation/issues/345); relates to AQP-142 |
 | Found by / date | qa-engineer, exploratory session in the G7 of AQP-142, 2026-11-12 |
 | Build / commit | H1 `cb95102` (report at H2 `f269b05`); the Process master part is `master` `3f22672` code |
@@ -34,10 +34,23 @@ The route-level `error.tsx` files: ask the router for a fresh read (for example 
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed | developer | | `fix/AQP-287-<slug>` after #297 merges |
-| Regression test added | developer | | |
-| Verified | qa-engineer | | |
+| Fixed | developer | 2026-11-23 | PR #668, squashed as `1ab13781` (`fix/AQP-287-try-again-rereads`): shared `useRetryRead` (router refresh, then reset); 15 `error.tsx` boundaries |
+| Regression test added | developer | 2026-11-23 | `tests/unit/route-error-retry.test.ts` (one case per `error.tsx` found by a glob; 20 cases red on the old pages, green with the fix). No E2E case: a page whose server render fails cannot be made to fail from Playwright without a fault hook in product code |
+| Verified | qa-engineer | 2026-11-24 | Closure below: real-browser reproduction on a build of `1ab13781` (12 of 12 pages recovered) and push runs CI 45319179466 and Windows package 45319179465 (attempt 1, success) |
 
 ## Severity history and routing
 - QA: Sev-3, pre-existing, not held against AQP-142.
 - Master, DL-192 (Jira AQP-142 comment 11711): DEF-033 goes to a separate PR from `master` after #297 merges, every error boundary, quality and standards reviews, due before G8.
+
+
+## Closure (qa-engineer, 2026-11-24)
+Master (DL-360, the DEF-033 note): the file asks for no ruling; QA closes it on its own verification (test plan section 6: "QA verifies a fix by rerunning the failing test and the regression around it, not by reading the diff"), against #668 and the push runs. DL-192 asked for reviews by reviewer-quality and reviewer-standards; CLAUDE.md section 9 item 1 and DL-354 (4) replace that request (error boundaries are in none of the section 9 item 2 areas), so the closure does not wait for a review.
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| Push run CI on `master` `1ab13781` | **success**, attempt 1: Stages 1 to 11b, Stage 12 shards 1 to 4, Stages 1 to 11 all success | run 45319179466 (`gh run view`) |
+| Push run Windows package on `1ab13781` | **success**, attempt 1: Stage 13 Windows package | run 45319179465 |
+| Original reproduction, real browser | **Fixed**: SELECT withdrawn from the application role (owner role, throwaway PostgreSQL 17), page reloaded to the error state with its **Try again** button, SELECT given back, **Try again** pressed: the page appears (the Try again button is gone within 15 s) on Customers list, Process master, Materials and Audit log, at 1366, 768 and 360 px, **12 of 12** (`recoveredByTryAgain` true). A plain reload afterwards also shows each page. On the base (3f22672 code) the same steps measured `recoveredByTryAgain` false (see Actual Result) | `tests/e2e-qa/def033.qa.ts` (QA throwaway, build of `1ab13781`, `next dev` on Next 16.4.5 = the pin of DL-344); copy kept in `docs/07-qa/final-review-cr01-evidence/scripts/def033.qa.ts` |
+| Unit regression | the PR's `tests/unit/route-error-retry.test.ts` ran in Stages 1 to 11 of run 45319179466 (success) | run 45319179466 |
+
+Not run by QA: the other 11 boundaries (Settings, Users, Configuration fields, Tasks queue, Assign, Estimate, Cost details, Export, Checkpoints, Customer page, root page) in a real browser; they share the same `RouteLoadError` / `useRetryRead` piece and are covered by the PR's glob test. Dev server, not the production build, for the real-browser run.

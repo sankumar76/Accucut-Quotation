@@ -1,0 +1,392 @@
+
+Running 1 test using 1 worker
+
+QA3| setup: quote 200 download 200
+QA3| setup: ignore 200
+QA3| Admin 1366px Open STATIC {"region":[305,1309],"scrollLeft":0,"overflow":0,"cell":[1109,1309],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Admin 1366px Open ITEM INSIDE {"label":"control \"Q-9999-703429491\"","whole":true,"left":321,"right":451.6,"hit":true}
+QA3| Admin 1366px Open ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":321,"right":682.2,"hit":true}
+QA3| Admin 1366px Open ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":321,"right":446.4,"hit":true}
+QA3| Admin 1366px Open ITEM INSIDE {"label":"control \"Reassign or change deadline, Q-9999-7034\"","whole":true,"left":1121,"right":1297,"hit":true}
+QA3| Admin 1366px Open ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1109,"right":1309,"hit":true}
+QA3| Admin 1366px Open axe clean
+QA3| Admin 1366px Open TAB TAB 1 WHOLE {"name":"Q-9999-703429491","left":321,"right":452,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1366px Open TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":321,"right":682,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1366px Open TAB TAB 3 WHOLE {"name":"Copy path","left":321,"right":446,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1366px Open TAB TAB 4 WHOLE {"name":"Reassign or change deadline, Q-9999-7034","left":1121,"right":1297,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1366px Open TAB STOP at 5
+QA3| Admin 1366px Closed STATIC {"region":[305,1309],"scrollLeft":0,"overflow":0,"cell":[1109,1309],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Admin 1366px Closed ITEM INSIDE {"label":"control \"Q-9999-1392501561\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Admin 1366px Closed ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":678.2,"hit":true}
+QA3| Admin 1366px Closed ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":true}
+QA3| Admin 1366px Closed ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1109,"right":1309,"hit":true}
+QA3| Admin 1366px Closed ITEM INSIDE {"label":"the Downloaded chip","whole":true,"left":1121,"right":1297,"hit":true}
+QA3| Admin 1366px Closed ITEM INSIDE {"label":"the word Closed","whole":true,"left":1121,"right":1165.2,"hit":true}
+QA3| Admin 1366px Closed axe clean
+QA3| Admin 1366px Closed TAB TAB 1 WHOLE {"name":"Q-9999-1392501561","left":317,"right":456,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1366px Closed TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":678,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1366px Closed TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1366px Closed TAB STOP at 4
+QA3| Admin 1366px Ignored STATIC {"region":[305,1309],"scrollLeft":0,"overflow":0,"cell":[1109,1309],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Admin 1366px Ignored ITEM INSIDE {"label":"control \"Q-9999-1089702893\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Admin 1366px Ignored ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":678.2,"hit":true}
+QA3| Admin 1366px Ignored ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":true}
+QA3| Admin 1366px Ignored ITEM INSIDE {"label":"control \"Open to restore, Q-9999-1089702893\"","whole":true,"left":1121,"right":1255.5,"hit":true}
+QA3| Admin 1366px Ignored ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1109,"right":1309,"hit":true}
+QA3| Admin 1366px Ignored axe clean
+QA3| Admin 1366px Ignored TAB TAB 1 WHOLE {"name":"Q-9999-1089702893","left":317,"right":456,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1366px Ignored TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":678,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1366px Ignored TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1366px Ignored TAB TAB 4 WHOLE {"name":"Open to restore, Q-9999-1089702893","left":1121,"right":1256,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1366px Ignored TAB STOP at 5
+QA3| Admin 1280px Open STATIC {"region":[305,1223],"scrollLeft":0,"overflow":0,"cell":[1023,1223],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Admin 1280px Open ITEM INSIDE {"label":"control \"Q-9999-703429491\"","whole":true,"left":321,"right":451.6,"hit":true}
+QA3| Admin 1280px Open ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":321,"right":662.4,"hit":true}
+QA3| Admin 1280px Open ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":321,"right":446.4,"hit":true}
+QA3| Admin 1280px Open ITEM INSIDE {"label":"control \"Reassign or change deadline, Q-9999-7034\"","whole":true,"left":1035,"right":1211,"hit":true}
+QA3| Admin 1280px Open ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1023,"right":1223,"hit":true}
+QA3| Admin 1280px Open axe clean
+QA3| Admin 1280px Open TAB TAB 1 WHOLE {"name":"Q-9999-703429491","left":321,"right":452,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1280px Open TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":321,"right":662,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1280px Open TAB TAB 3 WHOLE {"name":"Copy path","left":321,"right":446,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1280px Open TAB TAB 4 WHOLE {"name":"Reassign or change deadline, Q-9999-7034","left":1035,"right":1211,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1280px Open TAB STOP at 5
+QA3| Admin 1280px Closed STATIC {"region":[305,1223],"scrollLeft":0,"overflow":0,"cell":[1023,1223],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Admin 1280px Closed ITEM INSIDE {"label":"control \"Q-9999-1392501561\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Admin 1280px Closed ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":653.5,"hit":true}
+QA3| Admin 1280px Closed ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":true}
+QA3| Admin 1280px Closed ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1023,"right":1223,"hit":true}
+QA3| Admin 1280px Closed ITEM INSIDE {"label":"the Downloaded chip","whole":true,"left":1035,"right":1211,"hit":true}
+QA3| Admin 1280px Closed ITEM INSIDE {"label":"the word Closed","whole":true,"left":1035,"right":1079.2,"hit":true}
+QA3| Admin 1280px Closed axe clean
+QA3| Admin 1280px Closed TAB TAB 1 WHOLE {"name":"Q-9999-1392501561","left":317,"right":456,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1280px Closed TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":653,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1280px Closed TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1280px Closed TAB STOP at 4
+QA3| Admin 1280px Ignored STATIC {"region":[305,1223],"scrollLeft":0,"overflow":0,"cell":[1023,1223],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Admin 1280px Ignored ITEM INSIDE {"label":"control \"Q-9999-1089702893\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Admin 1280px Ignored ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":637,"hit":true}
+QA3| Admin 1280px Ignored ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":true}
+QA3| Admin 1280px Ignored ITEM INSIDE {"label":"control \"Open to restore, Q-9999-1089702893\"","whole":true,"left":1035,"right":1169.5,"hit":true}
+QA3| Admin 1280px Ignored ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1023,"right":1223,"hit":true}
+QA3| Admin 1280px Ignored axe clean
+QA3| Admin 1280px Ignored TAB TAB 1 WHOLE {"name":"Q-9999-1089702893","left":317,"right":456,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1280px Ignored TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":637,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1280px Ignored TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1280px Ignored TAB TAB 4 WHOLE {"name":"Open to restore, Q-9999-1089702893","left":1035,"right":1170,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1280px Ignored TAB STOP at 5
+QA3| Admin 1024px Open STATIC {"region":[305,967],"scrollLeft":0,"overflow":0,"cell":[767,967],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Admin 1024px Open ITEM INSIDE {"label":"control \"Q-9999-703429491\"","whole":true,"left":321,"right":451.6,"hit":true}
+QA3| Admin 1024px Open ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":321,"right":476.9,"hit":"outside-viewport"}
+QA3| Admin 1024px Open ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":321,"right":446.4,"hit":"outside-viewport"}
+QA3| Admin 1024px Open ITEM INSIDE {"label":"control \"Reassign or change deadline, Q-9999-7034\"","whole":true,"left":779,"right":955,"hit":"outside-viewport"}
+QA3| Admin 1024px Open ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":767,"right":967,"hit":"outside-viewport"}
+QA3| Admin 1024px Open axe clean
+QA3| Admin 1024px Open TAB TAB 1 WHOLE {"name":"Q-9999-703429491","left":321,"right":452,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1024px Open TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":321,"right":477,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1024px Open TAB TAB 3 WHOLE {"name":"Copy path","left":321,"right":446,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1024px Open TAB TAB 4 WHOLE {"name":"Reassign or change deadline, Q-9999-7034","left":779,"right":955,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1024px Open TAB STOP at 5
+QA3| Admin 1024px Closed STATIC {"region":[305,967],"scrollLeft":0,"overflow":0,"cell":[767,967],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Admin 1024px Closed ITEM INSIDE {"label":"control \"Q-9999-1392501561\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Admin 1024px Closed ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":467.8,"hit":"outside-viewport"}
+QA3| Admin 1024px Closed ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":"outside-viewport"}
+QA3| Admin 1024px Closed ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":767,"right":967,"hit":"outside-viewport"}
+QA3| Admin 1024px Closed ITEM INSIDE {"label":"the Downloaded chip","whole":true,"left":779,"right":955,"hit":"outside-viewport"}
+QA3| Admin 1024px Closed ITEM INSIDE {"label":"the word Closed","whole":true,"left":779,"right":823.2,"hit":true}
+QA3| Admin 1024px Closed axe clean
+QA3| Admin 1024px Closed TAB TAB 1 WHOLE {"name":"Q-9999-1392501561","left":317,"right":456,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1024px Closed TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":468,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1024px Closed TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1024px Closed TAB STOP at 4
+QA3| Admin 1024px Ignored STATIC {"region":[305,967],"scrollLeft":0,"overflow":0,"cell":[767,967],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Admin 1024px Ignored ITEM INSIDE {"label":"control \"Q-9999-1089702893\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Admin 1024px Ignored ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":463.8,"hit":"outside-viewport"}
+QA3| Admin 1024px Ignored ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":"outside-viewport"}
+QA3| Admin 1024px Ignored ITEM INSIDE {"label":"control \"Open to restore, Q-9999-1089702893\"","whole":true,"left":779,"right":913.5,"hit":"outside-viewport"}
+QA3| Admin 1024px Ignored ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":767,"right":967,"hit":"outside-viewport"}
+QA3| Admin 1024px Ignored axe clean
+QA3| Admin 1024px Ignored TAB TAB 1 WHOLE {"name":"Q-9999-1089702893","left":317,"right":456,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1024px Ignored TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":464,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1024px Ignored TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1024px Ignored TAB TAB 4 WHOLE {"name":"Open to restore, Q-9999-1089702893","left":779,"right":914,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1024px Ignored TAB STOP at 5
+QA3| Admin 1440px Open STATIC {"region":[305,1383],"scrollLeft":0,"overflow":0,"cell":[1183,1383],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Admin 1440px Open ITEM INSIDE {"label":"control \"Q-9999-703429491\"","whole":true,"left":321,"right":451.6,"hit":true}
+QA3| Admin 1440px Open ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":321,"right":682.2,"hit":true}
+QA3| Admin 1440px Open ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":321,"right":446.4,"hit":true}
+QA3| Admin 1440px Open ITEM INSIDE {"label":"control \"Reassign or change deadline, Q-9999-7034\"","whole":true,"left":1195,"right":1371,"hit":true}
+QA3| Admin 1440px Open ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1183,"right":1383,"hit":true}
+QA3| Admin 1440px Open axe clean
+QA3| Admin 1440px Open TAB TAB 1 WHOLE {"name":"Q-9999-703429491","left":321,"right":452,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1440px Open TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":321,"right":682,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1440px Open TAB TAB 3 WHOLE {"name":"Copy path","left":321,"right":446,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1440px Open TAB TAB 4 WHOLE {"name":"Reassign or change deadline, Q-9999-7034","left":1195,"right":1371,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1440px Open TAB STOP at 5
+QA3| Admin 1440px Closed STATIC {"region":[305,1383],"scrollLeft":0,"overflow":0,"cell":[1183,1383],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Admin 1440px Closed ITEM INSIDE {"label":"control \"Q-9999-1392501561\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Admin 1440px Closed ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":678.2,"hit":true}
+QA3| Admin 1440px Closed ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":true}
+QA3| Admin 1440px Closed ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1183,"right":1383,"hit":true}
+QA3| Admin 1440px Closed ITEM INSIDE {"label":"the Downloaded chip","whole":true,"left":1195,"right":1371,"hit":true}
+QA3| Admin 1440px Closed ITEM INSIDE {"label":"the word Closed","whole":true,"left":1195,"right":1239.2,"hit":true}
+QA3| Admin 1440px Closed axe clean
+QA3| Admin 1440px Closed TAB TAB 1 WHOLE {"name":"Q-9999-1392501561","left":317,"right":456,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1440px Closed TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":678,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1440px Closed TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1440px Closed TAB STOP at 4
+QA3| Admin 1440px Ignored STATIC {"region":[305,1383],"scrollLeft":0,"overflow":0,"cell":[1183,1383],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Admin 1440px Ignored ITEM INSIDE {"label":"control \"Q-9999-1089702893\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Admin 1440px Ignored ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":678.2,"hit":true}
+QA3| Admin 1440px Ignored ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":true}
+QA3| Admin 1440px Ignored ITEM INSIDE {"label":"control \"Open to restore, Q-9999-1089702893\"","whole":true,"left":1195,"right":1329.5,"hit":true}
+QA3| Admin 1440px Ignored ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1183,"right":1383,"hit":true}
+QA3| Admin 1440px Ignored axe clean
+QA3| Admin 1440px Ignored TAB TAB 1 WHOLE {"name":"Q-9999-1089702893","left":317,"right":456,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1440px Ignored TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":678,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1440px Ignored TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1440px Ignored TAB TAB 4 WHOLE {"name":"Open to restore, Q-9999-1089702893","left":1195,"right":1330,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Admin 1440px Ignored TAB STOP at 5
+QA3| Lead 1366px Open STATIC {"region":[305,1309],"scrollLeft":0,"overflow":0,"cell":[1109,1309],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Lead 1366px Open ITEM INSIDE {"label":"control \"Q-9999-703429491\"","whole":true,"left":321,"right":451.6,"hit":true}
+QA3| Lead 1366px Open ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":321,"right":682.2,"hit":true}
+QA3| Lead 1366px Open ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":321,"right":446.4,"hit":true}
+QA3| Lead 1366px Open ITEM INSIDE {"label":"control \"Reassign or change deadline, Q-9999-7034\"","whole":true,"left":1121,"right":1297,"hit":true}
+QA3| Lead 1366px Open ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1109,"right":1309,"hit":true}
+QA3| Lead 1366px Open axe clean
+QA3| Lead 1366px Open TAB TAB 1 WHOLE {"name":"Q-9999-703429491","left":321,"right":452,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1366px Open TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":321,"right":682,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1366px Open TAB TAB 3 WHOLE {"name":"Copy path","left":321,"right":446,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1366px Open TAB TAB 4 WHOLE {"name":"Reassign or change deadline, Q-9999-7034","left":1121,"right":1297,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1366px Open TAB STOP at 5
+QA3| Lead 1366px Closed STATIC {"region":[305,1309],"scrollLeft":0,"overflow":0,"cell":[1109,1309],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Lead 1366px Closed ITEM INSIDE {"label":"control \"Q-9999-1392501561\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Lead 1366px Closed ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":678.2,"hit":true}
+QA3| Lead 1366px Closed ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":true}
+QA3| Lead 1366px Closed ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1109,"right":1309,"hit":true}
+QA3| Lead 1366px Closed ITEM INSIDE {"label":"the Downloaded chip","whole":true,"left":1121,"right":1297,"hit":true}
+QA3| Lead 1366px Closed ITEM INSIDE {"label":"the word Closed","whole":true,"left":1121,"right":1165.2,"hit":true}
+QA3| Lead 1366px Closed axe clean
+QA3| Lead 1366px Closed TAB TAB 1 WHOLE {"name":"Q-9999-1392501561","left":317,"right":456,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1366px Closed TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":678,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1366px Closed TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1366px Closed TAB STOP at 4
+QA3| Lead 1366px Ignored STATIC {"region":[305,1309],"scrollLeft":0,"overflow":0,"cell":[1109,1309],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Lead 1366px Ignored ITEM INSIDE {"label":"control \"Q-9999-1089702893\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Lead 1366px Ignored ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":678.2,"hit":true}
+QA3| Lead 1366px Ignored ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":true}
+QA3| Lead 1366px Ignored ITEM INSIDE {"label":"control \"Open to restore, Q-9999-1089702893\"","whole":true,"left":1121,"right":1255.5,"hit":true}
+QA3| Lead 1366px Ignored ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1109,"right":1309,"hit":true}
+QA3| Lead 1366px Ignored axe clean
+QA3| Lead 1366px Ignored TAB TAB 1 WHOLE {"name":"Q-9999-1089702893","left":317,"right":456,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1366px Ignored TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":678,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1366px Ignored TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1366px Ignored TAB TAB 4 WHOLE {"name":"Open to restore, Q-9999-1089702893","left":1121,"right":1256,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1366px Ignored TAB STOP at 5
+QA3| Lead 1280px Open STATIC {"region":[305,1223],"scrollLeft":0,"overflow":0,"cell":[1023,1223],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Lead 1280px Open ITEM INSIDE {"label":"control \"Q-9999-703429491\"","whole":true,"left":321,"right":451.6,"hit":true}
+QA3| Lead 1280px Open ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":321,"right":662.4,"hit":true}
+QA3| Lead 1280px Open ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":321,"right":446.4,"hit":true}
+QA3| Lead 1280px Open ITEM INSIDE {"label":"control \"Reassign or change deadline, Q-9999-7034\"","whole":true,"left":1035,"right":1211,"hit":true}
+QA3| Lead 1280px Open ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1023,"right":1223,"hit":true}
+QA3| Lead 1280px Open axe clean
+QA3| Lead 1280px Open TAB TAB 1 WHOLE {"name":"Q-9999-703429491","left":321,"right":452,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1280px Open TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":321,"right":662,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1280px Open TAB TAB 3 WHOLE {"name":"Copy path","left":321,"right":446,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1280px Open TAB TAB 4 WHOLE {"name":"Reassign or change deadline, Q-9999-7034","left":1035,"right":1211,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1280px Open TAB STOP at 5
+QA3| Lead 1280px Closed STATIC {"region":[305,1223],"scrollLeft":0,"overflow":0,"cell":[1023,1223],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Lead 1280px Closed ITEM INSIDE {"label":"control \"Q-9999-1392501561\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Lead 1280px Closed ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":653.5,"hit":true}
+QA3| Lead 1280px Closed ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":true}
+QA3| Lead 1280px Closed ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1023,"right":1223,"hit":true}
+QA3| Lead 1280px Closed ITEM INSIDE {"label":"the Downloaded chip","whole":true,"left":1035,"right":1211,"hit":true}
+QA3| Lead 1280px Closed ITEM INSIDE {"label":"the word Closed","whole":true,"left":1035,"right":1079.2,"hit":true}
+QA3| Lead 1280px Closed axe clean
+QA3| Lead 1280px Closed TAB TAB 1 WHOLE {"name":"Q-9999-1392501561","left":317,"right":456,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1280px Closed TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":653,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1280px Closed TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1280px Closed TAB STOP at 4
+QA3| Lead 1280px Ignored STATIC {"region":[305,1223],"scrollLeft":0,"overflow":0,"cell":[1023,1223],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Lead 1280px Ignored ITEM INSIDE {"label":"control \"Q-9999-1089702893\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Lead 1280px Ignored ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":637,"hit":true}
+QA3| Lead 1280px Ignored ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":true}
+QA3| Lead 1280px Ignored ITEM INSIDE {"label":"control \"Open to restore, Q-9999-1089702893\"","whole":true,"left":1035,"right":1169.5,"hit":true}
+QA3| Lead 1280px Ignored ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1023,"right":1223,"hit":true}
+QA3| Lead 1280px Ignored axe clean
+QA3| Lead 1280px Ignored TAB TAB 1 WHOLE {"name":"Q-9999-1089702893","left":317,"right":456,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1280px Ignored TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":637,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1280px Ignored TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1280px Ignored TAB TAB 4 WHOLE {"name":"Open to restore, Q-9999-1089702893","left":1035,"right":1170,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1280px Ignored TAB STOP at 5
+QA3| Lead 1024px Open STATIC {"region":[305,967],"scrollLeft":0,"overflow":0,"cell":[767,967],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Lead 1024px Open ITEM INSIDE {"label":"control \"Q-9999-703429491\"","whole":true,"left":321,"right":451.6,"hit":true}
+QA3| Lead 1024px Open ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":321,"right":476.9,"hit":"outside-viewport"}
+QA3| Lead 1024px Open ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":321,"right":446.4,"hit":"outside-viewport"}
+QA3| Lead 1024px Open ITEM INSIDE {"label":"control \"Reassign or change deadline, Q-9999-7034\"","whole":true,"left":779,"right":955,"hit":"outside-viewport"}
+QA3| Lead 1024px Open ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":767,"right":967,"hit":"outside-viewport"}
+QA3| Lead 1024px Open axe clean
+QA3| Lead 1024px Open TAB TAB 1 WHOLE {"name":"Q-9999-703429491","left":321,"right":452,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1024px Open TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":321,"right":477,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1024px Open TAB TAB 3 WHOLE {"name":"Copy path","left":321,"right":446,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1024px Open TAB TAB 4 WHOLE {"name":"Reassign or change deadline, Q-9999-7034","left":779,"right":955,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1024px Open TAB STOP at 5
+QA3| Lead 1024px Closed STATIC {"region":[305,967],"scrollLeft":0,"overflow":0,"cell":[767,967],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Lead 1024px Closed ITEM INSIDE {"label":"control \"Q-9999-1392501561\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Lead 1024px Closed ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":467.8,"hit":"outside-viewport"}
+QA3| Lead 1024px Closed ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":"outside-viewport"}
+QA3| Lead 1024px Closed ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":767,"right":967,"hit":"outside-viewport"}
+QA3| Lead 1024px Closed ITEM INSIDE {"label":"the Downloaded chip","whole":true,"left":779,"right":955,"hit":"outside-viewport"}
+QA3| Lead 1024px Closed ITEM INSIDE {"label":"the word Closed","whole":true,"left":779,"right":823.2,"hit":"outside-viewport"}
+QA3| Lead 1024px Closed axe clean
+QA3| Lead 1024px Closed TAB TAB 1 WHOLE {"name":"Q-9999-1392501561","left":317,"right":456,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1024px Closed TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":468,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1024px Closed TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1024px Closed TAB STOP at 4
+QA3| Lead 1024px Ignored STATIC {"region":[305,967],"scrollLeft":0,"overflow":0,"cell":[767,967],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Lead 1024px Ignored ITEM INSIDE {"label":"control \"Q-9999-1089702893\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Lead 1024px Ignored ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":463.8,"hit":"outside-viewport"}
+QA3| Lead 1024px Ignored ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":"outside-viewport"}
+QA3| Lead 1024px Ignored ITEM INSIDE {"label":"control \"Open to restore, Q-9999-1089702893\"","whole":true,"left":779,"right":913.5,"hit":"outside-viewport"}
+QA3| Lead 1024px Ignored ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":767,"right":967,"hit":"outside-viewport"}
+QA3| Lead 1024px Ignored axe clean
+QA3| Lead 1024px Ignored TAB TAB 1 WHOLE {"name":"Q-9999-1089702893","left":317,"right":456,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1024px Ignored TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":464,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1024px Ignored TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1024px Ignored TAB TAB 4 WHOLE {"name":"Open to restore, Q-9999-1089702893","left":779,"right":914,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1024px Ignored TAB STOP at 5
+QA3| Lead 1440px Open STATIC {"region":[305,1383],"scrollLeft":0,"overflow":0,"cell":[1183,1383],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Lead 1440px Open ITEM INSIDE {"label":"control \"Q-9999-703429491\"","whole":true,"left":321,"right":451.6,"hit":true}
+QA3| Lead 1440px Open ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":321,"right":682.2,"hit":true}
+QA3| Lead 1440px Open ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":321,"right":446.4,"hit":true}
+QA3| Lead 1440px Open ITEM INSIDE {"label":"control \"Reassign or change deadline, Q-9999-7034\"","whole":true,"left":1195,"right":1371,"hit":true}
+QA3| Lead 1440px Open ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1183,"right":1383,"hit":true}
+QA3| Lead 1440px Open axe clean
+QA3| Lead 1440px Open TAB TAB 1 WHOLE {"name":"Q-9999-703429491","left":321,"right":452,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1440px Open TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":321,"right":682,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1440px Open TAB TAB 3 WHOLE {"name":"Copy path","left":321,"right":446,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1440px Open TAB TAB 4 WHOLE {"name":"Reassign or change deadline, Q-9999-7034","left":1195,"right":1371,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1440px Open TAB STOP at 5
+QA3| Lead 1440px Closed STATIC {"region":[305,1383],"scrollLeft":0,"overflow":0,"cell":[1183,1383],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Lead 1440px Closed ITEM INSIDE {"label":"control \"Q-9999-1392501561\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Lead 1440px Closed ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":678.2,"hit":true}
+QA3| Lead 1440px Closed ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":true}
+QA3| Lead 1440px Closed ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1183,"right":1383,"hit":true}
+QA3| Lead 1440px Closed ITEM INSIDE {"label":"the Downloaded chip","whole":true,"left":1195,"right":1371,"hit":true}
+QA3| Lead 1440px Closed ITEM INSIDE {"label":"the word Closed","whole":true,"left":1195,"right":1239.2,"hit":true}
+QA3| Lead 1440px Closed axe clean
+QA3| Lead 1440px Closed TAB TAB 1 WHOLE {"name":"Q-9999-1392501561","left":317,"right":456,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1440px Closed TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":678,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1440px Closed TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1440px Closed TAB STOP at 4
+QA3| Lead 1440px Ignored STATIC {"region":[305,1383],"scrollLeft":0,"overflow":0,"cell":[1183,1383],"cellSticky":"sticky","cellOpaque":true,"headSticky":"sticky","headOpaque":true,"underSticky":[]}
+QA3| Lead 1440px Ignored ITEM INSIDE {"label":"control \"Q-9999-1089702893\"","whole":true,"left":317,"right":456,"hit":true}
+QA3| Lead 1440px Ignored ITEM INSIDE {"label":"control \"\\\\invented-server\\invented-share\\RFQ-can\"","whole":true,"left":317,"right":678.2,"hit":true}
+QA3| Lead 1440px Ignored ITEM INSIDE {"label":"control \"Copy path\"","whole":true,"left":317,"right":442.4,"hit":true}
+QA3| Lead 1440px Ignored ITEM INSIDE {"label":"control \"Open to restore, Q-9999-1089702893\"","whole":true,"left":1195,"right":1329.5,"hit":true}
+QA3| Lead 1440px Ignored ITEM INSIDE {"label":"the Actions cell (all content)","whole":true,"left":1183,"right":1383,"hit":true}
+QA3| Lead 1440px Ignored axe clean
+QA3| Lead 1440px Ignored TAB TAB 1 WHOLE {"name":"Q-9999-1089702893","left":317,"right":456,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1440px Ignored TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":678,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1440px Ignored TAB TAB 3 WHOLE {"name":"Copy path","left":317,"right":442,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1440px Ignored TAB TAB 4 WHOLE {"name":"Open to restore, Q-9999-1089702893","left":1195,"right":1330,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| Lead 1440px Ignored TAB STOP at 5
+QA3| FORCED-WIDE Admin 1366px Open STATIC {"overflow":1396,"cellRight":1309,"regionRight":1309,"edgeOk":true,"sticky":"sticky","opaque":true,"outside":[],"underStickyAtZero":[]}
+QA3| FORCED-WIDE Admin 1366px Open TAB TAB 1 WHOLE {"name":"Q-9999-703429491","left":321,"right":452,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1366px Open TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":321,"right":682,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1366px Open TAB TAB 3 WHOLE {"name":"Copy path","left":694,"right":820,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1366px Open TAB TAB 4 WHOLE {"name":"Reassign or change deadline, Q-9999-7034","left":1121,"right":1297,"regionLeft":305,"regionRight":1309,"scrollLeft":502,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1366px Open TAB STOP at 5
+QA3| FORCED-WIDE Admin 1366px Open AT-END {"cellRight":1309,"regionRight":1309,"edgeOk":true}
+QA3| FORCED-WIDE Admin 1366px Ignored STATIC {"overflow":1396,"cellRight":1309,"regionRight":1309,"edgeOk":true,"sticky":"sticky","opaque":true,"outside":[],"underStickyAtZero":[]}
+QA3| FORCED-WIDE Admin 1366px Ignored TAB TAB 1 WHOLE {"name":"Q-9999-1089702893","left":317,"right":456,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1366px Ignored TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":678,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1366px Ignored TAB TAB 3 WHOLE {"name":"Copy path","left":690,"right":816,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1366px Ignored TAB TAB 4 WHOLE {"name":"Open to restore, Q-9999-1089702893","left":1121,"right":1256,"regionLeft":305,"regionRight":1309,"scrollLeft":481,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1366px Ignored TAB STOP at 5
+QA3| FORCED-WIDE Admin 1366px Ignored AT-END {"cellRight":1309,"regionRight":1309,"edgeOk":true}
+QA3| FORCED-WIDE Admin 1280px Open STATIC {"overflow":1482,"cellRight":1223,"regionRight":1223,"edgeOk":true,"sticky":"sticky","opaque":true,"outside":[],"underStickyAtZero":[]}
+QA3| FORCED-WIDE Admin 1280px Open TAB TAB 1 WHOLE {"name":"Q-9999-703429491","left":321,"right":452,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1280px Open TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":321,"right":682,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1280px Open TAB TAB 3 WHOLE {"name":"Copy path","left":694,"right":820,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1280px Open TAB TAB 4 WHOLE {"name":"Reassign or change deadline, Q-9999-7034","left":1035,"right":1211,"regionLeft":305,"regionRight":1223,"scrollLeft":459,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1280px Open TAB STOP at 5
+QA3| FORCED-WIDE Admin 1280px Open AT-END {"cellRight":1223,"regionRight":1223,"edgeOk":true}
+QA3| FORCED-WIDE Admin 1280px Ignored STATIC {"overflow":1482,"cellRight":1223,"regionRight":1223,"edgeOk":true,"sticky":"sticky","opaque":true,"outside":[],"underStickyAtZero":[]}
+QA3| FORCED-WIDE Admin 1280px Ignored TAB TAB 1 WHOLE {"name":"Q-9999-1089702893","left":317,"right":456,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1280px Ignored TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":678,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1280px Ignored TAB TAB 3 WHOLE {"name":"Copy path","left":690,"right":816,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1280px Ignored TAB TAB 4 WHOLE {"name":"Open to restore, Q-9999-1089702893","left":1035,"right":1170,"regionLeft":305,"regionRight":1223,"scrollLeft":438,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1280px Ignored TAB STOP at 5
+QA3| FORCED-WIDE Admin 1280px Ignored AT-END {"cellRight":1223,"regionRight":1223,"edgeOk":true}
+QA3| FORCED-WIDE Admin 1024px Open STATIC {"overflow":1738,"cellRight":967,"regionRight":967,"edgeOk":true,"sticky":"sticky","opaque":true,"outside":[],"underStickyAtZero":["Copy path"]}
+QA3| FORCED-WIDE Admin 1024px Open TAB TAB 1 WHOLE {"name":"Q-9999-703429491","left":321,"right":452,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1024px Open TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":321,"right":682,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1024px Open TAB TAB 3 WHOLE {"name":"Copy path","left":694,"right":820,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1024px Open TAB TAB 4 WHOLE {"name":"Reassign or change deadline, Q-9999-7034","left":779,"right":955,"regionLeft":305,"regionRight":967,"scrollLeft":331,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1024px Open TAB STOP at 5
+QA3| FORCED-WIDE Admin 1024px Open AT-END {"cellRight":967,"regionRight":967,"edgeOk":true}
+QA3| FORCED-WIDE Admin 1024px Ignored STATIC {"overflow":1738,"cellRight":967,"regionRight":967,"edgeOk":true,"sticky":"sticky","opaque":true,"outside":[],"underStickyAtZero":["Copy path"]}
+QA3| FORCED-WIDE Admin 1024px Ignored TAB TAB 1 WHOLE {"name":"Q-9999-1089702893","left":317,"right":456,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1024px Ignored TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":678,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1024px Ignored TAB TAB 3 WHOLE {"name":"Copy path","left":690,"right":816,"regionLeft":305,"regionRight":967,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1024px Ignored TAB TAB 4 WHOLE {"name":"Open to restore, Q-9999-1089702893","left":779,"right":914,"regionLeft":305,"regionRight":967,"scrollLeft":310,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1024px Ignored TAB STOP at 5
+QA3| FORCED-WIDE Admin 1024px Ignored AT-END {"cellRight":967,"regionRight":967,"edgeOk":true}
+QA3| FORCED-WIDE Admin 1440px Open STATIC {"overflow":1322,"cellRight":1383,"regionRight":1383,"edgeOk":true,"sticky":"sticky","opaque":true,"outside":[],"underStickyAtZero":[]}
+QA3| FORCED-WIDE Admin 1440px Open TAB TAB 1 WHOLE {"name":"Q-9999-703429491","left":321,"right":452,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1440px Open TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":321,"right":682,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1440px Open TAB TAB 3 WHOLE {"name":"Copy path","left":694,"right":820,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1440px Open TAB TAB 4 WHOLE {"name":"Reassign or change deadline, Q-9999-7034","left":1195,"right":1371,"regionLeft":305,"regionRight":1383,"scrollLeft":539,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1440px Open TAB STOP at 5
+QA3| FORCED-WIDE Admin 1440px Open AT-END {"cellRight":1383,"regionRight":1383,"edgeOk":true}
+QA3| FORCED-WIDE Admin 1440px Ignored STATIC {"overflow":1322,"cellRight":1383,"regionRight":1383,"edgeOk":true,"sticky":"sticky","opaque":true,"outside":[],"underStickyAtZero":[]}
+QA3| FORCED-WIDE Admin 1440px Ignored TAB TAB 1 WHOLE {"name":"Q-9999-1089702893","left":317,"right":456,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1440px Ignored TAB TAB 2 WHOLE {"name":"\\\\invented-server\\invented-share\\RFQ-can","left":317,"right":678,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1440px Ignored TAB TAB 3 WHOLE {"name":"Copy path","left":690,"right":816,"regionLeft":305,"regionRight":1383,"scrollLeft":0,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1440px Ignored TAB TAB 4 WHOLE {"name":"Open to restore, Q-9999-1089702893","left":1195,"right":1330,"regionLeft":305,"regionRight":1383,"scrollLeft":518,"inRegionX":true,"inViewport":true,"hitAllRects":true,"rects":1}
+QA3| FORCED-WIDE Admin 1440px Ignored TAB STOP at 5
+QA3| FORCED-WIDE Admin 1440px Ignored AT-END {"cellRight":1383,"regionRight":1383,"edgeOk":true}
+QA3| SCR-17 Admin 1366px STATIC {"rows":67,"headText":"Formula","headWidth":372,"headSticky":"static","headOpaque":true,"cellSticky":"static","cellOpaque":false,"endsAtEdge":true,"overflow":0}
+QA3| SCR-17 Admin 1280px STATIC {"rows":67,"headText":"Formula","headWidth":332,"headSticky":"static","headOpaque":true,"cellSticky":"static","cellOpaque":false,"endsAtEdge":true,"overflow":0}
+QA3| SCR-17 Admin 1024px STATIC {"rows":67,"headText":"Formula","headWidth":213,"headSticky":"static","headOpaque":true,"cellSticky":"static","cellOpaque":false,"endsAtEdge":true,"overflow":0}
+QA3| SCR-17 Admin 1440px STATIC {"rows":67,"headText":"Formula","headWidth":407,"headSticky":"static","headOpaque":true,"cellSticky":"static","cellOpaque":false,"endsAtEdge":true,"overflow":0}
+QA3| SUMMARY Admin 1366px Open: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-703429491 | \\invented-server\invented-share\RFQ-can | Copy path | Reassign or change deadline, Q-9999-7034), not whole 0, axe clean
+QA3| SUMMARY Admin 1366px Closed: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 3 (Q-9999-1392501561 | \\invented-server\invented-share\RFQ-can | Copy path), not whole 0, axe clean
+QA3| SUMMARY Admin 1366px Ignored: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-1089702893 | \\invented-server\invented-share\RFQ-can | Copy path | Open to restore, Q-9999-1089702893), not whole 0, axe clean
+QA3| SUMMARY Admin 1280px Open: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-703429491 | \\invented-server\invented-share\RFQ-can | Copy path | Reassign or change deadline, Q-9999-7034), not whole 0, axe clean
+QA3| SUMMARY Admin 1280px Closed: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 3 (Q-9999-1392501561 | \\invented-server\invented-share\RFQ-can | Copy path), not whole 0, axe clean
+QA3| SUMMARY Admin 1280px Ignored: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-1089702893 | \\invented-server\invented-share\RFQ-can | Copy path | Open to restore, Q-9999-1089702893), not whole 0, axe clean
+QA3| SUMMARY Admin 1024px Open: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-703429491 | \\invented-server\invented-share\RFQ-can | Copy path | Reassign or change deadline, Q-9999-7034), not whole 0, axe clean
+QA3| SUMMARY Admin 1024px Closed: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 3 (Q-9999-1392501561 | \\invented-server\invented-share\RFQ-can | Copy path), not whole 0, axe clean
+QA3| SUMMARY Admin 1024px Ignored: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-1089702893 | \\invented-server\invented-share\RFQ-can | Copy path | Open to restore, Q-9999-1089702893), not whole 0, axe clean
+QA3| SUMMARY Admin 1440px Open: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-703429491 | \\invented-server\invented-share\RFQ-can | Copy path | Reassign or change deadline, Q-9999-7034), not whole 0, axe clean
+QA3| SUMMARY Admin 1440px Closed: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 3 (Q-9999-1392501561 | \\invented-server\invented-share\RFQ-can | Copy path), not whole 0, axe clean
+QA3| SUMMARY Admin 1440px Ignored: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-1089702893 | \\invented-server\invented-share\RFQ-can | Copy path | Open to restore, Q-9999-1089702893), not whole 0, axe clean
+QA3| SUMMARY Lead 1366px Open: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-703429491 | \\invented-server\invented-share\RFQ-can | Copy path | Reassign or change deadline, Q-9999-7034), not whole 0, axe clean
+QA3| SUMMARY Lead 1366px Closed: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 3 (Q-9999-1392501561 | \\invented-server\invented-share\RFQ-can | Copy path), not whole 0, axe clean
+QA3| SUMMARY Lead 1366px Ignored: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-1089702893 | \\invented-server\invented-share\RFQ-can | Copy path | Open to restore, Q-9999-1089702893), not whole 0, axe clean
+QA3| SUMMARY Lead 1280px Open: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-703429491 | \\invented-server\invented-share\RFQ-can | Copy path | Reassign or change deadline, Q-9999-7034), not whole 0, axe clean
+QA3| SUMMARY Lead 1280px Closed: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 3 (Q-9999-1392501561 | \\invented-server\invented-share\RFQ-can | Copy path), not whole 0, axe clean
+QA3| SUMMARY Lead 1280px Ignored: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-1089702893 | \\invented-server\invented-share\RFQ-can | Copy path | Open to restore, Q-9999-1089702893), not whole 0, axe clean
+QA3| SUMMARY Lead 1024px Open: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-703429491 | \\invented-server\invented-share\RFQ-can | Copy path | Reassign or change deadline, Q-9999-7034), not whole 0, axe clean
+QA3| SUMMARY Lead 1024px Closed: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 3 (Q-9999-1392501561 | \\invented-server\invented-share\RFQ-can | Copy path), not whole 0, axe clean
+QA3| SUMMARY Lead 1024px Ignored: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-1089702893 | \\invented-server\invented-share\RFQ-can | Copy path | Open to restore, Q-9999-1089702893), not whole 0, axe clean
+QA3| SUMMARY Lead 1440px Open: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-703429491 | \\invented-server\invented-share\RFQ-can | Copy path | Reassign or change deadline, Q-9999-7034), not whole 0, axe clean
+QA3| SUMMARY Lead 1440px Closed: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 3 (Q-9999-1392501561 | \\invented-server\invented-share\RFQ-can | Copy path), not whole 0, axe clean
+QA3| SUMMARY Lead 1440px Ignored: overflow 0, outside-region 0, covered 0, sticky+opaque true, underSticky 0, passLine MET, tab stops 4 (Q-9999-1089702893 | \\invented-server\invented-share\RFQ-can | Copy path | Open to restore, Q-9999-1089702893), not whole 0, axe clean
+QA3| SUMMARY FORCED-WIDE Admin 1366px Open: overflow 1396, sticky edge true, sticky+opaque true, action outside region 0, tab stops 4, not whole 0, at end edge true
+QA3| SUMMARY FORCED-WIDE Admin 1366px Ignored: overflow 1396, sticky edge true, sticky+opaque true, action outside region 0, tab stops 4, not whole 0, at end edge true
+QA3| SUMMARY FORCED-WIDE Admin 1280px Open: overflow 1482, sticky edge true, sticky+opaque true, action outside region 0, tab stops 4, not whole 0, at end edge true
+QA3| SUMMARY FORCED-WIDE Admin 1280px Ignored: overflow 1482, sticky edge true, sticky+opaque true, action outside region 0, tab stops 4, not whole 0, at end edge true
+QA3| SUMMARY FORCED-WIDE Admin 1024px Open: overflow 1738, sticky edge true, sticky+opaque true, action outside region 0, tab stops 4, not whole 0, at end edge true
+QA3| SUMMARY FORCED-WIDE Admin 1024px Ignored: overflow 1738, sticky edge true, sticky+opaque true, action outside region 0, tab stops 4, not whole 0, at end edge true
+QA3| SUMMARY FORCED-WIDE Admin 1440px Open: overflow 1322, sticky edge true, sticky+opaque true, action outside region 0, tab stops 4, not whole 0, at end edge true
+QA3| SUMMARY FORCED-WIDE Admin 1440px Ignored: overflow 1322, sticky edge true, sticky+opaque true, action outside region 0, tab stops 4, not whole 0, at end edge true
+QA3| SUMMARY SCR-17 Admin 1366: {"rows":67,"headText":"Formula","headWidth":372,"headSticky":"static","headOpaque":true,"cellSticky":"static","cellOpaque":false,"endsAtEdge":true,"overflow":0}, first 24 stops, not whole 0
+QA3| SUMMARY SCR-17 Admin 1280: {"rows":67,"headText":"Formula","headWidth":332,"headSticky":"static","headOpaque":true,"cellSticky":"static","cellOpaque":false,"endsAtEdge":true,"overflow":0}, first 24 stops, not whole 0
+QA3| SUMMARY SCR-17 Admin 1024: {"rows":67,"headText":"Formula","headWidth":213,"headSticky":"static","headOpaque":true,"cellSticky":"static","cellOpaque":false,"endsAtEdge":true,"overflow":0}, first 24 stops, not whole 0
+QA3| SUMMARY SCR-17 Admin 1440: {"rows":67,"headText":"Formula","headWidth":407,"headSticky":"static","headOpaque":true,"cellSticky":"static","cellOpaque":false,"endsAtEdge":true,"overflow":0}, first 24 stops, not whole 0
+  ✓  1 [desktop] › tests\e2e-qa\verify.qa.ts:192:1 › T14 DEF-077 verification: queue as Admin and as Lead at 1024, 1280, 1366, 1440; Open, Closed, Ignored; scrollLeft 0 (4.5m)
+
+  1 passed (4.6m)

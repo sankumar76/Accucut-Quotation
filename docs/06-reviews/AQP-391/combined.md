@@ -129,3 +129,67 @@
 - Probe (Node 24, scratchpad): the ASCII fallback for `工._x_…` (QLT-11); NFC after CGJ removal (QLT-12).
 - CI: `gh run list --commit e13150c1`; I watched run 45014203487 until it completed (success, all 6 jobs) and read Nightly 45014203461.
 - No local run; everything was read with `git show`/`git diff` in the records worktree.
+
+---
+
+## Addendum 2: re-review at head `f091dddd` (2026-11-22): no length cut (OQ-PM-11, DL-297)
+
+| Item | Value |
+|---|---|
+| Head reviewed | `f091dddd719355f9fb599df9a27765307521617e`. New since `e13150c1`: the developer's commit `f091dddd` (6 files: `src/lib/export/file-name.ts`, `tests/unit/export/file-name.test.ts`, `tests/unit/limits-single-source.test.ts`, `tests/unit/export-download-client.test.ts`, `tests/unit/http-content-disposition.test.ts`, `tests/integration/export/layout.test.ts`) and merge `32f9e16e` of `master` `de4799ae`. The merge is clean: `git show --cc` has no conflict hunk, and it touches no export file. Only `f091dddd` was reviewed |
+| Decision implemented | DL-297 (records-t, the delivery lead's answer to OQ-PM-11, relayed on AQP-1 comment 12692): "Don't limit the characters." The name is `<Short Name>_<Subject>_<DD-MM-YYYY>.xlsx` in full; `EXPORT_FILE_NAME_STEM_MAX_LENGTH` goes. PRD v0.34 NFR-032 keeps one check: Short name limit + Subject limit + 17 must stay under 255 |
+| CI | Run 45022922606 (CI) on `f091dddd`: **completed, success**. That covers "Stages 1 to 11b", E2E shards 1 to 4 and "Stages 1 to 11". Nightly 45022922612 is green except "CI feedback time" (does not count before G8, DL-286) |
+| **Verdict** | **APPROVE WITH COMMENTS.** The header-injection path is unchanged, and removing the bound is acceptable (reasons below). One Minor: the NFR-032 check that DL-297 keeps is not implemented (QLT-14). No Blocker, Critical or Major |
+| Counts now open | Blocker 0 · Critical 0 · Major 0 · Minor 1 (QLT-14) · Info 8 (QLT-04, 05, 06, 08, 10, 11, 12, 13 and QLT-15; QLT-07 and QLT-09 closed) |
+
+### Header-injection path
+
+**Not reopened.** `content-disposition.ts`, `file-response.ts`, `schemas/export.ts`, `download-client.ts` and `time.ts` are byte-identical to `e13150c1` (`git diff e13150c1 f091dddd -- src/server src/lib/export/download-client.ts src/lib/time.ts` is empty). The only source change removes `fitParts`, the cut helpers and the constant, and drops the length test from `isExportFileName`. Every character rule (whitespace, reserved, Cc, Cf, Cs, default-ignorable, leading dot, `.xlsx`, non-empty stem) is kept in both the builder and the check. The header builder never depended on length.
+
+### Is removing the bound acceptable? Yes
+
+- **Bounded at the source.** The parts come only from columns with database CHECKs (`short_name` at most 20, `subject` at most 200 code points) plus the server-made task code and a 10-character date. The forms hold them to 10 and 80, so 107 characters with `.xlsx` today (DL-297). The old upper bound in the schema was a second ceiling; the database CHECKs now provide it.
+- **The header stays small.** At the database ceilings, all non-BMP characters (the worst case), `filename*` is about 220 × 12 + 17 ≈ 2.7 KB, plus a short ASCII fallback. That is well within Node's limits and those of Caddy and IIS (the proxies in `deploy/windows/README.md`). At today's form limits it is about 1.1 KB at most.
+- **No new risk from an unbounded check.** `isExportFileName` and the browser's header expressions are single character classes, so they run in linear time with no backtracking. The browser check still refuses every path, quote, control, invisible and dot-led name, whatever the length.
+- **What it costs.** The schema no longer stops an unexpectedly long name. That would need a code change to the field limits, which is exactly the event QLT-14's test would catch.
+
+### Prior findings
+
+| ID | Was | Now | Note |
+|---|---|---|---|
+| QLT-03 | Minor (fixed in addendum 1) | **Superseded** | The constant is gone. Its replacement under NFR-032 v0.34 is QLT-14 |
+| QLT-05 | Info | Unchanged | Byte length on APFS/ext4: at 107 code points, a subject in an Indic script is still near or over 255 UTF-8 bytes; Windows NTFS is fine |
+| QLT-07 | Info (process) | **Closed** | OQ-PM-11 is answered (DL-297) |
+| QLT-09 | Info | **Closed** | There is no cut any more, so no grapheme can be split |
+| QLT-06 | Info | **Widened** | Besides §8 "Input validation", architecture §4.11 c (the "Truncation" row, A-CR01-A3) and the constants table row `EXPORT_FILE_NAME_STEM_MAX_LENGTH` (around line 700) are now out of date. DL-297 (4) leaves them to the architect |
+| QLT-04, 08, 10, 11, 12, 13 | Info | Unchanged | none |
+
+### New diff: findings
+
+| ID | Severity | Where | Issue and why | Fix |
+|---|---|---|---|---|
+| QLT-14 | Minor | `tests/unit/limits-single-source.test.ts` (the AQP-391 block removed in `f091dddd`); PRD v0.34 NFR-032 | **The one length guard DL-297 keeps is not implemented.** NFR-032 v0.34's measure asks for "a unit test that the sum of the two limits plus 17 is under 255". With the cut and the schema bound gone, that test is the only thing that stops a future raise of `SUBJECT_MAX_LENGTH` (toward its 200 ceiling) or `CUSTOMER_SHORT_NAME_MAX_LENGTH` from producing names that Windows cannot save as shown. The browser would shorten them, and the saved name would differ from the card (AC-6). Today's sum is 107, so nothing breaks now | Add to `limits-single-source.test.ts`: `expect(CUSTOMER_SHORT_NAME_MAX_LENGTH + SUBJECT_MAX_LENGTH + 17).toBeLessThan(255)`, with a comment citing DL-297 and NFR-032. Stronger (product-manager or architect to choose): count the worst case in UTF-16 units, since NTFS's 255 is in UTF-16 units and a character outside the BMP counts 2: `2 * (S + N) + 17 < 255` (197 today) |
+| QLT-15 | Info | `src/lib/export/file-name.ts:54-56` (the `isExportFileName` doc comment) | The comment says the stem is "at most about 232 code points, inside the 255 of Windows". 232 is the database-ceiling figure. Windows' 255 counts UTF-16 units, so 232 code points of non-BMP characters (464 units) would not fit. The bound the product relies on is the form limits (107 with `.xlsx`, DL-297) | Reword: "bounded by the form limits (short name 10, subject 80: 107 with `.xlsx`, DL-297; NFR-032's test keeps that under 255)". Drop the 232 claim or qualify it |
+
+### Tests
+
+Only the cut tests were removed; DL-297 removed that behaviour, so this is not a weakening. The replacements read `CUSTOMER_SHORT_NAME_MAX_LENGTH` and `SUBJECT_MAX_LENGTH` and assert that every character survives at the form limits, at the database ceilings (20 + 200), with non-BMP parts, with a 5,000-character subject and with a 150-digit task code. The date stays whole. `isExportFileName` accepts long names. The integration test now expects all 80 subject characters under a 10-character short name. Test sources now use `\uXXXX` escapes instead of literal invisible characters, which makes them reviewable. Two refusal cases were added to the client test: `.hidden.xlsx` and an encoded U+3164.
+
+### For other roles
+
+- **product-owner:** AQP-391 AC-4 (cut) and AC-10 (the constant) are superseded by DL-297; update the Jira ACs.
+- **solution-architect:** architecture §4.11 c and the constants table (QLT-06), following DL-297 (4).
+- **developer:** QLT-14 (one line), and optionally QLT-15.
+
+### Checks run (addendum 2)
+
+- `git log --first-parent e13150c1..f091dddd`; `git diff f091dddd^ f091dddd` (source and tests read in full); `git show --cc 32f9e16e` (no conflict hunk) and its stat; `git diff e13150c1 f091dddd` over the header path (empty); `git grep EXPORT_FILE_NAME_STEM_MAX_LENGTH\|fitParts` at the head (none).
+- Records read: DL-297 and PRD v0.34 NFR-032 (`origin/docs/AQP-1-records-t`); the proxy kinds in `deploy/windows/README.md` and `install.ps1`.
+- CI: `gh run list --commit f091dddd`; I watched run 45022922606 until it completed (success, all 6 jobs) and read Nightly 45022922612
+- No local run.
+
+---
+
+## Addendum 3: QLT-14 and QLT-15 at `0d20b749` (2026-11-22)
+
+`0d20b749` (2 files) fixes **QLT-14 (Minor)**: `limits-single-source.test.ts` adds three tests that read `CUSTOMER_SHORT_NAME_MAX_LENGTH` and `SUBJECT_MAX_LENGTH`. They check that short name + subject + 17 is under 255, that the UTF-16 worst case 2 × (short name + subject) + 17 is under 255 (197 today), and that the builder really adds exactly 17 characters. It also fixes **QLT-15 (Info)** (the `isExportFileName` comment now states the 107 form-limit bound and points to the test) and QLT-13 (the missing space). The header path is untouched. The PR head is now `42fcb118`, a clean update-branch merge of `master` `34bc3250` (#494, records only; `git show --cc` has no conflict hunk). CI run 45027769723 on `42fcb118` was queued at the time of writing; the merge gate is a fully green CI (CLAUDE.md §9 item 1). **Verdict: APPROVE WITH COMMENTS. Open: Blocker 0 · Critical 0 · Major 0 · Minor 0 · Info 7** (QLT-04, 05, 06, 08, 10, 11 and 12).

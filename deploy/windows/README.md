@@ -358,6 +358,21 @@ takes a **release backup** (`backup.ps1 -Reason release`), copies the zip into t
 two services, checks the new release again, migrates, moves the `current` junction, starts, and waits for `/api/health`. Afterwards only the new and
 the previous release are kept.
 
+**Before you run it: check where the migrations will go (DL-317).** The update migrates whatever database `MIGRATE_DATABASE_URL` in
+`C:\Accucut\config\migrate.env` names, whatever you meant. Nothing else changes the target: the release's own Prisma settings (`migrate\prisma.config.mjs`) read
+no `.env` file, Prisma 7 reads none by itself, and the script hands the value to the one process that migrates. So a `.env` left in a release folder
+cannot change it; only `migrate.env` can. In Windows PowerShell as administrator, run these three lines. They print the host, the port and the database name,
+**never the password**:
+
+```powershell
+$line = (Select-String -LiteralPath C:\Accucut\config\migrate.env -Pattern '^MIGRATE_DATABASE_URL=').Line
+$u = [Uri]$line.Substring($line.IndexOf('=') + 1).Trim([char]39, [char]34)
+"Migrations will go to: host {0}, port {1}, database {2}" -f $u.Host, $u.Port, $u.AbsolutePath.TrimStart('/')
+```
+
+It must say the server's own PostgreSQL (normally host `127.0.0.1`, port `5432`, database `accucut`). If it names anything else, stop and call your IT person. Do not
+print `$line` or `$u` themselves: they hold the password.
+
 - **No backup, no update.** The release backup runs first (`backup.ps1 -Reason release`, through the same trust checks); if it fails, nothing has been
   changed and the update stops. If you accept that nothing can be restored if it goes wrong, add `-NoBackup`; it says so in the log.
 - **If the migrations fail**, the junction is not moved and the previous release starts again.
@@ -367,6 +382,61 @@ the previous release are kept.
 - **If the new release is not healthy**, the junction moves back, the previous release starts, and the script says **"Call your IT person"**.
   Migrations only add things (expand, then contract: architecture section 9.7), so the previous release still works on the migrated database.
 - **To go back to an older release on purpose**, run `update.ps1` with that release's zip.
+- **Going back past the CR-01 migrations is different.** Those migrations do not only add things, so running `update.ps1` with the older zip is not enough. Use the
+  rollback runbook in architecture section 5.6, "CR-01 release rollback runbook" ([architecture.md](../../docs/04-architecture/architecture.md)). It applies to a
+  database that has applied some of the CR-01 migrations and must go back to a release without them. Its server steps have not been rehearsed: rehearse them first.
+- **Never run `prisma migrate deploy` by hand on the server.** `install.ps1` and `update.ps1` are the only ways the server's database is migrated. If a
+  developer ever has to run Prisma by hand somewhere else (a copy, a test machine), the rule in "Migrating by hand" below applies.
+
+### Migrating by hand (developers, copies and the rehearsal machine only)
+
+From a checkout of the repository, `npx prisma migrate deploy` reads `prisma.config.ts`, which loads a `.env` file **from the folder you run it in**, for any
+variable not already set in the shell. So the target is the shell's `MIGRATE_DATABASE_URL` if it is set, and otherwise the one in that `.env`, whatever you
+meant. That is how a planned rehearsal on a throwaway copy went to the demo database on 22 Nov (DL-317; no harm, there was a backup). Before **any**
+`migrate deploy` by hand:
+
+1. In the same window and folder, run `npx prisma migrate status`. Its first line names the target without the password:
+   `Datasource "db": PostgreSQL database "<name>", schema "public" at "<host>:<port>"`. Check the database name, the host and the port. Its list of
+   migrations "not yet applied" must be exactly the ones you expect.
+2. Take a backup of that database (`pg_dump -Fc`), and keep it outside the repository until the result is confirmed.
+3. Only then run `npx prisma migrate deploy`, in the same window and folder.
+
+On the delivery PC this matters most: it holds the development `.env` and several Docker databases.
+
+**Rehearsing on a throwaway copy.** Restore the dump with its **original owners** (`pg_restore` without `--no-owner`, into a new database owned by the
+owner role). With `--no-owner`, `_prisma_migrations` belongs to `postgres`, and `migrate deploy` as the owner role fails with "migration persistence is not
+initialized" (seen in the DL-317 rehearsal, 22 Nov). Then run the three steps above against the copy. Step 1 must name the copy, not the original.
+
+## At install, before go-live (DL-311, DL-317)
+
+The release is rehearsed on the delivery PC (Windows 11, Docker Desktop), not on a Windows Server (DL-311, RISK-034). So the IT person, with the delivery
+lead, runs this list on the real server at install and **before people start using the portal**. Go-live waits until every line is done or the delivery lead
+has accepted, in writing, the line that is not.
+
+| # | Check | How | Pass |
+|---|-------|-----|------|
+| 1 | **Which PostgreSQL the install will use** (DL-317) | Before `install.ps1`: the install creates its database on the PostgreSQL at `-PgHost` and `-PgPort` (default `127.0.0.1`, `5432`). Run `Get-NetTCPConnection -LocalPort 5432 -State Listen \| ForEach-Object { Get-Process -Id $_.OwningProcess }` with your port | The answer is `postgres` (the PostgreSQL 17 of "What you need"), not another program such as a Docker container. No backup is needed first: the install refuses a database called `accucut` that already exists |
+| 2 | **Where every later migration goes** (DL-317) | Before every `update.ps1`: the three lines in "Before you run it: check where the migrations will go" (under Update). Keep the release backup on: never `-NoBackup` for a release that holds migrations | Host, port and database are the server's own (`127.0.0.1`, `5432`, `accucut`), and the update log shows the release backup |
+| 3 | **The steps the rehearsal had to do differently** (DL-311 (2)) | The rehearsal record (qa-engineer, R-release tier of the test plan) lists each step the delivery PC forced to differ, for example Windows 11 instead of Windows Server, a port clash, IIS not available, administrator rights. Run each of those steps here as this guide says | Each step works as written on the server |
+| 4 | **The reverse-proxy checklist C1 to C10** (DL-292 (3)), if IIS is the proxy | The IIS checklist in the reverse-proxy section of this guide | All ten lines pass |
+| 5 | **The Admin's account** (ADR-015 Amendment 3.4) | Create the Admin's own Windows account and add it to the local Administrators group, as "Restore a backup", "For the IT person" says | The Admin can sign in, open Windows PowerShell as administrator and run `cd C:\Accucut\current` without an error |
+| 6 | **`FEATURE_EMAIL` is off on web and worker** (DL-378) | In Windows PowerShell as an administrator: (a) `Select-String -Path C:\Accucut\config\.env -Pattern '^FEATURE_EMAIL='`; (b) `[Environment]::GetEnvironmentVariable('FEATURE_EMAIL','Machine')`; (c) `Select-String -Path C:\Accucut\services\*.xml -Pattern 'FEATURE_EMAIL'`; (d) `Restart-Service AccucutWorker, AccucutApp`, wait a minute, then `Select-String -Path C:\Accucut\logs\AccucutWorker.*.out.log -Pattern 'mail jobs are off: FEATURE_EMAIL is not on' \| Select-Object -Last 1`; (e) open the portal's sign-in page | (a) prints nothing, `FEATURE_EMAIL=` or `FEATURE_EMAIL=off`, never `on`; (b) and (c) print nothing; (d) shows a line from today with `"msg":"mail jobs are off: FEATURE_EMAIL is not on, so outbox-send is not scheduled"`; (e) shows "Forgot your password? Ask the Admin to reset it." and no "Forgot your password?" link. `SMTP_AUTH_MODE` is `none` and no mailbox password is in `.env`. E-mail stays off (alerts, password reset by e-mail, backup-watch e-mail), as the release notes say (KG-2) |
+| 7 | **One 50-node export timing on the server** (NFR-010, DL-311 (4)) | Sign in as a Lead, open an estimate with 50 parts and 50 pictures (invented test data, removed afterwards), and time Download Excel from the click to the file | Within **10 s**. Over 10 s is a defect against NFR-010; record the figure, the release and the server in the install record |
+| 8 | **The first backup and the Admin's restore rehearsal** (NFR-013, DL-035, DL-253) | "Backups" and "Restore a backup" below | A new `.age` file in `C:\Accucut\backups`; the rehearsal finished from this guide alone |
+| 9 | **A forgotten password, with e-mail off** (DL-378, FR-004) | Sign in as the Admin, open Users, choose Reset password for a test user (invented, removed afterwards) and set a temporary password. Sign in as that user in a private window | The user is taken to "Set a new password", sets one, and reaches the portal. The old password no longer works |
+
+## After go-live: switching e-mail on (DL-378 (3))
+
+E-mail goes live only after one real send from **this server** on the chosen mailbox. It is not a go-live check. Do it when the delivery lead has chosen the mailbox and Accucut IT has given the mail settings.
+
+| # | Step | How | Pass |
+|---|------|-----|------|
+| 1 | **Mail settings** | Edit `C:\Accucut\config\.env` as an administrator: `SMTP_AUTH_MODE` (`password` for a cPanel mailbox, `oauth2-client-credentials` for Microsoft 365), `SMTP_HOST`, `SMTP_PORT` (465 or 587), `SMTP_USER`, and `SMTP_PASSWORD` or the three `SMTP_OAUTH_*` values. Leave `FEATURE_EMAIL` off. Then `Restart-Service AccucutWorker, AccucutApp` | Both services run (`Get-Service AccucutApp, AccucutWorker`) and `http://127.0.0.1:3000/api/health` answers `{"status":"ok"}`. The password is in this file only: never in an e-mail, chat, Jira or GitHub |
+| 2 | **The real send** (DL-371 (5) (i) to (v)) | As the Admin, Settings, E-mail alerts: save the sender name and address, then Send test e-mail | The test e-mail arrives in the Admin's inbox (not junk), from the chosen sender. Record the date, who, mode, port, and inbox or junk, with no address or password. This send meets G3 condition 16 |
+| 3 | **Switch on** | Set `FEATURE_EMAIL=on` in `C:\Accucut\config\.env`, then `Restart-Service AccucutWorker, AccucutApp` | The newest worker start in `AccucutWorker.*.out.log` shows `outbox-send scheduled every minute`, `overdue-scan scheduled every minute` and `daily-digest scheduled at 11:00 Asia/Kolkata`. The sign-in page shows the "Forgot your password?" link |
+| 4 | **First real alert and reset** | Assign a task to a test Engineer whose address the team controls, and ask for one password reset by e-mail for a test user | Both e-mails arrive within a few minutes, and the reset link sets a new password that works |
+
+**To switch off again:** set `FEATURE_EMAIL=off` and restart both services. Nothing new is queued while it is off. Rows already queued wait: an unsent assignment e-mail expires 24 hours after it was written and a reset link 60 minutes after it was asked for, so neither goes out late. Overdue, digest and backup e-mails that were queued but not sent go out when e-mail is switched on again.
 
 ## Look and fix
 
