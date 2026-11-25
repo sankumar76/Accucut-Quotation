@@ -1,4 +1,4 @@
-# DEF-084: `cancel-approval.spec.ts:130` [tablet] ("a good cancel", AC-3, AC-6, AC-7) fails both attempts at the 30 s test budget on a `master` push; the case runs three roles in one test and reads 24 to 26 s at ordinary draws (Test; Sev-3; Jira AQP-440, GitHub #718)
+# DEF-084: `cancel-approval.spec.ts:130` [tablet] ("a good cancel", AC-3, AC-6, AC-7) fails both attempts at the 30 s test budget on a `master` push; the case runs three roles in one test and reads 24 to 26 s at ordinary draws (Test; Sev-3; Jira AQP-440, GitHub #718; CLOSED 2026-11-25)
 
 | Field | Value |
 |-------|-------|
@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate (qa-engineer, 2026-11-25, on master's DL-385 (4)).** A flaky test, type Test, that turned a required check red on a `master` push. Not a G8 blocker as Sev-3 (test plan section 6), but a failure of this case in the final regression sits outside DL-369's G8-day branch (DL-385 (6)). **Severity triggers (DL-385 (4)):** a price or "Approved Quote Price" on the Engineer's page in any attempt of this case or of its new cases is **Sev-1** (NFR-002) and blocks G8 at once; any other wrong value or text received makes it a **provisional Sev-2, type Product**, the same day. Neither has happened. |
 | Priority | P3 (Jira Medium, label `sev-3`; also `final-review`). **Lane 3 now** (freed by #717); a Sev-3 Bug comes before the Minors, so QLT-F-04 (#686) waits (DL-385 (4)). |
 | Type | **Test** (duration tail of the test's own design; the DEF-080 and DEF-043 class). **Product not excluded** (master, DL-385 (4)); the squash that was pushed changes no code, so nothing in it can be the cause. |
-| Status | **Open (new), 2026-11-25 (qa-engineer).** First failure of the case on any run QA holds (test plan, defect files and decision log searched: no mention before f2f19f76). Re-run rule **R14** covers PR runs only until the Bug closes or G8 (DL-385 (5)); `master` pushes are never re-run. |
+| Status | **CLOSED (Verified, Closed), 2026-11-25 (qa-engineer): the proof of DL-385 (4) is met.** The three cases of the split (Admin cancel `:141`, Lead view `:186`, Engineer view NFR-002 `:196`) passed attempt 1 under 25 s at mobile, tablet and desktop in three readings (mobile / tablet / desktop, seconds): **(1) PR #719 run of record 45581939782** (head b3f10588, 0 behind 810da064, `success`, `pull_request`, attempt 1; shards 578 / 576 / 579 / 563 passed, 15.2 / 15.1 / 13.2 / 18.1 m): Admin 10.1 / 8.2 / 12.2, Lead 7.8 / 7.6 / 7.6, Engineer 7.7 / 8.3 / 8.3. **(2) `master` push 54c85e43** (the squash; CI 45601912016 `success`, draw 0.65; shards 578 / 576 / 579 / 563, 15.5 / 15.8 / 12.3 / 12.3 m): Admin 8.4 / 11.4 / 10.6, Lead 6.9 / 9.1 / 7.2, Engineer 7.4 / 9.2 / 7.7. **(3) `master` push a761ca9d** (CI 45605853205, red for DEF-053 only, draw 1.00; shards 578 / 576 / 579 / 562 passed, 21.2 / 17.3 / 13.1 / 18.8 m): Admin 12.8 / 10.2 / 10.7, Lead 11.3 / 8.9 / 6.4, Engineer 11.1 / 7.9 / 6.6. No retry line for any of the cases in any of the three runs. **A later reading (`master` push 0244e930, CI 45611772700, draw 0.72):** Admin 10.1 / 15.0 / 9.6, Lead 9.4 / 13.2 / 7.2, Engineer 9.7 / 12.9 / 7.5. **QA's binding check** (posted late on #719, which had merged as 54c85e43): the five NFR-002 assertions (the Engineer's page answers 200; `#calculate-button` reads 'Calculate'; no '48,271.37'; no 'Approved Quote Price'; no 'Approval cancelled') are in the Engineer case `:196`, which ran at all three widths; `expect(` lines 108 before and 109 after; `SLOW_MILLISECONDS` unchanged at 800; no timeout, retry, `test.slow`, skip or `fixme` added. Jira AQP-440 Done, GitHub #718 closed (completed). **Reopen rule:** an attempt-1 failure of any of the three cases on a later `master` push or in the final regression. Earlier: Open (new), 2026-11-25. |
 | Jira / GitHub | [AQP-440](https://sankumar76.atlassian.net/browse/AQP-440) / [#718](https://github.com/sankumar76/Accucut-Quotation/issues/718) (labels bug, sev-3, ai-delivery, final-review; Jira also aiid-DEF-084, agent-qa-engineer). Jira "relates to" AQP-1 and AQP-329 (STORY-06.12). Searched first: JQL on `aiid-DEF-084` and the case's name found only the stories AQP-329 and AQP-297 (neither is a defect of this case); no GitHub issue with `cancel-approval` in the title was a defect of this case. |
 | Found by / date | CI (the push run); read and logged by qa-engineer, 2026-11-25; classified by master, DL-385 |
 | Build / commit | `master` `f2f19f76` (#714, the records squash; changes `docs/**`, `deploy/windows/README.md`, `ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md` and, per its description, `tsconfig.json`'s `docs` exclude; nothing under `src/`, `prisma/` or `tests/`). The spec last changed on 20 Nov (13d58e62, #548) per master. |
@@ -46,13 +46,13 @@ Attempt 1 (no. 282, tablet) **30.1 s**: `Test timeout of 30000ms exceeded.`, wit
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fixed (test-only split) | developer | | |
+| Fixed (test-only split) | developer | 2026-11-25 | PR #719 (head b3f10588), squash `54c85e43` (`test(approval): split cancel-approval case per person [AQP-440]`); DL-386 accepted its shard shift (+1 person) |
 | Assertions listed before and after in the PR body | developer | | |
-| QA check: every NFR-002 assertion in a case at all three widths | qa-engineer | | |
-| Proof: fix PR run of record | qa-engineer | | |
-| Proof: first `master` push after the squash | qa-engineer | | |
-| Proof: second `master` push after the squash | qa-engineer | | |
-| Closed | qa-engineer | | |
+| QA check: every NFR-002 assertion in a case at all three widths | qa-engineer | 2026-11-25 | Posted late on #719 (issuecomment-7162139670); all five in `:196`, three widths |
+| Proof: fix PR run of record | qa-engineer | 2026-11-25 | 45581939782: all under 13 s |
+| Proof: first `master` push after the squash | qa-engineer | 2026-11-25 | 54c85e43, CI 45601912016: all under 12 s |
+| Proof: second `master` push after the squash | qa-engineer | 2026-11-25 | a761ca9d, CI 45605853205: all under 13 s |
+| Closed | qa-engineer | 2026-11-25 | AQP-440 Done (comment 13279), #718 closed |
 
 ## Records
 Jira Bug AQP-440 and GitHub issue #718, created 2026-11-25 and cross-linked (Jira comment on AQP-440 and the GitHub body carry both keys). Related: AQP-1, AQP-329 (STORY-06.12); DEF-080 and DEF-043 (the same class); RISK-031 (a red `master` push, DL-385 (3)); DL-385 (master's ruling); test plan 0.3.54 (the watch entry, now this Bug) and 0.3.55; CI run 45549413842, shard 2 job 138986723263.
