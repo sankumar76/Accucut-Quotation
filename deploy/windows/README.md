@@ -634,6 +634,35 @@ staging. A restore from the oldest copy once a year is recommended: a 2-year cop
 
 **Not covered here:** an off-server copy (yours to set up, see "Backups") and the timed walk-through of NFR-030.
 
+## If the Admin forgets their password
+
+E-mail is off at go-live, so the Admin cannot use a reset link, and nobody else can reset the Admin. A server administrator can set a temporary password for the one Admin, on the server:
+
+1. Sign in to the server with your own Windows account (a member of Administrators) and open **Windows PowerShell** with **Run as administrator**.
+2. Run these four lines:
+   ```
+   $node = (Select-Xml -Path C:\Accucut\services\AccucutApp.xml -XPath '/service/executable').Node.InnerText
+   cd C:\Accucut\current\app
+   $env:NODE_ENV = 'production'
+   & $node --env-file=C:\Accucut\config\.env bootstrap-admin.mjs --reset-admin-password
+   ```
+3. Check the name and e-mail it shows, type `RESET`, then type a temporary password twice (10 to 128 characters, with a number and a symbol; nothing shows as you type).
+4. Give the Admin the temporary password in person or by phone, never by e-mail or chat. At their next sign-in they must choose their own. Every session they had has ended.
+
+The portal's audit log records it as "System: server command" with your Windows account name. The command never runs from the web, never reactivates a deactivated Admin, and changes nothing if it stops.
+
+**Note the date and your Windows account in the server's operations record.** The Windows name in the audit entry comes from the process that ran the command and is not proof of who it was; your own note, and the server's Windows Security log if process auditing is on, are (DL-381 (3)(b)). Never write the temporary password in chat, Jira, GitHub or the record: it is shared with the Admin only, in person or by phone.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | Done |
+| 1 | `.env` was read, but `DATABASE_URL` or `AUTH_SECRET` is missing or invalid, or the database cannot be reached: check `Get-Service postgresql-x64-17` |
+| 2 | Not exactly one active Admin, or "The Admin account changed while this ran. Nothing was changed. Run it again.": nothing was changed |
+| 3 | The password was refused (empty, the two entries differ, or the rule): run it again |
+| 4 | Stopped: not an interactive window, an unknown argument, `RESET` not typed, or Ctrl+C |
+
+A window that is not elevated never reaches the command: PowerShell cannot open `C:\Accucut`, and Node stops with its own exit 9 (`.env` not found). Open Windows PowerShell with Run as administrator.
+
 ## The shared module (`AccucutOps.psm1`)
 
 STORY-10.05 (backup) and STORY-10.11 (restore) import this module and add their own functions to it. The module is loaded only **after** it has passed

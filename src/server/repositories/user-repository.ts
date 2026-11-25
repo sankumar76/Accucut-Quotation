@@ -45,6 +45,15 @@ export interface NewUser {
   readonly mustChangePassword: boolean;
 }
 
+/** An account with the Admin role, active or not, as the server command that resets the Admin's password reads it (STORY-01.10). No password hash, no session version. */
+export interface AdminAccount {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  readonly isActive: boolean;
+  readonly mustChangePassword: boolean;
+}
+
 /** A row of the Users list (SCR-14): what the Admin sees about a person. No password hash, no session version. */
 export interface UserSummary {
   readonly id: string;
@@ -88,6 +97,11 @@ export interface UserRepository {
    * state the change really found and a second change to the same person waits for the first (STORY-01.07).
    */
   findAccountForUpdate(id: string, tx: Transaction): Promise<UserAccount | null>;
+  /**
+   * Every account with the Admin role, active or not, in ascending ID order. With `tx` it runs in the caller's transaction **and locks the rows** (`FOR UPDATE`) until it ends, always in that order, so two
+   * transactions that lock the Admin rows cannot wait on each other (STORY-01.10, architecture section 8). Without `tx` it is a plain read and locks nothing.
+   */
+  listAdminAccounts(tx?: Transaction): Promise<ReadonlyArray<AdminAccount>>;
   /** True if any user at all has the Admin role, active or not. */
   hasAnyAdmin(): Promise<boolean>;
   /** Everyone, for the Users list: active people first, then by role (Admin, Lead, Engineer), then by name. */
@@ -161,6 +175,11 @@ const LOCKED_ACCOUNT_ROWS = z.array(
   }),
 );
 
+/** The rows of the Admin listing, checked on the way in: a raw statement is not typed by Prisma. */
+const ADMIN_ACCOUNT_ROWS = z.array(
+  z.strictObject({ id: z.string(), name: z.string(), email: z.string(), isActive: z.boolean(), mustChangePassword: z.boolean() }),
+);
+
 /** The rule a unique violation broke, from the column or the index it names; null for anything else. */
 function constraintOf(error: unknown): UserConstraint | null {
   const names = uniqueViolationOf(error);
@@ -229,6 +248,21 @@ export function createUserRepository(db: PrismaClient): UserRepository {
           FROM users WHERE id = ${id}::uuid FOR UPDATE`;
         const found = LOCKED_ACCOUNT_ROWS.parse(rows)[0];
         return found ?? null;
+      });
+    },
+
+    listAdminAccounts(tx) {
+      return withDatabaseErrors(async () => {
+        // Prisma has no row lock, so with a transaction this is a raw statement; nothing in it comes from outside. Ordered by ID, and `LockRows` takes the locks in the order the rows come.
+        const rows =
+          tx === undefined
+            ? await db.$queryRaw`
+                SELECT id::text AS "id", name, email, is_active AS "isActive", must_change_password AS "mustChangePassword"
+                FROM users WHERE role = 'ADMIN' ORDER BY id`
+            : await clientFor(db, tx).$queryRaw`
+                SELECT id::text AS "id", name, email, is_active AS "isActive", must_change_password AS "mustChangePassword"
+                FROM users WHERE role = 'ADMIN' ORDER BY id FOR UPDATE`;
+        return ADMIN_ACCOUNT_ROWS.parse(rows);
       });
     },
 
