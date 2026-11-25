@@ -47,6 +47,8 @@ const store = (page: Page, userId: string, value: string): Promise<void> => page
 const handleOf = (page: Page): Locator => page.getByRole('separator', { name: 'Resize parts tree' });
 const column = (page: Page): Locator => page.locator('#parts-tree-column');
 const widthButton = (page: Page): Locator => page.getByRole('button', { name: 'Tree width', exact: true });
+/** An alert that says something: the framework's own route announcer is an alert with no text. */
+const textAlerts = (page: Page): Locator => page.getByRole('alert').filter({ hasText: /\S/ });
 const columnWidth = (page: Page): Promise<number> => column(page).evaluate((element) => Math.round(element.getBoundingClientRect().width));
 
 /** The width the handle says and the width the column has, which are one number (AC-2). */
@@ -462,7 +464,7 @@ test.describe('the stored width, at 1366 px', () => {
       await waitForForm(page);
       await expect(handleOf(page)).toBeVisible();
       await expectWidth(page, DEFAULT_WIDTH);
-      await expect(page.getByRole('alert'), `no message for ${JSON.stringify(bad)}`).toHaveCount(0);
+      await expect(textAlerts(page), `no message for ${JSON.stringify(bad)}`).toHaveCount(0);
     }
 
     await page.evaluate((key) => window.localStorage.removeItem(key), storageKey(owner.id));
@@ -487,6 +489,6 @@ test.describe('the stored width, at 1366 px', () => {
     await handleOf(page).focus();
     await page.keyboard.press('End');
     await expectWidth(page, MAXIMUM);
-    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(textAlerts(page)).toHaveCount(0);
   });
 });
