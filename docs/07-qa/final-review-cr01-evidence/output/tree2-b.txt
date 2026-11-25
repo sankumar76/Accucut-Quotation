@@ -1,0 +1,33 @@
+QA| firefox firefox viewport {"width":1366,"height":768} initial 1=MAIN
+QA| firefox tree built 1=MAIN 1.1=SUB_ 1.1.1=PART 1.1.1.1=FAST 1.1.2=PART 1.2=FAST 2=MAIN
+QA| firefox OVERFLOW tree built ok (1366<=1366)
+QA| firefox REVEAL selected(1.1) 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+QA| firefox REVEAL after keyboard focus on 1.1.2 link active= Sub-part1.1.2PartNo  1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| firefox REVEAL tab to handle of 1.1.2 (not open) active= Move 1.1.2 Part 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+  ✘  1 [firefox] › tests\e2e-qa\tree2.qa.ts:53:1 › T3 tree functions, :has() reveal, overflow (1.1m)
+QA| webkit webkit viewport {"width":1366,"height":768} initial 1=MAIN
+QA| webkit tree built 1=MAIN 1.1=SUB_ 1.1.1=PART 1.1.1.1=FAST 1.1.2=PART 1.2=FAST 2=MAIN
+QA| webkit OVERFLOW tree built ok (1366<=1366)
+QA| webkit REVEAL selected(1.1) 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+QA| webkit REVEAL after keyboard focus on 1.1.2 link active=  1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| webkit REVEAL tab to handle of 1.1.2 (not open) active= Add fastener under 1.1.2 Part 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+  ✘  2 [webkit] › tests\e2e-qa\tree2.qa.ts:53:1 › T3 tree functions, :has() reveal, overflow (1.2m)
+QA| desktop chromium viewport {"width":1366,"height":768} initial 1=MAIN
+QA| desktop tree built 1=MAIN 1.1=SUB_ 1.1.1=PART 1.1.1.1=FAST 1.1.2=PART 1.2=FAST 2=MAIN
+QA| desktop OVERFLOW tree built ok (1366<=1366)
+QA| desktop REVEAL selected(1.1) 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+QA| desktop REVEAL after keyboard focus on 1.1.2 link active= Sub-part1.1.2PartNo  1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| desktop REVEAL tab to handle of 1.1.2 (not open) active= Move 1.1.2 Part 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| desktop REVEAL menu open on 2 1:hidden 1.1:hidden 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:SHOWN
+QA| desktop MOVE menu items on 1.1.2 Move up:null Move down:true
+QA| desktop after Move up of 1.1.2 1=MAIN 1.1=SUB_ 1.1.1=PART 1.1.2=PART 1.1.2.1=FAST 1.2=FAST 2=MAIN | announcer:  // Part renumbered to 1.1.1 // Last saved 24 Nov 2026, 07:28 IST. Auto-save every 30 s. //  //  //  | requests: POST /api/v1/estimates/:id/tree/move
+QA| desktop OVERFLOW after move ok (1366<=1366)
+QA| desktop DELETE dialog Delete row 1.1? This also deletes the 3 rows under it, and everything typed into them. This cannot be undone. Cancel Delete 4 rows
+QA| desktop after cancel delete, focus on null | rows 7
+QA| desktop after delete 1.1 (4 rows go) 1=MAIN 1.1=FAST 2=MAIN | announcer:  // 4 rows deleted //  // 
+QA| desktop two Parts under 1 (Sub-part naming) Main Assembly1PartAll in / Fastener1.1PartNo inputs / Sub-part1.2PartNo inputs / Sub-part1.3PartNo inputs / Main Assembly2PartNo inp
+QA| desktop after deleting one of two Parts (other turns back to Part) Main Assembly1PartAll in / Fastener1.1PartNo inputs / Part1.2PartNo inputs yet / Main Assembly2PartNo inp
+QA| desktop OVERFLOW end ok (1366<=1366)
+  ✓  3 [desktop] › tests\e2e-qa\tree2.qa.ts:53:1 › T3 tree functions, :has() reveal, overflow (55.3s)
+  2 failed
+  1 passed (4.0m)

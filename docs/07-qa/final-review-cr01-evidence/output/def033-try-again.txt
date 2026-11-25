@@ -1,0 +1,24 @@
+QA3| 1366 Customers list error state shown (SELECT withdrawn on customers)
+QA3| 1366 Customers list recoveredByTryAgain true
+QA3| 1366 Process master error state shown (SELECT withdrawn on process_items)
+QA3| 1366 Process master recoveredByTryAgain true
+QA3| 1366 Materials error state shown (SELECT withdrawn on materials)
+QA3| 1366 Materials recoveredByTryAgain true
+QA3| 1366 Audit log error state shown (SELECT withdrawn on audit_log)
+QA3| 1366 Audit log recoveredByTryAgain true
+QA3| 768 Customers list error state shown (SELECT withdrawn on customers)
+QA3| 768 Customers list recoveredByTryAgain true
+QA3| 768 Process master error state shown (SELECT withdrawn on process_items)
+QA3| 768 Process master recoveredByTryAgain true
+QA3| 768 Materials error state shown (SELECT withdrawn on materials)
+QA3| 768 Materials recoveredByTryAgain true
+QA3| 768 Audit log error state shown (SELECT withdrawn on audit_log)
+QA3| 768 Audit log recoveredByTryAgain true
+QA3| 360 Customers list error state shown (SELECT withdrawn on customers)
+QA3| 360 Customers list recoveredByTryAgain true
+QA3| 360 Process master error state shown (SELECT withdrawn on process_items)
+QA3| 360 Process master recoveredByTryAgain true
+QA3| 360 Materials error state shown (SELECT withdrawn on materials)
+QA3| 360 Materials recoveredByTryAgain true
+QA3| 360 Audit log error state shown (SELECT withdrawn on audit_log)
+QA3| 360 Audit log recoveredByTryAgain true

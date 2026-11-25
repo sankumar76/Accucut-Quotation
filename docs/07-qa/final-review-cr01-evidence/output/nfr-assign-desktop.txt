@@ -1,0 +1,66 @@
+QA| desktop OVERFLOW assign empty ok (1366<=1366)
+QA| desktop AXE assign empty 0 violations
+QA| desktop ASSIGN fields ["Engineer","Customer Name","Customer Short Name","Network folder path","Deadline date","Deadline time","Title","Subject (project name)","Notes\n(optional)"]
+QA| desktop ASSIGN empty submit alert 6 things need fixing before this task can be assigned. Choose an Engineer. Choose a customer. Enter the network folder path. It starts with two backslashes, like \\server\share\RFQ-123. Choose a deadline later than now. Enter a title. Enter the subject. //  | focus: assign-engineer
+QA| desktop AXE assign with errors 0 violations
+QA| desktop OVERFLOW assign errors ok (1366<=1366)
+QA| desktop customer options (first 4) ["Choose the customer","Canary-Customer-Alpha"]
+QA| desktop short name output 2ed51d80b3
+QA| desktop subject 81 error 4 things need fixing before this task can be assigned. Choose an Engineer. Enter the network folder path. It starts with two backslashes, like \\server\share\RFQ-123. Choose a deadline later than now. Keep the subject under 80 characters. // Keep the subject under 80 characters. // 
+QA| desktop subject accepted 80 -> input value length 80
+QA| desktop after create: url http://localhost:3300/assign | status text Task Q-2026-0001 assigned to E2E Engineer. Folder \\invented-server\invented-share\QA-final Copy path Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer. Assign another Assign another task below. // // // 
+QA| desktop OVERFLOW customers ok (1366<=1366)
+QA| desktop AXE customers list 0 violations
+QA| desktop CUSTOMER form labels ["Customer name","Short name","Phone","E-mail","Address"]
+QA| desktop short name 11 chars Keep the short name under 10 characters.
+QA| desktop AXE customer dialog with error 0 violations
+QA| desktop RENAME /about 200 title= About · Accucut RFQ Portal | "Quotation Portal" occurrences: 0 | "RFQ Portal": 22
+QA| desktop RENAME / 200 title= Home · Accucut RFQ Portal | "Quotation Portal" occurrences: 0 | "RFQ Portal": 14
+QA| desktop RENAME /queue 200 title= Task queue · Accucut RFQ Portal | "Quotation Portal" occurrences: 0 | "RFQ Portal": 12
+QA| desktop RENAME /assign 200 title= Assign task · Accucut RFQ Portal | "Quotation Portal" occurrences: 0 | "RFQ Portal": 12
+QA| desktop RENAME /masters/customers 200 title= Customers · Accucut RFQ Portal | "Quotation Portal" occurrences: 0 | "RFQ Portal": 12
+QA| desktop RENAME /users 200 title= Users · Accucut RFQ Portal | "Quotation Portal" occurrences: 0 | "RFQ Portal": 12
+QA| desktop RENAME /account 200 title= Your account · Accucut RFQ Portal | "Quotation Portal" occurrences: 0 | "RFQ Portal": 12
+QA| desktop ABOUT text About ACCUCUT LASERS RFQ Portal The Accucut RFQ Portal helps Accucut Lasers prepare, review and approve manufacturing cost estimates. Engineers enter part details, the portal does the calculation, and a Lead or Admin reviews and approves the estimate. Version No: 1.0 © Accucut Lasers Pvt Ltd. All rights reserved.
+QA| desktop RENAME /sign-in 200 Sign in · Accucut RFQ Portal | robots: noindex, nofollow | og:title Sign in · Accucut RFQ Portal | og:image count 0 | QP: 0
+QA| desktop AXE sign-in 0 violations
+  ✓  1 [desktop] › tests\e2e-qa\assign.qa.ts:17:1 › T4 assign task, customers short name, rename strings (1.1m)
+QA| desktop figures the Lead sees (sample, digits only, no secrets): 04790 16889808.07421875 1351184.6459375 58732 48271.37 16889808.07
+QA| desktop Lead: mark quoted 200 download 200
+QA| desktop ENGINEER QUOTED /estimates/Q-9999-3762786516 200 bytes=60126 clean
+QA| desktop ENGINEER QUOTED /queue 200 bytes=59299 clean
+QA| desktop ENGINEER QUOTED /queue?tab=closed 200 bytes=67214 clean
+QA| desktop ENGINEER QUOTED /queue?tab=ignored 200 bytes=59492 clean
+QA| desktop ENGINEER QUOTED /queue?tab=open 200 bytes=59385 clean
+QA| desktop ENGINEER QUOTED /estimates/Q-9999-3762786516/export 403 bytes=46797 clean
+QA| desktop ENGINEER QUOTED /estimates/Q-9999-3762786516/costs/1 403 bytes=47360 clean
+QA| desktop ENGINEER QUOTED /api/v1/estimates/e04790d4-ab4e-440b-a42b-0d49d07c6913/form 200 bytes=9488 clean
+QA| desktop ENGINEER QUOTED /api/v1/estimates/e04790d4-ab4e-440b-a42b-0d49d07c6913/nodes 405 bytes=0 clean
+QA| desktop ENGINEER QUOTED /api/v1/estimates/e04790d4-ab4e-440b-a42b-0d49d07c6913/tree 200 bytes=161 clean
+QA| desktop ENGINEER QUOTED /api/v1/estimates/e04790d4-ab4e-440b-a42b-0d49d07c6913/costs 403 bytes=123 clean
+QA| desktop ENGINEER QUOTED /api/v1/estimates/e04790d4-ab4e-440b-a42b-0d49d07c6913/export-summary 403 bytes=123 clean
+QA| desktop ENGINEER QUOTED /api/v1/estimates/e04790d4-ab4e-440b-a42b-0d49d07c6913/unlock-preview 403 bytes=123 clean
+QA| desktop ENGINEER QUOTED /api/v1/tasks 200 bytes=132 clean
+QA| desktop ENGINEER QUOTED /api/v1/tasks?tab=closed 200 bytes=599 clean
+QA| desktop ENGINEER QUOTED /api/v1/tasks?tab=ignored 200 bytes=135 clean
+QA| desktop ENGINEER QUOTED summary: paths with a hit = 0
+QA| desktop Lead: unlock 200 ignore 200
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /estimates/Q-9999-3762786516 200 bytes=62269 LEAK? tokens=["E2E axe.desktop.r0.t0.a0de46"] words=[]
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /queue 200 bytes=59299 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /queue?tab=closed 200 bytes=59376 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /queue?tab=ignored 200 bytes=67831 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /queue?tab=open 200 bytes=59385 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /estimates/Q-9999-3762786516/export 403 bytes=46797 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /estimates/Q-9999-3762786516/costs/1 403 bytes=47360 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /api/v1/estimates/e04790d4-ab4e-440b-a42b-0d49d07c6913/form 200 bytes=9488 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /api/v1/estimates/e04790d4-ab4e-440b-a42b-0d49d07c6913/nodes 405 bytes=0 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /api/v1/estimates/e04790d4-ab4e-440b-a42b-0d49d07c6913/tree 200 bytes=161 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /api/v1/estimates/e04790d4-ab4e-440b-a42b-0d49d07c6913/costs 403 bytes=123 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /api/v1/estimates/e04790d4-ab4e-440b-a42b-0d49d07c6913/export-summary 403 bytes=123 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /api/v1/estimates/e04790d4-ab4e-440b-a42b-0d49d07c6913/unlock-preview 403 bytes=123 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /api/v1/tasks 200 bytes=132 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /api/v1/tasks?tab=closed 200 bytes=134 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) /api/v1/tasks?tab=ignored 200 bytes=626 clean
+QA| desktop ENGINEER IGNORED(after unlock -> draft) summary: paths with a hit = 1
+  ✓  2 [desktop] › tests\e2e-qa\nfr2.qa.ts:12:1 › T5 Engineer cost confidentiality across Approved, Quoted, Ignored (NFR-002) with planted figures (55.3s)
+  2 passed (2.3m)

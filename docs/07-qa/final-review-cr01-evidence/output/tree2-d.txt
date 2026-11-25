@@ -1,0 +1,25 @@
+QA| mobile chromium viewport {"width":360,"height":800} initial 1=MAIN
+QA| mobile tree built 1=MAIN 1.1=SUB_ 1.1.1=PART 1.1.1.1=FAST 1.1.2=PART 1.2=FAST 2=MAIN
+QA| mobile OVERFLOW tree built ok (360<=360)
+QA| mobile LEVEL-4 ROW OPEN {"openRow":"1.1.1.1","linkLeft":135,"linkRight":272,"toolbarLeft":135,"toolbarRight":272,"toolbarW":137,"clientW":360,"scrollW":360} PASS (no sideways scroll, toolbar inside)
+QA| mobile REVEAL selected(1.1) 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+QA| mobile REVEAL after keyboard focus on 1.1.2 link active= Sub-part1.1.2PartNo  1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| mobile REVEAL tab to handle of 1.1.2 (not open) active= Move 1.1.2 Part 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+  ✘  1 [mobile] › tests\e2e-qa\tree2.qa.ts:53:1 › T3 tree functions, :has() reveal, overflow (51.4s)
+QA| w320 chromium viewport {"width":320,"height":568} initial 1=MAIN
+QA| w320 tree built 1=MAIN 1.1=SUB_ 1.1.1=PART 1.1.1.1=FAST 1.1.2=PART 1.2=FAST 2=MAIN
+QA| w320 OVERFLOW tree built ok (320<=320)
+QA| w320 LEVEL-4 ROW OPEN {"openRow":"1.1.1.1","linkLeft":135,"linkRight":266,"toolbarLeft":135,"toolbarRight":266,"toolbarW":131,"clientW":320,"scrollW":320} PASS (no sideways scroll, toolbar inside)
+QA| w320 REVEAL selected(1.1) 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+QA| w320 REVEAL after keyboard focus on 1.1.2 link active= Sub-part1.1.2PartNo  1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| w320 REVEAL tab to handle of 1.1.2 (not open) active= Move 1.1.2 Part 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+  ✘  2 [w320] › tests\e2e-qa\tree2.qa.ts:53:1 › T3 tree functions, :has() reveal, overflow (49.6s)
+QA| z400 chromium viewport {"width":320,"height":256} initial 1=MAIN
+QA| z400 tree built 1=MAIN 1.1=SUB_ 1.1.1=PART 1.1.1.1=FAST 1.1.2=PART 1.2=FAST 2=MAIN
+QA| z400 OVERFLOW tree built ok (320<=320)
+QA| z400 LEVEL-4 ROW OPEN {"openRow":"1.1.1.1","linkLeft":135,"linkRight":266,"toolbarLeft":135,"toolbarRight":266,"toolbarW":131,"clientW":320,"scrollW":320} PASS (no sideways scroll, toolbar inside)
+QA| z400 REVEAL selected(1.1) 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:hidden 1.2:hidden 2:hidden
+QA| z400 REVEAL after keyboard focus on 1.1.2 link active= Sub-part1.1.2PartNo  1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+QA| z400 REVEAL tab to handle of 1.1.2 (not open) active= Move 1.1.2 Part 1:hidden 1.1:SHOWN 1.1.1:hidden 1.1.1.1:hidden 1.1.2:SHOWN 1.2:hidden 2:hidden
+  ✘  3 [z400] › tests\e2e-qa\tree2.qa.ts:53:1 › T3 tree functions, :has() reveal, overflow (57.2s)
+  3 failed
