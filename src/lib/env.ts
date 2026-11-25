@@ -137,6 +137,15 @@ export const databaseEnvSchema = z.object({ DATABASE_URL: postgresUrl });
 /** Needed by the `migrate` step only. The owner role never reaches `app` or `worker`. */
 export const migrateEnvSchema = z.object({ MIGRATE_DATABASE_URL: postgresUrl });
 
+/**
+ * Needed by the server command that resets the Admin's password (STORY-01.10): the runtime database URL, and the key that makes the throttle hashes unguessable, to lift the blocks. Nothing else: an unrelated mail
+ * setting must not stop the emergency command, and the command never reads `ADMIN_EMAIL` or `ADMIN_INITIAL_PASSWORD`.
+ */
+export const serverCommandEnvSchema = z.object({
+  DATABASE_URL: postgresUrl,
+  AUTH_SECRET: secret(AUTH_SECRET_MIN_LENGTH),
+});
+
 /** Read once by `bootstrap:admin`. */
 export const adminBootstrapEnvSchema = z.object({
   ADMIN_EMAIL: z.email(),
@@ -151,6 +160,7 @@ export type ExportEnv = z.infer<typeof exportEnvSchema>;
 export type DatabaseEnv = z.infer<typeof databaseEnvSchema>;
 export type MigrateEnv = z.infer<typeof migrateEnvSchema>;
 export type AdminBootstrapEnv = z.infer<typeof adminBootstrapEnvSchema>;
+export type ServerCommandEnv = z.infer<typeof serverCommandEnvSchema>;
 
 export type EnvSource = Readonly<Record<string, string | undefined>>;
 
@@ -218,6 +228,10 @@ export function loadDatabaseEnv(source: EnvSource = process.env): DatabaseEnv {
 
 export function loadMigrateEnv(source: EnvSource = process.env): MigrateEnv {
   return parseEnv(migrateEnvSchema, source);
+}
+
+export function loadServerCommandEnv(source: EnvSource = process.env): ServerCommandEnv {
+  return parseEnv(serverCommandEnvSchema, source);
 }
 
 export function loadAdminBootstrapEnv(source: EnvSource = process.env): AdminBootstrapEnv {

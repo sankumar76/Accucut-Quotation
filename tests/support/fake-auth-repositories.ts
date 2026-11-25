@@ -109,6 +109,13 @@ export function createFakeUserRepository(initial: ReadonlyArray<NewUser> = []): 
     findAccountForUpdate(id): Promise<UserAccount | null> {
       return this.findAccountById(id);
     },
+    listAdminAccounts: () =>
+      Promise.resolve(
+        records
+          .filter((record) => record.role === 'ADMIN')
+          .sort((a, b) => a.id.localeCompare(b.id))
+          .map((record) => ({ id: record.id, name: record.name, email: record.email, isActive: record.isActive, mustChangePassword: record.mustChangePassword })),
+      ),
     hasAnyAdmin: () => Promise.resolve(records.some((record) => record.role === 'ADMIN')),
     list: () =>
       Promise.resolve(

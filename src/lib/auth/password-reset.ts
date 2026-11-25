@@ -45,6 +45,23 @@ export const FORGOT_TITLE = 'Forgot your password?';
 export const FORGOT_DESCRIPTION = 'Enter your e-mail address and we will send you a link to choose a new one.';
 export const RESET_TITLE = 'Choose a new password';
 export const RESET_DESCRIPTION = 'The link works once and for one hour.';
+/**
+ * While e-mail is off (`FEATURE_EMAIL` absent, empty or `off`) no link is ever sent, so `/forgot-password` shows this explanation in place of the form (STORY-01.10 AC-10, DEF-083; UX ruling
+ * `docs/03-ux/rulings/forgot-password-email-off-2026-11-24.md`). The words are the ruling's, exactly. The lead is the sentence of the sign-in page ("Forgot your password? Ask the Admin to reset it."),
+ * word for word, so the two pages give one instruction (SC 3.2.6).
+ */
+export const FORGOT_EMAIL_OFF_LEAD = 'Ask the Admin to reset it.';
+export const EMAIL_OFF_NOTICE_TITLE = 'Reset links are not sent by e-mail yet.';
+export const EMAIL_OFF_NOTICE_PARAGRAPHS: ReadonlyArray<string> = [
+  'The Admin sets a temporary password and gives it to you in person or by phone. Sign in with it, then choose a password of your own.',
+  'If you are the Admin, ask Accucut IT.',
+];
+export const BACK_TO_SIGN_IN_TEXT = 'Back to sign in';
+
+/** The reset page for a link that is used, expired or unknown while e-mail is off (G-2b, UX-AC-G2.6): no "Ask for a new link", because no link can be sent. */
+export const RESET_LINK_INVALID_TITLE = 'This link has already been used or has expired.';
+export const RESET_LINK_INVALID_EMAIL_OFF_BODY = 'Ask the Admin to reset your password.';
+
 export const REQUEST_FAILED_TITLE = 'We could not send the request.';
 export const REQUEST_FAILED_BODY = 'Check your connection and try again.';
 export const RESET_FAILED_TITLE = 'We could not change your password.';
