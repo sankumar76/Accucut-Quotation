@@ -49,11 +49,20 @@ const stay = (): void => undefined;
  * browser test sets it and no component or setting does. Below 1024 px it is `hidden`: no box, no accessibility tree.
  * Two traps are handled here and nowhere else, so the form and the tree stay as they were:
  * 1. A zero-width flex item still takes the row's gap, so the margin `min(0, width - gap)` gives the gap back while the region is narrower than one gap and is 0 from one gap of width.
- * 2. The token never squeezes the form below one section card (14.5rem, the minimum of the card grid in `part-fields.tsx`): the region is held to what is left after the tree, one card, the form card's own
- *    padding and border (two `--s-5` and 2 px, since the form has a card of its own beside the tree's, DEF-081) and the two gaps. At 1024 px a 340px region therefore shows as less, and the cards stay 232 px wide; from 1280 px it has its whole width.
+ * 2. The token never squeezes the form below one section card (14.5rem, the minimum of the card grid in `part-fields.tsx`): the region is held to what is left after the tree, one card and the
+ *    two gaps. At 1024 px a 340px region therefore shows as less, and the cards stay 232 px wide; from 1280 px it has its whole width.
  * The Tailwind spacing scale is replaced (`globals.css`), so the sums are written with the tokens as arbitrary values (`_` is a space).
  */
-const DRAWING_REGION = 'hidden lg:block lg:shrink-0 lg:w-(--drawing-region-width) lg:ml-[min(0px,calc(var(--drawing-region-width)_-_var(--s-4)))] lg:max-w-[calc(100%_-_var(--tree-w)_-_14.5rem_-_2*var(--s-4)_-_2*var(--s-5)_-_2px)]';
+const DRAWING_REGION = 'hidden lg:block lg:shrink-0 lg:w-(--drawing-region-width) lg:ml-[min(0px,calc(var(--drawing-region-width)_-_var(--s-4)))] lg:max-w-[calc(100%_-_var(--tree-w)_-_14.5rem_-_2*var(--s-4))]';
+
+/**
+ * The form's card from 1024 px, where the tree has a card of its own beside it (DEF-081 ruling item 10): it keeps its title, "Parts and inputs", which the rows' links point to, and its group role, but draws no border, fill or padding, as the
+ * SCR-05 mock-up draws the form on the page itself. The tree is 320 px now, and a form card with 24 px of padding and a border would cost the form 50 px: at 1280 px the section cards would fall from two columns to one, and a 340 px
+ * drawing region would no longer have its whole width (STORY-10.06 AC-2). Below 1024 px the form is a card, as it was.
+ */
+const FORM_CARD = 'lg:flex-1 lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none';
+const FORM_CARD_HEAD = 'lg:border-b-0 lg:px-0 lg:pt-0';
+const FORM_CARD_BODY = 'flex lg:p-0';
 
 /** The alert of an estimate that was ignored while the Engineer worked (CR-01 item 7D): fetched only when the server says so, by a bare `import()`, so it is in no first load (NFR-009). */
 const loadIgnoredAlert = () => import('../estimate-ignore/engineer-ignored-alert').then((module) => module.EngineerIgnoredAlert);
@@ -161,11 +170,11 @@ export function EstimateWorkspace({ header, estimateId, ignored = false, notice 
       {/* The form area: the parts tree is a card of its own (its head, "Parts tree", is its own) beside the form's card, "Parts and inputs", which the rows' links point to (DEF-081 ruling item 10, SCR-05). */}
       <div className="flex flex-col gap-s-4 lg:flex-row lg:items-start">
         <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} />
-        <Card role="group" aria-labelledby={FORM_AREA_TITLE_ID} data-form-area="" className="lg:flex-1">
-          <CardHeader>
+        <Card role="group" aria-labelledby={FORM_AREA_TITLE_ID} data-form-area="" className={FORM_CARD}>
+          <CardHeader className={FORM_CARD_HEAD}>
             <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>
           </CardHeader>
-          <CardContent className="flex">
+          <CardContent className={FORM_CARD_BODY}>
             <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} />
           </CardContent>
         </Card>

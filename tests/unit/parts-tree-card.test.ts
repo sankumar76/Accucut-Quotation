@@ -243,6 +243,14 @@ describe('item 10: in the workspace the tree card sits beside the form card, not
     expect(html).toMatch(/<div[^>]*data-slot="card"[^>]*role="group"[^>]*aria-labelledby="estimate-form-area-title"|<div[^>]*role="group"[^>]*aria-labelledby="estimate-form-area-title"[^>]*data-form-area=""/);
   });
 
+  it('is a card below 1024 px and has no border, fill or padding from 1024 px, so the form keeps its width beside the 320 px tree (STORY-10.06 AC-2)', () => {
+    const open = html.lastIndexOf('<div', html.indexOf('data-form-area'));
+    const card = html.slice(open, html.indexOf('>', open));
+    for (const name of ['lg:flex-1', 'lg:border-0', 'lg:bg-transparent', 'lg:shadow-none']) expect(card, name).toContain(name);
+    expect(formCard).toMatch(/data-slot="card-header" class="[^"]*lg:px-0/);
+    expect(formCard).toMatch(/data-slot="card-content" class="[^"]*lg:p-0/);
+  });
+
   it('has the head "Parts tree" before the form card and none inside it', () => {
     expect(html.indexOf('Parts tree</h2>')).toBeGreaterThan(-1);
     expect(html.indexOf('Parts tree</h2>')).toBeLessThan(html.indexOf('data-form-area'));
