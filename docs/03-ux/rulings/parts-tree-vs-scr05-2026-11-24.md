@@ -143,7 +143,7 @@ Screenshots, all in `C:\Users\sanku\AppData\Local\Temp\claude\859e50c63dd2e28b\7
 | **12** | Arrow cell, row height and indent on a mouse | **Change build** | At `fine-wide:` (1024 px and wider, mouse): `ARROW_CELL` becomes `fine-wide:w-s-5 fine-wide:min-h-(--compact-field-h)` (24 wide, 36 high, meets WCAG 2.5.8) so the row is 36 px, as the link already asks; nested list `fine-wide:ml-s-3 fine-wide:pl-s-2` so the guide line stays under the arrow's centre and each level steps about 20 px. Below 1024 px and on touch: unchanged (44 px, 24 px indent) | Touch size only (see 7b). On a mouse there is no reason to keep 44 px: today the 44 px arrow holds the row at 44 px although the link asks for 36 | **No** |
 | **13** | "Add main assembly" | **Change build to match mock-up** | A hairline (`border-t border-border`, space above and below) then a `ghost` Button with the "+" icon, left-aligned (`primary-ink` text, 6.48:1; the words and the "+" are the cue). Height stays 44 px (`--control-h`), as the mock-up's. Today it is an outlined `secondary` button with no line above | | **No** |
 | **14** | Legends at the foot | **Change build to match mock-up** (words stay the build's) | (a) No visible "Row kinds" title and no line above the legend; keep `aria-label="Row kinds"` on the section. (b) Add the **status legend** the mock-up has under it: the same icons at 18 px in the same inks (`CircleCheck` `text-success`, `Contrast` `text-ink-2`, `Circle` `text-ink-3`, `TriangleAlert` `text-danger`) with the words the build already speaks to screen readers: "All inputs entered", "Some inputs entered", "No inputs yet", "Missing inputs" (STORY-05.11 AC-4, `estimate-texts.ts`). (c) Kind legend uses the same 24 px tile as the rows (the mock-up's 22 px is not kept; see ruling 1) | Words: the mock-up says "Complete / In progress / Not started / Missing data", but the build's words are an accepted acceptance criterion and a key that differs from what a screen reader says is confusing. Mock-up wording to be aligned by the CR-01 session | **No** (#707 only puts the tile in the kind legend) |
-| **15** | Tree resize handle | **Not a styling item; raised, not ruled** | Spec SCR-05 asks for a resizable tree (240 to 400 px, mouse or arrow keys); the mock-up has `.tree-handle`; the build has no handle (`lg:w-(--tree-w)` fixed) | | n/a |
+| **15** | Tree resize handle | **Ruled 2026-11-24: build before the freeze; see "Item 15 specification" below** | Spec SCR-05 asks for a resizable tree (240 to 400 px, mouse or arrow keys); the mock-up has `.tree-handle`; the build has no handle (`lg:w-(--tree-w)` fixed) | | n/a |
 
 ### Why items 8 to 15 are not in #707 and what to do
 
@@ -172,3 +172,183 @@ What I can say from the render, not from the failing run (no artefact was kept, 
 ## What I started and stopped
 
 Nothing was started that needs stopping: no container, no server, no E2E, no change to `aqp-398`, `aqp-403`, the demo copy or `accucut-demo-db`. In the scratchpad folder above I created two folders (`b-master`, `b-707`) holding `git archive` copies of `src` and `package.json` from the two commits, each with a directory junction named `node_modules` pointing at `aqp-398`'s (read only; the junctions were removed afterwards, the target was not touched), and ran Tailwind's PostCSS plugin, Vitest (to render markup) and Playwright's Chromium (screenshots) from there. No file in any repository was written except this one.
+
+
+---
+
+# Delivery lead decisions (2026-11-24)
+
+Given in chat on 2026-11-24 and relayed by the coordinator. They settle the open points of the ruled list above.
+
+| Item | Decision | What it means |
+|---|---|---|
+| 8 Row toolbar | **Keep the build.** The toolbar stays in line under the name of the open row and of the row that has keyboard focus; it does not float and does not appear on hover | The mock-up and the spec are the ones that change. Reason: DEF-075 (a press at the centre of a Part opened the move menu) and DEF-076 (rows jumped under the pointer). Do not build the floating toolbar. The product-manager's open point stands: the customer saw the floating one, so the next customer review shows the new one or tells the customer |
+| 10 Header | **Match the design.** The tree sits in its own card headed "Parts tree", with the row count on the right | Build change (a second card in `estimate-workspace.tsx`); the mock-up already draws it, so only the spec needs a sentence |
+| 15 Resizable tree | **Build before the freeze**, to the SCR-05 / ux-spec description | Handle on the panel edge, keyboard resize, a single-pointer alternative, tests at three widths. Specified below |
+| 1 to 7b, 9, 11 to 14 | **Go ahead as ruled** | Item 11 sets the default width at 320 px; item 14 changes the mock-up's status words to the build's |
+
+Who updates the mock-up and the spec: **the CR-01 UX session in the main checkout** (delivery lead, option A, 2026-11-24). It folds items 8, 10 and 14 (and 11, 12, 15 below) into its own uncommitted work. The ux-expert session that wrote this note did **not** edit `docs/03-ux/generator/**`, any `SCR-05*.html`, `screens.css` or `ux-spec.md`. The exact changes follow, so they can be handed over.
+
+## Changes the CR-01 session needs to make (SCR-05 mock-up and ux-spec)
+
+Line numbers are those of `records-u` at `854cbeb5`; the main checkout's working copy may have moved them, so match on the quoted text.
+
+### Item 8: toolbar in line under the open or focused row (reason: DEF-075, DEF-076, DL-346)
+
+| File and place | Current | New |
+|---|---|---|
+| `docs/03-ux/screens/screens.css` ~629-630 (`.tree-acts`, `.tree-row:hover > .tree-acts, .tree-row:focus-within > .tree-acts, ...`) | Absolute box at `right: 2px; top: 4px`, `opacity: 0`, floats over the end of the row, revealed on **hover**, focus-within or an open menu | In flow: `position: static; flex: 0 0 100%; opacity: 1`, a line of its own under the row's link, indented to line up with the name (arrow cell plus tile). **Hidden** (`display: none`) except on the open row (`.tree-row:has(.is-active)`) and on a row with `:focus-within` or an open menu (`:has([aria-expanded="true"])`). **No `:hover` selector.** No shadow or white box (it is not a floating layer) |
+| `screens.css` ~631 (`.tree-act`, 28 x 28) | 28 px buttons | 36 px high and wide with a mouse at 1024 px and wider (spec: row icon buttons are 36 px), 44 px otherwise (next row). Keep `color: var(--ink-2)`; hover `--surface-2` / `--ink`; the minus hover `--danger-soft` / `--danger` (item 9) |
+| `screens.css` ~637-638 and ~640 (touch special case; 44 px only at `max-width: 767px`) | Hides the toolbar below 1024 px, then shows it static on the open row; 44 px only below 768 px | Delete the special case (the rule above applies at every width). 44 px at `@media (max-width: 1023px), (pointer: coarse)` (this also fixes round-one point 1) |
+| `docs/03-ux/generator/s2.cjs` ~31-42 (comment "Row actions, shown on hover and focus" and the `acts` span) | Comment says hover and focus; the span is the last child of the `li` | Comment: "shown in line under the open row and the row in focus; never on hover (DEF-075, DEF-076)". Markup unchanged (same three buttons, same names); keep it the last child so `flex-wrap` puts it on its own line |
+| `s2.cjs` ~186 (CR-01 review note) and any other `reviewNote` that says the toolbar "floats" or shows "on hover" | Floating text | Reword to the under-the-name toolbar; add "Changed after the customer's third look; the customer is told at the next review" (product-manager's open point) |
+| `ux-spec.md` section 0.9 row 3 (line 201), sentence "**Row actions (third look, 17 Nov 2026):** on hover or keyboard focus a small toolbar floats over the end of the row: **move** (drag handle), **"+" add**, **"-" delete**; on touch screens it shows in line on the selected row." | Floats on hover or focus; in line on touch only | "**Row actions (revised 24 Nov 2026, DEF-075, DEF-076):** a small toolbar of **move** (drag handle), **"+" add** and **"-" delete** shows in line, on its own line under the name, on the open row and on the row that has keyboard focus, on every screen. It never appears on hover: a floating toolbar hid the name and the status and, in the 320 px column, took the press meant for the name; showing it on hover moved the rows below the pointer." |
+| Same row 3, sentence "A small "+" (shown on the row under the pointer, the row in focus and the open row, and always on touch screens) opens a menu..." | Hover and touch wording | "A small "+" (shown with the toolbar, on the open row and the row in focus) opens a menu..." |
+| `ux-spec.md` section 0.9 row 3, "Built" column | n/a | Add "Toolbar under the name: built (AQP-406, DL-346)" |
+| `ux-spec.md` accessibility table row "Target size" (~1443) | "the smallest interactive items (row icon buttons) are 36 px" | Add "(44 px with a finger and below 1024 px)" |
+
+### Item 10: card head "Parts tree" and the count (reason: delivery lead, match the design)
+
+The mock-up **already draws it** (`s2.cjs:50`: `h2` "Parts tree", spacer, "N rows"; `nav aria-label="Parts tree, N rows"`). **No mock-up change** apart from the item 15 button below. The spec is silent, which is how the build drifted:
+
+| File and place | New |
+|---|---|
+| `ux-spec.md` SCR-05 "Layout rules" (~line 636) and section 0.9 row 3 | Add: "The tree is a card of its own beside the form's card. Its head has the title **Parts tree** (an `h2`) on the left and the row count on the right ("12 rows"; "1 row" for one; every row, open or closed), with a hairline under it. The form keeps its own card and its title "Parts and inputs". The `nav` is named "Parts tree, 12 rows". On tablet and phone the same head sits above the list inside the panel and the drawer." |
+
+### Item 14: legends at the foot of the tree (reason: delivery lead; the build's words are an accepted AC, STORY-05.11 AC-4)
+
+| File and place | Current | New |
+|---|---|---|
+| `s2.cjs:54` kind legend | `aria-label="Kinds of row"`, glyph size 16 | `aria-label="Row kinds"`; same 24 px tile as the rows (`L.kindIcon(k, t, false, 18)`); no visible "Row kinds" title (none is drawn today: keep it so) |
+| `screens.css:609` `.tree-legend .kind-ic { width: 22px; height: 22px }` | 22 px legend tile | Delete the rule (24 px, like the rows) |
+| `s2.cjs:56` status legend | `aria-label="Legend"`; words "Complete", "In progress", "Not started", "Missing data" | `aria-label="Row status"`; words **"All inputs entered", "Some inputs entered", "No inputs yet", "Missing inputs"** |
+| `docs/03-ux/generator/lib.cjs:406` (`stIcon` map and its spoken words) | "Complete / In progress / Not started / Missing data" | The same four new words, so the row's spoken status and the legend agree. Check `SCR-05.html`, `SCR-06.html` and `SCR-07.html` after regenerating for the old words |
+| `ux-spec.md` row 3 | The legend of the four icons is named; the status legend is not | Add: "Under the kind legend, a second legend names the four status icons in the words a screen reader speaks: All inputs entered, Some inputs entered, No inputs yet, Missing inputs. Neither legend has a visible title." Check ~line 689 ("check, half circle, empty circle") and any other place that uses the old words |
+
+### Items 11 and 15 (spec and mock-up consequences)
+
+| File and place | Current | New |
+|---|---|---|
+| `ux-spec.md` SCR-05 Layout rules (~636): "**tree** (288 px, resizable 240 to 400 by mouse or arrow keys)" | 288 px | "**tree** (320 px by default, resizable from 240 to 400 px: see the item 15 specification in `docs/03-ux/rulings/parts-tree-vs-scr05-2026-11-24.md`)". Also re-check "At 1280 px with the tree, three columns fit; at 1024 px, two" with 320 px (the form is about 390 px wide at 1024 px, one card column; the CR-01 session confirms from the mock-up) |
+| `screens.css` ~372, ~495 (256 px at 1279 and below), ~510 (240) and `.tree-handle` ~367-369, ~514 | 288 / 256 / 240 defaults; handle 12 px wide, a `button` | Default 320 at every width from 1024 (line 673 already does this: remove the 288 and 256 fallbacks it overrides, so the file has one number); handle per the item 15 look below |
+| `screens.js` `initResize` (~189-207) | min 240, max 400, step 16, no Shift, no Home/End, no reset | Match the item 15 behaviour: Shift+Arrow 64, Home 240, End 400, Enter and double-click reset to 320, Escape cancels a drag, `aria-valuetext`; the element becomes `div tabindex="0" role="separator"` (a `button` may not take that role) with `aria-controls="tree"` and the label "Resize parts tree" |
+| `s2.cjs:57` | `button`, label "Resize parts tree. Use left and right arrow keys.", `aria-valuenow="288"` | `div`, label "Resize parts tree", `aria-valuenow="320"`, `aria-valuetext="Parts tree 320 pixels wide"`, `aria-describedby` pointing at a hidden hint "Drag, or use the left and right arrow keys. Enter resets to the standard width." Add the "Tree width" button and its three-choice popover to the card head (after the count) |
+| `ux-spec.md` accessibility table row "Dragging" (~1444): "No feature needs dragging: the tree is reordered by buttons; the panel is resized with arrow keys" | Wrong for SC 2.5.7: arrow keys serve a keyboard, not a single-pointer user | "The tree is reordered by buttons (Move up / Move down). The panel is resized by dragging its edge, with the arrow keys, or, without dragging, with the **Tree width** button in the tree's head (three choices)." |
+
+Not changed in the mock-up: items 9, 12 and 13 (the build changes; the mock-up already has them) and items 1 to 7b (the mock-up is right, the build changes).
+
+---
+
+# Item 15 specification: resizable parts tree (written 2026-11-24; for the scrum-master to turn into a story)
+
+**Scope.** The tree column of SCR-05 when it sits beside the form (1024 px and wider). It is one reusable component (a resizable column wrapper), so SCR-06 and SCR-07, whose mock-ups draw the same handle, can use it and read the same stored width. SCR-05 is required; whether SCR-06 and SCR-07 join the same story is for the scrum-master and the developer to decide after checking how those two trees are laid out (the spec text at line 636 names SCR-05 only). No cost, rate or formula is involved, so the Engineer view is unaffected.
+
+## The numbers
+
+| Thing | Value | Why |
+|---|---|---|
+| Default | **320 px** | Item 11; names stay on one line (mock-up, delivery lead) |
+| Minimum | **240 px** | The spec's lower bound and the mock-up's `min`. Below it the indent, the arrow cell and a name leave no room |
+| Maximum | **400 px**, and never more than the room allows (next row) | The spec's upper bound and the mock-up's `max` |
+| Room rule | Effective maximum = `min(400, workspace width - gap - 232)` | The form track never goes below **232 px** (14.5 rem, one section card: the minimum the card grid and `DRAWING_REGION` already use). At 1024 px the workspace is about 728 px wide (side menu 248, padding 2 x 24; the developer measures), so the room is about 480 px and 400 is allowed; the clamp only acts on a narrower window or a larger text size |
+| Drawing region | Yields first | The existing `DRAWING_REGION` clamp already reads `--tree-w` first and shrinks the region, so the tree keeps what the person set |
+| Presets (the non-drag alternative) | Narrow **256**, Standard **320**, Wide **400** | 256 is the mock-up's old default below 1280 px; 400 is the maximum. Standard is also the reset value |
+| Arrow step | **16 px** | The mock-up's; ten presses cross the range |
+| Shift + Arrow step | **64 px** | Four steps; crosses the range in three presses |
+| Home / End | Minimum **240** / effective maximum | |
+| Reset | **Enter**, **double-click** on the handle, and the Standard choice | One number, 320 |
+| Persistence | **localStorage**, per browser and per signed-in user, one number for every estimate | See below |
+
+## Where it exists
+
+- **1024 px and wider** (the width at which `useViewport()` says `desktop`, so the tree is docked beside the form): handle, "Tree width" button, resizing and stored width all apply. This includes a touch screen of 1024 px or more (a tablet held landscape): the handle takes a finger.
+- **Below 1024 px** (tablet 768 to 1023: the tree is the stacked, openable panel above the form; phone: the drawer): **no handle, no "Tree width" button, no `separator` in the accessibility tree**, and the stored width is ignored. The panel is the full width of its container; the drawer keeps its own width (`--drawer-w`). Nothing is clipped or scrolled sideways.
+- The stored width is **kept**, not erased, while the window is below 1024 px, so it comes back when the window grows.
+
+## The handle
+
+- **Place.** On the right edge of the tree card, in the gap between the tree and the form, full height of the card. It is **not a child of the scrolling box** (`overflow: auto` would clip it and scroll it away); it belongs to the column wrapper, which is `position: relative`. It does not cover the tree's scroll bar.
+- **Look.** The visible grip is a **4 x 40 px** rounded bar in `--border-strong` (3.23:1 on `--bg`, 3.55:1 on white, computed: passes the 3:1 of WCAG 1.4.11). On hover, keyboard focus and while dragging the bar turns `--primary` (4.18:1 on `--bg`). While dragging the cursor is `col-resize` over the whole page and text selection is off.
+- **Hit area.** Full card height and **24 px wide** with a mouse (the WCAG 2.5.8 minimum), starting at the tree card's right edge (the 16 px gap plus 8 px into the form's side). **44 px wide** with a coarse pointer (`@media (pointer: coarse)`; NFR-017), starting at the tree edge. `touch-action: none` on the hit area, so a finger drags it and does not scroll the page. A test checks that no form control's box overlaps the hit area at 1024 px with touch; if one does, the form track gets a left padding of the excess under `pointer: coarse` only.
+- **Focus.** The 3 px `--focus` ring with 2 px offset (the global `:focus-visible` style) around the grip bar and a 12 x 48 px pill behind it, not around the full-height strip. The grip also turns `--primary`; the ring, not the colour, is the cue. The ring is not clipped by the card or the column.
+- **Motion.** The width follows the pointer and the keys directly, with no transition. The grip's colour change is not animated. `prefers-reduced-motion: reduce` therefore needs no special case; a test asserts no `transition` on the column's width.
+- **Cancel.** Escape during a drag returns the column to the width it had when the drag began. The width is stored only at the end of a gesture (pointer up, a key press, a choice), not on every pixel.
+
+## Keyboard and screen reader
+
+| Item | Value |
+|---|---|
+| Element | `div tabindex="0" role="separator"` (not a `button`: ARIA does not allow `separator` on a button). In the tab order after the tree's last control and before the form |
+| `aria-orientation` | `vertical` |
+| `aria-valuenow` / `aria-valuemin` / `aria-valuemax` | The current width in px / 240 / the effective maximum (updates when the window changes) |
+| `aria-valuetext` | "Parts tree 320 pixels wide" |
+| `aria-controls` | The id of the tree column (the element whose width changes) |
+| `aria-label` | "Resize parts tree" |
+| `aria-describedby` | Hidden hint: "Drag, or use the left and right arrow keys. Enter resets to the standard width." Also shown as a tooltip on hover and focus |
+| Left / Right | Narrower / wider by 16 px (the handle is on the tree's right edge, so Right widens; the page is left-to-right only) |
+| Shift + Left / Right | by 64 px |
+| Home / End | 240 / effective maximum |
+| Enter | Reset to 320 |
+| Up / Down and other keys | No effect; the key is not captured (the page scrolls as usual) |
+| Announcement | The separator's own value is read as a key repeats. After a preset or a reset, a polite live region (the existing one; no focus move) says "Parts tree width: standard, 320 pixels." |
+
+## The non-drag alternative (WCAG 2.2 SC 2.5.7): required, and the keyboard is not enough
+
+SC 2.5.7 (Level AA, inside the project's WCAG 2.2 AA floor) asks that anything done by dragging can also be done by a **single pointer without dragging**. The arrow keys serve a keyboard, not a person who uses a mouse, trackball, head pointer or stylus and only taps. So the keyboard route does **not** satisfy it, and the ux-spec line "the panel is resized with arrow keys" must be corrected (see the table above). The cheapest honest fix:
+
+- A **"Tree width" icon button** (lucide `ArrowLeftRight`, 18 px glyph; accessible name "Tree width"; tooltip the same) at the right end of the tree card's head, after the row count. 32 x 32 px with a mouse (above the 24 px minimum), 44 x 44 px with a coarse pointer. It opens a shadcn `Popover` with a `RadioGroup` named "Tree width": **Narrow (256 px)**, **Standard (320 px)** (marked "default"), **Wide (400 px)**. Choosing one applies it at once and stores it; the popover stays open until Escape or a click outside, so the person sees the result. Focus returns to the button on close. If the effective maximum is below a preset (a narrow window), that radio is disabled, with the description "Not enough room at this window size".
+- The button shows only where the handle shows (1024 px and wider). It is an addition beyond the delivery lead's brief ("handle plus keyboard"), and the minimum to meet 2.5.7. **If the delivery lead declines it, he waives SC 2.5.7 for this control in writing and the decision log records it**, because without it the handle fails WCAG 2.2 AA for pointer-only users.
+- A bare click on the handle does nothing (it only takes focus).
+
+## Persistence
+
+- Written to `localStorage` under the key `aqp.ui.treeWidth.<userId>` (the signed-in user's id, so two engineers who share a PC each keep their own); the value is the integer px as text. Read once in the browser after mount, **applied before first paint where the framework allows (a layout effect), and never blocking the page**. If the read throws (private window, blocked storage), or the value is not an integer from 240 to 400, it is ignored and 320 is used. A write that throws is swallowed; the width still applies for the session.
+- **Per browser, not on the server.** Window size differs from one PC to the next, so a server value would be wrong on the other machine; no migration and no API. One number for all estimates (the layout is the person's habit, not a property of one estimate). It is not shared with other users.
+- One pure function decides every width (`clampTreeWidth(value, workspaceWidth)`): a stored 400 on a window with room for 360 shows 360 and an `aria-valuemax` of 360. A clamp **does not rewrite** the stored number, so a bigger window brings 400 back.
+- Reset (Enter, double-click, Standard) removes the stored key, so a later change of the default reaches this person.
+
+## What the form does when the tree widens
+
+- The form track is `minmax(0, 1fr)` and shrinks; its section cards reflow in the existing auto-fit grid (3, 2 or 1 columns by the room), never below one 232 px card. **No horizontal scroll of the page** at any width from 1024 px, with the tree at any width from 240 to its effective maximum. The sticky Actions bar and top bar keep their measured offsets (WCAG 2.4.11).
+- The tree card's own contents reflow too: names wrap (already allowed), the status icon stays at the right, and the tree has no horizontal scroll.
+- The reserved drawing region is unchanged (it yields to the tree).
+
+## Acceptance-criteria-ready wording (UX-AC-15.n)
+
+1. **UX-AC-15.1** At 1024 px and wider the parts tree column is 320 px wide when no width has been chosen and no valid width is stored.
+2. **UX-AC-15.2** At 1024 px and wider a resize handle (`role="separator"`, `aria-orientation="vertical"`) sits on the tree card's right edge. It is in the tab order, has the name "Resize parts tree", and carries `aria-controls` naming the tree column, `aria-valuenow` equal to the column's width in px, `aria-valuemin="240"`, `aria-valuemax` equal to the effective maximum, and `aria-valuetext` "Parts tree N pixels wide".
+3. **UX-AC-15.3** Dragging the handle with a mouse or a finger changes the width continuously between 240 px and the effective maximum, never beyond them. Escape during the drag restores the width the drag began with.
+4. **UX-AC-15.4** With the handle focused, Left and Right change the width by 16 px, Shift+Left and Shift+Right by 64 px, Home sets 240 px, End sets the effective maximum, and Enter sets 320 px. Up and Down do nothing. Each change updates `aria-valuenow` and `aria-valuetext`.
+5. **UX-AC-15.5** Double-clicking the handle sets 320 px and removes the stored width.
+6. **UX-AC-15.6** The effective maximum is 400 px or, where less, the workspace width minus the gap minus 232 px. The form never gets narrower than 232 px, the page never scrolls sideways, and the reserved drawing region gives way before the tree does.
+7. **UX-AC-15.7** Without dragging, a pointer user can set the width: the tree card's head has a button named "Tree width" (32 px square with a mouse, 44 px with a coarse pointer) that opens a group of three choices, "Narrow (256 px)", "Standard (320 px)" and "Wide (400 px)". Choosing one applies it at once and focus returns to the button on close; a choice that does not fit the window is disabled with a stated reason.
+8. **UX-AC-15.8** The chosen width is stored in the browser for the signed-in user at the end of a gesture and restored on the next visit to any estimate in that browser, before first paint where possible. A missing, unreadable, non-integer or out-of-range stored value is ignored (320 px is used) and no error is shown. A window too small for the stored width shows the clamped width without erasing the stored one.
+9. **UX-AC-15.9** The handle's grip has at least 3:1 contrast against the page and the card. On hover, focus and drag it is `--primary`; keyboard focus shows the 3 px `--focus` ring, which is not clipped.
+10. **UX-AC-15.10** The handle's hit area is at least 24 px wide with a mouse and 44 px wide with a coarse pointer, the full height of the card, does not cover the tree's scroll bar and does not overlap any form control.
+11. **UX-AC-15.11** Below 1024 px (tablet and phone) there is no handle, no "Tree width" button and no `separator` in the accessibility tree; the stored width is ignored there, and the panel and drawer keep their own widths.
+12. **UX-AC-15.12** The width changes with no animation: no `transition` on the column's width exists, so `prefers-reduced-motion` needs no special case.
+13. **UX-AC-15.13** After a choice from the "Tree width" group, or a reset, a polite announcement states the new width ("Parts tree width: standard, 320 pixels.").
+14. **UX-AC-15.14** The same component and the same stored width serve SCR-06 and SCR-07 where their trees sit beside the content (the scrum-master may split these into a second story).
+15. **UX-AC-15.15** axe reports no violation (including `target-size`) on SCR-05 at 360, 768 and 1366 px, with the tree at its narrowest, standard and widest width (360 and 768 px have no handle, so the widths apply at 1366 px).
+
+## Tests to run
+
+Unit (Vitest, no browser):
+- `clampTreeWidth`: below 240, above 400, above the room, NaN, non-integer, and a stored 400 on a window with room for 360 (UX-AC-15.6, 15.8).
+- Step logic: Arrow 16, Shift 64, Home, End, Enter, and clamping at both ends (15.4).
+- Stored-width parser: valid, missing, `"abc"`, `"300.5"`, `"1000"`, and a throwing `localStorage` for read and for write (15.8).
+- Preset list: values 256, 320, 400, and the disabled rule (15.7).
+
+End to end (Playwright, the three existing projects, plus the 1023 / 1024 edge):
+- **Mobile, 360 px.** Open the workspace with `localStorage` holding 400: no `separator`, no "Tree width" button, the tree drawer keeps its own width, no horizontal page scroll; axe clean (15.11, 15.15).
+- **Tablet, 768 px and 1023 px.** The same assertions with the stacked panel open; stored width ignored; the form not shifted sideways. At **1024 px** the separator and the button exist (the boundary; 15.11).
+- **Tablet landscape with touch, 1024 x 768, `hasTouch`.** The handle's box is at least 44 px wide, it drags by a touch pointer-event sequence, and no form control overlaps it (15.3, 15.10).
+- **Desktop, 1280 and 1366 px, mouse.** Default 320 px (15.1). Drag by mouse to a smaller and a larger width, and past both ends (clamped); Escape mid-drag restores (15.3). Keyboard: focus the handle and check each key of 15.4 and the ARIA values (15.2, 15.4). Double-click resets and the stored key is gone (15.5). The "Tree width" button: open, choose Wide, the width is 400, focus returns on Escape; choose Standard (15.7, 15.13). Reload: the width persists; clear storage: 320 (15.8). Form width is at least 232 at the widest, no horizontal scroll (15.6). With the viewport shrunk from 1400 to 1024 and 400 stored, the width is clamped and `aria-valuemax` follows (15.6, 15.8). Grip contrast at least 3:1 (computed) and the focus ring visible in a screenshot (15.9). Hit area 24 px (15.10). No `transition` on the column (15.12). axe at three tree widths (15.15). Re-run the existing tree tests (including the centre press on a short row at 1366 px, AQP-418) at 240 and 400 px, to show the row layout holds.
+- **Not tested in E2E:** the feel on a real touch screen: one manual check on the tablet the workshop uses, before G8.
+
+## Notes for the developer
+
+- The handle must not live inside the `overflow: auto` box. Wrap the scrolling column in a `position: relative` wrapper (today `parts-tree-area.tsx` has `lg:w-(--tree-w)` on the wrapper) and put the handle in the wrapper.
+- Set the width as the CSS custom property `--tree-w` on the workspace element (the one `globals.css` and `DRAWING_REGION` already read), batched with `requestAnimationFrame`, not as React state per pixel.
+- `useViewport()` reads the browser, so the server render shows the tablet or phone shape first. Do not render the separator until the viewport is `desktop`, so no server-rendered separator is announced at the wrong size.
+- The ux-spec line about arrow keys and the mock-up's `button` role are wrong (see the table above); the build follows this note.
