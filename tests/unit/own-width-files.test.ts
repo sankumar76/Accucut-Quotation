@@ -50,7 +50,7 @@ const FILE_LEVEL_DESKTOP_ONLY = /^test\.beforeEach\(\(\{\}, testInfo\) => \{\n {
  * a ruling in test strategy 10.5, like an entry in the list.
  */
 /**
- * `estimate-tree-width.spec.ts` (AQP-426, DL-387): seven of its eight cases set their own widths and skip outside `desktop`; the eighth (below 1024 px) runs in `mobile` and `tablet`. It is listed here by master's ruling DL-387, not in `OWN_WIDTH_FILES`.
+ * `estimate-tree-width.spec.ts` (AQP-426, DL-387): ten of its eleven cases set their own widths and skip outside `desktop`; the eleventh (below 1024 px) runs in `mobile` and `tablet`. It is listed here by master's ruling DL-387, not in `OWN_WIDTH_FILES`.
  */
 const PARTLY_DESKTOP_ONLY: ReadonlyArray<string> = ['shell.spec.ts', 'estimate-tree-width.spec.ts'];
 

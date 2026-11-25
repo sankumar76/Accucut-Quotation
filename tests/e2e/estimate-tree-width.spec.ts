@@ -32,7 +32,7 @@ import {
  * time; the clamping, step, storage and drag-state rules are the unit tests of `tests/unit/tree-width*.test.ts` (a storage that throws is unit-only); every case clears the stored width at its end.
  *
  * ONE person, a serial group (DL-386, DL-388 (6)): `beforeAll` makes one disposable Engineer and signs in once; each case starts from a fresh load of the same estimate with the stored width cleared, and a case that
- * needs a finger opens a second context from the first one's saved session, so no second person and no second sign-in. Seven small cases run in the desktop project and each is judged on its own time (attempt 1 under 25 s on the runner, DL-388 (6)(c)); the eighth, below
+ * needs a finger opens a second context from the first one's saved session, so no second person and no second sign-in. Ten small cases run in the desktop project and each is judged on its own time (attempt 1 under 25 s on the runner, DL-388 (6)(c)); the eleventh, below
  * 1024 px, runs at the width of the phone and of the tablet project. A failure skips the cases after it, and its retry repeats the group. The file sorts before `users.spec.ts`. Every ID and name is invented.
  */
 
@@ -70,7 +70,20 @@ test.beforeAll(async ({ browser }) => {
   workspaceUrl = page.url();
 });
 
+// The finger (case C4): a second context made from the first one's saved session (no second sign-in), 1024 x 768, touch, with the estimate already loaded, so the case itself only measures. Made in its own hook, so its
+// load is not part of any case's time. Only the desktop project runs the case.
+let fingerContext: BrowserContext | null = null;
+let fingerPage: Page | null = null;
+test.beforeAll(async ({ browser }, testInfo) => {
+  if (testInfo.project.name !== 'desktop') return;
+  fingerContext = await browser.newContext({ baseURL, storageState: await context.storageState(), viewport: { width: 1024, height: 768 }, hasTouch: true });
+  fingerPage = await fingerContext.newPage();
+  await fingerPage.goto(workspaceUrl);
+  await waitForForm(fingerPage);
+});
+
 test.afterAll(async () => {
+  await fingerContext?.close();
   await context.close();
 });
 
@@ -292,16 +305,14 @@ test('AC-3, AC-6, AC-11: the one drag at 1280 px (a press on the hit area focuse
 
 });
 
-test('AC-9, AC-10: with a finger at 1024 px the hit area is 44 px, the separator 44 x 48, the button 44 px, and nothing of the form lies under the hit area', async ({ browser }) => {
+test('AC-9, AC-10: with a finger at 1024 px the hit area is 44 px, the separator 44 x 48, the button 44 px, and nothing of the form lies under the hit area', async () => {
   const testInfo = test.info();
   test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
 
-  // The finger: a second context made from the first one's session (no second sign-in), 1024 x 768, touch.
-  const touch = await browser.newContext({ baseURL, storageState: await context.storageState(), viewport: { width: 1024, height: 768 }, hasTouch: true });
-  try {
-    const finger = await touch.newPage();
-    await finger.goto(workspaceUrl);
-    await waitForForm(finger);
+  const finger = fingerPage;
+  expect(finger, 'the finger page was made in beforeAll').not.toBeNull();
+  if (finger === null) return;
+  {
     await expect(handleOf(finger)).toBeVisible();
     expect(await finger.evaluate(() => window.matchMedia('(pointer: coarse)').matches), 'the emulated device has a coarse pointer').toBe(true);
     expect((await hitAreaOf(finger).boundingBox())?.width, 'the hit area is 44 px wide').toBe(44);
@@ -322,12 +333,10 @@ test('AC-9, AC-10: with a finger at 1024 px the hit area is 44 px, the separator
         .map((control) => control.outerHTML.slice(0, 100));
     });
     expect(overlapping, 'no control of the form lies under the hit area').toEqual([]);
-  } finally {
-    await touch.close();
   }
 });
 
-test('AC-7, AC-13, AC-6: the Tree width button and its three choices (axe with the group open), a choice that does not fit, a stored 400 on a narrow workspace', async () => {
+test('AC-7, AC-13, AC-6: the Tree width button and its three choices, a choice that does not fit, a stored 400 on a narrow workspace', async () => {
   const testInfo = test.info();
   test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
   const handle = handleOf(page);
@@ -348,7 +357,6 @@ test('AC-7, AC-13, AC-6: the Tree width button and its three choices (axe with t
   await expect(group.getByRole('radio')).toHaveCount(3);
   await expect(standard).toBeChecked();
   await expect(standard).toHaveAccessibleDescription('default');
-  await expectNoAxeViolations(page);
 
   const announcement = page.getByRole('status').filter({ hasText: 'Parts tree width' });
   await wide.click();
@@ -399,30 +407,32 @@ test('AC-7, AC-13, AC-6: the Tree width button and its three choices (axe with t
 
 });
 
-test('AC-8: the width is back after a reload; a value that is not a width, and a width stored under the key of another person, give 320 with no message', async () => {
+test('AC-8: nothing stored gives 320; a width that was stored is back after a reload, and a width stored under the key of another person is not read', async () => {
   const testInfo = test.info();
   test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
   const handle = handleOf(page);
   await expect(handle).toBeVisible();
-  await handle.focus();
-  await page.keyboard.press('End');
-  await expectWidth(page, MAXIMUM);
-
-  // Two reloads: the width is back after a reload; a value that is not a width, and the width stored under another person's key, give 320 and no message. (The other values, and a storage that throws, are unit tests.)
-  await page.reload();
-  await waitForForm(page);
-  await expect(handle).toBeVisible();
-  await expectWidth(page, MAXIMUM);
-  await store(page, storageKey(ownerId), 'abc');
+  await expectWidth(page, DEFAULT_WIDTH);
+  await store(page, storageKey(ownerId), '400');
   await store(page, `${storageKey(ownerId)}-another`, '280');
   await page.reload();
   await waitForForm(page);
   await expect(handle).toBeVisible();
+  await expectWidth(page, MAXIMUM);
+});
+
+test('AC-8: a stored value that is not a width gives 320 and no message (the other bad values and a storage that throws are unit tests)', async () => {
+  const testInfo = test.info();
+  test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+  await store(page, storageKey(ownerId), 'abc');
+  await page.reload();
+  await waitForForm(page);
+  await expect(handleOf(page)).toBeVisible();
   await expectWidth(page, DEFAULT_WIDTH);
   await expect(textAlerts(page)).toHaveCount(0);
 });
 
-test('AC-15: axe finds nothing at the narrowest (240 px) and the widest (400 px) tree; the standard width is scanned with the Tree width group open in the case of the button', async () => {
+test('AC-15: axe finds nothing at the narrowest (240 px) and the widest (400 px) tree, and at the standard width with the Tree width group open', async () => {
   const testInfo = test.info();
   test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
   const handle = handleOf(page);
@@ -436,22 +446,22 @@ test('AC-15: axe finds nothing at the narrowest (240 px) and the widest (400 px)
     await expectWidth(page, width);
     await expectFormAccessible(page);
   }
+  await page.keyboard.press('Enter');
+  await expectWidth(page, DEFAULT_WIDTH);
+  await widthButton(page).click();
+  await expect(page.getByRole('radiogroup', { name: 'Tree width' })).toBeVisible();
+  await expectNoAxeViolations(page);
 });
 
 test('AC-6, AC-11: a press at the centre of a row still chooses it at 240 and 400 px, and a long name wraps with no sideways scroll (the status icon stays at the right)', async () => {
   const testInfo = test.info();
   test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
 
-  // One part with a long name: the tree answers the page's own read with it (a name wraps, the status icon stays at the right).
-  await page.route('**/api/v1/estimates/*/tree', async (route) => {
-    const response = await route.fetch();
-    const body: unknown = await response.json();
-    if (typeof body !== 'object' || body === null || !('nodes' in body) || !Array.isArray(body.nodes)) return route.fulfill({ response });
-    const nodes: unknown[] = body.nodes;
-    return route.fulfill({ response, json: { ...body, nodes: nodes.map((node) => (typeof node === 'object' && node !== null ? { ...node, label: 'Invented bracket assembly with an unusually long descriptive name that keeps going and going' } : node)) } });
+  // One part with a long name: the name is set in the page (no second load), so it wraps in the column and the status icon stays at the right.
+  await page.locator('#parts-tree-panel a[data-part-id] [data-sl-no]').first().evaluate((number) => {
+    const name = number.nextElementSibling;
+    if (name !== null) name.textContent = 'Invented bracket assembly with an unusually long descriptive name that keeps going and going';
   });
-  await page.reload();
-  await waitForForm(page);
   const handle = handleOf(page);
   await expect(handle).toBeVisible();
   await handle.focus();
@@ -482,7 +492,6 @@ test('AC-6, AC-11: a press at the centre of a row still chooses it at 240 and 40
       await handle.focus();
     }
   }
-  await page.unroute('**/api/v1/estimates/*/tree');
 });
 
 test('DEF-085, DL-391: the form comes first and the controls appear in place: before the handle and the menu have loaded (their code held) there is no separator and no Tree width button, the slot is an empty hidden box, the stored 400 px is applied, and when the code arrives nothing moves and a focus in the form stays', async () => {
