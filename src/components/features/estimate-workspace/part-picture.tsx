@@ -9,7 +9,7 @@ import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
-import { type FormField, PART_CHANGED_CODE } from '@/lib/estimates/form-client';
+import type { FormField } from '@/lib/estimates/form-client';
 import { dropPicture, pictureUrl, sendPicture, type PartPictureAnswer } from '@/lib/estimates/picture-client';
 import { toPictureView, type PictureView } from '@/lib/estimates/picture-view';
 import { MAX_PICTURE_BYTES, PICTURE_TYPE_MESSAGE, PICTURE_UPLOAD_FAILED_MESSAGE, pictureTooLargeMessage, sanitiseFileName } from '@/lib/images/picture-rules';
@@ -19,6 +19,7 @@ import { detectImageType, IMAGE_MIMES } from '@/lib/images/signature';
 import { browserDecoder } from './browser-decoder';
 
 import { controlIdOf } from './field-renderer';
+import { pictureRefusalWords } from './picture-refusal';
 import {
   ADDING,
   CHOOSE_A_FILE,
@@ -27,7 +28,6 @@ import {
   PASTE_HINT,
   PHONE_HINT,
   PICTURE_ADDED,
-  PICTURE_CHANGED_NOTICE,
   PICTURE_OPTIONAL,
   PICTURE_REMOVED,
   PICTURE_REPLACED,
@@ -55,6 +55,8 @@ export interface PartPictureProps {
   readonly onChanged: (answer: PartPictureAnswer) => void;
   /** The server says the part is not as the person saw it: the tree is read again. */
   readonly onConflict: () => void;
+  /** The server says the estimate was ignored while the person worked (409 `ESTIMATE_IGNORED`): the page turns read-only and says so in its one alert. */
+  readonly onServerIgnored: () => void;
 }
 
 /** What the file picker offers: the four kinds. On a phone it lists the camera and the gallery as well, which `capture` would take away. */
@@ -103,7 +105,7 @@ interface PictureControlProps extends PartPictureProps {
   readonly held: PictureView | null;
 }
 
-function PictureControl({ field, estimateId, partId, held: initial, editable, inTurn, onChanged, onConflict }: PictureControlProps) {
+function PictureControl({ field, estimateId, partId, held: initial, editable, inTurn, onChanged, onConflict, onServerIgnored }: PictureControlProps) {
   const [picture, setPicture] = useState<PictureView | null>(initial);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
@@ -129,7 +131,8 @@ function PictureControl({ field, estimateId, partId, held: initial, editable, in
     working.current = false;
     setBusy(null);
     if (typeof result === 'string') {
-      setProblem(result);
+      // An empty string is "no words": the estimate was ignored and the page's alert speaks (`pictureRefusalWords`).
+      setProblem(result === '' ? null : result);
       return;
     }
     setPicture(result.picture);
@@ -139,13 +142,7 @@ function PictureControl({ field, estimateId, partId, held: initial, editable, in
 
   /** The words for a refusal or a failure: the server's own for a refusal of the picture, and the sentence for a part that changed under the person. */
   function wordsFor(outcome: Awaited<ReturnType<typeof sendPicture>>): string {
-    if (outcome.status === 'ok') return '';
-    if (outcome.status === 'failed') return PICTURE_UPLOAD_FAILED_MESSAGE;
-    if (outcome.code === PART_CHANGED_CODE) {
-      onConflict();
-      return PICTURE_CHANGED_NOTICE;
-    }
-    return outcome.title;
+    return pictureRefusalWords(outcome, { onConflict, onServerIgnored });
   }
 
   function add(file: File): Promise<void> {

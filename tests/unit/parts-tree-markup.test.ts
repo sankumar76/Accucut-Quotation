@@ -132,10 +132,25 @@ describe('AC-1, AC-4 (14.32): the workspace tree is a list of links, not a tree'
     expect(count(html, 'border-l border-border')).toBe(3);
   });
 
-  it('keeps an empty toolbar slot at the end of every row for 3C and 3D, so neither lays a row out again (AC-9)', () => {
+  it('draws no toolbar slot where no toolbar is given (the review tree, a person who may not edit): no empty line under the name and no change of the row height (AQP-418 acceptance check 9)', () => {
     const html = workspaceTree();
+    expect(html).not.toContain('data-row-toolbar');
+  });
+
+  it('lays a row out as two columns, the arrow and then the link, with the toolbar on its own line under the link and in the same column (AQP-418 acceptance checks 1 and 2)', () => {
+    const row = (node: PartItem, kindLabel: string) => createElement(TreeNode, { part: node, kindLabel, selected: false, onChoose: () => undefined });
+    const html = renderToStaticMarkup(createElement(PartsTreeList<PartItem>, { nodes: NODES, label: 'Parts tree', renderRow: row, renderToolbar: (node: PartItem) => createElement('span', { 'data-toolbar-of': node.id }) }));
     expect(count(html, 'data-row-toolbar=""')).toBe(NODES.length);
-    expect(html).toMatch(/<div data-row-toolbar="" class="[^"]*"><\/div>/);
+    const slot = html.match(/<div data-row-toolbar="" class="([^"]*)">/)?.[1] ?? '';
+    expect(slot).toContain('col-start-2');
+    expect(slot).not.toMatch(/absolute|right-0|opacity|pointer-coarse|hover/);
+    const line = html.match(/<div class="(group\/row [^"]*)">/)?.[1] ?? '';
+    expect(line).toContain('grid');
+    expect(line).not.toMatch(/\bflex\b/);
+    for (const node of NODES) {
+      const after = html.slice(html.indexOf(`data-part-id="${node.id}"`));
+      expect(after.indexOf('</a>')).toBeLessThan(after.indexOf(`data-toolbar-of="${node.id}"`));
+    }
   });
 
   it('never indents a legacy tree deeper than the kinds allow any further, so it cannot grow wider than its panel', () => {
@@ -145,6 +160,57 @@ describe('AC-1, AC-4 (14.32): the workspace tree is a list of links, not a tree'
     expect(count(html, 'border-l border-border')).toBe(4);
     expect(count(html, '<ul')).toBe(12);
   });
+});
+
+describe('AQP-406 PRF-C-01: the toolbar is given the row\'s place, once, and the render is linear in the rows', () => {
+  const place = (html: string, id: string): string => html.match(new RegExp(`data-toolbar-of="${id}" data-place="([^"]*)"`))?.[1] ?? 'missing';
+  const toolbarTree = (nodes: ReadonlyArray<PartItem>): string => {
+    const row = (node: PartItem, kindLabel: string) => createElement(TreeNode, { part: node, kindLabel, selected: false, onChoose: () => undefined });
+    const toolbar = (node: PartItem, _kindLabel: string, position: { readonly index: number; readonly count: number }) => createElement('span', { 'data-toolbar-of': node.id, 'data-place': `${String(position.index)}/${String(position.count)}` });
+    return renderToStaticMarkup(createElement(PartsTreeList<PartItem>, { nodes, label: 'Parts tree', renderRow: row, renderToolbar: toolbar }));
+  };
+
+  it('gives each row its index and the count of the rows under the same parent: first, middle, last and only child', () => {
+    const html = toolbarTree(NODES);
+    // m1 and m2 are the two at the top; s1 and f1 the two under m1; p1 and p2 the two under s1; p3 is alone under m2.
+    expect(place(html, 'm1')).toBe('0/2');
+    expect(place(html, 'm2')).toBe('1/2');
+    expect(place(html, 's1')).toBe('0/2');
+    expect(place(html, 'f1')).toBe('1/2');
+    expect(place(html, 'p1')).toBe('0/2');
+    expect(place(html, 'p2')).toBe('1/2');
+    expect(place(html, 'p3')).toBe('0/1');
+  });
+
+  it('gives a middle row both neighbours', () => {
+    const middle: ReadonlyArray<PartItem> = [part('m', null, '1', 'MAIN_ASSEMBLY'), part('a', 'm', '1.1', 'PART'), part('b', 'm', '1.2', 'PART'), part('c', 'm', '1.3', 'PART')];
+    expect(place(toolbarTree(middle), 'b')).toBe('1/3');
+  });
+
+  it('reads the nodes a fixed number of times per row, 1,000 rows wide or deep, so the render is linear (a count, never a timing)', () => {
+    const shapes: Record<string, (index: number) => string | null> = {
+      'one parent with 999 parts': (index) => (index === 0 ? null : 'n0'),
+      'a legacy chain 150 deep with 850 parts at its foot': (index) => (index === 0 ? null : `n${String(Math.min(index, 150) - 1)}`),
+      '30 groups of 32 parts under one assembly': (index) => (index === 0 ? null : index <= 30 ? 'n0' : `n${String(1 + ((index - 31) % 30))}`),
+    };
+    for (const [name, parentOf] of Object.entries(shapes)) {
+      let reads = 0;
+      const nodes = Array.from({ length: 1000 }, (_, index): PartItem => {
+        const id = `n${String(index)}`;
+        const parentId = parentOf(index);
+        return Object.defineProperties(part(id, parentId, id, index === 0 ? 'MAIN_ASSEMBLY' : 'PART'), {
+          id: { get: () => ((reads += 1), id), enumerable: true },
+          parentId: { get: () => ((reads += 1), parentId), enumerable: true },
+          nodeKind: { get: () => ((reads += 1), index === 0 ? 'MAIN_ASSEMBLY' : 'PART'), enumerable: true },
+        });
+      });
+      reads = 0;
+      const html = toolbarTree(nodes);
+      expect(count(html, 'data-toolbar-of='), name).toBe(1000);
+      // A fixed number of reads for each row (the row, its place, its kind name), never a read of every other row.
+      expect(reads, name).toBeLessThanOrEqual(1000 * 30);
+    }
+  }, 30_000);
 });
 
 describe('AC-3: the legend', () => {

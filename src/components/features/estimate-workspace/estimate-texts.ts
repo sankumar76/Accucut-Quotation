@@ -72,15 +72,11 @@ export const TREE_TITLE = 'Parts tree';
 export const FORM_AREA_TITLE_ID = 'estimate-form-area-title';
 export const TREE_CLOSE = 'Close parts tree';
 export const TREE_HIDE = 'Hide parts tree';
-export const TREE_EMPTY = 'No parts yet. Choose "New item" to add the first one.';
+export const TREE_EMPTY = 'No parts yet. Choose "Add main assembly" to add the first one.';
 export const TREE_LOADING = 'Loading the parts';
 export const TREE_LOAD_FAILED_TITLE = 'We could not load the parts';
-export const TREE_NEW_ITEM = 'New item';
-export const TREE_SUB_PART = 'Sub-part';
-export const TREE_PART_BESIDE = 'Part beside';
 export const TREE_MOVE_UP = 'Move up';
 export const TREE_MOVE_DOWN = 'Move down';
-export const TREE_DELETE = 'Delete';
 export const TREE_PART_NAME = 'Part';
 export const TREE_NO_INPUTS = 'No inputs yet';
 export const TREE_SOME_INPUTS = 'Some inputs entered';
@@ -88,13 +84,15 @@ export const TREE_ALL_INPUTS = 'All inputs entered';
 
 export const TREE_CHANGED_NOTICE = 'The parts were changed by someone else. The tree has been refreshed. Check it and try again.';
 export const TREE_FAILED_TITLE = 'The change was not made';
+/** Shown above the tree, and spoken, while a change to the tree is still open after 300 ms (AQP-343, DL-340; ux-expert's words, AQP-343 comment 12880). The pattern of "Calculating. This takes a moment." */
+export const TREE_CHANGING = 'Updating the parts. This takes a moment.';
+/** The ID of the visible line above: the buttons that are `aria-disabled` while it shows point at it (`aria-describedby`). */
+export const TREE_CHANGING_ID = 'parts-tree-changing';
 export const treeButtonLabel = (slNo: string | null): string => (slNo === null ? TREE_TITLE : `${TREE_TITLE}, part ${slNo}`);
 
 export const addedMessage = (slNo: string): string => `Part ${slNo} added`;
-/** The interim "Add sub-part" on a row that holds nothing (a Fastener, `ALLOWED_CHILDREN`): said at once, no request is sent. Replaced by the "+" menu of CR-01 3C. */
-export const noSubPartMessage = (kindName: string): string => `A ${kindName} cannot hold other parts.`;
 export const renumberedMessage = (slNo: string): string => `Part renumbered to ${slNo}`;
-export const deletedMessage = (parts: number): string => (parts === 1 ? 'Part deleted' : `${parts} parts deleted`);
+export const deletedMessage = (parts: number): string => (parts === 1 ? 'Row deleted' : `${parts} rows deleted`);
 
 
 /**
@@ -105,6 +103,10 @@ export const deletedMessage = (parts: number): string => (parts === 1 ? 'Part de
 export const CALCULATE_PREPARED_TITLE = 'Prepared';
 /** The state "Approved" of SCR-05 (STORY-06.06 AC-4; UX spec SCR-05 states and the G3 screen): read-only, and **no price** (NFR-002); a status is not a cost. */
 export const APPROVED_LOCKED_TITLE = 'Approved and locked.';
+/** The same notice on a Quoted estimate (QLT-C-02 of the final review; FR-102, FR-110): the word of the status the badge shows, so one status is never given two words. The body says nothing of a status and fits both. */
+export const QUOTED_LOCKED_TITLE = 'Quoted and locked.';
+/** The title of the locked notice by status: Quoted says Quoted, every other locked status is the Approved one. */
+export const lockedNoticeTitle = (status: 'APPROVED' | 'QUOTED'): string => (status === 'QUOTED' ? QUOTED_LOCKED_TITLE : APPROVED_LOCKED_TITLE);
 export const APPROVED_LOCKED_BODY = 'This estimate is closed and the task has moved to Closed. Inputs cannot be changed.';
 export const CALCULATE_FAILED_TITLE = 'Calculate did not go through';
 /** Nothing was sent because a field shows a value that is not saved (the form says which, under the field), and the button could not be loaded (the page needs a reload). */

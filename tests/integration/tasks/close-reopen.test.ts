@@ -57,20 +57,32 @@ afterEach(async () => {
   await db.owner.query('DELETE FROM tasks');
 });
 
-/** A task and its estimate in any state; returns the task's ID. */
-async function seed(code: string, engineerId: string, deadlineAt: Date, status: EstimateStatus = 'DRAFT'): Promise<string> {
+/**
+ * A task and its estimate in any state; returns the task's ID. A QUOTED estimate carries the quote columns (`ck_estimates_quoted`) and an `ignored` one the three ignore columns
+ * (`ck_estimates_ignored_all_or_none`); a quoted estimate is never ignored (`ck_estimates_quoted_not_ignored`), so that pair is not seeded.
+ */
+async function seed(code: string, engineerId: string, deadlineAt: Date, status: EstimateStatus = 'DRAFT', ignored = false): Promise<string> {
   const task = await db.owner.query<{ id: string }>(
     'INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, \'Invented task\', \'Invented subject\') RETURNING id::text',
     [code, engineerId, leadId, PATH, deadlineAt],
   );
   const id = defined(task.rows[0]).id;
-  await db.owner.query('INSERT INTO estimates (task_id, status) VALUES ($1::uuid, $2::estimate_status)', [id, status]);
+  await db.owner.query(
+    `INSERT INTO estimates (task_id, status, quoted_at, quoted_by, ignored_at, ignored_by, ignore_remarks)
+     VALUES ($1::uuid, $2::estimate_status,
+             CASE WHEN $2 = 'QUOTED' THEN now() END, CASE WHEN $2 = 'QUOTED' THEN $3::uuid END,
+             CASE WHEN $4::boolean THEN now() END, CASE WHEN $4::boolean THEN $3::uuid END, CASE WHEN $4::boolean THEN 'Invented remarks.' END)`,
+    [id, status, leadId, ignored],
+  );
   return id;
 }
 
 /** What approve, unlock and cancel will do (STORY-06.06, 06.08, 06.12), done directly: the one column the queue reads. */
 const setStatus = (taskId: string, status: EstimateStatus): Promise<unknown> =>
-  db.owner.query('UPDATE estimates SET status = $2::estimate_status WHERE task_id = $1::uuid', [taskId, status]);
+  db.owner.query(
+    `UPDATE estimates SET status = $2::estimate_status, quoted_at = CASE WHEN $2 = 'QUOTED' THEN now() END, quoted_by = CASE WHEN $2 = 'QUOTED' THEN $3::uuid END WHERE task_id = $1::uuid`,
+    [taskId, status, leadId],
+  );
 
 async function codesIn(viewer: QueueViewer, tab: QueueTab): Promise<string[]> {
   return (await service.listQueue(viewer, { tab })).tasks.map((task) => task.code);
@@ -82,6 +94,20 @@ describe('AC-1: a task whose estimate is DRAFT or PREPARED is in Open', () => {
     for (const viewer of [asEngineer(arjunId), asLead(), asAdmin()]) {
       expect(await codesIn(viewer, 'open')).toEqual(['Q-2026-0001']);
       expect(await codesIn(viewer, 'closed')).toEqual([]);
+    }
+  });
+});
+
+describe('AQP-399 AC-6: the estimate becomes QUOTED, and the task stays Closed', () => {
+  it('a QUOTED task is in Closed, never in Open or Overdue, however late its deadline, and the bell does not count it', async () => {
+    await seed('Q-2026-0001', arjunId, at(-2 * DAY), 'QUOTED');
+    await seed('Q-2026-0002', arjunId, at(-DAY), 'APPROVED');
+    await seed('Q-2026-0003', arjunId, at(-DAY), 'PREPARED');
+    for (const viewer of [asEngineer(arjunId), asLead(), asAdmin()]) {
+      expect(await codesIn(viewer, 'closed')).toEqual(['Q-2026-0001', 'Q-2026-0002']);
+      expect(await codesIn(viewer, 'open')).toEqual(['Q-2026-0003']);
+      expect(await codesIn(viewer, 'overdue')).toEqual(['Q-2026-0003']);
+      expect(await service.countOverdue(viewer)).toBe(1);
     }
   });
 });
@@ -120,19 +146,22 @@ describe('AC-2: the estimate becomes APPROVED, and the task is Closed', () => {
       }
     }
     const everything = await service.listQueue(asAdmin(), { tab: 'open' });
-    expect(everything.counts).toEqual({ open: 2, closed: 1, overdue: 1 });
+    expect(everything.counts).toEqual({ open: 2, closed: 1, overdue: 1, ignored: 0 });
   });
 });
 
 describe('AC-3: an unlock or the Admin\'s cancel puts the task back in Open', () => {
   it.each([
-    ['UNLOCK', 'LEAD'],
-    ['UNLOCK', 'ADMIN'],
-    ['CANCEL', 'ADMIN'],
-  ] as const)('%s by %s: APPROVED goes where the state machine says, and the task is Open again and Overdue again past its deadline', async (event, role) => {
-    const decision = decideTransition('APPROVED', event, role);
+    ['APPROVED', 'UNLOCK', 'LEAD'],
+    ['APPROVED', 'UNLOCK', 'ADMIN'],
+    ['APPROVED', 'CANCEL', 'ADMIN'],
+    ['QUOTED', 'UNLOCK', 'LEAD'],
+    ['QUOTED', 'UNLOCK', 'ADMIN'],
+    ['QUOTED', 'CANCEL', 'ADMIN'],
+  ] as const)('%s, %s by %s: goes where the state machine says, and the task is Open again and Overdue again past its deadline', async (from, event, role) => {
+    const decision = decideTransition({ status: from, ignored: false }, event, role);
     if (!decision.allowed) throw new Error('The state machine should allow this event.');
-    const lateId = await seed('Q-2026-0001', arjunId, at(-DAY), 'APPROVED');
+    const lateId = await seed('Q-2026-0001', arjunId, at(-DAY), from);
     await seed('Q-2026-0002', arjunId, at(DAY), 'APPROVED');
     const viewer = asEngineer(arjunId);
     expect(await codesIn(viewer, 'closed')).toEqual(['Q-2026-0001', 'Q-2026-0002']);
@@ -166,16 +195,18 @@ describe('AC-3: an unlock or the Admin\'s cancel puts the task back in Open', ()
 describe('AC-4: the SQL form of the rule gives the answer of the TypeScript rule', () => {
   it('for every status and a deadline in the past, exactly now and ahead, each tab lists exactly the tasks `tabsOf` says it does', async () => {
     const deadlines = [at(-DAY), at(0), at(DAY)];
-    const seeded: Array<{ code: string; status: EstimateStatus; deadlineAt: Date }> = [];
-    for (const [statusIndex, status] of ESTIMATE_STATUSES.entries()) {
+    const seeded: Array<{ code: string; status: EstimateStatus; ignored: boolean; deadlineAt: Date }> = [];
+    // Every status, and every status that can be ignored (a QUOTED estimate cannot, `ck_estimates_quoted_not_ignored`), at each deadline: an ignored task is in none of the three tabs.
+    const states = ESTIMATE_STATUSES.flatMap<{ status: EstimateStatus; ignored: boolean }>((status) => (status === 'QUOTED' ? [{ status, ignored: false }] : [{ status, ignored: false }, { status, ignored: true }]));
+    for (const [stateIndex, { status, ignored }] of states.entries()) {
       for (const [deadlineIndex, deadlineAt] of deadlines.entries()) {
-        const code = `Q-2026-${String(statusIndex * 10 + deadlineIndex + 1).padStart(4, '0')}`;
-        await seed(code, arjunId, deadlineAt, status);
-        seeded.push({ code, status, deadlineAt });
+        const code = `Q-2026-${String(stateIndex * 10 + deadlineIndex + 1).padStart(4, '0')}`;
+        await seed(code, arjunId, deadlineAt, status, ignored);
+        seeded.push({ code, status, ignored, deadlineAt });
       }
     }
     for (const tab of QUEUE_TABS) {
-      const expected = seeded.filter((task) => tabsOf(task.status, task.deadlineAt, NOW).includes(tab)).map((task) => task.code);
+      const expected = seeded.filter((task) => tabsOf(task.status, task.deadlineAt, NOW, task.ignored).includes(tab)).map((task) => task.code);
       expect((await codesIn(asAdmin(), tab)).sort()).toEqual(expected.sort());
     }
   });
@@ -189,8 +220,8 @@ describe('AC-6: an Engineer opens the Closed tab', () => {
     const closed = await service.listQueue(asEngineer(arjunId), { tab: 'closed' });
     expect(closed.tasks.map((task) => [task.code, task.status])).toEqual([['Q-2026-0001', 'APPROVED']]);
     expect(Object.keys(defined(closed.tasks[0])).sort()).toEqual(
-      ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'status', 'title'].sort(),
+      ['assignedByName', 'code', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'ignoredRemarks', 'status', 'title'].sort(),
     );
-    expect(closed.counts).toEqual({ open: 1, closed: 1, overdue: 0 });
+    expect(closed.counts).toEqual({ open: 1, closed: 1, overdue: 0, ignored: 0 });
   });
 });

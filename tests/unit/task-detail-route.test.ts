@@ -39,7 +39,7 @@ const withId = (id: string) => ({ params: Promise.resolve({ id }) });
 const owned = (): string => harness.targetId;
 const task = () => defined(harness.taskWorld.tasks.find((candidate) => candidate.id === owned()));
 
-const ANSWER_KEYS = ['assignedByName', 'code', 'customer', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'notes', 'status', 'subject', 'title'];
+const ANSWER_KEYS = ['assignedByName', 'code', 'customer', 'customerName', 'deadlineAt', 'engineer', 'folderPath', 'folderUrl', 'id', 'ignored', 'notes', 'status', 'subject', 'title'];
 
 beforeAll(holdSessionClock);
 afterAll(releaseSessionClock);

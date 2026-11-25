@@ -175,7 +175,7 @@ describe("AC-3: the Overdue tab a Lead's bell opens holds the set the bell count
     });
     expect(codesOf(tab)).toEqual(['Q-2026-0003', 'Q-2026-0001']);
     expect(tab.tasks).toHaveLength(await service.countOverdue(asViewer(FIRST_LEAD)));
-    expect(tab.counts).toEqual({ open: 4, closed: 1, overdue: 2 });
+    expect(tab.counts).toEqual({ open: 4, closed: 1, overdue: 2, ignored: 0 });
   });
 
   it("without assignedBy a Lead still sees the whole queue (STORY-04.02 AC-2): the filter is the bell's, asked for", async () => {

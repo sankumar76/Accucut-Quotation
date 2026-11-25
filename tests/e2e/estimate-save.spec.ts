@@ -127,7 +127,7 @@ test.describe('AC-1, AC-2, AC-5: Save draft', () => {
 test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
   test('AC-4: nothing prompts when nothing is unsaved: a link goes straight on, a value that was saved by leaving its field is not "unsaved"', async ({ page }, testInfo) => {
     await openForm(page, testInfo, { fromTheQueue: true });
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'J');
     await control(page, 'J').fill('5');
     await control(page, 'J').blur();
     expect(await saved).toBe(200);
@@ -241,7 +241,7 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
     await openForm(page, testInfo);
     await typeAValueThatCannotBeSaved(page);
     await showTree(page);
-    await page.getByRole('button', { name: 'New item' }).click();
+    await page.getByRole('button', { name: 'Add main assembly' }).click();
     await expect(leaveDialog(page)).toBeVisible();
     await keepEditing(page).click();
     await expect(leaveDialog(page)).toHaveCount(0);
@@ -265,7 +265,7 @@ test.describe('AC-4, AC-8: leaving with unsaved changes', () => {
     expect(page.isClosed()).toBe(false);
 
     // Saved by leaving the field: nothing is unsaved, so the page closes without a word.
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'J');
     await control(page, 'J').blur();
     expect(await saved).toBe(200);
     await waitUntilNothingIsUnsaved(page);
@@ -285,7 +285,7 @@ async function openSecondTab(page: Page): Promise<Page> {
 }
 
 async function saveLength(page: Page, text: string): Promise<number> {
-  const status = nextSave(page);
+  const status = nextSave(page, 'J');
   await control(page, 'J').fill(text);
   await control(page, 'J').blur();
   return status;
@@ -334,7 +334,7 @@ test.describe('AC-5, AC-6, AC-8: two tabs', () => {
 
   test('AC-6: "Keep what I typed" sends it with the newer revision, and then it is what the part holds', async ({ page }, testInfo) => {
     const other = await twoTabsDisagree(page, testInfo);
-    const kept = nextSave(other);
+    const kept = nextSave(other, 'J');
     await other.getByRole('button', { name: 'Keep what I typed' }).click();
     expect(await kept).toBe(200);
     await expect(other.getByText('This part was changed somewhere else.')).toHaveCount(0);

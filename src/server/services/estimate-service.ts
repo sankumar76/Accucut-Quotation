@@ -4,7 +4,7 @@ import { canEditInputs } from '../../lib/estimate/can-edit-inputs';
 import { isAllowedChild, NODE_KIND_NAMES, type NodeKind } from '../../lib/estimate/node-kinds';
 import { createCompletenessReader, type CompletenessReader } from '../../lib/estimate/part-completeness';
 import type { PartView } from '../../lib/estimate/part-view';
-import { decideTransition, TRANSITION_REFUSALS, type EstimateEvent } from '../../lib/estimate/state-machine';
+import { decideTransition, isLocked, stateOf, TRANSITION_REFUSALS, type EstimateEvent } from '../../lib/estimate/state-machine';
 import { subtreeFingerprint } from '../../lib/estimate/subtree-fingerprint';
 import type { ConfigDocument } from '../../lib/fields/schema';
 import { buildTree, changedPlacements, childCount, descendantIds, insertNode, moveNode, removeNodes, type PlacedNode } from '../../lib/estimate/tree';
@@ -70,6 +70,15 @@ export interface Workspace {
   readonly title: string;
   readonly notes: string | null;
   readonly assignedByName: string;
+  /** The name of the Engineer the task is assigned to (CR-01 item 7D): the Restore dialog says whose Open queue it returns to. A name, never an ID (NFR-002). */
+  readonly engineerName: string;
+  /** Who marked the estimate as quoted and when, by name (CR-01 item 7C): for a Lead and an Admin only, so it is `null` for an Engineer whatever the row holds (NFR-002, ADR-008). `null` while the estimate is not QUOTED. */
+  readonly quoted: { readonly at: Date; readonly byName: string } | null;
+  /**
+   * The Ignored layer over the status (ADR-019; CR-01 item 7D, AQP-401 AC-9): who set it (by name, never an ID), when, and the Lead's remarks, or `null` while the estimate is not ignored. **The same for every role**: an Engineer's own ignored task
+   * reads its notice from it (the remarks are the Lead's words, no figure, NFR-002), and the estimate of another Engineer is not found before this is read.
+   */
+  readonly ignored: { readonly at: Date; readonly byName: string; readonly remarks: string } | null;
 }
 
 /** What choosing a customer answers: the estimate and the customer it is now for. */
@@ -135,7 +144,7 @@ export interface AddedPart {
 
 /** The `code` of the 422 of an add whose kind the parent's kind does not allow (`ALLOWED_CHILDREN`), under `nodeKind`. */
 export const NODE_KIND_NOT_ALLOWED_CODE = 'NODE_KIND_NOT_ALLOWED';
-/** The `code` of the 422 of a move to a parent other than the part's own (A-CR01-5: a row is reordered only among rows with the same parent), under `parentId`. */
+/** The `code` of the 422 of a move to a parent other than the part's own (A-CR01-5, confirmed 2026-11-23: a row is reordered only among rows with the same parent), under `parentId`. */
 export const MOVE_ACROSS_PARENTS_CODE = 'MOVE_ACROSS_PARENTS';
 export const MOVE_ACROSS_PARENTS_MESSAGE = 'A part can only be moved among the parts under the same parent.';
 
@@ -161,8 +170,11 @@ export interface EstimateTransition {
  * that story), with the same code and words. Call it **after** the estimate is locked, so the status it reads cannot change before the write. Who owns the
  * task is not asked here: that is the 404 the caller has already given.
  */
-export function assertEditable(viewer: EstimateViewer, estimate: { readonly status: EstimateStatus }): void {
-  if (!canEditInputs(estimate.status, viewer.role)) throw new ConflictError(NOT_EDITABLE_MESSAGE, { code: ESTIMATE_NOT_EDITABLE_CODE });
+export function assertEditable(viewer: EstimateViewer, estimate: { readonly status: EstimateStatus; readonly ignoredAt: Date | null }): void {
+  const state = stateOf(estimate);
+  // An ignored estimate is refused with its own code and words, whatever its status underneath (architecture section 4.12 c, DL-300): the person is told to Restore it, not that it is locked.
+  if (state.ignored) throw new ConflictError(TRANSITION_REFUSALS.IGNORED.message, { code: TRANSITION_REFUSALS.IGNORED.code });
+  if (!canEditInputs(state, viewer.role)) throw new ConflictError(NOT_EDITABLE_MESSAGE, { code: ESTIMATE_NOT_EDITABLE_CODE });
 }
 
 export interface EstimateService {
@@ -264,16 +276,20 @@ async function applyTransition(
 ): Promise<EstimateTransition> {
   const estimate = await estimates.lockEstimate(estimateId, tx);
   if (estimate === null || !mayOpen(viewer, estimate.engineerId)) throw new NotFoundError();
-  const decision = decideTransition(estimate.status, event, viewer.role);
+  const state = stateOf(estimate);
+  const decision = decideTransition(state, event, viewer.role);
   if (!decision.allowed) {
     // A role that may never apply the event is refused before the status is looked at. An Engineer gets the uniform "not found" (CR-33); a Lead gets 403.
     if (decision.kind === 'ROLE') throw viewer.role === 'ENGINEER' ? new NotFoundError() : new ForbiddenError();
     const refusal = TRANSITION_REFUSALS[decision.reason];
     throw new ConflictError(refusal.message, { code: refusal.code });
   }
+  // Ignore and Restore change the layer over the status, which this function does not write (story 7D adds the service that does, with its audit entry): refuse to report them as done.
+  if (decision.ignored !== state.ignored) throw new Error('Ignore and Restore are not written by the status transition.');
   // A transition that keeps the status (Recalculate of a prepared estimate, an edit, an export) writes nothing here; what it does is its own story's.
   if (decision.to !== decision.from) {
-    const moved = await estimates.setStatus(estimate.id, decision.from, decision.to, tx);
+    // Marking as quoted records the person with the status, in the same UPDATE (`setStatus`); every other move leaves no quote marker behind.
+    const moved = await estimates.setStatus(estimate.id, decision.from, decision.to, tx, decision.to === 'QUOTED' ? viewer.id : undefined);
     if (!moved) throw new ConflictError(STATUS_CHANGED_MESSAGE, { code: ESTIMATE_STATUS_CHANGED_CODE });
   }
   return { id: estimate.id, from: decision.from, to: decision.to };
@@ -303,7 +319,8 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
    */
   async function configurationFor(estimateId: string): Promise<ConfigDocument> {
     const basis = await estimates.findConfigurationBasis(estimateId);
-    return basis?.status === 'APPROVED' && basis.configVersionId !== null ? configurationById(basis.configVersionId) : currentConfiguration();
+    // A locked estimate (approved or quoted) keeps the fields it was approved with; a quoted one is an approved one the quote has gone out for, so its form does not change either.
+    return basis !== null && isLocked(basis.status) && basis.configVersionId !== null ? configurationById(basis.configVersionId) : currentConfiguration();
   }
 
   /** What every change to the tree ends with: the places of the siblings that shifted (they get no new revision), the input change, and the tree as it is now. */
@@ -348,6 +365,10 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
         title: record.title,
         notes: record.notes,
         assignedByName: record.assignedByName,
+        engineerName: record.engineerName,
+        // The marker is the Lead's and the Admin's (ADR-008): an Engineer reads the status word and nothing of who marked it.
+        quoted: viewer.role === 'ENGINEER' || record.quoted === null ? null : { at: record.quoted.at, byName: record.quoted.byName },
+        ignored: record.ignored === null ? null : { at: record.ignored.at, byName: record.ignored.byName, remarks: record.ignored.remarks },
       };
     },
 
@@ -416,8 +437,8 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
         const before = await nodes.listNodes(id, tx);
         const part = partIn(before, request.nodeId);
         if (part.revision !== request.revision) throw new TreeChangedError(viewsOf(before, completenessOf));
-        // One refusal, one place (A-CR01-5): a row is reordered only among rows with the same parent. This also keeps a row out of its own subtree and out of another estimate, because the
-        // only parent allowed is the one it already has. If the customer answers "allow other parents", this line goes and, instead, the parent must exist in this estimate, must not be the row
+        // One refusal, one place (A-CR01-5, confirmed by the customer on 2026-11-23): a row is reordered only among rows with the same parent. This also keeps a row out of its own subtree and out of another estimate, because the
+        // only parent allowed is the one it already has. If the customer ever asks for "other parents", this line goes and, instead, the parent must exist in this estimate, must not be the row
         // or one of its descendants (`canMove` in `lib/estimate/tree.ts` is that check, unused until then) and must allow the moving row's kind (`isAllowedChild`).
         if ((request.parentId?.toLowerCase() ?? null) !== part.parentId) throw new FieldValidationError([{ field: 'parentId', message: MOVE_ACROSS_PARENTS_MESSAGE }], { code: MOVE_ACROSS_PARENTS_CODE });
         const placed = placedOf(before);

@@ -1,6 +1,7 @@
 import { assertNever } from '../../lib/assert-never';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../lib/errors';
 import { APPROVAL_CHANGED_CODE, APPROVAL_CHANGED_MESSAGE } from '../../lib/estimate/cancel-words';
+import { TRANSITION_REFUSALS } from '../../lib/estimate/state-machine';
 import {
   APPROVAL_NOT_CANCELLED_CODE,
   APPROVAL_NOT_CANCELLED_MESSAGE,
@@ -97,6 +98,8 @@ export function createRemovePriceService({ estimates, approvals, transactions, s
       return await transactions.run(async (tx) => {
         const estimate = await estimates.lockEstimate(estimateId, tx);
         if (estimate === null) throw new NotFoundError();
+        // An ignored estimate is read-only until it is restored, so its price cannot be removed either (CR-01 item 7D, AQP-401 AC-6; A-CR01-8): this route's own check under the lock, with the state machine's code and words.
+        if (estimate.ignoredAt !== null) throw new ConflictError(TRANSITION_REFUSALS.IGNORED.message, { code: TRANSITION_REFUSALS.IGNORED.code });
         const latest = await approvals.findLatestForRemoval(estimate.id, tx);
         if (latest === null) throw new ConflictError(NO_PRICE_TO_REMOVE_MESSAGE, { code: NO_PRICE_TO_REMOVE_CODE });
         // IDs are compared without regard to case, as PostgreSQL's `uuid` type does.

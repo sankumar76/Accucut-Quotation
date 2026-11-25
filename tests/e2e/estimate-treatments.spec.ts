@@ -8,7 +8,7 @@ import { defined } from '../support/defined';
 
 import { connectToTestDatabase, ensureCanaryCustomers, ensureCanaryMaterials, setCanaryCustomer, useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { control, expectFormAccessible, leastFieldHeight, nextSave, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
+import { control, expectFormAccessible, expectNothingUnsaved, leastFieldHeight, nextSave, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 import { deleteTreatment, insertTreatment, newTreatmentName, readPartInputs, renameTreatment, storeTreatmentInPart } from './support/treatment-rows';
 
@@ -30,11 +30,14 @@ const OTHER_ID = '00000000-0000-4000-8000-000700000001';
 const NOT_APPLICABLE_ID = '00000000-0000-4000-8000-000700000002';
 const idOf = (letter: string): string => seedId(FIELD_ID_NAMESPACE, columnLetterToIndex(letter));
 const G = idOf('G');
-const PRIMER = idOf('AA');
 const FOAM = idOf('AF');
 const ALL_TREATMENTS = ['Hot Dip Galvanizing', 'Primer', 'Shot Blasting', 'Polishing', 'Plating', 'Powder Coating', 'Foam', 'Soft Anodize'];
+/** The Excel columns of the eight flags of section 07, in the order of the list (Z to AG). */
+const FLAG_LETTERS = ['Z', 'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG'];
+/** The column of a treatment's flag: what its save carries. */
+const flagLetterOf = (name: string): string => defined(FLAG_LETTERS[ALL_TREATMENTS.indexOf(name)]);
 /** What the eight saves of AC-2 leave in the part: the eight flags of section 07 (Z to AG), each as 1, the way AC-1 reads a chosen one back. */
-const EVERY_TREATMENT_STORED: Record<string, string> = Object.fromEntries(['Z', 'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG'].map((letter) => [idOf(letter), '1']));
+const EVERY_TREATMENT_STORED: Record<string, string> = Object.fromEntries(FLAG_LETTERS.map((letter) => [idOf(letter), '1']));
 const OTHER_REQUIRED = 'Enter the treatment or colour.';
 
 const region = (page: Page, name: string): Locator => page.getByRole('region', { name });
@@ -48,9 +51,11 @@ async function openList(page: Page): Promise<void> {
 }
 
 async function toggle(page: Page, name: string): Promise<void> {
-  const saved = nextSave(page);
+  const saved = nextSave(page, flagLetterOf(name));
   await list(page).getByRole('checkbox', { name: new RegExp(`${name}$`) }).click();
   expect(await saved).toBe(200);
+  // The next choice, of the same treatment or another, is made after the page has handled this answer, as a person's is (AQP-1 issue 513).
+  await expectNothingUnsaved(page);
 }
 
 async function optionNamesOfG(page: Page): Promise<string[]> {
@@ -94,19 +99,22 @@ test.describe('AC-1, AC-2: the eight surface treatments as one multi-select', ()
     // Nothing was typed, and nothing is stored.
     expect(await readPartInputs(owner.id)).toEqual({});
 
+    // One treatment is the subject here: chosen it is stored as 1, left again it is stored as 0, and none chosen is valid. A second treatment, chosen and left again, was two more saves (DEF-070:
+    // the case ran 12 to 28 s on CI) for claims that are AC-2's: several chosen at once, the names in the order of the list and not of the clicks, each stored as 1.
     await toggle(page, 'Foam');
-    await toggle(page, 'Primer');
-    await expect(trigger(page)).toContainText('2 selected: Primer, Foam');
-    expect(await readPartInputs(owner.id)).toEqual({ [PRIMER]: '1', [FOAM]: '1' });
+    await expect(trigger(page)).toContainText('1 selected: Foam');
+    expect(await readPartInputs(owner.id)).toEqual({ [FOAM]: '1' });
 
-    await toggle(page, 'Primer');
     await toggle(page, 'Foam');
     await expect(trigger(page)).toContainText('None selected');
-    expect(await readPartInputs(owner.id)).toEqual({ [PRIMER]: '0', [FOAM]: '0' });
+    expect(await readPartInputs(owner.id)).toEqual({ [FOAM]: '0' });
 
     await toggle(page, 'Foam');
     await page.keyboard.press('Escape');
     await page.reload();
+    // The reload is a new page load: the form is built from the fields the page fetches once it is up, so the trigger is not on the page until the form is (DEF-070: it was absent when the test's
+    // 30 s ran out). Wait for the form as the other part-form specs do after a reload, so the next line judges what the form shows and not whether the form has arrived.
+    await waitForForm(page);
     await expect(trigger(page)).toContainText('1 selected: Foam');
   });
 
@@ -126,7 +134,7 @@ test.describe('AC-1, AC-2: the eight surface treatments as one multi-select', ()
 
     await page.keyboard.press('ArrowUp');
     await expect(boxes.nth(6)).toBeFocused();
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'AF');
     await page.keyboard.press('Space');
     expect(await saved).toBe(200);
     await expect(boxes.nth(6)).toBeChecked();
@@ -159,7 +167,7 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
     const id = await insertTreatment(name);
     const owner = await openForm(page, testInfo);
     await treatmentsLoaded(page);
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'G');
     await control(page, 'G').selectOption({ label: name });
     expect(await saved).toBe(200);
     expect((await readPartInputs(owner.id))[G]).toEqual({ id, text: name });
@@ -183,7 +191,7 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
     expect((await readPartInputs(owner.id))[G]).toBeUndefined();
 
     await otherBox(page).fill('  Invented matt black  ');
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'G');
     await otherBox(page).blur();
     expect(await saved).toBe(200);
     await expect(partForm(page).getByText(OTHER_REQUIRED)).toHaveCount(0);
@@ -198,7 +206,7 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
   test('AC-4, AC-5 (FR-018): "Not applicable" is stored with its own words and shown on the part for an Engineer, a Lead and an Admin alike, with no rate and no list entry', async ({ page }, testInfo) => {
     const owner = await openForm(page, testInfo);
     await treatmentsLoaded(page);
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'G');
     await control(page, 'G').selectOption({ label: 'Not applicable' });
     expect(await saved).toBe(200);
     expect((await readPartInputs(owner.id))[G]).toEqual({ id: NOT_APPLICABLE_ID, text: 'Not applicable' });
@@ -216,7 +224,7 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
     const goneId = await insertTreatment(gone);
     const owner = await openForm(page, testInfo);
     await treatmentsLoaded(page);
-    const saved = nextSave(page);
+    const saved = nextSave(page, 'G');
     await control(page, 'G').selectOption({ label: kept });
     expect(await saved).toBe(200);
 
@@ -231,7 +239,7 @@ test.describe('AC-3, AC-4, AC-5: Treatment / Color', () => {
     expect((await readPartInputs(owner.id))[G]).toEqual({ id: goneId, text: gone });
 
     // Saving the part without touching Treatment / Color keeps the words.
-    const savedLength = nextSave(page);
+    const savedLength = nextSave(page, 'J');
     await control(page, 'J').fill('120');
     await control(page, 'J').blur();
     expect(await savedLength).toBe(200);
@@ -303,7 +311,8 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
   test('AC-2: with every treatment chosen the trigger shows every name as text and the page still does not scroll sideways', async ({ page }, testInfo) => {
     const owner = await openForm(page, testInfo);
     await openList(page);
-    for (const name of ALL_TREATMENTS) await toggle(page, name);
+    // Chosen from the last to the first, so the names in the trigger are shown in the order of the list and not of the clicks (AC-1 chooses one treatment only).
+    for (const name of [...ALL_TREATMENTS].reverse()) await toggle(page, name);
     await page.keyboard.press('Escape');
     await expect(trigger(page)).toContainText(`8 selected: ${ALL_TREATMENTS.join(', ')}`);
     expect(await readPartInputs(owner.id)).toEqual(EVERY_TREATMENT_STORED);

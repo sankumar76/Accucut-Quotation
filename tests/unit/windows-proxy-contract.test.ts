@@ -58,9 +58,8 @@ describe('the install with -WithProxy (#576)', () => {
     expect(calls).toHaveLength(1);
     const at = install.indexOf('Invoke-AccucutProxyChecks -Origin');
     expect(install.slice(install.lastIndexOf('if ($WithProxy) {', at), at)).toContain('try {');
-    // After the first backup and the Admin\x27s account, so a problem with the proxy cannot get in the way of what the portal needs.
+    // After the first backup, so a problem with the proxy cannot get in the way of what the portal needs.
     expect(at).toBeGreaterThan(install.indexOf('Invoke-AccucutFirstBackup -PsqlPath'));
-    expect(at).toBeGreaterThan(install.indexOf('Register-AccucutAdminEndpoint -Paths'));
     // A failed check is said as a warning at the end; the proxy may not be installed yet.
     expect(install).toContain('$proxyFailed.Count -gt 0');
     expect(install).toContain('-Level Warning');

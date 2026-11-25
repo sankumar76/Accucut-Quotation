@@ -6,7 +6,9 @@ import { describeDeleteAfter, describeDeleteBefore } from '../../lib/config/fiel
 import { describeInsertAudit, describeInsertBefore } from '../../lib/config/field-insert-audit';
 import { describeRevertAfter, describeRevertBefore } from '../../lib/config/revert';
 import { MAX_REASON_LENGTH } from '../../lib/estimate/approve-price';
+import { IGNORE_REMARKS_MAX_LENGTH } from '../../lib/estimate/ignore-words';
 import { ESTIMATE_STATUSES, type EstimateStatus } from '../../lib/estimate/state-machine';
+import { taskStatusOf } from '../../lib/estimate/task-status';
 import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
 import { FIELD_KINDS } from '../../lib/fields/types';
 import { formatRupees } from '../../lib/money';
@@ -162,10 +164,33 @@ const describeOverride = (before: z.output<typeof overriddenBefore>, after: z.ou
 });
 
 // ---- Shape of the unlock event (SCR-16 "Unlock"; STORY-06.08) --------------------------------------------------------------------
-/** What an unlock keeps before: the price the approval stood at (BO), which stays on record. */
-const unlockedBeforeState = z.strictObject({ approvedPrice: rupeesText });
+/** The status an unlock leaves: only a locked estimate can be unlocked, Approved or Quoted (FR-110; QLT-C-03 of the final review). */
+const unlockedFromStatus = z.enum(['APPROVED', 'QUOTED']);
+/** What an unlock keeps before: the price the approval stood at (BO), which stays on record, and the status the estimate left, as the cancel entry keeps it. */
+const unlockedBeforeState = z.strictObject({ approvedPrice: rupeesText, status: unlockedFromStatus });
+/**
+ * LEGACY READ (QLT-C-03). Entries written before the status was kept hold the price alone. They read as Approved: that is true of every entry written before a Quoted estimate could be unlocked (PR 624, 2026-11-22).
+ * The window since then (an unlock of a Quoted estimate stored without a status) holds development, CI and demo data only, no production data, so no entry can read wrongly. The audit log is immutable,
+ * so the **read** schema reads a missing status as Approved; the write schema above requires it.
+ */
+const unlockedBeforeRead = z.strictObject({ approvedPrice: rupeesText, status: unlockedFromStatus.default('APPROVED') });
+/** "Approved at ₹ 4,750.00", or "Quoted at ₹ 4,750.00" for an estimate that had been marked as quoted: a quote taken back reads differently from an approval taken back. */
+const describeUnlockedFrom = (before: z.output<typeof unlockedBeforeState>): string => `${before.status === 'QUOTED' ? 'Quoted' : 'Approved'} at ${formatRupees(before.approvedPrice)}`;
 /** What an unlock keeps after: the Lead's reason, as stored (1 to 500 characters, trimmed). Who and when are the entry's own columns. */
 const unlockedAfterState = z.strictObject({ reason: z.string().min(1).max(500) });
+
+// ---- Shape of the Ignore and Restore events (CR-01 item 7D, AQP-401; SCR-16 "Task change") ------------------------------------------
+/** The status underneath the Ignored layer: a Draft, a Prepared or an Approved estimate (a Quoted one cannot be ignored, `ck_estimates_quoted_not_ignored`). */
+const ignoredStatusState = z.strictObject({ status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']) });
+/** The status and the Lead's remarks as stored (trimmed, 1 to `IGNORE_REMARKS_MAX_LENGTH` code points). The limit counts code points, as the column's CHECK does. */
+const ignoredRemarksState = z.strictObject({
+  status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
+  remarks: z
+    .string()
+    .min(1)
+    .refine((text) => Array.from(text).length <= IGNORE_REMARKS_MAX_LENGTH, { message: `Use ${IGNORE_REMARKS_MAX_LENGTH} characters or fewer.` }),
+});
+const describeStatus = (status: EstimateStatus): string => taskStatusOf(status).label;
 
 // ---- Shape of the cancel event (SCR-16 "Approval cancelled"; STORY-06.12) ---------------------------------------------------------
 /** The status of the estimate, before and after the cancel. Equal when the cancel did not move it (an approval kept through an unlock, on a Draft or a Prepared estimate: AC-10), so the entry shows that nothing moved. */
@@ -184,7 +209,7 @@ const readEstimateStatus = z.preprocess((value) => (value === LEGACY_SUBMITTED ?
 const cancelledBeforeRead = z.strictObject({ approvedPrice: rupeesText, status: readEstimateStatus });
 const cancelledAfterRead = z.strictObject({ reason: reasonText, status: readEstimateStatus });
 
-const STATUS_WORDS: Readonly<Record<EstimateStatus, string>> = { DRAFT: 'a Draft', PREPARED: 'Prepared', APPROVED: 'Approved' };
+const STATUS_WORDS: Readonly<Record<EstimateStatus, string>> = { DRAFT: 'a Draft', PREPARED: 'Prepared', APPROVED: 'Approved', QUOTED: 'Quoted' };
 
 /**
  * "Approved at ₹ 4,750.00 to Cancelled. Reason: …" (SCR-16, UX-64). When the cancel did not move the estimate the entry says so, before the reason: "Cancelled, the estimate stayed a Draft. Reason: …" (an assumption of
@@ -550,7 +575,7 @@ export const AUDIT_EVENTS = {
   }),
 
   // ---- Wired in STORY-06.08: an approved estimate unlocked --------------------------------------------------------------------
-  // One entry, in the unlock's own transaction (under the estimate's row lock): the price the approval stood at and the reason. The price stays on record after the unlock (it is "approved earlier" until a new approval
+  // One entry, in the unlock's own transaction (under the estimate's row lock): the price the approval stood at, the status the estimate left (Approved or Quoted) and the reason. The price stays on record after the unlock (it is "approved earlier" until a new approval
   // replaces it). Who unlocked and when are the entry's own columns. The words follow the "Approval cancelled" entry of SCR-16 ("Approved at ₹ 4,750.00 to Cancelled. Reason: …"; assumption of STORY-06.08).
   'approval.unlocked': defineEvent({
     objectType: 'estimate',
@@ -558,7 +583,8 @@ export const AUDIT_EVENTS = {
     status: 'wired',
     before: unlockedBeforeState,
     after: unlockedAfterState,
-    describe: (before, after) => ({ before: `Approved at ${formatRupees(before.approvedPrice)}`, after: `Unlocked. Reason: ${after.reason}` }),
+    readBefore: unlockedBeforeRead,
+    describe: (before, after) => ({ before: describeUnlockedFrom(before), after: `Unlocked. Reason: ${after.reason}` }),
   }),
 
   // ---- Wired in STORY-06.12: an approval cancelled by the Admin ---------------------------------------------------------------
@@ -665,6 +691,39 @@ export const AUDIT_EVENTS = {
     before: estimateCustomerState,
     after: estimateCustomerState,
     describe: (before, after) => ({ before: describeEstimateCustomer(before), after: describeEstimateCustomer(after) }),
+  }),
+
+  // ---- Wired in CR-01 item 7C (AQP-400): an approved estimate marked as quoted by a Lead or an Admin -----------------------------------
+  // One entry for one mark, in the mark's own transaction under the estimate's row lock: the status before (APPROVED, the only status the machine marks from) and after (QUOTED), and nothing else. The object is the
+  // task's code and the actor the Lead or the Admin who pressed. A refusal (a second press, a Draft, a Prepared or an ignored estimate) writes no entry. No figure has a key to sit in (NFR-002, NFR-007).
+  'estimate.quoted': defineEvent({
+    objectType: 'estimate',
+    category: 'task_change',
+    status: 'wired',
+    before: z.strictObject({ status: z.literal('APPROVED') }),
+    after: z.strictObject({ status: z.literal('QUOTED') }),
+    describe: () => ({ before: 'Approved', after: 'Quoted' }),
+  }),
+
+  // ---- Wired in CR-01 item 7D (AQP-401): an estimate ignored, and restored ------------------------------------------------------------
+  // One entry for each, in the change's own transaction under the estimate's row lock. Ignore keeps the status underneath (the layer does not change it) before, and the status with the Lead's remarks after. Restore
+  // keeps the Ignore remarks before (they stay on record after the layer is cleared) and the status after: Restore has no remarks of its own (the product-manager, FR-109). The object is the task's code and the actor
+  // the Lead or the Admin who pressed. A refusal writes no entry. No figure has a key to sit in (NFR-002, NFR-007).
+  'estimate.ignored': defineEvent({
+    objectType: 'estimate',
+    category: 'task_change',
+    status: 'wired',
+    before: ignoredStatusState,
+    after: ignoredRemarksState,
+    describe: (before, after) => ({ before: describeStatus(before.status), after: `Ignored. Remarks: ${after.remarks}` }),
+  }),
+  'estimate.restored': defineEvent({
+    objectType: 'estimate',
+    category: 'task_change',
+    status: 'wired',
+    before: ignoredRemarksState,
+    after: ignoredStatusState,
+    describe: (before, after) => ({ before: `Ignored. Remarks: ${before.remarks}`, after: describeStatus(after.status) }),
   }),
 
   // ---- Wired in STORY-04.07: a task given to another Engineer, a new deadline, or both ----------------------------------------------

@@ -95,6 +95,7 @@ describe('AC-1: the status is the estimate\'s, in every state', () => {
       deadlineAt: DEADLINE,
       status: 'PREPARED',
       assignedByName: 'Invented Status Lead',
+      ignored: null,
     });
   });
 });
@@ -141,6 +142,7 @@ describe('AC-3, AC-5: a Lead and an Admin open any task, with the same fields as
       'folderPath',
       'folderUrl',
       'id',
+      'ignored',
       'notes',
       'status',
       'subject',

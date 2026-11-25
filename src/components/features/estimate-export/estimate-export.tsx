@@ -358,6 +358,25 @@ function RefusedState({ state, code }: { readonly state: 'none' | 'out-of-date';
   );
 }
 
+export interface EstimateExportIgnoredProps {
+  /** The 409's own sentence, "This estimate is ignored. Restore it first." (DL-304 (2)): the only words of the state. */
+  readonly message: string;
+  readonly code: string;
+}
+
+/**
+ * SCR-10 for an **ignored** estimate (QLT-C-01 of the final review; FR-109, DL-304 (2)): the page opened from a bookmark, Back, or a tab left open while someone ignored the estimate. It is a state, not a fault, so
+ * the person is told in the refusal's own words and given the one way on, the link to the estimate, where Restore is. No file card, no table, no retry. It holds no figure and nothing here is a script.
+ */
+export function EstimateExportIgnored({ message, code }: EstimateExportIgnoredProps) {
+  return (
+    <>
+      <PageHeader title={EXPORT_TITLE} actions={<EstimateLink code={code} />} />
+      <Notice tone="warn" role="status" title={message} />
+    </>
+  );
+}
+
 export function EstimateExport({ summary, estimateId, code }: EstimateExportProps) {
   return (
     <>

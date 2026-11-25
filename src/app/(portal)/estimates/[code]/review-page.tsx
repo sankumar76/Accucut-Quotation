@@ -27,6 +27,14 @@ export interface ReviewPageArgs {
   readonly estimateId: string;
   readonly header: WorkspaceHeaderView;
   readonly customer: { readonly id: string; readonly name: string; readonly shortName: string } | null;
+  /** Who marked the estimate as quoted and when, for the Quoted notice (CR-01 item 7C): the Lead's and the Admin's only, so `page.tsx` reads it from the workspace on their branch alone. */
+  readonly quoted: { readonly at: Date; readonly byName: string } | null;
+  /** The Ignored layer over the status, or `null` (CR-01 item 7D): who, when (UTC text) and the remarks. An ignored estimate is read-only: the page draws its notice and no action bar. */
+  readonly ignored: { readonly at: string; readonly byName: string; readonly remarks: string } | null;
+  /** The name of the Engineer the task is assigned to: the Restore dialog says whose Open queue the task returns to. */
+  readonly engineerName: string;
+  /** The deadline has passed at the moment the page was drawn: the Restore dialog then says the task will also show as Overdue (unless it is Approved). */
+  readonly deadlinePassed: boolean;
 }
 
 /**
@@ -42,7 +50,7 @@ async function markerOf(viewer: EstimateViewer, estimateId: string): Promise<Dow
   }
 }
 
-export async function renderReview({ viewer, estimateId, header, customer }: ReviewPageArgs): Promise<ReactElement> {
+export async function renderReview({ viewer, estimateId, header, customer, quoted, ignored, engineerName, deadlinePassed }: ReviewPageArgs): Promise<ReactElement> {
   const [costs, download] = await Promise.all([getEstimateReviewService().getCosts(viewer, estimateId), markerOf(viewer, estimateId)]);
   return (
     <EstimateReview
@@ -53,6 +61,10 @@ export async function renderReview({ viewer, estimateId, header, customer }: Rev
       calculatedAt={costs.calculatedAt === null ? null : formatIst(new Date(costs.calculatedAt))}
       viewerRole={viewer.role}
       download={download}
+      quoted={quoted === null ? null : { at: quoted.at.toISOString(), byName: quoted.byName }}
+      ignored={ignored}
+      engineerName={engineerName}
+      deadlinePassed={deadlinePassed}
     />
   );
 }

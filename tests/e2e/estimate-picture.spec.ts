@@ -61,7 +61,10 @@ const file = (name: string, buffer: Uint8Array, mimeType = 'image/png') => ({ na
 async function choose(page: Page, name: string, bytes: Uint8Array): Promise<number> {
   const written = writeOfPicture(page, 'PUT');
   await chooser(page).setInputFiles(file(name, bytes));
-  return (await written).status();
+  const status = (await written).status();
+  // The field takes the next file only once it has handled this answer (it ignores one chosen while a change is settling), so it is busy until then (AQP-1 issue 513).
+  await expect(zone(page)).not.toHaveAttribute('aria-busy', 'true');
+  return status;
 }
 
 /** A picture pasted as a browser delivers it: a `paste` event whose clipboard holds one file. */

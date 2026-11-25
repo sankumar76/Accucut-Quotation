@@ -621,9 +621,6 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
         Mock New-AccucutBackupFolder { $script:Trace.Add('folder') }
         Mock Write-AccucutBackupConfig { $script:Trace.Add('config'); $script:SeenBackupPassword = $BackupPassword; $script:SeenRecipient = $AgeRecipient }
         Mock Write-AccucutRestoreConfig { $script:SeenRestorePassword = $RestorePassword; $script:RestoreConfigWritten = $true }
-        Mock Resolve-AccucutAdminAccount { $script:Trace.Add("admin-account:$Account"); [pscustomobject]@{ Sid = 'S-1-5-21-1-2-3-1001'; IsAdministrator = $false } }
-        Mock Register-AccucutAdminEndpoint { $script:Trace.Add("endpoint:$AdminAccount") }
-        Mock New-AccucutAdminShortcut { $script:Trace.Add("shortcut:$EndpointName") }
         Mock Wait-AccucutBackupTask { $script:Trace.Add('first-backup'); return [uint32]0 }
         Mock Remove-AccucutBackupAccount { $script:Trace.Add('remove-account') }
         Mock Remove-AccucutTrustedTree { $script:Trace.Add('remove-root') }
@@ -778,7 +775,7 @@ Describe 'the weekly backup in the install (STORY-10.05, ADR-015 Amendment 3)' {
     }
 }
 
-Describe 'the restore role and the Admin endpoint in the install (STORY-10.11 AC-3, AC-7; ADR-015 Amendment 3 forward note)' {
+Describe 'the restore role in the install, and no Admin endpoint (STORY-10.11 AC-3; ADR-015 Amendment 3.4)' {
     BeforeAll {
         function New-RestoreInstallFolder {
             param([string]$Name, [string]$Tag)
@@ -839,9 +836,6 @@ Describe 'the restore role and the Admin endpoint in the install (STORY-10.11 AC
         Mock Wait-AccucutBackupTask { $script:Trace.Add('first-backup'); return [uint32]0 }
         Mock Remove-AccucutBackupAccount { }
         Mock Remove-AccucutTrustedTree { $script:Trace.Add('remove-root') }
-        Mock Resolve-AccucutAdminAccount { $script:Trace.Add("admin-account:$Account"); [pscustomobject]@{ Sid = 'S-1-5-21-1-2-3-1001'; IsAdministrator = $false } }
-        Mock Register-AccucutAdminEndpoint { $script:Trace.Add("endpoint:$AdminAccount") }
-        Mock New-AccucutAdminShortcut { $script:Trace.Add("shortcut:$EndpointName|$PowerShellPath") }
         Mock Write-Host { }
     }
 
@@ -857,60 +851,67 @@ Describe 'the restore role and the Admin endpoint in the install (STORY-10.11 AC
         Should -Invoke Write-AccucutRestoreConfig -Times 1 -Exactly
         ($script:Logged -join "`n") | Should -Not -BeLike "*$($script:SeenRestorePassword)*"
         ($script:NativeArguments -join "`n") | Should -Not -BeLike "*$($script:SeenRestorePassword)*"
-        # No Admin endpoint without -AdminAccount: the restore itself is there (restore.ps1, as an administrator), the limited account is not.
-        Should -Invoke Register-AccucutAdminEndpoint -Times 0 -Exactly
-        Should -Invoke Resolve-AccucutAdminAccount -Times 0 -Exactly
-        Should -Invoke New-AccucutAdminShortcut -Times 0 -Exactly
     }
 
-    It 'AC-7: with -AdminAccount the account is checked before anything is created, and the endpoint and its shortcut are made last, after the first backup, with the trusted powershell.exe' {
-        $folders = New-RestoreInstallFolder -Name 'restore-admin' -Tag 't-admin'
-        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-admin' } }
-        $values = Write-FakeValuesFile -Name 'restore-admin-values.txt'
-        Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' -AdminAccount 'ACME\admin.user'
+    It 'ADR-015 Amendment 3.4 (d): a full install makes no endpoint, group or shortcut step, and the functions that made them are gone' {
+        $folders = New-RestoreInstallFolder -Name 'restore-plain' -Tag 't-plain'
+        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-plain' } }
+        $values = Write-FakeValuesFile -Name 'restore-plain-values.txt'
+        Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe'
         $trace = @($script:Trace)
-        $powershell = [System.IO.Path]::Combine($env:SystemRoot, 'System32\WindowsPowerShell\v1.0\powershell.exe')
-        $trace | Should -Contain 'admin-account:ACME\admin.user'
-        $trace | Should -Contain 'endpoint:ACME\admin.user'
-        $trace | Should -Contain "shortcut:AccucutAdmin|$powershell"
-        $firstDatabaseStep = @($trace | Where-Object { $_ -like 'psql:*create-roles*' })[0]
-        [array]::IndexOf($trace, 'admin-account:ACME\admin.user') | Should -BeLessThan ([array]::IndexOf($trace, $firstDatabaseStep))
-        [array]::IndexOf($trace, 'endpoint:ACME\admin.user') | Should -BeGreaterThan ([array]::IndexOf($trace, 'first-backup'))
-        [array]::IndexOf($trace, "shortcut:AccucutAdmin|$powershell") | Should -BeGreaterThan ([array]::IndexOf($trace, 'endpoint:ACME\admin.user'))
-        Should -Invoke Register-AccucutAdminEndpoint -Times 1 -Exactly -ParameterFilter { $ReleaseDirectory -like '*releases?t-admin' -and $ScPath -like '*System32?sc.exe' }
-        # R4: sc.exe is resolved through the trust check, by its full path, before the endpoint step, and the answer is what the step gets.
-        Should -Invoke Resolve-AccucutTrustedExecutable -Times 1 -Exactly -ParameterFilter { $Path -like '*System32?sc.exe' }
-        $scCheck = @($script:Trace | Where-Object { $_ -like 'admin-account:*' })
-        $scCheck.Count | Should -Be 1
+        $trace | Should -Contain 'first-backup'
+        $trace | Should -Contain 'restore-config'
+        @($trace | Where-Object { $_ -match '^(admin-account|endpoint|group|shortcut)' }).Count | Should -Be 0 -Because "the trace is: $($trace -join ' / ')"
+        ($script:Logged -join "$([char]10)") | Should -Not -Match 'Accucut Admin|shortcut|endpoint'
+        foreach ($name in 'Resolve-AccucutAdminAccount', 'Register-AccucutAdminEndpoint', 'Unregister-AccucutAdminEndpoint', 'New-AccucutAdminShortcut', 'New-AccucutAdminGroup', 'Grant-AccucutAdminEndpointAccess', 'Register-AccucutPSSessionConfiguration') {
+            Get-Command -Name $name -ErrorAction SilentlyContinue | Should -BeNullOrEmpty -Because "$name was removed with the JEA wrapper"
+        }
     }
 
-    It 'AC-7: an account that Windows does not know stops the install before the database, the roles and the folders are touched' {
-        $folders = New-RestoreInstallFolder -Name 'restore-noadmin' -Tag 't-noadmin'
-        Mock Read-AccucutReleaseInfo { [pscustomobject]@{ tag = 't-noadmin' } }
-        Mock Resolve-AccucutAdminAccount { throw "Windows does not know the account '$Account'." }
-        $values = Write-FakeValuesFile -Name 'restore-noadmin-values.txt'
-        { Invoke-AccucutInstall -ValuesFile $values -NonInteractive -Root $folders.Root -Release $folders.Release -NodeExe 'C:\fake\node.exe' -AdminAccount 'NOBODY\nobody' } | Should -Throw '*Windows does not know the account*'
-        Should -Invoke Invoke-AccucutPsql -Times 0 -Exactly -ParameterFilter { $Command -like 'CREATE*' -or $Command -like 'DROP*' }
-        Should -Invoke Register-AccucutBackupTask -Times 0 -Exactly
-        Should -Invoke Write-AccucutSecureFile -Times 0 -Exactly
-    }
-
-    It 'AC-7: passes -AdminAccount on from the first half to the second half, as a value, and only when it was given' {
-        $arguments = @(Get-AccucutInstallChildArgument -Bound @{ AdminAccount = 'ACME\admin.user'; Root = 'C:\Accucut' })
-        $at = [array]::IndexOf($arguments, '-AdminAccount')
-        $at | Should -BeGreaterOrEqual 0
-        $arguments[$at + 1] | Should -Be 'ACME\admin.user'
-        @(Get-AccucutInstallChildArgument -Bound @{ Root = 'C:\Accucut' }) | Should -Not -Contain '-AdminAccount'
-    }
-
-    It 'AC-7: the parameter has a pattern that refuses a name that could change what the endpoint files do (<Name>)' -ForEach @(
-        @{ Name = "bad'name" }, @{ Name = 'a;b' }, @{ Name = '{{ROOT}}' }, @{ Name = 'x y; z' }
-    ) {
+    It 'ADR-015 Amendment 3.4 (a): neither the parameter block of install.ps1 nor the one of Invoke-AccucutInstall has a parameter AdminAccount' {
         $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $script:WindowsDirectory 'install.ps1'), [ref]$null, [ref]$null)
-        $parameter = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'AdminAccount' }
-        $pattern = ($parameter.Attributes | Where-Object { $_.TypeName.Name -eq 'ValidatePattern' }).PositionalArguments[0].Value
-        $Name | Should -Not -Match $pattern
-        'ACME\admin.user' | Should -Match $pattern
-        'admin.user' | Should -Match $pattern
+        @($ast.ParamBlock.Parameters).Count | Should -BeGreaterThan 10
+        @($ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'AdminAccount' }).Count | Should -Be 0
+        $function = $ast.Find({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $args[0].Name -eq 'Invoke-AccucutInstall' }, $true)
+        $function | Should -Not -BeNullOrEmpty
+        @($function.Body.ParamBlock.Parameters).Count | Should -BeGreaterThan 10
+        @($function.Body.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'AdminAccount' }).Count | Should -Be 0
+        (Get-Content -LiteralPath (Join-Path $script:WindowsDirectory 'install.ps1') -Raw) | Should -Not -Match 'AdminAccount'
+    }
+
+    It 'ADR-015 Amendment 3.4 (b): an old command line with -AdminAccount passes nothing of it on to the second half' {
+        $arguments = @(Get-AccucutInstallChildArgument -Bound @{ AdminAccount = 'X'; Root = 'C:\Accucut' })
+        $arguments | Should -Not -Contain '-AdminAccount'
+        $arguments | Should -Not -Contain 'X'
+        $arguments | Should -Contain '-Root'
+        $arguments | Should -Contain 'C:\Accucut'
+    }
+
+    It 'ADR-015 Amendment 3.4: an old command line with -AdminAccount stops in PowerShell''s parameter binding, before anything is created' {
+        # A child powershell.exe with its two streams in files, so that the text is the program's own and not an error record formatted by this session.
+        $powershell = [System.IO.Path]::Combine($env:SystemRoot, 'System32\WindowsPowerShell\v1.0\powershell.exe')
+        $standardOutput = Join-Path $TestDrive 'binding-out.txt'
+        $standardError = Join-Path $TestDrive 'binding-err.txt'
+        $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + (Join-Path $script:WindowsDirectory 'install.ps1') + '"'), '-AdminAccount', 'TESTSRV\admin.test')
+        $process = Start-Process -FilePath $powershell -ArgumentList $arguments -WindowStyle Hidden -PassThru -RedirectStandardOutput $standardOutput -RedirectStandardError $standardError
+        $null = $process.Handle
+        if (-not $process.WaitForExit(120000)) { try { $process.Kill() } catch { Write-Verbose 'The child had already ended.' }; throw 'The child powershell.exe did not finish in 120 seconds.' }
+        # Windows PowerShell 5.1 gives $null for ExitCode of a Start-Process -PassThru object that was not waited for with its handle open (QLT-681-01), and $null is not 0: a bare
+        # "Should -Not -Be 0" passed whatever the child did. Reading the handle before the wait keeps the code, and a value above 0 is the only thing that passes here.
+        $process.ExitCode | Should -BeGreaterThan 0 -Because 'a refused parameter ends the child with a non-zero exit code (not $null, not 0)'
+        $output = (Get-Content -LiteralPath $standardOutput -Raw) + (Get-Content -LiteralPath $standardError -Raw)
+        # powershell.exe wraps its error text at the width of its console, even into a file: compare it with the white space squeezed.
+        $squeezed = $output -replace '\s+', ' '
+        $squeezed | Should -Match "parameter cannot be found that matches parameter name 'AdminAccount'"
+        $output | Should -Not -Match 'The install stopped'
+    }
+
+    It 'ADR-015 Amendment 3.4 (c): <File> holds no code that registers a session configuration, makes a local group or a shortcut, or sets the permissions of a service' -ForEach @(
+        @{ File = 'install.ps1' }, @{ File = 'AccucutOps.psm1' }
+    ) {
+        $text = Get-Content -LiteralPath (Join-Path $script:WindowsDirectory $File) -Raw
+        foreach ($term in 'Register-PSSessionConfiguration', 'New-PSSessionConfigurationFile', 'RunAsVirtualAccount', 'New-LocalGroup', 'WScript.Shell', 'CreateShortcut', 'sdset') {
+            $text | Should -Not -Match ([regex]::Escape($term)) -Because "$File must not contain $term"
+        }
     }
 }

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { PRICE_MESSAGE, PRICE_PATTERN, validateReason } from '../../../lib/estimate/approve-price';
 import { CALCULATE_MESSAGE, CALCULATE_PREPARED_STATUS } from '../../../lib/estimate/calculate-words';
+import { ESTIMATE_STATUSES } from '../../../lib/estimate/state-machine';
 import { CALCULATE_ACK_REQUIRED_CODE, QTY_ZERO_CODE } from '../../../lib/estimate/warning-copy';
 
 /**
@@ -28,7 +29,7 @@ const customerChoiceSchema = z.strictObject({ id: z.string().min(1), name: z.str
 /** The estimate and the customer it is now for. */
 export const estimateCustomerSchema = z.strictObject({
   id: z.string().min(1),
-  status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
+  status: z.enum(ESTIMATE_STATUSES),
   customer: customerChoiceSchema,
 });
 
@@ -82,6 +83,58 @@ export const approveAnswerSchema = z.strictObject({
   approvedAt: z.iso.datetime(),
 });
 export type ApproveAnswer = z.infer<typeof approveAnswerSchema>;
+
+/**
+ * Who marked the estimate as quoted and when (CR-01 item 7C, AQP-400; architecture section 4.12 c): a time as UTC text and the person's name now. **It exists only in the Lead and Admin schemas** (ADR-008):
+ * the Engineer's schemas carry the status word Quoted and no key for this, and `tests/security/quoted-restricted.test.ts` holds both. It holds no price, no figure and no ID (NFR-002).
+ */
+export const quotedMarkerSchema = z.strictObject({
+  at: z.iso.datetime(),
+  byName: z.string().min(1),
+});
+export type QuotedMarkerView = z.infer<typeof quotedMarkerSchema>;
+
+/**
+ * The answer of a good `POST /api/v1/estimates/{id}/quoted` (architecture section 4.12 c, "the estimate status view"): the new status, which is the one word QUOTED, and the marker just written. A strict
+ * schema, so nothing else can leave: no figure, no master value and no ID.
+ */
+export const markQuotedAnswerSchema = z.strictObject({
+  status: z.literal('QUOTED'),
+  quoted: quotedMarkerSchema,
+});
+export type MarkQuotedAnswer = z.infer<typeof markQuotedAnswerSchema>;
+
+/**
+ * Who ignored the estimate, when, and the remarks they gave (CR-01 item 7D, AQP-401 AC-9; architecture section 4.12 c): a time as UTC text, the person's name now and the Lead's words. **One nested object, the same
+ * for every role** (ADR-008): an Engineer's own ignored task reads its notice from it, and another Engineer's task is not found before it is read. It holds no price, no figure and no ID (NFR-002): the person's ID
+ * stays on the server.
+ */
+export const ignoredMarkerSchema = z.strictObject({
+  at: z.iso.datetime(),
+  byName: z.string().min(1),
+  remarks: z.string().min(1),
+});
+export type IgnoredMarkerView = z.infer<typeof ignoredMarkerSchema>;
+
+/** The size of the body of Ignore: only a bound, the rule (1 to 500 code points once trimmed) and its words are the service's (`checkIgnoreRemarks`), as `unlockBodySchema` does. */
+const MAX_BODY_REMARKS_LENGTH = 5_000;
+
+/** `POST /api/v1/estimates/{id}/ignore`: the Lead's remarks. A key that is left out is read as empty, and the service names it (422 under `remarks`). */
+export const ignoreBodySchema = z.strictObject({ remarks: z.string().max(MAX_BODY_REMARKS_LENGTH).default('') });
+
+/** The status that can lie under the Ignored layer: a Quoted estimate cannot be ignored. */
+const IGNORABLE_STATUSES = ['DRAFT', 'PREPARED', 'APPROVED'] as const;
+
+/** The answer of a good `POST /api/v1/estimates/{id}/ignore`: the status underneath (unchanged) and the layer just written. A strict schema, so nothing else can leave. */
+export const ignoreAnswerSchema = z.strictObject({
+  status: z.enum(IGNORABLE_STATUSES),
+  ignored: ignoredMarkerSchema,
+});
+export type IgnoreAnswer = z.infer<typeof ignoreAnswerSchema>;
+
+/** The answer of a good `POST /api/v1/estimates/{id}/restore` (no body): the status the estimate has again, the one it had when it was ignored. */
+export const restoreAnswerSchema = z.strictObject({ status: z.enum(IGNORABLE_STATUSES) });
+export type RestoreAnswer = z.infer<typeof restoreAnswerSchema>;
 
 /**
  * The 409 `CALCULATE_ACK_REQUIRED` (STORY-05.12 AC-2, AC-7; architecture section 6 "Error model"; NFR-002): one strict schema, the same keys for every role and no number but `inputsRevision`

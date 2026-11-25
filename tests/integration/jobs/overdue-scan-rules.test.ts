@@ -24,7 +24,7 @@ import {
   NOW,
   openWorld,
   ORIGIN,
-  outboxRows,
+  ownOutboxRows,
   PATH,
   reserveCodes,
   resetWorld,
@@ -58,7 +58,7 @@ describe('AC-6 (BR-040): alerts OFF, and the 24-hour window', () => {
       await scan();
       clock.advance(MILLISECONDS_PER_MINUTE);
     }
-    expect(await outboxRows()).toHaveLength(0);
+    expect(await ownOutboxRows()).toHaveLength(0);
     expect(await jobRuns()).toEqual([]);
   });
 
@@ -69,7 +69,7 @@ describe('AC-6 (BR-040): alerts OFF, and the 24-hour window', () => {
     const stale = await seed({ deadline: old });
     await setAlerts(false);
     await minute();
-    expect(await outboxRows()).toHaveLength(0);
+    expect(await ownOutboxRows()).toHaveLength(0);
 
     await setAlerts(true);
     await minute();
@@ -80,7 +80,7 @@ describe('AC-6 (BR-040): alerts OFF, and the 24-hour window', () => {
     clock.advance(2 * MILLISECONDS_PER_MINUTE);
     await minute();
     expect(await messagesFor(recent.code)).toHaveLength(1);
-    expect(await outboxRows()).toHaveLength(1);
+    expect(await ownOutboxRows()).toHaveLength(1);
   });
 
   it('a row written while alerts were ON and not yet sent is skipped when they are switched OFF before it is claimed (09.01)', async () => {
@@ -89,7 +89,7 @@ describe('AC-6 (BR-040): alerts OFF, and the 24-hour window', () => {
     await setAlerts(false);
     await send();
     expect(await messagesFor(task.code)).toHaveLength(0);
-    expect((await outboxRows())[0]).toMatchObject({ status: 'skipped', last_error: 'ALERTS_OFF' });
+    expect((await ownOutboxRows())[0]).toMatchObject({ status: 'skipped', last_error: 'ALERTS_OFF' });
   });
 });
 
@@ -138,7 +138,7 @@ describe('AC-7 (NFR-002, NFR-015): the message', () => {
     await minute();
     const forbidden = forbiddenStrings();
     expect(forbidden.length).toBeGreaterThan(0);
-    const rowText = JSON.stringify(await outboxRows());
+    const rowText = JSON.stringify(await ownOutboxRows());
     for (const code of codes) {
       const [mail] = await messagesFor(code);
       expect(mail, code).toBeDefined();
@@ -173,7 +173,7 @@ describe('AC-8 (NFR-024): the record of a run', () => {
     expect(lines.filter((line) => line.level === 'error')).toEqual([{ message: expect.stringContaining('overdue-scan failed after'), level: 'error', fields: expect.objectContaining({ job: 'overdue-scan', errorName: 'Error' }) }]);
     expect(JSON.stringify(lines)).not.toMatch(/10\.0\.0\.1|planted-user|password/);
     expect(await jobRuns()).toEqual([{ job: 'overdue-scan', result: { status: 'failed', message: 'the run failed' } }]);
-    expect(await outboxRows()).toHaveLength(0);
+    expect(await ownOutboxRows()).toHaveLength(0);
 
     clock.advance(MILLISECONDS_PER_MINUTE);
     await runJob({ name: 'overdue-scan', log, now: () => clock.now(), frequent: true, recordFailure: (run) => store.recordRun(run) }, () => performOverdueScan(scanDependencies));
@@ -226,7 +226,7 @@ describe('AC-9 (NFR-010): the number of statements does not grow with the number
     const large = await statementsOfOneScan();
     expect(large).toMatchObject({ inserts: 200, queued: 200 });
     expect(large.others).toBe(small.others);
-    expect(await outboxRows()).toHaveLength(200);
+    expect(await ownOutboxRows()).toHaveLength(200);
 
     const again = await statementsOfOneScan();
     expect(again).toMatchObject({ inserts: 0, queued: 0 });

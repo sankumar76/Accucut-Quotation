@@ -1,9 +1,10 @@
 import type { RoleName } from '../../lib/auth/roles';
 import { ConflictError, FieldValidationError, NotFoundError, type FieldProblem } from '../../lib/errors';
-import { isTaskClosed } from '../../lib/estimate/task-status';
+import { TRANSITION_REFUSALS, type EstimateStatus } from '../../lib/estimate/state-machine';
+import { displayStatusOf, isTaskClosed } from '../../lib/estimate/task-status';
 import { checkAssign, CUSTOMER_MESSAGE, ENGINEER_MESSAGE, type AssignInput } from '../../lib/tasks/assign';
 import { folderUrlOf } from '../../lib/tasks/folder-path';
-import { QUEUE_DEFAULT_LIMIT, type QueueCounts, type QueueTab, type TaskEstimateStatus } from '../../lib/tasks/queue';
+import { engineerSeesIgnored, QUEUE_DEFAULT_LIMIT, type QueueCounts, type QueueTab, type TaskEstimateStatus } from '../../lib/tasks/queue';
 import { DATE_ORDER_MESSAGE } from '../../lib/tasks/queue-filters';
 import { checkReassign, TASK_CLOSED_CODE, TASK_CLOSED_MESSAGE, type ReassignInput } from '../../lib/tasks/reassign';
 import { formatTaskCode } from '../../lib/tasks/task-code';
@@ -92,8 +93,14 @@ export interface QueueTask {
   /** Built here from the path; null only for a path the portal would not have accepted, so the row then shows the path as text. */
   readonly folderUrl: string | null;
   readonly deadlineAt: Date;
+  /** What a row shows (`displayStatusOf`): the estimate's status, or `IGNORED` while the layer over it is set (CR-01 item 7D). */
   readonly status: TaskEstimateStatus;
   readonly assignedByName: string;
+  /**
+   * The remarks the Lead gave when they ignored the task: **non-null only on a row of the Ignored tab** (AC-3, AC-9), because every other tab holds only tasks that are not ignored. Who ignored it and when are not in a
+   * row; the task page has them (`TaskDetail.ignored`). No figure (NFR-002).
+   */
+  readonly ignoredRemarks: string | null;
 }
 
 /** What a reassign did, for the route (the task as the queue shows it) and for what follows a change of Engineer (STORY-09.03 calls its e-mail from here, with the new revision). */
@@ -105,12 +112,18 @@ export interface ReassignResult {
   readonly assignmentRevision: number;
 }
 
-/** One task as the task route answers it: a row of the queue and the notes typed when it was assigned (STORY-04.04). The status is the estimate's, worded by `taskStatusOf`. */
-export interface TaskDetail extends QueueTask {
+/**
+ * One task as the task route answers it: a row of the queue and the notes typed when it was assigned (STORY-04.04). The status is the estimate's own (the one underneath the Ignored layer, which is the
+ * separate `ignored` field), worded by `taskStatusOf`.
+ */
+export interface TaskDetail extends Omit<QueueTask, 'status' | 'ignoredRemarks'> {
+  readonly status: EstimateStatus;
   readonly notes: string | null;
-  /** The project name and the customer with its short name (CR-01 item 6): the same for every role, names only. */
+  /** The project name and the customer with its short name (CR-01 item 7D and item 6): the same for every role, names only. */
   readonly subject: string;
   readonly customer: AssignCustomer | null;
+  /** Who ignored the task, when and with which remarks (CR-01 item 7D, AC-9), or `null`: the same for every role, by name and never an ID, with no figure (NFR-002). */
+  readonly ignored: { readonly at: Date; readonly byName: string; readonly remarks: string } | null;
 }
 
 /** One page of one tab, and how many tasks each tab holds for this person. */
@@ -236,7 +249,8 @@ function bellScopeOf(viewer: QueueViewer): QueueScope {
   }
 }
 
-function toQueueTask(row: QueueRow): QueueTask {
+/** What a row of the queue and the task route share: everything but the status and the remarks, which the two word differently (a row shows the display status, the task page the status and the layer). */
+function sharedFieldsOf(row: QueueRow) {
   return {
     id: row.id,
     code: row.code,
@@ -246,9 +260,12 @@ function toQueueTask(row: QueueRow): QueueTask {
     folderPath: row.folderPath,
     folderUrl: folderUrlOf(row.folderPath),
     deadlineAt: row.deadlineAt,
-    status: row.status,
     assignedByName: row.assignedByName,
   };
+}
+
+function toQueueTask(row: QueueRow): QueueTask {
+  return { ...sharedFieldsOf(row), status: displayStatusOf(row), ignoredRemarks: row.ignoredAt === null ? null : row.ignoreRemarks };
 }
 
 function problemsOf(errors: Readonly<Record<string, string | undefined>>): ReadonlyArray<FieldProblem> {
@@ -333,10 +350,13 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
       const scope = scopeOf(viewer, query.assignedBy);
       const limit = query.limit ?? QUEUE_DEFAULT_LIMIT;
       // One more than the page, to know whether another page follows without a count of its own.
-      const [rows, counts] = await Promise.all([
-        tasks.listQueue({ tab: query.tab, scope, now, limit: limit + 1, after: query.cursor ?? null, filter }),
+      // An Engineer's Ignored tab follows the one predicate (A-CR01-2): were it to say no, the tab and its count would be empty and an ignored task would open as not found.
+      const hidden = viewer.role === 'ENGINEER' && !engineerSeesIgnored();
+      const [rows, allCounts] = await Promise.all([
+        hidden && query.tab === 'ignored' ? Promise.resolve([]) : tasks.listQueue({ tab: query.tab, scope, now, limit: limit + 1, after: query.cursor ?? null, filter }),
         tasks.countQueue(scope, now, filter),
       ]);
+      const counts = hidden ? { ...allCounts, ignored: 0 } : allCounts;
       const page = rows.slice(0, limit);
       const last = page.at(-1);
       return {
@@ -350,7 +370,11 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
 
     async getTask(viewer, id) {
       const row = await tasks.findTask(id, scopeOf(viewer));
-      return row === null ? null : { ...toQueueTask(row), notes: row.notes, subject: row.subject, customer: row.customer };
+      if (row === null) return null;
+      // The same predicate as the queue's (A-CR01-2): an Engineer who may not see ignored tasks finds an ignored one as "not found", as any task that is not theirs.
+      if (row.ignoredAt !== null && viewer.role === 'ENGINEER' && !engineerSeesIgnored()) return null;
+      const ignored = row.ignoredAt === null || row.ignoreRemarks === null || row.ignoredByName === null ? null : { at: row.ignoredAt, byName: row.ignoredByName, remarks: row.ignoreRemarks };
+      return { ...sharedFieldsOf(row), status: row.status, notes: row.notes, subject: row.subject, customer: row.customer, ignored };
     },
 
     async reassignTask(context, id, input) {
@@ -360,7 +384,9 @@ export function createTaskService({ tasks, transactions, clock, audit, mail }: T
         const locked = await tasks.findTaskForUpdate(id, tx);
         if (locked === null) throw new NotFoundError();
         // Read under the lock: an approval that was committing has finished, and is seen here (AC-6).
-        if (isTaskClosed(locked.status)) throw new ConflictError(TASK_CLOSED_MESSAGE, { code: TASK_CLOSED_CODE });
+        // An ignored task is read-only until it is restored, so its Engineer and deadline cannot be changed either (FR-040, DL-304 (1), A-CR01-8): refused by this route's own check, with the state machine's code and words.
+        if (locked.ignoredAt !== null) throw new ConflictError(TRANSITION_REFUSALS.IGNORED.message, { code: TRANSITION_REFUSALS.IGNORED.code });
+        if (isTaskClosed(locked.status, false)) throw new ConflictError(TASK_CLOSED_MESSAGE, { code: TASK_CLOSED_CODE });
         const checked = checkReassign(input, { engineerId: locked.engineer.id, deadlineAt: locked.deadlineAt }, now);
         if (!checked.ok) throw new FieldValidationError(problemsOf(checked.errors));
         const { changes } = checked;

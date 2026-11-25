@@ -28,6 +28,7 @@ const row = (overrides: Partial<QueueRowData> = {}): QueueRowData => ({
   deadlineAt: '2026-11-12T11:30:00.000Z',
   status: 'DRAFT',
   assignedByName: 'Invented Boss',
+  ignoredRemarks: null,
   ...overrides,
 });
 
@@ -37,7 +38,7 @@ const AS_OF = '2026-11-09T04:00:00.000Z';
 const page = (tasks: ReadonlyArray<QueueRowData>, overrides: Partial<QueuePageData> = {}): QueuePageData => ({
   tab: 'open',
   tasks,
-  counts: { open: tasks.length, closed: 1, overdue: 2 },
+  counts: { open: tasks.length, closed: 1, overdue: 2, ignored: 0 },
   nextCursor: null,
   asOf: AS_OF,
   ...overrides,
@@ -49,10 +50,11 @@ const list = (role: RoleName, tasks: ReadonlyArray<QueueRowData>, asOf: string =
 const occurrences = (html: string, text: string): number => html.split(text).length - 1;
 
 describe('AC-1: three tabs with counts, and the sort note', () => {
-  it('has a tablist of Open, Closed and Overdue, each with its count, and the first one selected', () => {
-    const html = screen('LEAD', page([row()], { counts: { open: 5, closed: 1, overdue: 2 } }));
+  it('has a tablist of Open, Closed, Overdue and Ignored, each with its count, and the first one selected', () => {
+    const html = screen('LEAD', page([row()], { counts: { open: 5, closed: 1, overdue: 2, ignored: 3 } }));
     expect(html).toContain('role="tablist"');
-    expect(occurrences(html, 'role="tab"')).toBe(3);
+    expect(occurrences(html, 'role="tab"')).toBe(4);
+    expect(html).toMatch(/Ignored<span[^>]*>3<\/span>/);
     expect(html).toMatch(/aria-selected="true"[^>]*>Open<span[^>]*>5<\/span>/);
     expect(html).toMatch(/>Closed<span[^>]*>1<\/span>/);
     expect(html).toMatch(/Overdue<span[^>]*>2<\/span>/);
@@ -71,8 +73,8 @@ describe('AC-1: three tabs with counts, and the sort note', () => {
     expect(descriptionFor('LEAD')).toBe('All tasks assigned to Engineers.');
   });
 
-  it('knows the three tabs it draws', () => {
-    expect(QUEUE_TABS).toHaveLength(3);
+  it('knows the four tabs it draws', () => {
+    expect(QUEUE_TABS).toHaveLength(4);
   });
 });
 
@@ -106,12 +108,14 @@ describe('AC-3: the rows', () => {
     expect(html).not.toContain('Copy path</button>');
   });
 
-  it('gives a Lead and an Admin the Engineer and Customer columns and "Assigned by", and the "Assign task" button', () => {
+  it('gives a Lead and an Admin the Engineer column, the Customer and "Assigned by" as lines of the cells (DEF-077), and the "Assign task" button', () => {
     for (const role of ['LEAD', 'ADMIN'] as const) {
       const html = screen(role, page([row()]));
       expect(html).toMatch(/<th[^>]*>Engineer<\/th>/);
-      expect(html).toMatch(/<th[^>]*>Customer<\/th>/);
-      expect(html).toMatch(/<th[^>]*>Assigned by<\/th>/);
+      expect(html).not.toMatch(/<th[^>]*>Customer<\/th>/);
+      expect(html).not.toMatch(/<th[^>]*>Assigned by<\/th>/);
+      expect(html).toContain('Customer: ');
+      expect(html).toContain('Assigned by: ');
       expect(html).toContain('Invented Arjun');
       expect(html).toContain('href="/assign"');
       expect(html).toContain('Assign task');
@@ -130,11 +134,20 @@ describe('AC-3: the rows', () => {
     expect(html).toContain('Invented Boss');
   });
 
-  it('keeps the Task, Engineer, Deadline and Status columns at every width and drops Customer, Folder and Assigned by below 1024 px', () => {
-    const html = list('LEAD', [row()]);
-    for (const name of ['Customer', 'Folder', 'Assigned by']) expect(html).toMatch(new RegExp(`<th[^>]*hidden lg:table-cell[^>]*>${name}</th>`));
-    for (const name of ['Task', 'Engineer', 'Deadline \\(IST\\)', 'Status']) expect(html).toMatch(new RegExp(`<th[^>]*>${name}</th>`));
-    expect(html).not.toMatch(/<th[^>]*hidden[^>]*>(Task|Engineer|Deadline|Status)/);
+  it('keeps the Task, Deadline and Status columns of an Engineer at every width and drops Folder and Assigned by below 1024 px (their list has no Actions column to protect, DEF-077)', () => {
+    const html = list('ENGINEER', [row()]);
+    for (const name of ['Folder', 'Assigned by']) expect(html).toMatch(new RegExp(`<th[^>]*hidden lg:table-cell[^>]*>${name}</th>`));
+    for (const name of ['Task', 'Deadline \\(IST\\)', 'Status']) expect(html).toMatch(new RegExp(`<th[^>]*>${name}</th>`));
+    expect(html).not.toMatch(/<th[^>]*hidden[^>]*>(Task|Deadline|Status)/);
+  });
+
+  it('gives a Lead and an Admin five columns at every width, none of them hidden: the three columns that used to drop out are lines of the Task and Engineer cells (DEF-077)', () => {
+    for (const role of ['LEAD', 'ADMIN'] as const) {
+      const html = list(role, [row()]);
+      const table = html.slice(html.indexOf('<table'), html.indexOf('</table>'));
+      expect(Array.from(table.matchAll(/<th\s[^>]*>(.*?)<\/th>/g), (match) => match[1])).toEqual(['Task', 'Engineer', 'Deadline (IST)', 'Status', 'Actions']);
+      expect(table).not.toMatch(/<th[^>]*hidden/);
+    }
   });
 
   it('draws a table from 768 px and a card for each task below it', () => {
@@ -242,12 +255,12 @@ describe('STORY-04.03 AC-1: an overdue row has the clock icon, "Overdue by", and
 
 describe('STORY-04.03 AC-1: the Overdue tab says how many tasks are overdue, in the singular where it is 1', () => {
   it('adds the summary notice on the Overdue tab, "1 task is overdue" and "3 tasks are overdue"', () => {
-    expect(screen('LEAD', page([row()], { tab: 'overdue', counts: { open: 1, closed: 0, overdue: 1 }, asOf: LATE }))).toContain('1 task is overdue');
-    expect(screen('LEAD', page([row()], { tab: 'overdue', counts: { open: 3, closed: 0, overdue: 3 }, asOf: LATE }))).toContain('3 tasks are overdue');
+    expect(screen('LEAD', page([row()], { tab: 'overdue', counts: { open: 1, closed: 0, overdue: 1, ignored: 0 }, asOf: LATE }))).toContain('1 task is overdue');
+    expect(screen('LEAD', page([row()], { tab: 'overdue', counts: { open: 3, closed: 0, overdue: 3, ignored: 0 }, asOf: LATE }))).toContain('3 tasks are overdue');
   });
 
   it('has no summary notice on the other tabs', () => {
-    expect(screen('LEAD', page([row()], { tab: 'open', counts: { open: 1, closed: 0, overdue: 3 } }))).not.toContain('tasks are overdue');
+    expect(screen('LEAD', page([row()], { tab: 'open', counts: { open: 1, closed: 0, overdue: 3, ignored: 0 } }))).not.toContain('tasks are overdue');
   });
 });
 

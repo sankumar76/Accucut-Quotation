@@ -19,9 +19,10 @@ const ROW = {
   deadlineAt: '2026-11-12T11:30:00.000Z',
   status: 'DRAFT',
   assignedByName: 'Invented Boss',
+  ignoredRemarks: null,
 };
 const AS_OF = '2026-11-09T04:00:00.000Z';
-const BODY = { tab: 'open', tasks: [ROW], counts: { open: 1, closed: 0, overdue: 0 }, nextCursor: null, asOf: AS_OF };
+const BODY = { tab: 'open', tasks: [ROW], counts: { open: 1, closed: 0, overdue: 0, ignored: 0 }, nextCursor: null, asOf: AS_OF };
 
 const answering = (status: number, body: unknown) => vi.fn(() => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })));
 
@@ -41,9 +42,10 @@ describe('reading a page', () => {
           deadlineAt: ROW.deadlineAt,
           status: 'DRAFT',
           assignedByName: 'Invented Boss',
+          ignoredRemarks: null,
         },
       ],
-      counts: { open: 1, closed: 0, overdue: 0 },
+      counts: { open: 1, closed: 0, overdue: 0, ignored: 0 },
       nextCursor: 'abc',
       asOf: AS_OF,
     });
@@ -54,12 +56,25 @@ describe('reading a page', () => {
     expect(readQueuePage({ ...BODY, tasks: [] })?.tasks).toEqual([]);
   });
 
+  it('reads the Ignored tab, a row with the display status IGNORED and the remarks, and the count of the fourth tab (AQP-401 AC-3)', () => {
+    const page = readQueuePage({ ...BODY, tab: 'ignored', tasks: [{ ...ROW, status: 'IGNORED', ignoredRemarks: 'Not taken forward.' }], counts: { open: 1, closed: 0, overdue: 0, ignored: 4 } });
+    expect(page).toMatchObject({ tab: 'ignored', counts: { ignored: 4 }, tasks: [{ status: 'IGNORED', ignoredRemarks: 'Not taken forward.' }] });
+  });
+
+  it.each([
+    ['remarks that are not text', { ...BODY, tasks: [{ ...ROW, ignoredRemarks: 7 }] }],
+    ['no remarks key at all (the server always sends one, null on every other tab)', { ...BODY, tasks: [{ ...ROW, ignoredRemarks: undefined }] }],
+    ['no count of the Ignored tab', { ...BODY, counts: { open: 1, closed: 0, overdue: 0 } }],
+  ])('an answer with %s is a failure, never an empty list', (_name, body) => {
+    expect(readQueuePage(body)).toBeNull();
+  });
+
   it.each([
     ['not an object', 'nope'],
     ['no tasks list', { ...BODY, tasks: undefined }],
     ['a tab that is not one', { ...BODY, tab: 'all' }],
-    ['counts that are not whole numbers', { ...BODY, counts: { open: 1.5, closed: 0, overdue: 0 } }],
-    ['negative counts', { ...BODY, counts: { open: -1, closed: 0, overdue: 0 } }],
+    ['counts that are not whole numbers', { ...BODY, counts: { open: 1.5, closed: 0, overdue: 0, ignored: 0 } }],
+    ['negative counts', { ...BODY, counts: { open: -1, closed: 0, overdue: 0, ignored: 0 } }],
     ['no counts', { ...BODY, counts: null }],
     ['a cursor that is not text', { ...BODY, nextCursor: 5 }],
     ['no instant the overdue rows are judged at (STORY-04.03)', { ...BODY, asOf: undefined }],

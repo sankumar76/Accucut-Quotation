@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ConflictError } from '@/lib/errors';
+
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { clearPlantedCalculation, plantCalculation } from '../support/plant-calculation';
 import { defined } from '../support/defined';
@@ -81,6 +83,27 @@ describe('AC-6: a Lead and an Admin open the export page', () => {
     expect(html).toContain('The total is cleared because an input changed.');
     expect(html).toContain('Go to the estimate to Recalculate');
     for (const absent of ['The file<', 'Download .xlsx', '<table', 'The rows in the file', 'A to BO', '₹']) expect(html, absent).not.toContain(absent);
+  });
+
+  // QLT-C-01 (final review CR-01, FR-109, DL-304 (2)): an ignored estimate is an expected state, not a fault. The service's 409 sentence is the only wording; "Try again" must not appear.
+  it.each(['LEAD', 'ADMIN'] as const)('QLT-C-01, as %s: an ignored estimate shows the refusal sentence and a link back to the estimate, with no file card, no table and no error page', async (role) => {
+    harness.signInAs(role);
+    plantCalculation();
+    estimate().ignoredAt = new Date('2026-11-20T09:00:00Z');
+    const html = await open(CODE);
+    expect(html).toContain('Excel export');
+    expect(html).toContain('This estimate is ignored. Restore it first.');
+    expect(html).toContain('role="status"');
+    expect(html).toContain(`href="/estimates/${CODE}"`);
+    expect(html).toContain('Back to the estimate');
+    for (const absent of ['The file<', 'Download .xlsx', '<table', 'The rows in the file', 'A to BO', 'Try again', 'We could not load', '₹']) expect(html, absent).not.toContain(absent);
+  });
+
+  it('QLT-C-01: only the ignored refusal is turned into a state; any other fault still reaches the error page', async () => {
+    vi.spyOn(harness.exportService, 'getSummary').mockRejectedValueOnce(new ConflictError('Another conflict.', { code: 'SOMETHING_ELSE' }));
+    await expect(open(CODE)).rejects.toThrow('Another conflict.');
+    vi.spyOn(harness.exportService, 'getSummary').mockRejectedValueOnce(new Error('The database is down.'));
+    await expect(open(CODE)).rejects.toThrow('The database is down.');
   });
 
   it('the tab title and the tags hold neither the task code nor a customer name, and name no image', () => {

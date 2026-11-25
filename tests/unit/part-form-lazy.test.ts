@@ -22,6 +22,7 @@ const props = (overrides: Partial<PartFormProps> = {}): PartFormProps => ({
   editable: true,
   onSaved: () => undefined,
   onChanged: () => undefined,
+  onServerIgnored: () => undefined,
   missing: new Set<string>(),
   gate: createSaveGate(),
   ...overrides,

@@ -11,7 +11,7 @@ import {
   NO_APPROVAL_TO_CANCEL_CODE,
   NO_APPROVAL_TO_CANCEL_MESSAGE,
 } from '../../lib/estimate/cancel-words';
-import type { EstimateStatus } from '../../lib/estimate/state-machine';
+import { isLocked, TRANSITION_REFUSALS } from '../../lib/estimate/state-machine';
 import type { ApprovalCancelling } from '../repositories/approval-repository';
 import type { EstimateUnlocking } from '../repositories/estimate-repository';
 import type { TransactionRunner } from '../repositories/transaction';
@@ -61,8 +61,8 @@ export interface CancelApprovalRequest {
 
 /** What a cancel answers (NFR-002): the status the estimate has now and when. No figure, no master value, no ID, no password. */
 export interface CancelApprovalResult {
-  /** DRAFT when an approved estimate went back to Draft; the status it already had (DRAFT or PREPARED) when it did not move. */
-  readonly status: Exclude<EstimateStatus, 'APPROVED'>;
+  /** DRAFT when an approved or a quoted estimate went back to Draft; the status it already had (DRAFT or PREPARED) when it did not move. */
+  readonly status: 'DRAFT' | 'PREPARED';
   /** UTC, ISO 8601, the database's clock. */
   readonly cancelledAt: string;
 }
@@ -113,6 +113,8 @@ export function createCancelApprovalService({ estimates, approvals, transactions
       return await transactions.run(async (tx) => {
         const estimate = await estimates.lockEstimate(estimateId, tx);
         if (estimate === null) throw new NotFoundError();
+        // An ignored estimate is read-only until it is restored, the Admin's cancel included (CR-01 item 7D, AQP-401 AC-6; A-CR01-8): this route's own check under the lock, before the customer, the materials and the approval are looked at, so an ignored estimate with no approval says "ignored" and not "no approval". The state machine's code and words.
+        if (estimate.ignoredAt !== null) throw new ConflictError(TRANSITION_REFUSALS.IGNORED.message, { code: TRANSITION_REFUSALS.IGNORED.code });
         // The customer, then the materials in ascending ID order, each `FOR SHARE` after the estimate's and the task's lock (AC-9): the check Unlock shares, in the cancel's words. The state machine's own decision for
         // CANCEL is made by `transition` below, under the same lock; it allows the Admin in every status (AC-10), so there is no status for this check to wait for.
         await assertCustomerAndMaterialsExist(estimates, estimate, tx, CANCEL_WORDS);
@@ -123,8 +125,8 @@ export function createCancelApprovalService({ estimates, approvals, transactions
         if (latest.cancelledAt !== null) throw new ConflictError(APPROVAL_ALREADY_CANCELLED_MESSAGE, { code: APPROVAL_ALREADY_CANCELLED_CODE });
         // The write, in this transaction and in this order: the status (the machine decides under the same lock; DRAFT and PREPARED stay as they are and write nothing), the cancel, the entry. Any of them failing takes the others back.
         const moved = await workflow.transition(viewer, estimate.id, 'CANCEL', tx);
-        // The machine's CANCEL leads to DRAFT from APPROVED and stays put from the other two, so the estimate is never APPROVED afterwards; the check keeps a changed table from answering a status that is not one of the two.
-        if (moved.to === 'APPROVED') throw new Error('A cancelled approval would leave the estimate APPROVED.');
+        // The machine's CANCEL leads to DRAFT from APPROVED and from QUOTED (the same UPDATE clears the quote columns) and stays put from the other two, so the estimate is never locked afterwards; the check keeps a changed table from answering a status that is not one of the two.
+        if (isLocked(moved.to)) throw new Error('A cancelled approval would leave the estimate APPROVED or QUOTED.');
         const cancelledAt = await approvals.markCancelled({ approvalId: latest.id, cancelledById: viewer.id, reason: checked.reason }, tx);
         // The lock makes this impossible (the approval was not cancelled a moment ago); the check keeps a skipped lock from recording a cancel that was not stored.
         if (cancelledAt === null) throw new Error('The approval was no longer open to cancel when it was cancelled.');

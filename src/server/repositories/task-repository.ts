@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { Prisma } from '../../generated/prisma/client';
 import { escapeLike } from '../../lib/escape-like';
+import { ESTIMATE_STATUSES, LOCKED_STATUSES, type EstimateStatus } from '../../lib/estimate/state-machine';
 import type { QueueCounts, QueueTab } from '../../lib/tasks/queue';
 
 import { withDatabaseErrors } from './database-errors';
@@ -29,7 +30,8 @@ import { clientFor, type Transaction } from './transaction';
  * the reassign wait, and the status it reads once the lock is granted is the one that decides whether the task is still open (AC-6).
  */
 
-export type EstimateStatus = 'DRAFT' | 'PREPARED' | 'APPROVED';
+// The estimate's status is the state machine's (`lib/estimate/state-machine.ts`): one list, so a status added there reaches every read here. Re-exported for the repositories and services that named it here.
+export type { EstimateStatus };
 
 /** An Engineer as a choice: the ID and the name, and nothing else (the e-mail address is not sent to the screen). */
 export interface EngineerRecord {
@@ -97,11 +99,17 @@ export interface QueueRow {
   /** Null only for an estimate made before CR-01 item 6, which has no customer yet. A customer deleted since it was chosen is still named. */
   readonly customer: AssignCustomer | null;
   readonly status: EstimateStatus;
+  /** When the Ignored layer was set over the status, or null (CR-01 item 7D). Every tab but Ignored holds only rows where this is null, so only an Ignored-tab row has remarks. */
+  readonly ignoredAt: Date | null;
+  /** The remarks the Lead gave when they ignored the estimate: set exactly when `ignoredAt` is (`ck_estimates_ignored_all_or_none`). */
+  readonly ignoreRemarks: string | null;
 }
 
-/** One task as the task route reads it: the row of the queue and the notes typed when it was assigned. Still nothing about cost. */
+/** One task as the task route reads it: the row of the queue, the notes typed when it was assigned and the name of the person who ignored the estimate. Still nothing about cost. */
 export interface TaskDetailRow extends QueueRow {
   readonly notes: string | null;
+  /** The name now of the person who set the Ignored layer; null while the estimate is not ignored. The ID stays on the server. */
+  readonly ignoredByName: string | null;
 }
 
 /** A task as a reassign reads it, under the task's and the estimate's row locks: what it holds now and the status of its estimate. */
@@ -112,6 +120,8 @@ export interface LockedTask {
   readonly deadlineAt: Date;
   readonly assignmentRevision: number;
   readonly status: EstimateStatus;
+  /** When the Ignored layer was set over the status, read under the same lock, or null (CR-01 item 7D): a reassign is refused while it is set (FR-040, DL-304). */
+  readonly ignoredAt: Date | null;
   /** What the assignment e-mail of a change of Engineer shows (STORY-09.03 AC-7): plain fields of the task, read under the same lock. */
   readonly folderPath: string;
   readonly title: string;
@@ -202,7 +212,8 @@ const LOCKED_ROWS = z.array(
     engineerName: z.string(),
     deadlineAt: z.date(),
     assignmentRevision: z.number().int().positive(),
-    status: z.enum(['DRAFT', 'PREPARED', 'APPROVED']),
+    status: z.enum(ESTIMATE_STATUSES),
+    ignoredAt: z.date().nullable(),
     folderPath: z.string(),
     title: z.string(),
     notes: z.string().nullable(),
@@ -221,10 +232,15 @@ const QUEUE_SELECT = {
   deadlineAt: true,
   engineer: { select: { id: true, name: true } },
   assignedBy: { select: { name: true } },
-  estimate: { select: { status: true, customer: { select: { id: true, name: true, shortName: true } } } },
+  estimate: { select: { status: true, ignoredAt: true, ignoreRemarks: true, customer: { select: { id: true, name: true, shortName: true } } } },
 } satisfies Prisma.TaskSelect;
 
-const DETAIL_SELECT = { ...QUEUE_SELECT, notes: true } satisfies Prisma.TaskSelect;
+/** The task route also reads the name of the person who ignored the estimate (a join the list does not make: the list's rows carry the remarks and nothing of who and when). */
+const DETAIL_SELECT = {
+  ...QUEUE_SELECT,
+  notes: true,
+  estimate: { select: { ...QUEUE_SELECT.estimate.select, ignoredBy: { select: { name: true } } } },
+} satisfies Prisma.TaskSelect;
 
 type QueueSelected = Prisma.TaskGetPayload<{ select: typeof QUEUE_SELECT }>;
 
@@ -242,18 +258,26 @@ function toQueueRow(row: QueueSelected): QueueRow | null {
     assignedByName: row.assignedBy.name,
     customer: row.estimate.customer,
     status: row.estimate.status,
+    ignoredAt: row.estimate.ignoredAt,
+    ignoreRemarks: row.estimate.ignoreRemarks,
   };
 }
 
-/** The tab as a filter on the task and on the status of its estimate; Open and Closed are derived from `estimates.status`, never stored (architecture section 4.4). */
+/**
+ * The tab as a filter on the task and on its estimate; Open and Closed are derived from `estimates.status` and `estimates.ignored_at`, never stored (architecture sections 4.4 and 4.12 a). It is
+ * the SQL form of `taskTab` and `tabsOf` (`lib/tasks/task-state.ts`), which are built on `isTaskClosed` and so on `isLocked`: Closed is a locked status (`LOCKED_STATUSES`) that is not ignored, Open is any
+ * other status that is not ignored, and Overdue is Open and past its deadline. An ignored estimate is in the fourth tab, Ignored, alone (CR-01 item 7D). An integration test holds the two forms together.
+ */
 function tabFilter(tab: QueueTab, now: Date): Prisma.TaskWhereInput {
   switch (tab) {
     case 'open':
-      return { estimate: { is: { status: { not: 'APPROVED' } } } };
+      return { estimate: { is: { status: { notIn: [...LOCKED_STATUSES] }, ignoredAt: null } } };
     case 'closed':
-      return { estimate: { is: { status: 'APPROVED' } } };
+      return { estimate: { is: { status: { in: [...LOCKED_STATUSES] }, ignoredAt: null } } };
     case 'overdue':
-      return { estimate: { is: { status: { not: 'APPROVED' } } }, deadlineAt: { lt: now } };
+      return { estimate: { is: { status: { notIn: [...LOCKED_STATUSES] }, ignoredAt: null } }, deadlineAt: { lt: now } };
+    case 'ignored':
+      return { estimate: { is: { ignoredAt: { not: null } } } };
   }
 }
 
@@ -374,7 +398,7 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         // `engineer_id` would then drop the row when that save had changed the Engineer (the second of two saves at once would find no task).
         const rows = await clientFor(db, tx).$queryRaw`
           SELECT t.id::text AS "id", t.code AS "code", t.engineer_id::text AS "engineerId", (SELECT u.name FROM users u WHERE u.id = t.engineer_id) AS "engineerName",
-                 t.deadline_at AS "deadlineAt", t.assignment_revision::int AS "assignmentRevision", e.status::text AS "status",
+                 t.deadline_at AS "deadlineAt", t.assignment_revision::int AS "assignmentRevision", e.status::text AS "status", e.ignored_at AS "ignoredAt",
                  t.folder_path AS "folderPath", t.title AS "title", t.notes AS "notes"
           FROM estimates e JOIN tasks t ON t.id = e.task_id
           WHERE t.id = ${id}::uuid
@@ -400,7 +424,7 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
         if (!isUuid(id) || !isReadable(scope)) return null;
         const row = await db.task.findFirst({ where: { AND: [{ id }, scopeFilter(scope)] }, select: DETAIL_SELECT });
         const mapped = row === null ? null : toQueueRow(row);
-        return row === null || mapped === null ? null : { ...mapped, notes: row.notes };
+        return row === null || mapped === null ? null : { ...mapped, notes: row.notes, ignoredByName: row.estimate?.ignoredBy?.name ?? null };
       }),
 
     listQueue: ({ tab, scope, now, limit, after, filter }) =>
@@ -421,11 +445,11 @@ export function createTaskRepository(db: PrismaClient): TaskRepository {
 
     countQueue: (scope, now, filter) =>
       withDatabaseErrors(async () => {
-        if (!isReadable(scope)) return { open: 0, closed: 0, overdue: 0 };
+        if (!isReadable(scope)) return { open: 0, closed: 0, overdue: 0, ignored: 0 };
         const narrowed = filterWhere(filter);
         const count = (tab: QueueTab): Promise<number> => db.task.count({ where: { AND: [scopeFilter(scope), tabFilter(tab, now), narrowed] } });
-        const [open, closed, overdue] = await Promise.all([count('open'), count('closed'), count('overdue')]);
-        return { open, closed, overdue };
+        const [open, closed, overdue, ignored] = await Promise.all([count('open'), count('closed'), count('overdue'), count('ignored')]);
+        return { open, closed, overdue, ignored };
       }),
 
     countOverdue: (scope, now) =>

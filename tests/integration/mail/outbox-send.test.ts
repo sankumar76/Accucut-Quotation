@@ -105,7 +105,6 @@ beforeAll(async () => {
   repository = createEmailOutboxRepository(db.prisma);
   transactions = createTransactionRunner(db.prisma);
   capture = openMailCapture();
-  await capture.clear();
   engineerId = await plantUser('Invented Engineer', 'engineer.send@example.com', 'ENGINEER', true);
   leadId = await plantUser('Invented Lead', 'lead.send@example.com', 'LEAD', true);
   inactiveId = await plantUser('Invented Gone', 'gone.send@example.com', 'ENGINEER', false);

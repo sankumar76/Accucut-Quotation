@@ -12,9 +12,27 @@ export const LEAD_DESCRIPTION = 'All tasks assigned to Engineers.';
 
 export const TABS_LABEL = 'Task queues';
 export const SORT_NOTE = 'Sorted by deadline, earliest first. Overdue tasks stay in Open as well.';
+/** The sort note of the Ignored tab (UX 12944 section 1): the clause about Overdue is dropped, an ignored task is never overdue. */
+export const SORT_NOTE_IGNORED = 'Sorted by deadline, earliest first.';
 export const TABLE_REGION_LABEL = 'Tasks, scrollable table';
 export const TABLE_CAPTION = 'Tasks sorted by deadline, earliest first';
 export const LIST_LABEL = 'Tasks';
+
+/**
+ * The Ignored tab's intro line, per role (CR-01 item 7D, AQP-401 AC-3; UX 12944 section 1): an Engineer reads their own set-aside tasks and cannot change them; a Lead or an Admin is told where they come from and where they are
+ * restored (on the task's own page).
+ */
+export const IGNORED_INTRO_ENGINEER = 'Tasks that a Lead or Admin set aside. You can read them but not change them.';
+export const IGNORED_INTRO_MANAGER = 'RFQs that were not taken forward. They are out of Open and Overdue. Open one to restore it.';
+
+/** The link of an Ignored row for a Lead and an Admin: it opens the task, where Restore is. It restores nothing, so it does not say so (UX 12944). */
+export const OPEN_TO_RESTORE = 'Open to restore';
+/** The link of a row whose remarks were cut: it opens the task, where the whole text is. */
+export const READ_ALL_REMARKS = 'Read all remarks';
+
+/** The accessible names: the visible words first (WCAG 2.5.3), then the task, so the same link on every row is told apart. */
+export const openToRestoreLabel = (code: string): string => `${OPEN_TO_RESTORE}, ${code}`;
+export const readAllRemarksLabel = (code: string): string => `${READ_ALL_REMARKS}, ${code}`;
 
 /** The words in front of how late a task is (STORY-04.03 AC-1): "Overdue by 1 d 18 h". */
 export const OVERDUE_BY = 'Overdue by';
@@ -85,7 +103,16 @@ const EMPTY_TEXTS: Readonly<Record<QueueTab, Readonly<Record<'ENGINEER' | 'MANAG
     ENGINEER: { title: 'Nothing is overdue', description: 'None of your open tasks is past its deadline.' },
     MANAGER: { title: 'No overdue tasks', description: 'No open task is past its deadline.' },
   },
+  ignored: {
+    ENGINEER: { title: 'Nothing has been ignored', description: 'If a Lead or Admin sets one of your tasks aside, it appears here with their remarks.' },
+    MANAGER: { title: 'No ignored tasks', description: 'An RFQ you ignore leaves Open and appears here. You can restore it from its page.' },
+  },
 };
+
+/** The intro line of the Ignored tab for a role. */
+export function ignoredIntroFor(role: RoleName): string {
+  return role === 'ENGINEER' ? IGNORED_INTRO_ENGINEER : IGNORED_INTRO_MANAGER;
+}
 
 /** The empty state of a tab for a role: an Engineer's words speak of "you", a Lead's and an Admin's of tasks and Engineers. */
 export function emptyTextFor(role: RoleName, tab: QueueTab): EmptyText {

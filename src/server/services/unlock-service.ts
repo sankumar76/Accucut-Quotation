@@ -1,7 +1,7 @@
 import { assertNever } from '../../lib/assert-never';
 import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError } from '../../lib/errors';
 import type { RateChangeCounts } from '../../lib/estimate/rate-diff';
-import { decideTransition, TRANSITION_REFUSALS, type EstimateStatus } from '../../lib/estimate/state-machine';
+import { decideTransition, isLocked, stateOf, TRANSITION_REFUSALS, type EstimateState, type EstimateStatus } from '../../lib/estimate/state-machine';
 import { checkUnlockReason, UNLOCK_CUSTOMER_DELETED_MESSAGE, UNLOCK_MATERIAL_DELETED_MESSAGE } from '../../lib/estimate/unlock-words';
 import { createPlanCache, type PlanCache } from '../../lib/formula';
 import type { ApprovalUnlocking } from '../repositories/approval-repository';
@@ -97,6 +97,15 @@ export interface UnlockDependencies {
 }
 
 /** The role check, first and alone: it reads nothing, so a role that may never unlock learns nothing about any estimate (CR-33, NFR-002). Closed by `assertNever`, so a role added one day is refused until decided. */
+/**
+ * The status an unlock leaves, for the audit entry (QLT-C-03; QLT-669-01). The machine allows UNLOCK from a locked status alone (Approved or Quoted), and it has decided already; this refuses, rather than guesses,
+ * a status that is neither, so an entry can never say "Approved" for an estimate that was not.
+ */
+export function lockedStatusLeft(status: EstimateStatus): 'APPROVED' | 'QUOTED' {
+  if (!isLocked(status)) throw new Error('Only an approved or a quoted estimate can be unlocked.');
+  return status;
+}
+
 export function assertMayUnlock(viewer: Pick<EstimateViewer, 'role'>): void {
   switch (viewer.role) {
     case 'ADMIN':
@@ -110,8 +119,8 @@ export function assertMayUnlock(viewer: Pick<EstimateViewer, 'role'>): void {
 }
 
 /** The state machine's decision for UNLOCK, as the error it is: 403 for a role that may not, the machine's own code and sentence for a status that does not allow it (`ESTIMATE_NOT_APPROVED`). */
-function assertUnlockable(viewer: Pick<EstimateViewer, 'role'>, status: EstimateStatus): void {
-  const decision = decideTransition(status, 'UNLOCK', viewer.role);
+function assertUnlockable(viewer: Pick<EstimateViewer, 'role'>, state: EstimateState): void {
+  const decision = decideTransition(state, 'UNLOCK', viewer.role);
   if (decision.allowed) return;
   if (decision.kind === 'ROLE') throw new ForbiddenError();
   const refusal = TRANSITION_REFUSALS[decision.reason];
@@ -130,7 +139,7 @@ export function createUnlockService({ estimates, approvals, calculations, master
       return await transactions.run(async (tx) => {
         const estimate = await estimates.lockEstimate(estimateId, tx);
         if (estimate === null) throw new NotFoundError();
-        assertUnlockable(viewer, estimate.status);
+        assertUnlockable(viewer, stateOf(estimate));
         // The customer, then the materials in ascending ID order, each `FOR SHARE` after the estimate's and the task's lock (AC-10): the check Cancel approval shares (`deleted-masters.ts`), in the unlock's words.
         await assertCustomerAndMaterialsExist(estimates, estimate, tx, UNLOCK_WORDS);
         // An approved estimate has a live approval: the approval that approved it. Anything else is a fault in the data (a plain `Error`, a 500 with fixed words), never a guess.
@@ -141,11 +150,13 @@ export function createUnlockService({ estimates, approvals, calculations, master
         const unlockedAt = await approvals.markUnlocked({ approvalId: live.id, unlockedById: viewer.id, reason: checked.reason }, tx);
         // The lock makes this impossible (the approval was live a moment ago); the check keeps a skipped lock from recording an unlock that was not stored.
         if (unlockedAt === null) throw new Error('The approval was no longer live when it was unlocked.');
+        // The machine allows UNLOCK from APPROVED and from QUOTED alone (decided above, under the same lock), so this is the status the estimate leaves (QLT-C-03). Any other status is a fault, not an Approved one.
+        const leaving = lockedStatusLeft(estimate.status);
         await workflow.audit.record(tx, {
           event: 'approval.unlocked',
           ...request.audit,
           object: { id: estimate.id, label: estimate.taskCode },
-          before: { approvedPrice: live.approvedPrice },
+          before: { approvedPrice: live.approvedPrice, status: leaving },
           after: { reason: checked.reason },
         });
         return { status: 'DRAFT', unlockedAt: unlockedAt.toISOString() };
@@ -156,7 +167,7 @@ export function createUnlockService({ estimates, approvals, calculations, master
       assertMayUnlock(viewer);
       const access = await estimates.findEstimateAccess(estimateId);
       if (access === null) throw new NotFoundError();
-      assertUnlockable(viewer, access.status);
+      assertUnlockable(viewer, stateOf(access));
       const live = await approvals.findLiveApproval(estimateId);
       if (live === null) throw new Error('The approved estimate has no live approval to unlock.');
       const stored = await calculations.findMasterSnapshot(live.calculationId);

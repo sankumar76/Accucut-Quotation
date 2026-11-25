@@ -62,9 +62,12 @@ export function treeFromRefusal(refusal: Refusal): ReadonlyArray<PartItem> | nul
 
 const base = (estimateId: string): string => `/api/v1/estimates/${encodeURIComponent(estimateId)}`;
 
+/** The request's abort signal, when the caller gave one (AQP-343: the screen stops waiting for a change that is never answered). Nothing is added to the request otherwise. */
+const withSignal = (init: RequestInit, signal: AbortSignal | undefined): RequestInit => (signal === undefined ? init : { ...init, signal });
+
 /** `GET /api/v1/estimates/{id}/tree`. */
-export function loadTree(estimateId: string, doFetch: Fetch = fetch): Promise<Outcome<TreeAnswer>> {
-  return sendJson(doFetch, `${base(estimateId)}/tree`, { method: 'GET', headers: ACCEPT_JSON }, toAnswer);
+export function loadTree(estimateId: string, doFetch: Fetch = fetch, signal?: AbortSignal): Promise<Outcome<TreeAnswer>> {
+  return sendJson(doFetch, `${base(estimateId)}/tree`, withSignal({ method: 'GET', headers: ACCEPT_JSON }, signal), toAnswer);
 }
 
 /** What to add (CR-01 item 3A): a row of this kind, last under `parentId` (null: the top level). The server refuses a kind the parent's kind does not allow (422 `NODE_KIND_NOT_ALLOWED`). */
@@ -74,8 +77,8 @@ export interface AddRequest {
 }
 
 /** `POST /api/v1/estimates/{id}/nodes`: the answer is the tree and the part added. */
-export function addPart(estimateId: string, request: AddRequest, doFetch: Fetch = fetch): Promise<Outcome<TreeAnswer>> {
-  return sendJson(doFetch, `${base(estimateId)}/nodes`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(request) }, toAnswer);
+export function addPart(estimateId: string, request: AddRequest, doFetch: Fetch = fetch, signal?: AbortSignal): Promise<Outcome<TreeAnswer>> {
+  return sendJson(doFetch, `${base(estimateId)}/nodes`, withSignal({ method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(request) }, signal), toAnswer);
 }
 
 export interface MoveRequest {
@@ -88,8 +91,8 @@ export interface MoveRequest {
 }
 
 /** `POST /api/v1/estimates/{id}/tree/move`: the answer is the tree. */
-export function movePart(estimateId: string, request: MoveRequest, doFetch: Fetch = fetch): Promise<Outcome<TreeAnswer>> {
-  return sendJson(doFetch, `${base(estimateId)}/tree/move`, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(request) }, toAnswer);
+export function movePart(estimateId: string, request: MoveRequest, doFetch: Fetch = fetch, signal?: AbortSignal): Promise<Outcome<TreeAnswer>> {
+  return sendJson(doFetch, `${base(estimateId)}/tree/move`, withSignal({ method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(request) }, signal), toAnswer);
 }
 
 export interface DeleteRequest {
@@ -102,7 +105,7 @@ export interface DeleteRequest {
 }
 
 /** `DELETE /api/v1/estimates/{id}/nodes/{nodeId}?revision=&parts=&subtree=`: the answer is the tree that is left. */
-export function deletePart(estimateId: string, request: DeleteRequest, doFetch: Fetch = fetch): Promise<Outcome<TreeAnswer>> {
+export function deletePart(estimateId: string, request: DeleteRequest, doFetch: Fetch = fetch, signal?: AbortSignal): Promise<Outcome<TreeAnswer>> {
   const query = `revision=${String(request.revision)}&parts=${String(request.parts)}&subtree=${request.subtree}`;
-  return sendJson(doFetch, `${base(estimateId)}/nodes/${encodeURIComponent(request.nodeId)}?${query}`, { method: 'DELETE', headers: ACCEPT_JSON }, toAnswer);
+  return sendJson(doFetch, `${base(estimateId)}/nodes/${encodeURIComponent(request.nodeId)}?${query}`, withSignal({ method: 'DELETE', headers: ACCEPT_JSON }, signal), toAnswer);
 }

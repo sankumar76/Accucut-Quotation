@@ -1,7 +1,7 @@
 import { Clock } from 'lucide-react';
 
 import { Icon } from '@/components/shared/icon';
-import { isTaskClosed } from '@/lib/estimate/task-status';
+import { taskStatusOf } from '@/lib/estimate/task-status';
 import { overdueBy } from '@/lib/tasks/overdue';
 import type { TaskEstimateStatus } from '@/lib/tasks/queue';
 
@@ -13,15 +13,21 @@ import { OVERDUE_BY } from './queue-texts';
  * "Overdue" is judged at `asOf`, the instant the server judged the counts at (never the browser's clock), so the first paint and the hydrated page say the same words.
  */
 
+/** The tint of an overdue row, which its opaque Actions cell repeats so the row's colour is unbroken (DEF-077). */
+export const OVERDUE_TINT_CLASS = 'bg-accent-soft';
+
 /** The row of the table: an amber bar down its left edge (on its first cell, which a collapsed table border draws reliably) and a tint. */
-export const OVERDUE_ROW_CLASS = 'bg-accent-soft [&>:first-child]:border-l-4 [&>:first-child]:border-l-accent';
+export const OVERDUE_ROW_CLASS = `${OVERDUE_TINT_CLASS} [&>:first-child]:border-l-4 [&>:first-child]:border-l-accent`;
 
 /** The card of a phone: the same bar and tint. */
 export const OVERDUE_CARD_CLASS = 'border-l-4 border-l-accent bg-accent-soft';
 
-/** How late an open task is, in words (`1 d 18 h`), or null when it is not overdue. A closed task (`isTaskClosed`, the one rule) is never overdue, whatever its deadline. */
+/**
+ * How late an open task is, in words (`1 d 18 h`), or null when it is not overdue. A closed task (`taskStatusOf(...).closed`, built on `isTaskClosed`, the one rule) is never overdue, whatever its deadline, **and neither is an
+ * ignored one** (CR-01 item 7D, AC-3): its row carries the display status `IGNORED`, and it has no overdue bar, clock or tint, even past its deadline.
+ */
 export function lateTextFor(task: { readonly deadlineAt: string; readonly status: TaskEstimateStatus }, asOf: string): string | null {
-  return isTaskClosed(task.status) ? null : overdueBy(new Date(task.deadlineAt), new Date(asOf));
+  return task.status === 'IGNORED' || taskStatusOf(task.status).closed ? null : overdueBy(new Date(task.deadlineAt), new Date(asOf));
 }
 
 export function OverdueMarker({ late }: { readonly late: string }) {

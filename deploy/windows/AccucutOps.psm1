@@ -5,7 +5,7 @@
 .DESCRIPTION
   Windows PowerShell 5.1 only: nothing here uses a PowerShell 7 feature, so it runs on every Windows Server with nothing extra installed.
 
-  The surface is deliberately small. STORY-10.05 (backup) and STORY-10.11 (restore, JEA) import this module and add their own functions
+  The surface is deliberately small. STORY-10.05 (backup) and STORY-10.11 (restore) import this module and add their own functions
   here when they need them (the `job_runs` write, the backup manifest, the free-space reading, the byte pipe `pg_dump | age`). What is
   exported today is listed, with one line each, in deploy/windows/README.md ("The shared module").
 
@@ -75,9 +75,7 @@ function Get-AccucutPaths {
         BackupPgpass   = Join-Path $config 'backup.pgpass'
         BackupSettings = Join-Path $config 'backup-settings.json'
         RestorePgpass  = Join-Path $config 'restore.pgpass'
-        JeaConfig      = Join-Path $config 'jea'
         RestoreLog     = Join-Path (Join-Path $Root 'logs') 'restore.log'
-        JeaLogs        = Join-Path (Join-Path $Root 'logs') 'jea'
     }
 }
 
@@ -369,6 +367,8 @@ function Invoke-AccucutNative {
     <#
     Runs a program and returns its exit code and its output, with registered secrets blanked.
     A secret goes in -Environment (set for the child only) or -StdIn, never in -ArgumentList.
+    -StdIn takes ASCII text only (QLT-681-03): the standard input is written in a console code page (437 while the console-input guard below is on), so a character above 127 may be changed to another one or read as a different one.
+    Text with a character above 127 is refused before a process starts; for such text write UTF-8 bytes to StandardInput.BaseStream, as the key and dump pipes do.
     -ClearPgEnvironment drops every inherited PG* variable first, so that only what -Environment names reaches the child.
     Without -AllowFailure a non-zero exit code is an error that names the program and the code and shows the blanked output.
     #>
@@ -382,6 +382,11 @@ function Invoke-AccucutNative {
         [switch]$ClearPgEnvironment,
         [switch]$AllowFailure
     )
+
+    # The text itself is never put in the message: it may be a secret.
+    if ($PSBoundParameters.ContainsKey('StdIn') -and $StdIn -cmatch '[^\x00-\x7F]') {
+        throw 'Invoke-AccucutNative -StdIn takes ASCII text only: the standard input is written in a console code page (437 while the guard is on), so a character above 127 may be changed to another one or read as a different one. Write UTF-8 bytes to the standard input stream instead.'
+    }
 
     $info = New-Object System.Diagnostics.ProcessStartInfo
     $info.FileName = $FilePath
@@ -397,7 +402,11 @@ function Invoke-AccucutNative {
 
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $info
-    [void]$process.Start()
+    # Windows PowerShell 5.1 writes the console input encoding's preamble to a redirected standard input: in a UTF-8 console that is a byte order mark (EF BB BF), which psql
+    # would read as the start of the first line (#516, SQR-04). The encoding is switched for the moment the process starts, as the key and dump pipes do.
+    $console = $null
+    if ($PSBoundParameters.ContainsKey('StdIn')) { $console = Set-AccucutConsoleInputNoPreamble }
+    try { [void]$process.Start() } finally { Restore-AccucutConsoleInput -Encoding $console }
     if ($PSBoundParameters.ContainsKey('StdIn')) {
         $process.StandardInput.Write($StdIn)
         $process.StandardInput.Close()
@@ -2614,8 +2623,48 @@ function Test-AccucutRestoreRoom {
     return [pscustomobject]@{ Ok = $ok; FreeBytes = $FreeBytes; TotalBytes = $TotalBytes; NeededBytes = $needed; MinimumFreeBytes = $minimum; Message = $message }
 }
 
+function Get-AccucutWindowsIdentityName {
+    <# The one call that asks Windows who is running this session (a function of its own so that Pester can make it throw or answer empty). Not exported. #>
+    [CmdletBinding()]
+    param()
+
+    return [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+}
+
+function Get-AccucutRunningAccount {
+    <#
+    The Windows account that is running this script (DOMAIN\user or COMPUTER\user), for the restore's record (ADR-015 Amendment 3.4 decision 3): the Admin and the IT person are both
+    administrators, so the record itself must say who ran a restore. Never throws; the text 'unknown account' stands in when Windows cannot say.
+    #>
+    [CmdletBinding()]
+    param()
+
+    try {
+        $name = [string](Get-AccucutWindowsIdentityName)
+        if ([string]::IsNullOrWhiteSpace($name)) { return 'unknown account' }
+        return $name
+    }
+    catch { return 'unknown account' }
+}
+
+function Write-AccucutApplicationEvent {
+    <# The one call that writes to the Application log (a function of its own so that Pester can see the text). Never throws: a missing source must not turn a good restore into a failure. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][string]$EntryType,
+        [Parameter(Mandatory)][int]$EventId
+    )
+
+    try { [System.Diagnostics.EventLog]::WriteEntry($script:EventSource, $Text, [System.Diagnostics.EventLogEntryType]$EntryType, $EventId) }
+    catch { Write-Host "The event could not be written to the Application log: $($_.Exception.Message)" -ForegroundColor Yellow }
+}
+
 function Write-AccucutRestoreEvent {
-    <# One event in the Application log (source Accucut), outside the database, so that a rollback cannot erase it. Never throws: a missing source must not turn a good restore into a failure. #>
+    <#
+    One event in the Application log (source Accucut), outside the database, so that a rollback cannot erase it. It ends with " Run by <account>." (ADR-015 Amendment 3.4 decision 3);
+    the message is cut to fit 1000 characters before that ending, never after it. Never throws: a missing source must not turn a good restore into a failure.
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][ValidateSet('Information', 'Error')][string]$EntryType,
@@ -2623,10 +2672,10 @@ function Write-AccucutRestoreEvent {
         [Parameter(Mandatory)][string]$Message
     )
 
+    $tail = (Hide-AccucutSecrets -Text " Run by $(Get-AccucutRunningAccount).") -replace '[\x00-\x08\x0B-\x1F]', ' '
     $text = (Hide-AccucutSecrets -Text $Message) -replace '[\x00-\x08\x0B-\x1F]', ' '
-    if ($text.Length -gt 1000) { $text = $text.Substring(0, 1000) }
-    try { [System.Diagnostics.EventLog]::WriteEntry($script:EventSource, $text, [System.Diagnostics.EventLogEntryType]$EntryType, $EventId) }
-    catch { Write-Host "The event could not be written to the Application log: $($_.Exception.Message)" -ForegroundColor Yellow }
+    if ($text.Length + $tail.Length -gt 1000) { $text = $text.Substring(0, [Math]::Max(0, 1000 - $tail.Length)) }
+    Write-AccucutApplicationEvent -Text ($text + $tail) -EntryType $EntryType -EventId $EventId
 }
 
 function Set-AccucutLockedFileAcl {
@@ -3038,6 +3087,8 @@ function Invoke-AccucutRestore {
     try {
         Write-Host ''
         Write-Host 'Restore a backup. This replaces everything in the portal with what was in the copy you choose.'
+        # The first line of every run names the Windows account that ran it (ADR-015 Amendment 3.4 decision 3).
+        Write-AccucutRestoreRecord -Paths $Paths -Message "Restore run by $(Get-AccucutRunningAccount)."
         $choices = @(Get-AccucutRestoreChoice -Directory $Paths.Backups)
         if ($choices.Count -eq 0) { throw (New-AccucutRestoreStop -Code 'no-copies' -Message 'There are no backup copies on this server, so there is nothing to restore.') }
         Write-Host 'Backup copies on this server, newest first (dates are UTC):'
@@ -3205,18 +3256,14 @@ function Invoke-AccucutRestore {
 
 #endregion
 
-#region The Admin's endpoint (STORY-10.11 AC-7; architecture section 9.9 "The Admin's account"; ADR-015 Amendment 3 point 4 forward note)
+#region The endpoint group: inert since ADR-015 Amendment 3.4 (no install creates it); removed after G8
 
-# The local group that the endpoint's virtual account joins (and is limited to: RunAsVirtualAccountGroups), and the endpoint's name. The group has no members.
+# The name of the local group that an earlier design (a JEA endpoint) used. No install creates it any more. The scripts still look for it, and with no group every check
+# they make is as strict as before (ADR-015 Amendment 3.4 decision 4).
 $script:AdminGroupName = 'AccucutAdminRunAs'
-$script:AdminEndpointName = 'AccucutAdmin'
-
-# A Windows account as the Admin's name: optional DOMAIN\ (or .\), then the user name. Letters, digits, dot, dash, underscore (and a space inside a user name). It ends up in a
-# file that is read as PowerShell data, so no quote, brace or other punctuation is accepted.
-$script:AdminAccountPattern = '^(?:[A-Za-z0-9.][A-Za-z0-9._-]{0,63}\\)?[A-Za-z0-9][A-Za-z0-9._ -]{0,63}$'
 
 function Get-AccucutAdminGroupSid {
-    <# The SID of the local group that the Admin endpoint's virtual account joins, or $null when there is no such group (no endpoint was set up). #>
+    <# The SID of the local group named AccucutAdminRunAs, or $null when there is no such group (none is made since ADR-015 Amendment 3.4). #>
     [CmdletBinding()]
     param()
 
@@ -3229,128 +3276,11 @@ function Get-AccucutAdminGroupSid {
     }
 }
 
-function Resolve-AccucutAdminAccount {
-    <# Checks the account that will use the endpoint before anything is created: its name is well formed, Windows knows it, and it is told apart from an administrator. Returns Sid and IsAdministrator. #>
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Account)
-
-    if ($Account -cnotmatch $script:AdminAccountPattern) { throw "'$Account' is not a Windows account name that the endpoint accepts (DOMAIN\user or user: letters, digits, dot, dash and underscore)." }
-    try { $sid = ([System.Security.Principal.NTAccount]::new($Account)).Translate([System.Security.Principal.SecurityIdentifier]) }
-    catch { throw "Windows does not know the account '$Account'. Make the Admin's own Windows account first, then run the install again. Nothing was changed." }
-    $isAdministrator = $false
-    try { $isAdministrator = (@(Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction Stop | Where-Object { $_.SID.Value -eq $sid.Value }).Count -gt 0) }
-    catch { Write-Verbose "The members of Administrators could not be read: $($_.Exception.Message)" }
-    return [pscustomobject]@{ Sid = $sid.Value; IsAdministrator = $isAdministrator }
-}
-
-function Get-AccucutAdminGroupMember {
-    <# The names of the members of the endpoint group, read through ADSI (WinNT). Throws when the list cannot be read: a list that cannot be read is never taken for an empty one (R1). #>
-    [CmdletBinding()]
-    param()
-
-    try {
-        $group = [ADSI]"WinNT://$($env:COMPUTERNAME)/$($script:AdminGroupName),group"
-        $names = New-Object System.Collections.Generic.List[string]
-        foreach ($member in @($group.Invoke('Members'))) { $names.Add([string]$member.GetType().InvokeMember('Name', 'GetProperty', $null, $member, $null)) }
-        return , $names.ToArray()
-    }
-    catch {
-        throw "The members of the group $($script:AdminGroupName) could not be read ($($_.Exception.Message)). Nothing was changed."
-    }
-}
-
-function New-AccucutAdminGroup {
-    <#
-    The local group of the endpoint's virtual account, with no members. Returns its SID. An existing group of that name is reused ONLY if it has no member (ADR-015 Amendment 3.3 R1: a member
-    of the group could read the restore's database password), and an unreadable list is refused too.
-    #>
-    [CmdletBinding()]
-    param()
-
-    $existing = Get-AccucutAdminGroupSid
-    if (-not [string]::IsNullOrEmpty($existing)) {
-        $members = Get-AccucutAdminGroupMember
-        if (@($members).Count -gt 0) { throw "The group $($script:AdminGroupName) has members. It must have none: a member could read the restore's database password. Ask your IT person to remove them. Nothing was changed." }
-        return $existing
-    }
-    $group = New-LocalGroup -Name $script:AdminGroupName -Description 'Accucut Admin endpoint group (no members)'
-    return $group.SID.Value
-}
-
-function Add-AccucutFileReadAccess {
-    <# One more Read entry on a file whose list is protected (the entries it has stay as they are). #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Path,
-        [Parameter(Mandatory)][string]$Sid
-    )
-
-    $security = [System.IO.File]::GetAccessControl($Path)
-    $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new($Sid), [System.Security.AccessControl.FileSystemRights]::Read, [System.Security.AccessControl.AccessControlType]::Allow))
-    [System.IO.File]::SetAccessControl($Path, $security)
-}
-
-function New-AccucutAdminFolder {
-    <# A folder with a protected list made in one call: owner Administrators, Administrators and SYSTEM full control, and the group with the stated rights, all inherited by what it holds. #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Path,
-        [Parameter(Mandatory)][string]$GroupSid,
-        [Parameter(Mandatory)][ValidateSet('ReadAndExecute', 'Modify')][string]$GroupRights
-    )
-
-    if ([System.IO.Directory]::Exists($Path)) { return }
-    $administrators = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid, $null)
-    $system = [System.Security.Principal.SecurityIdentifier]::new([System.Security.Principal.WellKnownSidType]::LocalSystemSid, $null)
-    $security = [System.Security.AccessControl.DirectorySecurity]::new()
-    $security.SetOwner($administrators)
-    $security.SetAccessRuleProtection($true, $false)
-    $inherit = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
-    $none = [System.Security.AccessControl.PropagationFlags]::None
-    $allow = [System.Security.AccessControl.AccessControlType]::Allow
-    foreach ($sid in @($administrators, $system)) {
-        $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($sid, [System.Security.AccessControl.FileSystemRights]::FullControl, $inherit, $none, $allow))
-    }
-    $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new($GroupSid), [System.Security.AccessControl.FileSystemRights]$GroupRights, $inherit, $none, $allow))
-    [void][System.IO.Directory]::CreateDirectory($Path, $security)
-}
-
-function Grant-AccucutServiceControl {
-    <#
-    Lets one SID query, start and stop a service (its security descriptor, through sc.exe): query configuration, query status, enumerate dependents, start, stop, interrogate, read control
-    (CCLCSWRPWPLORC; no pause or continue, no change of the service, no delete, no write of permissions). The existing entries are kept; a second call changes nothing. After sdset the
-    descriptor is read back, and it must equal the earlier one plus exactly that entry, or this throws naming the service (ADR-015 Amendment 3.3 R4). -ScPath is the full path of
-    sc.exe, checked by the caller (the install) with the trust block: a program is never looked up through PATH.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Name,
-        [Parameter(Mandatory)][string]$Sid,
-        [Parameter(Mandatory)][string]$ScPath
-    )
-
-    if ($Sid -notmatch '^S-1-\d+(-\d+)+$') { throw "'$Sid' is not a SID." }
-    if ($Name -notmatch '^[A-Za-z0-9_.-]{1,64}$') { throw "'$Name' is not a service name." }
-    $current = (Invoke-AccucutNative -FilePath $ScPath -ArgumentList @('sdshow', $Name)).Output.Trim()
-    if ($current -notmatch '^D:') { throw "The security descriptor of the service '$Name' could not be read." }
-    if ($current.Contains(";;;$Sid)")) { return }
-    $entry = "(A;;CCLCSWRPWPLORC;;;$Sid)"
-    $split = $current.IndexOf(')S:')
-    if ($split -ge 0) { $updated = $current.Substring(0, $split + 1) + $entry + $current.Substring($split + 1) }
-    else { $updated = $current + $entry }
-    [void](Invoke-AccucutNative -FilePath $ScPath -ArgumentList @('sdset', $Name, $updated))
-    $after = (Invoke-AccucutNative -FilePath $ScPath -ArgumentList @('sdshow', $Name)).Output.Trim()
-    $index = $after.IndexOf($entry)
-    if ($index -lt 0 -or $after.Remove($index, $entry.Length) -ne $current) {
-        throw "The security descriptor of the service '$Name' is not what was set (it should be the earlier one plus $entry). It is now: $after. Ask your IT person to check it with sc.exe sdshow $Name."
-    }
-}
-
 function Write-AccucutRestoreConfig {
     <#
     Writes config\restore.pgpass: the connection line of the database role accucut_restore (host:port:*:accucut_restore:password; the database field is * because a restore connects to
     the maintenance database and to the new one). The password is invented by the install. The file is made with FileMode.CreateNew, locked to Administrators and SYSTEM while it is
-    still empty, and only then filled. The endpoint's group is added as a reader later (Grant-AccucutAdminEndpointAccess).
+    still empty, and only then filled. Administrators and SYSTEM only (ADR-015 Amendment 3.4).
     #>
     [CmdletBinding()]
     param(
@@ -3370,120 +3300,6 @@ function Write-AccucutRestoreConfig {
     $stream.Dispose()
     Set-AccucutLockedFileAcl -Path $Paths.RestorePgpass
     [System.IO.File]::WriteAllText($Paths.RestorePgpass, $line + "`n", [System.Text.UTF8Encoding]::new($false))
-}
-
-function Grant-AccucutAdminEndpointAccess {
-    <#
-    What the endpoint's virtual account (which is in the group and nothing else) needs, and nothing more (ADR-015 Amendment 3 forward note: never a local administrator):
-      - the install root: read and execute (the trust checks read the descriptor of every folder down to the script, the module and the programs);
-      - backups: Modify (the safety copy and clearing old copies). This is the one entry that 10.11 adds there;
-      - backup.pgpass and backup-settings.json: read (clear-copies.ps1 writes its job_runs row with them); restore.pgpass: read;
-      - logs\jea (the session transcripts): Modify; logs\restore.log: Modify on that one file, so the logs folder itself gets no entry;
-      - config\jea (the role capability file that the session loads): read and execute;
-      - the two services: start, stop and query, so that a restore can stop and start them.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][object]$Paths,
-        [Parameter(Mandatory)][string]$GroupSid,
-        [Parameter(Mandatory)][string]$ScPath,
-        [string]$LogFile
-    )
-
-    Grant-AccucutFolderAccess -Path $Paths.Root -Account $GroupSid -Rights ReadAndExecute
-    Grant-AccucutFolderAccess -Path $Paths.Backups -Account $GroupSid -Rights Modify
-    foreach ($file in $Paths.BackupPgpass, $Paths.BackupSettings, $Paths.RestorePgpass) { Add-AccucutFileReadAccess -Path $file -Sid $GroupSid }
-    New-AccucutAdminFolder -Path $Paths.JeaConfig -GroupSid $GroupSid -GroupRights ReadAndExecute
-    New-AccucutAdminFolder -Path $Paths.JeaLogs -GroupSid $GroupSid -GroupRights Modify
-    if (-not [System.IO.File]::Exists($Paths.RestoreLog)) {
-        $stream = [System.IO.FileStream]::new($Paths.RestoreLog, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
-        $stream.Dispose()
-        Set-AccucutLockedFileAcl -Path $Paths.RestoreLog -ModifySid $GroupSid
-    }
-    foreach ($name in (Get-AccucutServiceNames)) { Grant-AccucutServiceControl -Name $name -Sid $GroupSid -ScPath $ScPath }
-    Write-AccucutLog -Message "The Admin endpoint's group may read and execute under '$($Paths.Root)', change '$($Paths.Backups)', '$($Paths.JeaLogs)' and restore.log, read the three settings files, and start and stop the two services. Nothing else." -LogFile $LogFile
-}
-
-function New-AccucutAdminEndpointFiles {
-    <#
-    Makes the two files that the endpoint is registered from, from the templates in the release (jea\AccucutAdmin.psrc and .pssc): the role capability file, which defines the two
-    commands, and the session configuration file, which says who may connect and what it runs as. Only the tokens {{ROOT}}, {{ADMIN_ACCOUNT}}, {{ADMIN_GROUP}},
-    {{TRANSCRIPT_DIRECTORY}} and {{ROLE_FILE}} are filled in, from values that have been checked, and a template that still holds a {{ after that is refused.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$TemplateDirectory,
-        [Parameter(Mandatory)][string]$Root,
-        [Parameter(Mandatory)][string]$AdminAccount,
-        [Parameter(Mandatory)][string]$GroupName,
-        [Parameter(Mandatory)][string]$TranscriptDirectory,
-        [Parameter(Mandatory)][string]$OutputDirectory
-    )
-
-    if ($Root -notmatch '^[A-Za-z]:\\[A-Za-z0-9_-]{1,32}$') { throw "The install folder '$Root' is not in the form X:\Name." }
-    if ($AdminAccount -cnotmatch $script:AdminAccountPattern) { throw "'$AdminAccount' is not a Windows account name that the endpoint accepts." }
-    if ($GroupName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$') { throw "'$GroupName' is not a group name that the endpoint accepts." }
-    if ($TranscriptDirectory -notmatch '^[A-Za-z]:\\[A-Za-z0-9_\\-]{1,120}$') { throw "'$TranscriptDirectory' is not a folder path that the endpoint accepts." }
-    if (-not [System.IO.Directory]::Exists($OutputDirectory)) { throw "The folder '$OutputDirectory' does not exist." }
-    $roleFile = [System.IO.Path]::Combine($OutputDirectory, 'AccucutAdmin.psrc')
-    $sessionFile = [System.IO.Path]::Combine($OutputDirectory, 'AccucutAdmin.pssc')
-    $tokens = @{ '{{ROOT}}' = $Root; '{{ADMIN_ACCOUNT}}' = $AdminAccount; '{{ADMIN_GROUP}}' = $GroupName; '{{TRANSCRIPT_DIRECTORY}}' = $TranscriptDirectory; '{{ROLE_FILE}}' = $roleFile }
-    foreach ($pair in @(@('AccucutAdmin.psrc', $roleFile), @('AccucutAdmin.pssc', $sessionFile))) {
-        $text = [System.IO.File]::ReadAllText([System.IO.Path]::Combine($TemplateDirectory, $pair[0]))
-        foreach ($token in $tokens.Keys) { $text = $text.Replace($token, [string]$tokens[$token]) }
-        if ($text.Contains('{{')) { throw "The template '$($pair[0])' holds a token that has no value." }
-        $stream = [System.IO.FileStream]::new($pair[1], [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
-        try { $bytes = [System.Text.UTF8Encoding]::new($false).GetBytes($text); $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Dispose() }
-    }
-    return [pscustomobject]@{ RoleFile = $roleFile; SessionFile = $sessionFile }
-}
-
-function Register-AccucutPSSessionConfiguration {
-    <# The one call that registers a JEA endpoint (a function of its own so that Pester can mock it). Windows Remote Management must be running: it is never switched on here. #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Name,
-        [Parameter(Mandatory)][string]$SessionFile
-    )
-
-    $winrm = Get-Service -Name WinRM -ErrorAction SilentlyContinue
-    if ($null -eq $winrm -or $winrm.Status -ne 'Running') { throw 'Windows Remote Management (the WinRM service) is not running, so the Admin endpoint cannot be set up. Run Enable-PSRemoting -Force in an administrator window, then register the endpoint again.' }
-    [void](Register-PSSessionConfiguration -Name $Name -Path $SessionFile -Force -ErrorAction Stop)
-}
-
-function Register-AccucutAdminEndpoint {
-    <#
-    The install's -AdminAccount step (AC-7): the group, the few permissions it needs, the two files from the templates and the JEA endpoint AccucutAdmin (a virtual account in that
-    group, and nothing else; transcripts in logs\jea) (the desktop shortcut is made by install.ps1). -AdminAccount is the one account that may open the endpoint. The account must not be an
-    administrator (A-35: that is the point); if it is, the endpoint is still made and a warning is logged.
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][object]$Paths,
-        [Parameter(Mandatory)][string]$AdminAccount,
-        [Parameter(Mandatory)][string]$ReleaseDirectory,
-        [Parameter(Mandatory)][string]$ScPath,
-        [string]$LogFile
-    )
-
-    $account = Resolve-AccucutAdminAccount -Account $AdminAccount
-    if ($account.IsAdministrator) { Write-AccucutLog -Message "The account '$AdminAccount' is a member of Administrators, so the endpoint does not limit it (A-35 is not met for this account)." -Level Warning -LogFile $LogFile }
-    $groupSid = New-AccucutAdminGroup
-    Grant-AccucutAdminEndpointAccess -Paths $Paths -GroupSid $groupSid -ScPath $ScPath -LogFile $LogFile
-    $files = New-AccucutAdminEndpointFiles -TemplateDirectory ([System.IO.Path]::Combine($ReleaseDirectory, 'jea')) -Root $Paths.Root -AdminAccount $AdminAccount -GroupName $script:AdminGroupName -TranscriptDirectory $Paths.JeaLogs -OutputDirectory $Paths.JeaConfig
-    Register-AccucutPSSessionConfiguration -Name $script:AdminEndpointName -SessionFile $files.SessionFile
-    Write-AccucutLog -Message "The endpoint $($script:AdminEndpointName) is registered for '$AdminAccount' (a virtual account in the group $($script:AdminGroupName); transcripts in '$($Paths.JeaLogs)')." -LogFile $LogFile
-    return [pscustomobject]@{ GroupSid = $groupSid; RoleFile = $files.RoleFile; SessionFile = $files.SessionFile }
-}
-
-function Unregister-AccucutAdminEndpoint {
-    <# Takes the endpoint away (an Admin hand-over, or the removal of a test). The group, its permissions, the files and the desktop shortcut are left for the IT person to review: this module deletes no file but a backup copy. #>
-    [CmdletBinding()]
-    param()
-
-    if ($null -ne (Get-PSSessionConfiguration -Name $script:AdminEndpointName -ErrorAction SilentlyContinue)) {
-        [void](Unregister-PSSessionConfiguration -Name $script:AdminEndpointName -Force -ErrorAction Stop)
-    }
 }
 
 #endregion
@@ -3510,6 +3326,5 @@ Export-ModuleMember -Function @(
     'Write-AccucutRestoreEvent', 'Set-AccucutLockedFileAcl', 'Test-AccucutRestoreLogFile', 'Add-AccucutRestoreLogLine', 'Write-AccucutRestoreRecord', 'Invoke-AccucutRestoreSql', 'Assert-AccucutRestoreDatabaseName',
     'New-AccucutRestoreDatabase', 'Switch-AccucutRestoreDatabase', 'Remove-AccucutRestoreDatabase', 'Set-AccucutConsoleInputNoPreamble', 'Restore-AccucutConsoleInput', 'Test-AccucutBackupKey', 'Invoke-AccucutRestorePipe',
     'Assert-AccucutRestoreNotNewer', 'Get-AccucutRestoreChoice', 'Invoke-AccucutRestore',
-    'Get-AccucutAdminGroupSid', 'Get-AccucutAdminGroupMember', 'Resolve-AccucutAdminAccount', 'New-AccucutAdminGroup', 'Add-AccucutFileReadAccess', 'New-AccucutAdminFolder', 'Grant-AccucutServiceControl', 'Write-AccucutRestoreConfig',
-    'Grant-AccucutAdminEndpointAccess', 'New-AccucutAdminEndpointFiles', 'Register-AccucutPSSessionConfiguration', 'Register-AccucutAdminEndpoint', 'Unregister-AccucutAdminEndpoint'
+    'Get-AccucutAdminGroupSid', 'Write-AccucutRestoreConfig', 'Get-AccucutRunningAccount'
 )

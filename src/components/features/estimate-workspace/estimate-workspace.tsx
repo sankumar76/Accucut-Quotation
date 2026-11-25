@@ -1,19 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 
 import { Notice } from '@/components/shared/notice';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { blockedSummary, CALCULATE_MESSAGE } from '@/lib/estimate/calculate-words';
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
-import type { EstimateStatus } from '@/lib/estimate/state-machine';
+import { isLocked, type EstimateStatus } from '@/lib/estimate/state-machine';
 import { askToLeave } from '@/lib/estimates/leave-registry';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
 import type { AutosaveProps } from './autosave';
 import type { CalculateBarProps } from './calculate-bar';
 import type { CalculateSummaryProps } from './calculate-summary';
-import { APPROVED_LOCKED_BODY, APPROVED_LOCKED_TITLE, CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_PREPARED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_TITLE, FORM_AREA_TITLE_ID, LEAVE_GUARD_FAILED_TITLE } from './estimate-texts';
+import { APPROVED_LOCKED_BODY, CALCULATE_BAR_FAILED_TITLE, CALCULATE_FAILED_TITLE, CALCULATE_PREPARED_TITLE, CALCULATE_UNSAVED_TITLE, FAILED_BODY, FORM_AREA_TITLE, FORM_AREA_TITLE_ID, LEAVE_GUARD_FAILED_TITLE, lockedNoticeTitle } from './estimate-texts';
 import { focusFirstField } from './focus-field';
 import type { LeaveGuardProps } from './leave-guard';
 import { PartForm } from './part-form';
@@ -55,22 +55,43 @@ const stay = (): void => undefined;
  */
 const DRAWING_REGION = 'hidden lg:block lg:shrink-0 lg:w-(--drawing-region-width) lg:ml-[min(0px,calc(var(--drawing-region-width)_-_var(--s-4)))] lg:max-w-[calc(100%_-_var(--tree-w)_-_14.5rem_-_2*var(--s-4))]';
 
+/** The alert of an estimate that was ignored while the Engineer worked (CR-01 item 7D): fetched only when the server says so, by a bare `import()`, so it is in no first load (NFR-009). */
+const loadIgnoredAlert = () => import('../estimate-ignore/engineer-ignored-alert').then((module) => module.EngineerIgnoredAlert);
+
 export interface EstimateWorkspaceProps {
   readonly header: WorkspaceHeaderView;
   readonly estimateId: string;
+  /** The Ignored layer is set over the estimate (CR-01 item 7D, AQP-401 AC-8): the page is read-only, with no action bar, and the badge says so. */
+  readonly ignored?: boolean;
+  /**
+   * The Engineer's notice of an ignored task, **server-rendered** and handed in as an element, so it is drawn at first paint outside this client form and adds no client code (NFR-009). Absent while the estimate is not ignored.
+   */
+  readonly notice?: ReactNode;
 }
 
-export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps) {
+export function EstimateWorkspace({ header, estimateId, ignored = false, notice }: EstimateWorkspaceProps) {
   // The status is the server's: it starts as the page was rendered and becomes PREPARED when Calculate says it did.
   const [status, setStatus] = useState<EstimateStatus>(header.status);
-  // This page is the Engineer's (a Lead or an Admin sees the short header until SCR-06), so the Engineer's rule is the one asked.
-  const editable = canEditInputs(status, 'ENGINEER');
+  // A save, an auto-save or a Calculate was refused 409 because the estimate was ignored while the Engineer worked (CR-01 item 7D): the page turns read-only on the spot, stops its timer and says so in one alert.
+  const [refusedAsIgnored, setRefusedAsIgnored] = useState(false);
+  const serverIgnored = useCallback((): void => setRefusedAsIgnored(true), []);
+  const frozen = ignored || refusedAsIgnored;
+  // This page is the Engineer's (a Lead or an Admin sees the short header until SCR-06), so the Engineer's rule is the one asked. The Ignored layer is the page's, as the server rendered it, and the server's 409 above.
+  const editable = canEditInputs({ status, ignored: frozen }, 'ENGINEER');
   // The tree lives here: the form beside it is for the part chosen in it, and a save of the form gives the tree the part's new revision.
-  const tree = usePartsTree(estimateId);
+  const tree = usePartsTree(estimateId, serverIgnored);
   const selected = tree.selected === null ? null : { id: tree.selected.id, slNo: tree.selected.slNo, revision: tree.selected.revision };
   // What Calculate waits for: the part form's saves in flight, and the fields that show a value that is not saved (review SQR-01 of AQP-317).
   const [saves] = useState(createSaveGate);
-  const calculation = useCalculate({ estimateId, onPrepared: () => setStatus('PREPARED'), settle: saves.settle });
+  const calculation = useCalculate({ estimateId, onPrepared: () => setStatus('PREPARED'), onServerIgnored: serverIgnored, settle: saves.settle });
+  const [IgnoredAlert, setIgnoredAlert] = useState<ComponentType | null>(null);
+  useEffect(() => {
+    if (!refusedAsIgnored) return;
+    void loadIgnoredAlert().then(
+      (loaded) => setIgnoredAlert(() => loaded),
+      () => undefined,
+    );
+  }, [refusedAsIgnored]);
   const bar = useLazyComponent<CalculateBarProps>(loadBar, true);
   const summary = useLazyComponent<CalculateSummaryProps>(loadSummary, calculation.blocked !== null);
   const Bar = bar.Component;
@@ -84,7 +105,7 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
    * first, once the saves in flight have finished; with nothing unsaved the choice goes through at once, as before.
    */
   const guarded = (go: () => void): void => (saves.isDirty() ? askToLeave({ proceed: go, cancel: stay }) : go());
-  const guardedTree: PartsTreeState = { ...tree, select: (next) => guarded(() => tree.select(next)), add: (kind) => guarded(() => tree.add(kind)) };
+  const guardedTree: PartsTreeState = { ...tree, select: (next) => guarded(() => tree.select(next)), addUnder: (parentId, nodeKind) => guarded(() => tree.addUnder(parentId, nodeKind)) };
   const preparedNotice = useRef<HTMLDivElement>(null);
   // The press that prepared the estimate: the button has become "Prepared" and is off, so focus goes to the notice. A reload of a prepared estimate steals nothing (`done` is null).
   useEffect(() => {
@@ -102,7 +123,8 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
 
   return (
     <>
-      <WorkspaceHeader view={{ ...header, status }} />
+      <WorkspaceHeader view={{ ...header, status, ignored: frozen }} notice={notice} />
+      {refusedAsIgnored && !ignored && IgnoredAlert !== null ? <IgnoredAlert /> : null}
       {Autosave === null ? null : <Autosave gate={saves} enabled={editable} calculating={calculation.busy} />}
       {Guard !== null ? (
         <Guard gate={saves} />
@@ -121,7 +143,7 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
           {calculation.problem.kind === 'failed' ? FAILED_BODY : null}
         </Notice>
       )}
-      {status === 'PREPARED' ? (
+      {status === 'PREPARED' && !frozen ? (
         // The state "Prepared": the one sentence the server answers with and nothing else. No number from the calculation is anywhere (NFR-002). Focus comes here after the press that prepared it.
         <div ref={preparedNotice} tabIndex={-1} data-calculate-prepared="" className="rounded-md">
           <Notice tone="success" title={CALCULATE_PREPARED_TITLE}>
@@ -129,9 +151,10 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
           </Notice>
         </div>
       ) : null}
-      {status === 'APPROVED' ? (
-        // The state "Approved": the words of the G3 screen and nothing else, so no price and no figure is anywhere (NFR-002). Inputs are read-only because `canEditInputs` says so, and the server refuses a write.
-        <Notice tone="success" title={APPROVED_LOCKED_TITLE}>
+      {isLocked(status) && !frozen ? (
+        // Neither banner is drawn while the estimate is ignored: the Engineer's notice says so and does not name the status underneath (DEF-078, UX 12944 section 4), and "the task has moved to Closed" would be false.
+        // The state "Approved" or "Quoted": the words of the G3 screen and nothing else, so no price and no figure is anywhere (NFR-002). The title is the status's own word (QLT-C-02). Inputs are read-only because `canEditInputs` says so, and the server refuses a write.
+        <Notice tone="success" title={lockedNoticeTitle(status)}>
           {APPROVED_LOCKED_BODY}
         </Notice>
       ) : null}
@@ -141,11 +164,11 @@ export function EstimateWorkspace({ header, estimateId }: EstimateWorkspaceProps
         </CardHeader>
         <CardContent className="flex flex-col gap-s-4 lg:flex-row">
           <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} />
-          <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} />
+          <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} />
           <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />
         </CardContent>
       </Card>
-      {status === 'APPROVED' ? null : Bar !== null ? (
+      {isLocked(status) || frozen ? null : Bar !== null ? (
         <Bar prepared={status === 'PREPARED'} calculation={calculation} gate={saves} onChoosePart={guardedTree.select} />
       ) : bar.failed ? (
         // The button's code could not be fetched: the person is told so and what to do, never left with no button and no word (review SQR-06 of AQP-317).

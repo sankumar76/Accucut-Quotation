@@ -21,7 +21,8 @@ import {
   NOW,
   openWorld,
   otherEngineerId,
-  outboxRows,
+  ownOutboxRows,
+  plantLeftover,
   plantUser,
   resetWorld,
   restartWorker,
@@ -31,6 +32,7 @@ import {
   send,
   setActive,
   setDeadline,
+  setIgnored,
   setStatus,
   store,
 } from '../../support/overdue-world';
@@ -55,7 +57,7 @@ describe('AC-1: one outbox row per task and deadline, by user ID', () => {
   it('writes task-overdue:<taskId>:<deadlineAtUtc>, To the Engineer and Cc the Lead, and no address', async () => {
     const task = await seed({ deadline: ago(5 * MILLISECONDS_PER_MINUTE) });
     await scan();
-    const rows = await outboxRows();
+    const rows = await ownOutboxRows();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       idempotency_key: `task-overdue:${task.id}:${ago(5 * MILLISECONDS_PER_MINUTE).toISOString()}`,
@@ -69,18 +71,20 @@ describe('AC-1: one outbox row per task and deadline, by user ID', () => {
   });
 
   it('copies the Admin when the Admin assigned the task', async () => {
+    // DEF-071: a row left by an earlier case (older than this case's rows, the Lead as its Cc) is in the world, and this case reads only its own.
+    await plantLeftover();
     await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), assigner: adminId });
     await scan();
-    expect((await outboxRows())[0]?.cc_user_ids).toEqual([adminId]);
+    expect((await ownOutboxRows())[0]?.cc_user_ids).toEqual([adminId]);
   });
 
   it('"overdue" is the queue rule: due exactly now is not overdue, one millisecond later it is (the SQL and isOverdue agree)', async () => {
     const atNow = await seed({ deadline: NOW });
     await scan();
-    expect(await outboxRows()).toHaveLength(0);
+    expect(await ownOutboxRows()).toHaveLength(0);
     clock.advance(1);
     await scan();
-    const rows = await outboxRows();
+    const rows = await ownOutboxRows();
     expect(rows).toHaveLength(1);
     expect(rows[0]?.idempotency_key).toBe(idempotencyKeys.taskOverdue(atNow.id, NOW));
   });
@@ -88,7 +92,7 @@ describe('AC-1: one outbox row per task and deadline, by user ID', () => {
   it('does not write a row for a task that is not yet due', async () => {
     await seed({ deadline: new Date(NOW.getTime() + MILLISECONDS_PER_MINUTE) });
     await scan();
-    expect(await outboxRows()).toHaveLength(0);
+    expect(await ownOutboxRows()).toHaveLength(0);
   });
 });
 
@@ -98,7 +102,7 @@ describe('AC-2 (NFR-014): the message is in the capture server within 5 minutes 
     const task = await seed({ deadline: T });
     clock.set(T);
     await minute();
-    expect(await outboxRows()).toHaveLength(0);
+    expect(await ownOutboxRows()).toHaveLength(0);
 
     clock.set(new Date(T.getTime() + 1));
     let arrivedAt: Date | null = null;
@@ -128,7 +132,7 @@ describe('AC-3 (NFR-014): once per event', () => {
       await minute();
       clock.advance(MILLISECONDS_PER_MINUTE);
     }
-    expect(await outboxRows()).toHaveLength(1);
+    expect(await ownOutboxRows()).toHaveLength(1);
     expect(await messagesFor(task.code)).toHaveLength(1);
     expect(await jobRuns()).toHaveLength(1);
     // The store's SQL builds the same key as `idempotencyKeys.taskOverdue`, so a task with a row is not even read again.
@@ -141,14 +145,14 @@ describe('AC-3 (NFR-014): once per event', () => {
     restartWorker();
     clock.advance(MILLISECONDS_PER_MINUTE);
     await minute();
-    expect(await outboxRows()).toHaveLength(1);
+    expect(await ownOutboxRows()).toHaveLength(1);
     expect(await messagesFor(task.code)).toHaveLength(1);
   });
 
   it('two scans at once queue one row, and exactly one of them says it queued', async () => {
     await seed({ deadline: ago(MILLISECONDS_PER_MINUTE) });
     const outcomes = await Promise.all([runOverdueScan(scanDependencies, NOW), runOverdueScan(scanDependencies, NOW)]);
-    expect(await outboxRows()).toHaveLength(1);
+    expect(await ownOutboxRows()).toHaveLength(1);
     expect(outcomes.map((outcome) => (outcome.status === 'ok' ? outcome.queued : -1)).sort()).toEqual([0, 1]);
   });
 
@@ -160,7 +164,7 @@ describe('AC-3 (NFR-014): once per event', () => {
       [idempotencyKeys.taskOverdue(task.id, deadline), engineerId],
     );
     await scan();
-    const rows = await outboxRows();
+    const rows = await ownOutboxRows();
     expect(rows).toHaveLength(1);
     expect(rows[0]?.subject).toBe('planted');
     expect(await jobRuns()).toEqual([]);
@@ -182,7 +186,7 @@ describe('AC-4 (A-09): a changed deadline is reported again, once', () => {
     await minute();
     await minute();
     expect(await messagesFor(task.code)).toHaveLength(2);
-    const keys = (await outboxRows()).map((row) => row.idempotency_key).sort();
+    const keys = (await ownOutboxRows()).map((row) => row.idempotency_key).sort();
     expect(keys).toEqual([idempotencyKeys.taskOverdue(task.id, ago(5 * MILLISECONDS_PER_MINUTE)), idempotencyKeys.taskOverdue(task.id, moved)].sort());
   });
 });
@@ -193,20 +197,20 @@ describe('AC-5: closed tasks, deactivated people, unlocked and reassigned tasks'
     const gone = await plantUser('gone', 'ENGINEER', false);
     await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), engineer: gone });
     await scan();
-    expect(await outboxRows()).toHaveLength(0);
+    expect(await ownOutboxRows()).toHaveLength(0);
   });
 
   it('reports a PREPARED task (it is still open)', async () => {
     await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), status: 'PREPARED' });
     await scan();
-    expect(await outboxRows()).toHaveLength(1);
+    expect(await ownOutboxRows()).toHaveLength(1);
   });
 
   it('leaves a deactivated assigner off the Cc, and the message still goes to the Engineer (DL-262)', async () => {
     const gone = await plantUser('boss-gone', 'LEAD', false);
     const task = await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), assigner: gone });
     await minute();
-    const rows = await outboxRows();
+    const rows = await ownOutboxRows();
     expect(rows[0]).toMatchObject({ to_user_id: engineerId, cc_user_ids: [], status: 'sent' });
     const [mail] = await messagesFor(task.code);
     expect(mail?.to).toEqual([addressOf[engineerId]]);
@@ -218,7 +222,7 @@ describe('AC-5: closed tasks, deactivated people, unlocked and reassigned tasks'
     const first = await seed({ deadline: ago(MILLISECONDS_PER_MINUTE) });
     const second = await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), engineer: otherEngineerId, assigner: adminId });
     await scan();
-    expect(await outboxRows()).toHaveLength(2);
+    expect(await ownOutboxRows()).toHaveLength(2);
     await setActive(engineerId, false);
     await setActive(adminId, false);
     await send();
@@ -226,14 +230,26 @@ describe('AC-5: closed tasks, deactivated people, unlocked and reassigned tasks'
     const [mail] = await messagesFor(second.code);
     expect(mail?.to).toEqual([addressOf[otherEngineerId]]);
     expect(mail?.cc).toEqual([]);
-    const byKey = new Map((await outboxRows()).map((row) => [row.idempotency_key, row]));
+    const byKey = new Map((await ownOutboxRows()).map((row) => [row.idempotency_key, row]));
     expect(byKey.get(idempotencyKeys.taskOverdue(first.id, ago(MILLISECONDS_PER_MINUTE)))).toMatchObject({ status: 'skipped', last_error: 'NO_RECIPIENT' });
+  });
+
+  it('AQP-399 AC-6: a QUOTED task and an ignored task past their deadline are not reported, and a task that is restored is', async () => {
+    await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), status: 'QUOTED' });
+    const ignored = await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), ignored: true });
+    await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), status: 'PREPARED', ignored: true });
+    await scan();
+    expect(await ownOutboxRows()).toHaveLength(0);
+    await setIgnored(ignored.id, false);
+    await minute();
+    expect(await ownOutboxRows()).toHaveLength(1);
+    expect(await messagesFor(ignored.code)).toHaveLength(1);
   });
 
   it('a task unlocked after approval and already past its deadline is reported at most once per deadline', async () => {
     const task = await seed({ deadline: ago(MILLISECONDS_PER_MINUTE), status: 'APPROVED' });
     await scan();
-    expect(await outboxRows()).toHaveLength(0);
+    expect(await ownOutboxRows()).toHaveLength(0);
     await setStatus(task.id, 'DRAFT');
     await minute();
     await setStatus(task.id, 'APPROVED');
@@ -241,7 +257,7 @@ describe('AC-5: closed tasks, deactivated people, unlocked and reassigned tasks'
     await setStatus(task.id, 'PREPARED');
     clock.advance(MILLISECONDS_PER_MINUTE);
     await minute();
-    expect(await outboxRows()).toHaveLength(1);
+    expect(await ownOutboxRows()).toHaveLength(1);
     expect(await messagesFor(task.code)).toHaveLength(1);
   });
 
@@ -251,7 +267,7 @@ describe('AC-5: closed tasks, deactivated people, unlocked and reassigned tasks'
     await db.owner.query('UPDATE tasks SET engineer_id = $2::uuid, assignment_revision = assignment_revision + 1 WHERE id = $1::uuid', [task.id, otherEngineerId]);
     clock.advance(MILLISECONDS_PER_MINUTE);
     await minute();
-    expect(await outboxRows()).toHaveLength(1);
+    expect(await ownOutboxRows()).toHaveLength(1);
     const [mail] = await messagesFor(task.code);
     expect(mail?.to).toEqual([addressOf[engineerId]]);
   });

@@ -93,7 +93,7 @@ describe('AC-7: the download button of SCR-06 in those states', () => {
 
   const bar = (state: 'none' | 'out-of-date', status: EstimateStatus): string =>
     renderToStaticMarkup(
-      createElement(ReviewActions, { estimateId: ESTIMATE_ID, code: CODE, state, status, calculated: null, approve: null, cancel: null, remove: null, ratesChanged: false }),
+      createElement(ReviewActions, { estimateId: ESTIMATE_ID, code: CODE, state, status, calculated: null, approve: null, cancel: null, remove: null, ratesChanged: false, quote: null, ignore: true }),
     );
 
   it.each(STATUSES.flatMap((status) => (['none', 'out-of-date'] as const).map((state) => [state, status] as const)))('%s, %s: Download is disabled and described by the reason, which is visible text', (state, status) => {

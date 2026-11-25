@@ -12,6 +12,7 @@ import type {
   TaskRecord,
   TaskRepository,
 } from '../../src/server/repositories/task-repository';
+import type { QueueTab } from '../../src/lib/tasks/queue';
 import { createTransactionHandle, type Transaction, type TransactionRunner } from '../../src/server/repositories/transaction';
 
 /**
@@ -39,6 +40,15 @@ export interface SeededTask {
   readonly folderPath?: string;
   readonly status?: EstimateStatus;
   readonly customerId?: string | null;
+  /** CR-01 item 7D: the Ignored layer over the status, set when the task is put in; absent is not ignored. */
+  readonly ignored?: { readonly remarks: string; readonly byName?: string; readonly at?: Date };
+}
+
+/** The Ignored layer of a task's estimate as the fake holds it (the real table keeps it on `estimates`). */
+interface FakeIgnored {
+  readonly remarks: string;
+  readonly byName: string;
+  readonly at: Date;
 }
 
 export interface FakePerson {
@@ -66,6 +76,8 @@ export interface FakeTaskWorld {
   seed(task: SeededTask): TaskRecord;
   /** Puts the estimate of a task into another status, as an approval, an unlock or a calculation would (a test of the status words). */
   setStatus(taskId: string, status: EstimateStatus): void;
+  /** Sets the Ignored layer over the estimate of a task (CR-01 item 7D), as Ignore does; `null` clears it, as Restore does. */
+  setIgnored(taskId: string, ignored: { readonly remarks: string; readonly byName?: string; readonly at?: Date } | null): void;
   /** Makes the next `createEstimate` fail once with this error, after the task and the number were written (a late failure). */
   failNextEstimateWith(error: Error): void;
 }
@@ -84,6 +96,8 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
   const customers = new Map<string, string>();
   const customerShortNames = new Map<string, string>();
   const deletedCustomers = new Set<string>();
+  /** The Ignored layer by task ID. */
+  const ignoredLayers = new Map<string, FakeIgnored>();
   let failure: Error | null = null;
 
   const customerOf = (id: string): AssignCustomer | null => {
@@ -109,13 +123,20 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
           assignedByName: nameOf(task.assignedById),
           customer: estimate.customerId === null ? null : customerOf(estimate.customerId),
           status: estimate.status,
+          ignoredAt: ignoredLayers.get(task.id)?.at ?? null,
+          ignoreRemarks: ignoredLayers.get(task.id)?.remarks ?? null,
         },
       ];
     });
   }
 
-  const inTab = (row: QueueRow, tab: 'open' | 'closed' | 'overdue', now: Date): boolean =>
-    tab === 'closed' ? row.status === 'APPROVED' : row.status !== 'APPROVED' && (tab === 'open' || row.deadlineAt.getTime() < now.getTime());
+  /** The four tabs as the SQL means them: an ignored task is in Ignored alone; of the others, Closed is a locked status (APPROVED or QUOTED), Open is any other, Overdue is Open and past its deadline. */
+  const inTab = (row: QueueRow, tab: QueueTab, now: Date): boolean => {
+    if (tab === 'ignored') return row.ignoredAt !== null;
+    if (row.ignoredAt !== null) return false;
+    const locked = row.status === 'APPROVED' || row.status === 'QUOTED';
+    return tab === 'closed' ? locked : !locked && (tab === 'open' || row.deadlineAt.getTime() < now.getTime());
+  };
 
   /** The filter row of a read, written the way the SQL means it: a literal contains on the code and the title ignoring case, the estimate's customer, and the deadline range. */
   const passes = (row: QueueRow, filter: QueueFilter): boolean => {
@@ -148,6 +169,7 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
         deadlineAt: task.deadlineAt,
         assignmentRevision: task.assignmentRevision,
         status: estimate.status,
+        ignoredAt: ignoredLayers.get(task.id)?.at ?? null,
         folderPath: task.folderPath,
         title: task.title,
         notes: task.notes,
@@ -164,7 +186,7 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
     findTask: (id, scope) => {
       const row = inScope(scope).find((candidate) => candidate.id.toLowerCase() === id.toLowerCase());
       const task = row === undefined ? undefined : tasks.find((candidate) => candidate.id === row.id);
-      const detail: TaskDetailRow | null = row === undefined || task === undefined ? null : { ...row, notes: task.notes };
+      const detail: TaskDetailRow | null = row === undefined || task === undefined ? null : { ...row, notes: task.notes, ignoredByName: ignoredLayers.get(task.id)?.byName ?? null };
       return Promise.resolve(detail);
     },
     listQueue: ({ tab, scope, now, limit, after, filter }) => {
@@ -177,8 +199,8 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
     },
     countQueue: (scope, now, filter) => {
       const mine = inScope(scope).filter((row) => passes(row, filter));
-      const count = (tab: 'open' | 'closed' | 'overdue'): number => mine.filter((row) => inTab(row, tab, now)).length;
-      return Promise.resolve({ open: count('open'), closed: count('closed'), overdue: count('overdue') });
+      const count = (tab: QueueTab): number => mine.filter((row) => inTab(row, tab, now)).length;
+      return Promise.resolve({ open: count('open'), closed: count('closed'), overdue: count('overdue'), ignored: count('ignored') });
     },
     countOverdue: (scope, now) => Promise.resolve(inScope(scope).filter((row) => inTab(row, 'overdue', now)).length),
     listActiveCustomers: () =>
@@ -272,7 +294,12 @@ export function createFakeTaskWorld(people: () => ReadonlyArray<FakePerson>): Fa
       };
       tasks.push(task);
       estimates.push({ id: nextId(), taskId: task.id, customerId: seeded.customerId ?? null, status: seeded.status ?? 'DRAFT' });
+      if (seeded.ignored !== undefined) ignoredLayers.set(task.id, { remarks: seeded.ignored.remarks, byName: seeded.ignored.byName ?? 'Invented Ignorer', at: seeded.ignored.at ?? new Date() });
       return task;
+    },
+    setIgnored(taskId, ignored) {
+      if (ignored === null) ignoredLayers.delete(taskId);
+      else ignoredLayers.set(taskId, { remarks: ignored.remarks, byName: ignored.byName ?? 'Invented Ignorer', at: ignored.at ?? new Date() });
     },
     setStatus(taskId, status) {
       const index = estimates.findIndex((estimate) => estimate.taskId === taskId);

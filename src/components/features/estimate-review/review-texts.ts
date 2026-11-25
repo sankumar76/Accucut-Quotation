@@ -4,6 +4,8 @@
  * sentence (BL, BG, H) is always a parameter, taken from the configuration version the figures belong to (FR-021, UX-26), never typed.
  */
 
+import type { EstimateStatus } from '@/lib/estimate/state-machine';
+
 /** What the customer's name field says on an estimate that has none (made before CR-01 item 6): the Change customer action sits beside it. */
 export const REVIEW_NO_CUSTOMER = 'Not set';
 
@@ -82,6 +84,23 @@ export const UNLOCK_LABEL = 'Unlock';
 export const UNLOCK_FIRST_OPEN_FAILED = 'The unlock window did not open. Check your connection and try again.';
 
 /**
+ * Mark as quoted (CR-01 item 7C, AQP-400; UX spec SCR-06 "Mark as quoted" and "Quoted"). The primary button of a Lead and an Admin beside Unlock on an approved estimate opens the dialog of `estimate-quote` (fetched on the
+ * first press); once marked, the Quoted notice replaces the Approved one: who and when (IST), to whom the quote was sent, and that this is the last status. There is no wording for an undo: the way back is Unlock (A-CR01-3).
+ */
+export const MARK_QUOTED_LABEL = 'Mark as quoted';
+export const MARK_QUOTED_FIRST_OPEN_FAILED = 'The mark as quoted window did not open. Check your connection and try again.';
+
+/** The buttons of Ignore and Restore on SCR-06 (CR-01 item 7D, AQP-401; the ux-expert's comment 12944): the same words as the dialogs' own buttons. The lines say what to do when a dialog's code did not come. */
+export const IGNORE_LABEL = 'Ignore RFQ';
+export const IGNORE_FIRST_OPEN_FAILED = 'The ignore window did not open. Check your connection and try again.';
+export const RESTORE_LABEL = 'Restore RFQ';
+export const RESTORE_FIRST_OPEN_FAILED = 'The restore window did not open. Check your connection and try again.';
+export const quotedNoticeTitle = (time: string, name: string): string => `Quoted on ${time} by ${name}.`;
+export const QUOTED_NOTICE_TITLE_PLAIN = 'Quoted.';
+export const quotedNoticeBody = (customerName: string | null): string =>
+  `The quote was sent to ${customerName ?? 'the customer'}. This is the last status; the estimate stays locked at the approved figures.`;
+
+/**
  * The Approved state of SCR-06 (STORY-06.06 AC-5; UX spec SCR-06 "Approved (Lead)" and the G3 screen): the notice with the approver and the time, and the two sentences the spec gives for what approval means.
  * `time` is written in IST (`formatIst`). A notice for an approved estimate with no approvals row (data made before approvals existed) says only that it is approved and locked.
  */
@@ -135,7 +154,7 @@ export const CANCELLED_ONLY_ADMIN_REMOVES = 'Only the Admin can remove it.';
  * Prepared estimate whose approval was kept through an unlock **stays** as it was ("The estimate stays a Draft and its task does not change."). The sentence is said only while it is true: after a Recalculate the
  * first one would be false for a Prepared estimate and is left out (an assumption of STORY-06.12, listed in the pull request).
  */
-export function cancelledStatusLine(status: 'DRAFT' | 'PREPARED' | 'APPROVED', wasUnlocked: boolean, engineerName: string): string | null {
+export function cancelledStatusLine(status: EstimateStatus, wasUnlocked: boolean, engineerName: string): string | null {
   if (status === 'DRAFT') return wasUnlocked ? 'The estimate stays a Draft and its task does not change.' : `The estimate is a Draft and the task is back in ${engineerName}'s Open queue.`;
   if (status === 'PREPARED' && wasUnlocked) return 'The estimate stays Prepared and its task does not change.';
   return null;

@@ -74,6 +74,8 @@ export function restartWorker(): void {
 }
 
 export async function resetWorld(): Promise<void> {
+  // The line between this case and every earlier one, drawn before anything else is awaited: a code reserved after it belongs to this case, a code reserved before it to an earlier case (see `ownOutboxRows`).
+  boundaryCode = reserveCodes(1);
   clock = createFixedClock(NOW);
   restartWorker();
   sendDependencies = { store: outbox, mailer: createMailer(capture.transport), clock, log: () => undefined, jobRuns: { recordRun: () => Promise.resolve() } };
@@ -88,8 +90,21 @@ export async function resetWorld(): Promise<void> {
 export const setActive = (id: string, active: boolean): Promise<unknown> => db.owner.query('UPDATE users SET is_active = $2 WHERE id = $1::uuid', [id, active]);
 export const setAlerts = (on: boolean): Promise<unknown> => db.owner.query('UPDATE settings SET alerts_enabled = $1 WHERE id = 1', [on]);
 export const setDeadline = (id: string, deadline: Date): Promise<unknown> => db.owner.query('UPDATE tasks SET deadline_at = $2 WHERE id = $1::uuid', [id, deadline]);
-export const setStatus = (id: string, status: 'DRAFT' | 'PREPARED' | 'APPROVED'): Promise<unknown> =>
-  db.owner.query('UPDATE estimates SET status = $2::estimate_status WHERE task_id = $1::uuid', [id, status]);
+export const setStatus = (id: string, status: 'DRAFT' | 'PREPARED' | 'APPROVED' | 'QUOTED'): Promise<unknown> =>
+  // A QUOTED row carries the quote columns, and any other status none (`ck_estimates_quoted`), so the markers move with the status as the real UPDATE moves them.
+  db.owner.query(
+    `UPDATE estimates SET status = $2::estimate_status, quoted_at = CASE WHEN $2 = 'QUOTED' THEN now() END, quoted_by = CASE WHEN $2 = 'QUOTED' THEN $3::uuid END WHERE task_id = $1::uuid`,
+    [id, status, leadId],
+  );
+/** Sets or clears the Ignored layer over the status (CR-01 item 7B): the three columns, the status untouched. A QUOTED estimate cannot be ignored (`ck_estimates_quoted_not_ignored`). */
+export const setIgnored = (id: string, ignored: boolean): Promise<unknown> =>
+  db.owner.query(
+    `UPDATE estimates SET ignored_at = CASE WHEN $2::boolean THEN now() END, ignored_by = CASE WHEN $2::boolean THEN $3::uuid END, ignore_remarks = CASE WHEN $2::boolean THEN 'Invented remarks.' END WHERE task_id = $1::uuid`,
+    [id, ignored, leadId],
+  );
+
+/** The code a task of an earlier case would carry: the last one reserved before this case's reset. Nothing but `plantLeftover` uses it. Set by `resetWorld`. */
+let boundaryCode = 0;
 
 /** Task codes are unique to a call (the table's unique key, and a shared Mailpit is searched by subject). `reserveCodes(n)` takes `n` of them at once. Set by `openWorld`. */
 let counter = 0;
@@ -103,12 +118,14 @@ export interface Seed {
   readonly deadline: Date;
   readonly engineer?: string;
   readonly assigner?: string;
-  readonly status?: 'DRAFT' | 'PREPARED' | 'APPROVED';
+  readonly status?: 'DRAFT' | 'PREPARED' | 'APPROVED' | 'QUOTED';
+  /** The Ignored layer over the status; not for a QUOTED estimate. */
+  readonly ignored?: boolean;
   readonly title?: string;
 }
 
 /** A task and its estimate. */
-export async function seed({ deadline, engineer = engineerId, assigner = leadId, status = 'DRAFT', title = 'Hopper cover' }: Seed): Promise<{ readonly id: string; readonly code: string }> {
+export async function seed({ deadline, engineer = engineerId, assigner = leadId, status = 'DRAFT', ignored = false, title = 'Hopper cover' }: Seed): Promise<{ readonly id: string; readonly code: string }> {
   const code = `Q-2026-${reserveCodes(1)}`;
   const { rows } = await db.owner.query<{ id: string }>('INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, \'Invented subject\') RETURNING id::text', [
     code,
@@ -119,7 +136,9 @@ export async function seed({ deadline, engineer = engineerId, assigner = leadId,
     title,
   ]);
   const id = defined(rows[0]).id;
-  await db.owner.query('INSERT INTO estimates (task_id, status) VALUES ($1::uuid, $2::estimate_status)', [id, status]);
+  await db.owner.query('INSERT INTO estimates (task_id, status) VALUES ($1::uuid, $2::estimate_status)', [id, 'DRAFT']);
+  await setStatus(id, status);
+  if (ignored) await setIgnored(id, true);
   return { id, code };
 }
 
@@ -140,6 +159,43 @@ export async function outboxRows(): Promise<OutboxRow[]> {
     'SELECT idempotency_key, event, to_user_id::text, cc_user_ids::text[] AS cc_user_ids, status, last_error, subject, body_html, body_text FROM email_outbox ORDER BY created_at, idempotency_key',
   );
   return rows;
+}
+
+/**
+ * The outbox rows of THIS case's tasks, in the order of `outboxRows`. A task is this case's own when its code was reserved after this case's `resetWorld` (codes only grow within a file). A case that
+ * ran out of its 5 s keeps running, so it can still write a task and its row into the next case's world; Vitest does not stop it. Reading by position or count over every row then lets one cut become two
+ * failures, the second with a wrong value that looks like a product fault (DEF-071). A row of another case is neither counted nor read here, so it can neither pass nor fail a case.
+ */
+export async function ownOutboxRows(): Promise<OutboxRow[]> {
+  const { rows } = await db.owner.query<OutboxRow>(
+    `SELECT o.idempotency_key, o.event, o.to_user_id::text, o.cc_user_ids::text[] AS cc_user_ids, o.status, o.last_error, o.subject, o.body_html, o.body_text
+     FROM email_outbox o
+     JOIN tasks t ON split_part(o.idempotency_key, ':', 2) = t.id::text
+     WHERE CASE WHEN t.code ~ '^Q-2026-[0-9]+$' THEN substring(t.code from 8)::bigint END > $1::bigint
+     ORDER BY o.created_at, o.idempotency_key`,
+    [boundaryCode],
+  );
+  return rows;
+}
+
+/**
+ * What a case that ran out of time leaves behind in the next case's world: a task from an earlier case (its code is from before this case's reset), and its overdue row, which names the Lead as the Cc
+ * and is stamped a minute before this case's clock, so it sorts before any row of this case (a scan stamps its rows with the clock). A case that reads `ownOutboxRows` is not changed by it; one that reads `outboxRows` by position is.
+ */
+export async function plantLeftover(): Promise<void> {
+  const deadline = ago(MILLISECONDS_PER_MINUTE);
+  const { rows } = await db.owner.query<{ id: string }>(
+    "INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, $5, 'Hopper cover', 'Invented subject') RETURNING id::text",
+    [`Q-2026-${boundaryCode}`, engineerId, leadId, PATH, deadline],
+  );
+  const id = defined(rows[0]).id;
+  await db.owner.query("INSERT INTO estimates (task_id, status) VALUES ($1::uuid, 'DRAFT')", [id]);
+  await db.owner.query("INSERT INTO email_outbox (idempotency_key, event, to_user_id, cc_user_ids, subject, body_html, body_text, next_attempt_at, created_at) VALUES ($1, 'task-overdue', $2::uuid, $3::uuid[], 'leftover', 'x', 'x', $4::timestamptz, $4::timestamptz)", [
+    keyOf(id, deadline),
+    engineerId,
+    [leadId],
+    deadline,
+  ]);
 }
 
 export async function jobRuns(): Promise<Array<{ job: string; result: Record<string, unknown> }>> {

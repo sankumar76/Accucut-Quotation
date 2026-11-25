@@ -36,7 +36,7 @@ const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'app
 /** STORY-08.02: a formula of the field registry changed. Registry order puts it after the approval events and before the calculation event. */
 const WIRED_CONFIG: ReadonlyArray<AuditEventName> = ['config.formula_changed', 'config.field_inserted', 'config.field_deleted', 'config.reverted'];
 /** CR-01 item 6: the customer of an estimate changed (registry order puts it before the reassign); STORY-04.07: a task given to another Engineer, a new deadline, or both. */
-const WIRED_TASK: ReadonlyArray<AuditEventName> = ['estimate.customer_changed', 'task.reassigned'];
+const WIRED_TASK: ReadonlyArray<AuditEventName> = ['estimate.customer_changed', 'estimate.quoted', 'estimate.ignored', 'estimate.restored', 'task.reassigned'];
 const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CONFIG, ...WIRED_CALCULATION, ...WIRED_TASK];
 /** With STORY-06.13 no event is declared and left unwired. */
 const RESERVED: ReadonlyArray<AuditEventName> = [];
@@ -257,9 +257,9 @@ describe('STORY-06.07 AC-2, AC-3 (SCR-16): the price-override event keeps the ca
   });
 });
 
-describe('STORY-06.08 AC-2: the unlock event keeps the price it stood at and the reason, and nothing else', () => {
+describe('STORY-06.08 AC-2: the unlock event keeps the price it stood at, the status it left and the reason, and nothing else', () => {
   const event = AUDIT_EVENTS['approval.unlocked'];
-  const before = { approvedPrice: '12600.00' };
+  const before = { approvedPrice: '12600.00', status: 'APPROVED' };
   const after = { reason: 'The customer asked for a thicker plate.' };
 
   it('is wired, about the estimate, under the "Unlock" filter', () => {
@@ -271,11 +271,30 @@ describe('STORY-06.08 AC-2: the unlock event keeps the price it stood at and the
     expect(event.describeStored(before, after)).toEqual({ before: 'Approved at ₹ 12,600.00', after: 'Unlocked. Reason: The customer asked for a thicker plate.' });
   });
 
+  // QLT-C-03 of the final review (FR-110: "Unlock on a QUOTED estimate returns DRAFT ... the audit record has the entry"): the entry says which status the estimate left, as the cancel entry does.
+  it('QLT-C-03: says "Quoted at" for an estimate unlocked from Quoted, so the history tells a quote taken back from an approval taken back', () => {
+    expect(event.describeStored({ ...before, status: 'QUOTED' }, after)).toEqual({ before: 'Quoted at ₹ 12,600.00', after: 'Unlocked. Reason: The customer asked for a thicker plate.' });
+  });
+
+  it('QLT-C-03: an entry stored before the status was kept (only the price) still reads, as an unlock from Approved (the log is immutable)', () => {
+    expect(event.describeStored({ approvedPrice: '12600.00' }, after)).toEqual({ before: 'Approved at ₹ 12,600.00', after: 'Unlocked. Reason: The customer asked for a thicker plate.' });
+  });
+
+  it('QLT-C-03: the writer needs the status and takes only Approved and Quoted: a Draft, a Prepared, a missing one and an old word are refused', () => {
+    const schemas = event.schemasFor('estimate');
+    expect(schemas).not.toBeNull();
+    for (const status of ['APPROVED', 'QUOTED']) expect(schemas?.before.safeParse({ ...before, status }).success, status).toBe(true);
+    for (const status of ['DRAFT', 'PREPARED', 'SUBMITTED', 'approved', '', null, 1]) expect(schemas?.before.safeParse({ ...before, status }).success, String(status)).toBe(false);
+    expect(schemas?.before.safeParse({ approvedPrice: '12600.00' }).success).toBe(false);
+  });
+
   it.each([
     ['an extra key in the before (a rate has no place here)', { ...before, rate: '0.37' }, after],
     ['an extra key in the after', before, { ...after, rate: '0.37' }],
-    ['a price as a number', { approvedPrice: 12600 }, after],
-    ['a negative price', { approvedPrice: '-1.00' }, after],
+    ['a price as a number', { ...before, approvedPrice: 12600 }, after],
+    ['a negative price', { ...before, approvedPrice: '-1.00' }, after],
+    ['a status that an unlock never leaves', { ...before, status: 'DRAFT' }, after],
+    ['a status that is not text', { ...before, status: 1 }, after],
     ['no reason', before, {}],
     ['an empty reason', before, { reason: '' }],
     ['a reason over 500 characters', before, { reason: 'x'.repeat(501) }],
@@ -493,6 +512,68 @@ describe('CR-01 item 6, AC-17 (SCR-16 "Task change"): the customer-changed event
     expect(event.after.safeParse({ customer: { name: '', shortName: 'MAS' } }).success).toBe(false);
     expect(event.after.safeParse({ customer: MAS, extra: true }).success).toBe(false);
     expect(event.describeStored({ customer: BWC }, { customer: { name: 'x' } })).toBeNull();
+  });
+});
+
+describe('CR-01 item 7C, AC-7 (AQP-400; SCR-16 "Task change"): the quoted event keeps the status before and after, and nothing else', () => {
+  const event = AUDIT_EVENTS['estimate.quoted'];
+
+  it('is wired, about the estimate, under the "Task change" filter', () => {
+    expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'task_change' });
+  });
+
+  it('keeps APPROVED before and QUOTED after, and says so in words', () => {
+    expect(event.describeStored({ status: 'APPROVED' }, { status: 'QUOTED' })).toEqual({ before: 'Approved', after: 'Quoted' });
+  });
+
+  it.each([
+    ['a figure (a price has no place here)', { status: 'APPROVED' }, { status: 'QUOTED', price: '1000.00' }],
+    ['an extra key on the before', { status: 'APPROVED', reason: 'x' }, { status: 'QUOTED' }],
+    ['a status other than QUOTED after', { status: 'APPROVED' }, { status: 'APPROVED' }],
+    ['a status other than APPROVED before', { status: 'PREPARED' }, { status: 'QUOTED' }],
+    ['a before that is null', null, { status: 'QUOTED' }],
+    ['an after that is null', { status: 'APPROVED' }, null],
+  ])('refuses %s', (_name, storedBefore, storedAfter) => {
+    expect(event.before.safeParse(storedBefore).success && event.after.safeParse(storedAfter).success).toBe(false);
+    expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
+  });
+});
+
+describe('CR-01 item 7D, AC-5 (AQP-401; SCR-16 "Task change"): the Ignore and Restore events keep the status and the remarks of the Lead, and nothing else', () => {
+  const ignored = AUDIT_EVENTS['estimate.ignored'];
+  const restored = AUDIT_EVENTS['estimate.restored'];
+  const REMARKS = 'Not taken forward.\nThe customer chose another supplier.';
+
+  it('are wired, about the estimate, under the "Task change" filter', () => {
+    for (const event of [ignored, restored]) expect(event).toMatchObject({ status: 'wired', objectType: 'estimate', category: 'task_change' });
+  });
+
+  it.each(['DRAFT', 'PREPARED', 'APPROVED'] as const)('Ignore keeps the status underneath (%s) before and with the remarks after, and says so in words', (status) => {
+    const word = { DRAFT: 'Draft', PREPARED: 'Prepared', APPROVED: 'Approved' }[status];
+    expect(ignored.describeStored({ status }, { status, remarks: REMARKS })).toEqual({ before: word, after: `Ignored. Remarks: ${REMARKS}` });
+  });
+
+  it.each(['DRAFT', 'PREPARED', 'APPROVED'] as const)('Restore keeps the Ignore remarks before (they stay on record) and the status after (%s)', (status) => {
+    const word = { DRAFT: 'Draft', PREPARED: 'Prepared', APPROVED: 'Approved' }[status];
+    expect(restored.describeStored({ status, remarks: REMARKS }, { status })).toEqual({ before: `Ignored. Remarks: ${REMARKS}`, after: word });
+  });
+
+  it('counts the remarks in code points, as the column does: 500 emoji are kept and 501 are refused', () => {
+    expect(ignored.after.safeParse({ status: 'DRAFT', remarks: '😀'.repeat(500) }).success).toBe(true);
+    expect(ignored.after.safeParse({ status: 'DRAFT', remarks: '😀'.repeat(501) }).success).toBe(false);
+  });
+
+  it.each([
+    ['a figure on the Ignore (a price has no place here)', ignored, { status: 'PREPARED' }, { status: 'PREPARED', remarks: 'x', price: '1000.00' }],
+    ['no remarks on the Ignore', ignored, { status: 'PREPARED' }, { status: 'PREPARED' }],
+    ['empty remarks on the Ignore', ignored, { status: 'PREPARED' }, { status: 'PREPARED', remarks: '' }],
+    ['a QUOTED status under the layer (the database refuses it too)', ignored, { status: 'QUOTED' }, { status: 'QUOTED', remarks: 'x' }],
+    ['remarks on the "before" of an Ignore', ignored, { status: 'PREPARED', remarks: 'x' }, { status: 'PREPARED', remarks: 'x' }],
+    ['no remarks on the "before" of a Restore', restored, { status: 'PREPARED' }, { status: 'PREPARED' }],
+    ['remarks of its own on the "after" of a Restore (Restore has none)', restored, { status: 'PREPARED', remarks: 'x' }, { status: 'PREPARED', remarks: 'y' }],
+    ['a before that is null', restored, null, { status: 'PREPARED' }],
+  ])('refuses %s', (_name, event, storedBefore, storedAfter) => {
+    expect(event.describeStored(storedBefore, storedAfter)).toBeNull();
   });
 });
 

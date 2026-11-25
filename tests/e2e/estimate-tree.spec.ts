@@ -28,12 +28,138 @@ const PHONE_MAX = 767;
 /** The parts tree is a `nav` of nested lists of links (CR-01 item 3B): a row is its link, and its number is the text marked `data-sl-no`. */
 const tree = (page: Page): Locator => page.getByRole('navigation', { name: 'Parts tree' });
 const part = (page: Page, slNo: string): Locator => tree(page).getByRole('link').filter({ has: page.locator('[data-sl-no]', { hasText: new RegExp(`^${slNo.replaceAll('.', '\\.')}$`) }) });
+/** Chooses a row by a press at the centre of its name, where Playwright presses by default: nothing floats over a row (AQP-418, DEF-075), so that press is always the row. */
+const choose = (page: Page, slNo: string): Promise<void> => part(page, slNo).click();
 const action = (page: Page, name: string): Locator => page.getByRole('button', { name, exact: true });
+/**
+ * A button of one row (CR-01 item 3C): its name starts with the words and the number of its row ("Add under 1 ", "Add fastener under 1.1.1 ", "Delete 1.1 "). The toolbar is in view on the open row, and on a row that
+ * holds the keyboard focus (AQP-418: under the name, with no hover look), so a test chooses the row first, as a person does, or reaches the button by the keyboard.
+ */
+const rowButton = (page: Page, words: string, slNo: string): Locator => tree(page).getByRole('button', { name: new RegExp(`^${words} ${slNo.replaceAll('.', '\\.')} `) });
+/**
+ * The move handle of one row (CR-01 item 3D): its name is "Move" and the number and name of its row. A click on it, Enter or Space opens Move up / Move down; a press and a drag move the row among the rows with the same
+ * parent. Like the other row buttons it is in view on the open row and on a row that holds the keyboard focus, so a test chooses the row first.
+ */
+const handleOf = (page: Page, slNo: string): Locator => rowButton(page, 'Move', slNo);
+/** Move up or Move down of a row, from the menu of its handle, by the pointer. */
+async function moveFromMenu(page: Page, slNo: string, item: 'Move up' | 'Move down'): Promise<void> {
+  await choose(page, slNo);
+  await handleOf(page, slNo).click();
+  await page.getByRole('menuitem', { name: item, exact: true }).click();
+}
+/** Adds a row of this kind under the row with this Sl. No by its "+": a menu for a Main Assembly or a Sub-Assembly (the code of the menu loads on the first open), the Fastener at once for a Part. */
+async function addUnder(page: Page, slNo: string, kind: 'Sub-Assembly' | 'Part' | 'Fastener'): Promise<void> {
+  await choose(page, slNo);
+  if (kind === 'Fastener' && (await rowButton(page, 'Add fastener under', slNo).count()) === 1) {
+    await rowButton(page, 'Add fastener under', slNo).click();
+    return;
+  }
+  await rowButton(page, 'Add under', slNo).click();
+  await page.getByRole('menuitem', { name: kind, exact: true }).click();
+}
+/** "Add main assembly" at the foot of the tree. */
+const addMain = (page: Page): Promise<void> => page.getByRole('button', { name: 'Add main assembly' }).click();
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 
 /** The Sl. No of every part on screen, in order. */
 async function slNumbers(page: Page): Promise<string[]> {
   return tree(page).locator('[data-sl-no]').allTextContents();
+}
+
+/** What a press at the centre of a row's name reaches (AQP-418, DEF-075 acceptance check 1): the link itself or something in it, or the tag of whatever lies over it. */
+const reachedByCentrePress = (page: Page, slNo: string): Promise<string> =>
+  part(page, slNo).evaluate((link) => {
+    const { left, top, width, height } = link.getBoundingClientRect();
+    const reached = document.elementFromPoint(left + width / 2, top + height / 2);
+    return reached !== null && link.contains(reached) ? 'the row' : (reached?.outerHTML.slice(0, 80) ?? 'nothing');
+  });
+
+interface ToolbarBox {
+  readonly slNo: string;
+  readonly open: boolean;
+  readonly width: number;
+  readonly height: number;
+  /** The toolbar's box and the row's link overlap by more than half a pixel in both directions. */
+  readonly overlapsLink: boolean;
+  /** The topmost element at the centre of the toolbar's box is inside the toolbar: it would take a press. */
+  readonly takesPress: boolean;
+}
+
+/** The toolbar group of every row on screen, measured in the page (AQP-418 acceptance check 2). */
+const toolbarBoxes = (page: Page): Promise<ToolbarBox[]> =>
+  tree(page).evaluate((nav) =>
+    [...nav.querySelectorAll('li[data-part-row]')].map((item) => {
+      const link = item.querySelector('a[data-part-id]');
+      const group = item.querySelector('[data-row-actions]');
+      if (link === null || group === null) throw new Error('a row has no link or no toolbar group');
+      const box = group.getBoundingClientRect();
+      const text = link.getBoundingClientRect();
+      const overlap = (low: number, high: number, otherLow: number, otherHigh: number): boolean => Math.min(high, otherHigh) - Math.max(low, otherLow) > 0.5;
+      const reached = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      return {
+        slNo: link.querySelector('[data-sl-no]')?.textContent ?? '',
+        open: link.getAttribute('aria-current') === 'true',
+        width: box.width,
+        height: box.height,
+        overlapsLink: overlap(box.left, box.right, text.left, text.right) && overlap(box.top, box.bottom, text.top, text.bottom),
+        takesPress: reached !== null && group.contains(reached),
+      };
+    }),
+  );
+
+/** The top of a row's link, in the page's own pixels. */
+const topOf = (link: Locator): Promise<number> => link.evaluate((element) => element.getBoundingClientRect().top);
+
+/** The height of the toolbar group of one row: more than 1 px when it is in view, 1 px or less when it is the `sr-only` clip. */
+async function toolbarHeightOf(page: Page, slNo: string): Promise<number> {
+  const row = (await toolbarBoxes(page)).find((box) => box.slNo === slNo);
+  return defined(row).height;
+}
+
+/**
+ * The box of an element once it has stopped moving: Radix scales a menu in when it opens, and the rows slide when a toolbar line comes or goes, so a box read at once is not the one a press meets. The wait is on the
+ * state (two reads in a row are the same), not on a time.
+ */
+async function settledBox(target: Locator): Promise<NonNullable<Awaited<ReturnType<Locator['boundingBox']>>>> {
+  let last = '';
+  await expect
+    .poll(async () => {
+      const now = JSON.stringify(await target.boundingBox());
+      const same = now === last;
+      last = now;
+      return same && now !== 'null';
+    }, 'the element has stopped moving')
+    .toBe(true);
+  return defined(await target.boundingBox());
+}
+
+/**
+ * Where a press can reach the name of a row while a menu of the row above it is open. The menu lies over the rows below its handle and is wider than a name at 1366 px, so a press at the centre of the name would be a
+ * press on a menu item; the strip of the name above the menu is the part of it that is still the row. The y of that strip, in the page's pixels.
+ */
+async function yAboveMenu(page: Page, slNo: string): Promise<number> {
+  const menu = await settledBox(page.getByRole('menu'));
+  const link = defined(await part(page, slNo).boundingBox());
+  expect(menu.y - link.y, 'a strip of the name of ' + slNo + ' lies above the open menu').toBeGreaterThanOrEqual(4);
+  return link.y + (menu.y - link.y) / 2;
+}
+
+/**
+ * AQP-419 (DEF-076), rule P of the design (comment 13032): a press with the mouse on a row's name, whose row is where it was at the pointer-down and at the pointer-up. A press that moves the focus used to take the focus
+ * ring off another row, that row's toolbar went back to the clip, and the pressed row moved up under the pointer, so the pointer-up was over something else and the click was lost. The hold is `holdMs` long (0 for a fast click);
+ * The press is at the centre of the name, or at `y` when the name is partly under an open menu (see `yAboveMenu`).
+ */
+async function pressWithoutShift(page: Page, slNo: string, holdMs: number, y?: number): Promise<void> {
+  const link = part(page, slNo);
+  const box = defined(await link.boundingBox());
+  await page.mouse.move(box.x + box.width / 2, y ?? box.y + box.height / 2);
+  await page.mouse.down();
+  const atDown = await topOf(link);
+  if (holdMs > 0) await page.evaluate((ms) => new Promise((resolve) => setTimeout(resolve, ms)), holdMs);
+  const atUp = await topOf(link);
+  await page.mouse.up();
+  expect(atDown, `row ${slNo} does not move at the pointer-down`).toBe(box.y);
+  expect(atUp, `row ${slNo} does not move before the pointer-up`).toBe(box.y);
 }
 
 /**
@@ -48,7 +174,8 @@ async function slNumbers(page: Page): Promise<string[]> {
  *  A `200` that came after the 15 s and an announcement that is there by now is the duration tail (#467), not the trigger. `busy` is not in the page: it is read from the requests.
  */
 const MOVE_ROUTE = /\/tree\/move$/;
-const TOOLBAR_ACTIONS = ['New item', 'Sub-part', 'Part beside', 'Move up', 'Move down', 'Delete'] as const;
+const TOOLBAR_ACTIONS = ['Add main assembly', 'Move up', 'Move down'] as const;
+/** CR-01 item 3D: Move up and Move down are the items of each row's move handle now, so the diagnostic reads the handles (named "Move 1.2 ...") as the move controls. */
 /** What the report waits for the page: it must never hold up the test's own failure for long. */
 const REPORT_PATIENCE_MS = 5_000;
 const KEPT_PAGE_ERRORS = 20;
@@ -121,6 +248,8 @@ async function readScreen(page: Page, wanted: string): Promise<string[]> {
       const found = buttons.find((button) => textOf(button) === name);
       return found === undefined ? `${name}: not on screen` : `${name}: aria-disabled=${found.getAttribute('aria-disabled') ?? 'no'}, disabled=${String(found.disabled)}`;
     });
+    const handles = buttons.filter((button) => (button.getAttribute('aria-label') ?? '').startsWith('Move ')).map((button) => `${button.getAttribute('aria-label') ?? ''}: aria-disabled=${button.getAttribute('aria-disabled') ?? 'no'}, disabled=${String(button.disabled)}`);
+    toolbar.push(...handles);
     const active = document.activeElement;
     const focus = active === null ? 'none' : `<${active.tagName.toLowerCase()}${active.getAttribute('role') === null ? '' : ` role=${active.getAttribute('role')}`}> "${textOf(active).slice(0, 60)}"`;
     // The elements `getByText` would count: the innermost ones that hold the words (it ignores case).
@@ -262,7 +391,7 @@ async function openTreeWithTwoSubParts(page: Page, testInfo: TestInfo): Promise<
 }
 
 test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
-  test('AC-1, AC-2: New item, Sub-part and Part beside add parts and number them 1, 1.1, 1.2, 2; Move up renumbers and says so', async ({ page }, testInfo) => {
+  test('AC-1, AC-2: the "+" of a row and "Add main assembly" add rows and number them 1, 1.1, 1.2, 2; Move up and Move down of the handle renumber and say so', async ({ page }, testInfo) => {
     // The second of two tests that are slow by what they do (AQP-340): four additions and two moves, each a request and a re-read of the tree. Measured: 22.8 s on a mobile shard of a green run
     // (44021154191), and it ran out of its 30 s on the tablet shard in runs 43905784789, 44025795508 and 44045571667. Three times the default, for this test only.
     test.slow();
@@ -270,26 +399,28 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     const moves = watchMoves(page);
     expect(await slNumbers(page)).toEqual(['1']);
 
-    await part(page, '1').click();
-    await action(page, 'Sub-part').click();
+    await addUnder(page, '1', 'Sub-Assembly');
     await expect(page.getByText('Part 1.1 added')).toHaveCount(1);
-    await action(page, 'Part beside').click();
+    await addUnder(page, '1', 'Part');
     await expect(page.getByText('Part 1.2 added')).toHaveCount(1);
-    await action(page, 'New item').click();
+    await addMain(page);
     await expect(page.getByText('Part 2 added')).toHaveCount(1);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2', '2']);
 
     // The new part is the selected one; 1.2 up becomes 1.1, and the screen says so.
-    await part(page, '1.2').click();
-    await action(page, 'Move up').click();
+    await moveFromMenu(page, '1.2', 'Move up');
     await expectRenumbered(page, testInfo, moves, 'Part renumbered to 1.1');
-    await expect(action(page, 'Move up')).toBeFocused();
+    // The moved row's handle has the focus, in its new place, and the row is still the open one.
+    await expect(handleOf(page, '1.1')).toBeFocused();
     await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
-    // At the top of its group it cannot go further: the button says so and keeps focus.
-    await expect(action(page, 'Move up')).toHaveAttribute('aria-disabled', 'true');
+    // At the top of its group it cannot go further: Move up is disabled in the menu, and the menu still opens.
+    await handleOf(page, '1.1').click();
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Escape');
+    await expect(handleOf(page, '1.1')).toBeFocused();
 
     // Down again.
-    await action(page, 'Move down').click();
+    await moveFromMenu(page, '1.1', 'Move down');
     await expectRenumbered(page, testInfo, moves, 'Part renumbered to 1.2');
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2', '2']);
 
@@ -301,11 +432,10 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
 
   test('AQP-404 AC-1, AC-4: the tree is a nav of nested lists of links: no tree roles or counts, the open row is aria-current, each kind has its icon with its name, and a legend names the four', async ({ page }, testInfo) => {
     await openTree(page, testInfo);
-    await part(page, '1').click();
-    await action(page, 'Sub-part').click();
+    await addUnder(page, '1', 'Sub-Assembly');
     // One change at a time: a second press while the first is out is ignored, so wait for the part to appear.
     await expect(part(page, '1.1')).toBeVisible();
-    await action(page, 'New item').click();
+    await addMain(page);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '2']);
 
     // A list of links, not a tree: no role, no level, no place, no count.
@@ -335,16 +465,15 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await expectNoAxeViolations(page);
   });
 
-  test('AQP-404 AC-1, AC-5: an arrow opens and closes its branch, a leaf keeps the space, Tab moves from a row to the next and to each arrow (no arrow-key navigation), and Enter opens the row', async ({ page }, testInfo) => {
+  test('AQP-404 AC-1, AC-5: an arrow opens and closes its branch, a leaf keeps the space, Tab moves from a row to its "+" and "-", then to the next row, and to each arrow (no arrow-key navigation), and Enter opens the row', async ({ page }, testInfo) => {
     await openTree(page, testInfo);
-    await part(page, '1').click();
-    await action(page, 'Sub-part').click();
+    await addUnder(page, '1', 'Sub-Assembly');
     await expect(part(page, '1.1')).toBeVisible();
-    await action(page, 'New item').click();
+    await addMain(page);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '2']);
 
-    // Only a branch has an arrow button; the leaf rows have the same space and no button.
-    const arrows = tree(page).getByRole('button');
+    // Only a branch has an arrow button; the leaf rows have the same space and no arrow button.
+    const arrows = tree(page).getByRole('button', { name: /^(Close|Open) branch / });
     await expect(arrows).toHaveCount(1);
     const arrow = tree(page).getByRole('button', { name: 'Close branch 1' });
     await expect(arrow).toHaveAttribute('aria-expanded', 'true');
@@ -354,14 +483,22 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     expect((await arrow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     expect((await arrow.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
 
-    // Tab goes arrow, row, next row, next row: the order of the page, with no roving stop.
+    // Tab goes arrow, row, the row's own move handle, "+" and "-", next row, and so on: the order of the page, with no roving stop (UX spec section 0.9 row 3: "Keyboard: Tab moves between a row and its "+""). The buttons of a row
+    // that is not open are clipped, not removed (AQP-418), so this holds on a touch screen too.
+    const tabTo = async (target: Locator): Promise<void> => {
+      await page.keyboard.press('Tab');
+      await expect(target).toBeFocused();
+    };
     await arrow.focus();
-    await page.keyboard.press('Tab');
-    await expect(part(page, '1')).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(part(page, '1.1')).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(part(page, '2')).toBeFocused();
+    await tabTo(part(page, '1'));
+    await tabTo(rowButton(page, 'Move', '1'));
+    await tabTo(rowButton(page, 'Add under', '1'));
+    await tabTo(rowButton(page, 'Delete', '1'));
+    await tabTo(part(page, '1.1'));
+    await tabTo(rowButton(page, 'Move', '1.1'));
+    await tabTo(rowButton(page, 'Add under', '1.1'));
+    await tabTo(rowButton(page, 'Delete', '1.1'));
+    await tabTo(part(page, '2'));
     // The arrow keys do not move between rows any more (STORY-05.02 AC-9 is withdrawn).
     await page.keyboard.press('ArrowUp');
     await expect(part(page, '2')).toBeFocused();
@@ -389,13 +526,13 @@ test.describe('AC-3: delete asks first and names the count', () => {
   test('AC-3: a part with 2 sub-parts: the dialog names 3 parts and Cancel is the safe choice; Cancel changes nothing', async ({ page }, testInfo) => {
     await openTreeWithTwoSubParts(page, testInfo);
 
-    await part(page, '1').click();
-    await action(page, 'Delete').click();
-    const dialog = page.getByRole('alertdialog', { name: 'Delete part 1?' });
+    await choose(page, '1');
+    await rowButton(page, 'Delete', '1').click();
+    const dialog = page.getByRole('alertdialog', { name: 'Delete row 1?' });
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText('This also deletes its 2 sub-parts, and everything typed into them. This cannot be undone.');
+    await expect(dialog).toContainText('This also deletes the 2 rows under it, and everything typed into them. This cannot be undone.');
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
-    await expect(dialog.getByRole('button', { name: 'Delete 3 parts' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Delete 3 rows' })).toBeVisible();
     await expectNoAxeViolations(page);
 
     await dialog.getByRole('button', { name: 'Cancel' }).click();
@@ -406,51 +543,249 @@ test.describe('AC-3: delete asks first and names the count', () => {
   test('AC-3: a part with 2 sub-parts: confirming deletes all three', async ({ page }, testInfo) => {
     await openTreeWithTwoSubParts(page, testInfo);
 
-    await part(page, '1').click();
-    await action(page, 'Delete').click();
-    const dialog = page.getByRole('alertdialog', { name: 'Delete part 1?' });
+    await choose(page, '1');
+    await rowButton(page, 'Delete', '1').click();
+    const dialog = page.getByRole('alertdialog', { name: 'Delete row 1?' });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Delete 3 parts' }).click();
+    await dialog.getByRole('button', { name: 'Delete 3 rows' }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByText('3 parts deleted')).toHaveCount(1);
-    await expect(page.getByText('No parts yet. Choose "New item" to add the first one.')).toBeVisible();
+    await expect(page.getByText('3 rows deleted')).toHaveCount(1);
+    await expect(page.getByText('No parts yet. Choose "Add main assembly" to add the first one.')).toBeVisible();
+    // The foot of an empty tree still offers the one action that can start it again.
+    await expect(page.getByRole('button', { name: 'Add main assembly' })).toBeVisible();
     await page.reload();
     // With no part there is no tree element, only the words; on a phone they are in the drawer.
     if (isPhone(page)) await page.getByRole('button', { name: /^Parts tree/ }).click();
-    await expect(page.getByText('No parts yet. Choose "New item" to add the first one.')).toBeVisible();
+    await expect(page.getByText('No parts yet. Choose "Add main assembly" to add the first one.')).toBeVisible();
   });
 
   test('AC-3: a part with no sub-parts is a plain confirm, and Escape closes the dialog with nothing sent', async ({ page }, testInfo) => {
     await openTree(page, testInfo);
-    await action(page, 'New item').click();
+    await addMain(page);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '2']);
     const deletes: string[] = [];
     page.on('request', (request) => {
       if (request.method() === 'DELETE') deletes.push(request.url());
     });
 
-    await action(page, 'Delete').click();
-    const dialog = page.getByRole('alertdialog', { name: 'Delete part 2?' });
-    await expect(dialog).toContainText('Part 2 and everything typed into it will be deleted. This cannot be undone.');
+    await rowButton(page, 'Delete', '2').click();
+    const dialog = page.getByRole('alertdialog', { name: 'Delete row 2?' });
+    await expect(dialog).toContainText('Row 2 and everything typed into it will be deleted. This cannot be undone.');
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     expect(deletes).toEqual([]);
     expect(await slNumbers(page)).toEqual(['1', '2']);
 
-    await action(page, 'Delete').click();
-    await dialog.getByRole('button', { name: 'Delete part' }).click();
+    await rowButton(page, 'Delete', '2').click();
+    await dialog.getByRole('button', { name: 'Delete row' }).click();
     await expect(dialog).toHaveCount(0);
     await expect.poll(() => slNumbers(page)).toEqual(['1']);
     expect(deletes).toHaveLength(1);
   });
 });
 
+test.describe('AQP-405: the row actions', () => {
+  test('AQP-405 AC-1, AC-2, AC-3: the "+" menu offers only the kinds the row allows, a Part gets its Fastener at once, a Fastener has no "+", and the row that was added is open and has the focus', async ({ page }, testInfo) => {
+    // Five additions, each a request and a re-read of the tree, as the AC-1, AC-2 test above (AQP-340).
+    test.slow();
+    await openTree(page, testInfo);
+    await choose(page, '1');
+
+    // Under a Main Assembly: a Sub-Assembly, a Part or a Fastener. Escape closes the menu and gives the focus back to its "+".
+    const plus = rowButton(page, 'Add under', '1');
+    await expect(plus).toHaveAttribute('aria-haspopup', 'menu');
+    await plus.click();
+    await expect(page.getByRole('menuitem')).toHaveText(['Sub-Assembly', 'Part', 'Fastener']);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menuitem')).toHaveCount(0);
+    await expect(plus).toBeFocused();
+    await plus.click();
+    await page.getByRole('menuitem', { name: 'Sub-Assembly', exact: true }).click();
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1']);
+    // The added row is the open one and takes the focus.
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    await expect(part(page, '1.1')).toBeFocused();
+
+    // Under a Sub-Assembly: a Part or a Fastener, and by the keyboard the first item has the focus.
+    await rowButton(page, 'Add under', '1.1').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('menuitem')).toHaveText(['Part', 'Fastener']);
+    await expect(page.getByRole('menuitem').first()).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.1.1']);
+    await expect(part(page, '1.1.1')).toBeFocused();
+
+    // Under a Part there is one kind allowed, so it is added at once, with no menu; the "+" says so in its name.
+    await choose(page, '1.1.1');
+    const fastener = rowButton(page, 'Add fastener under', '1.1.1');
+    await expect(fastener).not.toHaveAttribute('aria-haspopup', 'menu');
+    await fastener.click();
+    await expect(page.getByRole('menuitem')).toHaveCount(0);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.1.1', '1.1.1.1']);
+    await expect(tree(page).getByRole('img', { name: 'Fastener' })).toHaveCount(1);
+
+    // A Fastener holds nothing: no "+", only its "-".
+    await choose(page, '1.1.1.1');
+    await expect(tree(page).getByRole('button', { name: /^Add (under|fastener under) 1\.1\.1\.1 / })).toHaveCount(0);
+    await expect(rowButton(page, 'Delete', '1.1.1.1')).toHaveCount(1);
+
+    // "Add main assembly" at the foot adds another top-level one, last, and opens it.
+    await addMain(page);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.1.1', '1.1.1.1', '2']);
+    await expect(part(page, '2')).toHaveAttribute('aria-current', 'true');
+    await expect(part(page, '2')).toBeFocused();
+
+    // AQP-418 (DEF-075), acceptance checks 1, 2 and 3 of the design (AQP-406 comment 12939). The toolbar never floats over a row, so a press at the centre of a name is a press on the row: a Main Assembly, a Sub-Assembly, a Part
+    // (level 3) and a Fastener, each when it is not the open row and again when it is. A press selects the row and opens no menu and no dialog, and sends no add, move or delete request.
+    const writes: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() !== 'GET' && /\/api\/v1\/estimates\/[^/]+\/(nodes|tree)/.test(new URL(request.url()).pathname)) writes.push(request.method() + ' ' + request.url());
+    });
+    for (const slNo of ['1.1', '1.1', '1.1.1', '1.1.1', '1.1.1.1', '1.1.1.1', '1', '1', '2', '2']) {
+      expect(await reachedByCentrePress(page, slNo), 'the centre of ' + slNo + ' reaches the row').toBe('the row');
+      await choose(page, slNo);
+      await expect(part(page, slNo)).toHaveAttribute('aria-current', 'true');
+      await expect(page.getByRole('menuitem')).toHaveCount(0);
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    }
+    expect(writes, 'a press on a name sent no add, move or delete request').toEqual([]);
+    // 2 is the open row now. Its toolbar is in view, under its name; every other toolbar is clipped to 1 px and has no hit area. A pointer over a row that is not open changes nothing (check 3).
+    const before = await toolbarBoxes(page);
+    expect(before.filter((row) => row.open).map((row) => row.slNo)).toEqual(['2']);
+    const rowOffsets = async (): Promise<number[]> => {
+      const tops = await Promise.all(['1', '1.1', '1.1.1', '1.1.1.1', '2'].map(async (slNo) => (await part(page, slNo).boundingBox())?.y ?? 0));
+      return tops.map((top) => top - (tops[0] ?? 0));
+    };
+    const offsets = await rowOffsets();
+    await part(page, '1.1').hover();
+    await part(page, '1.1.1').hover();
+    expect(await toolbarBoxes(page)).toEqual(before);
+    expect(await rowOffsets()).toEqual(offsets);
+    for (const row of before) {
+      if (!row.open) expect(row.takesPress, row.slNo + ' toolbar takes a press').toBe(false);
+      if (row.open) {
+        expect(row.overlapsLink, row.slNo + ' toolbar does not overlap its name').toBe(false);
+        expect(row.height, row.slNo + ' toolbar is in view').toBeGreaterThanOrEqual((page.viewportSize()?.width ?? 0) >= 1024 ? 36 : TOUCH_TARGET);
+      } else {
+        expect(row.width, row.slNo + ' toolbar is clipped').toBeLessThanOrEqual(1);
+        expect(row.height, row.slNo + ' toolbar is clipped').toBeLessThanOrEqual(1);
+      }
+    }
+    await expectNoAxeViolations(page);
+  });
+
+  test('AQP-405 AC-4 (AQP-418): the "-" of a row that is not the open one, reached by the keyboard (Tab from its link), deletes that row after the confirmation, and the open row stays open and is renumbered; and a press on a row below a row that has the keyboard focus is never lost (AQP-419)', async ({ page }, testInfo) => {
+    // The toolbar of a row that is not open is clipped, so a press cannot reach it (AQP-418, DEF-075): a person reaches it with Tab from the row's link, on every screen. 1.1 is a Part: the handle, the "+" and the "-".
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.2');
+    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+
+    // AQP-419 (DEF-076), acceptance checks 1, 2, 3, 5, 7 and 10 of the design (comment 13032). 1.2 is the open row. Row 1 is given the keyboard focus ring, so its toolbar is in view under its name and every row below it is
+    // one toolbar line lower; a press with the mouse on 1.1 then moves the focus, and used to take that line away under the pointer, so the row jumped up and the click was lost. Rule P: nothing moves between the
+    // pointer-down and the pointer-up, 1.1 is open after the click, and row 1's toolbar goes back to the clip once the press is over. Each start state is asserted (WebKit's Tab can skip), then put back.
+    const keyboardOnRow1 = async (focus: 'link' | 'handle' | 'menu'): Promise<void> => {
+      await tree(page).getByRole('button', { name: 'Close branch 1' }).focus();
+      await page.keyboard.press('Tab');
+      await expect(part(page, '1')).toBeFocused();
+      if (focus !== 'link') {
+        await page.keyboard.press('Tab');
+        await expect(handleOf(page, '1')).toBeFocused();
+      }
+      if (focus === 'menu') {
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toBeVisible();
+      }
+      expect(await toolbarHeightOf(page, '1'), 'row 1 shows its toolbar by the keyboard focus').toBeGreaterThan(1);
+    };
+    const settled = async (): Promise<void> => {
+      await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+      await expect(part(page, '1.2')).not.toHaveAttribute('aria-current', 'true');
+      await expect.poll(() => toolbarHeightOf(page, '1'), 'row 1 settles once the press is over').toBeLessThanOrEqual(1);
+      await expect(page.getByRole('menuitem')).toHaveCount(0);
+      await choose(page, '1.2');
+      await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+    };
+    for (const [focus, holdMs] of [['link', 0], ['link', 150], ['handle', 0], ['menu', 0]] as const) {
+      await keyboardOnRow1(focus);
+      await pressWithoutShift(page, '1.1', holdMs, focus === 'menu' ? await yAboveMenu(page, '1.1') : undefined);
+      await settled();
+    }
+
+    // Check 5: a press that is dragged off the row and released elsewhere is no click, and the held line is let go of when it is over: nothing stays in the way.
+    await keyboardOnRow1('link');
+    const pressed = defined(await part(page, '1.1').boundingBox());
+    await page.mouse.move(pressed.x + pressed.width / 2, pressed.y + pressed.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(2, 2, { steps: 4 });
+    await page.mouse.up();
+    await expect.poll(() => toolbarHeightOf(page, '1'), 'a press that ends elsewhere lets the held line go').toBeLessThanOrEqual(1);
+    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+
+    // Check 7: the keyboard holds nothing. Tab from row 1's link through its buttons to row 1.1 takes row 1's toolbar away at once.
+    await keyboardOnRow1('link');
+    for (const next of [handleOf(page, '1'), rowButton(page, 'Add under', '1'), rowButton(page, 'Delete', '1'), part(page, '1.1')]) {
+      await page.keyboard.press('Tab');
+      await expect(next).toBeFocused();
+    }
+    expect(await toolbarHeightOf(page, '1'), 'Tab away collapses row 1 at once').toBeLessThanOrEqual(1);
+    await choose(page, '1.2');
+    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+
+    // Check 4 and rule P2: a double click on the name of a row below the open row. The first click opens 1.1 and takes row 1's toolbar line away, so 1.1 sits one line higher and its own toolbar line is under the pointer;
+    // the second press would land on its "+" (a Part gets its Fastener at once). The pointer is put where the "+" of 1.1 is once 1.1 is open, which is on the name of 1.1 while row 1 is open; the second press comes 120 ms
+    // after the first, as a person's does. It must reach nothing: no add request, no menu, no dialog, and 1.1 stays the open row.
+    const added: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && /\/api\/v1\/estimates\/[^/]+\/nodes$/.test(new URL(request.url()).pathname)) added.push(request.url());
+    });
+    await choose(page, '1.1');
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    const plus = await settledBox(rowButton(page, 'Add fastener under', '1.1'));
+    await choose(page, '1');
+    await expect(part(page, '1')).toHaveAttribute('aria-current', 'true');
+    const name = await settledBox(part(page, '1.1'));
+    const [left, right] = [Math.max(plus.x, name.x), Math.min(plus.x + plus.width, name.x + name.width)];
+    const [top, bottom] = [Math.max(plus.y, name.y), Math.min(plus.y + plus.height, name.y + name.height)];
+    expect(right > left && bottom > top, 'the "+" of 1.1 once it is open lies over the name of 1.1 while row 1 is open').toBe(true);
+    await page.mouse.move((left + right) / 2, (top + bottom) / 2);
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 120)));
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    await expect(page.getByRole('menuitem')).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    await choose(page, '1.2');
+    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+
+    await part(page, '1.1').focus();
+    await page.keyboard.press('Tab');
+    await expect(handleOf(page, '1.1')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(rowButton(page, 'Add fastener under', '1.1')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(rowButton(page, 'Delete', '1.1')).toBeFocused();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('alertdialog', { name: 'Delete row 1.1?' });
+    await expect(dialog).toContainText('Row 1.1 and everything typed into it will be deleted. This cannot be undone.');
+    await dialog.getByRole('button', { name: 'Delete row' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1']);
+    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    // Judged here, after the steps above have given a late request time to show: the second press of the double click above added nothing.
+    expect(added, 'the second press of a double click on a name added no Fastener').toEqual([]);
+  });
+});
+
 test.describe('AC-6: a change made under the person', () => {
   test('AC-6: a move with a stale revision gets the fresh tree and a notice, and the first change stands', async ({ page }, testInfo) => {
     const { estimateId } = await openTree(page, testInfo);
-    await action(page, 'New item').click();
+    await addMain(page);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '2']);
-    await part(page, '2').click();
+    await choose(page, '2');
 
     // Someone else moves part 2 to the top, from the same session, while this screen still shows it second.
     const moved = await page.evaluate(async (id) => {
@@ -466,7 +801,8 @@ test.describe('AC-6: a change made under the person', () => {
     }, estimateId);
     expect(moved).toBe(200);
 
-    await action(page, 'Move up').click();
+    await handleOf(page, '2').click();
+    await page.getByRole('menuitem', { name: 'Move up', exact: true }).click();
     await expect(page.getByText('The parts were changed by someone else. The tree has been refreshed. Check it and try again.')).toBeVisible();
     // The tree is the server's: the part moved first is first, and nothing was moved twice.
     await expect.poll(() => slNumbers(page)).toEqual(['1', '2']);
@@ -477,8 +813,7 @@ test.describe('AC-6: a change made under the person', () => {
 test.describe('AC-9: the screen', () => {
   test('AC-9: a drawer below 768 px and a panel from it; every action is 44 px high, there is no sideways scroll and axe finds nothing, with the tree open', async ({ page }, testInfo) => {
     await openTree(page, testInfo);
-    await part(page, '1').click();
-    await action(page, 'Sub-part').click();
+    await addUnder(page, '1', 'Sub-Assembly');
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1']);
 
     if (isPhone(page)) {
@@ -486,8 +821,13 @@ test.describe('AC-9: the screen', () => {
     } else {
       await expect(page.getByRole('dialog')).toHaveCount(0);
     }
-    for (const name of ['New item', 'Sub-part', 'Part beside', 'Move up', 'Move down', 'Delete']) {
+    for (const name of ['Add main assembly']) {
       expect((await action(page, name).boundingBox())?.height ?? 0, name).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    }
+    // The row buttons are 44 px, and 36 px from 1024 px with a fine pointer (UX row 3, NFR-017). The open row (1.1, the one just added) is the one whose toolbar is on screen on a touch screen: the toolbar of another row is not drawn there.
+    const rowButtonHeight = (page.viewportSize()?.width ?? 0) >= 1024 ? 36 : TOUCH_TARGET;
+    for (const [words, slNo] of [['Move', '1.1'], ['Add under', '1.1'], ['Delete', '1.1']] as const) {
+      expect((await rowButton(page, words, slNo).boundingBox())?.height ?? 0, `${words} ${slNo}`).toBeGreaterThanOrEqual(rowButtonHeight);
     }
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
@@ -499,5 +839,173 @@ test.describe('AC-9: the screen', () => {
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     }
     await expectNoAxeViolations(page);
+  });
+});
+
+test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
+  /** The id of a row, from its link: it is how a test tells that the row, and not only its number, has moved. */
+  const idOf = async (page: Page, slNo: string): Promise<string | null> => part(page, slNo).getAttribute('data-part-id');
+
+  test('AQP-406 AC-1, AC-5, AC-8: dragging the handle of 1.2 above 1.1 shows a red line, moves the row, renumbers both, and announces it; the handle has the focus after', async ({ page }, testInfo) => {
+    test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop; the phone has the touch drag below');
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.2');
+    const moving = await idOf(page, '1.2');
+    const handle = defined(await handleOf(page, '1.2').boundingBox());
+    const above = defined(await part(page, '1.1').boundingBox());
+    const x = handle.x + handle.width / 2;
+    await page.mouse.move(x, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, above.y + 4, { steps: 8 });
+    // The red line is at the top of 1.1, where the row would land, and is not the only cue: the numbers change at the drop.
+    const line = page.locator('[data-drop-line]');
+    await expect(line).toBeVisible();
+    const lineBox = defined(await line.boundingBox());
+    expect(Math.abs(lineBox.y + lineBox.height / 2 - above.y)).toBeLessThan(10);
+    await page.mouse.up();
+    await expect(line).toHaveCount(0);
+    await expect(page.getByText('Part renumbered to 1.1')).toHaveCount(1);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    expect(await idOf(page, '1.1')).toBe(moving);
+    await expect(handleOf(page, '1.1')).toBeFocused();
+  });
+
+  test('AQP-406 AC-1: a drag to the place after the last sibling moves the row down: 1.1 below 1.2 swaps them, and the moved row keeps its identity', async ({ page }, testInfo) => {
+    test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop; the phone has the touch drag');
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.1');
+    const moving = await idOf(page, '1.1');
+    const handle = defined(await handleOf(page, '1.1').boundingBox());
+    const below = defined(await part(page, '1.2').boundingBox());
+    const x = handle.x + handle.width / 2;
+    await page.mouse.move(x, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, below.y + below.height - 4, { steps: 8 });
+    // The line is there (it is drawn as soon as the drag code has the pointer), and at the bottom of 1.2, where the row would land. Both are read in one go in the page: near the edge of the panel the drag scrolls it, and the line moves with the rows.
+    await expect(page.locator('[data-drop-line]')).toBeVisible();
+    const gap = await page.evaluate(() => {
+      const line = document.querySelector('[data-drop-line]')?.getBoundingClientRect();
+      const link = [...document.querySelectorAll('nav[aria-label="Parts tree"] a[data-part-id]')].find((candidate) => candidate.querySelector('[data-sl-no]')?.textContent === '1.2')?.getBoundingClientRect();
+      return line === undefined || link === undefined ? null : Math.abs(line.top + line.height / 2 - link.bottom);
+    });
+    expect(gap).not.toBeNull();
+    expect(gap ?? 999).toBeLessThan(12);
+    await page.mouse.up();
+    await expect(page.getByText('Part renumbered to 1.2')).toHaveCount(1);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    expect(await idOf(page, '1.2')).toBe(moving);
+    await expect(handleOf(page, '1.2')).toBeFocused();
+  });
+
+  test('AQP-406 AC-1: Escape during a drag abandons it: the line goes, no request is sent, nothing moves, and the click that ends the press opens no menu', async ({ page }, testInfo) => {
+    test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop');
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.2');
+    const moves = watchMoves(page);
+    const handle = defined(await handleOf(page, '1.2').boundingBox());
+    const above = defined(await part(page, '1.1').boundingBox());
+    const x = handle.x + handle.width / 2;
+    await page.mouse.move(x, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(x, above.y + 4, { steps: 8 });
+    await expect(page.locator('[data-drop-line]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-drop-line]')).toHaveCount(0);
+    await page.mouse.up();
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toHaveCount(0);
+    expect(moves.calls).toHaveLength(0);
+    expect(await slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+  });
+
+  test('AQP-406 AC-1: a drag that ends where the row is, or a click with a few pixels of wobble, sends nothing and opens the menu only for the click', async ({ page }, testInfo) => {
+    test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop');
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.1');
+    const moves = watchMoves(page);
+    const handle = defined(await handleOf(page, '1.1').boundingBox());
+    const x = handle.x + handle.width / 2;
+    const y = handle.y + handle.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y + 30, { steps: 4 });
+    await page.mouse.move(x, y, { steps: 4 });
+    await page.mouse.up();
+    // A drag, let go where it began: no request and no menu.
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toHaveCount(0);
+    expect(moves.calls).toHaveLength(0);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    // A click: the menu.
+    await handleOf(page, '1.1').click();
+    await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toBeVisible();
+    expect(moves.calls).toHaveLength(0);
+  });
+
+  test('AQP-406 AC-6, AC-8: a touch drag at phone width reorders, and the page still scrolls where the handle is not', async ({ page, context }, testInfo) => {
+    test.skip(!isPhone(page), 'the touch drag is judged at phone width');
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.2');
+    const moving = await idOf(page, '1.2');
+    const handle = defined(await handleOf(page, '1.2').boundingBox());
+    const above = defined(await part(page, '1.1').boundingBox());
+    const x = handle.x + handle.width / 2;
+    const fromY = handle.y + handle.height / 2;
+    const toY = above.y + 4;
+    const cdp = await context.newCDPSession(page);
+    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', y: number) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+    await touch('touchStart', fromY);
+    for (let step = 1; step <= 8; step += 1) await touch('touchMove', fromY + ((toY - fromY) * step) / 8);
+    await expect(page.locator('[data-drop-line]')).toBeVisible();
+    await touch('touchEnd', toY);
+    await expect(page.getByText('Part renumbered to 1.1')).toHaveCount(1);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    expect(await idOf(page, '1.1')).toBe(moving);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+
+  test('AQP-406 AC-2, AC-8: Move up and Move down by keyboard, with no dragging: Enter opens the menu on the first item that can be chosen, Enter chooses it, the row is announced and its handle keeps the focus; axe finds nothing with the menu open', async ({ page }, testInfo) => {
+    test.slow();
+    await openTreeWithTwoSubParts(page, testInfo);
+    await choose(page, '1.2');
+    await handleOf(page, '1.2').focus();
+    await page.keyboard.press('Enter');
+    // The last of two: Move down cannot be chosen, Move up can and has the focus.
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toBeFocused();
+    await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await expectNoAxeViolations(page);
+    await page.keyboard.press('Enter');
+    await expect(page.getByText('Part renumbered to 1.1')).toHaveCount(1);
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    await expect(handleOf(page, '1.1')).toBeFocused();
+
+    // The first of two: Move up cannot be chosen, and Move down has the focus. Escape closes the menu and the handle keeps the focus.
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toHaveCount(0);
+    await expect(handleOf(page, '1.1')).toBeFocused();
+    expect(await slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+  });
+
+  test('AQP-406 AC-2, AC-3: an only child has both items disabled, and there is no item that moves a row under another parent', async ({ page }, testInfo) => {
+    await openTree(page, testInfo);
+    await choose(page, '1');
+    await handleOf(page, '1').click();
+    await expect(page.getByRole('menuitem')).toHaveCount(2);
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Escape');
+  });
+
+  test('AQP-406 AC-9: a request that fails leaves the row where it was, with no new order kept, and says that the change was not made', async ({ page }, testInfo) => {
+    await openTreeWithTwoSubParts(page, testInfo);
+    await page.route(/\/tree\/move$/, (route) => route.abort('failed'));
+    await moveFromMenu(page, '1.2', 'Move up');
+    await expect(page.getByText('The change was not made')).toBeVisible();
+    expect(await slNumbers(page)).toEqual(['1', '1.1', '1.2']);
+    await page.unroute(/\/tree\/move$/);
+    // Nothing is stuck: the same move goes through now.
+    await moveFromMenu(page, '1.2', 'Move up');
+    await expect(page.getByText('Part renumbered to 1.1')).toHaveCount(1);
   });
 });
