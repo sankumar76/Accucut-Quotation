@@ -1,3 +1,5 @@
+*If the company mail is kept on a cPanel web host, use the version in Q-18b (`Q-18b-mail-settings-request-cpanel.md`) instead. This Microsoft 365 version is kept for reference.*
+
 # Request to Accucut IT: mail settings for the Quotation Portal
 
 **To:** Accucut IT (the person who looks after the company mail)
