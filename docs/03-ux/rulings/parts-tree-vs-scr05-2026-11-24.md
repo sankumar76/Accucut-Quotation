@@ -358,3 +358,10 @@ End to end (Playwright, the three existing projects, plus the 1023 / 1024 edge):
 # Correction, 2026-11-25: the form column has no card of its own (PR #707, DEF-081)
 
 **Ruling: accept the build as is.** The SCR-05 mock-up draws `.ws-form` as a plain column (generator `s2.cjs` ~171: heading row, stepper, then the section cards; no `.card` around it), so a borderless, unfilled, unpadded form area from 1024 px matches it, and the bordered card must not come back; the layout contract (two section columns at 1280 px, the 340 px drawing region of estimate-layout AC-2) stays as it is. My item 10 wording "keep the form's card" was wrong: it read the build's old wrapper as design, and the two places above are corrected. Conditions: the group keeps its accessible name "Parts and inputs" and role (the rows' links point to it), the section cards keep their own borders, and below 1024 px the area is unchanged.
+
+---
+
+# Note, 2026-11-25: coarse-pointer hit area and UX-AC-15.14 (PR #721, AQP-426)
+
+**Hit area: accept the developer's version.** The 44 px touch area extends 28 px into the tree card's own padding instead of padding the form (which cost the section cards a column at 1280 px and failed estimate-layout AC-2 on tablet), so the line in "The handle" about a left padding on the form is replaced by this. Conditions: it reaches only the card's padding and at most the last 4 px of a row's end, holds no control (the status icon is not one), no form control lies under it, and the grip, 24 px mouse area and no-overlap test of UX-AC-15.10 stand (assert that every point on the area's centre line hits the handle).
+**UX-AC-15.14 (SCR-06 and SCR-07 reuse) is deferred to follow-up #720, which is consistent with the spec:** the criterion applies only "where their trees sit beside the content", and SCR-06's tree is a server-rendered `details` panel above it, so there is nothing to resize until that layout changes.
