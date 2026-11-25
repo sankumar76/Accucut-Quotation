@@ -498,11 +498,7 @@ test('DEF-085, DL-391: the form comes first and the controls appear in place: be
   const testInfo = test.info();
   test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
   await page.setViewportSize({ width: 1280, height: 900 });
-  let release: () => void = () => undefined;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const chunk = await holdControlsCode(page, { release: held });
+  const controls = await holdControlsCode(page, 'hold');
   try {
     await store(page, storageKey(ownerId), '400');
     await page.reload();
@@ -519,22 +515,21 @@ test('DEF-085, DL-391: the form comes first and the controls appear in place: be
     await control(page, 'J').evaluate((element) => element.focus({ preventScroll: true }));
 
     // After: the code arrives; the controls appear in their places.
-    release();
+    controls.release();
     await expect(handleOf(page)).toBeVisible();
     await expect(widthButton(page)).toBeVisible();
     await expectWidth(page, MAXIMUM);
     expect(await boxes(page), 'the head, the count, the tree card and the form have not moved').toEqual(before);
     await expect(control(page, 'J'), 'a focus in the form stays where it was').toBeFocused();
   } finally {
-    release();
-    await page.unroute(chunk);
+    await controls.stop();
   }
 });
 
 test('DEF-085, DL-391: when the code of the controls cannot be fetched the page works, the width is the stored one and no error is shown', async () => {
   const testInfo = test.info();
   test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
-  const chunk = await holdControlsCode(page, 'refuse');
+  const controls = await holdControlsCode(page, 'refuse');
   try {
     await store(page, storageKey(ownerId), '400');
     const refused = page.waitForResponse((response) => response.status() === 503 && response.url().includes('/_next/static/chunks/'));
@@ -547,6 +542,6 @@ test('DEF-085, DL-391: when the code of the controls cannot be fetched the page 
     expect(await columnWidth(page)).toBe(MAXIMUM);
     await expect(control(page, 'J')).toBeEnabled();
   } finally {
-    await page.unroute(chunk);
+    await controls.stop();
   }
 });

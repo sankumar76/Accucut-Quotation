@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { answerChunk } from '../../support/controls-route-handler';
+
 /**
  * What the resizable parts tree specs share (AQP-426, STORY-CR01.3E, FR-112): the numbers, the locators of the handle and the column, and the few measurements. This file has no tests and its name does not end in `.spec.ts`.
  * The pure rules are `tests/unit/tree-width*.test.ts`; the structure of the handle is `tests/unit/tree-resize-handle.test.ts`.
@@ -82,27 +84,32 @@ export function contrast(first: string, second: string): number {
   return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
 }
 
-/** What only the code of the handle and of the Tree width menu contains: their own attributes. The development server hashes most chunk names, so the chunk is told by its content. */
-const CONTROLS_MARKERS = ['data-tree-hit', 'data-tree-width-button'];
 const CHUNK = /\/_next\/static\/chunks\/.*\.js(\?.*)?$/;
 
+export interface ControlsCodeRoute {
+  /** Lets the held code through. */
+  readonly release: () => void;
+  /** Releases anything still held, then waits for the handlers that are running to finish and removes the route. Call it before the case ends, so no handler outlives the page (DEF-088). */
+  readonly stop: () => Promise<void>;
+}
+
 /**
- * Holds the code of the handle and of the Tree width menu (the chunks that carry their markers) until `release` is called, or refuses it (`'refuse'`, answered 503), and lets every other chunk through at once. Remove it with
- * `page.unroute(CHUNK_ROUTE)` (the returned pattern). The tests of "the form first" (DEF-085, DL-391) use it to look at the page while the controls are not there.
+ * Holds the code of the handle and of the Tree width menu (the chunks that carry their markers) until `release()`, or refuses it (`'refuse'`, answered 503), and lets every other chunk through at once. The tests of "the form
+ * first" (DEF-085, DL-391) use it to look at the page while the controls are not there. **`stop()` must run before the case ends** (`finally`): a handler that is still fetching when the page or the context closes would
+ * throw "Request context disposed" outside any test and stop the worker (DEF-088), so `stop()` waits for the running handlers (`unrouteAll({ behavior: 'wait' })`) while the page is still there. What a handler does with a
+ * fault is `answerChunk` (`tests/support/controls-route-handler.ts`, unit-tested).
  */
-export async function holdControlsCode(page: Page, mode: { readonly release: Promise<void> } | 'refuse'): Promise<RegExp> {
-  await page.route(CHUNK, async (route) => {
-    try {
-      const response = await route.fetch();
-      const body = await response.text();
-      if (!CONTROLS_MARKERS.some((marker) => body.includes(marker))) return await route.fulfill({ response, body });
-      if (mode === 'refuse') return await route.fulfill({ status: 503, contentType: 'text/plain', body: 'refused' });
-      await mode.release;
-      return await route.fulfill({ response, body });
-    } catch (error) {
-      // The page was reloaded while the answer was being made: the browser has dropped that request, and there is nothing to answer. Any other fault is the test's.
-      if (!(error instanceof Error) || !/already handled|has been closed|closed/i.test(error.message)) throw error;
-    }
+export async function holdControlsCode(page: Page, mode: 'hold' | 'refuse'): Promise<ControlsCodeRoute> {
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
   });
-  return CHUNK;
+  await page.route(CHUNK, (route) => answerChunk(route, mode, held));
+  return {
+    release,
+    stop: async () => {
+      release();
+      await page.unrouteAll({ behavior: 'wait' });
+    },
+  };
 }
