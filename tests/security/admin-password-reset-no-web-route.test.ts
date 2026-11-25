@@ -39,7 +39,7 @@ const read = (file: string): string => readFileSync(join(ROOT, file), 'utf8');
 describe('AC-8: no HTTP route for the emergency Admin password reset', () => {
   it.each(METHODS)('%s is named in the user service and in the runner of the command, and nowhere else under src or scripts', (method) => {
     const naming = SOURCES.filter((file) => read(file).includes(method));
-    expect(naming).toEqual([...MAY_NAME_THE_METHODS].sort());
+    expect([...naming].sort()).toEqual([...MAY_NAME_THE_METHODS].sort());
   });
 
   it('nothing under src/app, and no route handler anywhere, names either method or imports the command', () => {
@@ -69,11 +69,10 @@ describe('AC-8: no HTTP route for the emergency Admin password reset', () => {
     // The web reset of someone else's password (STORY-01.04) and the e-mailed link's routes (STORY-09.07) are the only password-reset routes.
     expect(paths.filter((path) => /password/i.test(path)).sort()).toEqual(
       [
-        '/account/password',
         '/api/v1/account/password',
         '/api/v1/account/password/forgot',
         '/api/v1/account/password/reset',
-        '/api/v1/users/[id]/password',
+        '/api/v1/users/[id]/password-reset',
         '/forgot-password',
         '/reset-password',
       ].sort(),
