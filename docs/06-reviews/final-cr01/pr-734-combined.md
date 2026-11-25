@@ -3,12 +3,12 @@
 | Field | Value |
 |-------|-------|
 | Reviewer | reviewer-quality (the one combined security-and-quality review, CLAUDE.md §9 item 2: anything that can lose or corrupt data, here autosave) |
-| Review round | 1 |
+| Review round | 1, and 2 (re-review of `de145e58`, see "Previous Findings") |
 | Base…branch | `master...fix/AQP-367-autosave-on-hide` (PR [#734](https://github.com/sankumar76/Accucut-Quotation/pull/734)), 0 behind `master` 6bf10f7d |
-| Commit reviewed | `9ceb8134` |
+| Commit reviewed | `9ceb8134` (round 1); `de145e58` (round 2, 0 behind `master` 6bf10f7d, run 45663723703 green) |
 | Date | 2026-11-25 |
 | Reviewed against | Jira AQP-367 (AC-7 amended, AC-7a to AC-7f, A-3; PO validation of the amendment 2026-11-25); DL-403 and DL-404 (records-u 859ebf26), DL-370 (5), DL-375, DL-386, DL-388 (D), DL-397 (2)(d); `docs/standards/coding-standards.md`; precedent `pr-715-combined.md` |
-| **Verdict** | **REQUEST CHANGES (tests only)**: the product code is approved with comments (no Blocker, Critical or Major in `src/`). The one Major is the raised E2E timeout (QLT-734-09), which DL-404 (1) already orders split; the developer is doing that now. Run of record 45657457945 is green at the head. The test changes are re-checked on the new head |
+| **Verdict (round 2, `de145e58`)** | **REQUEST CHANGES (one line in a test).** The product code is approved with comments. QLT-734-02, -04, -05 and -07 are fixed, and -03 and -06 are closed by the PO's rulings A-5 and A-4. **QLT-734-09 is only partly fixed:** the original case is back to `master`, but the new case `estimate-autosave-leave.spec.ts:17` sets `test.setTimeout(60_000)`. The project default is 30 s, and DL-404 (1)(b) asks for "the default 30 s budget". The fix is to delete that line; the case reads 18.5 to 22.8 s. (Round 1 at `9ceb8134`: REQUEST CHANGES, tests only.) |
 
 ## Summary
 
@@ -110,14 +110,42 @@ I accept the stated deviation from AC-7b ("a save already in flight is not waite
 
 ## Previous Findings (re-review only)
 
-n/a (round 1).
+### Round 2: head `de145e58` (2026-11-25)
+
+**Scope:** `git diff 9ceb8134 de145e58` only. That is 6 files: `use-autosave.ts` (+2/−2), `use-part-form.ts` (+6/−5), the new `tests/e2e/estimate-autosave-leave.spec.ts` (+81), `tests/e2e/estimate-autosave.spec.ts` (back to `master`), and two unit files (+30). The developer's answers are in PR comment 7169918158.
+
+**Checks:**
+- **Unit tests at the head:** `npx vitest run` over the same 5 files (`aqp-398`, read-only) passed: **5 files, 142 tests**.
+- **Run 45663723703:** `success` at `de145e58`, 0 behind 6bf10f7d. The PR body reports 0 flaky.
+- **Original spec:** `git diff origin/master origin/fix/AQP-367-autosave-on-hide -- tests/e2e/estimate-autosave.spec.ts` is **empty**.
+- **Default test budget:** `playwright.config.ts` sets no top-level `timeout`, so a test gets Playwright's default **30 s** (the config comments say "a test's 30 s"; "never widen a timeout").
+- **Jira AQP-367:** A-4 and A-5 are present, and AC-7b, AC-7c, AC-7d and AC-7f were revised by the PO.
+
+| ID | Severity | Status | Evidence |
+|----|----------|--------|----------|
+| QLT-734-01 | Minor | **Deferred after G8 (DL-404 (5))**, #735 | No change expected in this PR. AC-7b (2) and A-4 now state the limit |
+| QLT-734-02 | Minor | **Fixed** | `leavingRef` is now a count (`use-part-form.ts:105`, `+= 1` / `-= 1`, `> 0` at send). Each increment has exactly one `done`, so it cannot go negative. New unit test "overlapping leaves …" expects `keepalive` `[true, true]` |
+| QLT-734-03 | Minor | **Closed by PO ruling A-5** | AC-7b (3) and AC-7f state the limit: a leave during Calculate sends nothing, and the warning on leaving is the guard. Revisit after G8 |
+| QLT-734-04 | Minor | **Fixed** | `use-autosave.ts:51` and `:75` use `hidden.current()`. New unit test "'is the tab hidden' has one source" |
+| QLT-734-05 | Minor | **Fixed** | No timed wait is left in the new spec. The duplicate check (`:63-66`) waits on a real answered request (`GET /api/v1/options/materials`, 200) after `pagehide`, then reads the recorder. This is sound: a save queued by `pagehide` calls `fetch` (recorded at call time) in the microtasks of that `evaluate`, before the barrier request starts. "Nothing unsaved sends nothing" is now unit-only (hook and part tests), which I accept |
+| QLT-734-06 | Info | **Closed by PO ruling A-4** | AC-7b now reads "not bypassed: later text for that part is queued behind it" |
+| QLT-734-07 | Info | **Fixed** | The new case's title names "AC-7a to AC-7c". The original title is unchanged, as on `master` |
+| QLT-734-09 | **Major** | **Partly fixed, still open** | (a) Original case exactly as on `master`, 60 s: **done.** (b) The new case `estimate-autosave-leave.spec.ts:17` sets **`test.setTimeout(60_000)`**. DL-404 (1)(b) asks for "new, separate cases at the **default 30 s budget**, each reading attempt 1 under 25 s". The PR body calls 60 s "the default", but it is not: the config default is 30 s, and 60 s is a per-file opt-in copied from `estimate-autosave.spec.ts` and `estimate-save.spec.ts`. Attempt-1 readings of 19.0, 18.5 and 22.8 s are under 25 s, so the case fits 30 s with margin. **Fix:** delete line 17 (keep `useFreshAddress`). **Test:** the next CI run reads each width under 25 s at 30 s. If master reads "default" as the 60 s that these form specs use, master can close this instead. DL-370 (5)'s words point the other way |
+| SEC-734-01, SEC-734-02, QLT-734-08 | Info | Unchanged | No source change touches them. `part-server.ts` is unchanged since round 1 (accepted, DL-404 (4)) |
+
+**New in round 2:**
+- The new case adds one person-making call per project (`openForm`). The PR body's DL-386 / DL-388 (D) statement from `--list --shard` is present: +0 before `users.spec.ts:58` in its own shard, no case after `users.spec.ts` of its own project, and shard-balance guard passing. I did not re-run `--list` (master's check).
+- No other findings. The barrier GET is an Engineer-readable options route, not a cost route (NFR-002).
+
+**Round 2 counts (open):** Blocker 0, Critical 0, **Major 1** (QLT-734-09, one line), Minor 0, Info 3 (SEC-734-01, SEC-734-02, QLT-734-08). Deferred: QLT-734-01 (#735).
 
 ## Hand-off
 
 - Status: COMPLETE
-- Verdict: **REQUEST CHANGES (tests only; product code approved with comments)**. Blocker 0, Critical 0, Major 1 (QLT-734-09, already ordered by DL-404 (1)), Minor 5, Info 5
+- Verdict (round 2, `de145e58`): **REQUEST CHANGES (one line).** Open: Blocker 0, Critical 0, Major 1 (QLT-734-09: `estimate-autosave-leave.spec.ts:17` `test.setTimeout(60_000)` against DL-404 (1)(b)'s default 30 s), Minor 0, Info 3. QLT-734-02, -04, -05 and -07 are fixed; -03 and -06 are closed by PO rulings A-5 and A-4; -01 is deferred to #735
+- Verdict (round 1, `9ceb8134`): REQUEST CHANGES (tests only). Blocker 0, Critical 0, Major 1, Minor 5, Info 5
 - Artefacts written/updated: `docs/06-reviews/final-cr01/pr-734-combined.md` (records-u)
 - Jira / GitHub updates: PR #734 review (COMMENT, single-token) with inline comments; label `review:quality-changes-requested`; follow-up issue #735 for QLT-734-01; hand-off comment on Jira AQP-367
-- Open questions: PO on QLT-734-06 wording and QLT-734-03; master on QLT-734-05
+- Open questions: none for the PO (A-4 and A-5 ruled). Master: only if "default budget" in DL-404 (1)(b) is meant as the 60 s of the form specs (QLT-734-09)
 - Risks raised: none new (QLT-734-01 residual guarded by FR-053)
-- Recommended next agent: developer, then reviewer-quality. The developer finishes the DL-404 (1) split (QLT-734-09). Then I re-check the test changes on the new head (QLT-734-09, -05, -07). After that, master decides the merge under DL-361 / DL-404 (7)
+- Recommended next agent: developer. Delete `test.setTimeout(60_000)` at `estimate-autosave-leave.spec.ts:17` and push. Then reviewer-quality confirms that one-line diff and the new run's under-25 s readings at 30 s (no full re-review needed). Then master decides the merge under DL-361 / DL-404 (7)
