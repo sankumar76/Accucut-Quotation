@@ -382,6 +382,9 @@ print `$line` or `$u` themselves: they hold the password.
 - **If the new release is not healthy**, the junction moves back, the previous release starts, and the script says **"Call your IT person"**.
   Migrations only add things (expand, then contract: architecture section 9.7), so the previous release still works on the migrated database.
 - **To go back to an older release on purpose**, run `update.ps1` with that release's zip.
+- **Going back past the CR-01 migrations is different.** Those migrations do not only add things, so running `update.ps1` with the older zip is not enough. Use the
+  rollback runbook in architecture section 5.6, "CR-01 release rollback runbook" ([architecture.md](../../docs/04-architecture/architecture.md)). It applies to a
+  database that has applied some of the CR-01 migrations and must go back to a release without them. Its server steps have not been rehearsed: rehearse them first.
 - **Never run `prisma migrate deploy` by hand on the server.** `install.ps1` and `update.ps1` are the only ways the server's database is migrated. If a
   developer ever has to run Prisma by hand somewhere else (a copy, a test machine), the rule in "Migrating by hand" below applies.
 
@@ -417,9 +420,23 @@ has accepted, in writing, the line that is not.
 | 3 | **The steps the rehearsal had to do differently** (DL-311 (2)) | The rehearsal record (qa-engineer, R-release tier of the test plan) lists each step the delivery PC forced to differ, for example Windows 11 instead of Windows Server, a port clash, IIS not available, administrator rights. Run each of those steps here as this guide says | Each step works as written on the server |
 | 4 | **The reverse-proxy checklist C1 to C10** (DL-292 (3)), if IIS is the proxy | The IIS checklist in the reverse-proxy section of this guide | All ten lines pass |
 | 5 | **The Admin's account** (ADR-015 Amendment 3.4) | Create the Admin's own Windows account and add it to the local Administrators group, as "Restore a backup", "For the IT person" says | The Admin can sign in, open Windows PowerShell as administrator and run `cd C:\Accucut\current` without an error |
-| 6 | **The real e-mail send**, only if STORY-09.08 was deferred (DL-309) | Fill in the mail settings from Accucut IT, send one real message to the real mailbox, then turn `FEATURE_EMAIL` on | The message arrives. Until then e-mail stays off (alerts, password reset by e-mail, backup-watch e-mail), as the release notes say |
+| 6 | **`FEATURE_EMAIL` is off on web and worker** (DL-378) | In Windows PowerShell as an administrator: (a) `Select-String -Path C:\Accucut\config\.env -Pattern '^FEATURE_EMAIL='`; (b) `[Environment]::GetEnvironmentVariable('FEATURE_EMAIL','Machine')`; (c) `Select-String -Path C:\Accucut\services\*.xml -Pattern 'FEATURE_EMAIL'`; (d) `Restart-Service AccucutWorker, AccucutApp`, wait a minute, then `Select-String -Path C:\Accucut\logs\AccucutWorker.*.out.log -Pattern 'mail jobs are off: FEATURE_EMAIL is not on' \| Select-Object -Last 1`; (e) open the portal's sign-in page | (a) prints nothing, `FEATURE_EMAIL=` or `FEATURE_EMAIL=off`, never `on`; (b) and (c) print nothing; (d) shows a line from today with `"msg":"mail jobs are off: FEATURE_EMAIL is not on, so outbox-send is not scheduled"`; (e) shows "Forgot your password? Ask the Admin to reset it." and no "Forgot your password?" link. `SMTP_AUTH_MODE` is `none` and no mailbox password is in `.env`. E-mail stays off (alerts, password reset by e-mail, backup-watch e-mail), as the release notes say (KG-2) |
 | 7 | **One 50-node export timing on the server** (NFR-010, DL-311 (4)) | Sign in as a Lead, open an estimate with 50 parts and 50 pictures (invented test data, removed afterwards), and time Download Excel from the click to the file | Within **10 s**. Over 10 s is a defect against NFR-010; record the figure, the release and the server in the install record |
 | 8 | **The first backup and the Admin's restore rehearsal** (NFR-013, DL-035, DL-253) | "Backups" and "Restore a backup" below | A new `.age` file in `C:\Accucut\backups`; the rehearsal finished from this guide alone |
+| 9 | **A forgotten password, with e-mail off** (DL-378, FR-004) | Sign in as the Admin, open Users, choose Reset password for a test user (invented, removed afterwards) and set a temporary password. Sign in as that user in a private window | The user is taken to "Set a new password", sets one, and reaches the portal. The old password no longer works |
+
+## After go-live: switching e-mail on (DL-378 (3))
+
+E-mail goes live only after one real send from **this server** on the chosen mailbox. It is not a go-live check. Do it when the delivery lead has chosen the mailbox and Accucut IT has given the mail settings.
+
+| # | Step | How | Pass |
+|---|------|-----|------|
+| 1 | **Mail settings** | Edit `C:\Accucut\config\.env` as an administrator: `SMTP_AUTH_MODE` (`password` for a cPanel mailbox, `oauth2-client-credentials` for Microsoft 365), `SMTP_HOST`, `SMTP_PORT` (465 or 587), `SMTP_USER`, and `SMTP_PASSWORD` or the three `SMTP_OAUTH_*` values. Leave `FEATURE_EMAIL` off. Then `Restart-Service AccucutWorker, AccucutApp` | Both services run (`Get-Service AccucutApp, AccucutWorker`) and `http://127.0.0.1:3000/api/health` answers `{"status":"ok"}`. The password is in this file only: never in an e-mail, chat, Jira or GitHub |
+| 2 | **The real send** (DL-371 (5) (i) to (v)) | As the Admin, Settings, E-mail alerts: save the sender name and address, then Send test e-mail | The test e-mail arrives in the Admin's inbox (not junk), from the chosen sender. Record the date, who, mode, port, and inbox or junk, with no address or password. This send meets G3 condition 16 |
+| 3 | **Switch on** | Set `FEATURE_EMAIL=on` in `C:\Accucut\config\.env`, then `Restart-Service AccucutWorker, AccucutApp` | The newest worker start in `AccucutWorker.*.out.log` shows `outbox-send scheduled every minute`, `overdue-scan scheduled every minute` and `daily-digest scheduled at 11:00 Asia/Kolkata`. The sign-in page shows the "Forgot your password?" link |
+| 4 | **First real alert and reset** | Assign a task to a test Engineer whose address the team controls, and ask for one password reset by e-mail for a test user | Both e-mails arrive within a few minutes, and the reset link sets a new password that works |
+
+**To switch off again:** set `FEATURE_EMAIL=off` and restart both services. Nothing new is queued while it is off. Rows already queued wait: an unsent assignment e-mail expires 24 hours after it was written and a reset link 60 minutes after it was asked for, so neither goes out late. Overdue, digest and backup e-mails that were queued but not sent go out when e-mail is switched on again.
 
 ## Look and fix
 
