@@ -8,13 +8,35 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Resume point (2026-11-24, pause 10, orchestrator)", then "Daily update (2026-11-24, after pause 9, orchestrator)", then "Resume point (2026-11-24, pause 9, orchestrator)", then "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-25, orchestrator)", then "Resume point (2026-11-24, pause 10, orchestrator)", then "Daily update (2026-11-24, after pause 9, orchestrator)", then "Resume point (2026-11-24, pause 9, orchestrator)", then "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
-| Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **G8 recommendation target about 6 Dec 2026, range 5 to 8 Dec, freeze about 3 Dec, all agreed scope kept (DL-307, delivery lead, 2026-11-22; replaces DL-298's provisional 4 Dec). Date triggers: ~~28 Nov Q-18 (DL-309)~~ withdrawn (DL-378); freeze AC-8 (DL-310) and #476 (DL-308); G8 condition list DL-314** |
+| Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **25 Nov: G8 recommendation about Mon 7 Dec, range 6 to 9 Dec; merge cut-off end of Wed 2 Dec for every PR except #727 (Thu 3 Dec, DL-395); freeze from #727's push reading; final regression about 4 to 6 Dec (release plan 0.44).** Before: G8 recommendation target about 6 Dec 2026, range 5 to 8 Dec, freeze about 3 Dec, all agreed scope kept (DL-307, delivery lead, 2026-11-22; replaces DL-298's provisional 4 Dec). Date triggers: ~~28 Nov Q-18 (DL-309)~~ withdrawn (DL-378); freeze AC-8 (DL-310) and #476 (DL-308); G8 condition list DL-314** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-24 by master (DL-375 to DL-378: pre-G8 list); before that by orchestrator (pause 10 resume point) |
+| Last updated       | 2026-11-25 by orchestrator (daily update); master's DL-379 to DL-395 and G8-C rows in between |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-25, orchestrator)
+
+> Resumed after pause 10 (24 Nov evening). This section wins over the pause 10 resume point below for anything it names.
+
+**`master` = 54c85e43** (#719). **Merged since the resume (12, squash via `gh pr merge --squash --match-head-commit`, DL-361):** #705 Q-18b (06543ae6); #704 DEF-018 (fafd687a, AQP-225 Done); #701 DEF-080 timing code removal (3637ec7f); #709 STD-C-03 (1b16269c, #692); #713 DEF-082 loader lock (a7dc6af4); #714 records PR (f2f19f76, DL-383 tsconfig `docs` exclude; #627); #717 QLT-F-08 (b50d4547, #690); #707 DEF-081 (e20aa039, AQP-424 Done, #706); #721 AQP-426 resizable tree (0c201e65) — **reverted by #724 (5b673b45, DL-388)**; #722 QLT-F-04 (01cf56f0, #686); #715 AQP-428 emergency Admin password command + DEF-083 (810da064, combined review APPROVE WITH COMMENTS, #712); #719 DEF-084 split (54c85e43).
+
+**`master` push runs (CI; Windows package green on all):** 06543ae6 success (DEF-080 proof 2 of 2); fafd687a success with DEF-053 attempt-1 fail (found late, DL-384); 3637ec7f, 1b16269c success; a7dc6af4 **red** DEF-053 (DL-384); f2f19f76 **red** DEF-053 + cancel-approval:130 (DL-385, DEF-084); b50d4547, e20aa039 success (RISK-031 close-out, then reopened); 0c201e65 **red** shard 4 (DL-388, DEF-085, #721 reverted); 01cf56f0 success, 2 flaky (:329, tree-width:449); 5b673b45, 810da064 success, fast draws (RISK-031 **closed**, DL-392); 54c85e43 in progress (QA reads; DEF-084 proof reading 2).
+
+**Closed:** DEF-080 (AQP-423), DEF-082 (AQP-425, #708), DEF-081 (AQP-424, #706), DEF-083 (AQP-427, #712), RISK-031 (DL-392). **New:** DEF-084 (AQP-440, #718, Sev-3 Test, fix merged, proof 1 of 3); DEF-085 (AQP-441, #725, Sev-3 Product, accepted for G8 by the delivery lead's B, KG-6); DEF-086 (AQP-442, #726, Sev-3 Product, sweep focus ring, fixed in #727); RISK-037 (8, to 2 after the AQP-428 rehearsal run).
+
+**Delivery lead decisions today (relayed):** DEF-081 items 8 keep build, 10 match design, 15 build before freeze (DL-377), Tree width button required; mock-up changes for items 8, 10, 14 to the CR-01 UX session (option A; G8-C-UX05); go-live mailbox option C (e-mail off, AQP-355 `deferred` label, DL-374/378); Q-18 cross-reference line; Deferred convention = To Do + `deferred` label; G-1 option B (emergency Admin command, DL-380, delivered in #715); DL-394 option B (#727 merges Thu 3 Dec, final regression a day later, a DEF-085 both-attempts failure comes to them that day, DL-395).
+
+**Rulings:** DL-373 to DL-395 (records-u). Key: DL-378 G8-C-MAILOFF; DL-386 person-count statement; DL-388 revert and freeze; DL-389/391/393 re-land design and proof; DL-394 warm-up refused; DL-395 one-PR exception and Thu/Fri order. PRD 0.54 (FR-112, FR-113; /estimates/[code] first-load ceiling 191,608 B), release plan 0.44, architecture 0.71c, test plan 0.3.59.
+
+**Open PRs:** #727 AQP-426 re-land (lane 1, draft; C4/C8 trims; squash Thu 3 Dec on DL-395 (3) conditions); #723 STD-C-04 (lane 2, updating; merges by end of Wed 2 Dec); Dependabot #674–#678, #476, #632 (not ours).
+
+**Final regression list (QA):** parts tree hand reading (3 widths, legends 100/200 %), tint/tile contrast, AQP-426 touch-drag on the workshop tablet, AQP-428 AC-13 rehearsal (incl. one non-elevated window), CR-01 UX mock-up update (G8-C-UX05).
+
+**Follow-ups:** #710 (G-1, closes with the rehearsal), #711 (two stale comments, with the next change), #716 (request-form browser test), #720 (SCR-06 tree reuse).
+
+**Process note:** I missed reading the fafd687a push run to its end (DL-384); every `master` push is now read by QA and me.
 
 ## Resume point (2026-11-24, pause 10, orchestrator)
 
