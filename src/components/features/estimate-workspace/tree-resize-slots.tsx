@@ -27,7 +27,7 @@ export function LazyTreeWidthMenu({ ready, ...props }: TreeWidthMenuProps & { re
 }
 
 /** The button's box is kept while its code is on the way (and before it is asked for), so the head does not change height when it arrives. */
-const MenuBox = () => <span aria-hidden="true" className="block h-(--control-h) w-(--control-h) fine-wide:h-[32px] fine-wide:w-[32px]" />;
+const MenuBox = () => <span aria-hidden="true" data-tree-width-slot="" className="hidden h-(--control-h) w-(--control-h) lg:block fine-wide:h-[32px] fine-wide:w-[32px]" />;
 
 function LoadedMenu(props: TreeWidthMenuProps) {
   const { Component } = useLazyComponent<TreeWidthMenuProps>(loadMenu, true);

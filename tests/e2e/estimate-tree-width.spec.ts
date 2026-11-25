@@ -1,11 +1,12 @@
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test';
 
 import { useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, tokenColour, widthOf } from './support/design-system';
-import { expectFormAccessible, openForm, showTree, tree, waitForForm } from './support/part-form';
+import { control, expectFormAccessible, openForm, showTree, tree, waitForForm } from './support/part-form';
 import {
   centreLineMisses,
   column,
+  columnWidth,
   contrast,
   DEFAULT_WIDTH,
   expectWidth,
@@ -13,6 +14,7 @@ import {
   HINT,
   handleOf,
   hitAreaOf,
+  holdControlsCode,
   layout,
   MAXIMUM,
   MINIMUM,
@@ -37,6 +39,17 @@ import {
 test.describe.configure({ mode: 'serial' });
 
 const DESKTOP_ONLY = 'the width of this case is its own; it runs in the desktop project';
+const slot = (target: Page): Locator => target.locator('[data-tree-width-slot]');
+
+/** The boxes the tree-width controls must not move: the tree card's head with its title and count, the tree card, and the form's card. */
+const boxes = (target: Page): Promise<Record<string, string>> =>
+  target.evaluate(() => {
+    const box = (selector: string): string => {
+      const rect = document.querySelector(selector)?.getBoundingClientRect();
+      return rect === undefined ? 'none' : [rect.x, rect.y, rect.width, rect.height].map((value) => value.toFixed(1)).join(' ');
+    };
+    return { head: box('#parts-tree-panel [data-slot="card-header"]'), title: box('#parts-tree-panel [data-slot="card-title"]'), count: box('#parts-tree-panel [data-slot="card-header"] > span'), card: box('#parts-tree-panel [data-slot="card"]'), form: box('[data-form-area]') };
+  });
 
 let context: BrowserContext;
 let page: Page;
@@ -85,6 +98,7 @@ test('AC-11, AC-15: with 400 px stored, a phone and a tablet have no separator a
 
   await expect(page.getByRole('separator')).toHaveCount(0);
   await expect(widthButton(page)).toHaveCount(0);
+  await expect(slot(page), 'no slot for the button either').toHaveCount(0);
   expect(await stored(page, ownerId), 'the stored width is ignored here and kept, so it returns when the window grows').toBe('400');
   expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   if (width >= 768) {
@@ -469,4 +483,61 @@ test('AC-6, AC-11: a press at the centre of a row still chooses it at 240 and 40
     }
   }
   await page.unroute('**/api/v1/estimates/*/tree');
+});
+
+test('DEF-085, DL-391: the form comes first and the controls appear in place: before the handle and the menu have loaded (their code held) there is no separator and no Tree width button, the slot is an empty hidden box, the stored 400 px is applied, and when the code arrives nothing moves and a focus in the form stays', async () => {
+  const testInfo = test.info();
+  test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const chunk = await holdControlsCode(page, { release: held });
+  try {
+    await store(page, storageKey(ownerId), '400');
+    await page.reload();
+    await waitForForm(page);
+
+    // Before: the form is there, the controls are not; the slot holds the button's place and nothing else.
+    await expect(page.getByRole('separator')).toHaveCount(0);
+    await expect(widthButton(page)).toHaveCount(0);
+    await expect(slot(page)).toHaveCount(1);
+    expect(await slot(page).evaluate((element) => ({ hidden: element.getAttribute('aria-hidden'), tabindex: element.getAttribute('tabindex'), text: element.textContent, width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height }))).toEqual({ hidden: 'true', tabindex: null, text: '', width: 32, height: 32 });
+    expect(await columnWidth(page), 'the stored width is applied by the eager part, before the code of the controls').toBe(MAXIMUM);
+    const before = await boxes(page);
+    // Without scrolling, so the boxes are compared where they stood.
+    await control(page, 'J').evaluate((element) => element.focus({ preventScroll: true }));
+
+    // After: the code arrives; the controls appear in their places.
+    release();
+    await expect(handleOf(page)).toBeVisible();
+    await expect(widthButton(page)).toBeVisible();
+    await expectWidth(page, MAXIMUM);
+    expect(await boxes(page), 'the head, the count, the tree card and the form have not moved').toEqual(before);
+    await expect(control(page, 'J'), 'a focus in the form stays where it was').toBeFocused();
+  } finally {
+    release();
+    await page.unroute(chunk);
+  }
+});
+
+test('DEF-085, DL-391: when the code of the controls cannot be fetched the page works, the width is the stored one and no error is shown', async () => {
+  const testInfo = test.info();
+  test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+  const chunk = await holdControlsCode(page, 'refuse');
+  try {
+    await store(page, storageKey(ownerId), '400');
+    const refused = page.waitForResponse((response) => response.status() === 503 && response.url().includes('/_next/static/chunks/'));
+    await page.reload();
+    await waitForForm(page);
+    await refused;
+    await expect(page.getByRole('separator')).toHaveCount(0);
+    await expect(widthButton(page)).toHaveCount(0);
+    await expect(textAlerts(page), 'no error for an enhancement that did not load').toHaveCount(0);
+    expect(await columnWidth(page)).toBe(MAXIMUM);
+    await expect(control(page, 'J')).toBeEnabled();
+  } finally {
+    await page.unroute(chunk);
+  }
 });

@@ -6,3 +6,11 @@
 export function treeControlsReady({ formShown, treeLoadFailed, treeRows }: { readonly formShown: boolean; readonly treeLoadFailed: boolean; readonly treeRows: number | null }): boolean {
   return formShown || treeLoadFailed || treeRows === 0;
 }
+
+/**
+ * The signal the part form gives (`PartForm`'s `onShown`): it has something to show for the part, which is its fields, or the notice that they could not be read (the form's definition failed, or its code did not come):
+ * a form that shows its error state has settled too, so the controls are not held back for ever behind it (DL-391 (2)). With no part chosen there is no form to wait for here (the workspace asks the tree).
+ */
+export function partFormShown({ hasPart, definition, fieldsCodeFailed, fieldsCodeHere }: { readonly hasPart: boolean; readonly definition: 'loading' | 'ready' | 'failed'; readonly fieldsCodeFailed: boolean; readonly fieldsCodeHere: boolean }): boolean {
+  return hasPart && (definition === 'failed' || fieldsCodeFailed || (definition === 'ready' && fieldsCodeHere));
+}

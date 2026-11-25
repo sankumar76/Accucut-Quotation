@@ -9,6 +9,7 @@ import type { SaveGate } from '@/lib/estimates/save-gate';
 
 import { FAILED_BODY, FORM_LOAD_FAILED_TITLE, FORM_LOADING, FORM_NO_PART, TRY_AGAIN } from './estimate-texts';
 import type { PartFieldsProps } from './part-fields';
+import { partFormShown } from './tree-controls-ready';
 import { useFormDefinition } from './use-form-definition';
 import { useLazyComponent } from './use-lazy-component';
 import type { PartTarget, SavedPart } from './use-part-form';
@@ -46,7 +47,7 @@ export function PartForm({ estimateId, part, editable, onSaved, onChanged, onSer
   const definition = useFormDefinition(estimateId);
   const fields = useLazyComponent<PartFieldsProps>(loadFields, true);
   const Fields = fields.Component;
-  const shown = part !== null && (definition.form.status === 'failed' || fields.failed || (definition.form.status === 'ready' && Fields !== null));
+  const shown = partFormShown({ hasPart: part !== null, definition: definition.form.status, fieldsCodeFailed: fields.failed, fieldsCodeHere: Fields !== null });
   useEffect(() => {
     if (shown) onShown?.();
   }, [shown, onShown]);

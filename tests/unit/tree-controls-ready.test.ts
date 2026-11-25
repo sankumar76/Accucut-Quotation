@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { treeControlsReady } from '@/components/features/estimate-workspace/tree-controls-ready';
+import { partFormShown, treeControlsReady } from '@/components/features/estimate-workspace/tree-controls-ready';
 
 /**
  * AQP-426, DEF-085 (DL-388, DL-389): the handle's and the Tree width menu's code is asked for only after the part form has shown, so it never competes with the form's code on a slow network or a cold development
@@ -24,6 +24,30 @@ describe('treeControlsReady', () => {
   it('is true when there is no form to wait for: the tree could not be read, or it has no rows', () => {
     expect(treeControlsReady({ formShown: false, treeLoadFailed: true, treeRows: null })).toBe(true);
     expect(treeControlsReady({ formShown: false, treeLoadFailed: false, treeRows: 0 })).toBe(true);
+  });
+});
+
+describe('partFormShown: the signal the form gives (DL-391 (1), (2))', () => {
+  const base = { hasPart: true, definition: 'loading', fieldsCodeFailed: false, fieldsCodeHere: false } as const;
+
+  it('is false while the form is on its way: the definition is loading, or the fields code has not come', () => {
+    expect(partFormShown(base)).toBe(false);
+    expect(partFormShown({ ...base, definition: 'ready' })).toBe(false);
+    expect(partFormShown({ ...base, fieldsCodeHere: true })).toBe(false);
+  });
+
+  it('is true once the fields can be drawn: the definition is here and so is the fields code', () => {
+    expect(partFormShown({ ...base, definition: 'ready', fieldsCodeHere: true })).toBe(true);
+  });
+
+  it('is true when the form shows its error state, so the controls are not held back for ever: the definition failed, or the fields code did not come', () => {
+    expect(partFormShown({ ...base, definition: 'failed' })).toBe(true);
+    expect(partFormShown({ ...base, fieldsCodeFailed: true })).toBe(true);
+  });
+
+  it('is false with no part chosen: the workspace asks the tree (no rows, or it could not be read) in that case', () => {
+    expect(partFormShown({ ...base, hasPart: false, definition: 'ready', fieldsCodeHere: true })).toBe(false);
+    expect(partFormShown({ ...base, hasPart: false, definition: 'failed' })).toBe(false);
   });
 });
 

@@ -67,7 +67,8 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds, resize, 
     }
   };
   // The panel is a card of its own beside the form and above it on a tablet; in the phone drawer, which is a surface of its own, it keeps its head and has no card around it (DEF-081 item 10).
-  const headAction = resizable ? <LazyTreeWidthMenu resize={resize} announce={tree.announce} ready={controlsReady} /> : undefined;
+  // The button's place is held from the first paint at 1024 px and wider (the server draws the desktop shape): a box, then the button in it once the form has shown (DL-391 (1)).
+  const headAction = viewport === 'desktop' ? <LazyTreeWidthMenu resize={resize} announce={tree.announce} ready={resizable && controlsReady} /> : undefined;
   const panel = <TreePanel tree={tree} editable={editable} onOpen={open} {...(missingIds === undefined ? {} : { missingIds })} {...(headAction === undefined ? {} : { headAction })} />;
   const drawerPanel = <TreePanel tree={tree} editable={editable} onOpen={open} framed={false} {...(missingIds === undefined ? {} : { missingIds })} />;
   const label = treeButtonLabel(tree.selected?.slNo ?? null);

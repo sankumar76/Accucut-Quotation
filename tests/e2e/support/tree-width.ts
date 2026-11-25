@@ -81,3 +81,23 @@ export function contrast(first: string, second: string): number {
   const [light, dark] = [luminance(first), luminance(second)].sort((a, b) => b - a);
   return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
 }
+
+/** What only the code of the handle and of the Tree width menu contains: their own attributes. The development server hashes most chunk names, so the chunk is told by its content. */
+const CONTROLS_MARKERS = ['data-tree-hit', 'data-tree-width-button'];
+const CHUNK = /\/_next\/static\/chunks\/.*\.js(\?.*)?$/;
+
+/**
+ * Holds the code of the handle and of the Tree width menu (the chunks that carry their markers) until `release` is called, or refuses it (`'refuse'`, answered 503), and lets every other chunk through at once. Remove it with
+ * `page.unroute(CHUNK_ROUTE)` (the returned pattern). The tests of "the form first" (DEF-085, DL-391) use it to look at the page while the controls are not there.
+ */
+export async function holdControlsCode(page: Page, mode: { readonly release: Promise<void> } | 'refuse'): Promise<RegExp> {
+  await page.route(CHUNK, async (route) => {
+    const response = await route.fetch();
+    const body = await response.text();
+    if (!CONTROLS_MARKERS.some((marker) => body.includes(marker))) return route.fulfill({ response, body });
+    if (mode === 'refuse') return route.fulfill({ status: 503, contentType: 'text/plain', body: 'refused' });
+    await mode.release;
+    return route.fulfill({ response, body });
+  });
+  return CHUNK;
+}
