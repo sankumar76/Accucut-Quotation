@@ -49,7 +49,7 @@ export const EARLY_INTENT_SCRIPT_SOURCE = `'sha256-${createHash('sha256').update
  * (`sandbox`: no forms, no pop-ups, no navigation). `sandbox` is what ADR-013 and STORY-05.07 AC-5 ask of a picture download.
  *
  * It is set here, by the proxy, and not by the route: when a route sets a header that the proxy already set, Next.js keeps the proxy's value and drops the route's (`send-response.js` adds a
- * route header only if it is absent). So `file-response.ts` has the same policy for its own tests, but the one on the wire is this one, and `tests/unit/security-headers.test.ts` pins it through the proxy.
+ * route header only if it is absent). `file-response.ts` sets this same constant on a stored file, so that answer is safe without the proxy too, but the one on the wire is the proxy's, and `tests/unit/security-headers.test.ts` pins it through the proxy.
  */
 export const API_CONTENT_SECURITY_POLICY = "default-src 'none'; frame-ancestors 'none'; sandbox";
 

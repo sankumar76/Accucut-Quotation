@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { z } from 'zod';
 
 import { MAX_UPLOAD_BODY_BYTES } from '@/lib/images/picture-rules';
+import { API_CONTENT_SECURITY_POLICY } from '@/lib/security/csp';
 import { nodeDetailSchema, partPictureSchema } from '@/server/views/schemas';
 
 import { defined } from '../support/defined';
@@ -272,7 +273,7 @@ describe('AC-5: GET /images/{id}', () => {
       expect(response.headers.get('x-content-type-options')).toBe('nosniff');
       expect(response.headers.get('cache-control')).toBe('private, no-store');
       expect(response.headers.get('content-disposition')).toBe('inline');
-      expect(response.headers.get('content-security-policy')).toBe("default-src 'none'; sandbox");
+      expect(response.headers.get('content-security-policy')).toBe(API_CONTENT_SECURITY_POLICY);
       expect(response.headers.get('cross-origin-resource-policy')).toBe('same-origin');
       expect(response.headers.get('content-length')).toBe(String(fresh().length));
       expect(response.headers.get('x-request-id')).toMatch(/^req-[0-9a-f]{8}$/);
