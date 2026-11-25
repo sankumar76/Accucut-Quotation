@@ -1,5 +1,6 @@
 import { withDatabaseErrors } from './database-errors';
 import type { PrismaClient } from './prisma-client';
+import { clientFor, type Transaction } from './transaction';
 
 /**
  * Storage of the sign-in attempt counters (`login_throttles`, architecture sections 5.1 and 6). The service decides
@@ -35,8 +36,11 @@ export interface ThrottleRepository {
   reserveAttempt(keyHash: string, policy: AttemptPolicy, now: Date): Promise<ReservedAttempt>;
   /** Gives one reservation back (a correct password from a shared address, or an attempt that never got checked). Never below 0. */
   releaseAttempt(keyHash: string): Promise<void>;
-  /** Forgets the key's attempts and block (a correct password). A key with nothing to forget is not written. */
-  clear(keyHash: string): Promise<void>;
+  /**
+   * Forgets the key's attempts and block (a correct password). A key with nothing to forget is not written. With `tx` it runs in the caller's transaction, so it is undone with it
+   * (the server command that resets the Admin's password, STORY-01.10 AC-5); without one it is as it always was.
+   */
+  clear(keyHash: string, tx?: Transaction): Promise<void>;
 }
 
 interface ReservedRow {
@@ -95,9 +99,9 @@ export function createThrottleRepository(db: PrismaClient): ThrottleRepository {
       });
     },
 
-    clear(keyHash) {
+    clear(keyHash, tx) {
       return withDatabaseErrors(async () => {
-        await db.loginThrottle.updateMany({
+        await clientFor(db, tx).loginThrottle.updateMany({
           where: { keyHash, OR: [{ failures: { gt: 0 } }, { blockedUntil: { not: null } }] },
           data: { failures: 0, blockedUntil: null },
         });

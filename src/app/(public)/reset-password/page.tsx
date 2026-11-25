@@ -2,6 +2,7 @@ import { InvalidLinkNotice } from '@/components/features/auth/invalid-link-notic
 import { PublicPageFrame } from '@/components/features/auth/public-page-frame';
 import { ResetPasswordForm } from '@/components/features/auth/reset-password-form';
 import { RESET_DESCRIPTION, RESET_TITLE, RESET_TOKEN_PARAMETER } from '@/lib/auth/password-reset';
+import { loadEmailFeature } from '@/lib/env';
 import { PRODUCT_NAME_IN_A_SENTENCE } from '@/lib/product-name';
 import { pageMetadata } from '@/lib/page-metadata';
 import { getPasswordResetService } from '@/server/composition';
@@ -15,7 +16,7 @@ interface ResetPasswordPageProps {
 
 /**
  * SCR-02, the reset (STORY-09.07 AC-5): public, opened from the e-mailed link. A link that works shows New password and Repeat; a link that is used, expired or unknown, a missing token and a
- * token of the wrong shape all show the same sentence and a link to ask for a new one, so the page says nothing about why. The read claims nothing: the token is claimed only by the post. The
+ * token of the wrong shape all show the same sentence and a link to ask for a new one, so the page says nothing about why. While e-mail is off the notice offers no such link (STORY-01.10 AC-12): the setting is read here, on the server, on each request. The read claims nothing: the token is claimed only by the post. The
  * token goes to the form as a prop and is never logged, echoed in text or sent anywhere but the reset request. No script or image comes from another site.
  */
 export default async function ResetPasswordPage({ searchParams }: ResetPasswordPageProps) {
@@ -24,7 +25,7 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
   const usable = token !== '' && (await getPasswordResetService().isLinkUsable(token));
   return (
     <PublicPageFrame title={RESET_TITLE} description={RESET_DESCRIPTION}>
-      {usable ? <ResetPasswordForm token={token} /> : <InvalidLinkNotice />}
+      {usable ? <ResetPasswordForm token={token} /> : <InvalidLinkNotice emailOff={!loadEmailFeature()} />}
     </PublicPageFrame>
   );
 }
