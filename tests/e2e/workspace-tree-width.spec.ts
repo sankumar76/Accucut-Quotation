@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 import { useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, tokenColour, widthOf } from './support/design-system';
@@ -31,7 +31,10 @@ test.afterEach(async ({ page }) => {
     .catch(() => undefined);
 });
 
-const DESKTOP_ONLY = 'the width of this case is its own; it runs in the desktop project';
+const DESKTOP_ONLY = 'the width of this case is its own; it runs in the project that is 1024 px or wider (desktop)';
+const DESKTOP_MIN = 1024;
+/** The width the project is configured with. These cases set their own widths, so the project's, not its name, says whether they run: a case that starts below 1024 px has nothing to judge here. */
+const projectWidth = (testInfo: TestInfo): number => testInfo.project.use.viewport?.width ?? 0;
 const DEFAULT_WIDTH = 320;
 const MINIMUM = 240;
 const MAXIMUM = 400;
@@ -115,7 +118,7 @@ test.describe('AC-11, AC-15: below 1024 px there is no handle and no button', ()
 
 test.describe('the handle and its keys, at 1366 px', () => {
   test('AC-1, AC-2, AC-4, AC-5, AC-9, AC-10, AC-12: 320 px by default; the separator has its name, values and description and sits after the tree and before the form; every key does its step and clamps; Up and Down are not taken; Enter and a double click reset and remove the stored width; the grip and the focus ring are as drawn; the hit area is 24 px; nothing is animated', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+    test.skip(projectWidth(testInfo) < DESKTOP_MIN, DESKTOP_ONLY);
     const owner = await openForm(page, testInfo);
     const handle = handleOf(page);
     await expect(handle).toBeVisible();
@@ -228,7 +231,7 @@ test.describe('the handle and its keys, at 1366 px', () => {
 
 test.describe('the Tree width button, at 1366 px', () => {
   test('AC-7, AC-13, AC-6: the button is 32 px; it opens a group of Narrow, Standard (default) and Wide; a choice applies, is stored and is announced at once; the group stays open until Escape, and focus returns to the button; a choice that does not fit is off with its reason', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+    test.skip(projectWidth(testInfo) < DESKTOP_MIN, DESKTOP_ONLY);
     const owner = await openForm(page, testInfo);
     await expect(handleOf(page)).toBeVisible();
     const button = widthButton(page);
@@ -300,7 +303,7 @@ test.describe('the Tree width button, at 1366 px', () => {
 
 test.describe('the one drag, at 1280 px', () => {
   test('AC-3: dragging the handle by the mouse changes the width by the distance, shows the value as it goes, and stores it once, when the button goes up', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+    test.skip(projectWidth(testInfo) < DESKTOP_MIN, DESKTOP_ONLY);
     const owner = await openForm(page, testInfo);
     await page.setViewportSize({ width: 1280, height: 900 });
     const handle = handleOf(page);
@@ -326,7 +329,7 @@ test.describe('the one drag, at 1280 px', () => {
 
 test.describe('the layout, from 1024 px', () => {
   test('AC-6, AC-11, AC-8: at 1280 and 1024 px the form keeps 232 px and nothing scrolls sideways at the widest tree, the drawing region gives way before the tree does, and the handle and the button exist at 1024 and not at 1023, with the stored width kept', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+    test.skip(projectWidth(testInfo) < DESKTOP_MIN, DESKTOP_ONLY);
     const owner = await openForm(page, testInfo);
     await expect(handleOf(page)).toBeVisible();
     await handleOf(page).focus();
@@ -370,7 +373,7 @@ test.describe('a finger at 1024 px', () => {
   test.use({ hasTouch: true, viewport: { width: 1024, height: 768 } });
 
   test('AC-10: with a coarse pointer the handle is 44 px wide and the button 44 px square, and no control of the form lies under the handle', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+    test.skip(projectWidth(testInfo) < DESKTOP_MIN, DESKTOP_ONLY);
     await openForm(page, testInfo);
     const handle = handleOf(page);
     await expect(handle).toBeVisible();
@@ -396,7 +399,7 @@ test.describe('a finger at 1024 px', () => {
 
 test.describe('the tree at its narrowest and widest', () => {
   test('AC-15, AC-6: axe finds nothing at 256, 320 and 400 px and with the Tree width group open; at 240 and 400 px a press at the centre of a row still chooses it and a long name wraps with no sideways scroll', async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+    test.skip(projectWidth(testInfo) < DESKTOP_MIN, DESKTOP_ONLY);
     // One part with a long name: the tree answers the page's own read with it (a name wraps, the status icon stays at the right).
     await page.route('**/api/v1/estimates/*/tree', async (route) => {
       const response = await route.fetch();
@@ -447,7 +450,7 @@ test.describe('the tree at its narrowest and widest', () => {
 
 test.describe('the stored width, at 1366 px', () => {
   test('AC-8: a width is back after a reload; a value that is missing, not a number, not whole or out of range gives 320 with no message; another user\'s width is not read; storage that throws gives 320 and a change still applies for the page', async ({ page, context }, testInfo) => {
-    test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+    test.skip(projectWidth(testInfo) < DESKTOP_MIN, DESKTOP_ONLY);
     const owner = await openForm(page, testInfo);
     await expect(handleOf(page)).toBeVisible();
     await handleOf(page).focus();
