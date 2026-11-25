@@ -5,7 +5,7 @@ import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 
 import { connectToTestDatabase, createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, setCanaryCustomer, signInWithoutThePage, useFreshAddress } from './support/auth';
-import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
+import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
 
 /**
  * STORY-05.02 T7 (AC-1 to AC-3, AC-6, AC-9): the parts tree of SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server. Each test signs in
@@ -480,8 +480,10 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     const leaf = await part(page, '2').boundingBox();
     const branch = await part(page, '1').boundingBox();
     expect(leaf?.x, 'a leaf row starts where a branch row does').toBeCloseTo(branch?.x ?? -1, 0);
-    expect((await arrow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
-    expect((await arrow.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    // A mouse at 1024 px and wider gets the 24 x 36 arrow (WCAG 2.5.8); a finger and anything narrower keep 44 px (NFR-017; DEF-081 ruling 12).
+    const wideMouse = (page.viewportSize()?.width ?? 0) >= 1024;
+    expect((await arrow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(wideMouse ? ROW_TARGET : TOUCH_TARGET);
+    expect((await arrow.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(wideMouse ? 24 : TOUCH_TARGET);
 
     // Tab goes arrow, row, the row's own move handle, "+" and "-", next row, and so on: the order of the page, with no roving stop (UX spec section 0.9 row 3: "Keyboard: Tab moves between a row and its "+""). The buttons of a row
     // that is not open are clipped, not removed (AQP-418), so this holds on a touch screen too.

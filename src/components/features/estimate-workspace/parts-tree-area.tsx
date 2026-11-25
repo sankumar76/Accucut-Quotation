@@ -57,7 +57,9 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds }: PartsT
       onOpenPart();
     }
   };
+  // The panel is a card of its own beside the form and above it on a tablet; in the phone drawer, which is a surface of its own, it keeps its head and has no card around it (DEF-081 item 10).
   const panel = <TreePanel tree={tree} editable={editable} onOpen={open} {...(missingIds === undefined ? {} : { missingIds })} />;
+  const drawerPanel = <TreePanel tree={tree} editable={editable} onOpen={open} framed={false} {...(missingIds === undefined ? {} : { missingIds })} />;
   const label = treeButtonLabel(tree.selected?.slNo ?? null);
 
   if (viewport === 'phone') {
@@ -96,7 +98,7 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds }: PartsT
               }
             }}
           >
-            {panel}
+            {drawerPanel}
           </Drawer>
         )}
       </>
