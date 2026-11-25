@@ -3,12 +3,13 @@
 | Field | Value |
 |-------|-------|
 | Reviewer | reviewer-quality (the one combined security-and-quality review, CLAUDE.md §9 item 2: anything that can lose or corrupt data, here autosave) |
-| Review round | 1, and 2 (re-review of `de145e58`, see "Previous Findings") |
+| Review round | 1, 2 (`de145e58`) and 3 (`fe6ef49f`); see "Previous Findings" |
 | Base…branch | `master...fix/AQP-367-autosave-on-hide` (PR [#734](https://github.com/sankumar76/Accucut-Quotation/pull/734)), 0 behind `master` 6bf10f7d |
-| Commit reviewed | `9ceb8134` (round 1); `de145e58` (round 2, 0 behind `master` 6bf10f7d, run 45663723703 green) |
+| Commit reviewed | `9ceb8134` (round 1); `de145e58` (round 2, run 45663723703); **`fe6ef49f` (round 3, 0 behind `master` 6bf10f7d, run 45668308795 green)** |
 | Date | 2026-11-25 |
 | Reviewed against | Jira AQP-367 (AC-7 amended, AC-7a to AC-7f, A-3; PO validation of the amendment 2026-11-25); DL-403 and DL-404 (records-u 859ebf26), DL-370 (5), DL-375, DL-386, DL-388 (D), DL-397 (2)(d); `docs/standards/coding-standards.md`; precedent `pr-715-combined.md` |
-| **Verdict (round 2, `de145e58`)** | **REQUEST CHANGES (one line in a test).** The product code is approved with comments. QLT-734-02, -04, -05 and -07 are fixed, and -03 and -06 are closed by the PO's rulings A-5 and A-4. **QLT-734-09 is only partly fixed:** the original case is back to `master`, but the new case `estimate-autosave-leave.spec.ts:17` sets `test.setTimeout(60_000)`. The project default is 30 s, and DL-404 (1)(b) asks for "the default 30 s budget". The fix is to delete that line; the case reads 18.5 to 22.8 s. (Round 1 at `9ceb8134`: REQUEST CHANGES, tests only.) |
+| **Verdict (final, round 3, `fe6ef49f`)** | **APPROVE WITH COMMENTS.** No Blocker, Critical, Major or Minor remains open. QLT-734-09 is closed: the one-line removal of `test.setTimeout(60_000)` was confirmed, and the new case reads 13.8, 20.0 and 20.4 s at the default 30 s. 3 Info remain (SEC-734-01, SEC-734-02, QLT-734-08), and QLT-734-01 is deferred to #735 after G8 |
+| Verdict (round 2, `de145e58`) | **REQUEST CHANGES (one line in a test).** The product code is approved with comments. QLT-734-02, -04, -05 and -07 are fixed, and -03 and -06 are closed by the PO's rulings A-5 and A-4. **QLT-734-09 is only partly fixed:** the original case is back to `master`, but the new case `estimate-autosave-leave.spec.ts:17` sets `test.setTimeout(60_000)`. The project default is 30 s, and DL-404 (1)(b) asks for "the default 30 s budget". The fix is to delete that line; the case reads 18.5 to 22.8 s. (Round 1 at `9ceb8134`: REQUEST CHANGES, tests only.) |
 
 ## Summary
 
@@ -139,13 +140,30 @@ I accept the stated deviation from AC-7b ("a save already in flight is not waite
 
 **Round 2 counts (open):** Blocker 0, Critical 0, **Major 1** (QLT-734-09, one line), Minor 0, Info 3 (SEC-734-01, SEC-734-02, QLT-734-08). Deferred: QLT-734-01 (#735).
 
+### Round 3: head `fe6ef49f` (2026-11-25)
+
+**Scope:** `git diff de145e58 fe6ef49f` only. It is one file, `tests/e2e/estimate-autosave-leave.spec.ts`: `test.setTimeout(60_000)` is removed from `beforeEach` (`useFreshAddress` stays), and the file comment is reworded to say the case keeps the project default. Nothing else changed.
+
+**Checks:** `gh run view 45668308795`: **success** at `fe6ef49f`, 0 behind 6bf10f7d. All six jobs are green.
+
+| ID | Severity | Status | Evidence |
+|----|----------|--------|----------|
+| QLT-734-09 | Major | **Fixed (closed)** | The one-line diff is confirmed. The new case `estimate-autosave-leave.spec.ts:49` passed on attempt 1 at the project default of 30 s: **[mobile] 13.8 s** (shard 1), **[tablet] 20.0 s** (shard 2), **[desktop] 20.4 s** (shard 3). All are under DL-404 (1)(b)'s 25 s line. `estimate-autosave.spec.ts` is still identical to `master` |
+
+**Flaky in the run:** one, `users.spec.ts:58` [desktop], shard 4. Attempt 1 failed at 32.3 s and the retry passed at 30.0 s (DEF-053's case, not touched by this PR). It is not in the new case's shard (shard 3 for [desktop]), and it is not the DEF-085 signature. Recording it against DEF-053 is for QA or master.
+
+**Final counts (open):** Blocker 0, Critical 0, Major 0, Minor 0, Info 3 (SEC-734-01, SEC-734-02, QLT-734-08).
+- Deferred: QLT-734-01 (#735, after G8).
+- Closed by PO ruling: QLT-734-03 (A-5) and QLT-734-06 (A-4).
+
 ## Hand-off
 
 - Status: COMPLETE
+- **Verdict (final, round 3, `fe6ef49f`): APPROVE WITH COMMENTS.** Open: Blocker 0, Critical 0, Major 0, Minor 0, Info 3. QLT-734-09 is closed (run 45668308795: 13.8, 20.0 and 20.4 s at 30 s)
 - Verdict (round 2, `de145e58`): **REQUEST CHANGES (one line).** Open: Blocker 0, Critical 0, Major 1 (QLT-734-09: `estimate-autosave-leave.spec.ts:17` `test.setTimeout(60_000)` against DL-404 (1)(b)'s default 30 s), Minor 0, Info 3. QLT-734-02, -04, -05 and -07 are fixed; -03 and -06 are closed by PO rulings A-5 and A-4; -01 is deferred to #735
 - Verdict (round 1, `9ceb8134`): REQUEST CHANGES (tests only). Blocker 0, Critical 0, Major 1, Minor 5, Info 5
 - Artefacts written/updated: `docs/06-reviews/final-cr01/pr-734-combined.md` (records-u)
-- Jira / GitHub updates: PR #734 review (COMMENT, single-token) with inline comments; label `review:quality-changes-requested`; follow-up issue #735 for QLT-734-01; hand-off comment on Jira AQP-367
-- Open questions: none for the PO (A-4 and A-5 ruled). Master: only if "default budget" in DL-404 (1)(b) is meant as the 60 s of the form specs (QLT-734-09)
+- Jira / GitHub updates: PR #734 reviews for rounds 1, 2 and 3 (COMMENT, single-token) with inline comments; label now `review:quality-approved` (was `review:quality-changes-requested`); follow-up issue #735 for QLT-734-01; hand-off comments on Jira AQP-367
+- Open questions: none
 - Risks raised: none new (QLT-734-01 residual guarded by FR-053)
-- Recommended next agent: developer. Delete `test.setTimeout(60_000)` at `estimate-autosave-leave.spec.ts:17` and push. Then reviewer-quality confirms that one-line diff and the new run's under-25 s readings at 30 s (no full re-review needed). Then master decides the merge under DL-361 / DL-404 (7)
+- Recommended next agent: master. DL-403 (d) is met (0 Blocker, 0 Critical, 0 Major open). Master decides the merge under DL-361 / DL-404 (7) on run 45668308795 at 0 behind, by the end of Wed 2 Dec
