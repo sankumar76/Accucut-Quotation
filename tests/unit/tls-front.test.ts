@@ -120,6 +120,29 @@ describe('AC-6: the TLS front passes a request to the portal and its answer back
   });
 });
 
+describe('STD-C-04 (#693): the front listens on loopback only', () => {
+  it('is bound to 127.0.0.1, not to every interface (0.0.0.0 or ::), so a run by hand on an office or Wi-Fi network opens no port to it', () => {
+    const bound = front.address() as AddressInfo;
+    expect(bound.address).toBe('127.0.0.1');
+    expect(bound.family).toBe('IPv4');
+    expect(['0.0.0.0', '::']).not.toContain(bound.address);
+  });
+
+  it('is still reached by the name the browsers of the sweep use, https://localhost:<port>, where localhost may resolve to ::1 first (the client tries the next address)', async () => {
+    const answer = await new Promise<Answer>((resolve, reject) => {
+      const request = https.request({ host: 'localhost', port: portOf(front), path: '/sign-in', rejectUnauthorized: false }, (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () => resolve({ status: response.statusCode ?? 0, headers: response.headers, body: Buffer.concat(chunks).toString('utf8') }));
+      });
+      request.on('error', reject);
+      request.end();
+    });
+    expect(answer.status).toBe(200);
+    expect(answer.body).toBe('answer');
+  });
+});
+
 describe('the throwaway certificate', () => {
   it('is made once and reused while it is fresh, and made again when it is older than half a day', () => {
     const own = mkdtempSync(join(tmpdir(), 'tls-front-cert-'));
