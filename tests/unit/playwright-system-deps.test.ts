@@ -15,8 +15,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * to all three apt commands. The script runs here against fake `sudo`, `dpkg`, `apt-get` and `npx` programs that log
  * their calls, so no package is installed and nothing is downloaded. The real apt run is shown by the CI logs.
  *
- * Every scenario runs once, in `beforeAll`, under the shared hook limit (vitest.config.ts, DL-057), and the tests read
- * the recorded outcomes. Each scenario starts a bash and several fake programs, which is slow on a Windows checkout
+ * Every scenario runs once, in a `beforeAll` of its own, under the shared hook limit (vitest.config.ts, DL-057; one hook
+ * for all of them passed that limit in a full Windows run, DEF-018), and the tests read the recorded outcomes. Each scenario starts a bash and several fake programs, which is slow on a Windows checkout
  * (QLT-80), and that cost belongs in a hook, not in a test with the 5 s test limit. The two `timeout` limits are set to
  * 4 s here (the script's own settings), so a "stalled" fake program costs four seconds; the real defaults, 45 s and 90 s,
  * are read from the script by tests/unit/ci-workflow.test.ts.
@@ -274,9 +274,12 @@ describe.skipIf(!BASH_AVAILABLE)('scripts/ci/playwright-system-deps.sh', () => {
     };
   }
 
-  beforeAll(() => {
-    for (const [name, scenario] of SCENARIOS) outcomes.set(name, runScenario(scenario));
-  });
+  // One hook for each scenario (DEF-018, DL-370): the hook limit applies to each of them, not to all of them together.
+  for (const [name, scenario] of SCENARIOS) {
+    beforeAll(() => {
+      outcomes.set(name, runScenario(scenario));
+    });
+  }
 
   afterAll(() => {
     for (const root of roots) rmSync(root, { recursive: true, force: true });
