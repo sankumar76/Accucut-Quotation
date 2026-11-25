@@ -1,0 +1,58 @@
+# DEF-084: `cancel-approval.spec.ts:130` [tablet] ("a good cancel", AC-3, AC-6, AC-7) fails both attempts at the 30 s test budget on a `master` push; the case runs three roles in one test and reads 24 to 26 s at ordinary draws (Test; Sev-3; Jira AQP-440, GitHub #718)
+
+| Field | Value |
+|-------|-------|
+| Story / AC | STORY-06.12 (AQP-329, Done), the case's own labels AC-3, AC-6, AC-7 (a good cancel; the Lead sees the same with no button; the Engineer sees no price, NFR-002). **No AC is shown to fail:** both attempts end on the 30 s test budget, and no value, text or violation was received. |
+| Severity | **Sev-3 Moderate (qa-engineer, 2026-11-25, on master's DL-385 (4)).** A flaky test, type Test, that turned a required check red on a `master` push. Not a G8 blocker as Sev-3 (test plan section 6), but a failure of this case in the final regression sits outside DL-369's G8-day branch (DL-385 (6)). **Severity triggers (DL-385 (4)):** a price or "Approved Quote Price" on the Engineer's page in any attempt of this case or of its new cases is **Sev-1** (NFR-002) and blocks G8 at once; any other wrong value or text received makes it a **provisional Sev-2, type Product**, the same day. Neither has happened. |
+| Priority | P3 (Jira Medium, label `sev-3`; also `final-review`). **Lane 3 now** (freed by #717); a Sev-3 Bug comes before the Minors, so QLT-F-04 (#686) waits (DL-385 (4)). |
+| Type | **Test** (duration tail of the test's own design; the DEF-080 and DEF-043 class). **Product not excluded** (master, DL-385 (4)); the squash that was pushed changes no code, so nothing in it can be the cause. |
+| Status | **Open (new), 2026-11-25 (qa-engineer).** First failure of the case on any run QA holds (test plan, defect files and decision log searched: no mention before f2f19f76). Re-run rule **R14** covers PR runs only until the Bug closes or G8 (DL-385 (5)); `master` pushes are never re-run. |
+| Jira / GitHub | [AQP-440](https://sankumar76.atlassian.net/browse/AQP-440) / [#718](https://github.com/sankumar76/Accucut-Quotation/issues/718) (labels bug, sev-3, ai-delivery, final-review; Jira also aiid-DEF-084, agent-qa-engineer). Jira "relates to" AQP-1 and AQP-329 (STORY-06.12). Searched first: JQL on `aiid-DEF-084` and the case's name found only the stories AQP-329 and AQP-297 (neither is a defect of this case); no GitHub issue with `cancel-approval` in the title was a defect of this case. |
+| Found by / date | CI (the push run); read and logged by qa-engineer, 2026-11-25; classified by master, DL-385 |
+| Build / commit | `master` `f2f19f76` (#714, the records squash; changes `docs/**`, `deploy/windows/README.md`, `ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md` and, per its description, `tsconfig.json`'s `docs` exclude; nothing under `src/`, `prisma/` or `tests/`). The spec last changed on 20 Nov (13d58e62, #548) per master. |
+| Environment | GitHub-hosted runner, `Stage 12: E2E (shard 2 of 4)`, Playwright Chromium, project `tablet` (768 px), production build, 4 workers, one shared PostgreSQL 17 per shard job. Run 45549413842 (`push`, run attempt 1, created 04:49:42Z), shard 2 job 138986723263. |
+
+## Steps to Reproduce
+Not on demand. The case fails when the shard runs slowly enough (a draw of about 1.1 to 1.2) for its three roles to take more than 30 s on the tablet project.
+1. Run `tests/e2e/cancel-approval.spec.ts:130` on the `tablet` project on a slow shard (CI, 4 workers).
+2. Read the time of the Admin step (the cancel with its deliberate delay, the dialog, the axe scan), the Lead step and the Engineer step.
+
+## Expected Result
+The case passes attempt 1 with margin under the 30 s budget (DL-370 (3): under 25 s) at every width.
+
+## Actual Result
+Attempt 1 (no. 282, tablet) **30.1 s**: `Test timeout of 30000ms exceeded.`, with `expect(locator('#calculate-button')).toHaveText('Calculate')` at `cancel-approval.spec.ts:186`: `Expected: "Calculate"`, `Error: element(s) not found`, call log "waiting for locator('#calculate-button')" (its 15 s expect cut by the 30 s budget). Retry (no. 290) **32.5 s**: a bare `Test timeout of 30000ms exceeded.` with an error-context file only. Shard 2: `1 failed, 8 skipped, 572 passed (23.5m)`; fan-in `Stages 1 to 11` (138995609657) `failure`. `[mobile]` 25.6 s (shard 1) and `[desktop]` 23.7 s (shard 3) passed in the same run. Line :186 is the Engineer step, the last of three sign-ins, after the Admin's cancel and the Lead's view.
+
+## Evidence (job logs, ANSI stripped; no secrets or personal data)
+**The case across recent `master` pushes and PR runs, `[tablet]`, shard 2:** 16.0 s (31015cce, a fast draw, 14.3 m), **25.7 s** (06543ae6, 20.7 m), **24.5 s** (fafd687a, 20.4 m), **25.4 s** (3637ec7f, 21.2 m), **25.7 s** (1b16269c, 20.9 m), 18.2 s (a7dc6af4, 15.4 m), 26.8 s (PR #713 run 45542934720, 21.1 m); then **30.1 s and 32.5 s** (f2f19f76, 23.5 m). `[desktop]` 16.2 to 25.6 s and `[mobile]` 15.7 to 26.8 s on the same pushes.
+
+**Draw of shard 2 on f2f19f76 (QA, matched per-test median over first attempts, same project, file and title):** **1.11** against 06543ae6's shard 2 (job 138934534187; 564 tests, quartiles 1.00 to 1.24), 1.10 against 1b16269c's (job 138965455202), 1.08 against 3637ec7f's (job 138954267949). Against 31015cce it reads 1.61, but that shard 2 was a fast draw (master, DL-385 (1)). A 1.11 draw takes the usual 25.7 s to about 28.5 s; the attempt-1 time of 30.1 s needs another 5 % from the Admin step's deliberate delay or the axe scan.
+
+**Not caused by the pushed change:** #714 changes no file the case reads (no `src/`, `prisma/` or `tests/` change; `docs/**` has 0 `.ts` files on the previous `master`).
+
+## Suspected Area (leads, not findings; master and the developer decide)
+- **The case's own length.** One test signs in three times and does three roles' checks: the Admin's cancel (the `page.route` delay of `SLOW_MILLISECONDS` on the cancel call, "Cancelling", the Escape press, the notice's five `toContainText` lines, the tiles, `readEstimateState`, `readCancel`, an axe scan), the Lead's view, then the Engineer's view with the NFR-002 assertions (`#calculate-button` text, no `48,271.37`, no "Approved Quote Price", no "Approval cancelled"). It reads 24 to 26 s at every width on ordinary draws.
+- **Route (master, DL-385 (4)): a test-only split** of :130 into separate cases, each with its own set-up: (1) the Admin's cancel with "Cancelling", the notice, the tiles, the state, the audit and axe; (2) the Lead's view; (3) the Engineer's view (NFR-002). Every assertion kept; the PR body lists each one before and after.
+- **Binding (DL-370 (5), as DL-385 states it):** no budget, timeout, retry, `test.slow()`, skip, `fixme`, sleep or `SLOW_MILLISECONDS` change; no change to `tests/e2e/support/**`, the Playwright config or `ci.yml` without master first; the PR body states from `e2e-shards.test.ts` whether `users.spec.ts` or `rates-changed.spec.ts` moves shard (if either moves, it comes to master), and no new `createDisposableUser` call before `users.spec.ts:58` in its shard. No combined review (test-only, the DEF-043 precedent).
+- **QA's own check on the PR (before the squash):** every NFR-002 assertion of the old case (`#calculate-button` reads "Calculate"; no "48,271.37"; no "Approved Quote Price"; no "Approval cancelled" on the Engineer's page; and the Engineer's own page returns 200) is still in a case that runs at **all three widths**, and the count of `expect(` lines is equal or higher.
+
+## Binding and proof (master's DL-385 (4); QA reads it)
+1. Each new case passes **attempt 1 under 25 s at mobile, tablet and desktop** on the fix PR's run of record.
+2. The same on **each of the first two `master` pushes after the squash**.
+3. Durations (attempt 1, per width, shard and test number) and the shard minutes of every shard of the three runs are reported. No retry line for the new cases in any of the three runs. A red on both attempts comes to master and is not re-run (a `master` push is never re-run).
+4. Bring-back: the PR open by the end of **Fri 27 Nov**, merged by the end of **Wed 2 Dec** (DL-370 (E)); otherwise it comes to master, and the re-ask of DL-385 (6) applies. **Re-ask triggers:** (a) the PR is not open by the end of Fri 27 Nov, (b) not merged by the end of Wed 2 Dec, or (c) `cancel-approval.spec.ts:130` fails both attempts on another `master` push before the fix merges.
+5. **R14 (PR runs only, until the Bug closes or G8):** one re-run of the failed shard jobs, once per head, only if the head is 0 behind `master` and the only failure is `cancel-approval.spec.ts:130` (any width) with both attempts showing a bare `Test timeout of 30000ms exceeded.` or that time-out with a call log that only waits for a locator, and no received value or text. A run with both R10's and R14's signatures gets one re-run in total. Each re-run is listed.
+
+## Fix & Verification  _(developer / qa-engineer)_
+| Step | By | Date | Ref (commit / test) |
+|------|----|------|---------------------|
+| Fixed (test-only split) | developer | | |
+| Assertions listed before and after in the PR body | developer | | |
+| QA check: every NFR-002 assertion in a case at all three widths | qa-engineer | | |
+| Proof: fix PR run of record | qa-engineer | | |
+| Proof: first `master` push after the squash | qa-engineer | | |
+| Proof: second `master` push after the squash | qa-engineer | | |
+| Closed | qa-engineer | | |
+
+## Records
+Jira Bug AQP-440 and GitHub issue #718, created 2026-11-25 and cross-linked (Jira comment on AQP-440 and the GitHub body carry both keys). Related: AQP-1, AQP-329 (STORY-06.12); DEF-080 and DEF-043 (the same class); RISK-031 (a red `master` push, DL-385 (3)); DL-385 (master's ruling); test plan 0.3.54 (the watch entry, now this Bug) and 0.3.55; CI run 45549413842, shard 2 job 138986723263.
