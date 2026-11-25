@@ -1,0 +1,55 @@
+QA| setup: quote 200 download 200
+QA| setup: ignore 200
+QA| 1366px Open tab: table region overflow 112 px
+QA| 1366px Open TAB 1 {"name":"Q-9999-3807440786","tag":"A","left":321,"right":405,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":false,"hiddenPx":0}
+QA| 1366px Open TAB 2 {"name":"\\\\invented-server\\invented-share\\R","tag":"A","left":634,"right":760,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1366px Open TAB 3 {"name":"Copy path","tag":"BUTTON","left":634,"right":760,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1366px Open TAB 4 {"name":"Reassign or change deadline, Q-999","tag":"A","left":1186,"right":1405,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"scrollable":true,"whollyInRegion":false,"hitIsSelf":true,"hiddenPx":96}
+QA| 1366px Open TAB 5 {"outside":true,"name":""}
+QA| 1366px Closed tab: table region overflow 27 px
+QA| 1366px Closed TAB 1 {"name":"Q-9999-2269547590","tag":"A","left":321,"right":405,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":false,"hiddenPx":0}
+QA| 1366px Closed TAB 2 {"name":"\\\\invented-server\\invented-share\\R","tag":"A","left":634,"right":760,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1366px Closed TAB 3 {"name":"Copy path","tag":"BUTTON","left":634,"right":760,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1366px Closed TAB 4 {"outside":true,"name":""}
+QA| 1366px Ignored tab: table region overflow 43 px
+QA| 1366px Ignored TAB 1 {"name":"Q-9999-1708413268","tag":"A","left":321,"right":405,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":false,"hiddenPx":0}
+QA| 1366px Ignored TAB 2 {"name":"\\\\invented-server\\invented-share\\R","tag":"A","left":634,"right":760,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1366px Ignored TAB 3 {"name":"Copy path","tag":"BUTTON","left":634,"right":760,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1366px Ignored TAB 4 {"name":"Open to restore, Q-9999-1708413268","tag":"A","left":1202,"right":1336,"regionLeft":305,"regionRight":1309,"scrollLeft":0,"scrollable":true,"whollyInRegion":false,"hitIsSelf":true,"hiddenPx":27}
+QA| 1366px Ignored TAB 5 {"outside":true,"name":""}
+QA| 1280px Open tab: table region overflow 198 px
+QA| 1280px Open TAB 1 {"name":"Q-9999-3807440786","tag":"A","left":321,"right":405,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":false,"hiddenPx":0}
+QA| 1280px Open TAB 2 {"name":"\\\\invented-server\\invented-share\\R","tag":"A","left":634,"right":760,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1280px Open TAB 3 {"name":"Copy path","tag":"BUTTON","left":634,"right":760,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1280px Open TAB 4 {"name":"Reassign or change deadline, Q-999","tag":"A","left":1186,"right":1405,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"scrollable":true,"whollyInRegion":false,"hitIsSelf":false,"hiddenPx":182}
+QA| 1280px Open TAB 5 {"outside":true,"name":""}
+QA| 1280px Closed tab: table region overflow 113 px
+QA| 1280px Closed TAB 1 {"name":"Q-9999-2269547590","tag":"A","left":321,"right":405,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":false,"hiddenPx":0}
+QA| 1280px Closed TAB 2 {"name":"\\\\invented-server\\invented-share\\R","tag":"A","left":634,"right":760,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1280px Closed TAB 3 {"name":"Copy path","tag":"BUTTON","left":634,"right":760,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1280px Closed TAB 4 {"outside":true,"name":""}
+QA| 1280px Ignored tab: table region overflow 129 px
+QA| 1280px Ignored TAB 1 {"name":"Q-9999-1708413268","tag":"A","left":321,"right":405,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":false,"hiddenPx":0}
+QA| 1280px Ignored TAB 2 {"name":"\\\\invented-server\\invented-share\\R","tag":"A","left":634,"right":760,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1280px Ignored TAB 3 {"name":"Copy path","tag":"BUTTON","left":634,"right":760,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1280px Ignored TAB 4 {"name":"Open to restore, Q-9999-1708413268","tag":"A","left":1202,"right":1336,"regionLeft":305,"regionRight":1223,"scrollLeft":0,"scrollable":true,"whollyInRegion":false,"hitIsSelf":false,"hiddenPx":113}
+QA| 1280px Ignored TAB 5 {"outside":true,"name":""}
+QA| 1024px Open tab: table region overflow 454 px
+QA| 1024px Open TAB 1 {"name":"Q-9999-3807440786","tag":"A","left":321,"right":405,"regionLeft":305,"regionRight":967,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":false,"hiddenPx":0}
+QA| 1024px Open TAB 2 {"name":"\\\\invented-server\\invented-share\\R","tag":"A","left":634,"right":760,"regionLeft":305,"regionRight":967,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1024px Open TAB 3 {"name":"Copy path","tag":"BUTTON","left":634,"right":760,"regionLeft":305,"regionRight":967,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1024px Open TAB 4 {"name":"Reassign or change deadline, Q-999","tag":"A","left":732,"right":951,"regionLeft":305,"regionRight":967,"scrollLeft":454,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1024px Open TAB 5 {"outside":true,"name":""}
+QA| 1024px Closed tab: table region overflow 369 px
+QA| 1024px Closed TAB 1 {"name":"Q-9999-2269547590","tag":"A","left":321,"right":405,"regionLeft":305,"regionRight":967,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":false,"hiddenPx":0}
+QA| 1024px Closed TAB 2 {"name":"\\\\invented-server\\invented-share\\R","tag":"A","left":634,"right":760,"regionLeft":305,"regionRight":967,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1024px Closed TAB 3 {"name":"Copy path","tag":"BUTTON","left":634,"right":760,"regionLeft":305,"regionRight":967,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1024px Closed TAB 4 {"outside":true,"name":""}
+QA| 1024px Ignored tab: table region overflow 385 px
+QA| 1024px Ignored TAB 1 {"name":"Q-9999-1708413268","tag":"A","left":321,"right":405,"regionLeft":305,"regionRight":967,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":false,"hiddenPx":0}
+QA| 1024px Ignored TAB 2 {"name":"\\\\invented-server\\invented-share\\R","tag":"A","left":634,"right":760,"regionLeft":305,"regionRight":967,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1024px Ignored TAB 3 {"name":"Copy path","tag":"BUTTON","left":634,"right":760,"regionLeft":305,"regionRight":967,"scrollLeft":0,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1024px Ignored TAB 4 {"name":"Open to restore, Q-9999-1708413268","tag":"A","left":817,"right":951,"regionLeft":305,"regionRight":967,"scrollLeft":385,"scrollable":true,"whollyInRegion":true,"hitIsSelf":true,"hiddenPx":0}
+QA| 1024px Ignored TAB 5 {"outside":true,"name":""}
+  ✓  1 [desktop] › tests\e2e-qa\focus.qa.ts:51:1 › T12 queue table: keyboard focus on row actions at 1024, 1280, 1366 (SC 2.4.11) (1.3m)
+  1 passed (1.4m)

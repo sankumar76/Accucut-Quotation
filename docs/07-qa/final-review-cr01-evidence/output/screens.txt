@@ -1,0 +1,67 @@
+QA| mobile SCR-06 Prepared (Lead): status Prepared | row toolbars 0 | tree buttons [] | actions ["Download .xlsx","Approve and lock","Ignore RFQ"]
+QA| mobile SCR-06 header Q-9999-955239007 Canary task Change customer Prepared Not downloaded Due 01 Jan 2099, 10:00 IST Customer Name Canary-Customer-Alpha Customer Short Name 2ed51d80b3 Subject (project name) Canary subject Task folder \\invented-server\invented-share\RFQ-canary Copy path Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer. Notes from E2E Lead: Invented notes.
+QA| mobile OVERFLOW SCR-06 prepared ok (360<=360)
+QA| mobile AXE SCR-06 prepared 0 violations
+QA| mobile TARGET<24px SCR-06 prepared A:View cost details for 1 :94x16
+QA| mobile CHANGE CUSTOMER dialog Change the customer? New customer Loading customers Keep Canary-Customer-Alpha Change customer | focus: Keep Canary-Customer-Alpha
+QA| mobile AXE change customer dialog 0 violations
+QA| mobile SCR-07 200 Cost details
+QA| mobile OVERFLOW SCR-07 ok (360<=360)
+QA| mobile AXE SCR-07 0 violations
+QA| mobile SCR-07 read-only tree toolbars 0
+QA| mobile SCR-05 Prepared (Engineer): status Prepared | inputs readonly/disabled 21 | row toolbars 0 | bar buttons ["Copy path","Parts tree, part 1","None selected","Prepared"]
+QA| mobile OVERFLOW SCR-05 prepared ok (360<=360)
+QA| mobile AXE SCR-05 prepared 0 violations
+QA| mobile TARGET<24px SCR-05 prepared none
+QA| mobile SCR-05 compact {"compactRoot":1,"firstCardPadding":"n/a","fieldH":44}
+QA| mobile Engineer PUT customer -> 403 (expected 403)
+QA| mobile CLOSED tab row (Lead) Open 0 Closed 1 Overdue 0 Ignored 0 Sorted by deadline, earliest first. Overdue tasks stay in Open as well. Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer. Q-9999-2378278078 Canary task Quoted Due: 01 Jan 2099, 10:00 IST Engineer: 
+QA| mobile OVERFLOW Closed tab ok (360<=360)
+QA| mobile AXE Closed tab 0 violations
+QA| mobile TARGET<24px Closed tab A:Q-9999-2378278078:139x18
+  ✓  1 [mobile] › tests\e2e-qa\screens.qa.ts:24:1 › T6 screens: Lead review read-only tree, cost detail, change customer, Engineer workspace compact, Closed tab (46.8s)
+QA| tablet SCR-06 Prepared (Lead): status Prepared | row toolbars 0 | tree buttons [] | actions ["Download .xlsx","Approve and lock","Ignore RFQ"]
+QA| tablet SCR-06 header Q-9999-2166325516 Canary task Change customer Prepared Not downloaded Due 01 Jan 2099, 10:00 IST Customer Name Canary-Customer-Alpha Customer Short Name 2ed51d80b3 Subject (project name) Canary subject Task folder \\invented-server\invented-share\RFQ-canary Copy path Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer. Notes from E2E Lead: Invented notes
+QA| tablet OVERFLOW SCR-06 prepared ok (768<=768)
+QA| tablet AXE SCR-06 prepared 0 violations
+QA| tablet TARGET<24px SCR-06 prepared A:\\invented-server\invent:361x22 | A:View cost details for 1 :94x16
+QA| tablet CHANGE CUSTOMER dialog Change the customer? New customer Loading customers Keep Canary-Customer-Alpha Change customer | focus: Keep Canary-Customer-Alpha
+QA| tablet AXE change customer dialog 0 violations
+QA| tablet SCR-07 200 Cost details
+QA| tablet OVERFLOW SCR-07 ok (768<=768)
+QA| tablet AXE SCR-07 0 violations
+QA| tablet SCR-07 read-only tree toolbars 0
+QA| tablet SCR-05 Prepared (Engineer): status Prepared | inputs readonly/disabled 21 | row toolbars 0 | bar buttons ["Copy path","Hide parts tree","None selected","Prepared"]
+QA| tablet OVERFLOW SCR-05 prepared ok (768<=768)
+QA| tablet AXE SCR-05 prepared 0 violations
+QA| tablet TARGET<24px SCR-05 prepared A:\\invented-server\invent:361x22
+QA| tablet SCR-05 compact {"compactRoot":1,"firstCardPadding":"n/a","fieldH":44}
+QA| tablet Engineer PUT customer -> 403 (expected 403)
+QA| tablet CLOSED tab row (Lead) Open 0 Closed 1 Overdue 0 Ignored 0 Sorted by deadline, earliest first. Overdue tasks stay in Open as well. Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer. Tasks sorted by deadline, earliest first TASK ENGINEER DEADLINE (IST) STATU
+QA| tablet OVERFLOW Closed tab ok (768<=768)
+QA| tablet AXE Closed tab 0 violations
+QA| tablet TARGET<24px Closed tab none
+  ✓  2 [tablet] › tests\e2e-qa\screens.qa.ts:24:1 › T6 screens: Lead review read-only tree, cost detail, change customer, Engineer workspace compact, Closed tab (35.5s)
+QA| desktop SCR-06 Prepared (Lead): status Prepared | row toolbars 0 | tree buttons [] | actions ["Download .xlsx","Approve and lock","Ignore RFQ"]
+QA| desktop SCR-06 header Q-9999-3423186895 Canary task Change customer Prepared Not downloaded Due 01 Jan 2099, 10:00 IST Customer Name Canary-Customer-Alpha Customer Short Name 2ed51d80b3 Subject (project name) Canary subject Task folder \\invented-server\invented-share\RFQ-canary Copy path Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer. Notes from E2E Lead: Invented notes
+QA| desktop OVERFLOW SCR-06 prepared ok (1366<=1366)
+QA| desktop AXE SCR-06 prepared 0 violations
+QA| desktop TARGET<24px SCR-06 prepared A:\\invented-server\invent:361x22 | A:View cost details for 1 :94x16
+QA| desktop CHANGE CUSTOMER dialog Change the customer? New customer Loading customers Keep Canary-Customer-Alpha Change customer | focus: Keep Canary-Customer-Alpha
+QA| desktop AXE change customer dialog 0 violations
+QA| desktop SCR-07 200 Cost details
+QA| desktop OVERFLOW SCR-07 ok (1366<=1366)
+QA| desktop AXE SCR-07 0 violations
+QA| desktop SCR-07 read-only tree toolbars 0
+QA| desktop SCR-05 Prepared (Engineer): status Prepared | inputs readonly/disabled 21 | row toolbars 0 | bar buttons ["Copy path","None selected","Prepared"]
+QA| desktop OVERFLOW SCR-05 prepared ok (1366<=1366)
+QA| desktop AXE SCR-05 prepared 0 violations
+QA| desktop TARGET<24px SCR-05 prepared A:\\invented-server\invent:361x22
+QA| desktop SCR-05 compact {"compactRoot":1,"firstCardPadding":"n/a","fieldH":36}
+QA| desktop Engineer PUT customer -> 403 (expected 403)
+QA| desktop CLOSED tab row (Lead) Open 0 Closed 1 Overdue 0 Ignored 0 Sorted by deadline, earliest first. Overdue tasks stay in Open as well. Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer. Tasks sorted by deadline, earliest first TASK ENGINEER CUSTOMER FOLDER DEAD
+QA| desktop OVERFLOW Closed tab ok (1366<=1366)
+QA| desktop AXE Closed tab 0 violations
+QA| desktop TARGET<24px Closed tab none
+  ✓  3 [desktop] › tests\e2e-qa\screens.qa.ts:24:1 › T6 screens: Lead review read-only tree, cost detail, change customer, Engineer workspace compact, Closed tab (40.6s)
+  3 passed (2.3m)

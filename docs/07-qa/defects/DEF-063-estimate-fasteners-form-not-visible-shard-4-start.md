@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate** (qa-engineer, by the line of DL-285 (3): a case that fails on its own `expect` timeout is a watch on its first occurrence and a Bug on its second; master is told and may rule otherwise): fails closed only if both attempts fail, workaround is the retry |
 | Priority | P3. Lane: master rules, and whether it joins the DEF-057 and DEF-059 cause step |
 | Type | **Open: Test, product not excluded** (the same early-shard stall as DEF-057 and DEF-059; a product cause such as the zero-width values-loading skeleton of DEF-059 taking the form's place is not ruled out) |
-| Status | **New** (logged 2026-11-22) |
+| Status | **Closed** (logged 2026-11-22; cause measured as a cold first compile (Test); #617 squashed as `2ff31d2b`; P1 and P2 met; closed by QA 2026-11-22) |
 | Jira / GitHub | [AQP-397](https://sankumar76.atlassian.net/browse/AQP-397) / [#615](https://github.com/sankumar76/Accucut-Quotation/issues/615). Jira "relates to" AQP-313 (STORY-05.05), AQP-393 (DEF-059) and AQP-1 (Intake). Labels `ai-delivery`, `aiid-DEF-063`, `agent-qa-engineer`, `final-review`, `sev-3`; priority Medium |
 | Risk / rule | RISK-031: **not counted on trigger (b)** (own 15 s `expect`, ended at about 20 s, under the 30 s budget; PR runs). No re-run rule; a red run (both attempts) comes to master |
 | Found by / date | CI, two PR runs on 22 Nov; read by qa-engineer, 2026-11-22 |
@@ -42,6 +42,23 @@ Shard 4 job logs of the two runs (the three error blocks each, at the end of the
 ## Binding for the fix (as DL-229 (4)(b), DL-257 (B), DL-272 (B); master rules the route)
 Test-only unless the cause is in `src/`, in which case stop and go to master. No budget, retry, `test.slow()`, skip or fixed-sleep change; every assertion kept. A spec-local warm-up in the DL-272 (B) form (in `estimate-fasteners.spec.ts` only, proven by the `src/` line, failing visibly) is the allowed candidate; an `auth.setup.ts` warm-up is not. If the DEF-057 cause step (DL-295) or the DEF-059 measurement names the stall, this Bug joins that route. Proof as DL-257 (A): attempt-1 pass of :93, :104 and :127 at all three widths on the PR run of record and on the first `master` push after the merge, each under 25 s.
 
+## Cause, fix, proof and close-out (qa-engineer, 2026-11-22; DL-296 (4))
+**Measured cause (PR #617 body, commit 1, observe only, run 45019003031, shard 4 job 137197520191, desktop, attempt 1; not a failing run, so the chain is at its ordinary size):** a **cold first compile** of the estimate page and its three reads on the development server, not a product fault. The three cases that start first (one per worker) read the document 2.3 to 2.6 s, the form read 2.6 to 2.7 s, the tree read 3.0 to 3.1 s and the stored-values read 1.7 s, against 0.4 to 0.9 s for the cases after them; the form first on the page at +9.2 to +9.6 s against +3.4 to +5.3 s. The page was served, no script was pending, and the 4-block values skeleton stood until the stored-values read answered, then the form. A zero-width skeleton (DEF-059) cannot make `waitForForm` fail, so DEF-059's measurement does not explain this Bug. The failing size is the same chain on a slower draw (the 15 s `expect` that ran out at about 20 s on runs 45011363827 and 45011895045); no failing-attempt line was captured.
+
+**Fix:** #617 (AQP-397, squashed as `2ff31d2b`; test-only, `tests/e2e/estimate-fasteners.spec.ts` only): a `test.beforeAll` in the DL-272 (B) form (each worker opens the estimate workspace once as a person of its own, so the routes are compiled before the first case; a failure there fails the hook visibly; it prints an `[AQP-397 warm-up]` line). No budget, retry, timeout, `test.slow()`, skip or sleep change; no `auth.setup.ts` change; the cases moved from :93, :104, :127 to **:96, :107, :130** (bound by title).
+
+**Proof** (attempt 1, seconds, all passed, mobile / tablet / desktop):
+
+| Run | :96 "AC-1: Qty and Cost are not on a new part ..." | :107 "AC-1: "none", " NONE " and a blank keep them hidden ..." | :130 "AC-2: another word shows Qty and Cost ..." |
+|---|---|---|---|
+| **P1: PR #617 run of record 45022384312** (head 41208ebb; `Stages 1 to 11` success; shards 543 / 537 / 539 / 523 passed, 0 flaky, 0 failed) | 9.4 / 10.4 / 4.3 | 9.2 / 11.5 / 3.8 | 13.6 / 15.7 / 10.4 |
+| **P2: first `master` push after the squash, 45025620716** (2ff31d2b; `Stages 1 to 11` success, job 137223401008; shards `523 passed (12.5m)`, `539 passed (12.2m)`, `537 passed (19.3m)`, `543 passed (13.6m)`: **0 flaky, 0 failed**) | 6.6 / 9.0 / 4.4 | 6.7 / 10.5 / 3.9 | 8.7 / 13.7 / 9.0 |
+
+The warm-up lines of the run of record (the form on the page after the hook began): tablet 6,608 to 9,158 ms, desktop 5,375 to 10,258 ms, mobile 5,487 to 7,312 ms; that is the cold cost the cases no longer carry.
+- **Met:** attempt-1 pass of :96, :107 and :130 at all three widths on the PR run of record and on the first `master` push after the merge, each under 25 s (worst 15.7 s, 15 s is the report line, not gated).
+- **Not a shortcut on the Bug's subject:** the three cases still open the form and assert as before; the warm-up only moves the one-time compile cost out of the first case of each worker. A cold first compile is also what #612's cause step found for DEF-057's slow `/recalculate`; the suite-wide form of the fix stays in #545, after G8.
+- **Closed by QA 2026-11-22.** Jira AQP-397 Done; GitHub #615 closed.
+
 ## Re-run rule
 None. A red run (both attempts) comes to master and is not re-run.
 
@@ -49,7 +66,7 @@ None. A red run (both attempts) comes to master and is not re-run.
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
 | Logged | qa-engineer | 2026-11-22 | AQP-397, #615 |
-| Cause named | developer | | with the DEF-057 cause step or the DEF-059 measurement (master rules) |
-| Fixed | developer | | `fix/AQP-397-<slug>` |
-| Regression test added | developer | | the fix is the test change; every assertion kept |
-| Verified | qa-engineer | | PR run of record and the first `master` push after the merge: the three cases first attempt at all three widths, under 25 s |
+| Cause named | developer | 2026-11-22 | #617 commit 1, run 45019003031: a cold first compile of the estimate page and its reads |
+| Fixed | developer | 2026-11-22 | #617, `fix/AQP-397-fasteners-first-load`, squashed as `2ff31d2b`; a spec-local `test.beforeAll` warm-up |
+| Regression test added | developer | 2026-11-22 | the fix is the test change; every assertion kept |
+| Verified | qa-engineer | 2026-11-22 | P1 (run 45022384312) and P2 (`master` push 45025620716): the three cases attempt-1 green at all three widths, worst 15.7 s |

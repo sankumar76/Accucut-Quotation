@@ -1,0 +1,19 @@
+QA| firefox CONTROL mouse-only human clicks 1 then 2 -> open row: 2
+QA| firefox CONTROL mouse-only human click 3 -> open row: 3
+QA| firefox KEYBOARD then human click on row 2 (hold 150 ms): row1 toolbar SHOWN, active=A | row 2 y before/after 428 386 | open row now: 3 (expected 2)
+QA| firefox KEYBOARD then human click on row 2 (hold 150 ms): row1 toolbar SHOWN, active=A | row 2 y before/after 428 386 | open row now: 3 (expected 2)
+QA| firefox KEYBOARD then fast click on row 2: open row now: 3 (expected 2)
+  ✓  1 [firefox] › tests\e2e-qa\ff.qa.ts:23:1 › lost click after keyboard-revealed toolbar (39.1s)
+QA| webkit CONTROL mouse-only human clicks 1 then 2 -> open row: 2
+QA| webkit CONTROL mouse-only human click 3 -> open row: 3
+QA| webkit KEYBOARD then human click on row 2 (hold 150 ms): row1 toolbar hidden, active=BUTTON | row 2 y before/after 548 548 | open row now: 2 (expected 2)
+QA| webkit KEYBOARD then human click on row 2 (hold 150 ms): row1 toolbar hidden, active=BUTTON | row 2 y before/after 548 548 | open row now: 2 (expected 2)
+QA| webkit KEYBOARD then fast click on row 2: open row now: 2 (expected 2)
+  ✓  2 [webkit] › tests\e2e-qa\ff.qa.ts:23:1 › lost click after keyboard-revealed toolbar (44.7s)
+QA| desktop CONTROL mouse-only human clicks 1 then 2 -> open row: 2
+QA| desktop CONTROL mouse-only human click 3 -> open row: 3
+QA| desktop KEYBOARD then human click on row 2 (hold 150 ms): row1 toolbar SHOWN, active=A | row 2 y before/after 428 386 | open row now: 3 (expected 2)
+QA| desktop KEYBOARD then human click on row 2 (hold 150 ms): row1 toolbar SHOWN, active=A | row 2 y before/after 428 386 | open row now: 3 (expected 2)
+QA| desktop KEYBOARD then fast click on row 2: open row now: 3 (expected 2)
+  ✓  3 [desktop] › tests\e2e-qa\ff.qa.ts:23:1 › lost click after keyboard-revealed toolbar (23.0s)
+  3 passed (2.5m)
