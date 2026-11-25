@@ -5,6 +5,7 @@ import {
   loadAdminBootstrapEnv,
   loadAppEnv,
   loadMigrateEnv,
+  loadServerCommandEnv,
   ENV_VARIABLE_NAMES,
   type EnvSource,
   type EnvVariableName,
@@ -114,6 +115,32 @@ describe('loadAppEnv (AC-3)', () => {
       SMTP_OAUTH_CLIENT_SECRET: 'invented-client-secret',
     };
     expect(() => loadAppEnv(complete)).not.toThrow();
+  });
+});
+
+describe('loadServerCommandEnv (STORY-01.10 AC-1 (e): the settings of the Admin password reset)', () => {
+  it('needs the runtime database URL and the key, and nothing else: the mail and origin settings are not asked for', () => {
+    expect(loadServerCommandEnv({ DATABASE_URL: validNone['DATABASE_URL'], AUTH_SECRET: SECRET_VALUE })).toEqual({
+      DATABASE_URL: validNone['DATABASE_URL'],
+      AUTH_SECRET: SECRET_VALUE,
+    });
+  });
+
+  it('names the variable and the kind of problem, never a value, for a missing, a short or a placeholder setting', () => {
+    expect(problemsOf(() => loadServerCommandEnv({})).problems).toEqual([
+      { name: 'DATABASE_URL', reason: 'missing' },
+      { name: 'AUTH_SECRET', reason: 'missing' },
+    ]);
+    const bad = problemsOf(() => loadServerCommandEnv({ DATABASE_URL: 'not-a-url', AUTH_SECRET: 'too-short' }));
+    expect(bad.problems).toEqual([
+      { name: 'DATABASE_URL', reason: 'invalid' },
+      { name: 'AUTH_SECRET', reason: 'invalid' },
+    ]);
+    expect(bad.message).not.toContain('too-short');
+    expect(bad.message).not.toContain('not-a-url');
+    expect(problemsOf(() => loadServerCommandEnv({ DATABASE_URL: validNone['DATABASE_URL'], AUTH_SECRET: 'CHANGE_ME_AUTH_SECRET_0123456789012345' })).problems).toEqual([
+      { name: 'AUTH_SECRET', reason: 'invalid' },
+    ]);
   });
 });
 
