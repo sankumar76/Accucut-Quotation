@@ -48,7 +48,7 @@ export function useAutosave(gate: SaveGate, { enabled, intervalMs = AUTOSAVE_INT
     blocked.current = isBlocked;
     if (hiddenWhileBlocked.current && blocked.current?.() !== true) {
       hiddenWhileBlocked.current = false;
-      if (documentIsHidden() && gate.isDirty()) gate.flush('leave');
+      if (hidden.current() && gate.isDirty()) gate.flush('leave');
     }
   });
 
@@ -72,7 +72,7 @@ export function useAutosave(gate: SaveGate, { enabled, intervalMs = AUTOSAVE_INT
       gate.flush('leave');
     };
     const onVisibilityChange = (): void => {
-      if (documentIsHidden()) sendAtOnce();
+      if (hidden.current()) sendAtOnce();
       else hiddenWhileBlocked.current = false;
     };
     document.addEventListener('visibilitychange', onVisibilityChange);

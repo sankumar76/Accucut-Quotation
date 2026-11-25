@@ -100,8 +100,9 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   const heldRef = useRef<Readonly<Record<string, string>>>({});
   const revisionRef = useRef<number>(part.revision);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
-  // The tab is being hidden or the page left (`gate.flush('leave')`): the saves that go out now ask the browser to finish them even if the page goes away (STORY-05.10 AC-7a, AC-7b). Put back once the queue has run.
-  const leavingRef = useRef(false);
+  // How many leaves (`gate.flush('leave')`: the tab hidden, the page left) have saves in the queue that are not yet run: while there is one, the saves that go out ask the browser to finish them even if the page goes away
+  // (STORY-05.10 AC-7a, AC-7b). A count, not a flag, so the end of an earlier leave's queue does not take it from a later leave's saves.
+  const leavingRef = useRef(0);
   // The fields that hold a newer value from somewhere else, until the person chooses: nothing sends them, so their text cannot overwrite the newer one by a blur or by Save draft (AC-6).
   const conflictRef = useRef<ReadonlySet<string>>(new Set());
   // The text of each field that a save in the queue is about to send or is sending, so the same text is not queued twice.
@@ -308,7 +309,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     // A save that was queued before a 409 can run after the re-read has found a newer value in this field: it sends nothing over the newer value, while the person has not chosen (review SQR-01) and after they
     // have, because the choice made it out of date (its ticket was taken from it, review SQR-13). A choice to keep the typed text is a new save with a new ticket.
     if (conflictRef.current.has(fieldId) || (ticketsRef.current.get(fieldId) ?? 0) !== ticket) return;
-    const outcome = await savePartInputs(estimateId, partId, { revision: revisionRef.current, values: { [fieldId]: value } }, undefined, leavingRef.current);
+    const outcome = await savePartInputs(estimateId, partId, { revision: revisionRef.current, values: { [fieldId]: value } }, undefined, leavingRef.current > 0);
     if (outcome.status === 'refused' && outcome.httpStatus === 409 && outcome.code === PART_CHANGED_CODE && refreshed < MAX_REFRESHES) {
       await reconcile(fieldId, refreshed + 1);
       return;
@@ -447,7 +448,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   function sendAgain(mode: FlushMode = 'draft'): void {
     if (!live.current || (mode !== 'draft' && conflictRef.current.size > 0)) return;
     const leaving = mode === 'leave';
-    if (leaving) leavingRef.current = true;
+    if (leaving) leavingRef.current += 1;
     const shown = fieldVisibility(fields, textsRef.current);
     for (const field of fields) {
       if (!shown(field) || textsRef.current[field.id] === undefined) continue;
@@ -456,7 +457,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     }
     if (leaving) {
       const done = (): void => {
-        leavingRef.current = false;
+        leavingRef.current -= 1;
       };
       void queueRef.current.then(done, done);
     }

@@ -403,6 +403,18 @@ describe('AC-7a to AC-7f: a save at once when the tab is hidden or the page is l
     expect(modes).toEqual(['leave', 'auto']);
   });
 
+  it('"is the tab hidden" has one source: the injected answer steers the hide path as it steers the tick', () => {
+    const page = fakePage();
+    const { gate, modes } = open({ isHidden: () => true });
+    gate.mark(PART, 'a', true);
+    page.show();
+    expect(modes).toEqual(['leave']);
+    const other = open({ isHidden: () => false });
+    other.gate.mark(PART, 'a', true);
+    page.hide();
+    expect(other.modes).toEqual([]);
+  });
+
   it('AC-7: the tick itself still does nothing while the tab is hidden', async () => {
     const page = fakePage();
     const { gate, modes } = open({ isHidden: () => true });

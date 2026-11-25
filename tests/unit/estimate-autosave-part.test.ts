@@ -384,6 +384,24 @@ describe('AC-7a to AC-7f: a save at once when the tab is hidden or the page is l
     expect(partServer.inputs['a']).toBe('3.00');
   });
 
+  it('overlapping leaves: a second leave that queues behind the first is still asked to survive (the first one\'s end does not take the flag from it)', async () => {
+    const { gate, hook } = await open();
+    const form = hook.render();
+    form.setText('a', '2');
+    const release = partServer.holdNextSave();
+    gate.flush('leave');
+    await flushMicrotasks();
+    form.setText('a', '3');
+    gate.flush('leave');
+    release();
+    await gate.settle();
+    expect(partServer.sent).toEqual([
+      { revision: 1, values: { a: '2.00' } },
+      { revision: 2, values: { a: '3.00' } },
+    ]);
+    expect(partServer.keepalive).toEqual([true, true]);
+  });
+
   it('AC-7f: nothing unsaved, nothing sent', async () => {
     const { gate } = await open();
     await leave(gate);

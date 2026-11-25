@@ -61,6 +61,8 @@ test.describe('STORY-05.10: autosave on hide and on leaving', () => {
 
     // AC-7c: the page is then left, as a closing tab does (hidden, then pagehide): the same text is not sent again.
     await pageLeft(page);
+    // A request the page sends after the leave and that is answered: any save the leave had queued has been sent by then, so the record is complete without a wait on time.
+    expect(await page.evaluate(() => window.fetch('/api/v1/options/materials').then((answer) => answer.status))).toBe(200);
     expect(await recordedKeepalive(page)).toEqual([true]);
     await tabShown(page);
 
