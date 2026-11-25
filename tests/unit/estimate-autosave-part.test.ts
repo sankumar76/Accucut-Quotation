@@ -302,3 +302,166 @@ describe('AC-8: with Save draft', () => {
     expect(partServer.inputs['a']).toBe('2.00');
   });
 });
+
+/**
+ * STORY-05.10 AC-7a to AC-7f (amended 2026-11-25, QLT-F-05, #687) at the level of the part form's hook: `gate.flush('leave')` is what the page asks for when the tab becomes hidden or the page is left.
+ * It is the tick's save (`autosaveField`: the same rules, the same one save, the same quiet failure), and its requests also survive the page going away (`keepalive`).
+ */
+describe('AC-7a to AC-7f: a save at once when the tab is hidden or the page is left', () => {
+  const leave = async (gate: ReturnType<typeof createSaveGate>): Promise<void> => {
+    gate.flush('leave');
+    await gate.settle();
+  };
+
+  it('AC-7a, AC-7b: sends the typed value at once, with the part revision, through the part form own save, asking that the request survive the page going away', async () => {
+    const { gate, hook } = await open();
+    hook.render().setText('a', '2');
+    await leave(gate);
+    expect(partServer.sent).toEqual([{ revision: 1, values: { a: '2.00' } }]);
+    expect(partServer.keepalive).toEqual([true]);
+    expect(partServer.inputs['a']).toBe('2.00');
+    expect(gate.isDirty()).toBe(false);
+  });
+
+  it('AC-7a, AC-4: the "Last saved" line follows that save, and nothing is said under the field', async () => {
+    const wrote = vi.fn();
+    const { gate, hook } = await open(true, wrote);
+    hook.render().setText('a', '2');
+    await leave(gate);
+    expect(wrote).toHaveBeenCalledWith(IST_TEN_FORTY_TWO.toISOString());
+    const form = hook.render();
+    expect(form.errors['a']).toBeUndefined();
+    expect(form.problem).toBeNull();
+    expect(form.autosaveFailedAt).toBeNull();
+  });
+
+  it('the 30-second tick is not a leave: its request does not ask to survive the page going away, and a leave is not sticky', async () => {
+    const { gate, hook, tick } = await open();
+    const form = hook.render();
+    form.setText('a', '2');
+    await tick();
+    form.setText('b', '3');
+    await leave(gate);
+    hook.render().setText('c', '4');
+    await tick();
+    expect(partServer.keepalive).toEqual([false, true, false]);
+  });
+
+  it('AC-7c: a hide followed by a leave (a tab that is closed) sends the same text once', async () => {
+    const { gate, hook } = await open();
+    hook.render().setText('a', '2');
+    const release = partServer.holdNextSave();
+    gate.flush('leave');
+    await flushMicrotasks();
+    gate.flush('leave');
+    release();
+    await gate.settle();
+    expect(partServer.sent).toHaveLength(1);
+    gate.flush('leave');
+    await gate.settle();
+    expect(partServer.sent).toHaveLength(1);
+    expect(partServer.revision).toBe(2);
+  });
+
+  it('AC-7a: a save in flight is not raced: a text typed meanwhile is queued behind it, sent once with the revision the first made, and asked to survive', async () => {
+    const { gate, hook } = await open();
+    const form = hook.render();
+    form.setText('a', '2');
+    const release = partServer.holdNextSave();
+    form.commit(A);
+    await flushMicrotasks();
+    expect(gate.isSaving()).toBe(true);
+    form.setText('a', '3');
+    gate.flush('leave');
+    gate.flush('leave');
+    release();
+    await gate.settle();
+    expect(partServer.sent).toEqual([
+      { revision: 1, values: { a: '2.00' } },
+      { revision: 2, values: { a: '3.00' } },
+    ]);
+    expect(partServer.keepalive).toEqual([false, true]);
+    expect(partServer.inputs['a']).toBe('3.00');
+  });
+
+  it('AC-7f: nothing unsaved, nothing sent', async () => {
+    const { gate } = await open();
+    await leave(gate);
+    await leave(gate);
+    expect(partServer.sent).toEqual([]);
+  });
+
+  it('AC-7c, AC-2: a value equal to what the server holds after normalisation (1.0 against 1.00) is not sent, and no revision moves', async () => {
+    const { gate, hook } = await open();
+    hook.render().setText('a', '1.0');
+    await leave(gate);
+    expect(partServer.sent).toEqual([]);
+    expect(partServer.revision).toBe(1);
+  });
+
+  it('AC-7f, AC-3: a text the rule refuses is not sent, says nothing, and stays unsaved so the warning on leaving still guards it', async () => {
+    const { gate, hook } = await open();
+    hook.render().setText('a', 'abc');
+    await leave(gate);
+    expect(partServer.sent).toEqual([]);
+    const form = hook.render();
+    expect(form.errors['a']).toBeUndefined();
+    expect(gate.isDirty()).toBe(true);
+  });
+
+  it('AC-7f: nothing is sent when the person may not edit the inputs', async () => {
+    const { gate, hook } = await open(false);
+    hook.render().setText('a', '2');
+    await leave(gate);
+    expect(partServer.sent).toEqual([]);
+  });
+
+  it('AC-7d: a failed save on hide keeps the value and the unsaved mark, shows the one quiet status (not an alert), and the next automatic save sends it again and clears the status', async () => {
+    const { gate, hook, tick } = await open();
+    hook.render().setText('a', '2');
+    partServer.failNextSave();
+    await leave(gate);
+    const form = hook.render();
+    expect(form.autosaveFailedAt).toEqual(IST_TEN_FORTY_TWO);
+    expect(form.problem).toBeNull();
+    expect(form.texts['a']).toBe('2');
+    expect(gate.isDirty()).toBe(true);
+    expect(partServer.inputs['a']).toBe('1.00');
+    await tick();
+    expect(partServer.inputs['a']).toBe('2.00');
+    expect(hook.render().autosaveFailedAt).toBeNull();
+    expect(gate.isDirty()).toBe(false);
+  });
+
+  it('AC-7e: a hide save refused because the part changed elsewhere (409) never overwrites, keeps what was typed, shows the conflict, and pauses every automatic save until the person chooses', async () => {
+    const { gate, hook, tick } = await open();
+    const form = hook.render();
+    form.setText('a', '2');
+    form.setText('b', '3');
+    partServer.changeElsewhere({ b: '9.00' });
+    await leave(gate);
+    const after = hook.render();
+    expect(after.problem).toEqual({ kind: 'conflict', fields: [{ fieldId: 'b', newer: '9.00' }] });
+    expect(after.texts['b']).toBe('3');
+    expect(partServer.inputs).toEqual({ a: '2.00', b: '9.00' });
+    const sent = partServer.sent.length;
+    await leave(gate);
+    await tick();
+    expect(partServer.sent).toHaveLength(sent);
+    hook.render().resolveConflict('newer');
+    expect(hook.render().problem).toBeNull();
+  });
+
+  it('AC-7e: while a conflict waits for the person, a hide sends nothing, even for another field', async () => {
+    const { gate, hook } = await open();
+    const form = hook.render();
+    form.setText('b', '3');
+    partServer.changeElsewhere({ b: '9.00' });
+    await leave(gate);
+    const sent = partServer.sent.length;
+    hook.render().setText('c', '5');
+    await leave(gate);
+    expect(partServer.sent).toHaveLength(sent);
+    expect(partServer.inputs['c']).toBeUndefined();
+  });
+});
