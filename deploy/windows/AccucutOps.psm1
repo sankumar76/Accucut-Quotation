@@ -2491,6 +2491,16 @@ $script:RestoreDatabaseRole = 'accucut_restore'
 $script:RestoreDatabasePattern = '^accucut_(new|old|failed)_\d{14}$'
 $script:RestoreStampFormat = 'yyyyMMddHHmmss'
 
+# DEF-087 (AQP-443). The swap ends only the sessions that the restore role may end (see Switch-AccucutRestoreDatabase). A rename that still finds another session is tried again when
+# PostgreSQL says so (SQLSTATE 55006, printed because the swap runs psql with VERBOSITY verbose; it is read after the psql line prefix, whatever word the server prints for the severity, which it translates), at most this many times after the first try, and never for any other error.
+$script:RestoreSwapRetries = 3
+$script:RestoreInUsePattern = '(?m)^psql:[^\r\n]*?:\s\S+:\s+55006:'
+# How many sessions one record writes to restore.log (the next ones are counted).
+$script:RestoreSessionRecordLimit = 5
+# What the Admin reads when a PostgreSQL administrator is connected to the portal's database: a superuser's session cannot be ended by the restore role (it is no superuser), and it
+# would stop the swap. No SQL error is shown for it.
+$script:RestoreSuperuserSessionMessage = "Someone is connected to the portal's database as a PostgreSQL administrator (for example pgAdmin, or psql as postgres). Close that connection and run the restore again."
+
 # What the Admin's key looks like (age's secret key: the text AGE, SECRET, KEY and 1 joined by dashes, then 58 upper-case letters and digits; written in two pieces so that this file never holds a key-shaped text) and what a decrypted custom-format dump starts with.
 $script:AgeSecretKeyPattern = '^AGE-SECRET-' + 'KEY-1[0-9A-Z]{58}$'
 $script:DumpMagicText = 'PGDMP'
@@ -2810,10 +2820,82 @@ function New-AccucutRestoreDatabase {
     [void](Invoke-AccucutRestoreSql -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database 'postgres' -Sql $sql)
 }
 
+function Get-AccucutRestoreSession {
+    <#
+    The other sessions on the named databases, as the restore role can see them: Database, UserName ('' for a process that has no role, such as an autovacuum worker), Superuser and BackendType.
+    The role is the last of four columns and is cleaned in SQL (a bar or a control character, such as a line break, becomes a question mark), so that a strange role name cannot move a field or forge a line of restore.log.
+    The restore role sees the backend_type of its own session only: for the session of any other role pg_stat_activity shows it NULL, which is returned as '' (so nothing filters on it, and
+    a log line says when it is not shown). The query text is never read. -SuperuserOnly keeps the sessions of PostgreSQL superusers, which the restore role (no superuser) cannot end.
+    The restore's own session is left out.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PsqlPath,
+        [Parameter(Mandatory)][object]$Settings,
+        [Parameter(Mandatory)][string]$PassFile,
+        [Parameter(Mandatory)][string[]]$Database,
+        [switch]$SuperuserOnly
+    )
+
+    foreach ($name in $Database) {
+        if (-not (Test-AccucutBackupSetting -Name 'database' -Value $name)) { throw 'A database name that is not allowed was given. Nothing was done.' }
+    }
+    $list = (@($Database | ForEach-Object { "'$_'" })) -join ', '
+    $only = ''
+    if ($SuperuserOnly) { $only = ' AND r.rolsuper' }
+    $sql = "SET ROLE NONE;`nSELECT format('%s|%s|%s|%s', a.datname, coalesce(r.rolsuper, false)::text, coalesce(a.backend_type, ''), regexp_replace(coalesce(a.usename, ''), '[[:cntrl:]|]', '?', 'g')) FROM pg_stat_activity a LEFT JOIN pg_roles r ON r.oid = a.usesysid WHERE a.datname IN ($list) AND a.pid <> pg_backend_pid()$only ORDER BY a.pid;`n"
+    $answer = Invoke-AccucutRestoreSql -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database 'postgres' -Sql $sql
+    $rows = New-Object System.Collections.Generic.List[object]
+    foreach ($line in (([string]$answer) -split "`r?`n")) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $parts = $line.Trim().Split([char[]]@('|'), 4)
+        if ($parts.Count -ne 4) { continue }
+        $rows.Add([pscustomobject]@{ Database = $parts[0]; UserName = $parts[3]; Superuser = ($parts[1] -ceq 'true'); BackendType = $parts[2] })
+    }
+    return $rows.ToArray()
+}
+
+function Assert-AccucutRestoreNoSuperuserSession {
+    <#
+    Stops, with the code superuser-session and a plain message (no SQL error), when a PostgreSQL superuser is connected to any of the named databases (pgAdmin, or psql as postgres): the restore
+    role cannot end such a session, and it would stop the swap. Run before the services are stopped (the live database), and again just before the swap (the live and the new one). Every session
+    it finds goes to restore.log with its role and database (and its type, when the restore role can read it), never a query, so that the next time can be seen.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$PsqlPath,
+        [Parameter(Mandatory)][object]$Settings,
+        [Parameter(Mandatory)][string]$PassFile,
+        [Parameter(Mandatory)][object]$Paths,
+        [Parameter(Mandatory)][string[]]$Database
+    )
+
+    $sessions = @(Get-AccucutRestoreSession -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database $Database -SuperuserOnly)
+    if ($sessions.Count -eq 0) { return }
+    $shown = [Math]::Min($sessions.Count, $script:RestoreSessionRecordLimit)
+    for ($i = 0; $i -lt $shown; $i++) {
+        $session = $sessions[$i]
+        $type = 'session type not shown to the restore role'
+        if (-not [string]::IsNullOrEmpty($session.BackendType)) { $type = "session type '$($session.BackendType)'" }
+        Write-AccucutRestoreRecord -Paths $Paths -Level Warning -Message "A PostgreSQL administrator session is connected to the database '$($session.Database)': role '$($session.UserName)', $type."
+    }
+    if ($sessions.Count -gt $shown) { Write-AccucutRestoreRecord -Paths $Paths -Level Warning -Message "and $($sessions.Count - $shown) more such sessions." }
+    throw (New-AccucutRestoreStop -Code 'superuser-session' -Message $script:RestoreSuperuserSessionMessage)
+}
+
 function Switch-AccucutRestoreDatabase {
     <#
     The swap: the last connections to the two databases are ended, then, in one transaction, the live database is renamed -Previous and -Replacement takes the live name. Both
     renames happen or neither does. Used the other way round to put the old database back (live -> accucut_failed_..., accucut_old_... -> live).
+    DEF-087 (AQP-443). The restore role is no superuser, and PostgreSQL 17 refuses it a signal to a session of a superuser or to a process that has no role (an autovacuum worker): one such
+    PID in a pg_terminate_backend over every PID of the two databases stopped the swap with "permission denied to terminate process". So:
+      - only the sessions of roles that are not superusers are ended (pg_stat_activity joined to pg_roles; a process with no role has no row there). The restore role holds pg_signal_backend for
+        those. No filter on backend_type: the restore role cannot read it in the session of another role (it is NULL there), and such a filter would end nothing;
+      - an autovacuum worker is left to ALTER DATABASE ... RENAME, which asks it to stop (SIGTERM) and waits about 5 seconds;
+      - a rename that still finds another session fails with SQLSTATE 55006 (printed, because the SQL sets VERBOSITY verbose) and the whole swap is run again, at most 3 times after the first
+        (it ends the sessions that came back, too). Any other error is raised at once, as before;
+      - if it is still in use after that, it stops with a plain message (code database-in-use) and the names are as they were. With -Paths, the sessions that are in the way (role, database, type when
+        readable; never a query) are written to restore.log, for each failed try.
     #>
     [CmdletBinding()]
     param(
@@ -2821,20 +2903,53 @@ function Switch-AccucutRestoreDatabase {
         [Parameter(Mandatory)][object]$Settings,
         [Parameter(Mandatory)][string]$PassFile,
         [Parameter(Mandatory)][string]$Replacement,
-        [Parameter(Mandatory)][string]$Previous
+        [Parameter(Mandatory)][string]$Previous,
+        [object]$Paths
     )
 
     $live = [string]$Settings.Database
     if (-not (Test-AccucutBackupSetting -Name 'database' -Value $live)) { throw 'The live database name is not allowed.' }
     Assert-AccucutRestoreDatabaseName -Name $Replacement
     Assert-AccucutRestoreDatabaseName -Name $Previous
-    $sql = "SET ROLE NONE;`nSELECT count(*) FROM (SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname IN ('$live', '$Replacement') AND pid <> pg_backend_pid()) AS ended;`n" +
+    $sql = "\set VERBOSITY verbose`nSET ROLE NONE;`nSELECT count(*) FROM (SELECT pg_terminate_backend(a.pid) FROM pg_stat_activity a JOIN pg_roles r ON r.oid = a.usesysid WHERE a.datname IN ('$live', '$Replacement') AND NOT r.rolsuper AND a.pid <> pg_backend_pid()) AS ended;`n" +
         "BEGIN;`nALTER DATABASE `"$live`" RENAME TO `"$Previous`";`nALTER DATABASE `"$Replacement`" RENAME TO `"$live`";`nCOMMIT;`n"
-    [void](Invoke-AccucutRestoreSql -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database 'postgres' -Sql $sql)
+    $retry = 0
+    while ($true) {
+        try {
+            [void](Invoke-AccucutRestoreSql -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database 'postgres' -Sql $sql)
+            return
+        }
+        catch {
+            if ($_.Exception.Message -cnotmatch $script:RestoreInUsePattern) { throw }
+        }
+        if ($null -ne $Paths) {
+            try {
+                $others = @(Get-AccucutRestoreSession -PsqlPath $PsqlPath -Settings $Settings -PassFile $PassFile -Database @($live, $Replacement))
+                $shown = [Math]::Min($others.Count, $script:RestoreSessionRecordLimit)
+                for ($i = 0; $i -lt $shown; $i++) {
+                    $other = $others[$i]
+                    $who = 'no role (a PostgreSQL background process, for example autovacuum)'
+                    if (-not [string]::IsNullOrEmpty($other.UserName)) {
+                        $who = "role '$($other.UserName)'"
+                        if ($other.Superuser) { $who += ' (a PostgreSQL superuser)' }
+                    }
+                    if (-not [string]::IsNullOrEmpty($other.BackendType)) { $who += ", session type '$($other.BackendType)'" }
+                    Write-AccucutRestoreRecord -Paths $Paths -Level Warning -Message "Still connected to the database '$($other.Database)': $who."
+                }
+                if ($others.Count -gt $shown) { Write-AccucutRestoreRecord -Paths $Paths -Level Warning -Message "and $($others.Count - $shown) more sessions." }
+            }
+            catch { Write-AccucutRestoreRecord -Paths $Paths -Level Warning -Message "The sessions that are in the way could not be read: $(ConvertTo-AccucutShortMessage -Text $_.Exception.Message)" }
+        }
+        if ($retry -ge $script:RestoreSwapRetries) {
+            throw (New-AccucutRestoreStop -Code 'database-in-use' -Message "Another connection to the database could not be ended (a PostgreSQL administrator session, for example in pgAdmin), so the database names were not swapped. Close any program that is connected to the portal's database as a PostgreSQL administrator, then try again.")
+        }
+        $retry++
+        if ($null -ne $Paths) { Write-AccucutRestoreRecord -Paths $Paths -Level Warning -Message "The database is still in use by another session (SQLSTATE 55006). Trying the swap again (retry $retry of $($script:RestoreSwapRetries))." }
+    }
 }
 
 function Remove-AccucutRestoreDatabase {
-    <# Drops a database that a restore made (never the live one: the name must match the pattern). Open connections are ended first (WITH FORCE). #>
+    <# Drops a database that a restore made (never the live one: the name must match the pattern). Open connections are ended first (WITH FORCE). DEF-087: that check lets a role with pg_signal_backend end an autovacuum worker too (it has no role, so it is not a superuser's), which the swap's own pg_terminate_backend could not; it stops only for a superuser's session (checked on PostgreSQL 17.11, and on stage 13). #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$PsqlPath,
@@ -3132,6 +3247,8 @@ function Invoke-AccucutRestore {
         if ($verified.Count -eq 1) { $lastBytes = $verified[0].SizeBytes }
         $room = Test-AccucutRestoreRoom -FreeBytes $space.FreeBytes -TotalBytes $space.TotalBytes -LastCopyBytes $lastBytes -DatabaseBytes $info.SizeBytes -CopyBytes $copy.SizeBytes
         if (-not $room.Ok) { throw (New-AccucutRestoreStop -Code 'low-space' -Message $room.Message) }
+        # DEF-087: a PostgreSQL administrator connected to the live database would stop the swap later, after the portal is stopped. Said now, before anything is touched.
+        Assert-AccucutRestoreNoSuperuserSession -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Paths $Paths -Database @($Settings.Database)
         Write-Host "Checks passed: the copy matches its manifest, $($version.Message) There is enough free space."
 
         # ---- What will be lost, and the typed date (AC-2) ----------------------------------------------------------------------------------
@@ -3182,7 +3299,9 @@ function Invoke-AccucutRestore {
             $password = Read-AccucutPgpassPassword -Path $passFile -Role $script:RestoreDatabaseRole
             $url = "postgresql://$($script:RestoreDatabaseRole):$([uri]::EscapeDataString($password))@$($Settings.PgHost):$($Settings.PgPort)/$newName"
             [void](Invoke-AccucutMigration -ReleaseDirectory $ReleaseDirectory -NodeExe $Program.Node -MigrateDatabaseUrl $url)
-            Switch-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Replacement $newName -Previous $oldName
+            # Again, now that the portal is stopped and the new database is ready: the two databases the swap is about to rename.
+            Assert-AccucutRestoreNoSuperuserSession -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Paths $Paths -Database @($Settings.Database, $newName)
+            Switch-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Replacement $newName -Previous $oldName -Paths $Paths
             $swapped = $true
             Write-AccucutRestoreRecord -Paths $Paths -Message "The restored database is now the live one. The database as it was is kept for the moment as $oldName. Starting the portal."
             Start-AccucutServices
@@ -3200,7 +3319,7 @@ function Invoke-AccucutRestore {
             try { Stop-AccucutServices } catch { $problems.Add("the services could not be stopped for the roll back: $($_.Exception.Message)") }
             if ($swapped) {
                 try {
-                    Switch-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Replacement $oldName -Previous $failedName
+                    Switch-AccucutRestoreDatabase -PsqlPath $Program.Psql -Settings $Settings -PassFile $passFile -Replacement $oldName -Previous $failedName -Paths $Paths
                     $swapped = $false
                     Write-AccucutRestoreRecord -Paths $Paths -Level Warning -Message "The old database is the live one again (the failed restore is kept as $failedName for your IT person)."
                 }
@@ -3323,7 +3442,7 @@ Export-ModuleMember -Function @(
     'Remove-AccucutBackupCopy', 'Remove-AccucutStaleBackupPart', 'ConvertTo-AccucutShortMessage', 'Invoke-AccucutBackupPipe', 'Add-AccucutJobRun', 'Get-AccucutDatabaseInfo', 'Write-AccucutBackupManifest', 'Invoke-AccucutBackupPrune',
     'Invoke-AccucutBackup', 'Invoke-AccucutClearCopies',
     'New-AccucutRestoreStop', 'Read-AccucutKeyInput', 'ConvertFrom-AccucutSecureString', 'Read-AccucutPgpassPassword', 'Read-AccucutInstallState', 'Test-AccucutRestoreVersion', 'Test-AccucutRestoreRoom',
-    'Write-AccucutRestoreEvent', 'Set-AccucutLockedFileAcl', 'Test-AccucutRestoreLogFile', 'Add-AccucutRestoreLogLine', 'Write-AccucutRestoreRecord', 'Invoke-AccucutRestoreSql', 'Assert-AccucutRestoreDatabaseName',
+    'Write-AccucutRestoreEvent', 'Set-AccucutLockedFileAcl', 'Test-AccucutRestoreLogFile', 'Add-AccucutRestoreLogLine', 'Write-AccucutRestoreRecord', 'Invoke-AccucutRestoreSql', 'Get-AccucutRestoreSession', 'Assert-AccucutRestoreNoSuperuserSession', 'Assert-AccucutRestoreDatabaseName',
     'New-AccucutRestoreDatabase', 'Switch-AccucutRestoreDatabase', 'Remove-AccucutRestoreDatabase', 'Set-AccucutConsoleInputNoPreamble', 'Restore-AccucutConsoleInput', 'Test-AccucutBackupKey', 'Invoke-AccucutRestorePipe',
     'Assert-AccucutRestoreNotNewer', 'Get-AccucutRestoreChoice', 'Invoke-AccucutRestore',
     'Get-AccucutAdminGroupSid', 'Write-AccucutRestoreConfig', 'Get-AccucutRunningAccount'
