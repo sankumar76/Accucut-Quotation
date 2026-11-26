@@ -67,12 +67,15 @@ async function slNumbers(page: Page): Promise<string[]> {
 }
 
 /** What a press at the centre of a row's name reaches (AQP-418, DEF-075 acceptance check 1): the link itself or something in it, or the tag of whatever lies over it. */
-const reachedByCentrePress = (page: Page, slNo: string): Promise<string> =>
-  part(page, slNo).evaluate((link) => {
+const reachedByCentrePress = async (page: Page, slNo: string): Promise<string> => {
+  // On screen first, as a press scrolls the row into view: with the toolbars clipped the tree is shorter, and a row at the foot lies under the fixed bar until it is scrolled.
+  await part(page, slNo).scrollIntoViewIfNeeded();
+  return part(page, slNo).evaluate((link) => {
     const { left, top, width, height } = link.getBoundingClientRect();
     const reached = document.elementFromPoint(left + width / 2, top + height / 2);
     return reached !== null && link.contains(reached) ? 'the row' : (reached?.outerHTML.slice(0, 80) ?? 'nothing');
   });
+};
 
 interface ToolbarBox {
   readonly slNo: string;
@@ -87,7 +90,8 @@ interface ToolbarBox {
 
 /** The toolbar group of every row on screen, measured in the page (AQP-418 acceptance check 2). */
 const toolbarBoxes = (page: Page): Promise<ToolbarBox[]> =>
-  tree(page).evaluate((nav) =>
+  // By CSS, not by role: a modal dialog (the delete confirmation) hides the tree from the accessibility tree while it is open, and the toolbar is judged then too.
+  page.locator('nav[aria-label="Parts tree"]').evaluate((nav) =>
     [...nav.querySelectorAll('li[data-part-row]')].map((item) => {
       const link = item.querySelector('a[data-part-id]');
       const group = item.querySelector('[data-row-actions]');
@@ -109,6 +113,15 @@ const toolbarBoxes = (page: Page): Promise<ToolbarBox[]> =>
 
 /** The top of a row's link, in the page's own pixels. */
 const topOf = (link: Locator): Promise<number> => link.evaluate((element) => element.getBoundingClientRect().top);
+
+/**
+ * Puts the pointer on a row and waits until its toolbar is in view (AQP-448): a mouse shows the toolbar of the hovered row only, and Playwright presses a button only where it can already be hit, so a test whose pointer
+ * is elsewhere (after an add, a drag or a dialog) reveals the toolbar of its row first. On a touch screen the row must be the open one, and the hover changes nothing.
+ */
+async function reveal(page: Page, slNo: string): Promise<void> {
+  await part(page, slNo).hover();
+  await expect.poll(() => toolbarHeightOf(page, slNo), `the toolbar of ${slNo} is in view`).toBeGreaterThan(1);
+}
 
 /** The pointer of this page, as the style sheet reads it (`mouse:` and `touch:`, globals.css): a mouse hovers and points finely, a finger is every other pointer. The desktop project has a mouse; the phone and tablet projects are `hasTouch`. */
 const hasMouse = (page: Page): Promise<boolean> => page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches);
@@ -143,6 +156,8 @@ async function settledBox(target: Locator): Promise<NonNullable<Awaited<ReturnTy
 async function yAboveMenu(page: Page, slNo: string): Promise<number> {
   const menu = await settledBox(page.getByRole('menu'));
   const link = defined(await part(page, slNo).boundingBox());
+  // A menu that opens upwards, or lies below the name, leaves the whole name free: its middle is the place. Only a menu that covers part of the name needs the strip.
+  if (menu.y >= link.y + link.height || menu.y + menu.height <= link.y) return link.y + link.height / 2;
   expect(menu.y - link.y, 'a strip of the name of ' + slNo + ' lies above the open menu').toBeGreaterThanOrEqual(4);
   return link.y + (menu.y - link.y) / 2;
 }
@@ -417,6 +432,7 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await expect(handleOf(page, '1.1')).toBeFocused();
     await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
     // At the top of its group it cannot go further: Move up is disabled in the menu, and the menu still opens.
+    await reveal(page, '1.1');
     await handleOf(page, '1.1').click();
     await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toHaveAttribute('aria-disabled', 'true');
     await page.keyboard.press('Escape');
@@ -573,6 +589,7 @@ test.describe('AC-3: delete asks first and names the count', () => {
       if (request.method() === 'DELETE') deletes.push(request.url());
     });
 
+    await reveal(page, '2');
     await rowButton(page, 'Delete', '2').click();
     const dialog = page.getByRole('alertdialog', { name: 'Delete row 2?' });
     await expect(dialog).toContainText('Row 2 and everything typed into it will be deleted. This cannot be undone.');
@@ -581,6 +598,7 @@ test.describe('AC-3: delete asks first and names the count', () => {
     expect(deletes).toEqual([]);
     expect(await slNumbers(page)).toEqual(['1', '2']);
 
+    await reveal(page, '2');
     await rowButton(page, 'Delete', '2').click();
     await dialog.getByRole('button', { name: 'Delete row' }).click();
     await expect(dialog).toHaveCount(0);
@@ -889,6 +907,8 @@ test.describe('AQP-448 (DEF-091): when the row toolbar is in view', () => {
     await openTree(page, testInfo);
     const mouse = await hasMouse(page);
     await addUnder(page, '1', 'Sub-Assembly');
+    // One change at a time: the "+" is unavailable while the first add is out, so the row is waited for.
+    await expect(part(page, '1.1')).toBeVisible();
     await addUnder(page, '1', 'Part');
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
     await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
@@ -943,6 +963,7 @@ test.describe('AC-6: a change made under the person', () => {
     }, estimateId);
     expect(moved).toBe(200);
 
+    await reveal(page, '2');
     await handleOf(page, '2').click();
     await page.getByRole('menuitem', { name: 'Move up', exact: true }).click();
     await expect(page.getByText('The parts were changed by someone else. The tree has been refreshed. Check it and try again.')).toBeVisible();
@@ -1019,9 +1040,10 @@ test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
     test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop; the phone has the touch drag');
     await openTreeWithTwoSubParts(page, testInfo);
     await choose(page, '1.1');
+    await reveal(page, '1.1');
     const moving = await idOf(page, '1.1');
-    const handle = defined(await handleOf(page, '1.1').boundingBox());
-    const below = defined(await part(page, '1.2').boundingBox());
+    const handle = await settledBox(handleOf(page, '1.1'));
+    const below = await settledBox(part(page, '1.2'));
     const x = handle.x + handle.width / 2;
     await page.mouse.move(x, handle.y + handle.height / 2);
     await page.mouse.down();
@@ -1066,8 +1088,9 @@ test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
     test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop');
     await openTreeWithTwoSubParts(page, testInfo);
     await choose(page, '1.1');
+    await reveal(page, '1.1');
     const moves = watchMoves(page);
-    const handle = defined(await handleOf(page, '1.1').boundingBox());
+    const handle = await settledBox(handleOf(page, '1.1'));
     const x = handle.x + handle.width / 2;
     const y = handle.y + handle.height / 2;
     await page.mouse.move(x, y);
@@ -1079,7 +1102,8 @@ test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
     await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toHaveCount(0);
     expect(moves.calls).toHaveLength(0);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
-    // A click: the menu.
+    // A click: the menu. The pointer is back on the handle, and the row shows its toolbar again.
+    await reveal(page, '1.1');
     await handleOf(page, '1.1').click();
     await expect(page.getByRole('menuitem', { name: 'Move down', exact: true })).toBeVisible();
     expect(moves.calls).toHaveLength(0);
