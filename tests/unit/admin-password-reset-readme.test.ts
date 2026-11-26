@@ -48,7 +48,9 @@ describe('AC-9: the README section for a forgotten Admin password', () => {
   });
 
   it('says a window that is not elevated never reaches the command, and that exit 1 is for settings and the database (QLT-715-02)', () => {
-    expect(section).toContain('A window that is not elevated never reaches the command: PowerShell cannot open `C:\\Accucut`, and Node stops with its own exit 9 (`.env` not found). Open Windows PowerShell with Run as administrator.');
+    expect(section).toContain('A window that is not elevated never reaches the command, and nothing changes: PowerShell is refused access to `C:\\Accucut` (the first two lines fail with "Access is denied") and then cannot run `& $node`, so Node never starts and there is no exit code from the command. Exit code 9 (`.env` not found) appears only if Node is started by hand, by its full path, from such a window. Open Windows PowerShell with Run as administrator.');
+    // AQP-428 (architecture 9.9, 0.71f): the old sentence said Node stops with exit 9 in a window that is not elevated; it never starts there.
+    expect(section).not.toContain('Node stops with its own exit 9');
     expect(section).toContain('| 1 | `.env` was read, but `DATABASE_URL` or `AUTH_SECRET` is missing or invalid, or the database cannot be reached: check `Get-Service postgresql-x64-17` |');
     expect(section).not.toContain('and that the window is elevated');
   });
