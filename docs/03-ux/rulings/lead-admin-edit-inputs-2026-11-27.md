@@ -227,7 +227,7 @@ In Stage 2 the Part Model picture is editable for a Lead and an Admin (the archi
 | Tree width handle and "Tree width" button | **Not drawn.** The resizable panel is not required on the review screen (PRD ED-AC-15); the tree stays at `--tree-w` (320 px) from 1024 px, and the foldable panel below it |
 | Completeness icons and the status legend of SCR-05 | Not drawn (the row has figures instead); the Inputs block's counts show what is blank. After a refused Recalculate, rows named in the refusal show the SCR-05 triangle (4.3 item 4) |
 
-**When the toolbar is in view** is the 26 Nov rule (item 3), unchanged: a mouse, on the hovered row, on a row holding keyboard focus, and while a menu or the delete dialog of the row is open; **never** because a row is open or was just added; touch, on the selected row only; always in the tab order and the accessibility tree (clipped to 1 px, never `display: none`). The review tree is no taller than today until the person points at a row.
+**When the toolbar is in view** is the 26 Nov rule (item 3), unchanged: a mouse, on the hovered row, on a row holding keyboard focus, and while a menu or the delete dialog of the row is open; **never** because a row is open or was just added; touch, on the selected row only; always in the tab order and the accessibility tree (clipped to 1 px, never `display: none`). **Layout, superseding the 26 Nov rule that showed the line only on hover:** the toolbar sits in a slot of 40 px that is reserved under every row of this tree for a mouse (`tree-toolbar-no-shift-2026-11-27.md`), so no row moves when a toolbar shows or hides. The review tree is therefore taller (a two-line row about 100 px) and scrolls in its column.
 
 **(b) States of the tree controls**
 
