@@ -1,4 +1,4 @@
-# DEF-088: `estimate-tree-width.spec.ts:534`'s route hold outlives its test: an unhandled `route.fetch: Request context disposed` is thrown 0.15 s after the test passed, aborts the shard-4 desktop worker and leaves the next test (`estimate-warning.spec.ts:181`) not run (Test; product excluded; Sev-3; Jira AQP-444, GitHub #732)
+# DEF-088: `estimate-tree-width.spec.ts:534`'s route hold outlives its test: an unhandled `route.fetch: Request context disposed` is thrown 0.15 s after the test passed, aborts the shard-4 desktop worker and leaves the next test (`estimate-warning.spec.ts:181`) not run (Test; product excluded; Sev-3; Jira AQP-444, GitHub #732; CLOSED 2026-11-26)
 
 | Field | Value |
 |-------|-------|
@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate (master, DL-399 (B), 2026-11-25); QA recorded it as given.** The severity follows the scale: it aborts a worker and can turn a shard red, but it has a test-only fix. |
 | Priority | P3 (Jira Medium, labels `sev-3`, `final-review`) |
 | Type | **Test; product excluded** (master, DL-399 (B)): the throw comes from test code (the spec's route callback) after its own test ended, and no product path is involved. |
-| Status | **Open (new), 2026-11-25 (qa-engineer, on DL-399 (B)).** First occurrence on record. **R17** covers PR runs only until the fix merges or G8 (below). A `master` push turned red by this before the fix is RISK-031 trigger (a) and comes to master the same day; it is not a DEF-085 take-out event (DL-399 (4)). |
+| Status | **CLOSED (Verified, Closed), 2026-11-26 (qa-engineer): the proof of DL-399 (3) is met.** Fix: PR #733 (`fix(test): the tree-width route hold finishes its handlers before the case ends [AQP-444]`), squash `6bf10f7d`. On the first two `master` pushes after it, read from the job logs: **(1) `6bf10f7d`** (CI 45651929473, `success`, attempt 1, draw 0.67; shards 576 / 575 / 587 / 569 passed, 15.6 / 23.5 / 16.9 / 13.6 m): 0 'Request context disposed' and 0 'error was not a part of any test' lines in any shard; every `estimate-tree-width` case attempt 1 under 25 s (desktop `:129` 7.6, `:248` 6.9, `:308` 5.4, `:339` 7.5, `:410` 11.2, `:424` 8.1, `:435` 11.6, `:456` 5.0, `:497` 8.4, the held-chunk case now at `:529` 10.0 s; tablet `:103` 19.5 s; mobile `:103` 11.1 s). **(2) `fa227b90`** (CI 45735719514, `success`, draw 0.79; shards 577 / 575 / 588 / 571 passed, 22.3 / 17.7 / 15.7 / 15.5 m): 0 and 0 again; desktop 4.6 to 14.7 s (`:529` 13.5 s), tablet `:103` 14.4 s, mobile `:103` 15.6 s. Two later pushes also read 0 and 0: `7e9674fc` (desktop 3.9 to 13.0 s) and `e3dc5b0b` (desktop 4.1 to 19.7 s). Jira AQP-444 Done, GitHub #732 closed (completed). **Reopen rule:** either error line in any shard, or an `estimate-tree-width` case at 25 s or more on attempt 1, on a later `master` push or in the final regression. R17 ends with this closure. Earlier: Open (new), 2026-11-25. |
 | Jira / GitHub | [AQP-444](https://sankumar76.atlassian.net/browse/AQP-444) / [#732](https://github.com/sankumar76/Accucut-Quotation/issues/732) (labels bug, sev-3, ai-delivery, final-review; Jira also aiid-DEF-088, agent-qa-engineer). Relates to AQP-426 and AQP-1; DEF-085 (AQP-441) is the neighbour. Searched first: JQL on `aiid-DEF-088` and 'Request context disposed', and a GitHub search: nothing. |
 | Found by / date | CI (a PR run); read and logged by qa-engineer, 2026-11-25; classified by master, DL-399 |
 | Build / commit | PR #730's head `53dcd588` (DEF-087; it changes only `deploy/windows/AccucutOps.psm1`, the README and the Pester tests, so it cannot reach E2E), which holds #727 (`0244e930`) |
@@ -41,12 +41,12 @@ Shard 4: `22 skipped`, `1 did not run`, `569 passed (13.7m)`, `1 error was not a
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Fix (test-only; hold released before the test ends) | developer (#727's author) | | |
+| Fix (test-only; hold released before the test ends) | developer (#727's author) | 2026-11-25 | PR #733, squash `6bf10f7d` |
 | PR body: the importer, the DL-386 and DL-388 (D) statements, the local close-the-page variant | developer | | |
-| Proof: fix PR run of record | qa-engineer | | |
-| Proof: first `master` push after the squash | qa-engineer | | |
-| Proof: second `master` push after the squash | qa-engineer | | |
-| Closed | qa-engineer | | |
+| Proof: fix PR run of record | qa-engineer | 2026-11-26 | Not read separately: the proof as master set it is the first two `master` pushes (QA's read of `6bf10f7d` and `fa227b90` below); the PR's checks were green at its merge (orchestrator) |
+| Proof: first `master` push after the squash | qa-engineer | 2026-11-26 | `6bf10f7d`, CI 45651929473: 0 and 0 lines, tree-width under 20 s |
+| Proof: second `master` push after the squash | qa-engineer | 2026-11-26 | `fa227b90`, CI 45735719514: 0 and 0 lines, tree-width under 15 s |
+| Closed | qa-engineer | 2026-11-26 | AQP-444 Done (comment 13305), #732 closed |
 
 ## Records
 Jira Bug AQP-444 and GitHub issue #732, created 2026-11-25 and cross-linked. Related: AQP-426, AQP-1, DEF-085 (AQP-441, #725), DEF-087 (the PR that carried the red); DL-399 (master's ruling), DL-398, DL-391, DL-386, DL-388 (D), DL-370 (5) and (E); test plan 0.3.62; CI run 45631761004 (attempt 1 red, attempt 2 the R17 re-run), shard 4 job 139266549077.
