@@ -81,8 +81,9 @@ async function rest(target: Page): Promise<void> {
 const ROWS = ['1', '1.1', '1.1.1', '1.2', '1.3', '1.3.1'] as const;
 
 /** The toolbar group of a row, and the slot that holds it. */
-const toolbarOf = (target: Page, slNo: string): Locator => target.locator('li[data-part-row]').filter({ has: row(target, slNo) }).first().locator('[data-row-actions]').first();
-const slotOf = (target: Page, slNo: string): Locator => target.locator('li[data-part-row]').filter({ has: row(target, slNo) }).first().locator('[data-row-toolbar]').first();
+const ownItem = (target: Page, slNo: string): Locator => row(target, slNo).locator('xpath=ancestor::li[@data-part-row][1]');
+const toolbarOf = (target: Page, slNo: string): Locator => ownItem(target, slNo).locator('[data-row-actions]').first();
+const slotOf = (target: Page, slNo: string): Locator => ownItem(target, slNo).locator('[data-row-toolbar]').first();
 
 /**
  * DEF-129 and DEF-132 (AQP-486; UX ruling `tree-toolbar-no-shift-2026-11-27.md`, checks TS-1 to TS-17; master DL-440): the toolbar of a row never moves a row. The cases below use **the page the first case built**, in one serial

@@ -863,8 +863,13 @@ test.describe('AQP-405: the row actions', () => {
     const name = await settledBox(part(page, '1.1'));
     const [left, right] = [Math.max(plus.x, name.x), Math.min(plus.x + plus.width, name.x + name.width)];
     const [top, bottom] = [Math.max(plus.y, name.y), Math.min(plus.y + plus.height, name.y + name.height)];
-    expect(right > left && bottom > top, 'the "+" of 1.1 once it is open lies over the name of 1.1 while row 1 is open').toBe(true);
-    await page.mouse.move((left + right) / 2, (top + bottom) / 2);
+    // AQP-486 (DEF-129, UX ruling tree-toolbar-no-shift-2026-11-27): a mouse's toolbar has a slot reserved under every row, so no row slides when a toolbar shows or goes, and the "+" of 1.1 never lies over the name of 1.1
+    // whichever row is open. A finger's toolbar is still added under the selected row alone, so for a finger the old geometry holds: the "+" lies over the name while row 1 is open.
+    const overlaps = right > left && bottom > top;
+    if (await hasMouse(page)) expect(overlaps, 'for a mouse the "+" of 1.1 does not lie over the name of 1.1 while row 1 is open').toBe(false);
+    else expect(overlaps, 'for a finger the "+" of 1.1 once it is open lies over the name of 1.1 while row 1 is open').toBe(true);
+    // The press goes where the old test put it when the "+" and the name overlapped (the overlap's centre); where they do not, the centre of the name, which is the press the second click was always about.
+    await page.mouse.move(overlaps ? (left + right) / 2 : name.x + name.width / 2, overlaps ? (top + bottom) / 2 : name.y + name.height / 2);
     await page.mouse.down();
     await page.mouse.up();
     await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
@@ -1080,10 +1085,13 @@ test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
     await page.mouse.move(x, below.y + below.height - 4, { steps: 8 });
     await withState(page, () => expect(page.locator('[data-drop-line]')).toBeVisible());
     // The line is there (it is drawn as soon as the drag code has the pointer), and at the bottom of 1.2, where the row would land. Both are read in one go in the page: near the edge of the panel the drag scrolls it, and the line moves with the rows.
+    // The bottom of a row is the bottom of its toolbar slot when it has one (AQP-486: a mouse's rows keep a slot under them), and the bottom of its link otherwise.
     const gap = await page.evaluate(() => {
       const line = document.querySelector('[data-drop-line]')?.getBoundingClientRect();
-      const link = [...document.querySelectorAll('nav[aria-label="Parts tree"] a[data-part-id]')].find((candidate) => candidate.querySelector('[data-sl-no]')?.textContent === '1.2')?.getBoundingClientRect();
-      return line === undefined || link === undefined ? null : Math.abs(line.top + line.height / 2 - link.bottom);
+      const link = [...document.querySelectorAll('nav[aria-label="Parts tree"] a[data-part-id]')].find((candidate) => candidate.querySelector('[data-sl-no]')?.textContent === '1.2');
+      const slot = link?.closest('li')?.querySelector('[data-row-toolbar]')?.getBoundingClientRect();
+      const bottom = slot?.bottom ?? link?.getBoundingClientRect().bottom;
+      return line === undefined || bottom === undefined ? null : Math.abs(line.top + line.height / 2 - bottom);
     });
     expect(gap).not.toBeNull();
     expect(gap ?? 999).toBeLessThan(12);
