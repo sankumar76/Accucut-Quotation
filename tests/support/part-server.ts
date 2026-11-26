@@ -17,6 +17,8 @@ const state = {
   revision: 1,
   inputs: {} as Record<string, string>,
   sent: [] as SentSave[],
+  /** For each save in `sent`, in order: was it asked to survive the page going away (`keepalive`)? */
+  keepalive: [] as boolean[],
   hold: null as Promise<void> | null,
   /** The number (1 is the first save since `reset`) of the save that waits for `hold`, or 0 for the next one. */
   holdAt: 0,
@@ -35,6 +37,7 @@ export const partServer = {
     state.revision = 1;
     state.inputs = { ...inputs };
     state.sent = [];
+    state.keepalive = [];
     state.hold = null;
     state.holdAt = 0;
     state.failNext = false;
@@ -85,6 +88,9 @@ export const partServer = {
   get sent(): ReadonlyArray<SentSave> {
     return state.sent;
   },
+  get keepalive(): ReadonlyArray<boolean> {
+    return state.keepalive;
+  },
   get inputs(): Readonly<Record<string, string>> {
     return state.inputs;
   },
@@ -92,8 +98,9 @@ export const partServer = {
     return state.revision;
   },
   load: (): Promise<Outcome<PartInputs>> => Promise.resolve({ status: 'ok', value: view() }),
-  async save(_estimateId: string, _nodeId: string, request: SaveInputsRequest): Promise<Outcome<PartInputs>> {
+  async save(_estimateId: string, _nodeId: string, request: SaveInputsRequest, _doFetch?: unknown, keepalive = false): Promise<Outcome<PartInputs>> {
     state.sent.push({ revision: request.revision, values: { ...request.values } });
+    state.keepalive.push(keepalive);
     if (state.failNext) {
       state.failNext = false;
       return { status: 'failed' };

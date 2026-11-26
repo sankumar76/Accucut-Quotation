@@ -147,6 +147,36 @@ describe('loadPartInputs and savePartInputs', () => {
     expect(outcome).toEqual({ status: 'ok', value: { id: PART, revision: 4, completeness: 'PARTIAL', inputs: { [FIELD]: '12.50' } } });
   });
 
+  describe('keepalive (STORY-05.10 AC-7b: the save on leaving the page)', () => {
+    const answer = { id: PART, revision: 4, completeness: 'PARTIAL', inputs: [{ fieldId: FIELD, value: '12.50' }] };
+    const sentWith = async (request: Parameters<typeof savePartInputs>[2], keepalive?: boolean): Promise<RequestInit> => {
+      const fetcher = vi.fn(() => Promise.resolve(json(200, answer)));
+      await savePartInputs(ESTIMATE, PART, request, fetcher, keepalive);
+      return (fetcher.mock.calls[0] as unknown as [string, RequestInit])[1];
+    };
+
+    it('an ordinary save does not ask for keepalive', async () => {
+      expect((await sentWith({ revision: 3, values: { [FIELD]: '12.5' } })).keepalive).toBeUndefined();
+    });
+
+    it('a save on leaving asks that the request survive the page going away, and is otherwise the same request (same method, headers, body, credentials)', async () => {
+      const init = await sentWith({ revision: 3, values: { [FIELD]: '12.5' } }, true);
+      expect(init).toMatchObject({ method: 'PATCH', keepalive: true, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' } });
+      expect(JSON.parse(String(init.body))).toEqual({ revision: 3, values: { [FIELD]: '12.5' } });
+    });
+
+    it('a body too big for the browser\'s keepalive limit (about 64 KB) is sent as an ordinary request, not refused by the browser before it is sent', async () => {
+      const init = await sentWith({ revision: 3, values: { [FIELD]: 'x'.repeat(61_000) } }, true);
+      expect(init.keepalive).toBeUndefined();
+      expect(init.method).toBe('PATCH');
+    });
+
+    it('the limit counts bytes, not characters', async () => {
+      expect((await sentWith({ revision: 3, values: { [FIELD]: '\u20ac'.repeat(21_000) } }, true)).keepalive).toBeUndefined();
+      expect((await sentWith({ revision: 3, values: { [FIELD]: '\u20ac'.repeat(1_000) } }, true)).keepalive).toBe(true);
+    });
+  });
+
   it('carries the server\'s words under the ID of the field at fault when a value is refused (422)', async () => {
     const problem = { code: 'VALIDATION_FAILED', title: 'x', status: 422, errors: [{ field: FIELD, message: 'Enter 0 or more, with up to 2 decimals.' }] };
     const outcome = await savePartInputs(ESTIMATE, PART, { revision: 3, values: { [FIELD]: '-1' } }, () => Promise.resolve(json(422, problem)));
