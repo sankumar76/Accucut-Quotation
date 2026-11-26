@@ -2,13 +2,12 @@ import type { ReactElement, ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AddNodeMenu } from '@/components/features/estimate-workspace/add-node-menu';
-import { AddNodeMenuPanel } from '@/components/features/estimate-workspace/add-node-menu-panel';
 import { RowActions } from '@/components/features/estimate-workspace/row-actions';
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { parentIdsHoldingPart, type NodeKind } from '@/lib/estimate/node-kinds';
 import type { PartItem } from '@/lib/estimates/tree-client';
 
-import { renderHook } from '../support/hook-harness';
+import { renderPanel, type MenuPanelProps } from '../support/menu-panel';
 
 // The components are called as functions and the elements they return are read, as in `add-node-menu-unavailable.test.ts`: no DOM is needed to pin what the menu says and what a choice sends.
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), ...(await import('../support/hook-harness')).reactHooks }));
@@ -47,7 +46,7 @@ const MAIN_ASSEMBLY_MENU: ReadonlyArray<NodeKind> = ['SUB_ASSEMBLY', 'PART', 'FA
 
 function menu(nodeKinds: ReadonlyArray<NodeKind>, extra: Props = {}) {
   const onChoose = vi.fn();
-  const tree = renderHook(AddNodeMenuPanel, { label: 'Add under 1.1 Frame', nodeKinds, onChoose, keyboard: false, ...extra } as Parameters<typeof AddNodeMenuPanel>[0]).render();
+  const tree = renderPanel({ label: 'Add under 1.1 Frame', nodeKinds, onChoose, keyboard: false, ...extra } as MenuPanelProps).render();
   const items = elementsIn(tree).filter((element) => element.type === DropdownMenuItem);
   const header = elementsIn(tree).find((element) => 'data-menu-header' in element.props);
   return { items, header, onChoose };
