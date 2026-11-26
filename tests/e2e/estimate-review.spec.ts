@@ -417,6 +417,33 @@ test.describe('AC-9: layout and accessibility', () => {
     await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
+
+    // ED-34, ED-37 (ruling 2026-11-27 4.7): with the tree editable, the "+" menu opens in line under its row and is not clipped by the column, the delete dialog is open, and under 1024 px choosing a row folds the tree and
+    // its summary names the row; no sideways scroll, and axe finds nothing serious with the toolbar in view, the menu open and the dialog open.
+    await expectTreeControls(page);
+    await addMainAssemblyButton(page).click();
+    await expect(reviewRow(page, '2')).toHaveAttribute('aria-current', 'true');
+    await chooseRow(page, '2');
+    await reviewButton(page, 'Add under', '2').click();
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    const menuBox = defined(await menu.boundingBox());
+    const width = page.viewportSize()?.width ?? 0;
+    expect(menuBox.x).toBeGreaterThanOrEqual(0);
+    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(width + 1);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoAxeViolations(page);
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+    await reviewButton(page, 'Delete', '2').click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await expectNoAxeViolations(page);
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Keep it' }).click();
+    if (isPhone(page) || (page.viewportSize()?.width ?? 0) < 1024) {
+      await chooseRow(page, '1');
+      await expect(treePanel(page)).not.toHaveAttribute('open', '');
+      await expect(treePanel(page).locator('summary')).toContainText('· 1');
+    }
   });
 
   test('not calculated: no sideways scroll and axe finds nothing', async ({ page }, testInfo) => {
