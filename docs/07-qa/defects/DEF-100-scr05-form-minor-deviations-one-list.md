@@ -6,7 +6,7 @@
 | Severity | **Sev-4 proposed by QA** (the ux-expert's word: Minor); **master grades.** |
 | Priority | P4 (Jira Low) (labels `sev-4`, `final-review`, `conformance`) |
 | Type | **Product** (conformance deviation of the running build from the SCR mock-up) |
-| Status | **Open (new), 2026-11-26 (qa-engineer, from the ux-expert's batch 1).** Not yet graded by master. |
+| Status | **Open (new), 2026-11-26 (qa-engineer, from the ux-expert's batch 1).** Not yet graded by master. **Update 2026-11-26 (batch 2): the left-nav items of this list (the extra 'Home' item, My tasks not highlighted, no 'Version 1.0 / (c) Accucut Lasers Pvt Ltd' footer; they apply to every signed-in page) moved to DEF-106 (AQP-463, GitHub #757), filed once as the ux-expert asked.** DEF-100 keeps the rest of its list. |
 | Jira / GitHub | [AQP-457](https://sankumar76.atlassian.net/browse/AQP-457) / [#750](https://github.com/sankumar76/Accucut-Quotation/issues/750) (labels bug, sev-4, ai-delivery, final-review, conformance; Jira also aiid-DEF-100, agent-qa-engineer). Relates to AQP-1 and the first owning story. Searched first: no earlier Bug for this deviation. |
 | Found by / date | The ux-expert (DL-411 conformance check), batch 1, 26 Nov 2026; logged by qa-engineer, 2026-11-26 |
 | Build / commit | production build of `master` `e3dc5b0b`, invented data, hands-on at the widths named (the ux-expert's file `qa-batch-1.md`); QA did not run it |
