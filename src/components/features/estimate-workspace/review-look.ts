@@ -1,20 +1,14 @@
-import type { ReactNode } from 'react';
-
 import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
 import type { FormField } from '@/lib/estimates/form-client';
 
 /**
  * What turns the Engineer's part form into the Lead's and the Admin's read-only view (AQP-488, DEF-131 Stage 1; UX ruling `lead-admin-edit-inputs-2026-11-27.md` section 3). One prop on the same form, so there is
- * no second one (UD-1): no intro and no hints, "Not entered" for an empty value, the chosen surface treatments as chips, the Lead's notice in place of "can no longer be changed", and the row's own line between the title
- * and the count. Nothing here holds a figure: the row line is a server-drawn element the page hands in.
+ * no second one (UD-1): no intro and no hints, "Not entered" for an empty value, the chosen surface treatments as chips and the Lead's notice in place of "can no longer be changed". Nothing here holds a figure: the
+ * row's eyebrow, title and figure line are drawn on the server above the form (ruling 3.6), and the form is labelled by that title.
  */
 export interface PartReview {
   /** The words of the one notice of the block (the page's, by status: `review-texts.ts`). */
   readonly notice: string;
-  /** The row's figure line, drawn on the server (Lead and Admin only), shown under the title. */
-  readonly rowLine: ReactNode;
-  /** The row's eyebrow, title and figure line, drawn on the server: what is on the page while the form is read, so the title and the line are there at first paint and nothing moves when the form arrives (UX ruling 3.6). */
-  readonly head: ReactNode;
   /** What is said once, politely, after a row is chosen: "Showing the inputs of 1.4 Top cover. Read-only." (a text the server wrote). */
   readonly showing: string;
 }
