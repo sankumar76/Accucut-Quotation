@@ -293,7 +293,7 @@ test.describe('AC-1, AC-2, AC-3, AC-8: what the form shows', () => {
 
   test('AC-2, AC-3, AC-8: the label stays "QTY per Assy" with the hint; Sl. No. and Material Considered are read-only; no rate, price, cost or formula is on the form', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
-    await expect(control(page, 'H')).toHaveAccessibleDescription(QTY_HINT);
+    await expect(control(page, 'H')).toHaveAccessibleDescription(`${QTY_HINT} nos`);
     await expect(partForm(page).getByText(QTY_HINT)).toBeVisible();
     await expect(control(page, 'A')).toHaveAttribute('readonly', '');
     await expect(control(page, 'A')).toHaveValue('1');
