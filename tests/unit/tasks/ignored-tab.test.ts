@@ -49,8 +49,8 @@ beforeEach(() => {
 });
 
 describe('AC-3: the four tabs, Ignored last', () => {
-  it('is open, closed, overdue, ignored, labelled Ignored', () => {
-    expect(QUEUE_TABS).toEqual(['open', 'closed', 'overdue', 'ignored']);
+  it('is open, overdue, closed, ignored (FR-034), labelled Ignored', () => {
+    expect(QUEUE_TABS).toEqual(['open', 'overdue', 'closed', 'ignored']);
     expect(QUEUE_TAB_LABELS.ignored).toBe('Ignored');
   });
 
