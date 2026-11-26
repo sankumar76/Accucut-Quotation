@@ -85,7 +85,7 @@ describe('the setting reaches the thread builder, and a bad one stops the start'
     });
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const { register } = await import('@/instrumentation');
-    expect(() => register()).toThrow('process.exit(1)');
+    await expect(register()).rejects.toThrow('process.exit(1)');
     expect(exit).toHaveBeenCalledWith(1);
     const text = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
     expect(text).toContain('EXPORT_TIMEOUT_SECONDS (invalid)');
