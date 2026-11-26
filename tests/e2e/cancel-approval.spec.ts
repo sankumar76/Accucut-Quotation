@@ -48,7 +48,7 @@ async function openedAsAdmin(page: Page, testInfo: Parameters<typeof approvedEst
   const admin = await signInAsTheAdmin(page);
   const response = await page.goto(`/estimates/${approved.code}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(approved.code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${approved.code}`);
   await expect(cancelButton(page)).toBeEnabled();
   await waitUntilHydrated(page, '#review-cancel');
   return { ...approved, admin };
@@ -78,7 +78,7 @@ test.describe('AC-1, AC-2, AC-8: the button and the dialog', () => {
     // The Lead who approved is signed in: the page has the line and no button, and a request made by hand is the fixed 403.
     const asLead = await page.goto(`/estimates/${approved.code}`);
     expect(asLead?.status()).toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(approved.code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${approved.code}`);
     await expect(page.getByText('Only the Admin can cancel an approval.')).toBeVisible();
     await expect(cancelButton(page)).toHaveCount(0);
     const approvalId = await latestApprovalIdOf(approved.owner.id);

@@ -60,7 +60,7 @@ async function openAs(page: Page, person: E2eUser, code: string): Promise<void> 
   await signInAs(page, person);
   const response = await page.goto(`/estimates/${code}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
 }
 
 /** The Engineer went ahead, an input then changed (so the figures are cleared and the Lead may Recalculate), and a Lead opens the estimate. */
