@@ -663,7 +663,7 @@ The portal's audit log records it as "System: server command" with your Windows 
 | 3 | The password was refused (empty, the two entries differ, or the rule): run it again |
 | 4 | Stopped: not an interactive window, an unknown argument, `RESET` not typed, or Ctrl+C |
 
-A window that is not elevated never reaches the command: PowerShell cannot open `C:\Accucut`, and Node stops with its own exit 9 (`.env` not found). Open Windows PowerShell with Run as administrator.
+A window that is not elevated never reaches the command, and nothing changes: PowerShell is refused access to `C:\Accucut` (the first two lines fail with "Access is denied") and then cannot run `& $node`, so Node never starts and there is no exit code from the command. Exit code 9 (`.env` not found) appears only if Node is started by hand, by its full path, from such a window. Open Windows PowerShell with Run as administrator.
 
 ## The shared module (`AccucutOps.psm1`)
 
