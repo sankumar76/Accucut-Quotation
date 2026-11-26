@@ -134,14 +134,14 @@ An edit changes **no status**, so the task stays in its tab: Draft and Prepared 
 
 | Event | `before` | `after` | Words on SCR-16 |
 |---|---|---|---|
-| `estimate.part_added` | `{}` | `{ actorRole, part: { slNo, kind }, parent: { slNo, name } \| null }` | "Added Sub-assembly 1.4 under 1 Frame" |
+| `estimate.part_added` | `{}` | `{ actorRole, part: { slNo, kind }, parent: { slNo, name } \| null }` | "Added Sub-Assembly 1.4 under 1 Frame" |
 | `estimate.part_moved` | `{ part: { slNo, name, kind } }` | `{ actorRole, part: { slNo, name, kind } }` (the Sl. No after the move) | "Moved 1.4 Top cover to 1.2" |
 | `estimate.part_deleted` | `{ part: { slNo, name, kind }, rows: <count>, list: [{ slNo, name, kind }] }`, where `list` holds at most 100 rows in reading order, with `truncated: true` beyond | `{ actorRole }` | "Deleted 1.4 Top cover and 3 rows under it" |
 | Picture | `estimate.inputs_changed`, field Part Model (3.2 (2)) | | "1.4 Top cover: Part Model, Picture replaced" |
 
 - The input **values** of deleted rows are not copied into the log. The log stays bounded, and the same goes for an Engineer's delete. For an estimate that was calculated, the last calculation record still holds its copy of the tree (section 4.8), so the deleted values are recoverable from it.
 - A batch delete writes **one** entry (the root row and its count), never one per row.
-- Names are the `partNameOf` text at the time, which can be empty for a new row, and kinds are the stored node kinds (ADR-020).
+- Names are the `partNameOf` text at the time, which can be empty for a new row, and kinds are the stored node kinds (ADR-020). **The kind words come from the product's own names in `src/lib/estimate/node-kinds.ts` (`Main Assembly`, `Sub-Assembly`, `Part`, `Fastener`), never typed again in the event file**, so SCR-16, the ux ruling ("Delete 1.1 Sub-Assembly?") and the E2E tests use the same spelling.
 
 **Concurrency with an Engineer at the same moment** (all as built; nothing new):
 - Every tree write and every input save takes the **estimate row lock**, so they run one at a time, and `inputs_revision` rises once per write or not at all.
@@ -250,4 +250,4 @@ Stage 1 (view) is unchanged at 6.5 h, on lane 3, merged by the end of Sun 29 Nov
 |---|---|---|
 | 1.0 | 2026-11-27 | First issue, for DEF-131 and DL-432 |
 | 1.1 | 2026-11-27 | The delivery lead's answers: staging A (edit by Wed 2 Dec, Sunday gates withdrawn) and "also the parts tree". The tree 403 is reversed. Section 3.9 adds `estimate.part_added`, `part_moved` and `part_deleted`, with the tree's concurrency, figures and approval. Section 6.1: stage 2 is 28.5 h. Wed 2 Dec holds only with lane 2 dedicated. Master's item (1) in section 7 is withdrawn. |
-| 1.2 | 2026-11-27 | DL-435 clean-up: the stale "403" text in section 3.2 item 3 and section 3.8's tree row is struck through, with pointers to section 3.9. The same goes for the leftover 403 lines in section 4 (checks, integration and security tests), R-3, and the v1.0 effort and date text (section 6.1 governs). Section 6b answers the ux-expert's O-1 (`usePartsTree` serves the review island; figures joined by node ID) and O-3 (tree controls inactive during Recalculate, through the shared context's `calculating` flag). |
+| 1.2 | 2026-11-27 | DL-435 clean-up: the stale "403" text in section 3.2 item 3 and section 3.8's tree row is struck through, with pointers to section 3.9. The same goes for the leftover 403 lines in section 4 (checks, integration and security tests), R-3, and the v1.0 effort and date text (section 6.1 governs). "Sub-Assembly" is spelled as the product names it, and the kind words come from `node-kinds.ts`. Section 6b answers the ux-expert's O-1 (`usePartsTree` serves the review island; figures joined by node ID) and O-3 (tree controls inactive during Recalculate, through the shared context's `calculating` flag). |
