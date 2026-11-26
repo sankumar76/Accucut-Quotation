@@ -43,6 +43,16 @@ export function firstAllowedChild(parent: NodeKind): NodeKind | null {
   return ALLOWED_CHILDREN[parent][0] ?? null;
 }
 
+/**
+ * The IDs of the rows that hold at least one PART directly (AQP-449, DEF-092): the "+" menu of such a row names its Part item "Sub-part", because the Part it adds will be the second (`nodeKindLabel`). Only PART children
+ * count; Sub-Assembly and Fastener children and the Parts of a deeper row do not.
+ */
+export function parentIdsHoldingPart(nodes: ReadonlyArray<{ readonly parentId: string | null; readonly nodeKind: NodeKind }>): ReadonlySet<string> {
+  const holders = new Set<string>();
+  for (const node of nodes) if (node.nodeKind === 'PART' && node.parentId !== null) holders.add(node.parentId);
+  return holders;
+}
+
 /** What `nodeKindLabel` needs of a row: its place and its stored kind. */
 export interface KindedNode {
   readonly id: string;
