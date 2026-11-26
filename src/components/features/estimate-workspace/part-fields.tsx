@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,8 @@ import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-c
 import type { PartItem } from '@/lib/estimates/tree-client';
 import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
 import { isSectionComplete, sectionProgress, sectionWeight, shownSections, sumProgress, textOf } from '@/lib/estimates/form-values';
-import type { SaveGate } from '@/lib/estimates/save-gate';
+import { PERSISTENT_MENU_MIN_WIDTH } from '@/lib/design-tokens';
+import { createSaveGate, type SaveGate } from '@/lib/estimates/save-gate';
 import { FLAG_OFF, FLAG_ON } from '@/lib/estimate/treatment-value';
 import { formatIst } from '@/lib/time';
 
@@ -36,7 +37,7 @@ import { FieldRenderer } from './field-renderer';
 import { PartHead } from './part-head';
 import { PartProgress, PartProgressSkeleton } from './part-progress';
 import { PictureSlot } from './picture-slot';
-import { reviewField, type PartReview } from './review-look';
+import { reviewField, type PartReviewState } from './review-look';
 import { CONFLICT_BODY, CONFLICT_KEEP_MINE, CONFLICT_TITLE, CONFLICT_USE_NEWER, saveStatusText } from './save-texts';
 import { SectionCard } from './section-card';
 import { SectionStrip } from './section-strip';
@@ -54,23 +55,29 @@ export interface PartFieldsProps {
   readonly form: FormView;
   readonly materials: Loaded<ReadonlyArray<MaterialChoice>>;
   readonly lastSavedAt: string | null;
-  readonly onSaved: (saved: SavedPart) => void;
-  readonly onChanged: () => void;
+  readonly onSaved?: ((saved: SavedPart) => void) | undefined;
+  readonly onChanged?: (() => void) | undefined;
   /** Description or Part No. was left with a new text: the tree's row takes the name (AQP-447). */
-  readonly onNamed: (id: string, label: string) => void;
+  readonly onNamed?: ((id: string, label: string) => void) | undefined;
   /** A save was refused because the estimate was ignored (CR-01 item 7D). */
-  readonly onServerIgnored: () => void;
+  readonly onServerIgnored?: (() => void) | undefined;
   readonly onWrote: (at: string) => void;
   readonly onReadMaterialsAgain: () => void;
   /** The IDs of this part's fields that Calculate found blank (STORY-05.09). Each shows the words of its blank under the field until it has a value. */
-  readonly missing: ReadonlySet<string>;
+  readonly missing?: ReadonlySet<string> | undefined;
   /** What Calculate waits for: the saves in flight and the fields that show a value that is not saved (STORY-05.09). */
-  readonly gate: SaveGate;
+  readonly gate?: SaveGate | undefined;
   /** The Lead's and the Admin's read-only view of the same form (AQP-488, DEF-131 Stage 1): see `PartReview`. Absent for the Engineer, whose form is unchanged. */
-  readonly review?: PartReview | undefined;
+  readonly review?: PartReviewState | undefined;
 }
 
 const TITLE_ID = 'part-form-title';
+
+// What the Lead's read-only view leaves out (AQP-488): it saves nothing, so nothing is told when a save goes through, the tree is not read again, no part is missing, and the form has no Calculate to wait for it.
+// They are in this file, not in the first load: the page that draws the view hands the form only what the server can send.
+const noop = (): void => undefined;
+const NONE_MISSING: ReadonlySet<string> = new Set();
+const WIDE = `(min-width: ${PERSISTENT_MENU_MIN_WIDTH}px)`;
 
 /**
  * The words under a blank that Calculate found (UX spec SCR-05 "Fields"): a choice is chosen, a number says what to do when a part needs nothing, a text is entered. QTY per Assy is a number too,
@@ -114,16 +121,33 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
  * its number of fields, one to a row on a phone; the form is held to one card's least width, so a reserved region beside it takes a column with no redesign, UD-4), and every field from the server's definition. It is used under a key of the part's ID.
  * Each value is the person's until the field is left, and then the part's values are saved on their own (`usePartValues`).
  */
-export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing, gate, review }: PartFieldsProps) {
+export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing = NONE_MISSING, gate, review }: PartFieldsProps) {
   const allFields = form.sections.flatMap((section) => section.fields);
-  const values = usePartValues({ estimateId, part, editable, fields: allFields, onSaved, onChanged, onNamed, onServerIgnored, onWrote, gate });
+  const [ownGate] = useState(createSaveGate);
+  const values = usePartValues({
+    estimateId,
+    part,
+    editable,
+    fields: allFields,
+    onSaved: onSaved ?? noop,
+    onChanged: onChanged ?? noop,
+    onNamed: onNamed ?? noop,
+    onServerIgnored: onServerIgnored ?? noop,
+    onWrote,
+    gate: gate ?? ownGate,
+  });
   const title = useRef<HTMLHeadingElement>(null);
   // A row was chosen on the review (RO-2): once the form shows, the title takes the focus. Not on the first paint of the page, and never from a form the Engineer uses.
   const shown = values.stored.status === 'ready';
-  const focusTitle = review?.focusTitle === true;
+  const chosen = review?.chosen === true;
   useEffect(() => {
-    if (focusTitle && shown) title.current?.focus();
-  }, [focusTitle, shown]);
+    if (chosen && shown) title.current?.focus();
+  }, [chosen, shown]);
+  // Under 1024 px the parts tree folds after a row is chosen, so the inputs are in view and the tree's summary (which says the open row) is one press away.
+  useEffect(() => {
+    if (!chosen || window.matchMedia(WIDE).matches) return;
+    document.querySelector<HTMLDetailsElement>('[data-review-tree]')?.removeAttribute('open');
+  }, [chosen]);
 
   if (values.stored.status === 'failed') {
     return (
@@ -233,8 +257,8 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
                   editable={editable}
                   inTurn={values.inTurn}
                   onChanged={values.pictureSaved}
-                  onConflict={onChanged}
-                  onServerIgnored={onServerIgnored}
+                  onConflict={onChanged ?? noop}
+                  onServerIgnored={onServerIgnored ?? noop}
                 />
               ) : (
                 <FieldRenderer
@@ -255,7 +279,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
         ))}
       </div>
       <p role="status" className="sr-only">
-        {values.announcement}
+        {review?.chosen === true ? review.showing : values.announcement}
       </p>
     </form>
   );

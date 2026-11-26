@@ -15,9 +15,12 @@ export interface PartReview {
   readonly rowLine: ReactNode;
   /** The row's eyebrow, title and figure line, drawn on the server: what is on the page while the form is read, so the title and the line are there at first paint and nothing moves when the form arrives (UX ruling 3.6). */
   readonly head: ReactNode;
-  /** A row was just chosen: the form's title takes the focus once the form shows (RO-2). Not on the first paint. */
-  readonly focusTitle: boolean;
+  /** What is said once, politely, after a row is chosen: "Showing the inputs of 1.4 Top cover. Read-only." (a text the server wrote). */
+  readonly showing: string;
 }
+
+/** The review look as the fields see it: what the server handed in, and whether a row was chosen after the page was drawn (the first paint steals no focus and says nothing). */
+export type PartReviewState = PartReview & { readonly chosen: boolean };
 
 /**
  * The field as the review look draws it: without its hint, except the QTY per Assy one (it says the count is for the whole order, which the Lead needs to read the figures). The same field object otherwise, so

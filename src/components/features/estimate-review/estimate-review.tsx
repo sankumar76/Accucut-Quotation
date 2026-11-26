@@ -14,7 +14,7 @@ import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { ReviewInputs } from '../estimate-review-inputs/review-inputs';
+import { PartForm } from '../estimate-workspace/part-form';
 import { PartHead } from '../estimate-workspace/part-head';
 import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
@@ -192,20 +192,25 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} selectedSlNo={selected === null ? null : selected.slNo} />
         {selected === null ? null : (
           // The Engineer's own form, read-only, in a client island of its own folder; nothing handed to it holds a figure: the rows are mapped down to their number, kind and name, and the row line is drawn here (AQP-488).
-          <ReviewInputs
-            estimateId={estimateId}
-            rows={partItems}
-            selectedId={selected.id}
-            notice={inputsNotice(header.status, isIgnored)}
-            showing={showingInputs(selected.slNo, rowNameOf(selected.name, nodeKindLabel(selected, nodes)))}
-            rowLine={rowLine}
-            head={
-              <>
-                <PartHead partId={selected.id} slNo={selected.slNo} nodes={partItems} titleId="part-form-title" titleRef={null} />
-                {rowLine}
-              </>
-            }
-          />
+          <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">
+            <PartForm
+              estimateId={estimateId}
+              part={{ id: selected.id, slNo: selected.slNo, revision: 0 }}
+              editable={false}
+              nodes={partItems}
+              review={{
+                notice: inputsNotice(header.status, isIgnored),
+                showing: showingInputs(selected.slNo, rowNameOf(selected.name, nodeKindLabel(selected, nodes))),
+                rowLine,
+                head: (
+                  <>
+                    <PartHead partId={selected.id} slNo={selected.slNo} nodes={partItems} titleId="part-form-title" titleRef={null} />
+                    {rowLine}
+                  </>
+                ),
+              }}
+            />
+          </div>
         )}
       </div>
       {/* The action bar is not drawn while the estimate is ignored: Restore RFQ, in the notice, is the one action left (CR-01 item 7D). */}

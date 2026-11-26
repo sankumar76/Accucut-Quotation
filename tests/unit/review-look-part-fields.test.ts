@@ -85,7 +85,7 @@ const props = (over: Partial<PartFieldsProps> = {}): PartFieldsProps => ({
   ...over,
 });
 
-const REVIEW = { notice: 'Read-only. These are the values saved for this part.', rowLine: createElement('p', { 'data-row-line': '' }, 'This row: Cleared · count 2 nos'), head: createElement('p', { 'data-loading-head': '' }, 'head'), focusTitle: false };
+const REVIEW = { notice: 'Read-only. These are the values saved for this part.', rowLine: createElement('p', { 'data-row-line': '' }, 'This row: Cleared · count 2 nos'), head: createElement('p', { 'data-loading-head': '' }, 'head'), showing: 'Showing the inputs of 1.4 Top cover. Read-only.', chosen: false };
 const text = (html: string): string => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 const render = (over: Partial<PartFieldsProps> = {}): string => renderToStaticMarkup(createElement(PartFields, props(over)));
 
