@@ -1,6 +1,7 @@
 import type { Instrumentation } from 'next';
 
 import { EnvValidationError, loadAppEnv, loadExportEnv } from '@/lib/env';
+import { exportThreadProblem } from '@/server/export/thread-runner';
 
 /**
  * Runs once when the Next.js server starts. A missing or invalid setting stops the server here (AC-3,
@@ -25,6 +26,11 @@ export function register(): void {
         process.exit(1);
       }
       throw error;
+    }
+    // A production server whose export thread bundle is missing says so once, here (DEF-130). It does not stop the start: everything but Download works.
+    if (process.env.NODE_ENV === 'production') {
+      const problem = exportThreadProblem(process.cwd());
+      if (problem !== null) process.stderr.write(`${problem}\n`);
     }
   }
 }

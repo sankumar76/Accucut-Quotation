@@ -53,6 +53,17 @@ export function exportThreadFile(folder: string): string {
   return join(folder, '.next', 'export-worker.mjs');
 }
 
+/**
+ * What the server writes once, at start-up, when the thread's bundle is not where the export looks for it (AQP-487, DEF-130). `next build` on its own empties `.next` and does not make the bundle (only `npm run build`, `npm run dev`,
+ * the Playwright server and `scripts/package-windows.ps1` do), so a server started from such a build answers every Download with the fixed 500 "We could not build the file" and nothing in its log until someone presses the button.
+ * `null` when the bundle is there. Pure apart from `exists`, which a test replaces.
+ */
+export function exportThreadProblem(folder: string, exists: (path: string) => boolean = existsSync): string | null {
+  const file = exportThreadFile(folder);
+  if (exists(file)) return null;
+  return `The export thread bundle is missing: ${file}. Downloading a workbook will fail (EXPORT_THREAD_MISSING) until it is made. \`next build\` alone does not make it: run \`npx tsx scripts/build-export-worker.ts\` in ${folder}, or build with \`npm run build\`, then start the server again.`;
+}
+
 /** A build that takes longer than the proxy's read timeout (architecture section 4.6: at least 120 s) has nobody left to receive the file. */
 const DEFAULT_TIMEOUT_MS = 120_000;
 /** Builds at once. Each holds a workbook in memory: measured +405 MB for ten header-only builds together and +1,037 MB for four of 2,000 rows (review QS-01). */

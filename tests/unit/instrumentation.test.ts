@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 import { register } from '@/instrumentation';
@@ -122,6 +126,63 @@ describe('register (start-up check)', () => {
     stubCompleteEnvironment();
     expect(() => register()).not.toThrow();
     expect(exit).not.toHaveBeenCalled();
+    expect(written()).toBe('');
+  });
+});
+
+/**
+ * AQP-487 (DEF-130): a production server whose export thread bundle (`.next/export-worker.mjs`) is missing says so once at start-up, naming the command to run, and goes on serving. It does not exit. Anywhere but production
+ * (development makes the bundle itself; the tests run under `test`) it writes nothing. The folder is a scratch one, made for each test.
+ */
+describe('register (the export thread bundle, DEF-130)', () => {
+  function inScratchFolder(withBundle: boolean): string {
+    const folder = mkdtempSync(join(tmpdir(), 'accucut-register-'));
+    if (withBundle) {
+      mkdirSync(join(folder, '.next'));
+      writeFileSync(join(folder, '.next', 'export-worker.mjs'), '// invented');
+    }
+    vi.spyOn(process, 'cwd').mockReturnValue(folder);
+    return folder;
+  }
+
+  function startAs(nodeEnv: string): void {
+    vi.stubEnv('NEXT_RUNTIME', 'nodejs');
+    vi.stubEnv('NEXT_PHASE', 'phase-production-server');
+    vi.stubEnv('NODE_ENV', nodeEnv);
+    stubCompleteEnvironment();
+  }
+
+  it('writes one line that names the file and the command, and neither exits nor throws, when a production server has no bundle', () => {
+    const folder = inScratchFolder(false);
+    startAs('production');
+    expect(() => register()).not.toThrow();
+    expect(exit).not.toHaveBeenCalled();
+    const lines = written().split('\n').filter((line) => line !== '');
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('export-worker.mjs');
+    expect(lines[0]).toContain(folder);
+    expect(lines[0]).toContain('npx tsx scripts/build-export-worker.ts');
+  });
+
+  it('writes nothing when the production server has its bundle', () => {
+    inScratchFolder(true);
+    startAs('production');
+    register();
+    expect(written()).toBe('');
+  });
+
+  it.each(['development', 'test'])('writes nothing in %s, where the bundle is not this check\'s business', (nodeEnv) => {
+    inScratchFolder(false);
+    startAs(nodeEnv);
+    register();
+    expect(written()).toBe('');
+  });
+
+  it('does not ask for the bundle while `next build` runs, which has no runtime settings and no bundle yet', () => {
+    inScratchFolder(false);
+    startAs('production');
+    vi.stubEnv('NEXT_PHASE', 'phase-production-build');
+    register();
     expect(written()).toBe('');
   });
 });
