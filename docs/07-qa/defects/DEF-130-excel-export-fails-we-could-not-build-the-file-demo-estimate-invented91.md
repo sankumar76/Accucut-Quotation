@@ -1,12 +1,12 @@
-# DEF-130: "Download .xlsx" fails with "We could not build the file ... Reference: req-da945569" on the demo estimate INVENTED91 (4 parts, columns A to BK) on the production build of master e3dc5b0b (cause found 2026-11-27: the demo build lacked the export-worker bundle, a build and packaging defect; Sev-2 proposed after the cause step, Sev-1 as first filed; Jira AQP-487, GitHub #797; fix due end of Sun 29 Nov 2026 for the demo on Mon 30 Nov)
+# DEF-130: "Download .xlsx" fails with "We could not build the file ... Reference: req-da945569" on the delivery lead's hand-built demo (customer short name INVENTED91, task Q-2026-0001, 4 parts, columns A to BK; master e3dc5b0b): the demo lacked the export-worker bundle (Build, packaging procedure; product excluded; **Sev-3 by master, DL-437**; Jira AQP-487, GitHub #797; **open condition: prove an export on the rebuilt demo before Mon 30 Nov**)
 
 | Field | Value |
 |-------|-------|
 | Story / AC | STORY-07.x (EPIC-07, the Excel export; FR-071 family: the workbook in the customer's layout) and the export read-back checks of the test plan (sections 7 and 9.5). The AC that fails is "an approved or calculated estimate downloads as the workbook"; QA has not run it: this is the delivery lead's report. |
-| Severity | **Sev-1 Critical, proposed by QA at the orchestrator's request: the export is a critical, customer-facing path and the customer is shown the demo on Mon 30 Nov. It drops to Sev-2 if lane 1 shows that only this estimate's shape is affected; master grades.** |
-| Priority | P1 until graded (Jira Highest); date: **fixed and verified by the end of Sun 29 Nov 2026** (the customer gets a rebuilt demo on Mon 30 Nov). |
-| Type | **Build / packaging (cause found by lane 1, relayed by the orchestrator, 2026-11-27; QA did not reproduce it): the demo build lacked `.next/export-worker.mjs`.** The product's export code and the data are fine on lane 1's reading. First filed as 'Product, cause not yet known'. Test not applicable. |
-| Status | **Open, cause found 2026-11-27 (see 'Cause found').** Owner: **lane 1**. **Proposed regrade: build / packaging defect, Sev-2 (lane 1's reading); the #799 review's evidence (below, 'Grade evidence') supports Sev-3, QA's proposal to master; it would stay Sev-1 only if a package could ship without the bundle, which the review found it cannot; master grades.** Fix PR (lane 1) and the demo-folder fix pending; QA's verification pending. |
+| Severity | **Sev-3 Moderate (master, DL-437, 2026-11-27): regraded from the provisional Sev-1 of DL-432 (3). Not a G8 blocker.** QA's proposals were Sev-1 (first filing), Sev-2 (after lane 1's cause) and Sev-3 (after the #799 review's evidence). Master's reason: every supported build path makes the bundle, so 'no workaround' does not hold; the failure exists only on a hand-built server. |
+| Priority | P3 (Jira Medium; labels `sev-3`, `final-review`, `demo-2026-11-30`; changed from Highest and `sev-1` on 2026-11-27). **The demo condition below keeps its date: by the end of Sun 29 Nov 2026.** |
+| Type | **Build (packaging procedure), product excluded (master, DL-437).** The demo at `e3dc5b0b` was built with `next build` run by hand, which skips the bundle step. |
+| Status | **Graded Sev-3 (DL-437); cause found and verified on the running demo with the bundle present (2026-11-27); OPEN on two proofs: (1) master's condition for Monday's demo (the open proof row below), (2) the build-path fix PR #799 (merges after its Major QLT-799-01 is fixed; QA verifies its PR run and the first `master` push after the squash).** Owner: lane 1. |
 | Jira / GitHub | [AQP-487](https://sankumar76.atlassian.net/browse/AQP-487) / [#797](https://github.com/sankumar76/Accucut-Quotation/issues/797) (labels bug, sev-1, ai-delivery, final-review, demo-2026-11-30; Jira also aiid-DEF-130, agent-qa-engineer). Relates to AQP-1 and the EPIC-07 export stories. Searched first: JQL on `aiid-DEF-130`, 'req-da945569', 'could not build the file' and a GitHub search: nothing (DEF-084's and QLT-F-04's hits are other topics). |
 | Found by / date | The delivery lead, testing the demo; relayed by the orchestrator, 2026-11-27 |
 | Build / commit | Production build of `master` `e3dc5b0b` (the demo build) |
@@ -64,13 +64,15 @@ The export route `src/app/api/v1/estimates/[id]/export/` and `src/server/export/
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Graded (type, severity, lane) | master | | |
+| Graded (type, severity, lane) | master | 2026-11-27 | **DL-437: Sev-3, type Build, product excluded, not a G8 blocker; one condition (below)** |
 | Cause found (the thrown error) | developer (lane 1) | 2026-11-27 | the missing `.next/export-worker.mjs` (relayed) |
 | Fixed: the demo folder (run the bundle step) | developer (lane 1) | | |
 | Fixed: the PR (start-up check, every-build-path test, README) | developer (lane 1) | | |
 | Regression test (every build path makes the bundle) | developer (lane 1) | | |
 | Verified on the running demo with the bundle present (INVENTED91 and one other estimate; export 200, xlsx read back) | qa-engineer | 2026-11-27 | the section above; the build-path fix #799 not yet verified |
-| Verified on the rebuilt demo of Mon 30 Nov, and the fix PR's run and first master push | qa-engineer | | |
+| **OPEN PROOF (master's condition, DL-437 (2)); due by the end of Sun 29 Nov 2026, before the demo is handed over:** the demo is rebuilt with `npm run build` (or from the Windows package); **QA or the orchestrator downloads one Excel file on it from an invented estimate and records the request ID and the result** (the request ID is the `X-Request-Id` response header of the download: `file-response.ts` sets it on the success answer and `problem.ts` on an error; QA's check of 27 Nov did not print that header, so no request ID has been recorded yet). **If that export fails it comes to master the same day as a provisional Sev-1.** | qa-engineer (or the orchestrator) | | **open** |
+| Verified on the fix PR's run (#799) and the first `master` push after the squash | qa-engineer | | open |
+| Hosting (H1, after G8): the managed-host build path includes the bundle step and joins `export-bundle-paths.test.ts` | solution-architect / qa-engineer (checklist) | | after G8 |
 | Rehearsal step P4a added (test plan 14.9) | qa-engineer | 2026-11-27 | test plan 0.3.79 |
 
 ## Records
