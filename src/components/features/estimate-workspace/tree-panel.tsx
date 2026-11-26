@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
+import { parentIdsHoldingPart } from '@/lib/estimate/node-kinds';
 import { ADD_MAIN_ASSEMBLY } from '@/lib/estimates/tree-actions';
 import type { PartItem } from '@/lib/estimates/tree-client';
 import { stepsAt, type SiblingPlace } from '@/lib/estimates/tree-moves';
@@ -138,6 +139,7 @@ export function TreePanel({ tree, editable, onOpen, missingIds, framed = true, h
       </>
     );
   } else {
+    const holdingPart = parentIdsHoldingPart(nodes);
     const choose = (id: string, byKeyboard: boolean): void => (byKeyboard && onOpen !== undefined ? onOpen(id) : tree.select(id));
     body = (
       <>
@@ -151,7 +153,7 @@ export function TreePanel({ tree, editable, onOpen, missingIds, framed = true, h
             <TreeNode part={part} kindLabel={kindLabel} selected={part.id === selected?.id} missing={missingIds?.has(part.id) ?? false} onChoose={choose} takesFocus={tree.wantsFocus} />
           )}
           {...(editable ? { renderToolbar: (part: PartItem, _kindLabel: string, place: SiblingPlace) => (
-                <RowActions part={part} onAdd={tree.addUnder} onDelete={tree.askDelete} {...stepsAt(place)} onMoveTo={tree.moveTo} busy={busy} describedBy={describedBy} showing={tree.deleteOpen && tree.deleting?.id === part.id} />
+                <RowActions part={part} onAdd={tree.addUnder} onDelete={tree.askDelete} {...stepsAt(place)} onMoveTo={tree.moveTo} busy={busy} describedBy={describedBy} showing={tree.deleteOpen && tree.deleting?.id === part.id} holdsPart={holdingPart.has(part.id)} />
               ),
             } : {})}
         />

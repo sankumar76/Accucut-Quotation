@@ -31,6 +31,8 @@ export interface RowActionsProps {
   readonly describedBy?: string | undefined;
   /** The delete confirmation of this row is open (AQP-418): the toolbar stays in view until the dialog is gone, although the focus is in the dialog. Never `busy`: a change on its way does not show or hide the toolbar. */
   readonly showing?: boolean;
+  /** The row already holds a Part (AQP-449, DEF-092): the Part item of its "+" menu reads "Sub-part". */
+  readonly holdsPart?: boolean;
 }
 
 /**
@@ -52,7 +54,7 @@ const HIDDEN_UNTIL_NEEDED =
  * The "-" opens the existing confirmation, which names the row and every row under it. Each button's name is its tooltip and its spoken name, and says which row it is for. Tab moves from a row to these buttons.
  * It is drawn only where the person may change the inputs (`treeActionsOffered`); the server asks again.
  */
-export function RowActions({ part, onAdd, onDelete, upTo, downTo, onMoveTo, busy = false, describedBy, showing = false }: RowActionsProps) {
+export function RowActions({ part, onAdd, onDelete, upTo, downTo, onMoveTo, busy = false, describedBy, showing = false, holdsPart = false }: RowActionsProps) {
   const add = addActionOf(part.nodeKind);
   const name = part.label === '' ? TREE_PART_NAME : part.label;
   const remove = deleteRowLabel(part.slNo, name);
@@ -62,7 +64,7 @@ export function RowActions({ part, onAdd, onDelete, upTo, downTo, onMoveTo, busy
       <div className="mt-s-1 ml-s-1 flex w-fit items-center rounded-md border border-border bg-surface">
         <MoveHandle id={`move-${part.id}`} label={moveRowLabel(part.slNo, name)} upTo={upTo} downTo={downTo} onMoveTo={(index) => onMoveTo(part.id, index)} {...(busy ? { unavailable: true, ...(describedBy === undefined ? {} : { describedBy }) } : {})} />
         {add.kind === 'direct' ? <AddNodeTrigger label={addFastenerLabel(part.slNo, name)} unavailable={busy} {...why} onClick={busy ? undefined : () => onAdd(part.id, add.nodeKind)} /> : null}
-        {add.kind === 'menu' ? <AddNodeMenu id={`add-node-${part.id}`} label={addUnderLabel(part.slNo, name)} nodeKinds={add.nodeKinds} onChoose={(nodeKind) => onAdd(part.id, nodeKind)} {...(busy ? { unavailable: true, ...(describedBy === undefined ? {} : { describedBy }) } : {})} /> : null}
+        {add.kind === 'menu' ? <AddNodeMenu id={`add-node-${part.id}`} label={addUnderLabel(part.slNo, name)} nodeKinds={add.nodeKinds} holdsPart={holdsPart} onChoose={(nodeKind) => onAdd(part.id, nodeKind)} {...(busy ? { unavailable: true, ...(describedBy === undefined ? {} : { describedBy }) } : {})} /> : null}
         <Button
           variant="ghost"
           size="icon"
