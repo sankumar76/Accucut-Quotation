@@ -139,7 +139,7 @@ describe('the head of SCR-06 (DEF-110)', () => {
 describe('QLT-789-03: the description is not a paragraph, so a block inside it (the alert of the Change customer button) nests validly', () => {
   it('draws a node description in a div', () => {
     const html = renderToStaticMarkup(createElement(PageHead, { crumbs: [{ label: 'Here' }], title: 'T', description: createElement('div', { role: 'alert' }, 'No') }));
-    expect(html).toContain('<div class="text-ink-2"><div role="alert">No</div></div>');
+    expect(html).toContain('<div data-page-head-description="" class="text-ink-2"><div role="alert">No</div></div>');
     expect(html).not.toMatch(/<p[^>]*class="text-ink-2"/);
   });
 });
