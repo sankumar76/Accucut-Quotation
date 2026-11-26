@@ -225,7 +225,7 @@ shows that it can fail: the Admin is sent the canary rates by the same routes an
 | Coverage of the lines a pull request adds (CI stage 11, pull requests only) | `npx tsx scripts/check-changed-coverage.ts --base origin/master` (after the line above) |
 | Integration tests only (needs the database above) | `npx vitest run tests/integration` |
 | All tests | `npx vitest run` |
-| Build | `npx prisma generate && npx next build` |
+| Build (**the full build**: `npm run build`, which is the three commands on the right. The last one makes the export thread's bundle, `.next/export-worker.mjs`. **Never run `next build` alone for a portal people will use, a demo included**: it empties `.next`, and without the bundle every Download of a workbook fails with "We could not build the file". A server started from such a build writes one line at start-up that says so; the repair is `npx tsx scripts/build-export-worker.ts` in the same folder, with no rebuild) | `npx prisma generate && npx next build && npx tsx scripts/build-export-worker.ts` |
 | Hidden routes in the build (CI stage 9, after the build) | `npx tsx scripts/check-production-routes.ts` |
 | First-load JavaScript budget (CI stage 11b; needs the build and the database above; see "Performance checks") | `npx tsx scripts/check-js-budget.ts` |
 | End-to-end, three screen sizes (needs the database above; builds and serves the production build for the sign-in spec) | `npx playwright install chromium` once, then `npx playwright test` |
@@ -372,7 +372,7 @@ Admin to sign in as, and the portal allows **one active Admin**, so there are tw
   (never staging), and the password is never printed.
 
   ```sh
-  npx next build
+  npm run build
   # bash; in PowerShell set the two variables with $env:NAME = "value"
   export MEASUREMENT_ADMIN_EMAIL=perf-admin@example.test MEASUREMENT_ADMIN_PASSWORD=<an invented password of your choice>
   npx tsx scripts/ensure-measurement-user.ts
