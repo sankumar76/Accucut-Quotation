@@ -30,8 +30,9 @@ The screen at the widths named reads as the design above; the hands-on check rep
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
 | Graded (type, severity, lane) | master | 2026-11-26 | DL-414, DL-416: Sev-3, lane 1 |
-| Fixed | developer | | |
-| Regression test added | developer | | |
+| Fixed | developer | 2026-11-27 | PR #791, squash `c30b349f` (form fields two to a row at 360 px; the tree button reads 'Parts tree 1.1 Base frame': `tree-button-label.tsx`, `parts-tree-area.tsx`, `estimate-workspace.tsx`) |
+| Regression test added | developer | 2026-11-27 | `compact-layout.spec.ts` (a card with two fields or more flows them in at least two columns at every width, 360 px included), `estimate-tree.spec.ts` (the button's name `/^Parts tree 1/`), `tree-button-label.test.ts` (4 tests), `parts-tree-card.test.ts` (26) |
+| CI proof read by QA (the push `c30b349f`, CI 45854831021 and Windows package 45854831146, both `success`) | qa-engineer | 2026-11-27 | the `compact-layout.spec.ts` cases `:60`, `:126`, `:135` and `:162` passed at all three widths on attempt 1; `estimate-tree.spec.ts:901` and `:1065` and `estimate-tree-names.spec.ts:52` passed; the two new unit files passed; `/estimates/[code]` first load **192,291 B** gzip (209 B under the 192,500 B ceiling; #791 added 129 B to the 192,162 B of `d2b58f04`); the push's one flaky (`estimate-warning.spec.ts:117` [tablet]) is unrelated; test plan 0.3.95 |
 | Hands-on check repeated | ux-expert | | |
 | Verified | qa-engineer | | |
 
