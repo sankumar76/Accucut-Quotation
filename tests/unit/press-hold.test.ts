@@ -335,11 +335,11 @@ describe('the toolbar of a row reads the hold', () => {
   const group = (showing: boolean): ReactElement<{ className: string }> =>
     RowActions({ part, onAdd: vi.fn(), onDelete: vi.fn(), upTo: null, downTo: null, onMoveTo: vi.fn(), showing }) as ReactElement<{ className: string }>;
 
-  it('is in view while it carries data-hold, besides the open row, visible focus and an open menu, and is clipped otherwise', () => {
+  it('is in view while it carries data-hold, besides the hovered row, the open row on a touch screen, visible focus and an open menu, and is clipped otherwise', () => {
     const classes = group(false).props.className.split(' ');
     expect(classes).toContain('sr-only');
     expect(classes).toContain(`${HOLD_ATTRIBUTE}:not-sr-only`);
-    expect(classes).toContain('group-has-[[aria-current=true]]/row:not-sr-only');
+    expect(classes).toContain('touch:group-has-[[aria-current=true]]/row:not-sr-only');
     expect(classes).toContain('group-has-[:focus-visible]/row:not-sr-only');
   });
 
