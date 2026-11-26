@@ -18,7 +18,7 @@ import type { CostsView } from '@/server/views/schemas/costs';
 
 import { ReviewTreeEditor } from '../estimate-review-edit/review-tree-editor';
 import { PartHead } from '../estimate-workspace/part-head';
-import { ReviewForm } from '../estimate-workspace/review-form';
+import { PartForm } from '../estimate-workspace/part-form';
 import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
 import { BuildTable } from './build-table';
@@ -220,7 +220,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
             {/* The row's eyebrow, title and figure line are drawn here, on the server, so they are in the first paint whatever the form is doing; the form under them is labelled by the title (UX ruling 3.6, 3.7). */}
             <PartHead partId={selected.id} slNo={selected.slNo} nodes={partItems} titleId="part-form-title" titleRef={null} />
             {rowLine}
-            <ReviewForm
+            <PartForm
               estimateId={estimateId}
               part={{ id: selected.id, slNo: selected.slNo, revision: selectedRevision ?? 0 }}
               editable={editable}

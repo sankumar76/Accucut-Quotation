@@ -22,7 +22,6 @@ import { QUANTITY_CASES } from './quantity/quantity-cases';
  */
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: () => undefined, replace: () => undefined }), usePathname: () => '/estimates/Q-2026-0318' }));
-vi.mock('@/components/features/estimate-workspace/review-form', () => ({ ReviewForm: () => null }));
 
 const CE1 = QUANTITY_CASES.find((candidate) => candidate.id === 'CE-1');
 const STATUSES: ReadonlyArray<EstimateStatus> = ['DRAFT', 'PREPARED', 'APPROVED', 'QUOTED'];

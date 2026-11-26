@@ -402,6 +402,9 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(island).not.toMatch(/@\/server\/(?!views\/schemas\/costs')/);
     expect(island).not.toMatch(/^import (?!type).*schemas\/costs/m);
     expect(island).not.toMatch(/calculation-|row-outputs|product-totals|figure-state|estimate-review-service|\bfetch\(/);
+    // The editable form (autosave, leave guard and its dialog) is fetched by a bare import() after the page is up and is never a plain import of the first load (`overlay-imports.test.ts`).
+    expect(island).toMatch(/import\('\.\.\/estimate-workspace\/review-form'\)/);
+    expect(island).not.toMatch(/^import (?!type).*estimate-workspace\/review-form'/m);
     const importers = ALL.filter((file) => file.path !== TREE_EDITOR && /from '[^']*review-tree-editor'/.test(file.text)).map((file) => file.path);
     expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
   });

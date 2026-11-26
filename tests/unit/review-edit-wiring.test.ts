@@ -27,9 +27,17 @@ interface Captured {
   readonly review: { readonly notice: string; readonly figuresCurrent?: boolean };
 }
 const captured: Captured[] = [];
-vi.mock('@/components/features/estimate-workspace/review-form', () => ({
-  ReviewForm: (props: Captured) => {
+// The inputs block is drawn in one of two places (DEF-131 stage 2T): by the editing island, which the page chooses where the tree can be edited (and which loads the editable form after the page is up), and by the read-only
+// `PartForm` where it cannot. Each is captured at the boundary, with what it would hand the form: the island's props are the page's (status and figure state), from which it works out the same notice.
+vi.mock('@/components/features/estimate-workspace/part-form', () => ({
+  PartForm: (props: Captured) => {
     captured.push(props);
+    return null;
+  },
+}));
+vi.mock('@/components/features/estimate-review-edit/review-tree-editor', () => ({
+  ReviewTreeEditor: (props: { readonly status: EstimateStatus; readonly state: 'current' | 'out-of-date' | 'none' }) => {
+    captured.push({ editable: true, review: { notice: inputsNotice(props.status, false, props.state), figuresCurrent: props.state === 'current' } });
     return null;
   },
 }));

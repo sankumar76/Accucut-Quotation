@@ -4,7 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 
 import { PartsTreeList } from '@/components/shared/parts-tree-list';
+import { Notice } from '@/components/shared/notice';
 import { TreeLegend } from '@/components/shared/tree-legend';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { rowNameOf } from '@/lib/estimates/row-name';
 import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import { createClearedRefresh } from '@/lib/estimates/cleared-refresh';
@@ -15,8 +18,9 @@ import type { EstimateStatus } from '@/lib/estimate/state-machine';
 import type { CostNode, CostsView } from '@/server/views/schemas/costs';
 
 import { PartHead } from '../estimate-workspace/part-head';
-import { ReviewForm } from '../estimate-workspace/review-form';
+import type { ReviewFormProps } from '../estimate-workspace/review-form';
 import { TreePanel } from '../estimate-workspace/tree-panel';
+import { useLazyComponent } from '../estimate-workspace/use-lazy-component';
 import { usePartsTree } from '../estimate-workspace/use-parts-tree';
 import { ReviewRowLine } from '../estimate-review/review-row-line';
 import { TreeRow } from '../estimate-review/review-tree-row';
@@ -36,6 +40,12 @@ import { inputsNotice, removedElsewhereLine, showingInputs, TREE_CALCULATING, TR
  * again **once** (\`createClearedRefresh\`, the rule of the inputs block) and says so once, politely. A refusal (the estimate was approved or ignored elsewhere) draws the page again too, which then shows the read-only tree
  * and its notice. If the open row was removed by someone else the block shows the row the tree now offers and says so once.
  */
+
+/**
+ * The form's code: a bare `import()` behind the type-only import above, so the autosave, the leave guard and their dialog are not in the first load of the review (NFR-009, ADR-016; `overlay-imports.test.ts`). It is asked
+ * for as soon as the island has mounted, like the fields' code inside the form. The Lead's read-only page draws the plain `PartForm` and has none of this.
+ */
+const loadForm = () => import('../estimate-workspace/review-form').then((module) => module.ReviewForm);
 
 export interface ReviewTreeEditorProps {
   readonly estimateId: string;
@@ -77,6 +87,8 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
   useEffect(() => {
     if (refused) refresh();
   }, [refused, refresh]);
+  const form = useLazyComponent<ReviewFormProps>(loadForm, true);
+  const Form = form.Component;
   const calculating = useSyncExternalStore(reviewCalculating.subscribe, reviewCalculating.get, () => false);
 
   // What the page knew when it was drawn, as rows the first paint can use before the tree is read.
@@ -142,20 +154,35 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
           {/* The row's eyebrow, title and figure line, then the form, which the title labels (UX ruling 3.6, 3.7): the same order as the read-only page. */}
           <PartHead partId={shown.id} slNo={shown.slNo} nodes={items} titleId="part-form-title" titleRef={null} />
           {rowLine}
-          <ReviewForm
-            estimateId={estimateId}
-            part={{ id: shown.id, slNo: shown.slNo, revision: shown.revision }}
-            editable
-            nodes={items}
-            onSaved={tree.applySaved}
-            onNamed={tree.applyLabel}
-            onChanged={tree.readAgain}
-            review={{
-              notice: inputsNotice(status, false, state),
-              showing: showingInputs(shown.slNo, rowNameOf(shown.label, nodeKindLabel(shown, items)), true),
-              figuresCurrent,
-            }}
-          />
+          {Form !== null ? (
+            <Form
+              estimateId={estimateId}
+              part={{ id: shown.id, slNo: shown.slNo, revision: shown.revision }}
+              editable
+              nodes={items}
+              onSaved={tree.applySaved}
+              onNamed={tree.applyLabel}
+              onChanged={tree.readAgain}
+              review={{
+                notice: inputsNotice(status, false, state),
+                showing: showingInputs(shown.slNo, rowNameOf(shown.label, nodeKindLabel(shown, items)), true),
+                figuresCurrent,
+              }}
+            />
+          ) : form.failed ? (
+            <Notice tone="danger" title="We could not load the form">
+              <p>Check your connection and try again.</p>
+              <Button variant="secondary" className="mt-s-2" onClick={form.retry}>
+                Try again
+              </Button>
+            </Notice>
+          ) : (
+            <div role="status" aria-label="Loading the form" className="flex min-w-0 flex-1 flex-col gap-s-3">
+              <Skeleton className="h-(--control-h)" />
+              <Skeleton className="h-(--control-h)" />
+              <Skeleton className="h-(--control-h)" />
+            </div>
+          )}
         </div>
       )}
     </>

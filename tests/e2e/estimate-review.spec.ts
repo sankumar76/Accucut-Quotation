@@ -2,12 +2,13 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 
 import { defined } from '../support/defined';
 
-import { createDisposableUser, E2E_ADMIN, useFreshAddress } from './support/auth';
+import { createDisposableUser, E2E_ADMIN, readEstimateState, useFreshAddress } from './support/auth';
 import { controlIdFor } from '../../src/components/features/estimate-workspace/field-ids';
 import { calculateWithoutThePage, engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
 import { ignoreThroughTheApi } from './support/ignored';
 import { control } from './support/part-form';
+import { addMainAssemblyButton, chooseRow, CLEARED_STATUS, countPageReads, expectTreeControls, reviewButton, reviewRow, slNumbersOf } from './support/review-tree';
 import { DEVELOPMENT_URL } from './support/servers';
 import { expectLinkTarget, isTouchLayout } from './support/touch-link';
 
@@ -85,6 +86,37 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     for (const letter of ['BL', 'BN', 'BO']) await expect(tiles(page).getByText(`Excel column ${letter}`, { exact: true })).toHaveCount(1);
     const bl = tiles(page).locator('p').filter({ hasText: RUPEES });
     await expect(bl).toHaveCount(1);
+
+    // DEF-131 stage 2T (ruling 2026-11-27 4.7; ED-18, ED-21, ED-23, ED-24, ED-30, ED-33): a Lead changes the parts of a Prepared estimate. The tree has its controls once the island has read it and no resize handle; "Add main assembly"
+    // adds a row last, opens it, gives its link the focus and says so; every figure is cleared, the page is read once and the change is said once; deleting it asks first, with the safe choice focused and no password; the
+    // estimate stays Prepared.
+    await expectTreeControls(page);
+    const pageReads = countPageReads(page);
+    await addMainAssemblyButton(page).click();
+    await expect(reviewRow(page, '2')).toHaveAttribute('aria-current', 'true');
+    await expect(reviewRow(page, '2')).toBeFocused();
+    await expect(page.getByRole('status').filter({ hasText: 'Added 2 Main Assembly. Type a Description to name it.' })).toHaveCount(1);
+    await expect(page.getByRole('status').filter({ hasText: CLEARED_STATUS })).toHaveCount(1);
+    await expect(tiles(page).getByText(RUPEES)).toHaveCount(0);
+    await expect(page.locator('#review-calculate')).toHaveText('Recalculate');
+    await expect(page.locator('#review-approve')).toBeDisabled();
+    await expect(page.locator('#review-download')).toBeDisabled();
+    await expect.poll(pageReads).toBe(1);
+
+    await chooseRow(page, '2');
+    await reviewButton(page, 'Delete', '2').click();
+    const dialog = page.getByRole('alertdialog', { name: /^Delete 2 .+?$/ });
+    await expect(dialog.getByRole('button', { name: 'Keep it' })).toBeFocused();
+    await expect(dialog.getByRole('textbox')).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Delete row' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText('Row deleted')).toHaveCount(1);
+    await expect(reviewRow(page, '2')).toHaveCount(0);
+    await expect(reviewRow(page, '1')).toBeFocused();
+    // The figures were already cleared, so the second change reads the page no more and says nothing more (once per change from current to cleared).
+    expect(pageReads()).toBe(1);
+    await expect(page.getByRole('status').filter({ hasText: CLEARED_STATUS })).toHaveCount(1);
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 
   test('AC-2: every row shows its own figure with its count beside it, and the legend says so', async ({ page }, testInfo) => {
@@ -181,7 +213,46 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(tiles(page)).toContainText('File cell BL2');
     // The Admin sees the same inputs block, read-only (AQP-488).
     await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
-    await expect(page.locator('#row-inputs')).toContainText('Read-only.');
+    await expect(page.locator('#row-inputs')).toContainText('You can correct inputs.');
+
+    // ED-20, ED-22, ED-23, ED-35 (ruling 2026-11-27 4.7): an Admin works the tree with the keyboard alone, no drag and no mouse after the first press. The "+" of a Main Assembly offers exactly the kinds that may go under it; a
+    // second Part under the same row is named "Sub-part"; the handle's menu moves a row up and the handle keeps the focus; "-" asks first (no password) and removes the row and the rows under it in one step.
+    await expectTreeControls(page);
+    await addMainAssemblyButton(page).click();
+    await expect(reviewRow(page, '2')).toBeFocused();
+    const addUnder = async (slNo: string, kind: RegExp): Promise<void> => {
+      await reviewButton(page, 'Add under', slNo).focus();
+      await page.keyboard.press('Enter');
+      const menu = page.getByRole('menu');
+      if (slNo === '2') {
+        await expect(menu.getByRole('menuitem')).toHaveCount(3);
+        for (const kindName of [/^Sub-Assembly/, /^(Part|Sub-part)/, /^Fastener/]) await expect(menu.getByRole('menuitem', { name: kindName })).toHaveCount(1);
+      }
+      await menu.getByRole('menuitem', { name: kind }).focus();
+      await page.keyboard.press('Enter');
+    };
+    await addUnder('2', /^Part/);
+    await expect(page.getByRole('status').filter({ hasText: /^Added 2.1 Part. Type a Description to name it./ })).toHaveCount(1);
+    await addUnder('2', /^(Part|Sub-part)/);
+    await expect(page.getByRole('status').filter({ hasText: /^Added 2.2 Sub-part. Type a Description to name it./ })).toHaveCount(1);
+    expect(await slNumbersOf(page)).toEqual(['1', '2', '2.1', '2.2']);
+    await reviewButton(page, 'Move', '2.2').focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('menuitem', { name: 'Move up', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('status').filter({ hasText: /renumbered to 2.1/ })).toHaveCount(1);
+    await expect(reviewButton(page, 'Move', '2.1')).toBeFocused();
+    await reviewButton(page, 'Delete', '2').focus();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('alertdialog', { name: /^Delete 2 .+?$/ });
+    await expect(dialog.getByRole('button', { name: 'Keep it' })).toBeFocused();
+    await expect(dialog).toContainText('This also deletes the 2 rows under it');
+    await expect(dialog.getByRole('textbox')).toHaveCount(0);
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Enter');
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText('3 rows deleted')).toHaveCount(1);
+    expect(await slNumbersOf(page)).toEqual(['1']);
   });
 });
 

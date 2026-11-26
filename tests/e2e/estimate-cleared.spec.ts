@@ -4,6 +4,8 @@ import { readEstimateState, saveCanaryQuantity, useFreshAddress } from './suppor
 import { calculateAsEngineer, engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
 import { control, fieldIdOf } from './support/part-form';
+import { addMainAssemblyButton, chooseRow, readTreeThrough, reviewButton, reviewRow, slNumbersOf, withEngineerWindow } from './support/review-tree';
+import { deleteGuardOf } from '../../src/lib/estimates/tree-moves';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
@@ -145,6 +147,61 @@ test.describe('AC-3: Recalculate from the screen', () => {
     await expect(page.getByRole('button', { name: 'Keep what I typed' })).toBeVisible();
     await page.getByRole('button', { name: 'Use the newer values' }).click();
     await expect(length).toHaveValue('77.00');
+
+    // ED-26, ED-27, ED-28 (ruling 2026-11-27 4.7 (d) 4; DEF-131 stage 2T): the Lead adds a row (2) and a Part under it (2.1); the Engineer's window reads them, with no figure. The Engineer then types inside the subtree the Lead has a
+    // delete dialog open on: the Lead's Delete is refused, nothing is deleted, the tree is read again and the notice says so. Last, the Engineer deletes the row the Lead has open: the Lead's next save answers 404, the block
+    // falls back to the first row and says so once. The Lead then removes the row that is left, so the Calculate below has only the part the Engineer filled.
+    await addMainAssemblyButton(page).click();
+    await expect(reviewRow(page, '2')).toBeFocused();
+    await reviewButton(page, 'Add under', '2').click();
+    await page.getByRole('menuitem', { name: /^Part/ }).click();
+    await expect(reviewRow(page, '2.1')).toHaveAttribute('aria-current', 'true');
+    await withEngineerWindow(browser, owner, async (api) => {
+      const rows = await readTreeThrough(api, owner.id);
+      expect(rows.map((row) => row.slNo)).toEqual(['1', '2', '2.1']);
+      expect(JSON.stringify(rows)).not.toMatch(/figures|unitPrice|price/i);
+    });
+
+    await chooseRow(page, '2');
+    await reviewButton(page, 'Delete', '2').click();
+    const deleteDialog = page.getByRole('alertdialog', { name: /^Delete 2 .+?$/ });
+    await expect(deleteDialog.getByRole('button', { name: 'Keep it' })).toBeFocused();
+    await withEngineerWindow(browser, owner, async (api) => {
+      const rows = await readTreeThrough(api, owner.id);
+      const inner = rows.find((row) => row.slNo === '2.1');
+      if (inner === undefined) throw new Error('row 2.1 is missing');
+      const read = await api.get(`/api/v1/estimates/${owner.id}/nodes/${inner.id}`);
+      const { revision } = (await read.json()) as { revision: number };
+      const written = await api.patch(`/api/v1/estimates/${owner.id}/nodes/${inner.id}/inputs`, { headers: { origin: DEVELOPMENT_URL }, data: { revision, values: { [fieldIdOf('J')]: '5' } } });
+      expect(written.status(), 'the Engineer types inside the subtree').toBe(200);
+    });
+    await deleteDialog.getByRole('button', { name: 'Delete 2 rows' }).click();
+    await expect(deleteDialog).toHaveCount(0);
+    await expect(page.getByText('The parts were changed by someone else. The tree has been refreshed. Check it and try again.')).toBeVisible();
+    expect(await slNumbersOf(page)).toEqual(['1', '2', '2.1']);
+
+    await chooseRow(page, '2.1');
+    await expect(reviewRow(page, '2.1')).toHaveAttribute('aria-current', 'true');
+    await withEngineerWindow(browser, owner, async (api) => {
+      const rows = await readTreeThrough(api, owner.id);
+      const inner = rows.find((row) => row.slNo === '2.1');
+      if (inner === undefined) throw new Error('row 2.1 is missing');
+      const guard = deleteGuardOf(rows, inner.id);
+      const removed = await api.delete(`/api/v1/estimates/${owner.id}/nodes/${inner.id}?revision=${String(inner.revision)}&parts=${String(guard.parts)}&subtree=${guard.subtree}`, { headers: { origin: DEVELOPMENT_URL } });
+      expect(removed.status(), 'the Engineer deletes the row the Lead has open').toBe(200);
+    });
+    const open = control(page, 'J');
+    await expect(open).toBeEnabled();
+    await open.fill('9');
+    await open.blur();
+    await expect(page.getByRole('status').filter({ hasText: '2.1 was removed by someone else. Showing 1.' })).toHaveCount(1);
+    await expect(reviewRow(page, '1')).toHaveAttribute('aria-current', 'true');
+    expect(await slNumbersOf(page)).toEqual(['1', '2']);
+    await chooseRow(page, '2');
+    await reviewButton(page, 'Delete', '2').click();
+    await page.getByRole('alertdialog', { name: /^Delete 2 .+?$/ }).getByRole('button', { name: 'Delete row' }).click();
+    await expect(page.getByText('Row deleted')).toHaveCount(1);
+    expect(await slNumbersOf(page)).toEqual(['1']);
 
     const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${owner.id}/recalculate`));
     await button(page).click();
