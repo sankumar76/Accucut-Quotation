@@ -170,8 +170,9 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
       {isIgnored ? null : <RatesChangedNotice state={state} ratesChanged={costs.ratesChanged} at={calculatedAt} />}
       <FigureTiles state={state} letters={letters} totals={totals} approval={approval} />
       {/* From 1024 px the tree is a column of the SCR-05 tree's width beside "How the total is built" (AQP-465, DEF-108; ux-expert ruling 2026-11-28; the right-hand column holds the row detail of the design, which
-          is waived, DL-306); below it the two are stacked. The tiles stay above both at full width. */}
-      <div data-review-columns="" className="flex flex-col gap-s-4 min-[1024px]:grid min-[1024px]:grid-cols-[var(--tree-w)_minmax(0,1fr)] min-[1024px]:items-start">
+          is waived, DL-306); below it the two are stacked. The tiles stay above both at full width. The gap is the page's own (`main`: s-4, s-5 from 768 px), so the rows keep the spacing they had when they were two items of
+          the page: a different gap moved the page by a few pixels and with it the axe target-size reading of the header's Change customer button at 768 px. */}
+      <div data-review-columns="" className="flex flex-col gap-s-4 md:gap-s-5 min-[1024px]:grid min-[1024px]:grid-cols-[var(--tree-w)_minmax(0,1fr)] min-[1024px]:items-start">
         <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} />
         {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
       </div>

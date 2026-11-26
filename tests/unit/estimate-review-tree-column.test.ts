@@ -64,6 +64,8 @@ describe('AQP-465: the parts tree is a column beside "How the total is built" fr
     const tag = columnsTag(html);
     expect(tag).toContain('min-[1024px]:grid-cols-[var(--tree-w)_minmax(0,1fr)]');
     expect(tag).toContain('min-[1024px]:grid');
+    // The gap is the page's own (main: gap-s-4, md:gap-s-5), so the spacing of the rows does not change.
+    expect(tag).toContain('gap-s-4 md:gap-s-5');
     expect(tag).toContain('min-[1024px]:items-start');
     expect(html.indexOf('aria-label="Totals"')).toBeLessThan(html.indexOf('data-review-columns'));
     expect(html.indexOf('data-review-columns')).toBeLessThan(html.indexOf('data-review-tree'));
