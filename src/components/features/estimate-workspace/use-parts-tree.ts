@@ -39,6 +39,8 @@ export interface DeleteTarget {
   readonly name: string;
   readonly revision: number;
   readonly parentId: string | null;
+  /** The rows under it, in reading order, each by its number and its name (the dialog lists them: DEF-099). */
+  readonly under: ReadonlyArray<{ readonly slNo: string; readonly name: string }>;
   /** The part and every sub-part. */
   readonly parts: number;
   /** The fingerprint of those parts with their revisions, as the dialog showed them. */
@@ -275,7 +277,7 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
     // While a change is on its way the "-" is not offered (`aria-disabled`); this is the guard behind it.
     if (row === undefined || nodes === null || inFlight.current) return;
     setProblem(null);
-    setDeleting({ id: row.id, slNo: row.slNo, name: rowNameOf(row.label, nodeKindLabel(row, nodes)), revision: row.revision, parentId: row.parentId, ...deleteGuardOf(nodes, row.id), removedIds: partsRemoved(nodes, row.id).map((part) => part.id) });
+    setDeleting({ id: row.id, slNo: row.slNo, name: rowNameOf(row.label, nodeKindLabel(row, nodes)), under: partsRemoved(nodes, row.id).filter((part) => part.id !== row.id).map((part) => ({ slNo: part.slNo, name: rowNameOf(part.label, nodeKindLabel(part, nodes)) })), revision: row.revision, parentId: row.parentId, ...deleteGuardOf(nodes, row.id), removedIds: partsRemoved(nodes, row.id).map((part) => part.id) });
     setDeleteOpen(true);
   }
 

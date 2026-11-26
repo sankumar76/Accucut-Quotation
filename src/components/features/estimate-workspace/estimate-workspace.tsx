@@ -65,7 +65,6 @@ const DRAWING_REGION = 'hidden lg:block lg:shrink-0 lg:w-(--drawing-region-width
 // The form's card is a card from 768 to 1023 px only. On a phone (AQP-458, DEF-101) it has no border, fill or padding either: the section cards are the form's own cards, as the mock-up draws them, and the width
 // they keep is what lets their fields flow two to a row at 360 px (a card inside a card left 268 px, less than the 292 px that two 140 px columns and a 12 px gap need). From 1024 px it is the same, beside the tree.
 const FORM_CARD = 'max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:shadow-none lg:flex-1 lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none';
-const FORM_CARD_HEAD = 'max-md:border-b-0 max-md:px-0 max-md:pt-0 lg:border-b-0 lg:px-0 lg:pt-0';
 const FORM_CARD_BODY = 'flex max-md:p-0 lg:p-0';
 
 /** The alert of an estimate that was ignored while the Engineer worked (CR-01 item 7D): fetched only when the server says so, by a bare `import()`, so it is in no first load (NFR-009). */
@@ -183,11 +182,12 @@ export function EstimateWorkspace({ header, estimateId, userId, ignored = false,
       <div ref={attachWorkspace} className="flex flex-col gap-s-4 lg:flex-row lg:items-start">
         <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} resize={treeWidth} controlsReady={formShown} />
         <Card role="group" aria-labelledby={FORM_AREA_TITLE_ID} data-form-area="" className={FORM_CARD}>
-          <CardHeader className={FORM_CARD_HEAD}>
+          {/* Not drawn: the form's own head (eyebrow, number and name, progress) is the head of the card in the SCR-05 mock-up (DEF-097). The title stays for the rows' links and the group's name. */}
+          <CardHeader className="sr-only">
             <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>
           </CardHeader>
           <CardContent className={FORM_CARD_BODY}>
-            <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} onNamed={tree.applyLabel} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} onShown={reportFormShown} />
+            <PartForm estimateId={estimateId} part={selected} editable={editable} nodes={tree.nodes} onSaved={saved} onChanged={tree.readAgain} onNamed={tree.applyLabel} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} onShown={reportFormShown} />
           </CardContent>
         </Card>
         <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />

@@ -32,11 +32,10 @@ export const FORM_AREA_TITLE = 'Parts and inputs';
  * The part form (STORY-05.03; UX spec SCR-05 "Content and microcopy", "States"). The labels, letters, hints and ranges of the fields come from the server, from the registry, and are
  * not written here; these are the words around them. None of them names a rate, a price or a formula (UX-24).
  */
-export const partFormTitle = (slNo: string): string => `Part ${slNo}`;
 export const FORM_INTRO = 'Every field is needed to Calculate. Enter 0 where a part needs nothing. Numbers allow up to 2 decimals.';
 export const FORM_LOADING = 'Loading the form';
 export const FORM_LOAD_FAILED_TITLE = 'We could not load the form';
-export const FORM_NO_PART = 'Choose a part in the tree to fill in its form, or add the first one with "New item".';
+export const FORM_NO_PART = 'Choose a part in the tree to fill in its form, or add the first one with "Add main assembly".';
 export const FORM_LOCKED = 'This estimate can no longer be changed.';
 export const lastSavedText = (when: string): string => `Last saved ${when}`;
 export const NOT_SAVED_YET = 'Nothing saved yet';
@@ -47,7 +46,6 @@ export const PART_LOAD_FAILED_TITLE = 'We could not load this part';
 export const MATERIAL_PLACEHOLDER = 'Choose a material';
 export const MATERIAL_LOADING = 'Loading materials';
 export const MATERIAL_LOAD_FAILED_TITLE = 'We could not load the materials';
-export const sectionRegionLabel = (number: number, name: string): string => `${String(number).padStart(2, '0')} ${name}`;
 export const columnRangeLabel = (range: string): string => `Excel columns ${range}`;
 
 /**
@@ -56,7 +54,6 @@ export const columnRangeLabel = (range: string): string => `Excel columns ${rang
 export const SECTION_STRIP_LABEL = 'Sections of the form';
 export const sectionLinkText = (number: number, shortName: string): string => `${String(number).padStart(2, '0')} ${shortName}`;
 export const SECTION_COMPLETE_TEXT = 'All filled in';
-export const progressText = (complete: number, total: number): string => `${complete} of ${total} complete`;
 
 /**
  * The completion line of the open part and the words around it (STORY-05.11; UX spec SCR-05 "Content": "24 of 25 inputs complete"). The wording is the wireframe's and is the ux-expert's to rule at the end review
