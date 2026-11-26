@@ -6,7 +6,7 @@
 | Severity | **Sev-3, graded by master 2026-11-26 (DL-414 (2), DL-416 (4)).** QA proposed Sev-3 (the ux-expert's word: Major). |
 | Priority | P3 (Jira Medium) (labels `sev-3`, `final-review`, `conformance`) |
 | Type | **Product** (conformance deviation of the running build from the SCR mock-up) |
-| Status | **Open (new), 2026-11-26 (qa-engineer, from the ux-expert's batch 3).** **Graded by master 2026-11-26 (DL-414, DL-416): Sev-3; lane 2.** Open. |
+| Status | **Open (new), 2026-11-26 (qa-engineer, from the ux-expert's batch 3).** **Graded by master 2026-11-26 (DL-414, DL-416): Sev-3; lane 2.** **Lane moved to lane 3 on 2026-11-27 (the orchestrator's relay: lane 2 is dedicated to DEF-131's edit, three PRs by Wed 2 Dec; the architect's note v1.1, section 6.1); grade, type and proof unchanged.** Open. |
 | Jira / GitHub | [AQP-478](https://sankumar76.atlassian.net/browse/AQP-478) / [#772](https://github.com/sankumar76/Accucut-Quotation/issues/772) (labels bug, sev-3, ai-delivery, final-review, conformance; Jira also aiid-DEF-121, agent-qa-engineer). Relates to AQP-1 and the first owning story. Searched first: no earlier Bug for this deviation. |
 | Found by / date | The ux-expert (DL-411 conformance check), batch 3, report `docs/03-ux/rulings/conformance-check-2026-11-28.md` (records-u fa07bba3); logged by qa-engineer, 2026-11-26 |
 | Build / commit | production build of `master` `e3dc5b0b`, invented data; QA did not run it |
@@ -29,7 +29,7 @@ The screen reads as the design above at the widths named; the hands-on check rep
 ## Fix & Verification  _(developer / ux-expert / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Graded (type, severity, lane) | master | 2026-11-26 | DL-414, DL-416: Sev-3, lane 2 |
+| Graded (type, severity, lane) | master | 2026-11-26 | DL-414, DL-416: Sev-3, lane 2; **lane moved to lane 3 on 2026-11-27 (relayed by the orchestrator; master's record not read by QA)** |
 | Fixed | developer | | |
 | Regression test added | developer | | |
 | Hands-on check repeated | ux-expert | | |
