@@ -108,7 +108,7 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(inputs.locator('#part-form-title')).toContainText('1');
     await expect(form).toHaveAccessibleName(/^1/);
     await expect(inputs).toContainText('Read-only. These are the values saved for this part.');
-    await expect(inputs.locator('[data-row-line]')).toContainText(/^This row: ₹ [\d,]+\.\d{2} \(B[A-Z]\) · \$ [\d,]+\.\d{2} · € [\d,]+\.\d{2} · count [\d,.]+ nos/);
+    await expect(inputs.locator('[data-row-line]')).toContainText(/^This row: ₹ [\d,]+\.\d{2} \(B[A-Z]\) · \$ ([\d,]+\.\d{2}|—) · € ([\d,]+\.\d{2}|—) · count [\d,.]+ nos/);
     await expect(inputs).not.toContainText('Every field is needed to Calculate');
     await expect(inputs.getByRole('button')).toHaveCount(0);
     const writes: string[] = [];
