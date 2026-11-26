@@ -47,7 +47,7 @@ async function openedApproved(page: Page, testInfo: Parameters<typeof approvedEs
   const approved = await approvedEstimate(page, testInfo);
   const response = await page.goto(`/estimates/${approved.code}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(approved.code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${approved.code}`);
   await expect(unlockButton(page)).toBeEnabled();
   await waitUntilHydrated(page, '#review-unlock');
   return approved;
@@ -207,7 +207,7 @@ test.describe('AC-2, AC-3, AC-7, AC-11: a good unlock', () => {
     expect(await unlockThroughTheApi(page, owner.id, REASON)).toBe(200);
     await saveCanaryQuantity(owner.id, '7');
     await page.reload();
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
 
     const notice = noticeOf(page);
     await expect(notice).toContainText(FIGURES_CLEARED);
