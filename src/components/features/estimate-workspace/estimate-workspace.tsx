@@ -185,7 +185,7 @@ export function EstimateWorkspace({ header, estimateId, userId, ignored = false,
             <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>
           </CardHeader>
           <CardContent className={FORM_CARD_BODY}>
-            <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} onShown={reportFormShown} />
+            <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} onNamed={tree.applyLabel} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} onShown={reportFormShown} />
           </CardContent>
         </Card>
         <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />

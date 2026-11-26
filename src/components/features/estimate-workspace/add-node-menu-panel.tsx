@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { NodeKindIcon } from '@/components/shared/node-kind-icon';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -47,6 +47,12 @@ function focusFirstItem(event: Event): void {
  * to the trigger. Not modal on purpose: a modal menu hides the rest of the page from assistive technology while its controls stay focusable (axe `aria-hidden-focus`). It is placed under its row.
  */
 export function AddNodeMenuPanel({ label, nodeKinds, onChoose, keyboard, holdsPart = false, unavailable, describedBy }: AddNodeMenuPanelProps) {
+  // The group of the row the menu is under (`RowActions`), found from the trigger once it is on the page: the menu is put inside it, so it opens in line under the row and not on the page body (AQP-451, DEF-094).
+  // Absent until then (nothing is drawn); null when the trigger is in no such group (the menu then opens in the default place).
+  const [group, setGroup] = useState<HTMLElement | null | undefined>(undefined);
+  const anchor = useCallback((button: HTMLElement | null): void => {
+    if (button !== null) setGroup(button.closest<HTMLElement>('[data-row-actions]'));
+  }, []);
   // The override is for the open that mounted the menu only; from then on Radix sees every key itself.
   const openedByKeyboard = useRef(keyboard);
   const [open, setOpen] = useState(true);
@@ -61,9 +67,10 @@ export function AddNodeMenuPanel({ label, nodeKinds, onChoose, keyboard, holdsPa
         if (!next || unavailable !== true) setOpen(next);
       }}>
       <DropdownMenuTrigger asChild>
-        <AddNodeTrigger label={label} {...(unavailable === true ? { unavailable, ...(describedBy === undefined ? {} : { 'aria-describedby': describedBy }) } : {})} />
+        <AddNodeTrigger ref={anchor} label={label} {...(unavailable === true ? { unavailable, ...(describedBy === undefined ? {} : { 'aria-describedby': describedBy }) } : {})} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" {...{ onOpenAutoFocus: focusOnOpen }}>
+      {group === undefined ? null : (
+      <DropdownMenuContent align="start" container={group} data-inline-menu="" className="mb-s-2 ml-s-1 mt-s-1 min-w-0 max-w-(--menu-w)" {...{ onOpenAutoFocus: focusOnOpen }}>
         {/* The header says which row the menu adds under. Text only and hidden from assistive technology: the menu is named by its trigger, which has the same words (`label`). */}
         <div data-menu-header="" aria-hidden={true} className="px-s-3 pb-s-2 text-label font-semibold text-ink-2">
           {label}
@@ -71,13 +78,14 @@ export function AddNodeMenuPanel({ label, nodeKinds, onChoose, keyboard, holdsPa
         {nodeKinds.map((nodeKind) => {
           const { name, hint } = itemText(nodeKind, holdsPart);
           const hintId = `add-node-hint-${nodeKind}`;
-          // The name stays the plain word (it is what a screen reader says and what a test finds); the hint is its description.
+          // The name is the visible name span, with no `aria-label` (a label that is not the item's visible text fails WCAG 2.5.3, axe `label-content-name-mismatch`); the hint is `aria-hidden`, so it is not part of the name,
+          // and the item is described by it (`aria-describedby` may point at hidden text).
           return (
-            <DropdownMenuItem key={nodeKind} aria-label={name} aria-describedby={hintId} disabled={unavailable === true} onSelect={() => onChoose(nodeKind)} className="py-s-2">
+            <DropdownMenuItem key={nodeKind} aria-describedby={hintId} disabled={unavailable === true} onSelect={() => onChoose(nodeKind)} className="py-s-2">
               <NodeKindIcon kind={nodeKind} />
               <span className="flex flex-col">
-                <span>{name}</span>
-                <span id={hintId} className="text-label font-normal text-ink-2">
+                <span data-item-name="">{name}</span>
+                <span id={hintId} aria-hidden={true} className="text-label font-normal text-ink-2">
                   {hint}
                 </span>
               </span>
@@ -85,6 +93,7 @@ export function AddNodeMenuPanel({ label, nodeKinds, onChoose, keyboard, holdsPa
           );
         })}
       </DropdownMenuContent>
+      )}
     </DropdownMenu>
   );
 }

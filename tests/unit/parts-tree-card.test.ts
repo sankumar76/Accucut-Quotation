@@ -54,6 +54,7 @@ function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
     confirmDelete: () => Promise.resolve(),
     cancelDelete: noop,
     applySaved: noop,
+    applyLabel: noop,
     readAgain: noop,
   };
 }
@@ -83,7 +84,7 @@ describe('rulings 7b and 12: the arrow cell and the indent step', () => {
 });
 
 describe('ruling 9: the row toolbar is quiet at rest', () => {
-  const actions = renderToStaticMarkup(createElement(RowActions, { part: NODES[1] as PartItem, onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop }));
+  const actions = renderToStaticMarkup(createElement(RowActions, { part: NODES[1] as PartItem, kindLabel: 'Sub-Assembly', onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop }));
   const buttons = actions
     .split('<button')
     .slice(1)

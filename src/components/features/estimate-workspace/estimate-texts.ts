@@ -77,7 +77,6 @@ export const TREE_LOADING = 'Loading the parts';
 export const TREE_LOAD_FAILED_TITLE = 'We could not load the parts';
 export const TREE_MOVE_UP = 'Move up';
 export const TREE_MOVE_DOWN = 'Move down';
-export const TREE_PART_NAME = 'Part';
 export const TREE_NO_INPUTS = 'No inputs yet';
 export const TREE_SOME_INPUTS = 'Some inputs entered';
 export const TREE_ALL_INPUTS = 'All inputs entered';
@@ -92,7 +91,6 @@ export const treeButtonLabel = (slNo: string | null): string => (slNo === null ?
 /** The count on the right of the tree's head (DEF-081 ruling item 10; SCR-05 "12 rows"): every row, open or closed. */
 export const treeRowsLabel = (rows: number): string => (rows === 1 ? '1 row' : `${rows} rows`);
 
-export const addedMessage = (slNo: string): string => `Part ${slNo} added`;
 export const renumberedMessage = (slNo: string): string => `Part renumbered to ${slNo}`;
 export const deletedMessage = (parts: number): string => (parts === 1 ? 'Row deleted' : `${parts} rows deleted`);
 

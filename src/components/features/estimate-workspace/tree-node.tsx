@@ -3,12 +3,13 @@ import type { MouseEvent } from 'react';
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { Icon } from '@/components/shared/icon';
 import { NodeKindIcon } from '@/components/shared/node-kind-icon';
+import { RowName } from '@/components/shared/row-name';
 import { TREE_ROW_NUMBER } from '@/components/shared/tree-row-number';
 import { cn } from '@/lib/cn';
 import type { PartItem } from '@/lib/estimates/tree-client';
 
 import { COMPLETENESS_ICON, COMPLETENESS_INK, COMPLETENESS_TEXT, MISSING_ICON, MISSING_INK } from './completeness-look';
-import { FORM_AREA_TITLE_ID, TREE_MISSING_INPUTS, TREE_PART_NAME } from './estimate-texts';
+import { FORM_AREA_TITLE_ID, TREE_MISSING_INPUTS } from './estimate-texts';
 
 export interface TreeNodeProps {
   readonly part: PartItem;
@@ -28,7 +29,8 @@ export interface TreeNodeProps {
  * The link of one row of the parts tree (CR-01 item 3B; UX spec SCR-05 "Accessibility"; STORY-05.02 AC-9 as changed): a link to the form area that opens this row's details, which is what a press or Enter
  * on it does (`onChoose`; the page does not move). It reads, in order, the kind icon (its name is a tooltip and the spoken name), the number and the name, and the status icon at the end; there is **no text
  * label for the kind**. The open row carries `aria-current="true"`. Tab moves from a row to its arrow and to its buttons; there is no roving tab stop and no arrow-key navigation (PM ruling). What it is
- * and how filled it is are text, so a screen reader reads both; no figure is ever shown here. The name is empty until the part form stores one (STORY-05.03), so "Part" stands in.
+ * and how filled it is are text, so a screen reader reads both; no figure is ever shown here. The name is the Description, else the Part No. (the row's `label`, from the server); with neither it is the
+ * kind's own name in a muted style, with ", no description yet" for a screen reader (`RowName`; AQP-446, DEF-089).
  */
 export function TreeNode({ part, kindLabel, selected, missing = false, onChoose, takesFocus }: TreeNodeProps) {
   const choose = (event: MouseEvent<HTMLAnchorElement>): void => {
@@ -55,7 +57,9 @@ export function TreeNode({ part, kindLabel, selected, missing = false, onChoose,
       <span data-sl-no="" className={TREE_ROW_NUMBER}>
         {part.slNo}
       </span>
-      <span className="min-w-0 flex-1">{part.label === '' ? TREE_PART_NAME : part.label}</span>
+      <span className="min-w-0 flex-1">
+        <RowName label={part.label} kindLabel={kindLabel} />
+      </span>
       <Icon icon={COMPLETENESS_ICON[part.completeness]} size="default" data-completeness={part.completeness} className={cn('shrink-0', COMPLETENESS_INK[part.completeness])} />
       {missing ? (
         <>

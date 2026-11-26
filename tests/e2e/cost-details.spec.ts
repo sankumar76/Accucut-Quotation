@@ -327,7 +327,7 @@ test.describe('AC-7: the states with nothing current', () => {
       return { status: response.status, body: await response.text() };
     }, owner.id);
     expect(answer.status).toBe(200);
-    expect(JSON.parse(answer.body)).toEqual({ state: 'out-of-date', row: { nodeId: owner.id, slNo: '1', name: expect.any(String) }, details: null });
+    expect(JSON.parse(answer.body)).toEqual({ state: 'out-of-date', row: { nodeId: owner.id, slNo: '1', name: expect.any(String), kindLabel: expect.any(String) }, details: null });
     expect(answer.body).not.toMatch(/Material-Scrap-Rate|stages|formula|working/);
   });
 });
