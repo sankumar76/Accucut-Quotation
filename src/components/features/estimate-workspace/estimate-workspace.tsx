@@ -81,9 +81,11 @@ export interface EstimateWorkspaceProps {
    * The Engineer's notice of an ignored task, **server-rendered** and handed in as an element, so it is drawn at first paint outside this client form and adds no client code (NFR-009). Absent while the estimate is not ignored.
    */
   readonly notice?: ReactNode;
+  /** SCR-05's customer and folder cards, **server-rendered** (`TaskCards`) and handed in as an element for the same reason: their code is not in the client bundle (NFR-009; the ceiling of PRD 0.58). */
+  readonly cards?: ReactNode;
 }
 
-export function EstimateWorkspace({ header, estimateId, userId, ignored = false, notice }: EstimateWorkspaceProps) {
+export function EstimateWorkspace({ header, estimateId, userId, ignored = false, notice, cards }: EstimateWorkspaceProps) {
   // The status is the server's: it starts as the page was rendered and becomes PREPARED when Calculate says it did.
   const [status, setStatus] = useState<EstimateStatus>(header.status);
   // A save, an auto-save or a Calculate was refused 409 because the estimate was ignored while the Engineer worked (CR-01 item 7D): the page turns read-only on the spot, stops its timer and says so in one alert.
@@ -143,7 +145,7 @@ export function EstimateWorkspace({ header, estimateId, userId, ignored = false,
 
   return (
     <>
-      <WorkspaceHeader view={{ ...header, status, ignored: frozen }} notice={notice} />
+      <WorkspaceHeader view={{ ...header, status, ignored: frozen }} notice={notice} cards={cards} />
       {refusedAsIgnored && !ignored && IgnoredAlert !== null ? <IgnoredAlert /> : null}
       {Autosave === null ? null : <Autosave gate={saves} enabled={editable} calculating={calculation.busy} />}
       {Guard !== null ? (
