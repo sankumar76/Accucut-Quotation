@@ -70,7 +70,7 @@ export function AddNodeMenuPanel({ label, nodeKinds, onChoose, keyboard, holdsPa
         <AddNodeTrigger ref={anchor} label={label} {...(unavailable === true ? { unavailable, ...(describedBy === undefined ? {} : { 'aria-describedby': describedBy }) } : {})} />
       </DropdownMenuTrigger>
       {group === undefined ? null : (
-      <DropdownMenuContent align="start" container={group} data-inline-menu="" className="mb-s-2 ml-s-1 mt-s-1 w-full min-w-0 max-w-(--menu-w)" {...{ onOpenAutoFocus: focusOnOpen }}>
+      <DropdownMenuContent align="start" container={group} data-inline-menu="" className="mb-s-2 ml-s-1 mt-s-1 min-w-0 max-w-(--menu-w)" {...{ onOpenAutoFocus: focusOnOpen }}>
         {/* The header says which row the menu adds under. Text only and hidden from assistive technology: the menu is named by its trigger, which has the same words (`label`). */}
         <div data-menu-header="" aria-hidden={true} className="px-s-3 pb-s-2 text-label font-semibold text-ink-2">
           {label}
