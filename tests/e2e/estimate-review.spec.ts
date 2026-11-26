@@ -6,6 +6,8 @@ import { createDisposableUser, E2E_ADMIN, useFreshAddress } from './support/auth
 import { controlIdFor } from '../../src/components/features/estimate-workspace/field-ids';
 import { calculateWithoutThePage, engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
+import { ignoreThroughTheApi } from './support/ignored';
+import { control } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 import { expectLinkTarget, isTouchLayout } from './support/touch-link';
 
@@ -231,6 +233,24 @@ test.describe('AC-6: not calculated', () => {
     else await expect(treePanel(page)).toHaveAttribute('open', '');
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
+
+    // ED-17 (DEF-131 stage 2): a value the rule refuses is told under its field in the Engineer's words (the icon, the text, `aria-invalid`, `aria-describedby`), what was typed stays, and axe still finds nothing.
+    const length = control(page, 'J');
+    await expect(length).toBeEnabled();
+    await length.fill('-5');
+    await length.blur();
+    await expect(length).toHaveAttribute('aria-invalid', 'true');
+    await expect(inputs.getByText('Enter 0 or more, with up to 2 decimals.')).toBeVisible();
+    await expect(length).toHaveValue('-5');
+    await expectNoAxeViolations(page);
+
+    // ED-12: the estimate is ignored in another window while this page is open. The next save is refused with the 409, the block turns read-only in the words of the Ignored layer, and what was typed stays on screen.
+    await length.fill('12.5');
+    expect(await ignoreThroughTheApi(page, owner.id, 'Not taken forward, an invented reason.')).toBe(200);
+    await length.blur();
+    await expect(inputs).toContainText('Read-only while this RFQ is ignored. Restore it to change an input.');
+    await expect(length).toHaveValue('12.5');
+    await expect(length).toHaveAttribute('aria-readonly', 'true');
   });
 });
 
