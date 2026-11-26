@@ -4,6 +4,7 @@ import { MATERIAL_IN_DRAWING_KEY } from '../fields/types';
 
 import { buildFormSections, type FormFieldView, type FormRule } from './form-fields';
 import { hiddenFieldIds, HIDDEN_NUMBER } from './hidden-inputs';
+import { PART_NAME_KEYS } from './part-name-keys';
 import { treatmentWordsOf } from './treatment-value';
 import { validateNumberInput, validateTextInput } from './validation';
 
@@ -58,8 +59,8 @@ export interface CheckedPart {
 
 export type CalculateCheck = { readonly ok: true; readonly parts: ReadonlyArray<CheckedPart> } | { readonly ok: false; readonly parts: ReadonlyArray<BlockedPart> };
 
-/** The keys of the fields that name a part, in the order they are tried. */
-export const PART_NAME_KEYS: ReadonlyArray<string> = ['description', 'part-no'];
+/** The keys of the fields that name a part, in the order they are tried (the list is in `part-name-keys.ts`, which the browser can read). */
+export { PART_NAME_KEYS };
 
 /**
  * A field of the form that a person types or chooses: its rule is a number, a text or a choice, never "follows another field" and never the picture. Part Model (C, STORY-05.07) is

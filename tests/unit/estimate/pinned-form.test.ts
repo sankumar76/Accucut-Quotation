@@ -91,7 +91,8 @@ describe('AC-5: an APPROVED estimate reads its form from the version of its calc
     const { service, asked } = setUp(estimate('APPROVED'));
     await service.getForm(engineer, ESTIMATE);
     await service.getNode(engineer, ESTIMATE, PART);
-    expect(asked).toEqual([VERSION_ONE, VERSION_ONE]);
+    // The form, then the part twice: the values by the version, and the name the tree row carries (AQP-446), which is read from the estimate's own version too.
+    expect(asked).toEqual([VERSION_ONE, VERSION_ONE, VERSION_ONE]);
   });
 
   it('answers the Engineer with no version number and no version ID: the same two keys as for a Draft', async () => {
