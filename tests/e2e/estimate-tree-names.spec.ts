@@ -102,6 +102,18 @@ async function expectStateAccessible(target: Page, selector: string): Promise<vo
   await expectNoAxeViolations(target);
 }
 
+/**
+ * A press on a row. In the phone drawer it also opens the row: the drawer closes and the form shows (AQP-490, DEF-133; UX ruling 2026-11-26 item 3 point 7), so the drawer is opened again to reach the row's toolbar; the row
+ * is still the open one. Anywhere else a press only chooses the row, and the tree stays on screen.
+ */
+async function tap(target: Page, slNo: string): Promise<void> {
+  await row(target, slNo).click();
+  if (isPhone(target)) {
+    await expect(tree(target)).toBeHidden();
+    await showTree(target);
+  }
+}
+
 /** The rows of the tree after the first case, in reading order. */
 const ROWS = ['1', '1.1', '1.1.1', '1.2', '1.3', '1.3.1'] as const;
 
@@ -162,7 +174,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     await expect(nameOf(page, '1.3').locator('span')).toHaveCount(0);
 
     // Adding a row: the status says what was added and how to name it, and the focus is on the new row's link.
-    await row(page, '1.1').click();
+    await tap(page, '1.1');
     await rowButton(page, 'Add under', '1.1').click();
     await page.getByRole('menuitem', { name: 'Part', exact: true }).click();
     await expect(page.getByText('Added 1.1.1 Part. Type a Description to name it.')).toHaveCount(1);
@@ -304,7 +316,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
       expect(shifts.reduce((sum, value) => sum + value, 0), 'the sum of the layout shifts').toBe(0);
     } else {
       // TS-8: a finger. Only the selected row has a toolbar in view; tapping another row moves it there; no other row has one, and its buttons are 44 px.
-      await row(page, '1.2').click();
+      await tap(page, '1.2');
       await expect(row(page, '1.2')).toHaveAttribute('aria-current', 'true');
       for (const slNo of ROWS) {
         const height = (await toolbarOf(page, slNo).boundingBox())?.height ?? 0;
@@ -316,7 +328,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
         expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
         expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
       }
-      await row(page, '1.3').click();
+      await tap(page, '1.3');
       await expect(row(page, '1.3')).toHaveAttribute('aria-current', 'true');
       expect((await toolbarOf(page, '1.3').boundingBox())?.height ?? 0).toBeGreaterThan(40);
       expect((await toolbarOf(page, '1.2').boundingBox())?.height ?? 0).toBeLessThanOrEqual(1);
@@ -331,7 +343,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     const open = async (): Promise<void> => {
       const centre = await centreOf(page, '1.1');
       if (mouse) await page.mouse.move(centre.x, centre.y);
-      else await row(page, '1.1').click();
+      else await tap(page, '1.1');
       await expect(toolbarOf(page, '1.1')).toBeVisible();
     };
     await open();
@@ -368,5 +380,36 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     await page.getByRole('button', { name: 'Keep it' }).click();
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect(row(page, '1.1')).toBeVisible();
+  });
+
+  test('DEF-133: a press on a row in the phone drawer closes the drawer and shows that row\'s form, the focus is on the form\'s title, and the drawer opens again on the same row with its toolbar; elsewhere the panel stays', async () => {
+    await showTree(page);
+    const formFocus = page.locator('form[data-part-form] :focus');
+    if (isPhone(page)) {
+      await row(page, '1.2').click();
+      // The drawer closes and the form of that row is what is on screen.
+      await expect(tree(page)).toBeHidden();
+      const title = page.locator('form[data-part-form] h3');
+      await expect(title).toContainText('1.2');
+      // The focus goes to the form's title, not into a field: no keyboard comes up for a finger that has not chosen to type.
+      await expect(title).toBeFocused();
+      await expect(page.locator('form[data-part-form] :is(input, textarea, select):focus')).toHaveCount(0);
+      // The drawer opens again on the same row, which is still the open one and has its toolbar (the touch rule of the no-shift ruling: the selected row only).
+      await showTree(page);
+      await expect(row(page, '1.2')).toHaveAttribute('aria-current', 'true');
+      expect((await toolbarOf(page, '1.2').boundingBox())?.height ?? 0).toBeGreaterThan(40);
+      // A press on a button of the toolbar does not close the drawer: only a press on a row does.
+      await rowButton(page, 'Delete', '1.2').click();
+      await expect(page.getByRole('alertdialog')).toBeVisible();
+      await page.getByRole('button', { name: 'Keep it' }).click();
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+      await expect(tree(page)).toBeVisible();
+    } else {
+      // The panel is beside or above the form: a press only chooses the row, the tree stays on screen and the focus does not go into the form.
+      await row(page, '1.2').click();
+      await expect(row(page, '1.2')).toHaveAttribute('aria-current', 'true');
+      await expect(tree(page)).toBeVisible();
+      await expect(formFocus).toHaveCount(0);
+    }
   });
 });

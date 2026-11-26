@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { controlIdFor, NEXT_FIELD, PART_FORM_ATTRIBUTE } from '@/components/features/estimate-workspace/field-ids';
-import { focusFieldWhenPresent, focusFirstField, MAX_ATTEMPTS, RETRY_MILLISECONDS } from '@/components/features/estimate-workspace/focus-field';
+import { controlIdFor, NEXT_FIELD, PART_FORM_ATTRIBUTE, PART_FORM_TITLE_ID } from '@/components/features/estimate-workspace/field-ids';
+import { focusFieldWhenPresent, focusFirstField, focusFormTitleWhenPresent, MAX_ATTEMPTS, RETRY_MILLISECONDS } from '@/components/features/estimate-workspace/focus-field';
 
 /**
  * AQP-339 AC-5: Enter on a part puts focus on the first field that can be typed into, and when the fields' code arrives after the key press (`PartFields` is fetched after the page is up) it still
@@ -99,5 +99,45 @@ describe('focusFieldWhenPresent (STORY-05.09, unchanged by AQP-339)', () => {
     present = control(focused, 'enabled');
     vi.advanceTimersByTime(RETRY_MILLISECONDS);
     expect(focused).toEqual(['enabled']);
+  });
+});
+
+describe('focusFormTitleWhenPresent (AQP-490, DEF-133)', () => {
+  const TITLE_SELECTOR = `[${PART_FORM_ATTRIBUTE}][data-part-id="${PART_ID}"] #${PART_FORM_TITLE_ID}`;
+
+  beforeEach(() => {
+    vi.stubGlobal('document', {
+      querySelector: (selector: string) => {
+        queries.push(selector);
+        return selector === TITLE_SELECTOR ? present : null;
+      },
+    });
+  });
+
+  it('focuses the title of the form of this part, never a field, once the form is on the page', () => {
+    const focused: string[] = [];
+    present = control(focused, 'title');
+    focusFormTitleWhenPresent(PART_ID);
+    expect(focused).toEqual(['title']);
+    expect(queries).toEqual([TITLE_SELECTOR]);
+  });
+
+  it('looks inside the form of this part only (data-part-id), so the title of the form that was open before is not taken', () => {
+    focusFormTitleWhenPresent(PART_ID);
+    expect(queries.every((query) => query === TITLE_SELECTOR)).toBe(true);
+  });
+
+  it('waits for the form, as the field helpers do, then focuses the title once, and gives up quietly after about two seconds', () => {
+    const focused: string[] = [];
+    focusFormTitleWhenPresent(PART_ID);
+    vi.advanceTimersByTime(RETRY_MILLISECONDS * 3);
+    present = control(focused, 'title');
+    vi.advanceTimersByTime(RETRY_MILLISECONDS * 3);
+    expect(focused).toEqual(['title']);
+    queries = [];
+    present = null;
+    focusFormTitleWhenPresent(PART_ID);
+    vi.advanceTimersByTime(RETRY_MILLISECONDS * MAX_ATTEMPTS * 2);
+    expect(queries).toHaveLength(MAX_ATTEMPTS);
   });
 });

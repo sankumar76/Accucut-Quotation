@@ -29,7 +29,14 @@ const PHONE_MAX = 767;
 const tree = (page: Page): Locator => page.getByRole('navigation', { name: 'Parts tree' });
 const part = (page: Page, slNo: string): Locator => tree(page).getByRole('link').filter({ has: page.locator('[data-sl-no]', { hasText: new RegExp(`^${slNo.replaceAll('.', '\\.')}$`) }) });
 /** Chooses a row by a press at the centre of its name, where Playwright presses by default: nothing floats over a row (AQP-418, DEF-075), so that press is always the row. */
-const choose = (page: Page, slNo: string): Promise<void> => part(page, slNo).click();
+async function choose(page: Page, slNo: string): Promise<void> {
+  await part(page, slNo).click();
+  // In the phone drawer a press on a row opens it: the drawer closes and the form shows (AQP-490, DEF-133; UX ruling 2026-11-26 item 3 point 7). The row stays the open row, so its toolbar is there when the drawer is opened again, which is what the case that follows needs.
+  if (isPhone(page)) {
+    await expect(tree(page)).toBeHidden();
+    await showTree(page);
+  }
+}
 const action = (page: Page, name: string): Locator => page.getByRole('button', { name, exact: true });
 /**
  * A button of one row (CR-01 item 3C): its name starts with the words and the number of its row ("Add under 1 ", "Add fastener under 1.1.1 ", "Delete 1.1 "). The toolbar is in view on the hovered row (a mouse),
@@ -872,11 +879,18 @@ test.describe('AQP-405: the row actions', () => {
     await page.mouse.move(overlaps ? (left + right) / 2 : name.x + name.width / 2, overlaps ? (top + bottom) / 2 : name.y + name.height / 2);
     await page.mouse.down();
     await page.mouse.up();
-    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
-    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 120)));
-    await page.mouse.down();
-    await page.mouse.up();
-    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    if (isPhone(page)) {
+      // The press opened the row: the drawer is shut and the form shows, so there is no second press on a toolbar to guard against (AQP-490). The press added, opened and deleted nothing; the drawer is opened again for the rest of the case.
+      await expect(tree(page)).toBeHidden();
+      await showTree(page);
+      await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    } else {
+      await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 120)));
+      await page.mouse.down();
+      await page.mouse.up();
+      await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    }
     await expect(page.getByRole('menuitem')).toHaveCount(0);
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);

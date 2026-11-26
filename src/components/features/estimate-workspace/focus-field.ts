@@ -1,4 +1,4 @@
-import { controlIdFor, NEXT_FIELD, PART_FORM_ATTRIBUTE } from './field-ids';
+import { controlIdFor, NEXT_FIELD, PART_FORM_ATTRIBUTE, PART_FORM_TITLE_ID } from './field-ids';
 
 export const RETRY_MILLISECONDS = 50;
 /** About two seconds: long enough for a part's form to be read from the server after it is chosen, short enough that a form that never comes is let go. */
@@ -26,6 +26,20 @@ export function focusFieldWhenPresent(partId: string, fieldId: string): void {
     const control = form?.querySelector<HTMLElement>(`#${CSS.escape(controlIdFor(fieldId))}`) ?? null;
     if (control === null || control.matches(':disabled')) return false;
     control.focus();
+    return true;
+  });
+}
+
+/**
+ * A tap on a row in the phone drawer opens its form (AQP-490, DEF-133; UX ruling 2026-11-26 item 3 point 7: "tapping the row closes the drawer and shows the form"): the form's title, not a field, takes the focus once that part's
+ * form is on the page. A field would put a finger's keyboard on the screen before the person has chosen to type; the title (`tabindex="-1"`) tells a screen reader which part it is and leaves Tab to go to the first field. Looked for
+ * inside the form of this part (`data-part-id`), as `focusFieldWhenPresent` does, and it gives up quietly after about two seconds.
+ */
+export function focusFormTitleWhenPresent(partId: string): void {
+  lookUntilFound(() => {
+    const title = document.querySelector<HTMLElement>(`[${PART_FORM_ATTRIBUTE}][data-part-id="${CSS.escape(partId)}"] #${PART_FORM_TITLE_ID}`);
+    if (title === null) return false;
+    title.focus();
     return true;
   });
 }

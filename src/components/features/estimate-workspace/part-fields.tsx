@@ -30,7 +30,7 @@ import {
   TRY_AGAIN,
 } from './estimate-texts';
 import { focusCalculate } from './calculate-button';
-import { controlIdFor, NEXT_FIELD } from './field-ids';
+import { controlIdFor, NEXT_FIELD, PART_FORM_TITLE_ID } from './field-ids';
 import { FieldRenderer } from './field-renderer';
 import { PartHead } from './part-head';
 import { PartProgress, PartProgressSkeleton } from './part-progress';
@@ -66,7 +66,7 @@ export interface PartFieldsProps {
   readonly gate: SaveGate;
 }
 
-const TITLE_ID = 'part-form-title';
+const TITLE_ID = PART_FORM_TITLE_ID;
 
 /**
  * The words under a blank that Calculate found (UX spec SCR-05 "Fields"): a choice is chosen, a number says what to do when a part needs nothing, a text is entered. QTY per Assy is a number too,
