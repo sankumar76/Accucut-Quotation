@@ -44,7 +44,7 @@ export function StagePanel({ stage, unitPriceLetter }: StagePanelProps) {
   const { total } = stage;
   return (
     <details open data-stage={stage.number} className="group/stage overflow-hidden rounded-lg border border-border bg-surface">
-      <summary className="flex min-h-13 cursor-pointer list-none items-center gap-s-3 bg-surface-2 px-s-3 py-s-2 text-body font-semibold text-ink md:px-s-4 [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-13 cursor-pointer list-none items-center gap-s-3 bg-surface-2 px-s-3 py-s-2 text-body font-semibold text-ink [&::-webkit-details-marker]:hidden">
         <span aria-hidden="true" data-stage-number="" className="inline-flex size-8 flex-none items-center justify-center rounded-md bg-nav font-mono text-label font-medium text-on-fill">
           {stage.number}
         </span>
@@ -60,7 +60,7 @@ export function StagePanel({ stage, unitPriceLetter }: StagePanelProps) {
       <ul className="flex flex-col">
         {groupsOf(stage, shown).flatMap((group) => [
           group.heading === null ? null : (
-            <li key={`${group.heading}-heading`} className="border-t border-border bg-bg px-s-3 py-s-2 md:px-s-4">
+            <li key={`${group.heading}-heading`} className="border-t border-border bg-bg px-s-3 py-s-2">
               <h3 className="text-label font-semibold tracking-wide text-ink-2 uppercase">{group.heading}</h3>
             </li>
           ),
@@ -75,7 +75,7 @@ export function StagePanel({ stage, unitPriceLetter }: StagePanelProps) {
         ])}
       </ul>
       {hiddenCount === 0 && (total === null || total.shownLinesSum === null) ? null : (
-        <div className="flex flex-col gap-s-2 border-t border-border px-s-3 py-s-3 md:px-s-4">
+        <div className="flex flex-col gap-s-2 border-t border-border px-s-3 py-s-3">
           {hiddenCount === 0 ? null : <p className="text-label text-ink-2">{hiddenLinesNote(hiddenCount)}</p>}
           {total === null || total.shownLinesSum === null ? null : (
             <p className="text-label text-ink-2">{roundingNote(total.letters.length, formatFigure(total.shownLinesSum), formatFigure(total.value))}</p>

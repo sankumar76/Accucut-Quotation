@@ -224,7 +224,8 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
       if (badge === null || chevron === null || card === null) throw new Error('a box is missing');
       expect(badge.x).toBeLessThan(chevron.x);
       expect(chevron.x + chevron.width).toBeLessThanOrEqual(card.x + card.width);
-      await expect(summary.locator('svg')).not.toHaveCSS('transform', 'none');
+      // Tailwind 4 turns it with the `rotate` property, not `transform`.
+      await expect(summary.locator('svg')).toHaveCSS('rotate', '180deg');
     }
     const [title, figure] = await Promise.all([stage(page, 3).locator('summary > span').nth(1).boundingBox(), stage(page, 3).locator('summary span.tabular-nums').boundingBox()]);
     if (title === null || figure === null) throw new Error('a box is missing');

@@ -28,7 +28,7 @@ export function WorkingLineItem({ line, highlighted, isTotal = false }: WorkingL
   return (
     <li
       className={cn(
-        'grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-start gap-x-s-3 gap-y-s-1 border-t px-s-3 py-s-2 text-body md:grid-cols-[3.5rem_minmax(0,1fr)_auto] md:px-s-4 md:py-s-3',
+        'grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-start gap-x-s-3 gap-y-s-1 border-t px-s-3 py-s-2 text-body md:grid-cols-[3.5rem_minmax(0,1fr)_auto]',
         highlighted ? 'border-nav bg-nav text-on-fill' : cn('border-border text-ink', isTotal && 'bg-surface-2'),
       )}
     >
