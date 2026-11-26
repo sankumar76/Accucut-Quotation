@@ -58,9 +58,9 @@ describe('AC-7: only the Lead\'s and the Admin\'s code names the rates-changed c
     expect(pathsMatching(engineerReachable, RATES_CHANGED)).toEqual([]);
   });
 
-  it('the only routes that ask the review service for the costs view are the costs read and Recalculate, which are the Lead\'s and the Admin\'s (the manifest holds no Engineer row for either)', () => {
+  it('the only routes that ask the review service for the costs view are the costs read, Recalculate and the cost details page (its parts tree, AQP-452), which are the Lead\'s and the Admin\'s (the manifest holds no Engineer row for any of them)', () => {
     const askers = pathsMatching(ALL.filter((file) => file.path.startsWith('src/app/')), /getEstimateReviewService/);
-    expect(askers).toEqual(['src/app/(portal)/estimates/[code]/review-page.tsx', 'src/app/api/v1/estimates/[id]/costs/route.ts', 'src/app/api/v1/estimates/[id]/recalculate/route.ts']);
+    expect(askers).toEqual(['src/app/(portal)/estimates/[code]/costs/[slNo]/page.tsx', 'src/app/(portal)/estimates/[code]/review-page.tsx', 'src/app/api/v1/estimates/[id]/costs/route.ts', 'src/app/api/v1/estimates/[id]/recalculate/route.ts']);
   });
 
   it('control: a file of the Engineer\'s workspace that carried the counts is found by the same scan', () => {

@@ -156,11 +156,12 @@ test.describe('AC-9, AC-10, AC-11: SCR-05, the Engineer sees the customer and th
   });
 });
 
+// AQP-452 (DEF-110): the customer is in the head's meta line (Subject: ... · customer (short name) Change customer · Entered by ...), no longer in a card of its own.
 test.describe('AC-12, AC-13: SCR-06, a Lead changes the customer', () => {
   test('AC-12: the header shows the customer, its short name and the subject with a "Change customer" action; the dialog names both customers, "Keep <current>" has the focus, and Keep and Escape send nothing', async ({ page }, testInfo) => {
     const puts = countPuts(page);
     await openAsLead(page, testInfo);
-    const identity = page.getByRole('main').locator('dl').first();
+    const identity = page.getByRole('main').locator('p', { hasText: 'Subject:' }).first();
     await expect(identity).toContainText(ALPHA);
     await expect(identity).toContainText(ALPHA_SHORT_NAME);
     await expect(identity).toContainText('Canary subject');
@@ -207,12 +208,12 @@ test.describe('AC-12, AC-13: SCR-06, a Lead changes the customer', () => {
     await dialog.getByRole('button', { name: 'Change customer' }).focus();
     await page.keyboard.press('Enter');
     await expect(dialog).toHaveCount(0);
-    const identity = page.getByRole('main').locator('dl').first();
+    const identity = page.getByRole('main').locator('p', { hasText: 'Subject:' }).first();
     await expect(identity).toContainText(E2E_SECOND_CUSTOMER);
     await expect(identity).toContainText(SECOND_SHORT_NAME);
     expect(puts.count()).toBe(1);
     await page.reload();
-    await expect(page.getByRole('main').locator('dl').first()).toContainText(E2E_SECOND_CUSTOMER);
+    await expect(page.getByRole('main').locator('p', { hasText: 'Subject:' }).first()).toContainText(E2E_SECOND_CUSTOMER);
   });
 
   test('AC-12: a refusal of the server keeps the dialog open and says why under the field; a failure says it was not changed', async ({ page }, testInfo) => {
@@ -242,7 +243,8 @@ test.describe('AC-12, AC-13: SCR-06, a Lead changes the customer', () => {
   test('AC-18: the dialog fits a phone: its buttons are 44 px high and the page does not scroll sideways, with the action on the page 44 px high too', async ({ page }, testInfo) => {
     await openAsLead(page, testInfo);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    expect((await changeButton(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
+    // In the head's meta line the action is 44 px high on a touch layout and 36 px with a mouse from 1024 px, as the rows of the tree are (NFR-017, DEF-081 ruling).
+    expect((await changeButton(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual((page.viewportSize()?.width ?? 0) >= 1024 ? 36 : TOUCH_TARGET);
     await changeButton(page).click();
     const dialog = dialogOf(page);
     await expect(dialog).toBeVisible();

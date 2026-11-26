@@ -47,7 +47,7 @@ export function ChangeCustomerButton({ estimateId, current, inline = false }: Ch
       <Button
         id={CHANGE_CUSTOMER_BUTTON_ID}
         variant={inline ? 'ghost' : 'secondary'}
-        {...(inline ? { className: 'h-(--control-h-row) px-s-2' } : {})}
+        {...(inline ? { className: 'h-(--control-h) px-s-2 fine-wide:h-(--control-h-row)' } : {})}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-busy={first.pending || undefined}
