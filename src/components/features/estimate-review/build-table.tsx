@@ -2,7 +2,9 @@ import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { ColumnTag } from '@/components/shared/column-tag';
 import { QuantityTag } from '@/components/shared/quantity-tag';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { RowName } from '@/components/shared/row-name';
 import { cn } from '@/lib/cn';
+import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
 import type { CostsView } from '@/server/views/schemas/costs';
 
@@ -16,7 +18,6 @@ import {
   BUILD_TOTAL_LABEL,
   COUNT_FIELD_NAME,
   ROUNDING_SENTENCE,
-  TREE_PART_NAME,
 } from './review-texts';
 
 /**
@@ -60,7 +61,7 @@ export function BuildTable({ letters, nodes, totalPrice, warned }: BuildTablePro
               <TableRow key={node.id}>
                 <TableCell className="tabular-nums">{node.slNo}</TableCell>
                 <TableCell className={cn('min-w-0', BREAK_LONG_NAMES)}>
-                  {node.name === '' ? TREE_PART_NAME : node.name}
+                  <RowName label={node.name} kindLabel={nodeKindLabel(node, nodes)} />
                   {warned.has(node.id) ? (
                     <>
                       {' '}

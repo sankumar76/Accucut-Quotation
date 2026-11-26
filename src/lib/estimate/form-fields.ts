@@ -6,6 +6,7 @@ import type { ShownRule } from '../fields/visible-when';
 import { MATERIAL_CONSIDERED_KEY, MATERIAL_IN_DRAWING_KEY } from '../fields/types';
 import { RUPEE } from '../masters/master-rules';
 
+import { isPartNameKey, type PartNameKey } from './part-name-keys';
 import { QTY_PER_ASSY_HINT } from './quantity-hint';
 import { MAX_LONG_TEXT_LENGTH, MAX_OTHER_TREATMENT_LENGTH, MAX_PART_TEXT_LENGTH } from './text-limits';
 
@@ -40,6 +41,8 @@ export const NUMBER_DECIMALS = 2;
 export const COST_INPUT_HINT = 'Enter 0 if there is none.';
 export const FASTENERS_HINT = 'Type "None" if the part has no fasteners.';
 export const REMARKS_HINT = 'Write "None" if there is nothing to add.';
+/** The hint under Description (UX ruling `parts-tree-scr05-conformance-2026-11-26.md` item 2, AQP-447, DEF-090): the Description is the row's name in the parts tree, and there is no other name field. */
+export const DESCRIPTION_HINT = 'Names this row in the parts tree.';
 /** The hint under the picture field (UX spec SCR-05): what is accepted. The limit is the one of `lib/images` (200 KB). */
 export const PICTURE_HINT = 'PNG, JPG, GIF or WebP, under 200 KB.';
 
@@ -56,6 +59,7 @@ const FORM_PRESENTATION: ReadonlyMap<string, { readonly unit?: string; readonly 
   ['plating-cost', { unit: RUPEE, hint: COST_INPUT_HINT }],
   ['tool-cost', { unit: RUPEE, hint: COST_INPUT_HINT }],
   ['remarks', { hint: REMARKS_HINT }],
+  ['description', { hint: DESCRIPTION_HINT }],
 ]);
 
 /** The hint under QTY per Assy (FR-029, D-34): given to the field by its system role (`quantity`), never by its letter or its text. It lives in its own small file (`quantity-hint.ts`) so the browser can read it. */
@@ -92,6 +96,8 @@ export interface FormFieldView {
   readonly required: boolean;
   /** False for a field that is shown and never typed into. */
   readonly editable: boolean;
+  /** Set on the two fields that name a part, Description and Part No. (`PART_NAME_KEYS`), and absent on every other: the screen builds a row's name from them when the person leaves one, and puts the focus in Description after an add. */
+  readonly nameKey?: PartNameKey;
   /**
    * When the registry hides this field (STORY-05.05; Fasteners Qty and Cost): the field it watches and the values that hide it, or null for a field that always shows. It is the registry's own
    * `visibleWhen` (the operator is always "not in"), read by `isShownByRule` in the browser and by `isFieldShown` on the server: the rule is written once, in the registry.
@@ -157,6 +163,7 @@ function viewOf(document: ConfigDocument, field: FieldDefinition): FormFieldView
     required: field.mandatory,
     // A derived field is shown and never typed; a picture is changed by its own routes, so no save of values may name it either.
     editable: rule.type !== 'derived' && rule.type !== 'picture',
+    ...(isPartNameKey(field.key) ? { nameKey: field.key } : {}),
     visibleWhen: field.kind === 'input' && field.visibleWhen !== null ? { fieldId: field.visibleWhen.fieldId, values: [...field.visibleWhen.values] } : null,
     rule,
   };

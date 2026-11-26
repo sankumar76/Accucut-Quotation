@@ -39,7 +39,6 @@ export const CLEARED_NOTICE_BODY =
 
 /** The parts tree (UX-53, UX-29). */
 export const TREE_TITLE = 'Parts tree';
-export const TREE_PART_NAME = 'Part';
 export const COUNT_HIDDEN_LABEL = 'Count for the whole order';
 export const COUNT_UNIT = 'nos';
 export const TREE_CLEARED_LINE = 'Every calculated figure is cleared because an input changed. Press Recalculate to see them again.';

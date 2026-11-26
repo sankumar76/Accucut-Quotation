@@ -4,10 +4,12 @@ import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { NodeKindIcon } from '@/components/shared/node-kind-icon';
 import { PartsTreeList } from '@/components/shared/parts-tree-list';
 import { QuantityTag } from '@/components/shared/quantity-tag';
+import { RowName } from '@/components/shared/row-name';
 import { TOUCH_LINK } from '@/components/shared/touch-link';
 import { TreeLegend } from '@/components/shared/tree-legend';
 import { TREE_ROW_NUMBER } from '@/components/shared/tree-row-number';
 import { cn } from '@/lib/cn';
+import { rowNameOf } from '@/lib/estimates/row-name';
 import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
 import type { CostNode, CostsView } from '@/server/views/schemas/costs';
 
@@ -20,7 +22,6 @@ import {
   rowCurrencies,
   TREE_CLEARED_LINE,
   TREE_EMPTY,
-  TREE_PART_NAME,
   TREE_TITLE,
   treeLegend,
 } from './review-texts';
@@ -42,7 +43,8 @@ function figureOf(state: CostsView['state'], node: CostNode): ReactNode {
 const costDetailsHref = (code: string, slNo: string): string => `/estimates/${encodeURIComponent(code)}/costs/${encodeURIComponent(slNo)}`;
 
 function TreeRow({ node, kindLabel, state, code, warned }: { readonly node: CostNode; readonly kindLabel: string; readonly state: CostsView['state']; readonly code: string; readonly warned: boolean }) {
-  const name = node.name === '' ? TREE_PART_NAME : node.name;
+  // The row's name by the one rule (AQP-446): typed, else the kind's own name, muted, with the words for a screen reader. The "Cost details" link says it in plain words.
+  const name = rowNameOf(node.name, kindLabel);
   return (
     <div className="flex min-h-(--control-h) flex-col justify-center gap-s-1 py-s-1 pr-s-2 pl-s-1">
       <div className="flex items-center gap-s-2 text-body text-ink">
@@ -50,7 +52,9 @@ function TreeRow({ node, kindLabel, state, code, warned }: { readonly node: Cost
         <span data-sl-no="" className={TREE_ROW_NUMBER}>
           {node.slNo}
         </span>
-        <span className={cn('min-w-0 flex-1', BREAK_LONG_NAMES)}>{name}</span>
+        <span className={cn('min-w-0 flex-1', BREAK_LONG_NAMES)}>
+          <RowName label={node.name} kindLabel={kindLabel} />
+        </span>
       </div>
       {/* The second line: the row's own figures (a Lead's and an Admin's screen only), its count, the mark of a warned row and the way to its cost details. */}
       <div className="flex flex-wrap items-baseline gap-x-s-3 gap-y-s-1 text-label text-ink-2">

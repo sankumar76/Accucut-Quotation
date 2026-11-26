@@ -52,6 +52,8 @@ export interface PartFieldsProps {
   readonly lastSavedAt: string | null;
   readonly onSaved: (saved: SavedPart) => void;
   readonly onChanged: () => void;
+  /** Description or Part No. was left with a new text: the tree's row takes the name (AQP-447). */
+  readonly onNamed: (id: string, label: string) => void;
   /** A save was refused because the estimate was ignored (CR-01 item 7D). */
   readonly onServerIgnored: () => void;
   readonly onWrote: (at: string) => void;
@@ -106,9 +108,9 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
  * its number of fields, one to a row on a phone; the form is held to one card's least width, so a reserved region beside it takes a column with no redesign, UD-4), and every field from the server's definition. It is used under a key of the part's ID.
  * Each value is the person's until the field is left, and then the part's values are saved on their own (`usePartValues`).
  */
-export function PartFields({ estimateId, part, editable, form, materials, lastSavedAt, onSaved, onChanged, onServerIgnored, onWrote, onReadMaterialsAgain, missing, gate }: PartFieldsProps) {
+export function PartFields({ estimateId, part, editable, form, materials, lastSavedAt, onSaved, onChanged, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing, gate }: PartFieldsProps) {
   const allFields = form.sections.flatMap((section) => section.fields);
-  const values = usePartValues({ estimateId, part, editable, fields: allFields, onSaved, onChanged, onServerIgnored, onWrote, gate });
+  const values = usePartValues({ estimateId, part, editable, fields: allFields, onSaved, onChanged, onNamed, onServerIgnored, onWrote, gate });
   const title = useRef<HTMLHeadingElement>(null);
 
   if (values.stored.status === 'failed') {

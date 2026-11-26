@@ -148,7 +148,7 @@ describe('AC-7: cleared figures are not read at all', () => {
     await db.owner.query('UPDATE estimates SET inputs_revision = inputs_revision + 1 WHERE id = $1::uuid', [estimateId]);
     const before = reads;
     const costs = await details.getNodeCosts(lead(), estimateId, defined(partIds[0]));
-    expect(costs).toEqual({ state: 'out-of-date', row: { nodeId: defined(partIds[0]), slNo: '1', name: 'Invented part 1' }, details: null });
+    expect(costs).toEqual({ state: 'out-of-date', row: { nodeId: defined(partIds[0]), slNo: '1', name: 'Invented part 1', kindLabel: expect.any(String) }, details: null });
     expect(reads).toBe(before);
   });
 

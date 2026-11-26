@@ -94,7 +94,7 @@ describe('AC-1, AC-7: a Lead and an Admin are answered with the state and, while
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(response.headers.get('X-Request-Id')).toMatch(/^req-[0-9a-f]{8}$/);
-    expect(nodeCostsSchema.parse(await response.json())).toEqual({ state: 'none', row: { nodeId: part().id, slNo: '1', name: '' }, details: null });
+    expect(nodeCostsSchema.parse(await response.json())).toEqual({ state: 'none', row: { nodeId: part().id, slNo: '1', name: '', kindLabel: 'Main Assembly' }, details: null });
   });
 
   it.each(['LEAD', 'ADMIN'] as const)('as %s with a current calculation: the six stages, the AK line worked from the stored operands, and the version and time of the calculation', async (role) => {

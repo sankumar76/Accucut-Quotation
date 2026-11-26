@@ -186,7 +186,7 @@ describe('AC-b: when the limit fires, the tree is read again and the screen says
     await tick(TREE_CHANGE_LIMIT_MS);
     const after = state();
     expect(after.problem).toBeNull();
-    expect(after.announcement).toBe('Part 1.3 added');
+    expect(after.announcement).toBe('Added 1.3 Sub-part. Type a Description to name it.');
     expect(after.wantsFocus('n1')).toBe(true);
   });
 
@@ -206,7 +206,8 @@ describe('AC-b: when the limit fires, the tree is read again and the screen says
     await tick(TREE_CHANGE_LIMIT_MS);
     const after = state();
     expect(after.problem).toBeNull();
-    expect(after.announcement).toBe('Row deleted');
+    // 1.1 and 1.2 were Sub-parts of 1; with 1.1 gone the other (still 1.2 in this answer) is the only Part under it (AQP-446, ruling item 2).
+    expect(after.announcement).toBe('Row deleted. 1.2 is now a Part.');
   });
 
   it('does nothing to a screen that has gone: leaving the page aborts the request, and no Notice is drawn', async () => {
@@ -464,5 +465,26 @@ describe('AQP-406 (CR-01 item 3D): moveTo, the one way a drop and Move up / Move
     expect(calls.move).toHaveBeenCalledTimes(1);
     answer.resolve(ok(MOVED));
     await tick(0);
+  });
+});
+
+describe('AQP-446 and AQP-447: the name of a row in the tree', () => {
+  it('takes the name when a field that names the row is left (NAME-4), and gives it back when it is cleared (NAME-5)', async () => {
+    const { state } = await open();
+    expect(state().nodes?.find((node) => node.id === 'p1')?.label).toBe('');
+    state().applyLabel('p1', 'Base frame');
+    expect(state().nodes?.find((node) => node.id === 'p1')?.label).toBe('Base frame');
+    expect(state().nodes?.find((node) => node.id === 's1')?.label).toBe('');
+    state().applyLabel('p1', '');
+    expect(state().nodes?.find((node) => node.id === 'p1')?.label).toBe('');
+  });
+
+  it('names the row in the delete dialog by its name, else by its kind', async () => {
+    const { state } = await open();
+    state().askDelete('p1');
+    expect(state().deleting?.name).toBe('Sub-part');
+    state().applyLabel('p1', 'Base frame');
+    state().askDelete('p1');
+    expect(state().deleting?.name).toBe('Base frame');
   });
 });
