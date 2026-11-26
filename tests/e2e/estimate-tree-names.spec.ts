@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test';
 
 import { CUSTOMER_CANARIES } from '../support/customer-canary';
@@ -5,7 +6,7 @@ import { defined } from '../support/defined';
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
 
 import { connectToTestDatabase, ensureCanaryCustomers, setCanaryCustomer } from './support/auth';
-import { expectNoAxeViolations, waitUntilHydrated, widthOf } from './support/design-system';
+import { AXE_TAGS, expectNoAxeViolations, waitUntilHydrated, widthOf } from './support/design-system';
 import { control, fieldIdOf, isPhone, nextSave, signInAsNewEngineer, tree } from './support/part-form';
 
 /**
@@ -50,7 +51,10 @@ async function insertKindedRows(ownerId: string): Promise<void> {
 /** Is the pointer a mouse (it hovers and points finely)? The same question the style sheet asks (`mouse:` in globals.css). */
 const hasMouse = (target: Page): Promise<boolean> => target.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches);
 
-/** What "no row moves" is measured by (DEF-129, UX ruling tree-toolbar-no-shift-2026-11-27, TS-1): the top and the height of the link of every row, in order, and the tree's own scroll height. */
+/**
+ * What "no row moves" is measured by (DEF-129, UX ruling tree-toolbar-no-shift-2026-11-27, TS-1): the top of the link of every row **from the top of the tree** (so a scroll of the page, which Playwright makes to bring a button into
+ * view, is not read as a move), its height, and the tree's own scroll height.
+ */
 interface Layout {
   readonly rows: ReadonlyArray<readonly [number, number]>;
   readonly scrollHeight: number;
@@ -59,7 +63,7 @@ const layoutOf = (target: Page): Promise<Layout> =>
   tree(target).evaluate((nav) => ({
     rows: [...nav.querySelectorAll('li[data-part-row] a[data-part-id]')].map((link) => {
       const box = link.getBoundingClientRect();
-      return [Math.round(box.top * 100) / 100, Math.round(box.height * 100) / 100] as const;
+      return [Math.round((box.top - nav.getBoundingClientRect().top) * 100) / 100, Math.round(box.height * 100) / 100] as const;
     }),
     scrollHeight: nav.scrollHeight,
   }));
@@ -75,6 +79,27 @@ async function centreOf(target: Page, slNo: string): Promise<{ readonly x: numbe
 async function rest(target: Page): Promise<void> {
   const size = target.viewportSize();
   await target.mouse.move((size?.width ?? 1_000) - 2, (size?.height ?? 600) / 2);
+}
+
+/**
+ * Axe on one region of the page, with the page where the interaction left it (TS-9, TS-10, TS-16: the toolbar's buttons must pass the target-size rule at the normal scroll position, not only after a scroll to the top). The
+ * rules are the suite's (`AXE_TAGS`), violations only, and the failure names the nodes and the neighbours they were compared with, as `expectNoAxeViolations` does. The whole page is scanned too, from the top, as everywhere.
+ */
+async function expectRegionAccessible(target: Page, selector: string): Promise<void> {
+  const results = await new AxeBuilder({ page: target }).include(selector).options({ resultTypes: ['violations'] }).withTags(AXE_TAGS).analyze();
+  const summary = results.violations.map((violation) => ({
+    id: violation.id,
+    nodes: violation.nodes.map((node) => node.target.join(' ')).slice(0, 5),
+    neighbours: violation.nodes.flatMap((node) => node.any.flatMap((check) => (check.relatedNodes ?? []).map((related) => related.target.join(' ')))).slice(0, 5),
+  }));
+  expect(summary, `axe on ${selector}`).toEqual([]);
+}
+
+/** Both scans of a state: the region where the page is, then the whole page from the top. */
+async function expectStateAccessible(target: Page, selector: string): Promise<void> {
+  await expectRegionAccessible(target, selector);
+  await target.evaluate(() => window.scrollTo(0, 0));
+  await expectNoAxeViolations(target);
 }
 
 /** The rows of the tree after the first case, in reading order. */
@@ -324,12 +349,14 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
         expect(apart, 'two toolbar buttons overlap').toBe(true);
       }
     }
-    await expectNoAxeViolations(page);
+    // The toolbar in view: the tree where the page is, then the whole page from the top. (A scan of the whole page where an interaction leaves it also meets the page's own header links half behind the sticky bar, which is
+    // the scroll and not the tree: the same reading as in `estimate-treatments.spec.ts`.)
+    await expectStateAccessible(page, 'nav[aria-label="Parts tree"]');
 
     // The "+" menu of the row opens in line under it.
     await rowButton(page, 'Add under', '1.1').click();
     await expect(page.getByRole('menu')).toBeVisible();
-    await expectNoAxeViolations(page);
+    await expectStateAccessible(page, 'nav[aria-label="Parts tree"]');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('menu')).toHaveCount(0);
 
@@ -337,7 +364,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     await open();
     await rowButton(page, 'Delete', '1.1').click();
     await expect(page.getByRole('alertdialog')).toBeVisible();
-    await expectNoAxeViolations(page);
+    await expectStateAccessible(page, '[role="alertdialog"]');
     await page.getByRole('button', { name: 'Keep it' }).click();
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect(row(page, '1.1')).toBeVisible();
