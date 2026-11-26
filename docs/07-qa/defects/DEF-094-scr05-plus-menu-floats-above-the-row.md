@@ -6,7 +6,7 @@
 | Severity | **Sev-3 proposed by QA** (the ux-expert's word: Major); **master grades.** |
 | Priority | P3 (Jira Medium) (labels `sev-3`, `final-review`, `conformance`) |
 | Type | **Product** (conformance deviation of the running build from the SCR mock-up) |
-| Status | **Open (new), 2026-11-26 (qa-engineer, from the ux-expert's batch 1).** Not yet graded by master. |
+| Status | **Open (new), 2026-11-26 (qa-engineer, from the ux-expert's batch 1).** Not yet graded by master. **Update 2026-11-26 (batch 3, row C-05-02):** the same fault also shows **at 360 px inside the parts-tree drawer**: the '+' menu floats over the rows (ux-expert, Major); the fix covers every width and the drawer. |
 | Jira / GitHub | [AQP-451](https://sankumar76.atlassian.net/browse/AQP-451) / [#744](https://github.com/sankumar76/Accucut-Quotation/issues/744) (labels bug, sev-3, ai-delivery, final-review, conformance; Jira also aiid-DEF-094, agent-qa-engineer). Relates to AQP-1 and the first owning story. Searched first: no earlier Bug for this deviation. |
 | Found by / date | The ux-expert (DL-411 conformance check), batch 1, 26 Nov 2026; logged by qa-engineer, 2026-11-26 |
 | Build / commit | production build of `master` `e3dc5b0b`, invented data, hands-on at the widths named (the ux-expert's file `qa-batch-1.md`); QA did not run it |
