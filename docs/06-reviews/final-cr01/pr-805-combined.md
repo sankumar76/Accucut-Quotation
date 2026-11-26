@@ -90,3 +90,37 @@ The shapes are strict. They hold no ID, no figure, no bytes and no file name. A 
 - **qa-engineer:** DEF-131 Row E and Row E-T. The QUOTED, ignored-tree, replace and per-event rollback cases (QLT-805-05) are the ones still missing.
 - **reviewer-performance:** QLT-805-02 and QLT-805-06 (full-tree read and second connection under the row lock).
 - **orchestrator and master:** do not merge until Stage 6 is green and the integration stage has run (RISK-038 closes only on a proven run).
+
+## Round 2 at `29741b31` (fix commit `c0bb189c`, then a merge of `master` bringing in #791)
+
+**Verdict: APPROVE WITH COMMENTS.** The Blocker and all five Minors are fixed, and the CI rows that were missing in round 1 are now green. Open findings: Blocker 0, Critical 0, Major 0, Minor 0, Info 6. There is no merge stop under §9 item 2. The squash still needs E2E shards 1 to 4 of run 45858061680; they were running when this was written. Only the diff since `b1532683` was reviewed. The merge brings in master's #791 (SCR-05 form and tree button), which is outside this review.
+
+### The brief's five checks
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1 | Stage 6, the AQP-237 check, passes in CI | **Yes** | Run 45858061680, job 140042681766: `audit-transaction-architecture.test.ts (49 tests)` ✓; Stage 6 529 files / 11,606 tests passed. Also passes locally on a scratch `git archive 29741b31` (49 of 49) |
+| 2 | The 18 integration cases and the new ones pass in CI | **Yes** | `tests/integration/estimates/input-audit.test.ts (23 tests)` ✓ (18 plus 5 new); `audit-database.test.ts (47 tests)` ✓ with the four events mapped to it; `tree.test.ts (18)` ✓; the integration stage 705 files / 17,487 tests passed |
+| 3 | 500-node timing | **Acceptable** | The new case ("a Lead's save on a tree of 500 rows, entry included") passes the 1,000 ms ceiling, and Vitest did not flag it as slow (it lists tests over 300 ms; this one is not listed; the whole file took 1,734 ms for 23 cases). The existing 500-row tree and Recalculate timings pass unchanged. See QLT-805-09 on what the figure does and does not measure |
+| 4 | Stage 11b ≤ 192,500 B | **Yes: 192,291 B**, 209 B under | Same job: `PASS /estimates/[code] gzip 192,291`. This equals the figure of #791's own run (job 140007458755), which the merge brought in. This PR adds **0 B**: its only `src/app` changes are 5 API routes, and no client file changed |
+| 5 | No check was loosened | **Yes** | `git diff b1532683 29741b31` leaves `tests/support/audit-transaction-check.ts`, `audit-transaction-cases.ts`, `audit-transaction-failing-cases.ts`, `audit-transaction-architecture.test.ts`, `vitest.config.ts`, `eslint.config.mjs` and `.github` **untouched**, and there is no allow-list. The import-rule test **gains** one Restricted entry (`input-change-audit`, classed with `image-service`); the audit-database test **gains** four required mappings. Both are tightenings |
+
+### Prior findings
+
+| Finding | Result | Evidence |
+|---|---|---|
+| QLT-805-01 Blocker | **Fixed** | The trace now **builds** entries (`Entries`, pure apart from its `tx` reads). Each owner records them inside its own `.run(` callback with `trace.audit.recordMany(tx, …)`: `saveInputs`, `putPicture`, `removePicture`, `addPart`, `moveNode`, `deleteNode`. `removePicture` makes its `findNode` repository call in the callback, so the check's rule (b) is met; the code is the same as `lockedPart`. Rollback is tested for save, picture add and remove, move, delete and add, each with a failing `recordMany` |
+| QLT-805-02 | **Fixed** | `ViewReaders.document` is read before the transaction (`viewReaders`); the three tree writes pass `readers.document`. No pool read is left inside the lock |
+| QLT-805-03 | **Fixed** | "Other" is shown as `Other: <words>`, so a switch between a listed treatment and "Other" with the same words is a change with an entry (unit test). Listed names are unique (`uq_treatments_name`), so two listed options cannot share words |
+| QLT-805-04 | **Fixed** | `MAX_ENTRY_FIELDS = 200` is shared by the builder and the schema; a unit test pins 64, 200 and the refusal at 201 |
+| QLT-805-05 | **Fixed** (one gap left, QLT-805-11) | QUOTED refusals for save, picture and add; Picture replaced (before "Picture", after "Picture replaced"); rollback for move, delete and the picture; the always-true assertion replaced by real revision checks |
+| QLT-805-06 | **Accepted as measured** | See QLT-805-09 |
+| QLT-805-07, -08, SEC-805-01 | Unchanged (Info) | |
+
+### New findings (Info only)
+
+| ID | Severity | File:line | Issue | Fix (optional) |
+|---|---|---|---|---|
+| QLT-805-09 | Info | `tests/integration/estimates/input-audit.test.ts` (QLT-805-06 case) | The "174 ms against 14 ms" is a **cold** Lead save (first query on fresh services) against a **warm** Engineer save, on rows with **empty** inputs. The gap is mostly warm-up, not the trail. Real rows carry about 30 inputs each, so a full `listNodes` costs more than this shows. The 1,000 ms ceiling is a fair guard, and the extra work (one tree read, one locked re-read, one insert per Lead save, at most every 30 s) is acceptable for this deployment | Warm both services first, give the rows realistic inputs, and print both figures. Or number the row from a lighter read later (performance backlog) |
+| QLT-805-10 | Info | `src/lib/estimate/input-change.ts` (`if (was.length >= MAX_ENTRY_FIELDS) break;`) | Past 200 changed fields the rest are dropped silently, with no marker. Unreachable (the form has 31 editable fields; a save carries at most 64) | Optional: drop the `break` (the schema refuses above 200 anyway), or add a `truncated` flag as the delete entry has |
+| QLT-805-11 | Info | `input-audit.test.ts` (new QUOTED case) | Its title says "an approved estimate refuses an Admin's save too", but it sets up QUOTED. A tree write on an **ignored** estimate is still not tested; it goes through the same `lockForChange` as the tested ignored save, so the risk is low | Retitle it; add an ignored `addPart` case when convenient |
