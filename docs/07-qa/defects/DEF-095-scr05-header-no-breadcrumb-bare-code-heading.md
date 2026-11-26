@@ -30,8 +30,9 @@ The screen at the widths named reads as the design above; the hands-on check rep
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
 | Graded (type, severity, lane) | master | 2026-11-26 | DL-414, DL-416: Sev-3, lane 1 |
-| Fixed | developer | | |
-| Regression test added | developer | | |
+| Fixed | developer | 2026-11-27 | PR #789 (AQP-452), squash `69ba8d98`: one shared page head for SCR-05, SCR-06 and SCR-07 (`page-head`) |
+| Regression test added | developer | 2026-11-27 | `page-head.test.ts` (17 tests), `cost-details-head.test.ts` (6), `cost-details-tree.test.ts` (5), `estimate-review-architecture.test.ts` (23, with the new case), and the E2E changes in `cost-details`, `estimate-review`, `estimate-customer`, `estimate-save` and about ten other specs for the new head |
+| CI proof read by QA (the push `69ba8d98`: CI 45888716522 RED in shard 4 for a DEF-129 case unrelated to the head; Windows package 45888716486 `success`) | qa-engineer | 2026-11-27 | `Stages 1 to 11b` `success` (530 and 705 files); the four unit files above passed; the changed E2E specs passed attempt 1 at all three widths (`cost-details` 10, `estimate-review` 10 to 11, `estimate-customer` 9, `estimate-save` 12, `cancel-approval` 9, `unlock` 7, `mark-quoted` 9, `remove-price` 9, `review-download` 8, `export-refusal` 3, `ignore-restore` 16, `lead-warning` 13, `rates-changed` 4, `estimate-cleared` 8 cases per width); `estimate-customer.spec.ts` (the two cases that had failed on #789's earlier PR runs) passes; `/estimates/[code]` first load **192,128 B** gzip (1,372 B under the 193,500 B ceiling; #789 is -163 B against `master`'s 192,291 B); the push's red is `estimate-tree-plus-menu.spec.ts:64` (DEF-129), not the head; test plan 0.3.98. **The ux-expert's hands-on check (pass 2) is still due before QA verifies and closes it.** |
 | Hands-on check repeated | ux-expert | | |
 | Verified | qa-engineer | | |
 
