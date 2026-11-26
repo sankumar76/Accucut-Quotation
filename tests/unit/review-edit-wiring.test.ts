@@ -27,8 +27,15 @@ interface Captured {
   readonly review: { readonly notice: string; readonly figuresCurrent?: boolean };
 }
 const captured: Captured[] = [];
-vi.mock('@/components/features/estimate-workspace/review-form', () => ({
-  ReviewForm: (props: Captured) => {
+// The inputs block is drawn by the shell of the editable form while the estimate can be corrected, and by the plain read-only `PartForm` otherwise; each is captured at the boundary.
+vi.mock('@/components/features/estimate-workspace/lazy-review-form', () => ({
+  LazyReviewForm: (props: Captured) => {
+    captured.push(props);
+    return null;
+  },
+}));
+vi.mock('@/components/features/estimate-workspace/part-form', () => ({
+  PartForm: (props: Captured) => {
     captured.push(props);
     return null;
   },

@@ -124,6 +124,8 @@ describe('AC-5: no review code reaches the Engineer', () => {
   // A Lead or an Admin corrects the inputs of a Draft or a Prepared estimate (DEF-131 stage 2): the review draws `ReviewForm`, the same `PartForm` with the autosave, the leave guard and the one page read; the page hands it
   // the same plain props, and the functions it adds are its own.
   const REVIEW_FORM = 'src/components/features/estimate-workspace/review-form.tsx';
+  // ... fetched after the page is up by a thin client shell, which the review draws (the autosave, the leave guard and its dialog stay out of the first load, `overlay-imports.test.ts`).
+  const LAZY_REVIEW_FORM = 'src/components/features/estimate-workspace/lazy-review-form.tsx';
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -147,6 +149,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     clientFiles.delete(CUSTOMER_BUTTON);
     clientFiles.delete(INPUTS_FORM);
     clientFiles.delete(REVIEW_FORM);
+    clientFiles.delete(LAZY_REVIEW_FORM);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
       const base = specifier.startsWith('@/') ? `src/${specifier.slice(2)}` : join(from, '..', specifier).replaceAll('\\', '/');
@@ -377,10 +380,21 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
   });
 
+  it('DEF-131 stage 2: the shell of the editable form reads the form by a bare dynamic import(), imports it for its type only, and is imported by the review alone', () => {
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const shell = strip(ALL.find((file) => file.path === LAZY_REVIEW_FORM)?.text ?? '');
+    expect(shell.length).toBeGreaterThan(200);
+    expect(shell).toMatch(/import\('\.\/review-form'\)/);
+    expect(shell).toMatch(/^import type \{ ReviewFormProps \} from '\.\/review-form';/m);
+    expect(shell).not.toMatch(/^import (?!type).*from '\.\/review-form'/m);
+    const importers = ALL.filter((file) => file.path !== LAZY_REVIEW_FORM && /lazy-review-form/.test(file.text)).map((file) => file.path);
+    expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
+  });
+
   it('AQP-488 ADR-016 (QLT-800-01): the part form the review draws, and the files it reads its look from, import no figure, schema, service, repository or review code', () => {
     const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
     const folder = 'src/components/features/estimate-workspace/';
-    for (const path of [INPUTS_FORM, REVIEW_FORM, `${folder}part-fields.tsx`, `${folder}review-look.ts`, `${folder}review-look-texts.ts`]) {
+    for (const path of [INPUTS_FORM, REVIEW_FORM, LAZY_REVIEW_FORM, `${folder}part-fields.tsx`, `${folder}review-look.ts`, `${folder}review-look-texts.ts`]) {
       const code = strip(ALL.find((file) => file.path === path)?.text ?? '');
       expect(code.length, path).toBeGreaterThan(20);
       expect(code, path).not.toMatch(/schemas\/|estimate-review\/|@\/server\/|calculation-|row-outputs|product-totals|figure-state|costs/);
