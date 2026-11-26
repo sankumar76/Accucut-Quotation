@@ -454,8 +454,9 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await expect(tree(page).getByRole('img', { name: 'Sub-Assembly' })).toHaveCount(1);
     await expect(part(page, '1.1').getByRole('img', { name: 'Sub-Assembly' })).toHaveCount(1);
     await expect(part(page, '1.1').locator('svg > title')).toHaveText('Sub-Assembly');
-    expect(await part(page, '1').innerText()).not.toContain('Main Assembly');
-    expect(await part(page, '1.1').innerText()).not.toContain('Sub-Assembly');
+    // A row with no Description and no Part No. shows its kind's own name as its name (AQP-446, DEF-089), once: the icon's name is a tooltip and a spoken name, not a second text.
+    expect((await part(page, '1').innerText()).split('Main Assembly')).toHaveLength(2);
+    expect((await part(page, '1.1').innerText()).split('Sub-Assembly')).toHaveLength(2);
 
     // The legend at the foot names the four icons.
     const legend = page.locator('[data-tree-legend]');

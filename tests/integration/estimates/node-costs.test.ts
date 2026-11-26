@@ -86,7 +86,7 @@ describe('AC-1, AC-2: a calculated estimate is read back, row by row, for a Lead
       for (const viewer of [lead(), admin()]) {
         const costs = nodeCostsSchema.parse(await details.getNodeCosts(viewer, estimateId, nodeId));
         expect(costs.state).toBe('current');
-        expect(costs.row).toEqual({ nodeId, slNo: index === 0 ? '1' : '1.1', name: `Invented part ${index + 1}` });
+        expect(costs.row).toEqual({ kindLabel: expect.any(String), nodeId, slNo: index === 0 ? '1' : '1.1', name: `Invented part ${index + 1}` });
         expect(costs.details?.stages.map((stage) => stage.number)).toEqual([1, 2, 3, 4, 5, 6]);
         expect(costs.details).toMatchObject({ configurationNumber: 1, letters: { count: 'H', unitPrice: 'BG' }, count: index === 0 ? '2.00' : '6.00', notApplicable: false });
         const calculated = linesOf(costs).filter((line) => line.kind === 'calculated');
