@@ -1,4 +1,4 @@
-# DEF-132: `estimate-tree-names.spec.ts:52` [desktop] fails attempt 1 because the add status "Added 1.1.1 Part. Type a Description to name it." is not seen within its 15 s expect (master 5a496d16); passes on retry (type not yet decided; product not excluded; Sev-3, provisional Sev-2 Product if the product can fail to show or announce it; Jira AQP-489, GitHub #802)
+# DEF-132 (CLOSED as a duplicate of DEF-129, DL-440): `estimate-tree-names.spec.ts:52` [desktop] fails attempt 1 because the add status "Added 1.1.1 Part. Type a Description to name it." is not seen within its 15 s expect (master 5a496d16); passes on retry (Jira AQP-489, GitHub #802)
 
 | Field | Value |
 |-------|-------|
@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate (master, DL-439 (A)); provisional Sev-2 Product (DL-094: a WCAG 4.1.3 failure on a delivered screen) if step 1 shows the product can fail to show or announce the status.** |
 | Priority | P3 (Jira Medium; labels `sev-3`, `final-review`) |
 | Type | **Not yet decided; product not excluded** (master, DL-439 (A)): a missing status could be the product not writing, or not announcing, its 'Added ...' message in some sequence, or a test-side race. Not DEF-129 (a different mechanism and failing line; #796's hover helper does not reach it). |
-| Status | **Open (new), 2026-11-27.** Owner: **lane 1** (#756's author), after #799, beside the DEF-053 split (lane 2 is dedicated to DEF-131's edit). **Step 1 due by the end of Sat 28 Nov 2026 (below).** |
+| Status | **CLOSED 2026-11-27 as a duplicate of DEF-129 (AQP-486, #793) on master's DL-440 (A): the same cause (the hovered row's toolbar pushes the rows below it down 42 px, so a click lands on another control).** Lane 1's #803 diagnostic (run 45847511614, a fast draw 0.65) showed `:52` failing both attempts on the click with no add request sent, which is why the status never came. Jira AQP-489 is Done and linked 'Duplicate' to AQP-486; GitHub #802 is closed as not planned with a comment pointing to #793. The record below stays as the evidence. **Step 1 and the diagnostic are no longer owed as a separate item;** the proof is DEF-129's. |
 | Jira / GitHub | [AQP-489](https://sankumar76.atlassian.net/browse/AQP-489) / [#802](https://github.com/sankumar76/Accucut-Quotation/issues/802) (labels bug, sev-3, ai-delivery, final-review; Jira also aiid-DEF-132, agent-qa-engineer). Relates to AQP-446, AQP-447 (#756), DEF-129 (AQP-486), DEF-090 (AQP-447), AQP-1. Searched first: JQL on `aiid-DEF-132`, 'DEF-132' and the status text: nothing (DEF-129 is the only hit and is a different signature). |
 | Found by / date | CI (a `master` push); read by qa-engineer, 2026-11-27 (test plan 0.3.89); graded by master, DL-439 |
 | Build / commit | `master` `5a496d16` (#795, DEF-103: the task queue tab order; the change cannot reach the estimate tree) |
@@ -63,6 +63,9 @@ After 'Add under 1.1' and the 'Part' menu item are pressed, the polite status 'A
 
 ## `master` push d2b58f04 (the first push after the DEF-132 filing; test plan 0.3.91)
 `estimate-tree-names.spec.ts:52` passed attempt 1 at all three widths: [desktop] 17.1 s, [tablet] 15.4 s, [mobile] 12.8 s; 0 flaky, 0 failed, 0 'intercepts pointer events' lines in the push's CI log; shard 4 draw 0.70 against 31015cce. No DEF-132 occurrence on this push.
+
+## Closed as a duplicate (qa-engineer, 2026-11-27; test plan 0.3.93)
+Master's DL-440 (A): DEF-132 is folded into DEF-129 (one cause, one defect, DL-057) and QA closes it as a duplicate with #803's diagnostic as its evidence. Done: Jira AQP-489 transitioned to Done and linked 'Duplicate' to AQP-486; GitHub #802 closed. The proof, the hold and the fix are in the DEF-129 file.
 
 ## Records
 Jira Bug AQP-489 and GitHub issue #802, created 2026-11-27 and cross-linked. Related: DEF-129 (AQP-486, #793), DEF-090 and DEF-089 (#756), RISK-031, WCAG 4.1.3, NFR-018; DL-439, DL-426, DL-425, DL-364 (A3), DL-094; test plan 0.3.89 and 0.3.90; CI run 45842343024, shard 4.
