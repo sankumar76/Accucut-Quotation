@@ -143,8 +143,41 @@
 
 n/a (round 1).
 
+## Round 2 (re-review of `37a3a1a7..984bf245`, 2026-11-26) — REQUEST CHANGES, merge stop at this head
+
+**Scope.**
+- `c4870eee`: the island is removed. The server review renders the Engineer's `PartForm` directly. The callbacks, `missing` and `gate` become optional, with defaults inside the lazy `PartFields`. The chosen-row state is in `PartForm`.
+- `150b24b0`: the review findings.
+- The merge `984bf245` of `master` (`d2b58f04`, #799), which brings only export and instrumentation files.
+- #789 has **not** merged yet, so the `estimate-review.tsx` merge resolution is still to be checked (`git show --cc` when it lands).
+- PR review [6076962764](https://github.com/sankumar76/Accucut-Quotation/pull/800#pullrequestreview-6076962764); a reply in each of the seven round-1 threads.
+
+**Checks run.**
+- 19 test files at `984bf245` in a temporary scratchpad worktree, since removed: **765 passed**. They cover the architecture, screen, `part-form-lazy`, `overlay-imports`, `source-conventions`, security, review-look and block tests, and every unit file that names `PartForm`, `PartFields`, `FieldRenderer`, `UnitInput` or `EstimateWorkspace`.
+- CI run 45849387544: Stages 1 to 11b **success**; the E2E shards were still running when this was published.
+
+| Finding | Round-2 status | Evidence |
+|---------|----------------|----------|
+| QLT-800-07 (Critical) | **Not fixed at this head** | **Stage 11b, job 140012963068: `/estimates/[code]` 192,538 B**, which is **+376 B against master** (192,162 B at `d2b58f04`, run 45848190569, job 140007246749) and **38 B over the DL-424 ceiling**. Removing the island halved the growth (from +733 B). #789 is still open. Projected run of record: about 192,384 B with #789 in (under), or about 192,534 B if #791 (~+150 B) lands first (over). **It closes when the run of record (#789 in, 0 behind) reads at or under 192,500 B.** A trim of ~40 B, better ~200 B, would make that robust (QLT-800-08 names a candidate); or master and the product-manager decide |
+| QLT-800-01 (Minor) | **Not fixed** | The exemption is now `part-form.tsx`: narrow (one file) and justified (already in the first load, figure-free today), but the test diff is only a rename. `part-form-lazy.test.ts` (unchanged) pins only the lazy import of `PartFields`. The suggested guard: `part-form.tsx` imports nothing restricted; the review's `<PartForm` props are exactly `estimateId`, `part`, `editable`, `nodes`, `review`; and `partItems` is built only from `id`, `parentId`, `slNo`, `nodeKind` and `name` |
+| QLT-800-02 | **Fixed** | Only `class` attributes are stripped, so other attributes are checked again |
+| QLT-800-03 | **Fixed** | `cn('rounded-r-none', className)` in `UnitInput`, with a unit test |
+| QLT-800-04 | **Fixed** | The AC-2 E2E compares every input and textarea by `controlIdFor(fieldId)` with what the part holds (read as the Lead), and asserts `status === 200` and more than 3 compared |
+| QLT-800-05, QLT-800-06 | **Fixed** | Counts pinned to 1 and 3; the path is corrected |
+| SEC-800-01, -02, -03 | Info, stand | SEC-800-03 (the #789 conflict) is still to be checked when #789 merges |
+
+**New in round 2**
+
+| ID | Severity | File:line | Note |
+|----|----------|-----------|------|
+| SEC-800-04 | Info | `src/components/features/estimate-review/estimate-review.tsx:196` | **The new NFR-002 boundary is verified.** The server review passes `PartForm` an id, `part` `{id, slNo, revision: 0}`, `editable={false}`, `nodes` mapped to `id`, `parentId`, `slNo`, `nodeKind` and `label`, and `review` with two strings and two server elements: no function and no figure data. The row line's figures are server markup on the Lead's and the Admin's page only. **The Engineer's path is unchanged:** `EstimateWorkspace` still passes every callback, `missing` and `gate`; `chosen` reaches the fields only through `review`, which the Engineer never has; and the fold, focus and announcement effects are no-ops without it |
+| QLT-800-08 | Info | `src/components/features/estimate-workspace/part-form.tsx:57` | The render-phase `seen` / `chosen` state runs for the Engineer too: one extra render when the selected part changes, and an unused `ownGate` per `PartFields` mount. There is no change of behaviour, but it is first-load code. Moving the "chosen after first paint" logic into the lazy `PartFields`, and creating the fallback gate only when `gate` is absent, is one way to find QLT-800-07's bytes |
+
+**Open after round 2:** Blocker 0, **Critical 1** (QLT-800-07, conditional on the run of record), Major 0, Minor 1 (QLT-800-01), Info 5 (SEC-800-01 to -04, QLT-800-08). **Verdict at `984bf245`: REQUEST CHANGES — merge stop at this head.** DL-422: +0.
+
 ## Hand-off
 - Status: COMPLETE
 - GitHub: PR review [6076703907](https://github.com/sankumar76/Accucut-Quotation/pull/800#pullrequestreview-6076703907) (COMMENT, 7 inline comments, at `37a3a1a7`); label `review:quality-changes-requested`
 - Verdict at `37a3a1a7`: REQUEST CHANGES, **merge stop** (Blocker 0, Critical 1, Major 0, Minor 4, Info 5). QLT-800-07 (DL-424): 192,895 B is 395 B over the ceiling, and still over with #789 in. NFR-002, read-only and access control hold
+- **Round 2 (`984bf245`):** REQUEST CHANGES, merge stop at this head (Blocker 0, Critical 1, Major 0, Minor 1, Info 5). Stage 11b is 192,538 B: +376 B against master and 38 B over. QLT-800-01's guard is still missing. #789's `estimate-review.tsx` resolution is to be checked when #789 merges.
 - Recommended next agent: developer (QLT-800-07, then QLT-800-01 to -04), then the merge of #789 in and the run of record, then a short re-review of that resolution, then orchestrator: mark ready and merge on fully green CI with Stage 11b at or under 192,500 B.
