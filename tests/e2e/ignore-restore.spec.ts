@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test';
 
 import { IGNORE_REMARKS_MAX_LENGTH } from '../../src/lib/estimate/ignore-words';
 import { validateTextInput } from '../../src/lib/estimate/validation';
@@ -169,9 +169,34 @@ test.describe('AC-2, AC-8: the Ignore dialog', () => {
   });
 });
 
+/**
+ * AQP-488 (DL-388, the DEF-053 and DEF-128 pattern): the case that ignores and then restores was one test of 24 to 28 s on the development server (#800's runs) and the page that comes back after Restore is now the
+ * editable one, so it passed 30 s. It is **two cases on one page, in one serial group**, split at its natural state boundary: the estimate is made, the page opened and hydrated once in `beforeAll` (the same person, address and
+ * viewport as every case of this file); case A is everything up to the end of the ignored state (the ignore, its status, notice, read-only page, layer, scan); case B is the Restore dialog, the restore and the restored state.
+ * Every assertion of the old case is kept, in the same order, in A or B. A failure of A skips B and a retry runs the group again from `beforeAll`. No timeout is set, raised or lowered, and no wait is added but the
+ * observe-only timestamps of case B (they assert nothing).
+ */
 test.describe('AC-1, AC-4, AC-5, AC-8, AC-10: ignore, then restore, with the keyboard alone', () => {
-  test('a Prepared estimate is ignored with remarks: the heading takes focus, the polite status is said, the notice names who, when and the remarks, the badge is dashed, the page is read-only with no action bar; Restore RFQ opens a dialog, restores nothing by itself, and brings the estimate back as Prepared', async ({ page }, testInfo) => {
-    const { code, owner, lead } = await openedForIgnoring(page, 'PREPARED', testInfo);
+  test.describe.configure({ mode: 'serial' });
+
+  let context: BrowserContext;
+  let page: Page;
+  let made: Awaited<ReturnType<typeof openedForIgnoring>>;
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    const { baseURL, viewport, hasTouch } = testInfo.project.use;
+    context = await browser.newContext({ storageState: { cookies: [], origins: [] }, ...(baseURL === undefined ? {} : { baseURL }), ...(viewport === undefined ? {} : { viewport }), ...(hasTouch === undefined ? {} : { hasTouch }) });
+    await useFreshAddress(context);
+    page = await context.newPage();
+    made = await openedForIgnoring(page, 'PREPARED', testInfo);
+  });
+
+  test.afterAll(async () => {
+    await context.close();
+  });
+
+  test('a Prepared estimate is ignored with remarks: the heading takes focus, the polite status is said, the notice names who, when and the remarks, the badge is dashed, the page is read-only with no action bar', async () => {
+    const { code, owner, lead } = made;
     await page.route(IGNORE_ROUTE, async (route) => {
       await new Promise<void>((resolve) => {
         setTimeout(resolve, SLOW_MILLISECONDS);
@@ -239,6 +264,12 @@ test.describe('AC-1, AC-4, AC-5, AC-8, AC-10: ignore, then restore, with the key
     await expectNoAxeViolations(page);
     await page.unroute(IGNORE_ROUTE);
 
+  });
+
+  test('Restore RFQ opens a dialog, restores nothing by itself, and brings the estimate back as Prepared', async ({}, testInfo) => {
+    const { code, owner, lead } = made;
+    // The page is as case A left it: ignored, read-only, the Restore button live.
+    await expect(badgeOf(page)).toHaveAttribute('data-status', 'IGNORED');
     // Restore: the notice's button opens a dialog and restores nothing by itself.
     let restores = 0;
     await page.route(RESTORE_ROUTE, async (route) => {
@@ -265,14 +296,21 @@ test.describe('AC-1, AC-4, AC-5, AC-8, AC-10: ignore, then restore, with the key
 
     await page.keyboard.press('Tab');
     await expect(restoreSubmitOf(restoreDialog)).toBeFocused();
+    // Observe-only timestamps (nothing is asserted on them): how long the restored page takes to be drawn, and then to be editable (the editing island fetched and swapped in), as a person waits for it.
+    const pressedAt = Date.now();
     await page.keyboard.press('Enter');
     await expect(restoreDialog).toHaveCount(0);
     await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
     await expect(announcerOf(page)).toHaveText(`${code} restored. It is back as Prepared, in Open.`);
     await expect(noticeOf(page)).toHaveCount(0);
     await expect(actionBar(page)).toBeVisible();
+    const drawnAt = Date.now();
     await expect(badgeOf(page)).toHaveAttribute('data-status', 'PREPARED');
     expect(restores).toBe(1);
+    await expect(page.getByRole('button', { name: 'Add main assembly' })).toBeVisible();
+    const editableAt = Date.now();
+    // eslint-disable-next-line no-console -- the measurement of AQP-488 (product cost of the island after Restore), read from the CI log
+    console.log(`[AQP-488 restore timing] ${testInfo.project.name}: page drawn ${String(drawnAt - pressedAt)} ms after the press, tree controls ${String(editableAt - drawnAt)} ms after that`);
     expect(await readLayer(owner.id)).toMatchObject({
       status: 'PREPARED',
       ignoredAtSet: false,
