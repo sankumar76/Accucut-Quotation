@@ -178,7 +178,8 @@ test.describe('AC-2, AC-3: "Recalculate anyway" makes the Lead\'s own calculatio
     await expect(notice(page)).toContainText(WENT_AHEAD);
     await expect(notice(page)).toContainText(NOTICE_MEANING);
     // The mark is in the tree and in "How the total is built" (closed, so counted and not looked at), with its words.
-    await expect(marks(page)).toHaveCount(2);
+    // The tree, the table and, since AQP-488, the row line of the open row (the warned item is the first row).
+    await expect(marks(page)).toHaveCount(3);
     await expect(marks(page).first()).toContainText('Quantity 0');
     await expect(marks(page).first()).toBeVisible();
 
@@ -197,7 +198,7 @@ test.describe('AC-2, AC-3: "Recalculate anyway" makes the Lead\'s own calculatio
     await expect(recalculateButton(page)).toHaveCount(0);
     await expect(notice(page)).toContainText(`${owner.name} went ahead on`);
     await expect(notice(page)).toContainText(WENT_AHEAD);
-    await expect(marks(page)).toHaveCount(2);
+    await expect(marks(page)).toHaveCount(3);
     const costs = await page.request.get(`/api/v1/estimates/${owner.id}/costs`);
     expect(costs.status()).toBe(200);
     expect(((await costs.json()) as { warning: { madeBy: string } }).warning.madeBy).toBe(owner.name);

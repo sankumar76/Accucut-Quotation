@@ -15,8 +15,8 @@ import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { LazyPartForm } from '../estimate-workspace/lazy-part-form';
 import { PartHead } from '../estimate-workspace/part-head';
+import { ReviewForm } from '../estimate-workspace/review-form';
 import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
 import { BuildTable } from './build-table';
@@ -198,7 +198,10 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         {selected === null ? null : (
           // The Engineer's own form, read-only, in a client island of its own folder; nothing handed to it holds a figure: the rows are mapped down to their number, kind and name, and the row line is drawn here (AQP-488).
           <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">
-            <LazyPartForm
+            {/* The row's eyebrow, title and figure line are drawn here, on the server, so they are in the first paint whatever the form is doing; the form under them is labelled by the title (UX ruling 3.6, 3.7). */}
+            <PartHead partId={selected.id} slNo={selected.slNo} nodes={partItems} titleId="part-form-title" titleRef={null} />
+            {rowLine}
+            <ReviewForm
               estimateId={estimateId}
               part={{ id: selected.id, slNo: selected.slNo, revision: selectedRevision ?? 0 }}
               editable={editable}
@@ -207,13 +210,6 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
                 notice: inputsNotice(header.status, isIgnored, state),
                 showing: showingInputs(selected.slNo, rowNameOf(selected.name, nodeKindLabel(selected, nodes)), editable),
                 figuresCurrent: state === 'current',
-                rowLine,
-                head: (
-                  <>
-                    <PartHead partId={selected.id} slNo={selected.slNo} nodes={partItems} titleId="part-form-title" titleRef={null} />
-                    {rowLine}
-                  </>
-                ),
               }}
             />
           </div>

@@ -118,9 +118,12 @@ describe('AC-5: no review code reaches the Engineer', () => {
   const REMOVE_BUTTON = `${REMOVE_FOLDER}remove-button.tsx`;
   const CUSTOMER_FOLDER = 'src/components/features/estimate-customer/';
   const CUSTOMER_BUTTON = `${CUSTOMER_FOLDER}change-customer-button.tsx`;
-  // The Lead's view of one row's inputs (AQP-488, DEF-131 Stage 1) is the Engineer's own `PartForm`, drawn by the review through a thin client shell that loads the form's code after the page is up (the first load is held
-  // to 192,500 B): only what a server can send goes in: ids, texts and server elements (the row line and the head), no function and no figure (its rows are mapped down to where each sits, its number, its kind and its name).
-  const INPUTS_FORM = 'src/components/features/estimate-workspace/lazy-part-form.tsx';
+  // The Lead's view of one row's inputs (AQP-488, DEF-131 Stage 1) is the Engineer's own `PartForm`, drawn by the review: only what a server can send goes in: ids and texts, no function and no figure (its rows are mapped
+  // down to where each sits, its number, its kind and its name; the row's title and figure line are server markup above it).
+  const INPUTS_FORM = 'src/components/features/estimate-workspace/part-form.tsx';
+  // A Lead or an Admin corrects the inputs of a Draft or a Prepared estimate (DEF-131 stage 2): the review draws `ReviewForm`, the same `PartForm` with the autosave, the leave guard and the one page read; the page hands it
+  // the same plain props, and the functions it adds are its own.
+  const REVIEW_FORM = 'src/components/features/estimate-workspace/review-form.tsx';
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -143,6 +146,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     clientFiles.delete(REMOVE_BUTTON);
     clientFiles.delete(CUSTOMER_BUTTON);
     clientFiles.delete(INPUTS_FORM);
+    clientFiles.delete(REVIEW_FORM);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
       const base = specifier.startsWith('@/') ? `src/${specifier.slice(2)}` : join(from, '..', specifier).replaceAll('\\', '/');
@@ -373,16 +377,14 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
   });
 
-  it('AQP-488 ADR-016: the shell of the inputs form imports no figure, schema, service or repository, reads the form by a bare dynamic import(), and is imported by the review alone', () => {
+  it('AQP-488 ADR-016 (QLT-800-01): the part form the review draws, and the files it reads its look from, import no figure, schema, service, repository or review code', () => {
     const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
-    const shell = strip(ALL.find((file) => file.path === INPUTS_FORM)?.text ?? '');
-    expect(shell.length).toBeGreaterThan(200);
-    expect(shell).not.toMatch(/schemas\/|estimate-review\/|@\/server\/|calculation-|row-outputs|product-totals|figure-state|costs|estimates-client|fetch\(/);
-    expect(shell).toMatch(/import\('\.\/review-form'\)/);
-    expect(shell).toMatch(/^import type \{ ReviewFormProps \} from '\.\/review-form';/m);
-    expect(shell).not.toMatch(/^import (?!type).*from '\.\/(part|review)-form'/m);
-    const importers = ALL.filter((file) => file.path !== INPUTS_FORM && /lazy-part-form/.test(file.text)).map((file) => file.path);
-    expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
+    const folder = 'src/components/features/estimate-workspace/';
+    for (const path of [INPUTS_FORM, REVIEW_FORM, `${folder}part-fields.tsx`, `${folder}review-look.ts`, `${folder}review-look-texts.ts`]) {
+      const code = strip(ALL.find((file) => file.path === path)?.text ?? '');
+      expect(code.length, path).toBeGreaterThan(20);
+      expect(code, path).not.toMatch(/schemas\/|estimate-review\/|@\/server\/|calculation-|row-outputs|product-totals|figure-state|costs/);
+    }
   });
 
   it('nothing outside the review imports a file of its folder except the review page', () => {

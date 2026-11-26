@@ -20,10 +20,8 @@ export type ReviewFormProps = Omit<PartFormProps, 'review'> & { readonly review:
 const REFRESH_QUIET_MS = 300;
 
 /**
- * The code the Lead's and the Admin's review loads after the page is up (`LazyPartForm`, AQP-488): the Engineer's own `PartForm`, with the review look. It is a module of its own so that the shell fetches it with a
- * bare `import()` while `PartForm` itself stays a plain import of the Engineer's workspace (the first-load guard, `overlay-imports.test.ts`, holds a module that is fetched by `import()` to that alone), and so that what
- * only the review needs is not in the Engineer's form. A row was chosen after the page was drawn (the part changed under this component): the form's title takes the focus, the choice is said once and the tree folds. The
- * first paint does none of it.
+ * The form the Lead's and the Admin's review draws (AQP-488): the Engineer's own `PartForm`, with the review look, in a module of its own so that what only the review needs is not in the Engineer's form. A row
+ * chosen after the page was drawn takes the form's title (the choice is said once and the tree folds, `PartForm`); the first paint does none of it.
  *
  * **Editing (DEF-131 stage 2; FR-116).** When the page says the estimate can be corrected (`editable`, which the server worked out with `canEditInputs` and the viewer's real role), the form is the Engineer's whole form:
  * the same fields, validation, on-leaving save and 30-second save (`Autosave`), the warning on leaving (`LeaveGuard`) and the conflict notice when the Engineer saved the part first. What is new is only what ties it to the
@@ -34,18 +32,12 @@ const REFRESH_QUIET_MS = 300;
 export function ReviewForm({ review, editable, ...props }: ReviewFormProps) {
   const router = useRouter();
   const [, startRefresh] = useTransition();
-  const [seen, setSeen] = useState(props.part?.id);
-  const [chosen, setChosen] = useState(false);
   // The server said no: the estimate is approved, quoted or ignored now. `null` while it is as the page drew it.
   const [refused, setRefused] = useState<'locked' | 'ignored' | null>(null);
   // The polite line said once for a change from current to cleared; set from the save's callback and read by the status below.
   const [announcement, setAnnouncement] = useState('');
   const cleared = useRef(createClearedRefresh());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  if (seen !== props.part?.id) {
-    setSeen(props.part?.id);
-    setChosen(true);
-  }
   const canEdit = editable && refused === null;
 
   // The page says whether its figures are current each time it is drawn: after a Recalculate the next edit asks for a refresh again.
@@ -90,7 +82,7 @@ export function ReviewForm({ review, editable, ...props }: ReviewFormProps) {
         onChanged={refresh}
         onNamed={refresh}
         onServerIgnored={() => refuse('ignored')}
-        review={{ ...review, notice, chosen, onWrote: wrote, onLocked: () => refuse('locked') }}
+        review={{ ...review, notice, onWrote: wrote, onLocked: () => refuse('locked') }}
       />
       <p role="status" className="sr-only">
         {announcement}

@@ -141,11 +141,13 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
     gate: gate ?? ownGate,
   });
   const title = useRef<HTMLHeadingElement>(null);
+  // The Engineer's form draws its own title; the review's is drawn on the server above the form, and this form is labelled by it.
+  const titleElement = (): HTMLElement | null => title.current ?? document.getElementById(TITLE_ID);
   // A row was chosen on the review (RO-2): once the form shows, the title takes the focus. Not on the first paint of the page, and never from a form the Engineer uses.
   const shown = values.stored.status === 'ready';
   const chosen = review?.chosen === true;
   useEffect(() => {
-    if (chosen && shown) title.current?.focus();
+    if (chosen && shown) titleElement()?.focus();
   }, [chosen, shown]);
   // Under 1024 px the parts tree folds after a row is chosen, so the inputs are in view and the tree's summary (which says the open row) is one press away.
   useEffect(() => {
@@ -165,14 +167,11 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
   }
   if (values.stored.status === 'loading') {
     return (
-      <div className="flex min-w-0 flex-1 flex-col gap-s-3">
-        {review?.head}
-        <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
-          <PartProgressSkeleton />
-          <Skeleton className="h-(--control-h)" />
-          <Skeleton className="h-(--control-h)" />
-          <Skeleton className="h-(--control-h)" />
-        </div>
+      <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
+        <PartProgressSkeleton />
+        <Skeleton className="h-(--control-h)" />
+        <Skeleton className="h-(--control-h)" />
+        <Skeleton className="h-(--control-h)" />
       </div>
     );
   }
@@ -189,10 +188,9 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
   const missingNeeded = (field: FormField): boolean => missing.has(field.id) && textOf(field, values.texts).trim() === '';
   const hasMissing = (section: { readonly fields: ReadonlyArray<FormField> }): boolean => section.fields.some(missingNeeded);
   return (
-    <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, title.current)} className="is-compact flex min-w-0 flex-1 flex-col gap-s-4">
+    <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, titleElement())} className="is-compact flex min-w-0 flex-1 flex-col gap-s-4">
       <div className="flex flex-col gap-s-1">
-        <PartHead partId={part.id} slNo={part.slNo} nodes={nodes} titleId={TITLE_ID} titleRef={title} />
-        {review === undefined ? null : review.rowLine}
+        {review === undefined ? <PartHead partId={part.id} slNo={part.slNo} nodes={nodes} titleId={TITLE_ID} titleRef={title} /> : null}
         <PartProgress slNo={part.slNo} counts={sumProgress(progress.map(({ counts }) => counts))} />
         {review === undefined ? <p className="text-label text-ink-3">{FORM_INTRO}</p> : null}
         {/* The one status line of saving (STORY-05.10 AC-4, AC-5): when something was last saved (every save that stored something moves it, `onWrote`), that the form saves on its own, and, once, that the automatic
