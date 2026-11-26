@@ -7,7 +7,7 @@ import { canaryTaskCodeFor } from '../support/estimate-recipe';
 import { defined } from '../support/defined';
 
 import { connectToTestDatabase, ensureCanaryCustomers, ensureCanaryMaterials, setCanaryCustomer, useFreshAddress } from './support/auth';
-import { horizontalOverflow, TOUCH_TARGET } from './support/design-system';
+import { expectNoAxeViolations, horizontalOverflow, TOUCH_TARGET } from './support/design-system';
 import { control, expectFormAccessible, expectNothingUnsaved, leastFieldHeight, nextSave, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 import { deleteTreatment, insertTreatment, newTreatmentName, readPartInputs, renameTreatment, storeTreatmentInPart } from './support/treatment-rows';
@@ -290,9 +290,11 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
       expect(size?.width ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     }
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    // From the top of the page, as every other form scan is (`expectFormAccessible`): with the list open the page is scrolled so that two fields of section 06 can sit half behind the sticky top bar, and axe's target-size
-    // rule judges them by that overlap, a state of the scroll and not of the page (the form's head changed height in AQP-454, which moved this point; the same scan, the same rules).
-    await expectFormAccessible(page);
+    // The same scan, the same rules and the same open list, from the top of the page as every other form scan is (`expectFormAccessible` is a scroll to the top and `expectNoAxeViolations`). Where the click left the page, two inputs
+    // of section 06 sat half behind the sticky top bar, and axe's target-size rule judged them by that overlap (AQP-454 moved the point). The list is asserted open after the scroll, so the scan covers it.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(list(page)).toBeVisible();
+    await expectNoAxeViolations(page);
     await page.keyboard.press('Escape');
     await expect(list(page)).toHaveCount(0);
   });
