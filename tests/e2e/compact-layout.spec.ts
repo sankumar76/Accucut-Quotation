@@ -97,6 +97,16 @@ test.describe('AC-1 to AC-5, AC-8, AC-9: SCR-05, the part form', () => {
     );
     expect(columns.length).toBeGreaterThan(0);
     for (const column of columns) expect(column).toBeGreaterThanOrEqual(COLUMN_MINIMUM - TOLERANCE);
+    // AQP-458 (DEF-101; the mock-up): at every width, including 360 px, a card with two fields or more flows them two to a row (two columns at least), never one to a row.
+    const fieldCounts = await cards.evaluateAll((elements) =>
+      elements.map((element) => {
+        const body = element.querySelector('[data-slot="card-content"]') ?? element;
+        return { fields: body.querySelectorAll('input:not([type=hidden]), select, [role="combobox"]').length, columns: getComputedStyle(body).gridTemplateColumns.split(' ').length };
+      }),
+    );
+    const twoOrMore = fieldCounts.filter((card) => card.fields >= 2);
+    expect(twoOrMore.length, 'cards with two fields or more').toBeGreaterThan(0);
+    for (const card of twoOrMore) expect(card.columns, 'columns of a card with two fields or more').toBeGreaterThanOrEqual(2);
 
     // AC-5: a typed box, a list and a read-only output; a multi-line box is 60 px at least.
     const fieldHeight = await leastFieldHeight(page);

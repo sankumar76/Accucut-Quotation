@@ -1027,7 +1027,7 @@ test.describe('AC-9: the screen', () => {
     if (isPhone(page)) {
       await page.keyboard.press('Escape');
       await expect(page.getByRole('dialog', { name: 'Parts tree' })).toHaveCount(0);
-      await expect(page.getByRole('button', { name: 'Parts tree, part 1' })).toBeFocused();
+      await expect(page.getByRole('button', { name: /^Parts tree 1/ })).toBeFocused();
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     }
     await expectNoAxeViolations(page);
