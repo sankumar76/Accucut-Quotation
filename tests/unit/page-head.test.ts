@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { ReviewHead } from '@/components/features/estimate-review/review-head';
+import { TaskCards } from '@/components/features/estimate-workspace/task-cards';
 import { WorkspaceHeader, type WorkspaceHeaderView } from '@/components/features/estimate-workspace/workspace-header';
 import { copyMessage, FolderPath } from '@/components/shared/folder-path';
 import { PageHead } from '@/components/shared/page-head';
@@ -82,9 +83,13 @@ describe('the head of SCR-05 (DEF-095)', () => {
     expect(head.indexOf('Every field is needed')).toBeLessThan(head.indexOf('Due 06 Nov'));
   });
 
-  it('keeps the customer and the folder cards under it (DEF-096 is another change)', () => {
-    expect(html).toContain('Customer Name');
-    expect(html).toContain('Task folder');
+  it('draws the cards it is handed under the head, and keeps the customer and the folder cards as the page hands them (DEF-096 is another change)', () => {
+    const withCards = renderToStaticMarkup(createElement(WorkspaceHeader, { view: VIEW, cards: createElement(TaskCards, { view: VIEW }) }));
+    expect(withCards).toContain('Customer Name');
+    expect(withCards).toContain('Task folder');
+    expect(withCards.indexOf('Due 06 Nov')).toBeLessThan(withCards.indexOf('Customer Name'));
+    // The head alone draws no card: the cards are the server's element.
+    expect(html).not.toContain('Customer Name');
   });
 });
 
@@ -153,6 +158,19 @@ describe('QLT-789-10: a failed copy with no path on screen shows the path', () =
     expect(copyMessage('failed', VIEW.folderPath, false)).toBe('The path could not be copied. Select it and copy it yourself.');
     expect(copyMessage('copied', VIEW.folderPath, true)).toBe('Path copied to the clipboard.');
     expect(copyMessage('idle', VIEW.folderPath, true)).toBe('');
+  });
+});
+
+describe("AQP-452 (NFR-009): SCR-05's customer and folder cards are a server module handed to the client workspace", () => {
+  const read = (path: string): string => readFileSync(fileURLToPath(new URL(`../../src/${path}`, import.meta.url)), 'utf8');
+  it('TaskCards starts with import server-only, and the client chain (the workspace and its head) holds none of its words', () => {
+    expect(read('components/features/estimate-workspace/task-cards.tsx').trimStart()).toMatch(/^import 'server-only';/);
+    for (const file of ['estimate-workspace.tsx', 'workspace-header.tsx']) expect(read(`components/features/estimate-workspace/${file}`), file).not.toMatch(/task-cards|Customer Name|CUSTOMER_NAME_LABEL|FOLDER_TITLE/);
+  });
+  it('the page draws them and hands them in as `cards`', () => {
+    const page = read('app/(portal)/estimates/[code]/page.tsx');
+    expect(page).toContain("from '@/components/features/estimate-workspace/task-cards'");
+    expect(page).toContain('cards={<TaskCards view={header} />}');
   });
 });
 
