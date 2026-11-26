@@ -40,8 +40,9 @@ describe('AC-1: six panels, and in each line the tag, the name, the formula, the
     const html = render(await viewOf());
     expect(countOf(html, '<details')).toBe(6);
     expect([...html.matchAll(/<details open="" data-stage="(\d)"/g)].map((match) => match[1])).toEqual(['1', '2', '3', '4', '5', '6']);
-    for (const title of ['1. Weights &amp; Areas', '2. Material Cost', '3. Process Costs', '4. Sub Total', '5. Rejection, Overheads &amp; Logistics', '6. Pricing']) expect(html).toContain(title);
-    expect(html).toContain('Stage total: 15.99');
+    // AQP-475 (ux-expert ruling, option A): the head reads "N · Name" with the stored name, and the total is at the right with its words kept for a screen reader.
+    for (const title of ['1 · Weights &amp; Areas', '2 · Material Cost', '3 · Process Costs', '4 · Sub Total', '5 · Rejection, Overheads &amp; Logistics', '6 · Pricing']) expect(html).toContain(title);
+    expect(html).toContain('Stage total: </span>15.99');
   });
 
   it('prints a line as its tag, its name, its formula in letters, its working with values and its value', async () => {
