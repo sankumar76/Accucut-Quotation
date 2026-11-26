@@ -1,6 +1,6 @@
 'use client';
 
-import { ListTree } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import { FirstOpenFailure } from '@/components/shared/first-open-failure';
@@ -8,10 +8,12 @@ import { Icon } from '@/components/shared/icon';
 import { useFirstOpen } from '@/components/shared/use-first-open';
 import { useViewport } from '@/components/shared/use-viewport';
 import { Button } from '@/components/ui/button';
+import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import { EARLY_INTENT_ATTRIBUTE } from '@/lib/ui/early-intent';
 
-import { TREE_HIDE, treeButtonLabel } from './estimate-texts';
+import { TREE_HIDE } from './estimate-texts';
 import type { PartsTreeDrawerProps } from './parts-tree-drawer';
+import { TreeButtonLabel } from './tree-button-label';
 import { TreePanel } from './tree-panel';
 import { LazyTreeResizeHandle, LazyTreeWidthMenu } from './tree-resize-slots';
 import { TREE_COLUMN_ID, useMounted, type TreeWidth } from './use-tree-width';
@@ -40,7 +42,7 @@ const loadDrawer = () => import('./parts-tree-drawer').then((module) => module.P
 /**
  * The parts tree where it belongs at each width (STORY-05.02 AC-9; UX spec SCR-05 "Responsive"): from 1024 px a persistent panel beside the form; from 768 px a collapsible
  * panel that the "Parts tree" button shows and hides; below 768 px that button opens the tree as a left drawer (`PartsTreeDrawer`) with a scrim and a focus trap. The button names the
- * current part ("Parts tree, part 1.1"). The tree is one component in one place at a time, so its ids and roles are never in the page twice. What the tree holds survives the
+ * current part (the branch icon, "Parts tree" and, muted, "1.1 Base frame": `TreeButtonLabel`, AQP-458). The tree is one component in one place at a time, so its ids and roles are never in the page twice. What the tree holds survives the
  * panel closing, because it lives here and not in the drawer.
  *
  * The drawer is not in the first load (AQP-188, ADR-016 E1): its code is fetched on the first press of the button, through the loader every overlay uses (`useFirstOpen`), and stays mounted
@@ -70,7 +72,8 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds, resize, 
   const headAction = viewport === 'desktop' ? <LazyTreeWidthMenu resize={resize} announce={tree.announce} ready={resizable && controlsReady} /> : undefined;
   const panel = <TreePanel tree={tree} editable={editable} onOpen={open} {...(missingIds === undefined ? {} : { missingIds })} {...(headAction === undefined ? {} : { headAction })} />;
   const drawerPanel = <TreePanel tree={tree} editable={editable} onOpen={open} framed={false} {...(missingIds === undefined ? {} : { missingIds })} />;
-  const label = treeButtonLabel(tree.selected?.slNo ?? null);
+  const { selected } = tree;
+  const label = <TreeButtonLabel slNo={selected?.slNo ?? null} name={selected?.label ?? ''} kindLabel={selected === null ? '' : nodeKindLabel(selected, tree.nodes ?? [])} />;
 
   if (viewport === 'phone') {
     const Drawer = first.Overlay;
@@ -88,7 +91,6 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds, resize, 
             {...{ [EARLY_INTENT_ATTRIBUTE]: 'parts-tree' }}
             onClick={(event) => first.activate(event.detail === 0)}
           >
-            <Icon icon={ListTree} />
             {label}
           </Button>
           {first.failed ? <FirstOpenFailure id={DRAWER_FAILURE_ID} message={DRAWER_FAILURE_MESSAGE} align="left" /> : null}
@@ -119,8 +121,14 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds, resize, 
     <div id={TREE_COLUMN_ID} className="relative flex min-w-0 flex-col gap-s-3 lg:w-(--tree-w) lg:shrink-0">
       {viewport === 'tablet' ? (
         <Button variant="secondary" className="justify-start" aria-expanded={panelOpen} aria-controls="parts-tree-panel" onClick={() => setPanelOpen((open) => !open)}>
-          <Icon icon={ListTree} />
-          {panelOpen ? TREE_HIDE : label}
+          {panelOpen ? (
+            <>
+              <Icon icon={GitBranch} />
+              {TREE_HIDE}
+            </>
+          ) : (
+            label
+          )}
         </Button>
       ) : null}
       {viewport === 'desktop' || panelOpen ? (
