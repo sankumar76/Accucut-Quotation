@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import type { PartItem } from '@/lib/estimates/tree-client';
 
 import { FAILED_BODY, FORM_LOAD_FAILED_TITLE, FORM_LOADING, FORM_NO_PART, TRY_AGAIN } from './estimate-texts';
 import type { PartFieldsProps } from './part-fields';
-import type { PartReviewState } from './review-look';
+import type { PartReview } from './review-look';
 import { partFormShown } from './tree-controls-ready';
 import { useFormDefinition } from './use-form-definition';
 import { useLazyComponent } from './use-lazy-component';
@@ -42,7 +42,7 @@ export interface PartFormProps {
   /** Called once the form has something to show for the part (its fields, or the notice that they could not be read): the workspace then lets the tree-width controls load, so their code never competes with the form's (AQP-426, DEF-085). */
   readonly onShown?: () => void;
   /** The Lead's and the Admin's read-only view (AQP-488, DEF-131 Stage 1), with `editable` false: the same form with the review look. Absent for the Engineer. */
-  readonly review?: PartReviewState | undefined;
+  readonly review?: PartReview | undefined;
 }
 
 /**
@@ -53,6 +53,13 @@ export interface PartFormProps {
  */
 export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, onNamed, onServerIgnored, missing, gate, onShown, review }: PartFormProps) {
   const definition = useFormDefinition(estimateId);
+  // A row was chosen after the page was drawn (the review's view): the form's title takes the focus, the choice is said once and the tree folds. The first paint does none of it.
+  const [seen, setSeen] = useState(part?.id);
+  const [chosen, setChosen] = useState(false);
+  if (seen !== part?.id) {
+    setSeen(part?.id);
+    setChosen(true);
+  }
   const fields = useLazyComponent<PartFieldsProps>(loadFields, true);
   const Fields = fields.Component;
   const shown = partFormShown({ hasPart: part !== null, definition: definition.form.status, fieldsCodeFailed: fields.failed, fieldsCodeHere: Fields !== null });
@@ -84,14 +91,11 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
   }
   if (definition.form.status === 'loading' || Fields === null) {
     return (
-      <>
-        {review?.head}
-        <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
-          <Skeleton className="h-(--control-h)" />
-          <Skeleton className="h-(--control-h)" />
-          <Skeleton className="h-(--control-h)" />
-        </div>
-      </>
+      <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
+        <Skeleton className="h-(--control-h)" />
+        <Skeleton className="h-(--control-h)" />
+        <Skeleton className="h-(--control-h)" />
+      </div>
     );
   }
 
@@ -113,7 +117,7 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
       onReadMaterialsAgain={definition.readAgain}
       missing={missing}
       gate={gate}
-      review={review}
+      review={review === undefined ? undefined : { ...review, chosen }}
     />
   );
 }

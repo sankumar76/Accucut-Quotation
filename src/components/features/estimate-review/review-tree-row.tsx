@@ -8,7 +8,7 @@ import { RowName } from '@/components/shared/row-name';
 import { TOUCH_LINK } from '@/components/shared/touch-link';
 import { TREE_ROW_NUMBER } from '@/components/shared/tree-row-number';
 import { cn } from '@/lib/cn';
-import { rowNameOf } from '@/lib/estimates/row-name';
+import { hasRowName, NO_DESCRIPTION_YET, rowNameOf } from '@/lib/estimates/row-name';
 import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
 import type { CostNode, CostsView } from '@/server/views/schemas/costs';
 
@@ -55,7 +55,8 @@ export function TreeRow({ node, kindLabel, state, code, warned, selected, onChoo
         href={inputsHref(code, node.slNo)}
         scroll={false}
         prefetch={false}
-        aria-label={`${node.slNo} ${name}`}
+        // The name starts with the kind (the icon's own label) and then says what the text says, word for word, so what is seen is in the name (WCAG 2.5.3, axe label-content-name-mismatch): "Sub-Assembly 1.4 Top cover".
+        aria-label={`${kindLabel} ${node.slNo} ${hasRowName(node.name) ? node.name : `${kindLabel}${NO_DESCRIPTION_YET}`}`}
         {...(selected ? { 'aria-current': 'true' as const } : {})}
         {...(onChoose === undefined
           ? {}
@@ -80,7 +81,7 @@ export function TreeRow({ node, kindLabel, state, code, warned, selected, onChoo
         <NodeKindIcon kind={node.nodeKind} label={kindLabel} />
         <span data-sl-no="" className={TREE_ROW_NUMBER}>
           {node.slNo}
-        </span>
+        </span>{' '}
         <span className={cn('min-w-0 flex-1', BREAK_LONG_NAMES)}>
           <RowName label={node.name} kindLabel={kindLabel} />
         </span>

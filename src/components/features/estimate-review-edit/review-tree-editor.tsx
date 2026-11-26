@@ -14,8 +14,8 @@ import type { PartItem } from '@/lib/estimates/tree-client';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
 import type { CostNode, CostsView } from '@/server/views/schemas/costs';
 
-import { LazyPartForm } from '../estimate-workspace/lazy-part-form';
 import { PartHead } from '../estimate-workspace/part-head';
+import { ReviewForm } from '../estimate-workspace/review-form';
 import { TreePanel } from '../estimate-workspace/tree-panel';
 import { usePartsTree } from '../estimate-workspace/use-parts-tree';
 import { ReviewRowLine } from '../estimate-review/review-row-line';
@@ -139,7 +139,10 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
       </ReviewTreeFrame>
       {shown === null ? null : (
         <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">
-          <LazyPartForm
+          {/* The row's eyebrow, title and figure line, then the form, which the title labels (UX ruling 3.6, 3.7): the same order as the read-only page. */}
+          <PartHead partId={shown.id} slNo={shown.slNo} nodes={items} titleId="part-form-title" titleRef={null} />
+          {rowLine}
+          <ReviewForm
             estimateId={estimateId}
             part={{ id: shown.id, slNo: shown.slNo, revision: shown.revision }}
             editable
@@ -151,13 +154,6 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
               notice: inputsNotice(status, false, state),
               showing: showingInputs(shown.slNo, rowNameOf(shown.label, nodeKindLabel(shown, items)), true),
               figuresCurrent,
-              rowLine,
-              head: (
-                <>
-                  <PartHead partId={shown.id} slNo={shown.slNo} nodes={items} titleId="part-form-title" titleRef={null} />
-                  {rowLine}
-                </>
-              ),
             }}
           />
         </div>

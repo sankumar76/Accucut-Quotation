@@ -27,8 +27,8 @@ interface Captured {
   readonly review: { readonly notice: string; readonly figuresCurrent?: boolean };
 }
 const captured: Captured[] = [];
-vi.mock('@/components/features/estimate-workspace/lazy-part-form', () => ({
-  LazyPartForm: (props: Captured) => {
+vi.mock('@/components/features/estimate-workspace/review-form', () => ({
+  ReviewForm: (props: Captured) => {
     captured.push(props);
     return null;
   },
