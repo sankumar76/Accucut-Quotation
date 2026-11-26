@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
+import { Icon } from '@/components/shared/icon';
 import { NodeKindIcon } from '@/components/shared/node-kind-icon';
 import { QuantityTag } from '@/components/shared/quantity-tag';
 import { RowName } from '@/components/shared/row-name';
@@ -11,6 +12,9 @@ import { cn } from '@/lib/cn';
 import { hasRowName, NO_DESCRIPTION_YET, rowNameOf } from '@/lib/estimates/row-name';
 import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
 import type { CostNode, CostsView } from '@/server/views/schemas/costs';
+
+import { MISSING_ICON, MISSING_INK } from '../estimate-workspace/completeness-look';
+import { TREE_MISSING_INPUTS } from '../estimate-workspace/estimate-texts';
 
 import { CLEARED, COST_DETAILS_LINK, COUNT_HIDDEN_LABEL, COUNT_UNIT, rowCurrencies } from './review-texts';
 
@@ -39,13 +43,15 @@ export interface TreeRowProps {
   readonly code: string;
   readonly warned: boolean;
   readonly selected: boolean;
+  /** The island only: a refused Recalculate named this row (ED-25): the triangle and its words follow the name, as on SCR-05. */
+  readonly missing?: boolean;
   /** The island only: a press on the link (a mouse, a finger or Enter) chooses this row without leaving the page. The link keeps its address, so "open in a new tab" still works. */
   readonly onChoose?: ((id: string) => void) | undefined;
   /** The island only: true once for the row that was just added, whose link then takes the focus when it is mounted (CR-01 item 3C AC-3). A ref callback, so nothing is read while rendering. */
   readonly takesFocus?: ((id: string) => boolean) | undefined;
 }
 
-export function TreeRow({ node, kindLabel, state, code, warned, selected, onChoose, takesFocus }: TreeRowProps) {
+export function TreeRow({ node, kindLabel, state, code, warned, selected, missing = false, onChoose, takesFocus }: TreeRowProps) {
   // The row's name by the one rule (AQP-446): typed, else the kind's own name, muted, with the words for a screen reader. The "Cost details" link says it in plain words.
   const name = rowNameOf(node.name, kindLabel);
   return (
@@ -85,6 +91,12 @@ export function TreeRow({ node, kindLabel, state, code, warned, selected, onChoo
         <span className={cn('min-w-0 flex-1', BREAK_LONG_NAMES)}>
           <RowName label={node.name} kindLabel={kindLabel} />
         </span>
+        {missing ? (
+          <>
+            <Icon icon={MISSING_ICON} size="small" className={cn('shrink-0', MISSING_INK)} />
+            <span className="sr-only">{TREE_MISSING_INPUTS}</span>
+          </>
+        ) : null}
       </Link>
       {/* The second line: the row's own figures (a Lead's and an Admin's screen only), its count, the mark of a warned row and the way to its cost details. */}
       <div className="flex flex-wrap items-baseline gap-x-s-3 gap-y-s-1 text-label text-ink-2">

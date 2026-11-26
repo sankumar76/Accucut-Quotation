@@ -9,14 +9,20 @@ import { rowNameOf } from '@/lib/estimates/row-name';
 import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import { createClearedRefresh } from '@/lib/estimates/cleared-refresh';
 import { addressWithRow, joinRows, removedElsewhere, type OpenRow } from '@/lib/estimates/review-tree-edit';
-import { reviewCalculating } from '@/lib/estimates/review-save-gate';
+import { withoutFilled } from '@/lib/estimates/calculate-missing';
+import { reviewBlocked, reviewCalculating } from '@/lib/estimates/review-save-gate';
 import type { PartItem } from '@/lib/estimates/tree-client';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
 import type { CostNode, CostsView } from '@/server/views/schemas/costs';
 
 import { PartHead } from '../estimate-workspace/part-head';
+import { Notice } from '@/components/shared/notice';
+import { blockedSummary } from '@/lib/estimate/calculate-words';
+
+import type { CalculateSummaryProps } from '../estimate-workspace/calculate-summary';
 import { LazyReviewForm } from '../estimate-workspace/lazy-review-form';
 import { TreePanel } from '../estimate-workspace/tree-panel';
+import { useLazyComponent } from '../estimate-workspace/use-lazy-component';
 import { usePartsTree } from '../estimate-workspace/use-parts-tree';
 import { ReviewRowLine } from '../estimate-review/review-row-line';
 import { TreeRow } from '../estimate-review/review-tree-row';
@@ -36,6 +42,9 @@ import { inputsNotice, removedElsewhereLine, showingInputs, TREE_CALCULATING, TR
  * again **once** (\`createClearedRefresh\`, the rule of the inputs block) and says so once, politely. A refusal (the estimate was approved or ignored elsewhere) draws the page again too, which then shows the read-only tree
  * and its notice. If the open row was removed by someone else the block shows the row the tree now offers and says so once.
  */
+
+/** The summary of a refused Recalculate: fetched when a refusal names parts (the same component as SCR-05's Calculate-blocked summary), so none of it is in the first load. */
+const loadSummary = () => import('../estimate-workspace/calculate-summary').then((module) => module.CalculateSummary);
 
 export interface ReviewTreeEditorProps {
   readonly estimateId: string;
@@ -78,6 +87,12 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
     if (refused) refresh();
   }, [refused, refresh]);
   const calculating = useSyncExternalStore(reviewCalculating.subscribe, reviewCalculating.get, () => false);
+  // What a refused Recalculate found missing (ED-25): the summary, a triangle on each row named and, in the open row, a message under each blank field. A field that now holds a value comes off the list.
+  const blocked = useSyncExternalStore(reviewBlocked.subscribe, reviewBlocked.get, () => null);
+  const blockedRequest = useSyncExternalStore(reviewBlocked.subscribe, reviewBlocked.request, () => 0);
+  const summary = useLazyComponent<CalculateSummaryProps>(loadSummary, blocked !== null);
+  const Summary = summary.Component;
+  const missingIds = useMemo(() => new Set((blocked ?? []).map((part) => part.nodeId)), [blocked]);
 
   // What the page knew when it was drawn, as rows the first paint can use before the tree is read.
   const pageItems = useMemo<ReadonlyArray<PartItem>>(
@@ -92,8 +107,9 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
   // The open row: the tree's once it is read, and until then the one that was chosen among the page's rows (the first paint draws those).
   const shown = tree.selected ?? items.find((item) => item.id === tree.selectedId) ?? items.find((item) => item.id === first?.id) ?? items[0] ?? null;
   const selectedId = shown?.id ?? null;
+  const missingFields = new Set(blocked?.find((part) => part.nodeId === selectedId)?.fields.map((field) => field.fieldId));
   const renderRow = (part: PartItem, kindLabel: string) => (
-    <TreeRow node={costOf(part)} kindLabel={kindLabel} state={state} code={code} warned={warnedIds.has(part.id)} selected={part.id === selectedId} onChoose={tree.select} takesFocus={tree.wantsFocus} />
+    <TreeRow node={costOf(part)} kindLabel={kindLabel} state={state} code={code} warned={warnedIds.has(part.id)} selected={part.id === selectedId} missing={missingIds.has(part.id)} onChoose={tree.select} takesFocus={tree.wantsFocus} />
   );
   // Until the tree has been read the rows are the page's, as the server drew them (the figures are the first thing the Lead looks for); the buttons come with the tree.
   const reading = tree.nodes === null && !tree.loadFailed;
@@ -140,6 +156,12 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
       {shown === null ? null : (
         <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">
           {/* The row's eyebrow, title and figure line, then the form, which the title labels (UX ruling 3.6, 3.7): the same order as the read-only page. */}
+          {blocked === null ? null : Summary === null ? (
+            // The list's code is on its way (or could not be fetched): the sentence is the server's, and it is never missing.
+            <Notice tone="danger" title={blockedSummary(blocked.length)} />
+          ) : (
+            <Summary parts={blocked} onChoosePart={tree.select} focusRequest={blockedRequest} />
+          )}
           <PartHead partId={shown.id} slNo={shown.slNo} nodes={items} titleId="part-form-title" titleRef={null} />
           {rowLine}
           <LazyReviewForm
@@ -147,7 +169,11 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
             part={{ id: shown.id, slNo: shown.slNo, revision: shown.revision }}
             editable
             nodes={items}
-            onSaved={tree.applySaved}
+            missing={missingFields}
+            onSaved={(saved) => {
+              tree.applySaved(saved);
+              if (blocked !== null) reviewBlocked.update(withoutFilled(blocked, saved.id, saved.inputs));
+            }}
             onNamed={tree.applyLabel}
             onChanged={tree.readAgain}
             review={{

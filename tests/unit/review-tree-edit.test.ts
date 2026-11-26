@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { removedElsewhereLine, TREE_CALCULATING, TREE_CLEARED_STATUS } from '@/components/features/estimate-review/review-texts';
+import { withoutFilled } from '@/lib/estimates/calculate-missing';
 import { createClearedRefresh } from '@/lib/estimates/cleared-refresh';
 import { press } from '@/lib/estimates/recalculate-client';
 import { addressWithRow, joinRows, removedElsewhere } from '@/lib/estimates/review-tree-edit';
-import { reviewCalculating } from '@/lib/estimates/review-save-gate';
+import { reviewBlocked, reviewCalculating } from '@/lib/estimates/review-save-gate';
 import type { PartItem } from '@/lib/estimates/tree-client';
 
 /**
@@ -128,5 +129,48 @@ describe('ED-31: the tree\'s buttons wait while Recalculate runs', () => {
     );
     await press('00000000-0000-4000-8000-000000000001');
     expect(reviewCalculating.get()).toBe(false);
+  });
+});
+
+describe('ED-25: a refused Recalculate names the parts and fields, and the island shows them', () => {
+  const BLOCKED = { type: 'about:blank', title: 'Nothing was submitted. 1 part has missing inputs.', status: 422, code: 'CALCULATE_BLOCKED', parts: [{ nodeId: 'p1', slNo: '2.1', name: null, fields: [{ fieldId: 'f1', label: 'Length' }, { fieldId: 'f2', label: 'Width' }] }] };
+  const respond = (body: unknown, status: number): void => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/problem+json' } })));
+  };
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    reviewBlocked.update(null);
+    reviewCalculating.set(false);
+  });
+
+  it('keeps the parts of a 422 CALCULATE_BLOCKED, asks for the focus once, and clears them when the next press starts', async () => {
+    respond(BLOCKED, 422);
+    const heard: number[] = [];
+    const stop = reviewBlocked.subscribe(() => heard.push(reviewBlocked.get()?.length ?? 0));
+    await press('00000000-0000-4000-8000-000000000001');
+    expect(reviewBlocked.get()).toEqual([{ nodeId: 'p1', slNo: '2.1', name: null, fields: [{ fieldId: 'f1', label: 'Length' }, { fieldId: 'f2', label: 'Width' }] }]);
+    const first = reviewBlocked.request();
+    respond({ state: 'current' }, 200);
+    await press('00000000-0000-4000-8000-000000000001');
+    stop();
+    expect(reviewBlocked.get()).toBeNull();
+    expect(heard).toEqual([1, 0]);
+    expect(first).toBeGreaterThan(0);
+  });
+
+  it('takes no refusal of another kind for a list of parts', async () => {
+    respond({ type: 'about:blank', title: 'This estimate can no longer be changed.', status: 409, code: 'ESTIMATE_APPROVED_IS_LOCKED' }, 409);
+    await press('00000000-0000-4000-8000-000000000001');
+    expect(reviewBlocked.get()).toBeNull();
+  });
+
+  it('strikes a field once it holds a value and asks for no focus again', () => {
+    reviewBlocked.refuse([{ nodeId: 'p1', slNo: '2.1', name: null, fields: [{ fieldId: 'f1', label: 'Length' }, { fieldId: 'f2', label: 'Width' }] }]);
+    const request = reviewBlocked.request();
+    reviewBlocked.update(withoutFilled(reviewBlocked.get() ?? [], 'p1', { f1: '4' }));
+    expect(reviewBlocked.get()?.[0]?.fields.map((field) => field.fieldId)).toEqual(['f2']);
+    expect(reviewBlocked.request()).toBe(request);
+    reviewBlocked.update(withoutFilled(reviewBlocked.get() ?? [], 'p1', { f2: '5' }));
+    expect(reviewBlocked.get()).toBeNull();
   });
 });

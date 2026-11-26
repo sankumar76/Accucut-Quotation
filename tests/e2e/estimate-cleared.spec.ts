@@ -180,6 +180,14 @@ test.describe('AC-3: Recalculate from the screen', () => {
     await expect(page.getByText('The parts were changed by someone else. The tree has been refreshed. Check it and try again.')).toBeVisible();
     expect(await slNumbersOf(page)).toEqual(['1', '2', '2.1']);
 
+    // ED-25 (ruling 4.3 item 4): Calculate is refused for the blank inputs of the new Part. The summary names the part and its fields as links, the link opens the row, and the blank field says what to do.
+    await button(page).click();
+    const missing = page.locator('[data-calculate-summary]');
+    await expect(missing).toContainText('missing inputs');
+    await missing.getByRole('listitem').filter({ hasText: '2.1' }).getByRole('link').first().click();
+    await expect(reviewRow(page, '2.1')).toHaveAttribute('aria-current', 'true');
+    await expect(page.getByText('Enter this value.').first()).toBeVisible();
+
     await chooseRow(page, '2.1');
     await expect(reviewRow(page, '2.1')).toHaveAttribute('aria-current', 'true');
     await withEngineerWindow(browser, owner, async (api) => {
