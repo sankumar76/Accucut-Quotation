@@ -1,9 +1,11 @@
-# Unit list for the part form's number inputs (draft)
+# Unit list for the part form's number inputs (accepted)
+
+> **Accepted by the delivery lead on 2026-11-26, option A: "Use the draft list exactly as above" (master's DL-420). OQ-UX-07, input half, is closed.** Cutting Length (mm) and Weld (nos), which the SPEC does not give, are now the delivery lead's word. The file keeps "draft" in its name only so that earlier references resolve; the content below is the accepted list. DEF-125 (AQP-482) builds it.
 
 | Field | Value |
 |---|---|
 | For | DEF-125 (AQP-482, GitHub #776); OQ-UX-07, input half; master's DL-418 (5) |
-| Author / date | product-manager, 2026-11-26 (due end of Fri 27 Nov) |
+| Author / date | product-manager, 2026-11-26 (due end of Fri 27 Nov); accepted 2026-11-26 (DL-420) |
 | Read from | `ACCUCUT_QUOTATION_PORTAL_REQUIREMENTS.md` (SPEC 1.20) section 7.1 (the inputs), 7.4 (the formulas) and 4.1 (the Process Master units, D-38); `docs/03-ux/screens/SCR-05.html` (the mock-up's add-ons); `prisma/seed/config/seed-config.ts` and `src/lib/estimate/form-fields.ts` (what the build already shows); DEF-125 |
 | Not done | I did not run the build. I did not read the sample workbook (NFR-006). No value, rate or cost figure is used anywhere here |
 
