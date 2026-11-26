@@ -63,7 +63,7 @@ export function RowActions({ part, kindLabel, onAdd, onDelete, upTo, downTo, onM
   const why = busy && describedBy !== undefined ? { 'aria-describedby': describedBy } : {};
   return (
     <div data-row-actions="" role="group" aria-label={actionsLabel(part.slNo, name)} className={showing ? 'not-sr-only' : HIDDEN_UNTIL_NEEDED}>
-      <div className="mt-s-1 ml-s-1 flex w-fit items-center rounded-md border border-border bg-surface">
+      <div className="mt-[2px] ml-s-1 flex w-fit items-center rounded-md border border-border bg-surface">
         <MoveHandle id={`move-${part.id}`} label={moveRowLabel(part.slNo, name)} upTo={upTo} downTo={downTo} onMoveTo={(index) => onMoveTo(part.id, index)} {...(busy ? { unavailable: true, ...(describedBy === undefined ? {} : { describedBy }) } : {})} />
         {add.kind === 'direct' ? <AddNodeTrigger label={addFastenerLabel(part.slNo, name)} unavailable={busy} {...why} onClick={busy ? undefined : () => onAdd(part.id, add.nodeKind)} /> : null}
         {add.kind === 'menu' ? <AddNodeMenu id={`add-node-${part.id}`} label={addUnderLabel(part.slNo, name)} nodeKinds={add.nodeKinds} holdsPart={holdsPart} onChoose={(nodeKind) => onAdd(part.id, nodeKind)} {...(busy ? { unavailable: true, ...(describedBy === undefined ? {} : { describedBy }) } : {})} /> : null}

@@ -116,5 +116,5 @@ export const queueAddressOf = (tab: string, code: string): string => `/queue?tab
 
 /** The task code and the heading agree: the page is the one asked for and has finished its first paint. */
 export async function expectHeading(page: Page, code: string): Promise<void> {
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
 }

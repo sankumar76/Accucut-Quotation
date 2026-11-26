@@ -5,6 +5,7 @@ import { QUOTED_NOTICE_ID } from '@/components/features/estimate-quote/mark-quot
 import { DownloadChip } from '@/components/shared/download-chip';
 import { Notice } from '@/components/shared/notice';
 import { warnedNodeIds } from '@/components/shared/quantity-tag';
+import { TREE_COLUMN_LAYOUT } from '@/components/shared/tree-column-panel';
 import { WarningNotice } from '@/components/shared/warning-notice';
 import type { RoleName } from '@/lib/auth/roles';
 import { isLocked, type EstimateStatus } from '@/lib/estimate/state-machine';
@@ -12,7 +13,7 @@ import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
+import type { WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
 import { BuildTable } from './build-table';
 import { CancelledNotice } from './cancelled-notice';
@@ -21,6 +22,7 @@ import { PriceRemovedNotice } from './price-removed-notice';
 import { RatesChangedNotice } from './rates-changed-notice';
 import { approveOffer, cancelOffer, ignoreOffer, quoteOffer, removeOffer, ReviewActions } from './review-actions';
 import { REVIEW_RESTORE_ID } from './review-ids';
+import { ReviewHead } from './review-head';
 import { ReviewTree } from './review-tree';
 import { UnlockedNotice } from './unlocked-notice';
 import {
@@ -125,13 +127,14 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         };
   return (
     <div className="is-compact group/review contents">
-      <WorkspaceHeader
+      <ReviewHead
         view={{ ...header, ignored: isIgnored }}
+        engineerName={engineerName}
         noCustomerText={REVIEW_NO_CUSTOMER}
         // While the estimate is ignored there is no download chip and no Change customer: it is read-only until it is restored (CR-01 item 7D, A-CR01-8), and the notice below says so.
         downloadMarker={isIgnored ? null : <DownloadChip marker={download} />}
         // Change customer (CR-01 item 6, AC-12): on an estimate that is not approved and not ignored only; the review is the Lead's and the Admin's, and the server refuses anyone else all the same.
-        customerAction={isLocked(header.status) || isIgnored ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} />}
+        customerAction={isLocked(header.status) || isIgnored ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} inline />}
         notice={
           ignored === null ? null : (
             <IgnoredNotice
@@ -172,7 +175,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
       {/* From 1024 px the tree is a column of the SCR-05 tree's width beside "How the total is built" (AQP-465, DEF-108; ux-expert ruling 2026-11-28; the right-hand column holds the row detail of the design, which
           is waived, DL-306); below it the two are stacked. The tiles stay above both at full width. The gap is the page's own (`main`: s-4, s-5 from 768 px), so the rows keep the spacing they had when they were two items of
           the page: a different gap moved the page by a few pixels and with it the axe target-size reading of the header's Change customer button at 768 px. */}
-      <div data-review-columns="" className="flex flex-col gap-s-4 md:gap-s-5 min-[1024px]:grid min-[1024px]:grid-cols-[var(--tree-w)_minmax(0,1fr)] min-[1024px]:items-start">
+      <div data-review-columns="" className={TREE_COLUMN_LAYOUT}>
         <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} />
         {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
       </div>

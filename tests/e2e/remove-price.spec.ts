@@ -58,7 +58,7 @@ async function openedAsAdmin(page: Page, testInfo: Parameters<typeof approvedEst
   const made = await cancelled(page, testInfo);
   const response = await page.goto(`/estimates/${made.code}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(made.code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${made.code}`);
   await expect(removeButton(page)).toBeEnabled();
   await waitUntilHydrated(page, '#review-remove-price');
   return made;
@@ -101,7 +101,7 @@ test.describe('AC-1, AC-2, AC-8: the button and the dialog', () => {
     await signInAs(page, made.lead);
     const asLead = await page.goto(`/estimates/${made.code}`);
     expect(asLead?.status()).toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(made.code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${made.code}`);
     await expect(page.locator('#review-cancelled-notice')).toContainText('Only the Admin can remove it.');
     await expect(removeButton(page)).toHaveCount(0);
     const approvalId = await latestApprovalIdOf(made.owner.id);

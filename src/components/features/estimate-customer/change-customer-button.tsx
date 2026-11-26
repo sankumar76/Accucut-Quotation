@@ -32,9 +32,11 @@ export interface ChangeCustomerButtonProps {
   readonly estimateId: string;
   /** The customer the estimate has now, or null for one made before CR-01 that has none (the button then says "Set customer"). */
   readonly current: CustomerView | null;
+  /** The button stands in a line of text (SCR-06's meta line, AQP-452): the look of a ghost button, the height of a row button, no border. */
+  readonly inline?: boolean;
 }
 
-export function ChangeCustomerButton({ estimateId, current }: ChangeCustomerButtonProps) {
+export function ChangeCustomerButton({ estimateId, current, inline = false }: ChangeCustomerButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [, startRefresh] = useTransition();
@@ -44,7 +46,8 @@ export function ChangeCustomerButton({ estimateId, current }: ChangeCustomerButt
     <span className="relative inline-flex flex-col gap-s-1">
       <Button
         id={CHANGE_CUSTOMER_BUTTON_ID}
-        variant="secondary"
+        variant={inline ? 'ghost' : 'secondary'}
+        {...(inline ? { className: 'h-(--control-h) px-s-2 fine-wide:h-(--control-h-row)' } : {})}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-busy={first.pending || undefined}
