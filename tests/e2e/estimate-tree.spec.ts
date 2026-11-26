@@ -123,6 +123,36 @@ async function reveal(page: Page, slNo: string): Promise<void> {
   await expect.poll(() => toolbarHeightOf(page, slNo), `the toolbar of ${slNo} is in view`).toBeGreaterThan(1);
 }
 
+/** What holds a toolbar in view, read in one go for a failure message (AQP-448): the held toolbars, the focus ring, the hovered rows and the height of every toolbar. */
+const pressState = (page: Page): Promise<unknown> =>
+  page.evaluate(() => ({
+    held: document.querySelectorAll('[data-hold]').length,
+    focus: document.activeElement?.getAttribute('aria-label') ?? document.activeElement?.tagName ?? null,
+    focusVisible: document.querySelector(':focus-visible')?.getAttribute('aria-label') ?? null,
+    hovered: [...document.querySelectorAll('li[data-part-row]')].filter((item) => item.firstElementChild?.matches(':hover')).map((item) => item.querySelector('[data-sl-no]')?.textContent ?? ''),
+    heights: [...document.querySelectorAll('[data-row-actions]')].map((group) => Math.round(group.getBoundingClientRect().height)),
+  }));
+
+/** Runs an assertion and, if it fails, adds `pressState` and the pointer events seen (`watchPointer`) to the message, so a failure on a machine nobody can reach says what the page was doing. */
+async function withState(page: Page, work: () => Promise<unknown>): Promise<void> {
+  try {
+    await work();
+  } catch (error) {
+    const seen = await page.evaluate(() => (window as unknown as { __aqp448?: string[] }).__aqp448 ?? []);
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\nstate: ${JSON.stringify(await pressState(page))}\npointer events: ${seen.join(' | ')}`);
+  }
+}
+
+/** Starts a log of the pointer events of the page, read by `withState`. */
+const watchPointer = (page: Page): Promise<void> =>
+  page.evaluate(() => {
+    const log: string[] = [];
+    (window as unknown as { __aqp448?: string[] }).__aqp448 = log;
+    for (const type of ['pointerdown', 'pointerup', 'pointercancel', 'gotpointercapture', 'lostpointercapture']) {
+      document.addEventListener(type, (event) => log.push(`${type}:${event.target instanceof Element ? (event.target.getAttribute('aria-label') ?? event.target.tagName) : '?'}`), true);
+    }
+  });
+
 /** The pointer of this page, as the style sheet reads it (`mouse:` and `touch:`, globals.css): a mouse hovers and points finely, a finger is every other pointer. The desktop project has a mouse; the phone and tablet projects are `hasTouch`. */
 const hasMouse = (page: Page): Promise<boolean> => page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches);
 
@@ -745,7 +775,7 @@ test.describe('AQP-405: the row actions', () => {
     await page.mouse.down();
     await page.mouse.move(2, 2, { steps: 4 });
     await page.mouse.up();
-    await expect.poll(() => toolbarHeightOf(page, '1'), 'a press that ends elsewhere lets the held line go').toBeLessThanOrEqual(1);
+    await withState(page, () => expect.poll(() => toolbarHeightOf(page, '1'), 'a press that ends elsewhere lets the held line go').toBeLessThanOrEqual(1));
     await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
 
     // Check 7: the keyboard holds nothing. Tab from row 1's link through its buttons to row 1.1 takes row 1's toolbar away at once.
@@ -850,7 +880,8 @@ test.describe('AQP-448 (DEF-091): when the row toolbar is in view', () => {
         await part(page, slNo).hover();
         await expectToolbarsOn(page, mouse, slNo);
       }
-      await part(page, '1.1').hover();
+      // The toolbar of 1.1 is waited for before the pointer goes down onto its handle: the rows move as the toolbars come and go, and Playwright aims at the place the handle was.
+      await reveal(page, '1.1');
       await handleOf(page, '1.1').hover();
       await expectToolbarsOn(page, mouse, '1.1');
       await pointerAway(page);
@@ -1045,11 +1076,12 @@ test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
     const handle = await settledBox(handleOf(page, '1.1'));
     const below = await settledBox(part(page, '1.2'));
     const x = handle.x + handle.width / 2;
+    await watchPointer(page);
     await page.mouse.move(x, handle.y + handle.height / 2);
     await page.mouse.down();
     await page.mouse.move(x, below.y + below.height - 4, { steps: 8 });
+    await withState(page, () => expect(page.locator('[data-drop-line]')).toBeVisible());
     // The line is there (it is drawn as soon as the drag code has the pointer), and at the bottom of 1.2, where the row would land. Both are read in one go in the page: near the edge of the panel the drag scrolls it, and the line moves with the rows.
-    await expect(page.locator('[data-drop-line]')).toBeVisible();
     const gap = await page.evaluate(() => {
       const line = document.querySelector('[data-drop-line]')?.getBoundingClientRect();
       const link = [...document.querySelectorAll('nav[aria-label="Parts tree"] a[data-part-id]')].find((candidate) => candidate.querySelector('[data-sl-no]')?.textContent === '1.2')?.getBoundingClientRect();
