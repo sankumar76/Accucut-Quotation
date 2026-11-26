@@ -37,6 +37,8 @@ const goBack = (page: Page) => dialog(page).getByRole('button', { name: 'Go back
 const goAhead = (page: Page, label: 'Recalculate anyway' | 'Calculate anyway' = 'Recalculate anyway') => dialog(page).getByRole('button', { name: label, exact: true });
 const notice = (page: Page) => page.getByRole('status').filter({ hasText: NOTICE_TITLE });
 const marks = (page: Page) => page.locator('[data-quantity-tag]');
+// The mark of the tree: "How the total is built" is above the tree and closed (AQP-488), so the first mark in the page is no longer one that can be seen.
+const treeMark = (page: Page) => page.locator('[data-review-tree] [data-quantity-tag]').first();
 const isRecalculate = (response: Response): boolean => response.request().method() === 'POST' && /\/api\/v1\/estimates\/[^/]+\/recalculate$/.test(new URL(response.url()).pathname);
 /** True for the press that carries the acknowledgement ("Recalculate anyway"), false for the first press. */
 const isAcknowledged = (request: { postData(): string | null }): boolean => request.postData()?.includes('acknowledge') === true;
@@ -180,8 +182,8 @@ test.describe('AC-2, AC-3: "Recalculate anyway" makes the Lead\'s own calculatio
     // The mark is in the tree and in "How the total is built" (closed, so counted and not looked at), with its words.
     // The tree, the table and, since AQP-488, the row line of the open row (the warned item is the first row).
     await expect(marks(page)).toHaveCount(3);
-    await expect(marks(page).first()).toContainText('Quantity 0');
-    await expect(marks(page).first()).toBeVisible();
+    await expect(treeMark(page)).toContainText('Quantity 0');
+    await expect(treeMark(page)).toBeVisible();
 
     expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 2 });
     const record = await readWarningRecord(owner.id);
@@ -284,7 +286,7 @@ test.describe('AC-8: keyboard, focus and accessibility at this width', () => {
     const lead = await createDisposableUser('axe', testInfo, 'LEAD');
     await openAs(page, lead, code);
     await expect(notice(page)).toBeVisible();
-    await expect(marks(page).first()).toBeVisible();
+    await expect(treeMark(page)).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
   });
