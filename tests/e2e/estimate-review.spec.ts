@@ -105,7 +105,7 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     const inputs = page.locator('#row-inputs');
     const form = inputs.locator('form[data-part-form]');
     await expect(form).toBeVisible();
-    await expect(inputs.getByRole('heading', { level: 3 })).toContainText('1');
+    await expect(inputs.locator('#part-form-title')).toContainText('1');
     await expect(form).toHaveAccessibleName(/^1/);
     await expect(inputs).toContainText('Read-only. These are the values saved for this part.');
     await expect(inputs.locator('[data-row-line]')).toContainText(/^This row: ₹ [\d,]+\.\d{2} \(B[A-Z]\) · \$ [\d,]+\.\d{2} · € [\d,]+\.\d{2} · count [\d,.]+ nos/);
@@ -221,7 +221,7 @@ test.describe('AC-6: not calculated', () => {
     await treePanel(page).locator('a[href$="?row=2#row-inputs"]').click();
     await expect(page).toHaveURL(/\?row=2#row-inputs$/);
     await expect(treePanel(page).locator('a[aria-current="true"]')).toHaveAttribute('href', /\?row=2#row-inputs$/);
-    await expect(inputs.getByRole('heading', { level: 3 })).toContainText('2');
+    await expect(inputs.locator('#part-form-title')).toContainText('2');
     await expect(page.locator('#part-form-title')).toBeFocused();
     await expect(inputs.getByRole('status').filter({ hasText: /^Showing the inputs of 2 .* Read-only\.$/ })).toHaveCount(1);
     if ((page.viewportSize()?.width ?? 0) < 1024) await expect(treePanel(page)).not.toHaveAttribute('open', '');
