@@ -118,6 +118,9 @@ describe('AC-5: no review code reaches the Engineer', () => {
   const REMOVE_BUTTON = `${REMOVE_FOLDER}remove-button.tsx`;
   const CUSTOMER_FOLDER = 'src/components/features/estimate-customer/';
   const CUSTOMER_BUTTON = `${CUSTOMER_FOLDER}change-customer-button.tsx`;
+  // The Lead's view of one row's inputs (AQP-488, DEF-131 Stage 1): one client island in a folder of its own, outside the review's folder. It wraps the Engineer's `PartForm` read-only and is handed no figure: its rows are
+  // mapped down to where each sits, its number, its kind and its name, and the row line is a server element. It is imported by the review alone (the next test).
+  const INPUTS_ISLAND = 'src/components/features/estimate-review-inputs/review-inputs.tsx';
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -139,6 +142,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     clientFiles.delete(RESTORE_BUTTON);
     clientFiles.delete(REMOVE_BUTTON);
     clientFiles.delete(CUSTOMER_BUTTON);
+    clientFiles.delete(INPUTS_ISLAND);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
       const base = specifier.startsWith('@/') ? `src/${specifier.slice(2)}` : join(from, '..', specifier).replaceAll('\\', '/');

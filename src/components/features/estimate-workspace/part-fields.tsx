@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent } from 'react';
 
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ import { FieldRenderer } from './field-renderer';
 import { PartHead } from './part-head';
 import { PartProgress, PartProgressSkeleton } from './part-progress';
 import { PictureSlot } from './picture-slot';
+import { reviewField, type PartReview } from './review-look';
 import { CONFLICT_BODY, CONFLICT_KEEP_MINE, CONFLICT_TITLE, CONFLICT_USE_NEWER, saveStatusText } from './save-texts';
 import { SectionCard } from './section-card';
 import { SectionStrip } from './section-strip';
@@ -65,6 +66,8 @@ export interface PartFieldsProps {
   readonly missing: ReadonlySet<string>;
   /** What Calculate waits for: the saves in flight and the fields that show a value that is not saved (STORY-05.09). */
   readonly gate: SaveGate;
+  /** The Lead's and the Admin's read-only view of the same form (AQP-488, DEF-131 Stage 1): see `PartReview`. Absent for the Engineer, whose form is unchanged. */
+  readonly review?: PartReview | undefined;
 }
 
 const TITLE_ID = 'part-form-title';
@@ -111,10 +114,16 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
  * its number of fields, one to a row on a phone; the form is held to one card's least width, so a reserved region beside it takes a column with no redesign, UD-4), and every field from the server's definition. It is used under a key of the part's ID.
  * Each value is the person's until the field is left, and then the part's values are saved on their own (`usePartValues`).
  */
-export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing, gate }: PartFieldsProps) {
+export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing, gate, review }: PartFieldsProps) {
   const allFields = form.sections.flatMap((section) => section.fields);
   const values = usePartValues({ estimateId, part, editable, fields: allFields, onSaved, onChanged, onNamed, onServerIgnored, onWrote, gate });
   const title = useRef<HTMLHeadingElement>(null);
+  // A row was chosen on the review (RO-2): once the form shows, the title takes the focus. Not on the first paint of the page, and never from a form the Engineer uses.
+  const shown = values.stored.status === 'ready';
+  const focusTitle = review?.focusTitle === true;
+  useEffect(() => {
+    if (focusTitle && shown) title.current?.focus();
+  }, [focusTitle, shown]);
 
   if (values.stored.status === 'failed') {
     return (
@@ -128,11 +137,14 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
   }
   if (values.stored.status === 'loading') {
     return (
-      <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
-        <PartProgressSkeleton />
-        <Skeleton className="h-(--control-h)" />
-        <Skeleton className="h-(--control-h)" />
-        <Skeleton className="h-(--control-h)" />
+      <div className="flex min-w-0 flex-1 flex-col gap-s-3">
+        {review?.head}
+        <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
+          <PartProgressSkeleton />
+          <Skeleton className="h-(--control-h)" />
+          <Skeleton className="h-(--control-h)" />
+          <Skeleton className="h-(--control-h)" />
+        </div>
       </div>
     );
   }
@@ -152,15 +164,16 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
     <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, title.current)} className="is-compact flex min-w-0 flex-1 flex-col gap-s-4">
       <div className="flex flex-col gap-s-1">
         <PartHead partId={part.id} slNo={part.slNo} nodes={nodes} titleId={TITLE_ID} titleRef={title} />
+        {review === undefined ? null : review.rowLine}
         <PartProgress slNo={part.slNo} counts={sumProgress(progress.map(({ counts }) => counts))} />
-        <p className="text-label text-ink-3">{FORM_INTRO}</p>
+        {review === undefined ? <p className="text-label text-ink-3">{FORM_INTRO}</p> : null}
         {/* The one status line of saving (STORY-05.10 AC-4, AC-5): when something was last saved (every save that stored something moves it, `onWrote`), that the form saves on its own, and, once, that the automatic
             save could not. A polite live region that is on the page from the first paint, so it speaks only when its words change, which is when a save stored something or failed, never on a silent tick. */}
         <p role="status" data-last-saved="" className="text-label text-ink-3">
           {saveStatusText(lastSavedAt === null ? NOT_SAVED_YET : lastSavedText(formatIst(new Date(lastSavedAt))), editable, values.autosaveFailedAt)}
         </p>
       </div>
-      {editable ? null : <Notice tone="info">{FORM_LOCKED}</Notice>}
+      {editable ? null : <Notice tone="info">{review === undefined ? FORM_LOCKED : review.notice}</Notice>}
       {problem?.kind !== 'conflict' ? null : (
         // The part was changed somewhere else (STORY-05.08 AC-5, AC-6): what the person typed is kept under each marked field, and they choose. Nothing is sent until they do.
         <Notice tone="danger" title={CONFLICT_TITLE}>
@@ -200,6 +213,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
                 fields={section.fields.filter((field) => field.rule.type === 'flag')}
                 texts={values.texts}
                 editable={editable}
+                review={review !== undefined}
                 onToggle={(flag, chosen) => {
                   const text = chosen ? FLAG_ON : FLAG_OFF;
                   values.setText(flag.id, text);
@@ -212,7 +226,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
                 // The picture (Part Model, STORY-05.07) is its own control, fetched when the form opens; it is changed by its own routes and is no typed value.
                 <PictureSlot
                   key={field.id}
-                  field={field}
+                  field={review === undefined ? field : reviewField(field)}
                   estimateId={estimateId}
                   partId={part.id}
                   picture={picture}
@@ -225,7 +239,8 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
               ) : (
                 <FieldRenderer
                   key={field.id}
-                  field={field}
+                  field={review === undefined ? field : reviewField(field)}
+                  review={review !== undefined}
                   missing={missingNeeded(field) ? missingMessageOf(field) : undefined}
                   text={field.rule.type === 'derived' ? derivedText(field, part, values.texts, materials) : textOf(field, values.texts)}
                   error={values.errors[field.id]}

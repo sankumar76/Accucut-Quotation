@@ -10,6 +10,7 @@ import type { PartItem } from '@/lib/estimates/tree-client';
 
 import { FAILED_BODY, FORM_LOAD_FAILED_TITLE, FORM_LOADING, FORM_NO_PART, TRY_AGAIN } from './estimate-texts';
 import type { PartFieldsProps } from './part-fields';
+import type { PartReview } from './review-look';
 import { partFormShown } from './tree-controls-ready';
 import { useFormDefinition } from './use-form-definition';
 import { useLazyComponent } from './use-lazy-component';
@@ -40,6 +41,8 @@ export interface PartFormProps {
   readonly gate: SaveGate;
   /** Called once the form has something to show for the part (its fields, or the notice that they could not be read): the workspace then lets the tree-width controls load, so their code never competes with the form's (AQP-426, DEF-085). */
   readonly onShown?: () => void;
+  /** The Lead's and the Admin's read-only view (AQP-488, DEF-131 Stage 1), with `editable` false: the same form with the review look. Absent for the Engineer. */
+  readonly review?: PartReview | undefined;
 }
 
 /**
@@ -48,7 +51,7 @@ export interface PartFormProps {
  * nothing typed into one can land in another. Skeleton cards while it loads, a notice with "Try again" when it cannot be read. No rate, cost or formula is requested, held or drawn: the
  * server's form has none, and the materials are IDs and names.
  */
-export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, onNamed, onServerIgnored, missing, gate, onShown }: PartFormProps) {
+export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, onNamed, onServerIgnored, missing, gate, onShown, review }: PartFormProps) {
   const definition = useFormDefinition(estimateId);
   const fields = useLazyComponent<PartFieldsProps>(loadFields, true);
   const Fields = fields.Component;
@@ -81,10 +84,13 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
   }
   if (definition.form.status === 'loading' || Fields === null) {
     return (
-      <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
-        <Skeleton className="h-(--control-h)" />
-        <Skeleton className="h-(--control-h)" />
-        <Skeleton className="h-(--control-h)" />
+      <div className="flex min-w-0 flex-1 flex-col gap-s-3">
+        {review?.head}
+        <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
+          <Skeleton className="h-(--control-h)" />
+          <Skeleton className="h-(--control-h)" />
+          <Skeleton className="h-(--control-h)" />
+        </div>
       </div>
     );
   }
@@ -107,6 +113,7 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
       onReadMaterialsAgain={definition.readAgain}
       missing={missing}
       gate={gate}
+      review={review}
     />
   );
 }

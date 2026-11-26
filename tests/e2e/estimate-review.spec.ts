@@ -41,25 +41,28 @@ async function openAsLead(page: Page, testInfo: TestInfo, code: string, role: 'L
 }
 
 const tiles = (page: Page) => page.getByRole('region', { name: 'Totals' });
-const treePanel = (page: Page) => page.locator('details').filter({ has: page.locator('summary', { hasText: /^Parts tree$/ }) });
+const treePanel = (page: Page) => page.locator('details').filter({ has: page.locator('summary', { hasText: /^Parts tree/ }) });
 const buildPanel = (page: Page) => page.locator('details').filter({ has: page.locator('summary', { hasText: /^How the total is built/ }) });
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 
 /**
- * AQP-465 (DEF-108; ux-expert ruling 2026-11-28): from 1024 px the parts tree is a column 320 px wide (the SCR-05 tree's width) at the left of "How the total is built", sticky and under the tiles, which stay full width; below
+ * AQP-465 (DEF-108; ux-expert ruling 2026-11-28) and AQP-488 (DEF-131 Stage 1; ruling 2026-11-27 section 3.8): "How the total is built" is above the two columns at every width, under the tiles, which stay full width. The
+ * columns are the parts tree and the inputs of the open row: from 1024 px the tree is a column 320 px wide (the SCR-05 tree's width) at the left, sticky, with the inputs at its right, starting at the same height; below
  * 1024 px the two are stacked, the tree first, and the tree folds. Judged from the boxes as drawn.
  */
 async function expectColumns(page: Page): Promise<void> {
-  const [tilesBox, treeBox, buildBox] = await Promise.all([tiles(page).boundingBox(), treePanel(page).boundingBox(), buildPanel(page).boundingBox()]);
-  if (tilesBox === null || treeBox === null || buildBox === null) throw new Error('a box is missing');
-  expect(treeBox.y).toBeGreaterThanOrEqual(tilesBox.y + tilesBox.height - 1);
+  const inputs = page.locator('#row-inputs');
+  const [tilesBox, treeBox, buildBox, inputsBox] = await Promise.all([tiles(page).boundingBox(), treePanel(page).boundingBox(), buildPanel(page).boundingBox(), inputs.boundingBox()]);
+  if (tilesBox === null || treeBox === null || buildBox === null || inputsBox === null) throw new Error('a box is missing');
+  expect(buildBox.y).toBeGreaterThanOrEqual(tilesBox.y + tilesBox.height - 1);
+  expect(treeBox.y).toBeGreaterThanOrEqual(buildBox.y + buildBox.height - 1);
   if ((page.viewportSize()?.width ?? 0) >= 1024) {
     expect(Math.abs(treeBox.width - 320)).toBeLessThanOrEqual(1);
-    expect(buildBox.x).toBeGreaterThanOrEqual(treeBox.x + treeBox.width - 1);
-    expect(Math.abs(buildBox.y - treeBox.y)).toBeLessThanOrEqual(1);
+    expect(inputsBox.x).toBeGreaterThanOrEqual(treeBox.x + treeBox.width - 1);
+    expect(Math.abs(inputsBox.y - treeBox.y)).toBeLessThanOrEqual(1);
     await expect(treePanel(page)).toHaveCSS('position', 'sticky');
   } else {
-    expect(buildBox.y).toBeGreaterThanOrEqual(treeBox.y + treeBox.height - 1);
+    expect(inputsBox.y).toBeGreaterThanOrEqual(treeBox.y + treeBox.height - 1);
     await expect(treePanel(page)).toHaveCSS('position', 'static');
   }
 }
@@ -91,6 +94,33 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(rows.first().locator('span').filter({ hasText: FIGURE }).last()).toBeVisible();
     await expect(treePanel(page)).toContainText("Each figure is that row's own BG. The count for the whole order (QTY per Assy) is shown beside it and is already included. The estimate total adds every row's BG.");
     await expect(page.getByText('Σ')).toHaveCount(0);
+
+    // AQP-488 (DEF-131 Stage 1; ruling 2026-11-27, RO-1, RO-6, RO-9, RO-10, RO-11, RO-14): each row's first line is a link to its inputs, the first row is open, and the block beside the tree is the Engineer's form read-only: a region
+    // named by its title, the Lead's notice, the row line with the row's own figure, no intro, no edit control, and nothing sent when a value is typed.
+    const open = treePanel(page).locator('a[aria-current="true"]');
+    await expect(open).toHaveCount(1);
+    await expect(open).toHaveAttribute('href', /\?row=1#row-inputs$/);
+    const inputs = page.locator('#row-inputs');
+    const form = inputs.locator('form[data-part-form]');
+    await expect(form).toBeVisible();
+    await expect(form.getByRole('heading', { level: 3 })).toContainText('1');
+    await expect(form).toHaveAccessibleName(/^1/);
+    await expect(inputs).toContainText('Read-only. These are the values saved for this part.');
+    await expect(inputs.locator('[data-row-line]')).toContainText(/^This row: ₹ [\d,]+\.\d{2} \(B[A-Z]\) · \$ [\d,]+\.\d{2} · € [\d,]+\.\d{2} · count [\d,.]+ nos/);
+    await expect(inputs).not.toContainText('Every field is needed to Calculate');
+    await expect(inputs.getByRole('button')).toHaveCount(0);
+    const writes: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() !== 'GET' && request.url().includes('/api/v1/')) writes.push(request.method());
+    });
+    const length = form.getByRole('textbox', { name: /Length/ }).first();
+    const before = await length.inputValue();
+    await length.focus();
+    await page.keyboard.type('9');
+    await length.blur();
+    await expect(length).toHaveValue(before);
+    await expect(length).toHaveAttribute('aria-readonly', 'true');
+    expect(writes).toEqual([]);
   });
 
   test('AC-3: "How the total is built" lists the row and ends with the total, which is the figure of the BL tile, under the example and the rounding sentence', async ({ page }, testInfo) => {
@@ -126,6 +156,9 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await calculateWithoutThePage(page, owner);
     await openAsLead(page, testInfo, code, 'ADMIN');
     await expect(tiles(page)).toContainText('File cell BL2');
+    // The Admin sees the same inputs block, read-only (AQP-488).
+    await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
+    await expect(page.locator('#row-inputs')).toContainText('Read-only.');
   });
 });
 
@@ -234,6 +267,8 @@ test.describe('AC-9: layout and accessibility', () => {
 
     await buildPanel(page).locator('summary').click();
     await expect(page.getByRole('region', { name: 'How the total is built, scrollable' })).toBeVisible();
+    // The block of the open row is on the page, its form read, when the scan runs (RO-15, RO-17).
+    await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
   });
