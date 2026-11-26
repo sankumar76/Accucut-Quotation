@@ -7,6 +7,10 @@ export const ESTIMATE_META_TITLE = 'Estimate';
 export const ESTIMATE_META_DESCRIPTION = 'Open an estimate and enter the inputs of its parts.';
 
 export const FOLDER_TITLE = 'Task folder';
+/** The button of SCR-06's head that opens the task folder (the mock-up; AQP-452). */
+export const OPEN_FOLDER_LABEL = 'Open folder';
+/** The words before the subject in SCR-06's meta line. */
+export const SUBJECT_META_PREFIX = 'Subject:';
 export const NOTES_FROM_PREFIX = 'Notes from';
 export const NO_LINK_NOTE = 'This path has no link. Select it and copy it yourself.';
 

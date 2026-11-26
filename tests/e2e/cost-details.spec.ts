@@ -210,6 +210,15 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     await signInAsLead(page, testInfo);
     await openCostDetails(page, code);
 
+    // AQP-452 (DEF-113; UX spec SCR-07, the mock-up): the breadcrumb "Task queue / <code> / Cost details <Sl. No>", the description, the row's heading and its one box.
+    const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+    await expect(crumbs.getByRole('link', { name: 'Task queue' })).toHaveAttribute('href', '/queue');
+    await expect(crumbs.getByRole('link', { name: code })).toHaveAttribute('href', `/estimates/${code}`);
+    await expect(crumbs.locator('[aria-current="page"]')).toHaveText(/^Cost details \d/);
+    await expect(page.getByRole('main')).toContainText('Every calculated value for this row, in six stages, each with its formula. Lead and Admin only.');
+    await expect(page.getByRole('main')).toContainText('Cost details for one row');
+    await expect(page.getByRole('main').getByText('This row, on screen and in the Excel row')).toBeVisible();
+
     await expect(page.locator('details[data-stage]')).toHaveCount(6);
     for (const [index, title] of STAGE_TITLES.entries()) await expect(stage(page, index + 1).locator('summary')).toContainText(title);
     await expect(stage(page, 3).locator('summary')).toContainText(/Stage total: [\d,]+\.\d{2}/);
@@ -221,7 +230,7 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     await expect(material.getByText(/^AK = \(.+ × .+\) - \(.+ × .+\) = [\d,]+\.\d{2}$/)).toBeVisible();
     await expect(stage(page, 1).getByText('O = IF(Material-Specific-Gravity > 0, M - N, 0)', { exact: true })).toBeVisible();
     await expect(stage(page, 6).getByText(/^BG = .+ = [\d,]+\.\d{2}$/)).toBeVisible();
-    await expect(page.getByText('Unit Production Price', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('This row, on screen and in the Excel row').first()).toBeVisible();
   });
 
   test('AC-2: a sentence says what the working prints and states the rounding rule', async ({ page }, testInfo) => {

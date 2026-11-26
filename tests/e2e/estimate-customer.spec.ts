@@ -84,6 +84,13 @@ test.describe('AC-9, AC-10, AC-11: SCR-05, the Engineer sees the customer and th
     const { code } = await openOwnWorkspace(page, testInfo);
 
     await expect(page.getByRole('heading', { level: 1, name: code })).toBeVisible();
+    // AQP-452 (DEF-095; UX spec SCR-05, the mock-up): the head has a breadcrumb "My tasks / <code>", the h1 "Estimate <code>" with the status badge on its line, the title and the sentence of the form under it, and the due pill.
+    const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+    await expect(crumbs.getByRole('link', { name: 'My tasks' })).toHaveAttribute('href', '/queue');
+    await expect(crumbs.locator('[aria-current="page"]')).toHaveText(code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
+    await expect(page.getByRole('main')).toContainText('Every field is needed to Calculate. Enter 0 where a part needs nothing. Numbers allow up to 2 decimals.');
+    await expect(page.getByRole('main').getByText(/^Due /)).toBeVisible();
     const identity = page.getByRole('main').locator('dl').first();
     await expect(identity.locator('dt', { hasText: 'Customer Name' }).locator('xpath=following-sibling::dd[1]')).toContainText(ALPHA);
     await expect(identity.locator('dt', { hasText: 'Customer Short Name' }).locator('xpath=following-sibling::dd[1]')).toHaveText(ALPHA_SHORT_NAME);

@@ -14,7 +14,6 @@ import { formatIst } from '@/lib/time';
 
 import {
   FAILED_BODY,
-  FORM_INTRO,
   FORM_LOADING,
   FORM_LOCKED,
   MISSING_CHOICE_MESSAGE,
@@ -151,7 +150,6 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
         <h3 id={TITLE_ID} ref={title} tabIndex={-1} className="text-sub font-semibold text-ink">
           {partFormTitle(part.slNo)}
         </h3>
-        <p className="text-label text-ink-3">{FORM_INTRO}</p>
         {/* The one status line of saving (STORY-05.10 AC-4, AC-5): when something was last saved (every save that stored something moves it, `onWrote`), that the form saves on its own, and, once, that the automatic
             save could not. A polite live region that is on the page from the first paint, so it speaks only when its words change, which is when a save stored something or failed, never on a silent tick. */}
         <p role="status" data-last-saved="" className="text-label text-ink-3">

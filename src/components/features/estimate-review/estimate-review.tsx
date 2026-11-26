@@ -131,7 +131,8 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         // While the estimate is ignored there is no download chip and no Change customer: it is read-only until it is restored (CR-01 item 7D, A-CR01-8), and the notice below says so.
         downloadMarker={isIgnored ? null : <DownloadChip marker={download} />}
         // Change customer (CR-01 item 6, AC-12): on an estimate that is not approved and not ignored only; the review is the Lead's and the Admin's, and the server refuses anyone else all the same.
-        customerAction={isLocked(header.status) || isIgnored ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} />}
+        customerAction={isLocked(header.status) || isIgnored ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} inline />}
+        review={{ engineerName }}
         notice={
           ignored === null ? null : (
             <IgnoredNotice
