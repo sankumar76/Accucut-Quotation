@@ -3,10 +3,10 @@
 | Field | Value |
 |-------|-------|
 | Story / AC | Found in the delivery lead's demo of master e3dc5b0b (26 Nov). Stories: AQP-404 (STORY-CR01.3B, tree rows), AQP-302 (STORY-05.02, built the tree view), AQP-424 (DEF-081). SCR-05 and ux-spec section 0.9 row 3: each row reads an arrow, the kind's icon, then the number and the name. |
-| Severity | **Sev-2 as proposed by the orchestrator** on the delivery lead's finding; **master rules.** A core screen shows wrong information (the design shows each row's name). |
+| Severity | **Sev-2, type Product (master, DL-409 (A), DL-410 (A)).** Every row of the core estimate screen shows 'Part': an AC of the screen fails, with a workaround (open each row). (Proposed at filing by the orchestrator: Sev-2.) |
 | Priority | P2 (Jira High) (labels `sev-2`, `final-review`) |
-| Type | Product |
-| Status | **Open (new), 2026-11-26 (qa-engineer, on the orchestrator's relay of the delivery lead's finding).** Not yet ruled by master. |
+| Type | **Product.** |
+| Status | **Open, ruled (DL-409, DL-410, DL-411, DL-413), 2026-11-26.** Fix in lane 1, test-first, with DEF-090. Not yet built or proved. |
 | Jira / GitHub | [AQP-446](https://sankumar76.atlassian.net/browse/AQP-446) / [#737](https://github.com/sankumar76/Accucut-Quotation/issues/737) (labels bug, sev-2, ai-delivery, final-review; Jira also aiid-DEF-089, agent-qa-engineer). Relates to AQP-1 and the stories above. Searched first: JQL on `aiid-DEF-089` and the title words, and a GitHub search: nothing. |
 | Found by / date | The delivery lead, in the demo at master e3dc5b0b (26 Nov 2026), relayed by the orchestrator; read and logged by qa-engineer, 2026-11-26 |
 | Build / commit | `master` `e3dc5b0b` (code read with `git show origin/master:<path>`; no browser run by QA) |
@@ -36,10 +36,16 @@ Every row of the parts tree on the estimate screen reads "Part" where its real n
 ## Proof (proposed; master rules)
 A row's text equals `partNameOf` on the estimate screen at three widths, for a part with a Description, one with only a Part No. and one with neither; the review, cost details and export names unchanged.
 
+## Ruling (master; 2026-11-26; recorded by QA from DL-409 to DL-413, read on records-u 02f10cd4)
+- **Scope widened (DL-409 (B)).** The delivery lead's point 1 (their words, 26 Nov, 06:36Z) is about the **kind**: 'Every item is displaying as part (instead of Assembly, Subassembly, Subparts, Part, Fastener).' QA's filing described the name only. The fix makes each row show what SCR-05 shows for it: its kind and its name.
+- **The fix (architect, architecture section 4.12 i; master adopts it, DL-410 (1), (2)).** No migration: the name **is** the part form's Description (Excel, SCR-06, SCR-07 and Calculate's blocked list already use it). `viewsOf` (`estimate-service.ts:243-244`) sets `label` = Description, else Part No., else `''`, from each estimate's own registry, and saved inputs refresh the label. **A row with no name shows its kind's own name, muted** (`kindLabel`; the ux ruling, item 2), so **no row reads 'Part' unless it is a Part.** With the kind icon and legend of SCR-05 that answers the delivery lead's point 1. No new write path, so **no combined review**; the cost-confidentiality scan runs as always and the Engineer view still shows no cost (NFR-002).
+- **Proof (QA's reading, to be confirmed on the PR):** each row's text equals the Description, else the Part No., else the muted kind name, at three widths, for a part with a Description, one with only a Part No., an Assembly and a Sub-Assembly with none, and a Fastener; 'Sub-part' reads for a second PART under a parent; the review, cost-details and export names unchanged; first-load figure stated.
+- Cut-offs (DL-370 (E)): start by the end of Mon 30 Nov, merge by the end of Wed 2 Dec; every fix is test-first, with E2E at three widths for what the delivery lead saw, every existing assertion kept; lanes: lane 1 DEF-089 and DEF-090, lane 2 DEF-091, lane 3 DEF-092; merge order lane 3, then lane 2, then lane 1 (DL-410 (1)). The delivery lead's instruction that the build works as designed (DL-409 (1)) applies.
+
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Ruled (type, grade, route) | master | | |
+| Ruled (type, grade, route) | master | 2026-11-26 | DL-409 to DL-413 |
 | Design reference | ux-expert, solution-architect | | |
 | Fixed | developer | | |
 | Regression test added | developer | | |
