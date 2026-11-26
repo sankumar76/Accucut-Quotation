@@ -597,7 +597,8 @@ test.describe('AQP-405: the row actions', () => {
     const plus = rowButton(page, 'Add under', '1');
     await expect(plus).toHaveAttribute('aria-haspopup', 'menu');
     await plus.click();
-    await expect(page.getByRole('menuitem')).toHaveText(['Sub-Assembly', 'Part', 'Fastener']);
+    // The names, in order; each item also carries its hint (AQP-449), which `estimate-tree-plus-menu.spec.ts` judges.
+    await expect(page.getByRole('menuitem')).toHaveText([/^Sub-Assembly/, /^Part/, /^Fastener/]);
     await page.keyboard.press('Escape');
     await expect(page.getByRole('menuitem')).toHaveCount(0);
     await expect(plus).toBeFocused();
@@ -611,7 +612,7 @@ test.describe('AQP-405: the row actions', () => {
     // Under a Sub-Assembly: a Part or a Fastener, and by the keyboard the first item has the focus.
     await rowButton(page, 'Add under', '1.1').focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('menuitem')).toHaveText(['Part', 'Fastener']);
+    await expect(page.getByRole('menuitem')).toHaveText([/^Part/, /^Fastener/]);
     await expect(page.getByRole('menuitem').first()).toBeFocused();
     await page.keyboard.press('Enter');
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.1.1']);
