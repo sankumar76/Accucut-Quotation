@@ -186,9 +186,9 @@ export const INPUTS_NOTICE_EDIT_CURRENT = ' Any change clears every calculated f
 export const INPUTS_NOTICE_EDIT_CLEARED = ' Every calculated figure is already cleared; press Recalculate when you have finished.';
 /** A Draft may still be worked on by its Engineer. */
 export const INPUTS_NOTICE_EDIT_DRAFT = ' The Engineer can change this estimate too.';
-export const INPUTS_NOTICE_APPROVED = 'Read-only while approved. Unlock the estimate to change an input.';
-export const INPUTS_NOTICE_QUOTED = 'Read-only while quoted. Unlock the estimate to change an input.';
-export const INPUTS_NOTICE_IGNORED = 'Read-only while this RFQ is ignored. Restore it to change an input.';
+export const INPUTS_NOTICE_APPROVED = 'Read-only while approved. Unlock the estimate to change an input or the parts tree.';
+export const INPUTS_NOTICE_QUOTED = 'Read-only while quoted. Unlock the estimate to change an input or the parts tree.';
+export const INPUTS_NOTICE_IGNORED = 'Read-only while this RFQ is ignored. Restore it to change an input or the parts tree.';
 /** The state of the figures the notice depends on: the costs view's own (`current`, `out-of-date` for cleared, `none` for never calculated). */
 export type InputsFigures = 'current' | 'out-of-date' | 'none';
 export const inputsNotice = (status: EstimateStatus, ignored: boolean, figures: InputsFigures): string => {
@@ -200,6 +200,13 @@ export const inputsNotice = (status: EstimateStatus, ignored: boolean, figures: 
 };
 /** Said once, politely, after a row is chosen (RO-2); an editable block does not say "Read-only". */
 export const showingInputs = (slNo: string, name: string, editable = false): string => `Showing the inputs of ${slNo} ${name}.${editable ? '' : ' Read-only.'}`;
+/**
+ * The words of the parts tree the Lead and the Admin edit (DEF-131 stage 2T; UX ruling `lead-admin-edit-inputs-2026-11-27.md` 4.7 (d)): the one polite status once the figures go from current to cleared by a change to the
+ * parts; the reason the tree's buttons wait while Recalculate runs; and what is said when the open row was removed by someone else and the block shows another row.
+ */
+export const TREE_CLEARED_STATUS = 'The parts changed. Every calculated figure is cleared. Press Recalculate to see them again.';
+export const TREE_CALCULATING = 'Calculating. This takes a moment.';
+export const removedElsewhereLine = (slNo: string, shownSlNo: string): string => `${slNo} was removed by someone else. Showing ${shownSlNo}.`;
 /** The row line under the form's title (3.3): the row's own figure and its count, the only Lead-only output beside the inputs. */
 export const ROW_LINE_PREFIX = 'This row:';
 export const rowLineFigures = (price: string, priceLetter: string, usd: string, eur: string): string => `${price} (${priceLetter}) · $ ${usd} · € ${eur}`;

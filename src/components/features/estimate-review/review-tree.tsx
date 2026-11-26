@@ -1,32 +1,13 @@
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
-import { NodeKindIcon } from '@/components/shared/node-kind-icon';
 import { PartsTreeList } from '@/components/shared/parts-tree-list';
-import { QuantityTag } from '@/components/shared/quantity-tag';
-import { RowName } from '@/components/shared/row-name';
-import { TOUCH_LINK } from '@/components/shared/touch-link';
 import { TreeLegend } from '@/components/shared/tree-legend';
-import { TREE_ROW_NUMBER } from '@/components/shared/tree-row-number';
-import { cn } from '@/lib/cn';
 import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import { rowNameOf } from '@/lib/estimates/row-name';
-import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
-import type { CostNode, CostsView } from '@/server/views/schemas/costs';
+import type { CostsView } from '@/server/views/schemas/costs';
 
-import {
-  CLEARED,
-  COST_DETAILS_LINK,
-  COUNT_FIELD_NAME,
-  COUNT_HIDDEN_LABEL,
-  COUNT_UNIT,
-  rowCurrencies,
-  TREE_CLEARED_LINE,
-  TREE_EMPTY,
-  TREE_TITLE,
-  treeLegend,
-} from './review-texts';
+import { TreeRow } from './review-tree-row';
+import { COUNT_FIELD_NAME, TREE_CLEARED_LINE, TREE_EMPTY, TREE_TITLE, treeLegend } from './review-texts';
 
 /**
  * The parts tree of SCR-06 (STORY-06.02 AC-2, AC-6; D-12, D-25; UX-53, UX-29; CR-01 item 3B), **read-only**: the same row component as the workspace tree (`PartsTreeList`), with the arrow, the kind icon,
@@ -44,74 +25,6 @@ import {
 const TREE_PANEL =
   'rounded-md border border-border bg-surface-2 min-[1024px]:sticky min-[1024px]:top-[var(--sticky-top,var(--topbar-h))] min-[1024px]:max-h-[calc(100dvh-var(--sticky-top,var(--topbar-h))-var(--sticky-bottom,0px)-var(--s-4))] min-[1024px]:overflow-y-auto min-[1024px]:[&::details-content]:[content-visibility:visible]';
 
-function figureOf(state: CostsView['state'], node: CostNode): ReactNode {
-  if (state === 'current') return formatFigure(node.figures?.unitPrice ?? null);
-  return state === 'out-of-date' ? <span className="italic">{CLEARED}</span> : NO_FIGURE;
-}
-
-/** The address of SCR-07 for a row: the task code and the row's Sl. No (STORY-06.03). A Lead and an Admin only: this folder is loaded for no one else. */
-const costDetailsHref = (code: string, slNo: string): string => `/estimates/${encodeURIComponent(code)}/costs/${encodeURIComponent(slNo)}`;
-
-/** The address of a row's inputs on this page (AQP-488, DEF-131 Stage 1): the row is in the address, so the choice survives a reload and can be sent on; `#row-inputs` is where the block begins. */
-const inputsHref = (code: string, slNo: string): string => `/estimates/${encodeURIComponent(code)}?row=${encodeURIComponent(slNo)}#row-inputs`;
-
-function TreeRow({
-  node,
-  kindLabel,
-  state,
-  code,
-  warned,
-  selected,
-}: {
-  readonly node: CostNode;
-  readonly kindLabel: string;
-  readonly state: CostsView['state'];
-  readonly code: string;
-  readonly warned: boolean;
-  readonly selected: boolean;
-}) {
-  // The row's name by the one rule (AQP-446): typed, else the kind's own name, muted, with the words for a screen reader. The "Cost details" link says it in plain words.
-  const name = rowNameOf(node.name, kindLabel);
-  return (
-    <div className="flex min-h-(--control-h) flex-col justify-center gap-s-1 py-s-1 pr-s-2 pl-s-1">
-      {/* The first line is the link to this row's inputs (AQP-488): a soft navigation, so the tiles and the tree do not jump and no code is read again. Its name is the number and the name, "1.4 Top cover". */}
-      <Link
-        href={inputsHref(code, node.slNo)}
-        scroll={false}
-        prefetch={false}
-        aria-label={`${node.slNo} ${name}`}
-        {...(selected ? { 'aria-current': 'true' as const } : {})}
-        className={cn(
-          'flex min-h-(--control-h) items-center gap-s-2 rounded-md text-body text-ink no-underline hover:bg-surface fine-wide:min-h-0',
-          selected && 'bg-surface font-semibold shadow-[inset_3px_0_0_var(--primary)]',
-        )}
-      >
-        <NodeKindIcon kind={node.nodeKind} label={kindLabel} />
-        <span data-sl-no="" className={TREE_ROW_NUMBER}>
-          {node.slNo}
-        </span>
-        <span className={cn('min-w-0 flex-1', BREAK_LONG_NAMES)}>
-          <RowName label={node.name} kindLabel={kindLabel} />
-        </span>
-      </Link>
-      {/* The second line: the row's own figures (a Lead's and an Admin's screen only), its count, the mark of a warned row and the way to its cost details. */}
-      <div className="flex flex-wrap items-baseline gap-x-s-3 gap-y-s-1 text-label text-ink-2">
-        <span className="tabular-nums">
-          <span className="sr-only">{`${COUNT_HIDDEN_LABEL}: `}</span>
-          {node.count === null ? NO_FIGURE : `${formatCount(node.count)} ${COUNT_UNIT}`}
-        </span>
-        <span className="text-body font-semibold text-ink tabular-nums">{figureOf(state, node)}</span>
-        {state === 'current' && node.figures !== null ? <span className="text-ink-3 tabular-nums">{rowCurrencies(formatFigure(node.figures.unitPriceUsd), formatFigure(node.figures.unitPriceEur))}</span> : null}
-        {warned ? <QuantityTag /> : null}
-        <a href={costDetailsHref(code, node.slNo)} className={cn(TOUCH_LINK, 'font-semibold text-primary-ink underline underline-offset-2')}>
-          {COST_DETAILS_LINK}
-          <span className="sr-only">{` for ${node.slNo} ${name}`}</span>
-        </a>
-      </div>
-    </div>
-  );
-}
-
 export interface ReviewTreeProps {
   /** The task code of the estimate, for the address of each row's cost details (STORY-06.03). */
   readonly code: string;
@@ -124,11 +37,13 @@ export interface ReviewTreeProps {
   readonly selectedSlNo?: string | null;
 }
 
-export function ReviewTree({ code, state, letters, nodes, warned, selectedSlNo = null }: ReviewTreeProps) {
-  const selected = selectedSlNo === null ? undefined : nodes.find((node) => node.slNo === selectedSlNo);
-  const selectedName = selected === undefined ? '' : `${selected.slNo} ${rowNameOf(selected.name, nodeKindLabel(selected, nodes))}`;
+/**
+ * The panel and the lines above the tree, drawn the same way by the read-only tree and by the editing island (`review-tree-editor.tsx`; no hook here): the title, the name of the open row under 1024 px, the legend of the
+ * figures and, while the figures are cleared, the line that says so. `edit` marks the island's panel (the page and the tests tell the two apart by it).
+ */
+export function ReviewTreeFrame({ selectedName, letters, state, edit = false, children }: { readonly selectedName: string; readonly letters: CostsView['letters']; readonly state: CostsView['state']; readonly edit?: boolean; readonly children: ReactNode }) {
   return (
-    <details open data-review-tree="" className={TREE_PANEL}>
+    <details open data-review-tree="" {...(edit ? { 'data-review-tree-edit': '' } : {})} className={TREE_PANEL}>
       <summary className="flex min-h-(--control-h) cursor-pointer items-center px-s-4 text-body font-semibold text-ink min-[1024px]:pointer-events-none min-[1024px]:cursor-default">{TREE_TITLE}
         {/* Under 1024 px the panel folds after a row is chosen, and its summary says which row is open, so the way back to the tree is one press (AQP-488). */}
         {selectedName === '' ? null : <span className="ml-s-2 min-w-0 font-normal text-ink-2 min-[1024px]:hidden">{`· ${selectedName}`}</span>}
@@ -136,19 +51,29 @@ export function ReviewTree({ code, state, letters, nodes, warned, selectedSlNo =
       <div className="flex flex-col gap-s-3 px-s-4 pb-s-4">
         <p className="text-label text-ink-2">{treeLegend(letters.unitPrice, COUNT_FIELD_NAME)}</p>
         {state === 'out-of-date' ? <p className="text-label text-ink-2 italic">{TREE_CLEARED_LINE}</p> : null}
-        {nodes.length === 0 ? (
-          <p className="text-body text-ink-2">{TREE_EMPTY}</p>
-        ) : (
-          <>
-            <PartsTreeList
-              label={TREE_TITLE}
-              nodes={nodes}
-              renderRow={(node, kindLabel) => <TreeRow node={node} kindLabel={kindLabel} state={state} code={code} warned={warned.has(node.id)} selected={node.slNo === selectedSlNo} />}
-            />
-            <TreeLegend />
-          </>
-        )}
+        {children}
       </div>
     </details>
+  );
+}
+
+export function ReviewTree({ code, state, letters, nodes, warned, selectedSlNo = null }: ReviewTreeProps) {
+  const selected = selectedSlNo === null ? undefined : nodes.find((node) => node.slNo === selectedSlNo);
+  const selectedName = selected === undefined ? '' : `${selected.slNo} ${rowNameOf(selected.name, nodeKindLabel(selected, nodes))}`;
+  return (
+    <ReviewTreeFrame selectedName={selectedName} letters={letters} state={state}>
+      {nodes.length === 0 ? (
+        <p className="text-body text-ink-2">{TREE_EMPTY}</p>
+      ) : (
+        <>
+          <PartsTreeList
+            label={TREE_TITLE}
+            nodes={nodes}
+            renderRow={(node, kindLabel) => <TreeRow node={node} kindLabel={kindLabel} state={state} code={code} warned={warned.has(node.id)} selected={node.slNo === selectedSlNo} />}
+          />
+          <TreeLegend />
+        </>
+      )}
+    </ReviewTreeFrame>
   );
 }

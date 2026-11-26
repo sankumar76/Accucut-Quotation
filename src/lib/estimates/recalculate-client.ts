@@ -1,6 +1,6 @@
 import { ACCEPT_JSON, isRecord, JSON_HEADERS, sendJson, type Fetch, type Outcome } from '../api-client';
 
-import { reviewSaveGate } from './review-save-gate';
+import { reviewCalculating, reviewSaveGate } from './review-save-gate';
 
 /**
  * The browser's side of Recalculate (STORY-06.04; SCR-06 "Total cleared"; architecture section 6 "Recalculate"): press the button, and read whether it worked. Nothing here decides anything: whether the
@@ -42,7 +42,13 @@ const UNSAVED: Outcome<true> = { status: 'refused', httpStatus: 0, code: 'RECALC
 export async function press(estimateId: string, acknowledged?: number): Promise<Outcome<true>> {
   reviewSaveGate.flush('draft');
   if (!(await reviewSaveGate.settle())) return UNSAVED;
-  return acknowledged === undefined ? recalculateEstimate(estimateId) : recalculateAnyway(estimateId, acknowledged);
+  // The tree's buttons say they wait while the calculation runs (ED-31).
+  reviewCalculating.set(true);
+  try {
+    return await (acknowledged === undefined ? recalculateEstimate(estimateId) : recalculateAnyway(estimateId, acknowledged));
+  } finally {
+    reviewCalculating.set(false);
+  }
 }
 
 /** The rows and revision of a 409 `CALCULATE_ACK_REQUIRED`: the one reading of it, shared with the Engineer's Calculate (`calculate-client.ts`). */

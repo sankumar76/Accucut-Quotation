@@ -84,6 +84,8 @@ export const TREE_FAILED_TITLE = 'The change was not made';
 export const TREE_CHANGING = 'Updating the parts. This takes a moment.';
 /** The ID of the visible line above: the buttons that are `aria-disabled` while it shows point at it (`aria-describedby`). */
 export const TREE_CHANGING_ID = 'parts-tree-changing';
+/** The line that says why the tree's buttons are not offered while the review's Recalculate runs (DEF-131 stage 2T, ED-31): the island gives the words, this is the element's ID. */
+export const TREE_CALCULATING_ID = 'parts-tree-calculating';
 /** The count on the right of the tree's head (DEF-081 ruling item 10; SCR-05 "12 rows"): every row, open or closed. */
 export const treeRowsLabel = (rows: number): string => (rows === 1 ? '1 row' : `${rows} rows`);
 

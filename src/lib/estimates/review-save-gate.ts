@@ -7,3 +7,24 @@ import { createSaveGate } from './save-gate';
  * fetches `recalculate-client` on its first press, and the island is fetched after the page is up).
  */
 export const reviewSaveGate = createSaveGate();
+
+/**
+ * Whether the review's Recalculate is running (DEF-131 stage 2T, ED-31). The press sets it (`recalculate-client.ts`) and the tree's editing island reads it, so the tree's buttons say why they are not offered while the
+ * figures are being worked out: the server serialises the two anyway (a tree write and a calculation take the same row lock), so this is for the person's sake and not for safety. Plain data, like the gate above.
+ */
+let calculating = false;
+const listeners = new Set<() => void>();
+export const reviewCalculating = {
+  get: (): boolean => calculating,
+  set(next: boolean): void {
+    if (next === calculating) return;
+    calculating = next;
+    for (const listener of [...listeners]) listener();
+  },
+  subscribe(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  },
+};

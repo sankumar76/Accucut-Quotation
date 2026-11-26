@@ -10,11 +10,13 @@ import { rowNameOf } from '@/lib/estimates/row-name';
 import { WarningNotice } from '@/components/shared/warning-notice';
 import type { RoleName } from '@/lib/auth/roles';
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
+import { treeActionsOffered } from '@/lib/estimates/tree-actions';
 import { isLocked, type EstimateStatus } from '@/lib/estimate/state-machine';
 import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
+import { ReviewTreeEditor } from '../estimate-review-edit/review-tree-editor';
 import { LazyPartForm } from '../estimate-workspace/lazy-part-form';
 import { PartHead } from '../estimate-workspace/part-head';
 import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
@@ -125,6 +127,9 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
   const isIgnored = ignored !== null;
   // A Lead or an Admin corrects the inputs of a Draft or a Prepared estimate that is not ignored: the one rule the server asks again under the row lock (`canEditInputs`, DEF-131 stage 2), asked with the viewer's real role.
   const editable = canEditInputs({ status: header.status, ignored: isIgnored }, viewerRole);
+  // The parts tree is editable by the same people in the same states, asked of the one rule for the tree's actions (DEF-131 stage 2T, ED-18, ED-19): then the tree and the inputs block are one client island that holds the
+  // selected row. Approved, Quoted and ignored estimates keep the read-only tree below, with no toolbar and no "Add main assembly" in the page.
+  const editTree = treeActionsOffered({ status: header.status, ignored: isIgnored }, viewerRole);
   // The rows of the calculation's quantity warning, which the costs view holds only while the figures are current (STORY-06.10 AC-3, AC-4).
   const warned = warnedNodeIds(state === 'current' ? costs.warning : null);
   const rowLine = selected === null ? null : <ReviewRowLine code={header.code} node={selected} state={state} letters={letters} warned={warned.has(selected.id)} />;
@@ -194,8 +199,22 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
       {/* "How the total is built" is above the two columns at every width (UX ruling 2026-11-27 section 3.8; AQP-488): the tree and the row's inputs are the two columns below it. */}
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
       <div data-review-columns="" className="flex flex-col gap-s-4 md:gap-s-5 min-[1024px]:grid min-[1024px]:grid-cols-[var(--tree-w)_minmax(0,1fr)] min-[1024px]:items-start">
-        <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} selectedSlNo={selected === null ? null : selected.slNo} />
-        {selected === null ? null : (
+        {editTree ? (
+          <ReviewTreeEditor
+            estimateId={estimateId}
+            code={header.code}
+            status={header.status}
+            state={state}
+            letters={letters}
+            nodes={nodes}
+            warned={[...warned]}
+            selectedSlNo={selected === null ? null : selected.slNo}
+            selectedRevision={selectedRevision ?? 0}
+          />
+        ) : (
+          <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} selectedSlNo={selected === null ? null : selected.slNo} />
+        )}
+        {editTree || selected === null ? null : (
           // The Engineer's own form, read-only, in a client island of its own folder; nothing handed to it holds a figure: the rows are mapped down to their number, kind and name, and the row line is drawn here (AQP-488).
           <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">
             <LazyPartForm

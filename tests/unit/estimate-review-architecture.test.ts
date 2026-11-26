@@ -121,6 +121,10 @@ describe('AC-5: no review code reaches the Engineer', () => {
   // The Lead's view of one row's inputs (AQP-488, DEF-131 Stage 1) is the Engineer's own `PartForm`, drawn by the review through a thin client shell that loads the form's code after the page is up (the first load is held
   // to 192,500 B): only what a server can send goes in: ids, texts and server elements (the row line and the head), no function and no figure (its rows are mapped down to where each sits, its number, its kind and its name).
   const INPUTS_FORM = 'src/components/features/estimate-workspace/lazy-part-form.tsx';
+  // The Lead's and the Admin's parts tree and inputs block of a Draft or a Prepared estimate (DEF-131 stage 2T, UX ruling `lead-admin-edit-inputs-2026-11-27.md` 4.7 (c)) is one client island in a folder of its own, drawn by
+  // the review alone: the page chooses it only where `treeActionsOffered` says so, and it takes the rows of the costs view as props (its tree, its buttons and its form are the Engineer's own code).
+  const TREE_EDITOR_FOLDER = 'src/components/features/estimate-review-edit/';
+  const TREE_EDITOR = `${TREE_EDITOR_FOLDER}review-tree-editor.tsx`;
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -143,6 +147,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     clientFiles.delete(REMOVE_BUTTON);
     clientFiles.delete(CUSTOMER_BUTTON);
     clientFiles.delete(INPUTS_FORM);
+    clientFiles.delete(TREE_EDITOR);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
       const base = specifier.startsWith('@/') ? `src/${specifier.slice(2)}` : join(from, '..', specifier).replaceAll('\\', '/');
@@ -382,12 +387,27 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(shell).toMatch(/^import type \{ ReviewFormProps \} from '\.\/review-form';/m);
     expect(shell).not.toMatch(/^import (?!type).*from '\.\/(part|review)-form'/m);
     const importers = ALL.filter((file) => file.path !== INPUTS_FORM && /lazy-part-form/.test(file.text)).map((file) => file.path);
+    // The review (a server file) draws it for a read-only estimate, and the tree island (DEF-131 stage 2T) draws it beside the tree it holds, for an editable one.
+    expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx', TREE_EDITOR]);
+  });
+
+  it('DEF-131 stage 2T: the tree island is the one client file of its folder, is imported by the review alone, imports no service, repository, calculation or figure-state module and sends no request of its own', () => {
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const folder = ALL.filter((file) => file.path.startsWith(TREE_EDITOR_FOLDER));
+    expect(folder.map((file) => file.path)).toEqual([TREE_EDITOR]);
+    const island = strip(folder[0]?.text ?? '');
+    expect(island).toMatch(/^\s*['"]use client['"]/m);
+    // The rows of the costs view arrive as props and are read for their type only: the one import of the schema is a type import, and no server module is named.
+    expect(island).not.toMatch(/@\/server\/(?!views\/schemas\/costs')/);
+    expect(island).not.toMatch(/^import (?!type).*schemas\/costs/m);
+    expect(island).not.toMatch(/calculation-|row-outputs|product-totals|figure-state|estimate-review-service|\bfetch\(/);
+    const importers = ALL.filter((file) => file.path !== TREE_EDITOR && /from '[^']*review-tree-editor'/.test(file.text)).map((file) => file.path);
     expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
   });
 
-  it('nothing outside the review imports a file of its folder except the review page', () => {
+  it('nothing outside the review imports a file of its folder except the review page and the tree island, which draws the review\'s own row, frame and words', () => {
     const importers = ALL.filter((file) => !file.path.startsWith(REVIEW_FOLDER) && /estimate-review\//.test(file.text)).map((file) => file.path);
-    expect(importers).toEqual([REVIEW_PAGE]);
+    expect(importers).toEqual([REVIEW_PAGE, TREE_EDITOR]);
   });
 
   it('the Engineer\'s page file imports no review code, no review service and no costs schema: it loads the review page with a dynamic import() on the Lead\'s and the Admin\'s branch', () => {

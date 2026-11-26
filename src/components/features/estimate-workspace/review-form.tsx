@@ -87,8 +87,15 @@ export function ReviewForm({ review, editable, ...props }: ReviewFormProps) {
         {...props}
         editable={canEdit}
         gate={reviewSaveGate}
-        onChanged={refresh}
-        onNamed={refresh}
+        // What the page asks of the form (the review's editing island: the tree takes the part's new revision, its new name, and reads itself again) comes first, then the page is drawn again.
+        onChanged={() => {
+          props.onChanged?.();
+          refresh();
+        }}
+        onNamed={(id, label) => {
+          props.onNamed?.(id, label);
+          refresh();
+        }}
         onServerIgnored={() => refuse('ignored')}
         review={{ ...review, notice, chosen, onWrote: wrote, onLocked: () => refuse('locked') }}
       />

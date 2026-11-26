@@ -248,7 +248,7 @@ test.describe('AC-6: not calculated', () => {
     await length.fill('12.5');
     expect(await ignoreThroughTheApi(page, owner.id, 'Not taken forward, an invented reason.')).toBe(200);
     await length.blur();
-    await expect(inputs).toContainText('Read-only while this RFQ is ignored. Restore it to change an input.');
+    await expect(inputs).toContainText('Read-only while this RFQ is ignored. Restore it to change an input or the parts tree.');
     await expect(length).toHaveValue('12.5');
     await expect(length).toHaveAttribute('aria-readonly', 'true');
   });

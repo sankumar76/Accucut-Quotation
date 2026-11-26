@@ -103,14 +103,14 @@ describe('ED-3: the island is told whether the figures are current, and the noti
     ['PREPARED', 'none', 'You can correct inputs.'],
     ['DRAFT', 'none', 'You can correct inputs. The Engineer can change this estimate too.'],
     ['DRAFT', 'out-of-date', 'You can correct inputs. Every calculated figure is already cleared; press Recalculate when you have finished. The Engineer can change this estimate too.'],
-    ['APPROVED', 'current', 'Read-only while approved. Unlock the estimate to change an input.'],
-    ['QUOTED', 'current', 'Read-only while quoted. Unlock the estimate to change an input.'],
+    ['APPROVED', 'current', 'Read-only while approved. Unlock the estimate to change an input or the parts tree.'],
+    ['QUOTED', 'current', 'Read-only while quoted. Unlock the estimate to change an input or the parts tree.'],
   ] as const)('%s with figures %s', (status, figures, words) => {
     expect(inputsNotice(status, false, figures)).toBe(words);
   });
 
   it('the Ignored layer wins over the status and says how to get editing back', () => {
-    for (const status of STATUSES) expect(inputsNotice(status, true, 'current')).toBe('Read-only while this RFQ is ignored. Restore it to change an input.');
+    for (const status of STATUSES) expect(inputsNotice(status, true, 'current')).toBe('Read-only while this RFQ is ignored. Restore it to change an input or the parts tree.');
   });
 
   it('hands the page\'s own notice to the island', async () => {
