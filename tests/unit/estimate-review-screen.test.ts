@@ -213,8 +213,8 @@ describe('AC-6: not calculated', () => {
     expect(html).toMatch(/role="status"[^>]*>[\s\S]*The Engineer has not calculated/);
     expect(html).toContain('Not calculated');
     expect(html).not.toContain('How the total is built');
-    // What is drawn as text: the classes of the page (a size such as 0.06em) are not a figure.
-    expect(withoutIcons(html).replace(/<[^>]*>/g, ' ')).not.toMatch(/\d+\.\d\d/);
+    // Text and attributes (an aria-label, a title) are read; only the classes of the page (a size such as 0.06em) are not a figure (QLT-800-02).
+    expect(withoutIcons(html).replace(/\sclass="[^"]*"/g, '')).not.toMatch(/\d+\.\d\d/);
     expect(html).not.toContain('₹');
     expect(countOf(html, '>—<')).toBeGreaterThanOrEqual(4);
   });
@@ -248,7 +248,7 @@ describe('AC-1, AC-4 and AC-5: the cleared state', () => {
     expect(html).toContain('You set it when you approve, after Recalculate.');
     expect(countOf(html, '>Cleared<')).toBeGreaterThanOrEqual(4);
     expect(html).toContain('24 nos');
-    expect(withoutIcons(html).replace(/<[^>]*>/g, ' ')).not.toMatch(/\d+\.\d\d/);
+    expect(withoutIcons(html).replace(/\sclass="[^"]*"/g, '')).not.toMatch(/\d+\.\d\d/);
     expect(html).not.toContain('How the total is built');
     expect(html).toContain('>Recalculate</button>');
     expect(html).toContain('Recalculate first. Approving is available once the figures have been calculated again.');
@@ -768,8 +768,10 @@ describe('STORY-06.10 AC-3, AC-4: the quantity warning on the calculation in vie
     // The tree and the table: one mark each, and only on the warned row (the item), not on 1.1 and 1.1.1.
     // The tree, the table and, since AQP-488 (ruling 2026-11-27 section 3.3), the row line of the open row, which is the warned row when it is the first.
     const row = html.slice(html.indexOf('data-row-line'), html.indexOf('</p>', html.indexOf('data-row-line')));
-    expect(countOf(html, 'data-quantity-tag=""')).toBe(2 + countOf(row, 'data-quantity-tag=""'));
-    expect(countOf(html, 'Quantity 0')).toBe(2 + countOf(row, 'Quantity 0'));
+    // In this fixture the open row is the warned item, so its row line carries the mark: one more than the tree's and the table's two (QLT-800-05).
+    expect(countOf(row, 'Quantity 0')).toBe(1);
+    expect(countOf(html, 'data-quantity-tag=""')).toBe(3);
+    expect(countOf(html, 'Quantity 0')).toBe(3);
     const tree = html.slice(html.indexOf('data-review-tree'), html.indexOf('id="row-inputs"'));
     expect(countOf(tree, 'Quantity 0')).toBe(1);
     expect(tree.indexOf('Quantity 0')).toBeLessThan(tree.indexOf('1.1'));

@@ -58,6 +58,11 @@ describe('RO-4: an empty field says "Not entered"', () => {
     expect(html).toMatch(/aria-describedby="[^"]*-empty/);
   });
 
+  it('an empty field with a unit keeps the square right corner that joins the box to its unit (QLT-800-03)', () => {
+    const html = render(NUMBER, '');
+    expect(html).toMatch(/class="[^"]*rounded-r-none[^"]*placeholder:italic|class="[^"]*placeholder:italic[^"]*rounded-r-none/);
+  });
+
   it('a text, a multi-line text, a list and the materials list: the same words', () => {
     expect(render(TEXT, '')).toContain(`placeholder="${NOT_ENTERED}"`);
     expect(render(REMARKS, '')).toContain(`placeholder="${NOT_ENTERED}"`);

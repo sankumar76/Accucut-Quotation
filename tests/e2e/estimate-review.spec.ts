@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 import { defined } from '../support/defined';
 
 import { createDisposableUser, E2E_ADMIN, useFreshAddress } from './support/auth';
+import { controlIdFor } from '../../src/components/features/estimate-workspace/field-ids';
 import { calculateWithoutThePage, engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
 import { DEVELOPMENT_URL } from './support/servers';
@@ -114,6 +115,24 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     page.on('request', (request) => {
       if (request.method() !== 'GET' && request.url().includes('/api/v1/')) writes.push(request.method());
     });
+    // RO-3 (QLT-800-04): each value the part holds is the value shown, compared by field ID: the part is read as the Lead through the same route the form uses, and every box (a number, a text) shows what it holds. A number is
+    // shown as SCR-05 shows it after saving (two decimals), so numbers are compared as numbers.
+    const held = await page.evaluate(async (id) => {
+      const response = await fetch(`/api/v1/estimates/${id}/nodes/${id}`);
+      return { status: response.status, inputs: ((await response.json()) as { inputs: Record<string, string> }).inputs };
+    }, owner.id);
+    expect(held.status).toBe(200);
+    let compared = 0;
+    for (const [fieldId, stored] of Object.entries(held.inputs)) {
+      const box = form.locator(`input#${controlIdFor(fieldId)}, textarea#${controlIdFor(fieldId)}`);
+      if ((await box.count()) === 0 || stored === '') continue;
+      const shown = await box.inputValue();
+      if (/^-?\d+(\.\d+)?$/.test(stored)) expect(Number(shown), `field ${fieldId}`).toBe(Number(stored));
+      else expect(shown, `field ${fieldId}`).toBe(stored);
+      compared += 1;
+    }
+    expect(compared, 'boxes compared with what the part holds').toBeGreaterThan(3);
+
     const length = form.getByRole('textbox', { name: /Length/ }).first();
     const before = await length.inputValue();
     await length.focus();

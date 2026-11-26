@@ -17,7 +17,7 @@ import { QUANTITY_CASES } from './quantity/quantity-cases';
  * AQP-488 (DEF-131 Stage 1; UX ruling `lead-admin-edit-inputs-2026-11-27.md` section 3, RO-1, RO-2, RO-9, RO-10, RO-16, RO-18): the Lead's and the Admin's view of one row's inputs on SCR-06, rendered to markup
  * with no browser (the first paint). The tree's rows are links to `?row=<Sl. No>#row-inputs` and the open one is `aria-current`; with no `row`, or one that is not in the tree, the first row is open; the block has
  * the words of its notice by status, with the Ignored layer first, and the row line (`This row: ...`) with the row's own figure, or `Cleared` or a dash; an estimate with no rows has no block; "How the total
- * is built" is above the two columns. The form inside is the Engineer's, with the review look (`review-look-part-fields.test.ts`) and is judged in a browser (`tests/e2e/estimate-review-inputs.spec.ts`).
+ * is built" is above the two columns. The form inside is the Engineer's, with the review look (`review-look-part-fields.test.ts`) and is judged in a browser (`tests/e2e/estimate-review.spec.ts`).
  * Every name is invented.
  */
 
