@@ -8,7 +8,7 @@ import { calculateWithoutThePage, engineerWithEstimate, signInAs } from './suppo
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
 import { ignoreThroughTheApi } from './support/ignored';
 import { control } from './support/part-form';
-import { addMainAssemblyButton, chooseRow, CLEARED_STATUS, countPageReads, expectTreeControls, openTreePanel, reviewButton, reviewRow, slNumbersOf } from './support/review-tree';
+import { addMainAssemblyButton, chooseRow, CLEARED_STATUS, countPageReads, expectTreeControls, openTreePanel, readTreeThrough, reviewButton, reviewRow, slNumbersOf } from './support/review-tree';
 import { DEVELOPMENT_URL } from './support/servers';
 import { expectLinkTarget, isTouchLayout } from './support/touch-link';
 
@@ -108,9 +108,20 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     const dialog = page.getByRole('alertdialog', { name: /^Delete 2 .+?$/ });
     await expect(dialog.getByRole('button', { name: 'Keep it' })).toBeFocused();
     await expect(dialog.getByRole('textbox')).toHaveCount(0);
+    // ED-26 (4.7 (d) 4): while the dialog is open another session of the same Lead adds a Part under the row. The Delete that was asked for one row is refused, nothing is deleted, the tree is read again and the notice says so;
+    // the next delete names the two rows and removes them in one step.
+    const rowTwo = defined((await readTreeThrough(page.request, owner.id)).find((row) => row.slNo === '2'));
+    const added = await page.request.post(`/api/v1/estimates/${owner.id}/nodes`, { headers: { origin: DEVELOPMENT_URL }, data: { parentId: rowTwo.id, nodeKind: 'PART' } });
+    expect(added.status(), 'another session adds a Part under the row').toBe(201);
     await dialog.getByRole('button', { name: 'Delete row' }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByText('Row deleted')).toHaveCount(1);
+    await expect(page.getByText('The parts were changed by someone else. The tree has been refreshed. Check it and try again.')).toBeVisible();
+    expect(await slNumbersOf(page)).toEqual(['1', '2', '2.1']);
+    await chooseRow(page, '2');
+    await reviewButton(page, 'Delete', '2').click();
+    await dialog.getByRole('button', { name: 'Delete 2 rows' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText('2 rows deleted')).toHaveCount(1);
     await expect(reviewRow(page, '2')).toHaveCount(0);
     await expect(reviewRow(page, '1')).toBeFocused();
     // The figures were already cleared, so the second change reads the page no more and says nothing more (once per change from current to cleared).
@@ -325,7 +336,8 @@ test.describe('AC-6: not calculated', () => {
     expect(await ignoreThroughTheApi(page, owner.id, 'Not taken forward, an invented reason.')).toBe(200);
     await length.blur();
     await expect(inputs).toContainText('Read-only while this RFQ is ignored. Restore it to change an input or the parts tree.');
-    await expect(length).toHaveValue('12.5');
+    // The box shows what was typed, formatted as the form does when a field is left.
+    await expect(length).toHaveValue(/^12.5(0)?$/);
     await expect(length).toHaveAttribute('aria-readonly', 'true');
   });
 });

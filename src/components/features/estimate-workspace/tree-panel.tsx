@@ -25,7 +25,6 @@ import {
   TREE_FAILED_TITLE,
   TREE_LOAD_FAILED_TITLE,
   TREE_CHANGING,
-  TREE_CALCULATING_ID,
   TREE_CHANGING_ID,
   TREE_LOADING,
   TREE_TITLE,
@@ -93,7 +92,7 @@ export function TreePanel({ tree, editable, onOpen, missingIds, framed = true, h
   const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
   const toggle = (id: string): void => setClosed((current) => (current.has(id) ? new Set([...current].filter((other) => other !== id)) : new Set([...current, id])));
   // While a change is on its way the buttons that would start another are not offered, and once the line above the tree is on screen they are described by it (AQP-343, DL-340).
-  const describedBy = tree.waiting ? TREE_CHANGING_ID : calculating !== null ? TREE_CALCULATING_ID : undefined;
+  const describedBy = tree.waiting || calculating !== null ? TREE_CHANGING_ID : undefined;
   // The tree could not be read (the first time, or after a change that nothing answered): the Notice takes the tree's place, and after a change that nothing answered the focus goes to its button.
   const notKnown = tree.problem?.kind === 'unconfirmed';
   const retry = useRef<HTMLButtonElement>(null);
@@ -185,16 +184,11 @@ export function TreePanel({ tree, editable, onOpen, missingIds, framed = true, h
 
   const content = (
     <div className="flex min-w-0 flex-col gap-s-3">
-      {tree.waiting ? (
+      {tree.waiting || calculating !== null ? (
         <p id={TREE_CHANGING_ID} className="text-body text-ink-2">
-          {TREE_CHANGING}
+          {tree.waiting ? TREE_CHANGING : calculating}
         </p>
       ) : null}
-      {calculating === null || tree.waiting ? null : (
-        <p id={TREE_CALCULATING_ID} className="text-body text-ink-2">
-          {calculating}
-        </p>
-      )}
       {tree.problem === null || tree.problem.kind === 'unconfirmed' ? null : (
         <Notice tone="danger" title={tree.problem.kind === 'changed' ? TREE_CHANGED_NOTICE : tree.problem.kind === 'refused' ? tree.problem.message : TREE_FAILED_TITLE}>
           {tree.problem.kind === 'failed' ? FAILED_BODY : null}

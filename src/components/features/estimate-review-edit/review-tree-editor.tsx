@@ -110,7 +110,8 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
   // The row last chosen by a press on the tree: only then does the form take the focus and the tree fold under 1024 px (a row just added or the neighbour after a delete is not a choice, `PartReview.byPress`).
   const [pressedId, setPressedId] = useState<string | null>(null);
   const choose = (id: string): void => {
-    setPressedId(id);
+    // Pressing the row that is already open changes nothing (it must not turn a row that was added into one that was pressed, which would fold the tree under it).
+    if (id !== selectedId) setPressedId(id);
     tree.select(id);
   };
   const missingFields = new Set(blocked?.find((part) => part.nodeId === selectedId)?.fields.map((field) => field.fieldId));

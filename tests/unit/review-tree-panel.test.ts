@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { TREE_CALCULATING_ID, TREE_CHANGING, TREE_CHANGING_ID } from '@/components/features/estimate-workspace/estimate-texts';
+import { TREE_CHANGING, TREE_CHANGING_ID } from '@/components/features/estimate-workspace/estimate-texts';
 import { TreePanel, type TreePanelProps } from '@/components/features/estimate-workspace/tree-panel';
 import type { PartsTreeState } from '@/components/features/estimate-workspace/use-parts-tree';
 import { TREE_CALCULATING } from '@/components/features/estimate-review/review-texts';
@@ -120,7 +120,6 @@ describe('ED-31: while a change is on its way or Recalculate runs, the buttons w
   it('is available when nothing is going on: no button is aria-disabled and neither line is drawn', () => {
     const html = panel(treeState(NODES), true);
     expect(disabled(html)).toEqual([]);
-    expect(html).not.toContain(TREE_CALCULATING_ID);
     expect(html).not.toContain(TREE_CHANGING_ID);
   });
 
@@ -137,7 +136,9 @@ describe('ED-31: while a change is on its way or Recalculate runs, the buttons w
     expect(html).toContain(TREE_CALCULATING);
     const waiting = disabled(html);
     expect(waiting.length).toBeGreaterThanOrEqual(NODES.length + 1);
-    for (const button of waiting) expect(button).toContain(`aria-describedby="${TREE_CALCULATING_ID}"`);
+    // The one line that says why the buttons wait carries the reason of the moment: its words are "Calculating" here and "Updating the parts" while a change is on its way.
+    for (const button of waiting) expect(button).toContain(`aria-describedby="${TREE_CHANGING_ID}"`);
+    expect(html).not.toContain(TREE_CHANGING);
     // A button that waits keeps its place and its name: the focus stays where it was.
     expect(toolbarOf(html, 's1')).toEqual(['Move 1.1 Name 1.1', 'Add under 1.1 Name 1.1', 'Delete 1.1 Name 1.1']);
   });

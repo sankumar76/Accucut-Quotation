@@ -2,7 +2,6 @@
 
 import type { ReactNode } from 'react';
 
-import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 
 import { useLazyComponent } from '../estimate-workspace/use-lazy-component';
@@ -23,14 +22,12 @@ export function ReviewEditShell({ children, ...island }: ReviewTreeEditorProps &
   return (
     <>
       {failed ? (
-        <div className="min-[1024px]:col-span-2">
-          <Notice tone="danger" title="We could not load the editing tools">
-            <p>Check your connection and try again. The tree and the inputs are shown as they were saved.</p>
-            <Button variant="secondary" className="mt-s-2" onClick={retry}>
-              Try again
-            </Button>
-          </Notice>
-        </div>
+        <p role="alert" className="text-body text-danger-ink min-[1024px]:col-span-2">
+          We could not load the editing tools.{' '}
+          <Button variant="secondary" onClick={retry}>
+            Try again
+          </Button>
+        </p>
       ) : null}
       {children}
     </>
