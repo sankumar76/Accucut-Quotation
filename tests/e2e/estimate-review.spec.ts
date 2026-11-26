@@ -8,7 +8,7 @@ import { calculateWithoutThePage, engineerWithEstimate, signInAs } from './suppo
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
 import { ignoreThroughTheApi } from './support/ignored';
 import { control } from './support/part-form';
-import { addMainAssemblyButton, chooseRow, CLEARED_STATUS, countPageReads, expectTreeControls, reviewButton, reviewRow, slNumbersOf } from './support/review-tree';
+import { addMainAssemblyButton, chooseRow, CLEARED_STATUS, countPageReads, expectTreeControls, openTreePanel, reviewButton, reviewRow, slNumbersOf } from './support/review-tree';
 import { DEVELOPMENT_URL } from './support/servers';
 import { expectLinkTarget, isTouchLayout } from './support/touch-link';
 
@@ -222,7 +222,8 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expectTreeControls(page);
     await addMainAssemblyButton(page).click();
     await expect(reviewRow(page, '2')).toBeFocused();
-    const addUnder = async (slNo: string, kind: RegExp): Promise<void> => {
+    // The menu opens with its first item highlighted and the arrows move down it (Sub-Assembly, Part or Sub-part, Fastener): the keyboard alone, with no mouse and no focus call on an item.
+    const addUnder = async (slNo: string, steps: number): Promise<void> => {
       await reviewButton(page, 'Add under', slNo).focus();
       await page.keyboard.press('Enter');
       const menu = page.getByRole('menu');
@@ -230,17 +231,18 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
         await expect(menu.getByRole('menuitem')).toHaveCount(3);
         for (const kindName of [/^Sub-Assembly/, /^(Part|Sub-part)/, /^Fastener/]) await expect(menu.getByRole('menuitem', { name: kindName })).toHaveCount(1);
       }
-      await menu.getByRole('menuitem', { name: kind }).focus();
+      await expect(menu.getByRole('menuitem').first()).toBeFocused();
+      for (let step = 0; step < steps; step += 1) await page.keyboard.press('ArrowDown');
       await page.keyboard.press('Enter');
     };
-    await addUnder('2', /^Part/);
+    await addUnder('2', 1);
     await expect(page.getByRole('status').filter({ hasText: /^Added 2.1 Part. Type a Description to name it./ })).toHaveCount(1);
-    await addUnder('2', /^(Part|Sub-part)/);
+    await addUnder('2', 1);
     await expect(page.getByRole('status').filter({ hasText: /^Added 2.2 Sub-part. Type a Description to name it./ })).toHaveCount(1);
     expect(await slNumbersOf(page)).toEqual(['1', '2', '2.1', '2.2']);
     await reviewButton(page, 'Move', '2.2').focus();
     await page.keyboard.press('Enter');
-    await page.getByRole('menuitem', { name: 'Move up', exact: true }).focus();
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('status').filter({ hasText: /renumbered to 2.1/ })).toHaveCount(1);
     await expect(reviewButton(page, 'Move', '2.1')).toBeFocused();
@@ -443,7 +445,8 @@ test.describe('AC-9: layout and accessibility', () => {
     await expectNoAxeViolations(page);
     await page.getByRole('alertdialog').getByRole('button', { name: 'Keep it' }).click();
     if (isPhone(page) || (page.viewportSize()?.width ?? 0) < 1024) {
-      await chooseRow(page, '1');
+      await openTreePanel(page);
+      await reviewRow(page, '1').click();
       await expect(treePanel(page)).not.toHaveAttribute('open', '');
       await expect(treePanel(page).locator('summary')).toContainText('· 1');
     }

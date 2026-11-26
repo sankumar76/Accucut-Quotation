@@ -30,10 +30,18 @@ export async function openTreePanel(page: Page): Promise<void> {
   if (!(await panel.evaluate((element) => (element as HTMLDetailsElement).open))) await panel.locator('summary').click();
 }
 
-/** Chooses a row by a press on its link (a mouse hovers it first, which brings its toolbar into view). */
+/**
+ * Chooses a row by a press on its link (a mouse hovers it first, which brings its toolbar into view). Under 1024 px choosing a row folds the tree so the inputs are in view (ruling 4.7, ED-34): the panel is opened again
+ * so the row's toolbar can be reached, once the fold has happened.
+ */
 export async function chooseRow(page: Page, slNo: string): Promise<void> {
   await openTreePanel(page);
+  const folds = (page.viewportSize()?.width ?? 0) < 1024 && (await reviewRow(page, slNo).getAttribute('aria-current')) !== 'true';
   await reviewRow(page, slNo).click();
+  if (folds) {
+    await expect(page.locator('details[data-review-tree]')).not.toHaveAttribute('open', '');
+    await openTreePanel(page);
+  }
 }
 
 /**
