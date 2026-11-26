@@ -203,7 +203,7 @@ describe('AQP-418 (DEF-075): the toolbar slot of a row in the panel', () => {
   });
 
   it('passes showing to the row whose delete confirmation is open and to no other', () => {
-    const target = { id: 'p1', slNo: '1.1.1', name: 'Plate', revision: 1, parentId: 's1', parts: 2, subtree: 'x', removedIds: [] };
+    const target = { id: 'p1', slNo: '1.1.1', name: 'Plate', under: [], revision: 1, parentId: 's1', parts: 2, subtree: 'x', removedIds: [] };
     const standing = (html: string): string[] => NODES.filter((node) => groupTokens(html, node).includes('not-sr-only')).map((node) => node.slNo);
     expect(standing(panel(NODES, true, { deleting: target, deleteOpen: true }))).toEqual(['1.1.1']);
     expect(standing(panel(NODES, true, { deleting: target, deleteOpen: false }))).toEqual([]);
