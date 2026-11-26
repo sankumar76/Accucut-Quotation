@@ -163,7 +163,10 @@ test.describe('AC-3: Recalculate from the screen', () => {
       await button(page).click();
       const missing = page.locator('[data-calculate-summary]');
       await expect(missing).toContainText('missing inputs');
-      await missing.getByRole('listitem').filter({ hasText: '2.1' }).getByRole('link').first().click();
+      // The link is followed with the keyboard (the summary holds the focus, and a press would have to find a point of the link that nothing sticky covers).
+      const toField = missing.getByRole('listitem').filter({ hasText: '2.1' }).getByRole('link').first();
+      await toField.focus();
+      await page.keyboard.press('Enter');
       await expect(reviewRow(page, '2.1')).toHaveAttribute('aria-current', 'true');
       await expect(page.getByText('Enter this value.').first()).toBeVisible();
 

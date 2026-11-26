@@ -234,7 +234,7 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await addMainAssemblyButton(page).click();
     await expect(reviewRow(page, '2')).toBeFocused();
     // The menu opens with its first item highlighted and the arrows move down it (Sub-Assembly, Part or Sub-part, Fastener): the keyboard alone, with no mouse and no focus call on an item.
-    const addUnder = async (slNo: string, steps: number): Promise<void> => {
+    const addUnder = async (slNo: string, steps: number, kind: RegExp): Promise<void> => {
       await reviewButton(page, 'Add under', slNo).focus();
       await page.keyboard.press('Enter');
       const menu = page.getByRole('menu');
@@ -244,11 +244,12 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
       }
       await expect(menu.getByRole('menuitem').first()).toBeFocused();
       for (let step = 0; step < steps; step += 1) await page.keyboard.press('ArrowDown');
+      await expect(menu.getByRole('menuitem', { name: kind })).toBeFocused();
       await page.keyboard.press('Enter');
     };
-    await addUnder('2', 1);
+    await addUnder('2', 1, /^Part/);
     await expect(page.getByRole('status').filter({ hasText: /^Added 2.1 Part. Type a Description to name it./ })).toHaveCount(1);
-    await addUnder('2', 1);
+    await addUnder('2', 1, /^(Part|Sub-part)/);
     await expect(page.getByRole('status').filter({ hasText: /^Added 2.2 Sub-part. Type a Description to name it./ })).toHaveCount(1);
     expect(await slNumbersOf(page)).toEqual(['1', '2', '2.1', '2.2']);
     await reviewButton(page, 'Move', '2.2').focus();
