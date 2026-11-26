@@ -440,8 +440,8 @@ test.describe('AC-3, AC-10: the Ignored tab of the queue, for a Lead', () => {
     const tabs = page.getByRole('tab');
     await expect(tabs).toHaveCount(4);
     await expect(tabs.nth(0)).toContainText('Open');
-    await expect(tabs.nth(1)).toContainText('Closed');
-    await expect(tabs.nth(2)).toContainText('Overdue');
+    await expect(tabs.nth(1)).toContainText('Overdue');
+    await expect(tabs.nth(2)).toContainText('Closed');
     await expect(tabs.nth(3)).toContainText('Ignored');
     await expect(tabs.nth(3)).toHaveAttribute('aria-selected', 'true');
     const boxes = await Promise.all([0, 1, 2, 3].map(async (index) => defined(await tabs.nth(index).boundingBox())));
