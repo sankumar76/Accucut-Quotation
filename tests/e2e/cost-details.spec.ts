@@ -2,7 +2,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 import { createDisposableUser, E2E_PASSWORD, readEstimateState, saveCanaryQuantity, signInWithoutThePage, useFreshAddress, type E2eUser } from './support/auth';
 import { calculateAsEngineer, engineerWithEstimate, signInAsLead } from './support/calculated-estimate';
-import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
+import { expectNoAxeViolations, horizontalOverflow, tokenColour } from './support/design-system';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
@@ -50,7 +50,7 @@ test.beforeAll(async ({ browser }, testInfo) => {
 
 const PHONE_MAX = 767;
 const DESKTOP_MIN = 1280;
-const STAGE_TITLES = ['1. Weights & Areas', '2. Material Cost', '3. Process Costs', '4. Sub Total', '5. Rejection, Overheads & Logistics', '6. Pricing'];
+const STAGE_TITLES = ['1 · Weights & Areas', '2 · Material Cost', '3 · Process Costs', '4 · Sub Total', '5 · Rejection, Overheads & Logistics', '6 · Pricing'];
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 const isWide = (page: Page): boolean => (page.viewportSize()?.width ?? 0) >= DESKTOP_MIN;
 const stage = (page: Page, number: number) => page.locator(`details[data-stage="${number}"]`);
@@ -214,6 +214,23 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     for (const [index, title] of STAGE_TITLES.entries()) await expect(stage(page, index + 1).locator('summary')).toContainText(title);
     await expect(stage(page, 3).locator('summary')).toContainText(/Stage total: [\d,]+\.\d{2}/);
     await openAllStages(page);
+
+    // AQP-475 (DEF-114; UX spec SCR-07, the mock-up's .stage): each stage is a numbered card, with its badge, its heading, its total at the right of the heading and a chevron that turns when it is open; the lines
+    // are rows of the card; the sub-headings are capitals; the line of the price stays dark.
+    for (const number of [1, 2, 3, 4, 5, 6]) {
+      const summary = stage(page, number).locator('summary');
+      await expect(summary.locator('[data-stage-number]')).toHaveText(String(number));
+      const [badge, chevron, card] = await Promise.all([summary.locator('[data-stage-number]').boundingBox(), summary.locator('svg').boundingBox(), stage(page, number).boundingBox()]);
+      if (badge === null || chevron === null || card === null) throw new Error('a box is missing');
+      expect(badge.x).toBeLessThan(chevron.x);
+      expect(chevron.x + chevron.width).toBeLessThanOrEqual(card.x + card.width);
+      await expect(summary.locator('svg')).not.toHaveCSS('transform', 'none');
+    }
+    const [title, figure] = await Promise.all([stage(page, 3).locator('summary > span').nth(1).boundingBox(), stage(page, 3).locator('summary span.tabular-nums').boundingBox()]);
+    if (title === null || figure === null) throw new Error('a box is missing');
+    expect(figure.x).toBeGreaterThanOrEqual(title.x + title.width - 1);
+    await expect(stage(page, 3).locator('h3').first()).toHaveCSS('text-transform', 'uppercase');
+    await expect(stage(page, 6).locator('li').filter({ hasText: /^Excel column BG/ })).toHaveCSS('background-color', await tokenColour(page, '--nav'));
 
     const material = stage(page, 2);
     await expect(material).toContainText('Excel column AK');
