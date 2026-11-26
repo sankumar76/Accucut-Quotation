@@ -636,12 +636,12 @@ test.describe('AC-3: delete asks first and names the count', () => {
     // The title names the row as the button that opened it does: its number, then its name or its kind (AQP-446).
     const dialog = page.getByRole('alertdialog', { name: /^Delete 1 .+\?$/ });
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText('This also deletes the 2 rows under it, and everything typed into them. This cannot be undone.');
-    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await expect(dialog).toContainText('This also deletes the 2 rows under it (1.1 Sub-part, 1.2 Sub-part) and everything entered for them. The remaining parts are renumbered. This cannot be undone.');
+    await expect(dialog.getByRole('button', { name: 'Keep it' })).toBeFocused();
     await expect(dialog.getByRole('button', { name: 'Delete 3 rows' })).toBeVisible();
     await expectNoAxeViolations(page);
 
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await dialog.getByRole('button', { name: 'Keep it' }).click();
     await expect(dialog).toHaveCount(0);
     expect(await slNumbers(page)).toEqual(['1', '1.1', '1.2']);
   });
@@ -657,8 +657,9 @@ test.describe('AC-3: delete asks first and names the count', () => {
     await expect(dialog).toHaveCount(0);
     await expect(page.getByText('3 rows deleted')).toHaveCount(1);
     await expect(page.getByText('No parts yet. Choose "Add main assembly" to add the first one.')).toBeVisible();
-    // The foot of an empty tree still offers the one action that can start it again.
+    // The foot of an empty tree still offers the one action that can start it again, and the form area points at it (DEF-099 [H]: not at a "New item" that no longer exists).
     await expect(page.getByRole('button', { name: 'Add main assembly' })).toBeVisible();
+    await expect(page.getByText('Choose a part in the tree to fill in its form, or add the first one with "Add main assembly".')).toBeVisible();
     await page.reload();
     // With no part there is no tree element, only the words; on a phone they are in the drawer.
     if (isPhone(page)) await page.getByRole('button', { name: /^Parts tree/ }).click();
@@ -960,7 +961,7 @@ test.describe('AQP-448 (DEF-091): when the row toolbar is in view', () => {
     await expect(page.getByRole('alertdialog')).toBeVisible();
     await pointerAway(page);
     await expectToolbarsOn(page, mouse, '1.1');
-    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('button', { name: 'Keep it' }).click();
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await pointerAway(page);
     await expectToolbarsOn(page, mouse);
