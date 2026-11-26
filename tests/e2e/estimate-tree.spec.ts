@@ -1077,7 +1077,8 @@ test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
     // from a box went down on "Calculate" (run 45796904957): the toolbar line of 1.1 lies low in the panel with the toolbars clipped.
     await handleOf(page, '1.1').hover();
     const handle = await settledBox(handleOf(page, '1.1'));
-    const below = await settledBox(part(page, '1.2'));
+    // The row 1.2 is its whole list item: its link and, for a mouse, the slot under it (AQP-486). The drop after it is chosen by the lower half of that item, as the drag code reads the rows' boxes; so the pointer goes to the foot of the item.
+    const below = await settledBox(part(page, '1.2').locator('xpath=ancestor::li[@data-part-row][1]'));
     const x = handle.x + handle.width / 2;
     await watchPointer(page);
     await page.mouse.move(x, handle.y + handle.height / 2);
