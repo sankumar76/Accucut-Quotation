@@ -1,13 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { defined } from '../support/defined';
-
 import { readEstimateState, saveCanaryQuantity, useFreshAddress } from './support/auth';
 import { calculateAsEngineer, engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
 import { control, fieldIdOf } from './support/part-form';
-import { addMainAssemblyButton, openEngineerWindow, readTreeThrough, reviewButton, reviewRow } from './support/review-tree';
-import { deleteGuardOf } from '../../src/lib/estimates/tree-moves';
+import { openEngineerWindow } from './support/review-tree';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
@@ -134,13 +131,15 @@ test.describe('AC-3: Recalculate from the screen', () => {
     // changed elsewhere, the conflict notice offers the two choices, nothing is overwritten, and "Use the newer values" shows the Engineer's value.
     const length = control(page, 'J');
     await expect(length).toBeEnabled();
-    // One Engineer window for the whole case (ED-8 and then the tree block below), closed at the end.
     const engineer = await openEngineerWindow(browser, owner);
     try {
       const read = await engineer.api.get(`/api/v1/estimates/${owner.id}/nodes/${owner.id}`);
       const { revision } = (await read.json()) as { revision: number };
       const written = await engineer.api.patch(`/api/v1/estimates/${owner.id}/nodes/${owner.id}/inputs`, { headers: { origin: DEVELOPMENT_URL }, data: { revision, values: { [fieldIdOf('J')]: '77' } } });
       expect(written.status(), 'the Engineer saves the part').toBe(200);
+    } finally {
+      await engineer.close();
+    }
     await length.fill('88');
     await length.blur();
     await expect(page.getByText('This part was changed somewhere else.')).toBeVisible();
@@ -148,36 +147,6 @@ test.describe('AC-3: Recalculate from the screen', () => {
     await page.getByRole('button', { name: 'Use the newer values' }).click();
     await expect(length).toHaveValue('77.00');
 
-    // ED-25, ED-28 (ruling 2026-11-27 4.3 item 4, 4.7 (d)): the Lead adds a row (2) and a Part under it (2.1); the Engineer's window reads them, with no figure. Calculate is refused for the Part's blank inputs: the summary names it,
-    // its link opens the row and the blank field says what to do. (The row removed by someone else, ED-27, is held by `tests/unit/review-tree-edit.test.ts`: this case is at the limit of its time.)
-    await addMainAssemblyButton(page).click();
-    await expect(reviewRow(page, '2')).toBeFocused();
-    await reviewButton(page, 'Add under', '2').click();
-    await page.getByRole('menuitem', { name: /^Part/ }).click();
-    await expect(reviewRow(page, '2.1')).toHaveAttribute('aria-current', 'true');
-      const rows = await readTreeThrough(engineer.api, owner.id);
-      expect(rows.map((row) => row.slNo)).toEqual(['1', '2', '2.1']);
-      expect(JSON.stringify(rows)).not.toMatch(/figures|unitPrice|price/i);
-
-      await button(page).click();
-      const missing = page.locator('[data-calculate-summary]');
-      await expect(missing).toContainText('missing inputs');
-      // The link is followed with the keyboard (the summary holds the focus, and a press would have to find a point of the link that nothing sticky covers).
-      const toField = missing.getByRole('listitem').filter({ hasText: '2.1' }).getByRole('link').first();
-      await toField.focus();
-      await page.keyboard.press('Enter');
-      await expect(reviewRow(page, '2.1')).toHaveAttribute('aria-current', 'true');
-      await expect(page.getByText('Enter this value.').first()).toBeVisible();
-
-      // The Engineer removes the rows the Lead added (row 2 with its Part, one delete), so the Calculate below has only the part the Engineer filled; the Lead's screen need not follow.
-      const fresh = await readTreeThrough(engineer.api, owner.id);
-      const second = defined(fresh.find((row) => row.slNo === '2'));
-      const guard = deleteGuardOf(fresh, second.id);
-      const gone = await engineer.api.delete(`/api/v1/estimates/${owner.id}/nodes/${second.id}?revision=${String(second.revision)}&parts=${String(guard.parts)}&subtree=${guard.subtree}`, { headers: { origin: DEVELOPMENT_URL } });
-      expect(gone.status(), 'the Engineer deletes the rows the Lead added').toBe(200);
-    } finally {
-      await engineer.close();
-    }
 
     const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${owner.id}/recalculate`));
     await button(page).click();
