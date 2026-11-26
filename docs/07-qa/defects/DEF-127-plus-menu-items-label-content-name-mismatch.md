@@ -1,4 +1,4 @@
-# DEF-127: the "+" menu items of #742 (AQP-449) fail axe `label-content-name-mismatch` (WCAG 2.5.3, Level A): the `aria-label` did not contain the visible hint text; on `master` from 6085f71e until #777 (Product; Sev-2; Jira AQP-484, GitHub #783)
+# DEF-127: the "+" menu items of #742 (AQP-449) fail axe `label-content-name-mismatch` (WCAG 2.5.3, Level A): the `aria-label` did not contain the visible hint text; on `master` from 6085f71e until #777 (Product; Sev-2; Jira AQP-484, GitHub #783; CLOSED 2026-11-26)
 
 | Field | Value |
 |-------|-------|
@@ -6,7 +6,7 @@
 | Severity | **Sev-2 (master, DL-419 (4), DL-094):** a WCAG 2.2 failure on a delivered screen. WCAG 2.5.3 Label in Name is Level A, which NFR-018's AA target includes. |
 | Priority | P2 (Jira High) (labels `sev-2`, `final-review`) |
 | Type | **Product** (accessibility regression brought in by #742) |
-| Status | **Fixed (merged 2026-11-26 as `bb8656dc`, PR #777); verification: see Fix & Verification.** Raised and graded by master in DL-419 (4); logged by qa-engineer, 2026-11-26. It lived on `master` from `6085f71e` (07:55Z) until `bb8656dc`. |
+| Status | **CLOSED (Verified, Closed), 2026-11-26 (qa-engineer).** Fixed by #777 (squash `bb8656dc`). Proof: PR run 45785936137 (fully green; `estimate-tree-plus-menu.spec.ts:64`, axe with the menu open, passed at [mobile], [tablet] and [desktop]) and the `master` push run of `bb8656dc` (CI 45795446420, run attempt 1, created 09:48:50Z, `success` at 10:20:47Z; Windows package 45795446363 `success`): shards 1 to 4 `577 passed (22.3m)`, `576 passed (16.6m)`, `589 passed (14.5m)`, `572 passed (12.8m)`, 0 failed, 0 flaky, no `✘`; the same case read 20.6 s [mobile], 17.9 s [tablet], 14.4 s [desktop] on attempt 1 and passed. It lived on `master` from `6085f71e` (07:55Z) to `bb8656dc`. |
 | Jira / GitHub | [AQP-484](https://sankumar76.atlassian.net/browse/AQP-484) / [#783](https://github.com/sankumar76/Accucut-Quotation/issues/783) (labels bug, sev-2, ai-delivery, final-review; Jira also aiid-DEF-127, agent-qa-engineer). Relates to AQP-449, AQP-451 and AQP-1. Searched first: JQL on `aiid-DEF-127` and 'label-content-name-mismatch', and a GitHub search: nothing earlier. |
 | Found by / date | #777's E2E (lane 3), which runs axe with the "+" menu open at three widths; read by master (DL-419 (1)) and logged by qa-engineer, 2026-11-26. No earlier case ran axe with the menu open, so #742's own CI was green. |
 | Build / commit | `master` `6085f71e` (#742's squash). Fixed in `bb8656dc` (#777, head `3a42b83a`). |
@@ -33,7 +33,7 @@ axe `label-content-name-mismatch` (serious) on the menu items: AQP-449's `aria-l
 | Graded (type, severity) | master | 2026-11-26 | DL-419 (4): Sev-2, Product |
 | Fixed | developer | 2026-11-26 | PR #777, squash `bb8656dc` (AQP-451, DEF-094) |
 | Regression test | developer | 2026-11-26 | `estimate-tree-plus-menu.spec.ts:64` (axe with the menu open, three widths) |
-| Verified | qa-engineer | | PR run 45785936137 read: three widths pass. `master` push run of `bb8656dc` (45795446420): to be read to its end |
+| Verified | qa-engineer | 2026-11-26 | PR run 45785936137: three widths pass; `master` push run 45795446420 (bb8656dc): all jobs success, 0 flaky, 0 failed; the case passes at three widths |
 
 ## Records
 Jira Bug AQP-484 and GitHub issue #783, created 2026-11-26 and cross-linked. Related: AQP-449 (#742), AQP-451 (#777, DEF-094), DEF-092, DEF-094; DL-094, DL-419; test plan 0.3.70.
