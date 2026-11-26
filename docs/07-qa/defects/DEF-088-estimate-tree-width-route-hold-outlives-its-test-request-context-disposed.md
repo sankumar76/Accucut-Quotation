@@ -50,5 +50,15 @@ Shard 4: `22 skipped`, `1 did not run`, `569 passed (13.7m)`, `1 error was not a
 | Proof: second `master` push after the squash | qa-engineer | 2026-11-26 | `fa227b90`, CI 45735719514: 0 and 0 lines, tree-width under 15 s |
 | Closed | qa-engineer | 2026-11-26 | AQP-444 Done (comment 13305), #732 closed |
 
+## Proof ledger after the reopen (qa-engineer, 2026-11-26; test plan 0.3.75; master rules)
+Fix: PR #784 (squash `40feaa53`). Criterion (Status above, DL-419 (3)): 0 teardown errors ('Request context disposed', 'error was not a part of any test', `page.unrouteAll ... has been closed`) and every `estimate-tree-width` case under 25 s on attempt 1, on the fix PR's run and the first two `master` pushes. The fix PR's run of record was not read separately by QA.
+
+| Push | Run | Result | Teardown lines | Tree-width, attempt 1 | DEF-088 criterion |
+|------|-----|--------|----------------|-----------------------|-------------------|
+| 1: `40feaa53` (#784) | CI 45815890325; Windows package 45815890342 | both `success`; shards `579 / 577 / 591 / 574 passed` (16.9 / 20.9 / 17.1 / 13.7 m); 0 failed, 0 flaky; Windows 617 passed | 0 in the whole log | desktop 4.5 to 11.7 s (`:424` 11.7); tablet `:103` 18.7 s; mobile `:103` 12.8 s | **Met; push clean** |
+| 2: `3ece5e47` (#788) | CI 45820387977 (`failure`); Windows package 45820387676 (`success`, 617 passed) | shard 4 `1 failed, 6 flaky, 567 passed (21.3m)`; shard 1 `1 flaky`; shards 2 and 3 clean | 0 in the whole log | desktop 6.9 to 18.7 s (`:435` 18.7); tablet `:103` 16.8 s; mobile `:103` 18.3 s | **Met on tree-width; push NOT clean** |
+
+Push 2's red is `users.spec.ts:58` [desktop] (DEF-053) on both attempts (32.2 s and 33.9 s), plus six shard-4 flaky (the four cold-start cases of DEF-085, `estimate-tree-names.spec.ts:52` and `estimate-tree.spec.ts:1065`) and `estimate-tree.spec.ts:790` [mobile] in shard 1; none is a tree-width case or a route hold. Shard 4's draw was 1.03 against 31015cce and 1.50 against `40feaa53`. A `master` push is not re-run. **Whether push 2's red breaks the proof is master's ruling; QA's record is the table above.** Status stays REOPENED until master rules; the next push is read the same way.
+
 ## Records
 Jira Bug AQP-444 and GitHub issue #732, created 2026-11-25 and cross-linked. Related: AQP-426, AQP-1, DEF-085 (AQP-441, #725), DEF-087 (the PR that carried the red); DL-399 (master's ruling), DL-398, DL-391, DL-386, DL-388 (D), DL-370 (5) and (E); test plan 0.3.62; CI run 45631761004 (attempt 1 red, attempt 2 the R17 re-run), shard 4 job 139266549077.
