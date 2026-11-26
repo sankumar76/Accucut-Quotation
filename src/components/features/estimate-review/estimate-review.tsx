@@ -13,7 +13,7 @@ import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
+import type { WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
 import { BuildTable } from './build-table';
 import { CancelledNotice } from './cancelled-notice';
@@ -22,6 +22,7 @@ import { PriceRemovedNotice } from './price-removed-notice';
 import { RatesChangedNotice } from './rates-changed-notice';
 import { approveOffer, cancelOffer, ignoreOffer, quoteOffer, removeOffer, ReviewActions } from './review-actions';
 import { REVIEW_RESTORE_ID } from './review-ids';
+import { ReviewHead } from './review-head';
 import { ReviewTree } from './review-tree';
 import { UnlockedNotice } from './unlocked-notice';
 import {
@@ -126,14 +127,14 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         };
   return (
     <div className="is-compact group/review contents">
-      <WorkspaceHeader
+      <ReviewHead
         view={{ ...header, ignored: isIgnored }}
+        engineerName={engineerName}
         noCustomerText={REVIEW_NO_CUSTOMER}
         // While the estimate is ignored there is no download chip and no Change customer: it is read-only until it is restored (CR-01 item 7D, A-CR01-8), and the notice below says so.
         downloadMarker={isIgnored ? null : <DownloadChip marker={download} />}
         // Change customer (CR-01 item 6, AC-12): on an estimate that is not approved and not ignored only; the review is the Lead's and the Admin's, and the server refuses anyone else all the same.
         customerAction={isLocked(header.status) || isIgnored ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} inline />}
-        review={{ engineerName }}
         notice={
           ignored === null ? null : (
             <IgnoredNotice

@@ -59,7 +59,7 @@ export function PageHead({ crumbs, title, badges, description, actions }: PageHe
           </h1>
           {badges}
         </div>
-        {description === undefined ? null : <p className="text-ink-2">{description}</p>}
+        {description === undefined ? null : <div className="text-ink-2">{description}</div>}
       </div>
       {actions}
     </div>

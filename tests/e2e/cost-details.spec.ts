@@ -222,10 +222,22 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     const tree = page.getByRole('navigation', { name: 'Parts tree' });
     await expect(tree.getByRole('link').first()).toHaveAttribute('aria-current', 'page');
     await expect(tree.locator('[aria-current="page"]')).toHaveCount(1);
-    await expect(tree).not.toContainText('₹');
+    // No figure of any row: the text of the tree without its Sl. No. cells holds no number with decimals (a Sl. No. such as 1.10 is taken out first).
+    const treeText = await tree.evaluate((element) => {
+      const copy = element.cloneNode(true) as Element;
+      for (const cell of copy.querySelectorAll('[data-sl-no]')) cell.remove();
+      return copy.textContent ?? '';
+    });
+    expect(treeText).not.toMatch(/\d\.\d{2}/);
+    expect(treeText).not.toContain('₹');
     if ((page.viewportSize()?.width ?? 0) >= 1024) {
       const box = await page.locator('[data-cost-tree]').boundingBox();
       expect(Math.round(box?.width ?? 0)).toBe(Number.parseInt(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--tree-w')), 10));
+    } else {
+      // Below 1024 px the stages come first and the tree follows them (QLT-789-04; the design is silent on the phone's order).
+      const stagesTop = (await page.locator('details[data-stage]').first().boundingBox())?.y ?? Number.POSITIVE_INFINITY;
+      const treeTop = (await page.locator('[data-cost-tree]').boundingBox())?.y ?? 0;
+      expect(stagesTop).toBeLessThan(treeTop);
     }
 
     await expect(page.locator('details[data-stage]')).toHaveCount(6);

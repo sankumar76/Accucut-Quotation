@@ -9,8 +9,10 @@ import { cn } from '@/lib/cn';
 import { BREAK_LONG_NAMES } from './break-long-names';
 import { Icon } from './icon';
 
-/** The sentence that says why a link to a network folder may not open (UX spec SCR-04, FR-033). It is text on the page, not only a tooltip. */
-export const FOLDER_LINK_NOTE = 'Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer.';
+import { FOLDER_LINK_NOTE } from './folder-path-texts';
+
+/** The sentence that says why a link to a network folder may not open: written in `folder-path-texts.ts`, which a server component can import; re-exported here for the client files that always had it from here. */
+export { FOLDER_LINK_NOTE };
 export const COPY_PATH_LABEL = 'Copy path';
 export const PATH_COPIED_MESSAGE = 'Path copied to the clipboard.';
 export const PATH_NOT_COPIED_MESSAGE = 'The path could not be copied. Select it and copy it yourself.';
@@ -59,7 +61,7 @@ export function FolderPath({ path, url, showNote = true, copyOnly = false }: Fol
           <Icon icon={Copy} />
           {COPY_PATH_LABEL}
         </Button>
-        <span role="status" className="sr-only">
+        <span role="status" className="text-label font-semibold text-ink">
           {COPY_MESSAGES[state]}
         </span>
       </>

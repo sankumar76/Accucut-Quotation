@@ -1,8 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
+import { ReviewHead } from '@/components/features/estimate-review/review-head';
 import { WorkspaceHeader, type WorkspaceHeaderView } from '@/components/features/estimate-workspace/workspace-header';
+import { FolderPath } from '@/components/shared/folder-path';
 import { PageHead } from '@/components/shared/page-head';
 
 /**
@@ -85,9 +90,11 @@ describe('the head of SCR-05 (DEF-095)', () => {
 
 describe('the head of SCR-06 (DEF-110)', () => {
   const html = renderToStaticMarkup(
-    createElement(WorkspaceHeader, {
+    createElement(ReviewHead, {
       view: { ...VIEW, status: 'PREPARED' },
-      review: { engineerName: 'Priya Nair' },
+      engineerName: 'Priya Nair',
+      noCustomerText: 'Not set',
+      notice: null,
       customerAction: createElement('button', { id: 'review-change-customer', type: 'button' }, 'Change customer'),
       downloadMarker: createElement('span', { 'data-chip': '' }, 'Not downloaded'),
     }),
@@ -119,7 +126,34 @@ describe('the head of SCR-06 (DEF-110)', () => {
   });
 
   it('says "Not set" and offers the action when the estimate has no customer', () => {
-    const none = renderToStaticMarkup(createElement(WorkspaceHeader, { view: { ...VIEW, customer: null }, review: { engineerName: 'Priya Nair' }, noCustomerText: 'Not set' }));
+    const none = renderToStaticMarkup(createElement(ReviewHead, { view: { ...VIEW, customer: null }, engineerName: 'Priya Nair', noCustomerText: 'Not set', notice: null, customerAction: null, downloadMarker: null }));
     expect(text(none)).toContain('Not set');
+  });
+});
+
+describe('QLT-789-03: the description is not a paragraph, so a block inside it (the alert of the Change customer button) nests validly', () => {
+  it('draws a node description in a div', () => {
+    const html = renderToStaticMarkup(createElement(PageHead, { crumbs: [{ label: 'Here' }], title: 'T', description: createElement('div', { role: 'alert' }, 'No') }));
+    expect(html).toContain('<div class="text-ink-2"><div role="alert">No</div></div>');
+    expect(html).not.toMatch(/<p[^>]*class="text-ink-2"/);
+  });
+});
+
+describe('QLT-789-08: the copy-only Copy path shows its result to everyone', () => {
+  it('draws the button and a polite status that is not visually hidden', () => {
+    const html = renderToStaticMarkup(createElement(FolderPath, { path: VIEW.folderPath, url: '', copyOnly: true }));
+    expect(html).toContain('Copy path');
+    expect(html).toMatch(/<span role="status" class="(?![^"]*sr-only)[^"]*"><\/span>/);
+  });
+});
+
+describe("QLT-789-07: SCR-06's head is a server module, outside the client import chain", () => {
+  const read = (path: string): string => readFileSync(fileURLToPath(new URL(`../../src/components/features/${path}`, import.meta.url)), 'utf8');
+  it('starts with import server-only in the head and in its words, so a client import fails the build', () => {
+    for (const file of ['review-head.tsx', 'review-head-texts.ts']) expect(read(`estimate-review/${file}`).trimStart(), file).toMatch(/^import 'server-only';/);
+  });
+  it("is imported by the review, and the Engineer's workspace head holds none of its words", () => {
+    expect(read('estimate-review/estimate-review.tsx')).toContain("from './review-head'");
+    expect(read('estimate-workspace/workspace-header.tsx')).not.toMatch(/Open folder|OPEN_FOLDER_LABEL|SUBJECT_META_PREFIX|review-head/);
   });
 });

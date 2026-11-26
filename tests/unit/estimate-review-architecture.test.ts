@@ -118,6 +118,8 @@ describe('AC-5: no review code reaches the Engineer', () => {
   const REMOVE_BUTTON = `${REMOVE_FOLDER}remove-button.tsx`;
   const CUSTOMER_FOLDER = 'src/components/features/estimate-customer/';
   const CUSTOMER_BUTTON = `${CUSTOMER_FOLDER}change-customer-button.tsx`;
+  // SCR-06's head draws Copy path with `FolderPath` (`copyOnly`, AQP-452), the shared client button the queue and SCR-05 already carry: it is in the route's chunks already and holds no figure.
+  const FOLDER_PATH_BUTTON = 'src/components/shared/folder-path.tsx';
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -139,6 +141,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     clientFiles.delete(RESTORE_BUTTON);
     clientFiles.delete(REMOVE_BUTTON);
     clientFiles.delete(CUSTOMER_BUTTON);
+    clientFiles.delete(FOLDER_PATH_BUTTON);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
       const base = specifier.startsWith('@/') ? `src/${specifier.slice(2)}` : join(from, '..', specifier).replaceAll('\\', '/');

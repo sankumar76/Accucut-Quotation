@@ -6,7 +6,7 @@ import { TOUCH_LINK } from '@/components/shared/touch-link';
 import { TREE_COLUMN_PANEL, TREE_COLUMN_SUMMARY } from '@/components/shared/tree-column-panel';
 import { TREE_ROW_NUMBER } from '@/components/shared/tree-row-number';
 import { cn } from '@/lib/cn';
-import type { CostNode } from '@/server/views/schemas/costs';
+import type { NodeKind } from '@/lib/estimate/node-kinds';
 
 import { COST_TREE_TITLE } from './cost-details-texts';
 
@@ -16,10 +16,22 @@ import { COST_TREE_TITLE } from './cost-details-texts';
  * hook, so it ships no script. Lead and Admin only, like the screen it is in.
  */
 
+/**
+ * What a row of this tree needs, and no more: the tree read of the estimate (`getTree`) has it, and carries no figure (QLT-789-01). Anything else a node holds is not drawn.
+ */
+export interface CostTreeNode {
+  readonly id: string;
+  readonly parentId: string | null;
+  readonly slNo: string;
+  readonly nodeKind: NodeKind;
+  /** The name as typed (Description, else Part No.), or an empty text. */
+  readonly label: string;
+}
+
 /** The address of SCR-07 for a row: the task code and the row's Sl. No. */
 const costDetailsHref = (code: string, slNo: string): string => `/estimates/${encodeURIComponent(code)}/costs/${encodeURIComponent(slNo)}`;
 
-function TreeRow({ node, kindLabel, code, openSlNo }: { readonly node: CostNode; readonly kindLabel: string; readonly code: string; readonly openSlNo: string }) {
+function TreeRow({ node, kindLabel, code, openSlNo }: { readonly node: CostTreeNode; readonly kindLabel: string; readonly code: string; readonly openSlNo: string }) {
   const open = node.slNo === openSlNo;
   return (
     <a
@@ -32,7 +44,7 @@ function TreeRow({ node, kindLabel, code, openSlNo }: { readonly node: CostNode;
         {node.slNo}
       </span>
       <span className={cn('min-w-0 flex-1', BREAK_LONG_NAMES)}>
-        <RowName label={node.name} kindLabel={kindLabel} />
+        <RowName label={node.label} kindLabel={kindLabel} />
       </span>
     </a>
   );
@@ -40,15 +52,16 @@ function TreeRow({ node, kindLabel, code, openSlNo }: { readonly node: CostNode;
 
 export interface CostTreeProps {
   readonly code: string;
-  /** Every row of the estimate, as the review's tree has them. */
-  readonly nodes: ReadonlyArray<CostNode>;
+  /** Every row of the estimate, in reading order. */
+  readonly nodes: ReadonlyArray<CostTreeNode>;
   /** The Sl. No of the row whose cost details are open. */
   readonly openSlNo: string;
 }
 
 export function CostTree({ code, nodes, openSlNo }: CostTreeProps) {
   return (
-    <details open data-cost-tree="" className={TREE_COLUMN_PANEL}>
+    // Below 1024 px the stages come first and the tree follows them: the design is silent on the phone's order, and a Lead there should not scroll past every row to reach the stages (QLT-789-04).
+    <details open data-cost-tree="" className={cn(TREE_COLUMN_PANEL, 'max-[1023px]:order-last')}>
       <summary className={TREE_COLUMN_SUMMARY}>{COST_TREE_TITLE}</summary>
       <div className="px-s-4 pb-s-4">
         <PartsTreeList label={COST_TREE_TITLE} nodes={nodes} renderRow={(node, kindLabel) => <TreeRow node={node} kindLabel={kindLabel} code={code} openSlNo={openSlNo} />} />

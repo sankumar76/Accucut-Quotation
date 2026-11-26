@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/cn';
 import { formatCount, formatFigure, formatRupees, NO_FIGURE } from '@/lib/money';
-import type { CostNode } from '@/server/views/schemas/costs';
 import type { NodeCostsView } from '@/server/views/schemas/node-costs';
 
 import {
@@ -39,7 +38,7 @@ import {
   STAGES_HEADING,
   TASK_QUEUE_LABEL,
 } from './cost-details-texts';
-import { CostTree } from './cost-tree';
+import { CostTree, type CostTreeNode } from './cost-tree';
 import { PhoneStages } from './phone-stages';
 import { StagePanel } from './stage-panel';
 
@@ -60,7 +59,7 @@ export interface CostDetailsProps {
   /** The time of the calculation written in IST (`formatIst`), or `null` while there is no calculation. */
   readonly calculatedAt: string | null;
   /** Every row of the estimate (names and kinds, no figure) for the parts tree column. Left out, no column is drawn (AQP-452). */
-  readonly tree?: ReadonlyArray<CostNode> | undefined;
+  readonly tree?: ReadonlyArray<CostTreeNode> | undefined;
 }
 
 function EstimateLink({ code, label, variant }: { readonly code: string; readonly label: string; readonly variant: 'secondary' | 'ghost' }) {

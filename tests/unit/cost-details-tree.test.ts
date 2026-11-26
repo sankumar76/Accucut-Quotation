@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { CostDetails } from '@/components/features/cost-details/cost-details';
-import type { CostNode } from '@/server/views/schemas/costs';
+import type { CostTreeNode } from '@/components/features/cost-details/cost-tree';
 import type { NodeCostsView } from '@/server/views/schemas/node-costs';
 
 import { COST_ESTIMATE_ID, COST_FIRST_NODE_ID, createCostWorld } from '../support/cost-details-world';
@@ -17,14 +17,14 @@ import { COST_ESTIMATE_ID, COST_FIRST_NODE_ID, createCostWorld } from '../suppor
 const LEAD = { id: '00000000-0000-4000-8000-0000000001ed', role: 'LEAD' } as const;
 const CODE = 'Q-2026-0320';
 
-const node = (id: string, parentId: string | null, slNo: string, name: string, nodeKind: CostNode['nodeKind']): CostNode => ({ id, parentId, slNo, name, nodeKind, count: '1', figures: null });
-const NODES: ReadonlyArray<CostNode> = [
+const node = (id: string, parentId: string | null, slNo: string, label: string, nodeKind: CostTreeNode['nodeKind']): CostTreeNode => ({ id, parentId, slNo, label, nodeKind });
+const NODES: ReadonlyArray<CostTreeNode> = [
   node('n1', null, '1', 'Invented Bracket', 'MAIN_ASSEMBLY'),
   node('n2', 'n1', '1.1', 'Invented Frame', 'SUB_ASSEMBLY'),
   node('n3', 'n2', '1.1.1', 'Invented Plate', 'PART'),
 ];
 
-async function html(tree: ReadonlyArray<CostNode> | undefined): Promise<string> {
+async function html(tree: ReadonlyArray<CostTreeNode> | undefined): Promise<string> {
   const view: NodeCostsView = await createCostWorld({}).service.getNodeCosts(LEAD, COST_ESTIMATE_ID, COST_FIRST_NODE_ID);
   return renderToStaticMarkup(createElement(CostDetails, { view, code: CODE, calculatedAt: '05 Nov 2026, 10:42 IST', ...(tree === undefined ? {} : { tree }) }));
 }
@@ -52,6 +52,13 @@ describe('AQP-452: the parts tree column of SCR-07', () => {
     const page = await html(NODES);
     expect(page).toContain('Invented Frame');
     expect(page).toContain('data-node-kind="SUB_ASSEMBLY"');
+  });
+
+  it('draws no figure even if a node carried one: only the number, the name and the kind of a row are read', async () => {
+    // A row of the review's costs read has figures; the tree read has none. The column must not draw them if it were ever given such rows.
+    const withFigures = NODES.map((row) => ({ ...row, figures: { unitPrice: '1234.56', unitPriceUsd: '14.80', unitPriceEur: '13.60' }, count: '3' }));
+    const page = await html(withFigures);
+    for (const figure of ['1,234.56', '1234.56', '14.80', '13.60']) expect(page.slice(page.indexOf('data-cost-tree')), figure).not.toContain(figure);
   });
 
   it('is not drawn when the page was given no tree', async () => {
