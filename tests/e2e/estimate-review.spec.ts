@@ -45,6 +45,25 @@ const treePanel = (page: Page) => page.locator('details').filter({ has: page.loc
 const buildPanel = (page: Page) => page.locator('details').filter({ has: page.locator('summary', { hasText: /^How the total is built/ }) });
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 
+/**
+ * AQP-465 (DEF-108; ux-expert ruling 2026-11-28): from 1024 px the parts tree is a column 320 px wide (the SCR-05 tree's width) at the left of "How the total is built", sticky and under the tiles, which stay full width; below
+ * 1024 px the two are stacked, the tree first, and the tree folds. Judged from the boxes as drawn.
+ */
+async function expectColumns(page: Page): Promise<void> {
+  const [tilesBox, treeBox, buildBox] = await Promise.all([tiles(page).boundingBox(), treePanel(page).boundingBox(), buildPanel(page).boundingBox()]);
+  if (tilesBox === null || treeBox === null || buildBox === null) throw new Error('a box is missing');
+  expect(treeBox.y).toBeGreaterThanOrEqual(tilesBox.y + tilesBox.height - 1);
+  if ((page.viewportSize()?.width ?? 0) >= 1024) {
+    expect(Math.abs(treeBox.width - 320)).toBeLessThanOrEqual(1);
+    expect(buildBox.x).toBeGreaterThanOrEqual(treeBox.x + treeBox.width - 1);
+    expect(Math.abs(buildBox.y - treeBox.y)).toBeLessThanOrEqual(1);
+    await expect(treePanel(page)).toHaveCSS('position', 'sticky');
+  } else {
+    expect(buildBox.y).toBeGreaterThanOrEqual(treeBox.y + treeBox.height - 1);
+    await expect(treePanel(page)).toHaveCSS('position', 'static');
+  }
+}
+
 test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
   test('AC-1: the tiles show BL in rupees, BN and BO, each with its letter tag and its file cell once', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
@@ -80,7 +99,14 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await openAsLead(page, testInfo, code);
 
     await expect(buildPanel(page)).not.toHaveAttribute('open', '');
-    await buildPanel(page).locator('summary').click();
+    // AQP-468 (DEF-112; ux-expert ruling 2026-11-28): the whole line is the control, with the heading, a chevron and the word "Show" while it is closed and "Hide" while it is open.
+    const toggle = buildPanel(page).locator('summary');
+    await expect(toggle).toHaveText(/^How the total is builts*Show$/);
+    await expect(toggle.getByText('Show', { exact: true })).toBeVisible();
+    await expect(toggle.getByText('Hide', { exact: true })).toBeHidden();
+    await toggle.click();
+    await expect(toggle.getByText('Hide', { exact: true })).toBeVisible();
+    await expect(toggle.getByText('Show', { exact: true })).toBeHidden();
     const table = page.getByRole('region', { name: 'How the total is built, scrollable' });
     await expect(table).toBeVisible();
     for (const heading of ['Sl. No', 'Part', 'QTY per Assy']) await expect(table.getByRole('columnheader', { name: new RegExp(heading, 'i') })).toBeVisible();
@@ -90,6 +116,8 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(tiles(page)).toContainText(`₹ ${total}`);
     await expect(buildPanel(page)).toContainText('Worked example: if one lid costs 1, one pipe costs 1 and the frame row holds nothing, the total is 24 + 6 + 0 = 30.');
     await expect(buildPanel(page)).toContainText('Figures are shown to 2 decimals. Totals add the unrounded values and round once');
+    await expect(buildPanel(page)).toContainText("The Engineer types the count for the whole order on every row (QTY per Assy, column H). Each row's cost (column BG) already includes its own count, so the total is the BG of every row added together. Nothing is multiplied by the rows above.");
+    await expectColumns(page);
   });
 
   test('AC-2: an Admin sees the same review', async ({ page }, testInfo) => {
@@ -192,10 +220,16 @@ test.describe('AC-9: layout and accessibility', () => {
 
     const rows = treePanel(page).locator('[data-part-row]');
     await expect(rows.first()).toBeVisible();
-    await treePanel(page).locator('summary').click();
-    await expect(rows.first()).toBeHidden();
-    await treePanel(page).locator('summary').click();
-    await expect(rows.first()).toBeVisible();
+    if ((page.viewportSize()?.width ?? 0) < 1024) {
+      // Below 1024 px the tree is the foldable panel it was (AQP-465: from 1024 px it is a column that stays, so its summary takes no press there).
+      await treePanel(page).locator('summary').click();
+      await expect(rows.first()).toBeHidden();
+      await treePanel(page).locator('summary').click();
+      await expect(rows.first()).toBeVisible();
+    } else {
+      await expect(treePanel(page).locator('summary')).toHaveCSS('pointer-events', 'none');
+      await expect(rows.first()).toBeVisible();
+    }
 
     await buildPanel(page).locator('summary').click();
     await expect(page.getByRole('region', { name: 'How the total is built, scrollable' })).toBeVisible();

@@ -169,7 +169,9 @@ describe('AC-3: "How the total is built"', () => {
   it('CE-1: one line for each row (Sl. No, part, count, BG) ending with the total, 30.00, which is the BL tile', async () => {
     const html = render(await current());
     const table = html.slice(html.indexOf('How the total is built'));
-    expect(table).toContain('How the total is built (the BG of every row added up)');
+    // AQP-468 (ux-expert ruling 2026-11-28): the heading is exactly "How the total is built"; the suffix is gone.
+    expect(table).toContain('How the total is built');
+    expect(table).not.toContain('(the BG of every row added up)');
     for (const heading of ['Sl. No', 'Part', 'QTY per Assy', 'Excel column </span>BG']) expect(table).toContain(heading);
     for (const figure of ['0.00', '6.00', '24.00']) expect(table).toContain(`>${figure}</td>`);
     expect(table).toContain('Total (the sum of the BG column)');
