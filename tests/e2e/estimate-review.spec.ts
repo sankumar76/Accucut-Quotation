@@ -101,7 +101,8 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(buildPanel(page)).not.toHaveAttribute('open', '');
     // AQP-468 (DEF-112; ux-expert ruling 2026-11-28): the whole line is the control, with the heading, a chevron and the word "Show" while it is closed and "Hide" while it is open.
     const toggle = buildPanel(page).locator('summary');
-    await expect(toggle).toHaveText(/^How the total is builts*Show$/);
+    // `toHaveText` reads the text of the element, hidden words included: the heading comes first, and what is seen is judged by the two checks below.
+    await expect(toggle).toHaveText(/^How the total is built/);
     await expect(toggle.getByText('Show', { exact: true })).toBeVisible();
     await expect(toggle.getByText('Hide', { exact: true })).toBeHidden();
     await toggle.click();
