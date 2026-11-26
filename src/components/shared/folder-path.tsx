@@ -25,6 +25,8 @@ export interface FolderPathProps {
    * instead (STORY-04.02, SCR-03), and the link keeps it as its tooltip.
    */
   readonly showNote?: boolean;
+  /** Only the Copy path button (and its polite message, for a screen reader), for the head of SCR-06 where Open folder is a button of its own (AQP-452). The path and the note are not drawn. */
+  readonly copyOnly?: boolean;
 }
 
 type CopyState = 'idle' | 'copied' | 'failed';
@@ -32,9 +34,15 @@ type CopyState = 'idle' | 'copied' | 'failed';
 /** What the live region says in each state; it is empty until a copy has been tried, so nothing is announced on load. */
 const COPY_MESSAGES: Readonly<Record<CopyState, string>> = { idle: '', copied: PATH_COPIED_MESSAGE, failed: PATH_NOT_COPIED_MESSAGE };
 
-/** Copies the path to the clipboard and says how it went. */
-function useCopyPath(path: string): { readonly state: CopyState; readonly copy: () => Promise<void> } {
+/**
+ * The folder of a task as everyone sees it (STORY-04.01 AC-4; FR-033): the path as a link, a **Copy path** button, and the sentence that explains a link that
+ * does not open. Shared by the assign screen, the queue and the workspace. The copy is announced in a polite live region ("Path copied to the clipboard.").
+ * The path is shown as plain text (React encodes it); the link comes from the server and is only used as given.
+ */
+export function FolderPath({ path, url, showNote = true, copyOnly = false }: FolderPathProps) {
+  const noteId = useId();
   const [state, setState] = useState<CopyState>('idle');
+
   async function copy(): Promise<void> {
     try {
       await navigator.clipboard.writeText(path);
@@ -43,36 +51,20 @@ function useCopyPath(path: string): { readonly state: CopyState; readonly copy: 
       setState('failed');
     }
   }
-  return { state, copy };
-}
 
-/**
- * The "Copy path" button alone, for the head of SCR-06 (AQP-452, DEF-110: Open folder and Copy path are two buttons at the right of the head): the same copy and the same two messages, in a polite live region that
- * only sighted people do not read (`sr-only`), and the button's label says "Copied" for a moment's worth of state. It shares the copy with `FolderPath`.
- */
-export function CopyPathButton({ path }: { readonly path: string }) {
-  const { state, copy } = useCopyPath(path);
-  return (
-    <>
-      <Button variant="secondary" onClick={() => void copy()}>
-        <Icon icon={Copy} />
-        {state === 'copied' ? 'Copied' : COPY_PATH_LABEL}
-      </Button>
-      <span role="status" className="sr-only">
-        {COPY_MESSAGES[state]}
-      </span>
-    </>
-  );
-}
-
-/**
- * The folder of a task as everyone sees it (STORY-04.01 AC-4; FR-033): the path as a link, a **Copy path** button, and the sentence that explains a link that
- * does not open. Shared by the assign screen, the queue and the workspace. The copy is announced in a polite live region ("Path copied to the clipboard.").
- * The path is shown as plain text (React encodes it); the link comes from the server and is only used as given.
- */
-export function FolderPath({ path, url, showNote = true }: FolderPathProps) {
-  const noteId = useId();
-  const { state, copy } = useCopyPath(path);
+  if (copyOnly) {
+    return (
+      <>
+        <Button variant="secondary" onClick={() => void copy()}>
+          <Icon icon={Copy} />
+          {COPY_PATH_LABEL}
+        </Button>
+        <span role="status" className="sr-only">
+          {COPY_MESSAGES[state]}
+        </span>
+      </>
+    );
+  }
 
   return (
     <div className="flex min-w-0 flex-col gap-s-2">

@@ -2,7 +2,7 @@ import { CalendarClock, FolderOpen } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
-import { CopyPathButton, FOLDER_LINK_NOTE, FolderPath } from '@/components/shared/folder-path';
+import { FOLDER_LINK_NOTE, FolderPath } from '@/components/shared/folder-path';
 import { Icon } from '@/components/shared/icon';
 import { PageHead } from '@/components/shared/page-head';
 import { StatusBadge } from '@/components/shared/status-badge';
@@ -21,18 +21,17 @@ import {
   IDENTITY_LABEL,
   NO_LINK_NOTE,
   NOTES_FROM_PREFIX,
-  OPEN_FOLDER_LABEL,
   SHORT_NAME_NOT_SET,
   SUBJECT_LABEL,
-  SUBJECT_META_PREFIX,
 } from './estimate-texts';
+import { OPEN_FOLDER_LABEL, SUBJECT_META_PREFIX } from './workspace-head-texts';
 
 /**
  * The top of SCR-05 and of SCR-06 (STORY-05.01 AC-1; UX-15; CR-01 item 6; AQP-452, DEF-095 and DEF-110): the page head (a breadcrumb, "Estimate <code>" with its status badge, a sentence under it and the due pill) and
  * the identity of the task: the customer, its short name and the subject (read-only, as labelled text, for every role: they are set when the task is assigned and an Engineer cannot change them), the folder and the notes
  * typed when the task was assigned. **SCR-05** has the title and the sentence of the form under the title and keeps the customer and folder cards. **SCR-06** (`review`) has one meta line under the title (title, subject,
  * customer with its short name and Change customer, who entered it and who assigned it), Open folder and Copy path beside the due pill, and only the notes below. It holds no state and needs no script of its own; the
- * folder's "Copy path" is `FolderPath` (SCR-05) or `CopyPathButton` (SCR-06). The customer is a name and a short name and nothing else (NFR-002), so it is the same for every role that may open the task. SCR-06 passes a Change customer action to sit among the
+ * folder's "Copy path" is `FolderPath` (SCR-05, whole; SCR-06, `copyOnly`). The customer is a name and a short name and nothing else (NFR-002), so it is the same for every role that may open the task. SCR-06 passes a Change customer action to sit among the
  * header actions (`customerAction`); SCR-05 passes none, so an Engineer has no control to change it.
  */
 
@@ -153,7 +152,7 @@ export function WorkspaceHeader({ view, noCustomerText = NO_CUSTOMER_SET_MESSAGE
                     </a>
                   </Button>
                 )}
-                <CopyPathButton path={view.folderPath} />
+                <FolderPath path={view.folderPath} url={view.folderUrl ?? ''} copyOnly />
               </>
             )}
           </div>
