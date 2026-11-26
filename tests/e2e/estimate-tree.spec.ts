@@ -156,6 +156,33 @@ const watchPointer = (page: Page): Promise<void> =>
 /** The pointer of this page, as the style sheet reads it (`mouse:` and `touch:`, globals.css): a mouse hovers and points finely, a finger is every other pointer. The desktop project has a mouse; the phone and tablet projects are `hasTouch`. */
 const hasMouse = (page: Page): Promise<boolean> => page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches);
 
+/** The Sl. No of every row whose toolbar is in view (taller than the 1 px of the `sr-only` clip), in order. */
+async function rowsWithToolbar(page: Page): Promise<string[]> {
+  return (await toolbarBoxes(page)).filter((box) => box.height > 1).map((box) => box.slNo);
+}
+
+/** The Sl. No of every row that holds the focus ring (the focus is visible inside the row), in order. The row is the first block of its list item, the toolbar included, as the style sheet's `group/row` is. */
+const rowsWithFocusRing = (page: Page): Promise<string[]> =>
+  tree(page).evaluate((nav) =>
+    [...nav.querySelectorAll('li[data-part-row]')]
+      .filter((item) => item.firstElementChild?.querySelector(':focus-visible') != null)
+      .map((item) => item.querySelector('[data-sl-no]')?.textContent ?? ''),
+  );
+
+/** The pointer rests at the right edge of the page, at mid height: outside the tree at every width (the top left corner is the tree itself once the page is scrolled). */
+const awayPoint = (page: Page): { readonly x: number; readonly y: number } => {
+  const { width, height } = defined(page.viewportSize());
+  return { x: width - 2, y: Math.round(height / 2) };
+};
+const pointerAway = (page: Page, steps = 1): Promise<void> => page.mouse.move(awayPoint(page).x, awayPoint(page).y, { steps });
+
+/** The rows that must show a toolbar: the rows the test names, and on a touch screen also the open row. A test names the rows a mouse puts there (the hovered row, the row with the focus ring, a row with a menu or its delete confirmation open). */
+async function expectToolbarsOn(page: Page, mouse: boolean, ...rows: string[]): Promise<void> {
+  const open = mouse ? [] : (await toolbarBoxes(page)).filter((box) => box.open).map((box) => box.slNo);
+  const wanted = [...new Set([...rows, ...open])].sort();
+  await expect.poll(async () => (await rowsWithToolbar(page)).sort(), `the toolbars in view are those of ${wanted.join(', ') || 'no row'}`).toEqual(wanted);
+}
+
 /** The height of the toolbar group of one row: more than 1 px when it is in view, 1 px or less when it is the `sr-only` clip. */
 async function toolbarHeightOf(page: Page, slNo: string): Promise<number> {
   const row = (await toolbarBoxes(page)).find((box) => box.slNo === slNo);
@@ -451,6 +478,10 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await expect(page.getByText('Part 1.1 added')).toHaveCount(1);
     await addUnder(page, '1', 'Part');
     await expect(page.getByText('Part 1.2 added')).toHaveCount(1);
+    // AQP-448 TB-4: the row just added is last under its parent and open; with the pointer away from the tree no toolbar is in view anywhere (a finger: the open row's only).
+    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
+    await pointerAway(page);
+    await expectToolbarsOn(page, await hasMouse(page));
     await addMain(page);
     await expect(page.getByText('Part 2 added')).toHaveCount(1);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2', '2']);
@@ -477,6 +508,28 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await page.reload();
     await showTree(page);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2', '2']);
+
+    // AQP-448 TB-5: an add by the keyboard (the "+" of row 1, Enter on the first item) opens the new row, and a toolbar is in view exactly on the rows that hold the focus ring, wherever the add's own rule puts the
+    // focus (on a finger also the open row).
+    await pointerAway(page);
+    await part(page, '1').focus();
+    await page.keyboard.press('Tab');
+    await expect(handleOf(page, '1')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(rowButton(page, 'Add under', '1')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('menuitem', { name: 'Sub-Assembly', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2', '1.3', '2']);
+    await expect(part(page, '1.3')).toHaveAttribute('aria-current', 'true');
+    const mouse = await hasMouse(page);
+    await expect
+      .poll(async () => {
+        const wanted = [...new Set([...(await rowsWithFocusRing(page)), ...(mouse ? [] : ['1.3'])])].sort();
+        const inView = (await rowsWithToolbar(page)).sort();
+        return JSON.stringify(inView) === JSON.stringify(wanted) ? 'the rows with the focus ring' : JSON.stringify({ inView, wanted });
+      }, 'the toolbars in view are the rows with the focus ring')
+      .toBe('the rows with the focus ring');
   });
 
   test('AQP-404 AC-1, AC-4: the tree is a nav of nested lists of links: no tree roles or counts, the open row is aria-current, each kind has its icon with its name, and a legend names the four', async ({ page }, testInfo) => {
@@ -773,7 +826,7 @@ test.describe('AQP-405: the row actions', () => {
     const pressed = defined(await part(page, '1.1').boundingBox());
     await page.mouse.move(pressed.x + pressed.width / 2, pressed.y + pressed.height / 2);
     await page.mouse.down();
-    await page.mouse.move(2, 2, { steps: 4 });
+    await pointerAway(page, 4);
     await page.mouse.up();
     await withState(page, () => expect.poll(() => toolbarHeightOf(page, '1'), 'a press that ends elsewhere lets the held line go').toBeLessThanOrEqual(1));
     await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
@@ -840,29 +893,6 @@ test.describe('AQP-405: the row actions', () => {
     expect(added, 'the second press of a double click on a name added no Fastener').toEqual([]);
   });
 });
-
-/** The Sl. No of every row whose toolbar is in view (taller than the 1 px of the `sr-only` clip), in order. */
-async function rowsWithToolbar(page: Page): Promise<string[]> {
-  return (await toolbarBoxes(page)).filter((box) => box.height > 1).map((box) => box.slNo);
-}
-
-/** The Sl. No of every row that holds the focus ring (the focus is visible inside the row), in order. The row is the first block of its list item, the toolbar included, as the style sheet's `group/row` is. */
-const rowsWithFocusRing = (page: Page): Promise<string[]> =>
-  tree(page).evaluate((nav) =>
-    [...nav.querySelectorAll('li[data-part-row]')]
-      .filter((item) => item.firstElementChild?.querySelector(':focus-visible') != null)
-      .map((item) => item.querySelector('[data-sl-no]')?.textContent ?? ''),
-  );
-
-/** The pointer rests at the top left corner of the page, outside the tree at every width. */
-const pointerAway = (page: Page): Promise<void> => page.mouse.move(1, 1);
-
-/** The rows that must show a toolbar: the rows the test names, and on a touch screen also the open row. A test names the rows a mouse puts there (the hovered row, the row with the focus ring, a row with a menu or its delete confirmation open). */
-async function expectToolbarsOn(page: Page, mouse: boolean, ...rows: string[]): Promise<void> {
-  const open = mouse ? [] : (await toolbarBoxes(page)).filter((box) => box.open).map((box) => box.slNo);
-  const wanted = [...new Set([...rows, ...open])].sort();
-  await expect.poll(async () => (await rowsWithToolbar(page)).sort(), `the toolbars in view are those of ${wanted.join(', ') || 'no row'}`).toEqual(wanted);
-}
 
 test.describe('AQP-448 (DEF-091): when the row toolbar is in view', () => {
   test('AQP-448 TB-1, TB-2, TB-3, TB-6: a mouse shows the toolbar of the hovered row, of the row with the focus ring and of a row with a menu or its delete confirmation open, and never of the open row; a finger shows the open row only', async ({ page }, testInfo) => {
@@ -932,44 +962,6 @@ test.describe('AQP-448 (DEF-091): when the row toolbar is in view', () => {
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await pointerAway(page);
     await expectToolbarsOn(page, mouse);
-  });
-
-  test('AQP-448 TB-4: after an add with the mouse the new row is last under its parent and open, and no toolbar is in view anywhere while the pointer is away from the tree (a finger: the new row)', async ({ page }, testInfo) => {
-    await openTree(page, testInfo);
-    const mouse = await hasMouse(page);
-    await addUnder(page, '1', 'Sub-Assembly');
-    // One change at a time: the "+" is unavailable while the first add is out, so the row is waited for.
-    await expect(part(page, '1.1')).toBeVisible();
-    await addUnder(page, '1', 'Part');
-    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2']);
-    await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
-    await pointerAway(page);
-    await expectToolbarsOn(page, mouse);
-    if (mouse) expect(await rowsWithToolbar(page), 'no toolbar is in view under the last row added').toEqual([]);
-    else expect(await rowsWithToolbar(page), 'the new row, which is the open row, shows its toolbar').toEqual(['1.2']);
-  });
-
-  test('AQP-448 TB-5: after an add with the keyboard the new row is open, and a toolbar is in view exactly on the rows that hold the focus ring (on a finger also the open row)', async ({ page }, testInfo) => {
-    await openTree(page, testInfo);
-    const mouse = await hasMouse(page);
-    await part(page, '1').focus();
-    await page.keyboard.press('Tab');
-    await expect(handleOf(page, '1')).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(rowButton(page, 'Add under', '1')).toBeFocused();
-    await page.keyboard.press('Enter');
-    await expect(page.getByRole('menuitem', { name: 'Sub-Assembly', exact: true })).toBeFocused();
-    await page.keyboard.press('Enter');
-    await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1']);
-    await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
-    // Where the focus goes after an add is the add's own rule; the toolbar follows the focus ring wherever it lies.
-    await expect
-      .poll(async () => {
-        const wanted = [...new Set([...(await rowsWithFocusRing(page)), ...(mouse ? [] : ['1.1'])])].sort();
-        const inView = (await rowsWithToolbar(page)).sort();
-        return JSON.stringify(inView) === JSON.stringify(wanted) ? 'the rows with the focus ring' : JSON.stringify({ inView, wanted });
-      }, 'the toolbars in view are the rows with the focus ring')
-      .toBe('the rows with the focus ring');
   });
 });
 
@@ -1073,6 +1065,9 @@ test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
     await choose(page, '1.1');
     await reveal(page, '1.1');
     const moving = await idOf(page, '1.1');
+    // The pointer goes onto the handle by Playwright's own hover, which scrolls the handle clear of the fixed bar at the foot of the page and checks that it is what lies under the pointer. A press at a place read
+    // from a box went down on "Calculate" (run 45796904957): the toolbar line of 1.1 lies low in the panel with the toolbars clipped.
+    await handleOf(page, '1.1').hover();
     const handle = await settledBox(handleOf(page, '1.1'));
     const below = await settledBox(part(page, '1.2'));
     const x = handle.x + handle.width / 2;
