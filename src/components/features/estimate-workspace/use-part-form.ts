@@ -29,6 +29,9 @@ export type PartProblem = OtherProblem | { readonly kind: 'conflict'; readonly f
 /** A save that finds the part changed reads it again and sends again what nobody else touched; a part that changes three times in a row is told to the person instead of looped on. */
 const MAX_REFRESHES = 2;
 
+/** The 409 codes of an estimate that is approved (`ESTIMATE_APPROVED_IS_LOCKED`, `state-machine.ts`) or no longer editable by this person (`ESTIMATE_NOT_EDITABLE`, `estimate-service.ts`): the server's words, read as codes. */
+const LOCKED_CODES: ReadonlyArray<string> = ['ESTIMATE_APPROVED_IS_LOCKED', 'ESTIMATE_NOT_EDITABLE'];
+
 /** What a field holds when nothing is stored for it: its default (Fasteners: "None"), or nothing. A blank over a default is the default, so leaving the box alone changes nothing. */
 const standIn = (field: Pick<FormField, 'defaultValue'>, value: string | null): string | null => value ?? field.defaultValue;
 
@@ -62,6 +65,8 @@ export interface UsePartValuesProps {
   readonly onNamed: (id: string, label: string) => void;
   /** The server refused a save with the 409 of an ignored estimate (CR-01 item 7D): the page says so once, in one alert, and nothing more is sent. */
   readonly onServerIgnored: () => void;
+  /** A Lead's or an Admin's save was refused with the 409 of an estimate that is approved or no longer editable (DEF-131, ED-12): the block turns read-only and what was typed stays on screen. Absent for the Engineer, whose form is unchanged. */
+  readonly onLocked?: (() => void) | undefined;
   /** A save changed the part, at this time. */
   readonly onWrote: (at: string) => void;
   /** Told about every save in flight and every field that shows a value that is not saved, so Calculate waits for the saves and does not go over such a field (STORY-05.09, review SQR-01). */
@@ -84,7 +89,7 @@ export interface UsePartValuesProps {
  * of Save draft only in what it says. Nothing under a field and no alert, because the person may be typing in it: a value the rule refuses is left unsent and unsaved, the text shown is not rewritten, and a failure
  * is one polite status (`autosaveFailedAt`, `use-autosave-trail.ts`). A conflict pauses it until the person has chosen.
  */
-export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onNamed, onServerIgnored, onWrote, gate }: UsePartValuesProps) {
+export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onNamed, onServerIgnored, onLocked, onWrote, gate }: UsePartValuesProps) {
   const partId = part.id;
   const [stored, setStored] = useState<Loaded<PartInputs>>(LOADING);
   const [texts, setTexts] = useState<Readonly<Record<string, string>>>({});
@@ -206,6 +211,12 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     if (outcome.status === 'refused' && outcome.httpStatus === 409 && outcome.code === ESTIMATE_IGNORED_CODE) {
       mark(fieldId, false);
       onServerIgnored();
+      return;
+    }
+    // The estimate was approved, quoted or taken out of the editable states elsewhere while a Lead or an Admin typed (ED-12): nothing was stored, and the block says so and stops offering the edit. What was typed stays shown.
+    if (onLocked !== undefined && outcome.status === 'refused' && outcome.httpStatus === 409 && outcome.code !== undefined && LOCKED_CODES.includes(outcome.code)) {
+      mark(fieldId, false);
+      onLocked();
       return;
     }
     mark(fieldId, true);

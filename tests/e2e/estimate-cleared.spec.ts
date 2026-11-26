@@ -84,9 +84,22 @@ test.describe('AC-3: Recalculate from the screen', () => {
     expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
     await waitUntilHydrated(page, '#review-calculate');
 
+    // DEF-131 stage 2 (ED-7): a value typed in the inputs block and not yet left is saved first, then calculated: the press is the click that leaves the field, and the request goes after the save.
+    const length = page.locator('#row-inputs form[data-part-form]').getByRole('textbox', { name: /Length/ }).first();
+    await expect(length).toBeEnabled();
+    await length.fill('111.5');
+    const order: string[] = [];
+    page.on('response', (response) => {
+      const request = response.request();
+      if (request.method() === 'PATCH' && /\/nodes\/[^/]+\/inputs$/.test(response.url())) order.push('saved');
+      if (request.method() === 'POST' && response.url().endsWith('/recalculate')) order.push('calculated');
+    });
     const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${owner.id}/recalculate`));
     await button(page).click();
     expect((await answered).status()).toBe(200);
+    expect(order, 'the value was saved before the figures were calculated').toEqual(['saved', 'calculated']);
+    const held = await page.evaluate(async (id) => ((await (await fetch(`/api/v1/estimates/${id}/nodes/${id}`)).json()) as { inputs: Record<string, string> }).inputs, owner.id);
+    expect(Object.values(held)).toContain('111.50');
 
     await expect(button(page)).toHaveCount(0);
     await expect(clearedNotice(page)).toHaveCount(0);
