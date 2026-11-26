@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { answerChunk } from '../../support/controls-route-handler';
+import { answerChunk, stopRoutes } from '../../support/controls-route-handler';
 
 /**
  * What the resizable parts tree specs share (AQP-426, STORY-CR01.3E, FR-112): the numbers, the locators of the handle and the column, and the few measurements. This file has no tests and its name does not end in `.spec.ts`.
@@ -109,7 +109,8 @@ export async function holdControlsCode(page: Page, mode: 'hold' | 'refuse'): Pro
     release,
     stop: async () => {
       release();
-      await page.unrouteAll({ behavior: 'wait' });
+      // A case that has timed out leaves the page closed: that one fault of the teardown is not the test's and is ignored; every other is rethrown (AQP-444, DEF-088 reopened; `stopRoutes`, unit-tested).
+      await stopRoutes(() => page.unrouteAll({ behavior: 'wait' }));
     },
   };
 }
