@@ -338,7 +338,7 @@
 | ID | Date | Condition | Status |
 |---|---|---|---|
 | T1 | ~~28 Nov, end of day~~ | ~~Q-18 (mail details). No answer → AQP-355 Deferred (DL-309)~~ | **Withdrawn (DL-378, master, 24 Nov):** the delivery lead chose DL-371 option C (DL-374): AQP-355 Deferred now, e-mail off at go-live. No 29 Nov post. Replaced by G8-C-MAILOFF below; the real send becomes the step before switching e-mail on after go-live (DL-378 (3)) |
-| T2 | Freeze, about 3 Dec | G8-C-AC8: no PASS → a go-live condition named in the delivery lead's G8 sign-off; a FAIL is not covered (DL-310) | Open |
+| T2 | Freeze, about 3 Dec | G8-C-AC8: no PASS → a go-live condition named in the delivery lead's G8 sign-off; a FAIL is not covered (DL-310) | **Lapsed (master, 26 Nov, on DL-362):** the AC-8 kit failed and the delivery lead chose the full-administrator fallback; AC-8 is no longer needed, A-35 is not met, and RISK-018 (10) is accepted in writing at G8 instead. OQ-ARCH-15 closed (DL-402 (5)) |
 | T3 | Freeze, about 3 Dec, before the final regression | #632 (replaces #476) merges after #633 and DEF-038's test fix, on DL-320 M1 to M7 and DL-323 (4); otherwise the release ships on 16.4.5 with #632 and #513 post-G8 (DL-321 (4), DL-323 (5)) | **Decided (DL-344, 23 Nov): fallback taken — the release ships on Next 16.4.5 / Vitest 5.0.5; #632 and #513 post-G8; #476 stays open.** One way back before the freeze only if DEF-074's cause is version-independent and its fix has merged |
 | T4 | 26 Nov | DEF-057 re-ruling (see above) | Open |
 
