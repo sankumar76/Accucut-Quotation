@@ -5,6 +5,7 @@ import { defined } from '../support/defined';
 import { createDisposableUser, E2E_ADMIN, useFreshAddress } from './support/auth';
 import { calculateWithoutThePage, engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
+import { DEVELOPMENT_URL } from './support/servers';
 import { expectLinkTarget, isTouchLayout } from './support/touch-link';
 
 /**
@@ -164,7 +165,11 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
 
 test.describe('AC-6: not calculated', () => {
   test('shows the notice as a status, "Not calculated", dashes, Calculate as the primary button, and Approve and Download off with their reasons', async ({ page }, testInfo) => {
-    const { code } = await engineerWithEstimate(testInfo);
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    // A second row (AQP-488; not a person, so the ledger of persons stays as it was): the Engineer adds a main assembly with the request the "+" sends, before the Lead opens the page.
+    await signInAs(page, owner);
+    const added = await page.request.post(`/api/v1/estimates/${owner.id}/nodes`, { headers: { origin: DEVELOPMENT_URL }, data: { parentId: null, nodeKind: 'MAIN_ASSEMBLY' } });
+    expect(added.status(), 'the Engineer adds a second row').toBe(201);
     await openAsLead(page, testInfo, code);
 
     const notice = page.getByRole('status').filter({ hasText: 'The Engineer has not calculated this estimate yet.' });
@@ -186,6 +191,24 @@ test.describe('AC-6: not calculated', () => {
     }
     await expect(page.locator('#review-approve-reason')).toHaveText('Calculate first. Approving is available once the figures have been calculated.');
     await expect(page.locator('#review-download-reason')).toHaveText('Calculate or Recalculate first. There is no file until a calculation is current.');
+
+    // AQP-488 (DEF-131 Stage 1; ruling 2026-11-27, RO-2, RO-15, RO-16, RO-17): choosing the second row. The first is open to begin with; the link goes to ?row=2#row-inputs, `aria-current` moves, the focus is on the form's
+    // title, the choice is said once, below 1024 px the tree folds, and the page is as clean for axe as before. The state is "not calculated", so the row line has a dash and the count.
+    const inputs = page.locator('#row-inputs');
+    await expect(inputs.locator('form[data-part-form]')).toBeVisible();
+    await expect(treePanel(page).locator('a[aria-current="true"]')).toHaveAttribute('href', /\?row=1#row-inputs$/);
+    await expect(inputs.locator('[data-row-line]')).toContainText(/^This row: — · count /);
+    await expect(inputs.getByRole('status').filter({ hasText: 'Showing the inputs of' })).toHaveCount(0);
+    await treePanel(page).locator('a[href$="?row=2#row-inputs"]').click();
+    await expect(page).toHaveURL(/\?row=2#row-inputs$/);
+    await expect(treePanel(page).locator('a[aria-current="true"]')).toHaveAttribute('href', /\?row=2#row-inputs$/);
+    await expect(inputs.locator('form[data-part-form]').getByRole('heading', { level: 3 })).toContainText('2');
+    await expect(page.locator('#part-form-title')).toBeFocused();
+    await expect(inputs.getByRole('status').filter({ hasText: /^Showing the inputs of 2 .* Read-only\.$/ })).toHaveCount(1);
+    if ((page.viewportSize()?.width ?? 0) < 1024) await expect(treePanel(page)).not.toHaveAttribute('open', '');
+    else await expect(treePanel(page)).toHaveAttribute('open', '');
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoAxeViolations(page);
   });
 });
 
@@ -200,6 +223,16 @@ test.describe('AC-5 (NFR-002): an Engineer at the same address', () => {
     await expect(page.getByText('Total Unit Production Price')).toHaveCount(0);
     await expect(page.getByText('File cell')).toHaveCount(0);
     await expect(page.locator('#review-approve')).toHaveCount(0);
+    // AQP-488 (NFR-002): the Engineer gets no inputs block of the review, no row line and no row links, at the address with or without `?row=`.
+    for (const path of [`/estimates/${code}`, `/estimates/${code}?row=1`]) {
+      const response = await page.goto(path);
+      expect(response?.status()).toBe(200);
+      await expect(page.locator('#row-inputs')).toHaveCount(0);
+      await expect(page.getByText('This row:')).toHaveCount(0);
+      await expect(page.getByText('Read-only. These are the values')).toHaveCount(0);
+      await expect(page.locator('a[href*="row="]')).toHaveCount(0);
+      await expect(page.getByText(/This row: ₹/)).toHaveCount(0);
+    }
 
     const refused = await page.evaluate(async (id) => {
       const response = await fetch(`/api/v1/estimates/${id}/costs`);
