@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ReviewHead } from '@/components/features/estimate-review/review-head';
 import { WorkspaceHeader, type WorkspaceHeaderView } from '@/components/features/estimate-workspace/workspace-header';
-import { FolderPath } from '@/components/shared/folder-path';
+import { copyMessage, FolderPath } from '@/components/shared/folder-path';
 import { PageHead } from '@/components/shared/page-head';
 
 /**
@@ -144,6 +144,15 @@ describe('QLT-789-08: the copy-only Copy path shows its result to everyone', () 
     const html = renderToStaticMarkup(createElement(FolderPath, { path: VIEW.folderPath, url: '', copyOnly: true }));
     expect(html).toContain('Copy path');
     expect(html).toMatch(/<span role="status" class="(?![^"]*sr-only)[^"]*"><\/span>/);
+  });
+});
+
+describe('QLT-789-10: a failed copy with no path on screen shows the path', () => {
+  it('says the path in the message of the copy-only button so it can be selected, and keeps the short sentence where the path is drawn', () => {
+    expect(copyMessage('failed', VIEW.folderPath, true)).toBe(`The path could not be copied. Select it and copy it yourself. ${VIEW.folderPath}`);
+    expect(copyMessage('failed', VIEW.folderPath, false)).toBe('The path could not be copied. Select it and copy it yourself.');
+    expect(copyMessage('copied', VIEW.folderPath, true)).toBe('Path copied to the clipboard.');
+    expect(copyMessage('idle', VIEW.folderPath, true)).toBe('');
   });
 });
 

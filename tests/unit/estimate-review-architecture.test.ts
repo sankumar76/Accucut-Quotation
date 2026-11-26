@@ -372,6 +372,16 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
   });
 
+  it('AQP-452 ADR-016: the Copy path button SCR-06 shares with the queue and SCR-05 imports no figure, schema, service or repository, and fetches nothing', () => {
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    for (const path of ['src/components/shared/folder-path.tsx', 'src/components/shared/folder-path-texts.ts']) {
+      const code = strip(ALL.find((file) => file.path === path)?.text ?? '');
+      expect(code.length, path).toBeGreaterThan(50);
+      expect(code, path).not.toMatch(/schemas\/|estimate-review|@\/server\/|calculation-|row-outputs|product-totals|figure-state|estimates-client|fetch\(/);
+    }
+    expect(ALL.find((file) => file.path === 'src/components/shared/folder-path-texts.ts')?.text ?? '').not.toMatch(/use client/);
+  });
+
   it('nothing outside the review imports a file of its folder except the review page', () => {
     const importers = ALL.filter((file) => !file.path.startsWith(REVIEW_FOLDER) && /estimate-review\//.test(file.text)).map((file) => file.path);
     expect(importers).toEqual([REVIEW_PAGE]);

@@ -27,7 +27,7 @@ export interface FolderPathProps {
    * instead (STORY-04.02, SCR-03), and the link keeps it as its tooltip.
    */
   readonly showNote?: boolean;
-  /** Only the Copy path button (and its polite message, for a screen reader), for the head of SCR-06 where Open folder is a button of its own (AQP-452). The path and the note are not drawn. */
+  /** Only the Copy path button and its message, for the head of SCR-06 where Open folder is a button of its own (AQP-452). The path and the note are not drawn; a failed copy shows the path in its message so it can be selected. */
   readonly copyOnly?: boolean;
 }
 
@@ -35,6 +35,12 @@ type CopyState = 'idle' | 'copied' | 'failed';
 
 /** What the live region says in each state; it is empty until a copy has been tried, so nothing is announced on load. */
 const COPY_MESSAGES: Readonly<Record<CopyState, string>> = { idle: '', copied: PATH_COPIED_MESSAGE, failed: PATH_NOT_COPIED_MESSAGE };
+
+/**
+ * What the message says. Where the path is drawn on the page ("Select it and copy it yourself") the sentence is enough; where only the button is (SCR-06's head, `copyOnly`, AQP-452) there is nothing to select,
+ * and the UX spec has no wording for that case, so a failed copy shows the path itself, as text that can be selected.
+ */
+export const copyMessage = (state: CopyState, path: string, copyOnly: boolean): string => (state === 'failed' && copyOnly ? `${PATH_NOT_COPIED_MESSAGE} ${path}` : COPY_MESSAGES[state]);
 
 /**
  * The folder of a task as everyone sees it (STORY-04.01 AC-4; FR-033): the path as a link, a **Copy path** button, and the sentence that explains a link that
@@ -61,8 +67,8 @@ export function FolderPath({ path, url, showNote = true, copyOnly = false }: Fol
           <Icon icon={Copy} />
           {COPY_PATH_LABEL}
         </Button>
-        <span role="status" className="text-label font-semibold text-ink">
-          {COPY_MESSAGES[state]}
+        <span role="status" className={cn('text-label font-semibold text-ink', BREAK_LONG_NAMES)}>
+          {copyMessage(state, path, true)}
         </span>
       </>
     );
