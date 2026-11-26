@@ -66,7 +66,7 @@ describe('AC-1 and AC-3: GET /api/v1/config/fields', () => {
     expect(response.headers.get('X-Request-Id')).toMatch(/^req-[0-9a-f]{8}$/);
     const fields = await fieldsOf(response);
     expect(fields.map((field) => field['letter']).slice(0, 4)).toEqual(['A', 'B', 'C', 'D']);
-    for (const field of fields) expect(Object.keys(field).sort()).toEqual(['canEditFormula', 'formula', 'id', 'isProtected', 'kind', 'label', 'letter', 'note', 'place', 'systemRole']);
+    for (const field of fields) expect(Object.keys(field).sort()).toEqual(['canEditFormula', 'formula', 'id', 'isProtected', 'kind', 'label', 'letter', 'lookup', 'note', 'place', 'systemRole']);
   });
 
   it('lists Scrap Weight with its formula and the estimate total as SUM(BG) with its sentence, in display form and never the stored one', async () => {

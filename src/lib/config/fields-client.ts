@@ -22,6 +22,8 @@ export interface ConfigFieldRow {
   readonly systemRole: string | null;
   /** One sentence that explains the formula (the estimate total), or null. */
   readonly note: string | null;
+  /** For an auto field found by lookup: the words that say where its value comes from ("From tree position"), or null (AQP-473, DEF-118). */
+  readonly lookup: string | null;
   readonly canEditFormula: boolean;
   /** A System field, or one the code cannot do without: the lock tag "System" and no Delete (STORY-08.04). */
   readonly isProtected: boolean;
@@ -44,15 +46,25 @@ export function toConfigFieldRow(value: unknown): ConfigFieldRow | null {
   const formula = textOrNull(value['formula']);
   const systemRole = textOrNull(value['systemRole']);
   const note = textOrNull(value['note']);
+  const lookup = textOrNull(value['lookup']);
   if (typeof id !== 'string' || typeof letter !== 'string' || typeof label !== 'string' || !isKind(kind) || typeof canEditFormula !== 'boolean' || typeof isProtected !== 'boolean') return null;
-  if (place === undefined || formula === undefined || systemRole === undefined || note === undefined) return null;
-  return { id, letter, label, place, kind, formula, systemRole, note, canEditFormula, isProtected };
+  if (place === undefined || formula === undefined || systemRole === undefined || note === undefined || lookup === undefined) return null;
+  return { id, letter, label, place, kind, formula, systemRole, note, lookup, canEditFormula, isProtected };
 }
 
 function readFields(body: unknown): ReadonlyArray<ConfigFieldRow> | null {
   if (!isRecord(body) || !Array.isArray(body['fields'])) return null;
   const rows = body['fields'].map(toConfigFieldRow);
   return rows.every((row): row is ConfigFieldRow => row !== null) ? rows : null;
+}
+
+/** The number of the current configuration version, read from `GET /api/v1/config/current` for the note under the toolbar (AQP-473); `null` for any answer that is not a version number. */
+function readVersionNumber(body: unknown): number | null {
+  return isRecord(body) && typeof body['number'] === 'number' && Number.isInteger(body['number']) && body['number'] >= 1 ? body['number'] : null;
+}
+
+export function readConfigVersionNumber(doFetch: Fetch = fetch): Promise<Outcome<number | null>> {
+  return sendJson(doFetch, '/api/v1/config/current', { method: 'GET', headers: ACCEPT_JSON }, readVersionNumber);
 }
 
 /** `GET /api/v1/config/fields`. */

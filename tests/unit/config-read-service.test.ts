@@ -53,6 +53,20 @@ function serviceOver(document: ConfigDocument = seedConfig, use: ConfigVersionUs
 
 const rowAt = (rows: ReadonlyArray<ConfigFieldRow>, letter: string): ConfigFieldRow => defined(rows.find((row) => row.letter === letter));
 
+describe('AQP-473: the words that say where an auto field gets its value', () => {
+  it('gives A, F and I the words of the ux-expert (2026-11-26), with the letter of E found by its key', async () => {
+    const { fields } = await serviceOver().service.getFields();
+    expect(rowAt(fields, 'A').lookup).toBe('From tree position');
+    expect(rowAt(fields, 'F').lookup).toBe('Material-Considered for E');
+    expect(rowAt(fields, 'I').lookup).toBe('Material-Price-per-kg for E');
+  });
+
+  it('gives no words to any other field, an auto one included (the screen says "No formula")', async () => {
+    const { fields } = await serviceOver().service.getFields();
+    for (const row of fields.filter((each) => !['A', 'F', 'I'].includes(each.letter))) expect(row.lookup, row.letter).toBeNull();
+  });
+});
+
 describe('AC-1: the list is the registry in column order', () => {
   it('has one row for every field, in position order, with the letter derived from the position', async () => {
     const { fields } = await serviceOver().service.getFields();
