@@ -118,9 +118,9 @@ describe('AC-5: no review code reaches the Engineer', () => {
   const REMOVE_BUTTON = `${REMOVE_FOLDER}remove-button.tsx`;
   const CUSTOMER_FOLDER = 'src/components/features/estimate-customer/';
   const CUSTOMER_BUTTON = `${CUSTOMER_FOLDER}change-customer-button.tsx`;
-  // The Lead's view of one row's inputs (AQP-488, DEF-131 Stage 1) is the Engineer's own `PartForm`, drawn by the review with only what a server can send: ids, texts and server elements (the row line and the head), no
-  // function and no figure (its rows are mapped down to where each sits, its number, its kind and its name). No client file of the review's own and none of a folder of its own: the form is in the first load already.
-  const INPUTS_FORM = 'src/components/features/estimate-workspace/part-form.tsx';
+  // The Lead's view of one row's inputs (AQP-488, DEF-131 Stage 1) is the Engineer's own `PartForm`, drawn by the review through a thin client shell that loads the form's code after the page is up (the first load is held
+  // to 192,500 B): only what a server can send goes in: ids, texts and server elements (the row line and the head), no function and no figure (its rows are mapped down to where each sits, its number, its kind and its name).
+  const INPUTS_FORM = 'src/components/features/estimate-workspace/lazy-part-form.tsx';
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -370,6 +370,18 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(button).not.toMatch(/^import (?!type).*estimates-client/m);
     expect(dialog).toMatch(/@\/lib\/estimates\/estimates-client/);
     const importers = ALL.filter((file) => !file.path.startsWith(CUSTOMER_FOLDER) && /estimate-customer\//.test(file.text)).map((file) => file.path);
+    expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
+  });
+
+  it('AQP-488 ADR-016: the shell of the inputs form imports no figure, schema, service or repository, reads the form by a bare dynamic import(), and is imported by the review alone', () => {
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const shell = strip(ALL.find((file) => file.path === INPUTS_FORM)?.text ?? '');
+    expect(shell.length).toBeGreaterThan(200);
+    expect(shell).not.toMatch(/schemas\/|estimate-review\/|@\/server\/|calculation-|row-outputs|product-totals|figure-state|costs|estimates-client|fetch\(/);
+    expect(shell).toMatch(/import\('\.\/review-form'\)/);
+    expect(shell).toMatch(/^import type \{ ReviewFormProps \} from '\.\/review-form';/m);
+    expect(shell).not.toMatch(/^import (?!type).*from '\.\/(part|review)-form'/m);
+    const importers = ALL.filter((file) => file.path !== INPUTS_FORM && /lazy-part-form/.test(file.text)).map((file) => file.path);
     expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
   });
 

@@ -14,7 +14,7 @@ import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { PartForm } from '../estimate-workspace/part-form';
+import { LazyPartForm } from '../estimate-workspace/lazy-part-form';
 import { PartHead } from '../estimate-workspace/part-head';
 import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
@@ -193,7 +193,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         {selected === null ? null : (
           // The Engineer's own form, read-only, in a client island of its own folder; nothing handed to it holds a figure: the rows are mapped down to their number, kind and name, and the row line is drawn here (AQP-488).
           <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">
-            <PartForm
+            <LazyPartForm
               estimateId={estimateId}
               part={{ id: selected.id, slNo: selected.slNo, revision: 0 }}
               editable={false}
