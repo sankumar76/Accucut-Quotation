@@ -82,7 +82,8 @@ describe('AC-1, AC-7: a Lead and an Admin open the row', () => {
     plantCalculation();
     harness.signInAs(role);
     const html = await openCosts(CODE, '1');
-    expect(html.match(/<details/g)).toHaveLength(6);
+    // The six stages; the parts tree column (AQP-452) is a seventh `details`, which has no `data-stage`.
+    expect(html.match(/<details[^>]*data-stage/g)).toHaveLength(6);
     expect(html).toContain('AK = (M * I) - (O * Material-Scrap-Rate)');
     expect(html).toContain('AK = (0.3140 × 60) - (0.1140 × 25) = 15.99');
     expect(html).toContain('Calculated 05 Nov 2026, 10:42 IST · configuration version 1');
@@ -93,7 +94,7 @@ describe('AC-1, AC-7: a Lead and an Admin open the row', () => {
     harness.signInAs(role);
     const html = await openCosts(CODE, '1');
     expect(html).toContain('The Engineer has not calculated this estimate yet');
-    expect(html).not.toContain('<details');
+    expect(html).not.toMatch(/<details[^>]*data-stage/);
   });
 
   it('with a changed input the page says cleared and holds no stage and no figure of the calculation', async () => {
@@ -103,7 +104,7 @@ describe('AC-1, AC-7: a Lead and an Admin open the row', () => {
     expect(html).toContain('Press Recalculate on the estimate to see the stages again.');
     expect(html).toContain('Go to the estimate to Recalculate');
     expect(html).not.toContain('once the estimate is calculated again');
-    expect(html).not.toContain('<details');
+    expect(html).not.toMatch(/<details[^>]*data-stage/);
     for (const absent of ['451.39', '15.99', 'Material-Scrap-Rate', '0.3140']) expect(html, absent).not.toContain(absent);
   });
 

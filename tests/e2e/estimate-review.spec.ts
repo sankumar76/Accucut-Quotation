@@ -39,7 +39,7 @@ async function openAsLead(page: Page, testInfo: TestInfo, code: string, role: 'L
   await signInAs(page, person);
   const response = await page.goto(`/estimates/${code}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
 }
 
 const tiles = (page: Page) => page.getByRole('region', { name: 'Totals' });
@@ -74,6 +74,18 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     const { owner, code } = await engineerWithEstimate(testInfo);
     await calculateWithoutThePage(page, owner);
     await openAsLead(page, testInfo, code);
+
+    // AQP-452 (DEF-110; UX spec SCR-06, the mock-up): a breadcrumb "Task queue / <code>", one meta line (title, subject, customer with Change customer, who entered it and who assigned it), the due pill, Copy path;
+    // the three-column customer card and the Task folder card are gone.
+    const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+    await expect(crumbs.getByRole('link', { name: 'Task queue' })).toHaveAttribute('href', '/queue');
+    await expect(crumbs.locator('[aria-current="page"]')).toHaveText(code);
+    const main = page.getByRole('main');
+    await expect(main).toContainText(/Subject: .* · .*Entered by .* · Assigned by /);
+    await expect(main.getByText(/^Due /)).toBeVisible();
+    await expect(main.getByRole('button', { name: 'Copy path' })).toBeVisible();
+    await expect(main.getByText('Task folder')).toHaveCount(0);
+    await expect(main.getByText('Customer Short Name')).toHaveCount(0);
 
     await expect(tiles(page)).toContainText('Total Unit Production Price');
     await expect(tiles(page)).toContainText('Price per Tool Cost');
@@ -238,7 +250,7 @@ test.describe('AC-5 (NFR-002): an Engineer at the same address', () => {
 
     const own = await page.goto(`/estimates/${code}`);
     expect(own?.status()).toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
     await expect(page.getByText('Total Unit Production Price')).toHaveCount(0);
     await expect(page.getByText('File cell')).toHaveCount(0);
     await expect(page.locator('#review-approve')).toHaveCount(0);

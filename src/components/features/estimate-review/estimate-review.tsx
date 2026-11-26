@@ -7,6 +7,7 @@ import { Notice } from '@/components/shared/notice';
 import { warnedNodeIds } from '@/components/shared/quantity-tag';
 import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import { rowNameOf } from '@/lib/estimates/row-name';
+import { TREE_COLUMN_LAYOUT } from '@/components/shared/tree-column-panel';
 import { WarningNotice } from '@/components/shared/warning-notice';
 import type { RoleName } from '@/lib/auth/roles';
 import { isLocked, type EstimateStatus } from '@/lib/estimate/state-machine';
@@ -16,7 +17,7 @@ import type { CostsView } from '@/server/views/schemas/costs';
 
 import { PartForm } from '../estimate-workspace/part-form';
 import { PartHead } from '../estimate-workspace/part-head';
-import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
+import type { WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
 import { BuildTable } from './build-table';
 import { CancelledNotice } from './cancelled-notice';
@@ -26,6 +27,7 @@ import { RatesChangedNotice } from './rates-changed-notice';
 import { approveOffer, cancelOffer, ignoreOffer, quoteOffer, removeOffer, ReviewActions } from './review-actions';
 import { REVIEW_RESTORE_ID } from './review-ids';
 import { ReviewRowLine } from './review-row-line';
+import { ReviewHead } from './review-head';
 import { ReviewTree } from './review-tree';
 import { selectedRow } from './selected-row';
 import { UnlockedNotice } from './unlocked-notice';
@@ -139,13 +141,14 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         };
   return (
     <div className="is-compact group/review contents">
-      <WorkspaceHeader
+      <ReviewHead
         view={{ ...header, ignored: isIgnored }}
+        engineerName={engineerName}
         noCustomerText={REVIEW_NO_CUSTOMER}
         // While the estimate is ignored there is no download chip and no Change customer: it is read-only until it is restored (CR-01 item 7D, A-CR01-8), and the notice below says so.
         downloadMarker={isIgnored ? null : <DownloadChip marker={download} />}
         // Change customer (CR-01 item 6, AC-12): on an estimate that is not approved and not ignored only; the review is the Lead's and the Admin's, and the server refuses anyone else all the same.
-        customerAction={isLocked(header.status) || isIgnored ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} />}
+        customerAction={isLocked(header.status) || isIgnored ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} inline />}
         notice={
           ignored === null ? null : (
             <IgnoredNotice
@@ -188,10 +191,10 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           the page: a different gap moved the page by a few pixels and with it the axe target-size reading of the header's Change customer button at 768 px. */}
       {/* "How the total is built" is above the two columns at every width (UX ruling 2026-11-27 section 3.8; AQP-488): the tree and the row's inputs are the two columns below it. */}
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
-      <div data-review-columns="" className="flex flex-col gap-s-4 md:gap-s-5 min-[1024px]:grid min-[1024px]:grid-cols-[var(--tree-w)_minmax(0,1fr)] min-[1024px]:items-start">
+      <div data-review-columns="" className={TREE_COLUMN_LAYOUT}>
         <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} selectedSlNo={selected === null ? null : selected.slNo} />
         {selected === null ? null : (
-          // The Engineer's own form, read-only, in a client island of its own folder; nothing handed to it holds a figure: the rows are mapped down to their number, kind and name, and the row line is drawn here (AQP-488).
+          // The Engineer's own form, read-only (the same `PartForm`); nothing handed to it holds a figure: the rows are mapped down to where each sits, its number, its kind and its name, and the row line is drawn here (AQP-488).
           <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">
             {/* The row's eyebrow, title and figure line are drawn here, on the server, so they are in the first paint whatever the form is doing; the form under them is labelled by the title (UX ruling 3.6, 3.7). */}
             <PartHead partId={selected.id} slNo={selected.slNo} nodes={partItems} titleId="part-form-title" titleRef={null} />

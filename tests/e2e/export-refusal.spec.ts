@@ -117,7 +117,7 @@ test.describe('AC-2, AC-3, AC-5, AC-6, AC-7, AC-9: an estimate whose count chang
     await link.focus();
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(new RegExp(`/estimates/${code}$`));
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
     await expect(page.locator('#review-calculate')).toHaveText('Recalculate');
     await expect(page.locator('#review-calculate')).toBeEnabled();
     await expect(page.locator('#review-download')).toBeDisabled();
