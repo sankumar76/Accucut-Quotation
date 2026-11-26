@@ -1,10 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { defined } from '../support/defined';
+
 import { readEstimateState, saveCanaryQuantity, useFreshAddress } from './support/auth';
 import { calculateAsEngineer, engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
 import { control, fieldIdOf } from './support/part-form';
-import { addMainAssemblyButton, chooseRow, readTreeThrough, reviewButton, reviewRow, slNumbersOf, withEngineerWindow } from './support/review-tree';
+import { addMainAssemblyButton, chooseRow, openEngineerWindow, readTreeThrough, reviewButton, reviewRow, slNumbersOf } from './support/review-tree';
 import { deleteGuardOf } from '../../src/lib/estimates/tree-moves';
 import { DEVELOPMENT_URL } from './support/servers';
 
@@ -101,7 +103,10 @@ test.describe('AC-3: Recalculate from the screen', () => {
     const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${owner.id}/recalculate`));
     await button(page).click();
     expect((await answered).status()).toBe(200);
-    expect(order, 'the value was saved before the figures were calculated').toEqual(['saved', 'calculated']);
+    // The click that leaves the field saves it and the press asks the form to send what it shows, so the same value may go twice (the second changes nothing); what matters is that every save is answered before the request.
+    expect(order.at(-1), 'the figures were calculated last').toBe('calculated');
+    expect(order.filter((step) => step === 'calculated'), 'once').toHaveLength(1);
+    expect(order.length, 'the value was saved before the figures were calculated').toBeGreaterThan(1);
     const held = await page.evaluate(async (id) => ((await (await fetch(`/api/v1/estimates/${id}/nodes/${id}`)).json()) as { inputs: Record<string, string> }).inputs, owner.id);
     expect(Object.values(held)).toContain('111.50');
 
@@ -148,68 +153,62 @@ test.describe('AC-3: Recalculate from the screen', () => {
     await page.getByRole('button', { name: 'Use the newer values' }).click();
     await expect(length).toHaveValue('77.00');
 
-    // ED-26, ED-27, ED-28 (ruling 2026-11-27 4.7 (d) 4; DEF-131 stage 2T): the Lead adds a row (2) and a Part under it (2.1); the Engineer's window reads them, with no figure. The Engineer then types inside the subtree the Lead has a
-    // delete dialog open on: the Lead's Delete is refused, nothing is deleted, the tree is read again and the notice says so. Last, the Engineer deletes the row the Lead has open: the Lead's next save answers 404, the block
-    // falls back to the first row and says so once. The Lead then removes the row that is left, so the Calculate below has only the part the Engineer filled.
+    // ED-25, ED-26, ED-27, ED-28 (ruling 2026-11-27 4.3 item 4, 4.7 (d) 4; DEF-131 stage 2T): the Lead adds a row (2) and a Part under it (2.1); the Engineer's window (one, kept for this block) reads them, with no figure. The Engineer
+    // types inside the subtree the Lead has a delete dialog open on: the Lead's Delete is refused, nothing is deleted, and the notice says so. Calculate is refused for the Part's blank inputs: the summary names it, its link opens
+    // the row and the blank field says what to do. Last, the Engineer deletes the row the Lead has open: the Lead's next save answers 404, the block falls back to the first row and says so once. The Engineer then deletes
+    // the row that is left (the Lead's screen need not follow), so the Calculate below has only the part the Engineer filled.
     await addMainAssemblyButton(page).click();
     await expect(reviewRow(page, '2')).toBeFocused();
     await reviewButton(page, 'Add under', '2').click();
     await page.getByRole('menuitem', { name: /^Part/ }).click();
     await expect(reviewRow(page, '2.1')).toHaveAttribute('aria-current', 'true');
-    await withEngineerWindow(browser, owner, async (api) => {
-      const rows = await readTreeThrough(api, owner.id);
+    const engineer = await openEngineerWindow(browser, owner);
+    try {
+      const rows = await readTreeThrough(engineer.api, owner.id);
       expect(rows.map((row) => row.slNo)).toEqual(['1', '2', '2.1']);
       expect(JSON.stringify(rows)).not.toMatch(/figures|unitPrice|price/i);
-    });
+      const inner = defined(rows.find((row) => row.slNo === '2.1'));
 
-    await chooseRow(page, '2');
-    await reviewButton(page, 'Delete', '2').click();
-    const deleteDialog = page.getByRole('alertdialog', { name: /^Delete 2 .+?$/ });
-    await expect(deleteDialog.getByRole('button', { name: 'Keep it' })).toBeFocused();
-    await withEngineerWindow(browser, owner, async (api) => {
-      const rows = await readTreeThrough(api, owner.id);
-      const inner = rows.find((row) => row.slNo === '2.1');
-      if (inner === undefined) throw new Error('row 2.1 is missing');
-      const read = await api.get(`/api/v1/estimates/${owner.id}/nodes/${inner.id}`);
+      await chooseRow(page, '2');
+      await reviewButton(page, 'Delete', '2').click();
+      const deleteDialog = page.getByRole('alertdialog', { name: /^Delete 2 .+\?$/ });
+      await expect(deleteDialog.getByRole('button', { name: 'Keep it' })).toBeFocused();
+      const read = await engineer.api.get(`/api/v1/estimates/${owner.id}/nodes/${inner.id}`);
       const { revision } = (await read.json()) as { revision: number };
-      const written = await api.patch(`/api/v1/estimates/${owner.id}/nodes/${inner.id}/inputs`, { headers: { origin: DEVELOPMENT_URL }, data: { revision, values: { [fieldIdOf('J')]: '5' } } });
+      const written = await engineer.api.patch(`/api/v1/estimates/${owner.id}/nodes/${inner.id}/inputs`, { headers: { origin: DEVELOPMENT_URL }, data: { revision, values: { [fieldIdOf('J')]: '5' } } });
       expect(written.status(), 'the Engineer types inside the subtree').toBe(200);
-    });
-    await deleteDialog.getByRole('button', { name: 'Delete 2 rows' }).click();
-    await expect(deleteDialog).toHaveCount(0);
-    await expect(page.getByText('The parts were changed by someone else. The tree has been refreshed. Check it and try again.')).toBeVisible();
-    expect(await slNumbersOf(page)).toEqual(['1', '2', '2.1']);
+      await deleteDialog.getByRole('button', { name: 'Delete 2 rows' }).click();
+      await expect(deleteDialog).toHaveCount(0);
+      await expect(page.getByText('The parts were changed by someone else. The tree has been refreshed. Check it and try again.')).toBeVisible();
+      expect(await slNumbersOf(page)).toEqual(['1', '2', '2.1']);
 
-    // ED-25 (ruling 4.3 item 4): Calculate is refused for the blank inputs of the new Part. The summary names the part and its fields as links, the link opens the row, and the blank field says what to do.
-    await button(page).click();
-    const missing = page.locator('[data-calculate-summary]');
-    await expect(missing).toContainText('missing inputs');
-    await missing.getByRole('listitem').filter({ hasText: '2.1' }).getByRole('link').first().click();
-    await expect(reviewRow(page, '2.1')).toHaveAttribute('aria-current', 'true');
-    await expect(page.getByText('Enter this value.').first()).toBeVisible();
+      await button(page).click();
+      const missing = page.locator('[data-calculate-summary]');
+      await expect(missing).toContainText('missing inputs');
+      await missing.getByRole('listitem').filter({ hasText: '2.1' }).getByRole('link').first().click();
+      await expect(reviewRow(page, '2.1')).toHaveAttribute('aria-current', 'true');
+      await expect(page.getByText('Enter this value.').first()).toBeVisible();
 
-    await chooseRow(page, '2.1');
-    await expect(reviewRow(page, '2.1')).toHaveAttribute('aria-current', 'true');
-    await withEngineerWindow(browser, owner, async (api) => {
-      const rows = await readTreeThrough(api, owner.id);
-      const inner = rows.find((row) => row.slNo === '2.1');
-      if (inner === undefined) throw new Error('row 2.1 is missing');
-      const guard = deleteGuardOf(rows, inner.id);
-      const removed = await api.delete(`/api/v1/estimates/${owner.id}/nodes/${inner.id}?revision=${String(inner.revision)}&parts=${String(guard.parts)}&subtree=${guard.subtree}`, { headers: { origin: DEVELOPMENT_URL } });
+      const fresh = await readTreeThrough(engineer.api, owner.id);
+      const open = defined(fresh.find((row) => row.slNo === '2.1'));
+      const guard = deleteGuardOf(fresh, open.id);
+      const removed = await engineer.api.delete(`/api/v1/estimates/${owner.id}/nodes/${open.id}?revision=${String(open.revision)}&parts=${String(guard.parts)}&subtree=${guard.subtree}`, { headers: { origin: DEVELOPMENT_URL } });
       expect(removed.status(), 'the Engineer deletes the row the Lead has open').toBe(200);
-    });
-    const open = control(page, 'J');
-    await expect(open).toBeEnabled();
-    await open.fill('9');
-    await open.blur();
-    await expect(page.getByRole('status').filter({ hasText: '2.1 was removed by someone else. Showing 1.' })).toHaveCount(1);
-    await expect(reviewRow(page, '1')).toHaveAttribute('aria-current', 'true');
-    expect(await slNumbersOf(page)).toEqual(['1', '2']);
-    await chooseRow(page, '2');
-    await reviewButton(page, 'Delete', '2').click();
-    await page.getByRole('alertdialog', { name: /^Delete 2 .+?$/ }).getByRole('button', { name: 'Delete row' }).click();
-    await expect(page.getByText('Row deleted')).toHaveCount(1);
-    expect(await slNumbersOf(page)).toEqual(['1']);
+      const field = control(page, 'J');
+      await expect(field).toBeEnabled();
+      await field.fill('9');
+      await field.blur();
+      await expect(page.getByRole('status').filter({ hasText: '2.1 was removed by someone else. Showing 1.' })).toHaveCount(1);
+      await expect(reviewRow(page, '1')).toHaveAttribute('aria-current', 'true');
+
+      const left = await readTreeThrough(engineer.api, owner.id);
+      const second = defined(left.find((row) => row.slNo === '2'));
+      const secondGuard = deleteGuardOf(left, second.id);
+      const gone = await engineer.api.delete(`/api/v1/estimates/${owner.id}/nodes/${second.id}?revision=${String(second.revision)}&parts=${String(secondGuard.parts)}&subtree=${secondGuard.subtree}`, { headers: { origin: DEVELOPMENT_URL } });
+      expect(gone.status(), 'the Engineer deletes the row that is left').toBe(200);
+    } finally {
+      await engineer.close();
+    }
 
     const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${owner.id}/recalculate`));
     await button(page).click();

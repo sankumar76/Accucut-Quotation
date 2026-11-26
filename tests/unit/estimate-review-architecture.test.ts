@@ -128,6 +128,8 @@ describe('AC-5: no review code reaches the Engineer', () => {
   // the review alone: the page chooses it only where `treeActionsOffered` says so, and it takes the rows of the costs view as props (its tree, its buttons and its form are the Engineer's own code).
   const TREE_EDITOR_FOLDER = 'src/components/features/estimate-review-edit/';
   const TREE_EDITOR = `${TREE_EDITOR_FOLDER}review-tree-editor.tsx`;
+  // ... and it is fetched after the page is up by a thin client shell, the one file of the folder the review imports: a bare import() behind a type-only import, so none of the island is in the scripts the page names.
+  const TREE_SHELL = `${TREE_EDITOR_FOLDER}review-edit-shell.tsx`;
   // ... fetched after the page is up by a thin client shell, which the review draws (the autosave, the leave guard and its dialog stay out of the first load, `overlay-imports.test.ts`).
   const LAZY_REVIEW_FORM = 'src/components/features/estimate-workspace/lazy-review-form.tsx';
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
@@ -154,6 +156,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     clientFiles.delete(INPUTS_FORM);
     clientFiles.delete(REVIEW_FORM);
     clientFiles.delete(TREE_EDITOR);
+    clientFiles.delete(TREE_SHELL);
     clientFiles.delete(LAZY_REVIEW_FORM);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
@@ -407,21 +410,33 @@ describe('AC-5: no review code reaches the Engineer', () => {
     }
   });
 
-  it('DEF-131 stage 2T: the tree island is the one client file of its folder, is imported by the review alone, imports no service, repository, calculation or figure-state module and sends no request of its own', () => {
+  it('DEF-131 stage 2T: the tree island and its shell are the two client files of their folder; the island imports no service, repository, calculation or figure-state module and sends no request of its own', () => {
     const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
     const folder = ALL.filter((file) => file.path.startsWith(TREE_EDITOR_FOLDER));
-    expect(folder.map((file) => file.path)).toEqual([TREE_EDITOR]);
-    const island = strip(folder[0]?.text ?? '');
-    expect(island).toMatch(/^\s*['"]use client['"]/m);
-    // The rows of the costs view arrive as props and are read for their type only: the one import of the schema is a type import, and no server module is named.
-    expect(island).not.toMatch(/@\/server\/(?!views\/schemas\/costs')/);
-    expect(island).not.toMatch(/^import (?!type).*schemas\/costs/m);
-    expect(island).not.toMatch(/calculation-|row-outputs|product-totals|figure-state|estimate-review-service|\bfetch\(/);
+    expect(folder.map((file) => file.path)).toEqual([TREE_SHELL, TREE_EDITOR]);
+    for (const file of folder) {
+      const code = strip(file.text);
+      expect(code, file.path).toMatch(/^\s*['"]use client['"]/m);
+      // The rows of the costs view arrive as props and are read for their type only: the one import of the schema is a type import, and no server module is named.
+      expect(code, file.path).not.toMatch(/@\/server\/(?!views\/schemas\/costs')/);
+      expect(code, file.path).not.toMatch(/^import (?!type).*schemas\/costs/m);
+      expect(code, file.path).not.toMatch(/calculation-|row-outputs|product-totals|figure-state|estimate-review-service|\bfetch\(/);
+    }
+    const island = strip(ALL.find((file) => file.path === TREE_EDITOR)?.text ?? '');
     // The editable form (autosave, leave guard and its dialog) comes through the shell that fetches it after the page is up, and is never a plain import of the first load (`overlay-imports.test.ts`).
     expect(island).toMatch(/from '\.\.\/estimate-workspace\/lazy-review-form'/);
     expect(island).not.toMatch(/estimate-workspace\/review-form'/);
-    const importers = ALL.filter((file) => file.path !== TREE_EDITOR && /from '[^']*review-tree-editor'/.test(file.text)).map((file) => file.path);
-    expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
+  });
+
+  it('DEF-131 stage 2T: the shell fetches the island by a bare dynamic import(), imports it for its type only, and is imported by the review alone (the island is in no script the page names)', () => {
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const shell = strip(ALL.find((file) => file.path === TREE_SHELL)?.text ?? '');
+    expect(shell.length).toBeGreaterThan(200);
+    expect(shell).toMatch(/import\('\.\/review-tree-editor'\)/);
+    expect(shell).toMatch(/^import type \{ ReviewTreeEditorProps \} from '\.\/review-tree-editor';/m);
+    expect(shell).not.toMatch(/^import (?!type).*from '\.\/review-tree-editor'/m);
+    expect(ALL.filter((file) => file.path !== TREE_SHELL && /from '[^']*review-edit-shell'/.test(file.text)).map((file) => file.path)).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
+    expect(ALL.filter((file) => file.path !== TREE_EDITOR && /from '[^']*review-tree-editor'/.test(file.text)).map((file) => file.path)).toEqual([TREE_SHELL]);
   });
 
   it('nothing outside the review imports a file of its folder except the review page and the tree island, which draws the review\'s own row, frame and words', () => {

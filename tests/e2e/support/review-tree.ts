@@ -66,19 +66,15 @@ export function countPageReads(page: Page): () => number {
 export const CLEARED_STATUS = 'The parts changed. Every calculated figure is cleared. Press Recalculate to see them again.';
 
 /**
- * The Engineer's own window onto the same estimate (a context of its own, the same person, no new one): signs in through the two calls the sign-in page makes and hands the page's request context to `run`, which
- * reads and writes as the Engineer does.
+ * The Engineer's own window onto the same estimate (a context of its own, the same person, no new one): signs in through the two calls the sign-in page makes and gives the page's request context, which reads and
+ * writes as the Engineer does. The caller closes it.
  */
-export async function withEngineerWindow(browser: Browser, owner: E2eUser, run: (api: APIRequestContext) => Promise<void>): Promise<void> {
+export async function openEngineerWindow(browser: Browser, owner: E2eUser): Promise<{ readonly api: APIRequestContext; readonly close: () => Promise<void> }> {
   const window = await browser.newContext({ baseURL: DEVELOPMENT_URL });
-  try {
-    await freshAddressFor(window);
-    const windowPage = await window.newPage();
-    await signInAs(windowPage, owner);
-    await run(windowPage.request);
-  } finally {
-    await window.close();
-  }
+  await freshAddressFor(window);
+  const windowPage = await window.newPage();
+  await signInAs(windowPage, owner);
+  return { api: windowPage.request, close: () => window.close() };
 }
 
 /** The tree as the server holds it, read through a request context. */

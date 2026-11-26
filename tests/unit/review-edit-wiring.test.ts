@@ -35,8 +35,8 @@ vi.mock('@/components/features/estimate-workspace/part-form', () => ({
     return null;
   },
 }));
-vi.mock('@/components/features/estimate-review-edit/review-tree-editor', () => ({
-  ReviewTreeEditor: (props: { readonly status: EstimateStatus; readonly state: 'current' | 'out-of-date' | 'none' }) => {
+vi.mock('@/components/features/estimate-review-edit/review-edit-shell', () => ({
+  ReviewEditShell: (props: { readonly status: EstimateStatus; readonly state: 'current' | 'out-of-date' | 'none' }) => {
     captured.push({ editable: true, review: { notice: inputsNotice(props.status, false, props.state), figuresCurrent: props.state === 'current' } });
     return null;
   },

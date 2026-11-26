@@ -107,9 +107,15 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
   // The open row: the tree's once it is read, and until then the one that was chosen among the page's rows (the first paint draws those).
   const shown = tree.selected ?? items.find((item) => item.id === tree.selectedId) ?? items.find((item) => item.id === first?.id) ?? items[0] ?? null;
   const selectedId = shown?.id ?? null;
+  // The row last chosen by a press on the tree: only then does the form take the focus and the tree fold under 1024 px (a row just added or the neighbour after a delete is not a choice, `PartReview.byPress`).
+  const [pressedId, setPressedId] = useState<string | null>(null);
+  const choose = (id: string): void => {
+    setPressedId(id);
+    tree.select(id);
+  };
   const missingFields = new Set(blocked?.find((part) => part.nodeId === selectedId)?.fields.map((field) => field.fieldId));
   const renderRow = (part: PartItem, kindLabel: string) => (
-    <TreeRow node={costOf(part)} kindLabel={kindLabel} state={state} code={code} warned={warnedIds.has(part.id)} selected={part.id === selectedId} missing={missingIds.has(part.id)} onChoose={tree.select} takesFocus={tree.wantsFocus} />
+    <TreeRow node={costOf(part)} kindLabel={kindLabel} state={state} code={code} warned={warnedIds.has(part.id)} selected={part.id === selectedId} missing={missingIds.has(part.id)} onChoose={choose} takesFocus={tree.wantsFocus} />
   );
   // Until the tree has been read the rows are the page's, as the server drew them (the figures are the first thing the Lead looks for); the buttons come with the tree.
   const reading = tree.nodes === null && !tree.loadFailed;
@@ -180,6 +186,7 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
               notice: inputsNotice(status, false, state),
               showing: showingInputs(shown.slNo, rowNameOf(shown.label, nodeKindLabel(shown, items)), true),
               figuresCurrent,
+              byPress: shown.id === pressedId,
             }}
           />
         </div>

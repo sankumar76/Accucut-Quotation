@@ -16,7 +16,7 @@ import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { ReviewTreeEditor } from '../estimate-review-edit/review-tree-editor';
+import { ReviewEditShell } from '../estimate-review-edit/review-edit-shell';
 import { PartHead } from '../estimate-workspace/part-head';
 import { PartForm } from '../estimate-workspace/part-form';
 import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
@@ -133,6 +133,31 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
   // The rows of the calculation's quantity warning, which the costs view holds only while the figures are current (STORY-06.10 AC-3, AC-4).
   const warned = warnedNodeIds(state === 'current' ? costs.warning : null);
   const rowLine = selected === null ? null : <ReviewRowLine code={header.code} node={selected} state={state} letters={letters} warned={warned.has(selected.id)} />;
+  // The two columns of the review as the server draws them: the parts tree (read-only, with the mark of an editable one) and the open row's inputs. For an editable estimate the island takes their place once it is up.
+  const columns = (
+    <>
+      <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} selectedSlNo={selected === null ? null : selected.slNo} edit={editTree} />
+      {selected === null ? null : (
+        // The Engineer's own form, read-only (never editable here: the editable form is the island's), in the same place as the island's.
+        <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">
+          {/* The row's eyebrow, title and figure line are drawn here, on the server, so they are in the first paint whatever the form is doing; the form under them is labelled by the title (UX ruling 3.6, 3.7). */}
+          <PartHead partId={selected.id} slNo={selected.slNo} nodes={partItems} titleId="part-form-title" titleRef={null} />
+          {rowLine}
+          <PartForm
+            estimateId={estimateId}
+            part={{ id: selected.id, slNo: selected.slNo, revision: selectedRevision ?? 0 }}
+            editable={false}
+            nodes={partItems}
+            review={{
+              notice: inputsNotice(header.status, isIgnored, state),
+              showing: showingInputs(selected.slNo, rowNameOf(selected.name, nodeKindLabel(selected, nodes)), editable),
+              figuresCurrent: state === 'current',
+            }}
+          />
+        </div>
+      )}
+    </>
+  );
   // BO from the approvals row, in every state of the figures (AC-9); its time in IST.
   const approval: ApprovedTileView | null =
     costs.approval === null
@@ -200,7 +225,9 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
       <div data-review-columns="" className="flex flex-col gap-s-4 md:gap-s-5 min-[1024px]:grid min-[1024px]:grid-cols-[var(--tree-w)_minmax(0,1fr)] min-[1024px]:items-start">
         {editTree ? (
-          <ReviewTreeEditor
+          // A Draft or a Prepared estimate that can be corrected: the read-only columns below are what the first paint shows, and the thin shell swaps the editing island in once its code has arrived (a bare import(), so
+          // none of it is in the first load). The first paint says what the island says, with no control, so nothing typed is lost to a form that cannot save.
+          <ReviewEditShell
             estimateId={estimateId}
             code={header.code}
             status={header.status}
@@ -210,28 +237,11 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
             warned={[...warned]}
             selectedSlNo={selected === null ? null : selected.slNo}
             selectedRevision={selectedRevision ?? 0}
-          />
+          >
+            {columns}
+          </ReviewEditShell>
         ) : (
-          <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} selectedSlNo={selected === null ? null : selected.slNo} />
-        )}
-        {editTree || selected === null ? null : (
-          // The Engineer's own form, read-only, in a client island of its own folder; nothing handed to it holds a figure: the rows are mapped down to their number, kind and name, and the row line is drawn here (AQP-488).
-          <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">
-            {/* The row's eyebrow, title and figure line are drawn here, on the server, so they are in the first paint whatever the form is doing; the form under them is labelled by the title (UX ruling 3.6, 3.7). */}
-            <PartHead partId={selected.id} slNo={selected.slNo} nodes={partItems} titleId="part-form-title" titleRef={null} />
-            {rowLine}
-            <PartForm
-              estimateId={estimateId}
-              part={{ id: selected.id, slNo: selected.slNo, revision: selectedRevision ?? 0 }}
-              editable={editable}
-              nodes={partItems}
-              review={{
-                notice: inputsNotice(header.status, isIgnored, state),
-                showing: showingInputs(selected.slNo, rowNameOf(selected.name, nodeKindLabel(selected, nodes)), editable),
-                figuresCurrent: state === 'current',
-              }}
-            />
-          </div>
+          columns
         )}
       </div>
       {/* The action bar is not drawn while the estimate is ignored: Restore RFQ, in the notice, is the one action left (CR-01 item 7D). */}

@@ -148,6 +148,8 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(inputs.getByRole('button', { name: /^(Save draft|Calculate)$/ })).toHaveCount(0);
     // RO-3 (QLT-800-04): each value the part holds is the value shown, compared by field ID: the part is read as the Lead through the same route the form uses, and every box (a number, a text) shows what it holds. A number is
     // shown as SCR-05 shows it after saving (two decimals), so numbers are compared as numbers.
+    // The fields arrive after the form's code and its definition: the boxes are compared once they are there.
+    await expect(form.getByRole('textbox', { name: /Length/ }).first()).toBeVisible();
     const held = await page.evaluate(async (id) => {
       const response = await fetch(`/api/v1/estimates/${id}/nodes/${id}`);
       return { status: response.status, inputs: ((await response.json()) as { inputs: ReadonlyArray<{ fieldId: string; value: string }> }).inputs };
@@ -293,7 +295,8 @@ test.describe('AC-6: not calculated', () => {
     await expect(inputs.locator('[data-row-line]')).toContainText(/^This row: — · count /);
     await expect(inputs.getByRole('status').filter({ hasText: 'Showing the inputs of' })).toHaveCount(0);
     await treePanel(page).locator('a[href$="?row=2#row-inputs"]').click();
-    await expect(page).toHaveURL(/\?row=2#row-inputs$/);
+    // A Draft is editable, so the row is chosen in place (the island writes `?row=` with no navigation and no hash); the link keeps its address all the same.
+    await expect(page).toHaveURL(/\?row=2(#row-inputs)?$/);
     await expect(treePanel(page).locator('a[aria-current="true"]')).toHaveAttribute('href', /\?row=2#row-inputs$/);
     await expect(inputs.locator('#part-form-title')).toContainText('2');
     await expect(page.locator('#part-form-title')).toBeFocused();

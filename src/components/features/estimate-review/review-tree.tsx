@@ -35,6 +35,8 @@ export interface ReviewTreeProps {
   readonly warned: ReadonlySet<string>;
   /** The Sl. No of the row whose inputs are shown beside the tree (`aria-current`), or null for an estimate with no rows. */
   readonly selectedSlNo?: string | null;
+  /** The estimate can be corrected: the panel carries the mark of the editing tree (`data-review-tree-edit`) while the island's code is on its way and takes this tree's place. */
+  readonly edit?: boolean;
 }
 
 /**
@@ -57,11 +59,11 @@ export function ReviewTreeFrame({ selectedName, letters, state, edit = false, ch
   );
 }
 
-export function ReviewTree({ code, state, letters, nodes, warned, selectedSlNo = null }: ReviewTreeProps) {
+export function ReviewTree({ code, state, letters, nodes, warned, selectedSlNo = null, edit = false }: ReviewTreeProps) {
   const selected = selectedSlNo === null ? undefined : nodes.find((node) => node.slNo === selectedSlNo);
   const selectedName = selected === undefined ? '' : `${selected.slNo} ${rowNameOf(selected.name, nodeKindLabel(selected, nodes))}`;
   return (
-    <ReviewTreeFrame selectedName={selectedName} letters={letters} state={state}>
+    <ReviewTreeFrame selectedName={selectedName} letters={letters} state={state} edit={edit}>
       {nodes.length === 0 ? (
         <p className="text-body text-ink-2">{TREE_EMPTY}</p>
       ) : (
