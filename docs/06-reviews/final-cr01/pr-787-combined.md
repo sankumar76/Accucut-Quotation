@@ -121,7 +121,30 @@ I found four Minors and nothing that blocks the merge:
 
 n/a (round 1).
 
+## Round 2 (re-review of `51070109..1bccebe7`, 2026-11-26) — APPROVE WITH COMMENTS
+
+Scope: the one fix commit `1bccebe7` (3 files, +56/−9). CI run 45806135860 is fully green at `1bccebe7`. `npx vitest run tests/unit/password-input.test.ts tests/unit/cn.test.ts` ran at `1bccebe7` in a temporary scratchpad worktree, since removed: 2 files, 36 passed. Master drift (#778, #756) touches none of the 4 files. DL-422 stays **+0**: the E2E step sits inside the existing sign-in case. PR review [6073269759](https://github.com/sankumar76/Accucut-Quotation/pull/787#pullrequestreview-6073269759).
+
+| Finding | Round-2 status | Evidence |
+|---------|----------------|----------|
+| SEC-787-01 | **Fixed** | `flushSync` wraps the hide in both native listeners (`password-input.tsx:53`); they never run during a render. E2E `sign-in.spec.ts:117-121` dispatches `PageTransitionEvent('pagehide', { persisted: true })` and reads `#password` as `password` in the same task, at 3 widths. The unit test counts the `flushSync` |
+| QLT-787-01 | **Fixed** (not yet seen in a real Edge) | `[&::-ms-reveal]:hidden` on the input, with a unit assertion. The qa-engineer's manual check in Edge stays open as a check, not a hold |
+| QLT-787-02 | **Fixed** | `disabled={props.disabled}` (`:62`), with unit cases. Side effect: QLT-787-07 |
+| QLT-787-03 | **Fixed** | `peer` on the input; `peer-aria-invalid:border-y-2 peer-aria-invalid:border-r-2` on the button, kept after merging (probe with the project's `extendTailwindMerge` set) |
+| QLT-787-04 | **Fixed** | the return type is `() => void`; `stop()`; `void form;` removed |
+| SEC-787-02, QLT-787-06 | Info, stand | — |
+| QLT-787-05 | Info; the `pagehide` gap is closed by the E2E step | — |
+
+**New finding**
+
+| ID | Severity | File:line | Issue | Why | Fix |
+|----|----------|-----------|-------|-----|-----|
+| QLT-787-07 | Minor | `src/components/shared/password-input.tsx:61-62` | A disabled eye draws a 1 px divider inside the disabled field. `Button`'s base keeps `border` (all four sides) and `disabled:border-border`, and the plain `border-transparent` does not override the `disabled:` variant (`tailwind-merge` probe). The top, right and bottom edges fall on the field's own disabled border; the left edge shows as a line | Cosmetic, only while a request is pending in 7 forms; new with the QLT-787-02 fix | Add `disabled:border-transparent` to the button's `className`. **Test:** a unit class assertion. Hardening window or this PR; does not block |
+
+Open after round 2: Blocker 0, Critical 0, Major 0, Minor 1 (QLT-787-07), Info 3 (SEC-787-02, QLT-787-05, QLT-787-06). The label stays `review:quality-approved`.
+
 ## Hand-off
 - Status: COMPLETE
 - Verdict: APPROVE WITH COMMENTS (Blocker 0, Critical 0, Major 0, Minor 4, Info 4). CI run 45798949161 is green at `51070109`. DL-422 +0 is confirmed.
 - Recommended next agent: developer (optional: QLT-787-01, QLT-787-02 and SEC-787-01 in this PR), then orchestrator: bring the branch up to date and merge per CLAUDE.md §9 on fully green CI, by the end of Wed 2 Dec.
+- **Round 2 (1bccebe7):** APPROVE WITH COMMENTS. All 5 round-1 findings are fixed; one new Minor (QLT-787-07) does not block. Next: orchestrator merges on fully green CI after updating the branch.
