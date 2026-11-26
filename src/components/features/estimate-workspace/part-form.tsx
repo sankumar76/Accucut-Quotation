@@ -6,6 +6,7 @@ import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { SaveGate } from '@/lib/estimates/save-gate';
+import type { PartItem } from '@/lib/estimates/tree-client';
 
 import { FAILED_BODY, FORM_LOAD_FAILED_TITLE, FORM_LOADING, FORM_NO_PART, TRY_AGAIN } from './estimate-texts';
 import type { PartFieldsProps } from './part-fields';
@@ -23,6 +24,8 @@ export interface PartFormProps {
   readonly part: PartTarget | null;
   /** False once the estimate may no longer be changed by this person (the server refuses a save regardless). */
   readonly editable: boolean;
+  /** The tree as it is now: the form's head names the row and where it sits. */
+  readonly nodes: ReadonlyArray<PartItem> | null;
   /** A save went through: the tree takes the part's new revision and how complete it is. */
   readonly onSaved: (saved: SavedPart) => void;
   /** The server says the part is not as the person saw it: the tree is read again. */
@@ -45,7 +48,7 @@ export interface PartFormProps {
  * nothing typed into one can land in another. Skeleton cards while it loads, a notice with "Try again" when it cannot be read. No rate, cost or formula is requested, held or drawn: the
  * server's form has none, and the materials are IDs and names.
  */
-export function PartForm({ estimateId, part, editable, onSaved, onChanged, onNamed, onServerIgnored, missing, gate, onShown }: PartFormProps) {
+export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, onNamed, onServerIgnored, missing, gate, onShown }: PartFormProps) {
   const definition = useFormDefinition(estimateId);
   const fields = useLazyComponent<PartFieldsProps>(loadFields, true);
   const Fields = fields.Component;
@@ -92,6 +95,7 @@ export function PartForm({ estimateId, part, editable, onSaved, onChanged, onNam
       estimateId={estimateId}
       part={part}
       editable={editable}
+      nodes={nodes}
       form={definition.form.value}
       materials={definition.materials}
       lastSavedAt={definition.lastSavedAt}
