@@ -30,8 +30,9 @@ The screen at the widths named reads as the design above; the hands-on check rep
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
 | Graded (type, severity, lane) | master | 2026-11-26 | DL-414, DL-416: Sev-2, lane 2 |
-| Fixed | developer | | |
-| Regression test added | developer | | |
+| Fixed | developer | 2026-11-27 | PR #795, squash `5a496d16` (`QUEUE_TABS` is `open, overdue, closed, ignored` in `src/lib/tasks/queue.ts`; `queue-screen.tsx`) |
+| Regression test added | developer | 2026-11-27 | `task-queue.spec.ts`, `ignore-restore.spec.ts`, `task-queue-contract`, `task-queue-screen`, `ignored-tab` and `ignored-tab-screen` tests updated in #795 |
+| CI proof read by QA (the push `5a496d16`, CI 45842343024, Windows package 45842343047, both `success`) | qa-engineer | 2026-11-27 | `task-queue.spec.ts` 9 cases, `task-queue-filters.spec.ts` 6 and `ignore-restore.spec.ts` 16 passed at each of the three widths on attempt 1; the four unit files passed; the push's one flaky (`estimate-tree-names.spec.ts:52`) is unrelated; test plan 0.3.89 |
 | Hands-on check repeated | ux-expert | | |
 | Verified | qa-engineer | | |
 
