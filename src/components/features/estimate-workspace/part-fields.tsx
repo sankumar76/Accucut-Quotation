@@ -6,6 +6,7 @@ import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-client';
+import type { PartItem } from '@/lib/estimates/tree-client';
 import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
 import { isSectionComplete, sectionProgress, sectionWeight, shownSections, sumProgress, textOf } from '@/lib/estimates/form-values';
 import type { SaveGate } from '@/lib/estimates/save-gate';
@@ -27,12 +28,12 @@ import {
   PART_CHANGED_NOTICE,
   PART_LOAD_FAILED_TITLE,
   PART_SAVE_FAILED_TITLE,
-  partFormTitle,
   TRY_AGAIN,
 } from './estimate-texts';
 import { focusCalculate } from './calculate-button';
 import { controlIdFor, NEXT_FIELD } from './field-ids';
 import { FieldRenderer } from './field-renderer';
+import { PartHead } from './part-head';
 import { PartProgress, PartProgressSkeleton } from './part-progress';
 import { PictureSlot } from './picture-slot';
 import { CONFLICT_BODY, CONFLICT_KEEP_MINE, CONFLICT_TITLE, CONFLICT_USE_NEWER, saveStatusText } from './save-texts';
@@ -47,6 +48,8 @@ export interface PartFieldsProps {
   readonly estimateId: string;
   readonly part: PartTarget;
   readonly editable: boolean;
+  /** The tree as it is now: the form's head says where the row sits and what it is called (DEF-097). Null until the tree is read. */
+  readonly nodes: ReadonlyArray<PartItem> | null;
   readonly form: FormView;
   readonly materials: Loaded<ReadonlyArray<MaterialChoice>>;
   readonly lastSavedAt: string | null;
@@ -108,7 +111,7 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
  * its number of fields, one to a row on a phone; the form is held to one card's least width, so a reserved region beside it takes a column with no redesign, UD-4), and every field from the server's definition. It is used under a key of the part's ID.
  * Each value is the person's until the field is left, and then the part's values are saved on their own (`usePartValues`).
  */
-export function PartFields({ estimateId, part, editable, form, materials, lastSavedAt, onSaved, onChanged, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing, gate }: PartFieldsProps) {
+export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing, gate }: PartFieldsProps) {
   const allFields = form.sections.flatMap((section) => section.fields);
   const values = usePartValues({ estimateId, part, editable, fields: allFields, onSaved, onChanged, onNamed, onServerIgnored, onWrote, gate });
   const title = useRef<HTMLHeadingElement>(null);
@@ -148,9 +151,8 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
   return (
     <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, title.current)} className="is-compact flex min-w-0 flex-1 flex-col gap-s-4">
       <div className="flex flex-col gap-s-1">
-        <h3 id={TITLE_ID} ref={title} tabIndex={-1} className="text-sub font-semibold text-ink">
-          {partFormTitle(part.slNo)}
-        </h3>
+        <PartHead partId={part.id} slNo={part.slNo} nodes={nodes} titleId={TITLE_ID} titleRef={title} />
+        <PartProgress slNo={part.slNo} counts={sumProgress(progress.map(({ counts }) => counts))} />
         <p className="text-label text-ink-3">{FORM_INTRO}</p>
         {/* The one status line of saving (STORY-05.10 AC-4, AC-5): when something was last saved (every save that stored something moves it, `onWrote`), that the form saves on its own, and, once, that the automatic
             save could not. A polite live region that is on the page from the first paint, so it speaks only when its words change, which is when a save stored something or failed, never on a silent tick. */}
@@ -187,7 +189,6 @@ export function PartFields({ estimateId, part, editable, form, materials, lastSa
           </Button>
         </Notice>
       ) : null}
-      <PartProgress slNo={part.slNo} counts={sumProgress(progress.map(({ counts }) => counts))} />
       <SectionStrip items={progress.map(({ section, counts }) => ({ section, complete: isSectionComplete(counts), missing: hasMissing(section) }))} />
       <div data-part-grid="" className="flex flex-wrap gap-s-3">
         {progress.map(({ section, counts }) => (

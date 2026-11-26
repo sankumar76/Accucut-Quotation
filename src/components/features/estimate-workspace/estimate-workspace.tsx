@@ -63,7 +63,6 @@ const DRAWING_REGION = 'hidden lg:block lg:shrink-0 lg:w-(--drawing-region-width
  * drawing region would no longer have its whole width (STORY-10.06 AC-2). Below 1024 px the form is a card, as it was.
  */
 const FORM_CARD = 'lg:flex-1 lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none';
-const FORM_CARD_HEAD = 'lg:border-b-0 lg:px-0 lg:pt-0';
 const FORM_CARD_BODY = 'flex lg:p-0';
 
 /** The alert of an estimate that was ignored while the Engineer worked (CR-01 item 7D): fetched only when the server says so, by a bare `import()`, so it is in no first load (NFR-009). */
@@ -181,11 +180,12 @@ export function EstimateWorkspace({ header, estimateId, userId, ignored = false,
       <div ref={attachWorkspace} className="flex flex-col gap-s-4 lg:flex-row lg:items-start">
         <PartsTreeArea tree={guardedTree} editable={editable} onOpenPart={focusFirstField} missingIds={missingParts} resize={treeWidth} controlsReady={formShown} />
         <Card role="group" aria-labelledby={FORM_AREA_TITLE_ID} data-form-area="" className={FORM_CARD}>
-          <CardHeader className={FORM_CARD_HEAD}>
+          {/* Not drawn: the form's own head (eyebrow, number and name, progress) is the head of the card in the SCR-05 mock-up (DEF-097). The title stays for the rows' links and the group's name. */}
+          <CardHeader className="sr-only">
             <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>
           </CardHeader>
           <CardContent className={FORM_CARD_BODY}>
-            <PartForm estimateId={estimateId} part={selected} editable={editable} onSaved={saved} onChanged={tree.readAgain} onNamed={tree.applyLabel} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} onShown={reportFormShown} />
+            <PartForm estimateId={estimateId} part={selected} editable={editable} nodes={tree.nodes} onSaved={saved} onChanged={tree.readAgain} onNamed={tree.applyLabel} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} onShown={reportFormShown} />
           </CardContent>
         </Card>
         <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />

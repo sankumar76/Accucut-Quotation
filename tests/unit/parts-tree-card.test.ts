@@ -250,7 +250,8 @@ describe('item 10: in the workspace the tree card sits beside the form card, not
     const open = html.lastIndexOf('<div', html.indexOf('data-form-area'));
     const card = html.slice(open, html.indexOf('>', open));
     for (const name of ['lg:flex-1', 'lg:border-0', 'lg:bg-transparent', 'lg:shadow-none']) expect(card, name).toContain(name);
-    expect(formCard).toMatch(/data-slot="card-header" class="[^"]*lg:px-0/);
+    // The card's own head is not drawn (DEF-097): the form's head is the mock-up's head. Its title is still there for the rows' links and the group's name.
+    expect(formCard).toMatch(/data-slot="card-header" class="[^"]*sr-only/);
     expect(formCard).toMatch(/data-slot="card-content" class="[^"]*lg:p-0/);
   });
 
