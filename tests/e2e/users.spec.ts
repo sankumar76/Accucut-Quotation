@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test';
 
 import { createDisposableUser, E2E_ADMIN } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TABLET_MIN_WIDTH, TOUCH_TARGET, waitUntilHydrated, widthOf } from './support/design-system';
@@ -54,10 +54,35 @@ async function pressWithKeyboard(button: Locator): Promise<void> {
   await button.press('Enter');
 }
 
-test.describe('the list', () => {
-  test('AC-1, AC-7: shows name, e-mail, role and status, does not scroll sideways and has no axe violations', async ({ page }, testInfo) => {
-    const person = await createDisposableUser('managed', testInfo);
+/**
+ * DEF-053 (AQP-383; DL-427, DL-430): the list case was one test that made a person, loaded /users (about 4.6 s) and ran every check and one whole-page axe scan, which is about 15 s of a 20 s case on desktop with
+ * the list at 820 people and 21,549 DOM nodes, and it timed out at 30 s on slow draws. It is now **two cases on one page**, in one serial group: the page is made and loaded once, in `beforeAll`, with the same sign-in
+ * (`ADMIN_STATE`), address (`baseURL`) and viewport as every case of this file; case A runs **every check** of the old case except the scan; case B first asserts that the page is as A left it and then runs the **same**
+ * `expectNoAxeViolations` on the whole page, with the same rules and context. A failure of A skips B and a retry runs the whole group again from `beforeAll`, so the retry and coverage semantics are the old case's.
+ * No click, navigation, dialog, focus move, viewport change or reload happens between the load and the scan. No timeout is set, raised or lowered anywhere here.
+ */
+test.describe('the list: one page, checked and then scanned (DEF-053)', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  let context: BrowserContext;
+  let page: Page;
+  let person: Awaited<ReturnType<typeof createDisposableUser>>;
+  let rowsOnLoad = 0;
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    const { baseURL, viewport, hasTouch } = testInfo.project.use;
+    context = await browser.newContext({ storageState: ADMIN_STATE, ...(baseURL === undefined ? {} : { baseURL }), ...(viewport === undefined ? {} : { viewport }), ...(hasTouch === undefined ? {} : { hasTouch }) });
+    page = await context.newPage();
+    person = await createDisposableUser('managed', testInfo);
     await openUsers(page);
+    rowsOnLoad = await page.locator('[data-user-id]:visible').count();
+  });
+
+  test.afterAll(async () => {
+    await context.close();
+  });
+
+  test('AC-1, AC-7: shows name, e-mail, role and status, and does not scroll sideways', async () => {
     const row = rowOf(page, person.name);
     await expect(row).toContainText(person.email);
     await expect(row).toContainText('Engineer');
@@ -72,9 +97,20 @@ test.describe('the list', () => {
       await expect(page.getByText(OWN_PHONE_LINE)).toBeHidden();
     }
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectNoAxeViolations(page);
   });
 
+  test('AC-7: the list has no axe violations, scanned on the page the case before it checked', async ({}, testInfo) => {
+    // The state that the old single case scanned: the list as it was rendered (the same rows), no dialog or overlay open, and the viewport as the project sets it.
+    await expect(page.locator('[data-user-id]:visible')).toHaveCount(rowsOnLoad);
+    await expect(rowOf(page, person.name)).toHaveCount(1);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    expect(page.viewportSize()).toEqual(testInfo.project.use.viewport);
+    await expectNoAxeViolations(page);
+  });
+});
+
+test.describe('the list', () => {
   test('AC-7: controls are at least 44 px, and the icon buttons of a table row at least 36 px', async ({ page }, testInfo) => {
     const person = await createDisposableUser('managed', testInfo);
     await openUsers(page);
