@@ -2,6 +2,7 @@ import { assertNever } from '../../lib/assert-never';
 import { ForbiddenError, NotFoundError } from '../../lib/errors';
 import { buildCostWorking } from '../../lib/estimate/cost-working';
 import { figureState, readFiguresWhenCurrent } from '../../lib/estimate/figure-state';
+import { nodeKindLabel } from '../../lib/estimate/node-kinds';
 import { partNameOf } from '../../lib/estimate/part-name';
 import { buildTree } from '../../lib/estimate/tree';
 import type { FieldDefinition } from '../../lib/fields/field-schema';
@@ -87,12 +88,13 @@ export function createCostDetailsService({ calculations, nodes, configuration, p
     }
     const basis = await calculations.findFigureBasis(estimateId);
     if (basis === null) throw new NotFoundError();
-    const { node, slNo } = findPart(await nodes.listNodes(estimateId), asked);
+    const records = await nodes.listNodes(estimateId);
+    const { node, slNo } = findPart(records, asked);
 
     const { calculation } = basis;
     const state = figureState({ inputsRevision: basis.inputsRevision, calculationInputsRevision: calculation?.inputsRevision ?? null });
     const version = calculation === null ? await configuration.current() : await configuration.byId(calculation.configVersionId);
-    const row = { nodeId: node.id, slNo, name: partNameOf(version.document, node.inputs) };
+    const row = { nodeId: node.id, slNo, name: partNameOf(version.document, node.inputs), kindLabel: nodeKindLabel(node, records) };
     if (calculation === null || state !== 'current') return nodeCostsSchema.parse({ state, row, details: null });
 
     // The one read of a calculated figure: through the figure state, and only while it is `current` (STORY-06.02 AC-7).

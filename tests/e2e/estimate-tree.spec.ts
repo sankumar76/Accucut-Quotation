@@ -400,11 +400,11 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     expect(await slNumbers(page)).toEqual(['1']);
 
     await addUnder(page, '1', 'Sub-Assembly');
-    await expect(page.getByText('Part 1.1 added')).toHaveCount(1);
+    await expect(page.getByText('Added 1.1 Sub-Assembly. Type a Description to name it.')).toHaveCount(1);
     await addUnder(page, '1', 'Part');
-    await expect(page.getByText('Part 1.2 added')).toHaveCount(1);
+    await expect(page.getByText('Added 1.2 Part. Type a Description to name it.')).toHaveCount(1);
     await addMain(page);
-    await expect(page.getByText('Part 2 added')).toHaveCount(1);
+    await expect(page.getByText('Added 2 Main Assembly. Type a Description to name it.')).toHaveCount(1);
     await expect.poll(() => slNumbers(page)).toEqual(['1', '1.1', '1.2', '2']);
 
     // The new part is the selected one; 1.2 up becomes 1.1, and the screen says so.
@@ -454,8 +454,9 @@ test.describe('AC-1, AC-2: adding, moving and renumbering', () => {
     await expect(tree(page).getByRole('img', { name: 'Sub-Assembly' })).toHaveCount(1);
     await expect(part(page, '1.1').getByRole('img', { name: 'Sub-Assembly' })).toHaveCount(1);
     await expect(part(page, '1.1').locator('svg > title')).toHaveText('Sub-Assembly');
-    expect(await part(page, '1').innerText()).not.toContain('Main Assembly');
-    expect(await part(page, '1.1').innerText()).not.toContain('Sub-Assembly');
+    // A row with no Description and no Part No. shows its kind's own name as its name (AQP-446, DEF-089), once: the icon's name is a tooltip and a spoken name, not a second text.
+    expect((await part(page, '1').innerText()).split('Main Assembly')).toHaveLength(2);
+    expect((await part(page, '1.1').innerText()).split('Sub-Assembly')).toHaveLength(2);
 
     // The legend at the foot names the four icons.
     const legend = page.locator('[data-tree-legend]');
@@ -530,7 +531,8 @@ test.describe('AC-3: delete asks first and names the count', () => {
 
     await choose(page, '1');
     await rowButton(page, 'Delete', '1').click();
-    const dialog = page.getByRole('alertdialog', { name: 'Delete row 1?' });
+    // The title names the row as the button that opened it does: its number, then its name or its kind (AQP-446).
+    const dialog = page.getByRole('alertdialog', { name: /^Delete 1 .+\?$/ });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('This also deletes the 2 rows under it, and everything typed into them. This cannot be undone.');
     await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
@@ -547,7 +549,7 @@ test.describe('AC-3: delete asks first and names the count', () => {
 
     await choose(page, '1');
     await rowButton(page, 'Delete', '1').click();
-    const dialog = page.getByRole('alertdialog', { name: 'Delete row 1?' });
+    const dialog = page.getByRole('alertdialog', { name: /^Delete 1 .+\?$/ });
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Delete 3 rows' }).click();
     await expect(dialog).toHaveCount(0);
@@ -571,7 +573,7 @@ test.describe('AC-3: delete asks first and names the count', () => {
     });
 
     await rowButton(page, 'Delete', '2').click();
-    const dialog = page.getByRole('alertdialog', { name: 'Delete row 2?' });
+    const dialog = page.getByRole('alertdialog', { name: 'Delete 2 Main Assembly?' });
     await expect(dialog).toContainText('Row 2 and everything typed into it will be deleted. This cannot be undone.');
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
@@ -772,7 +774,7 @@ test.describe('AQP-405: the row actions', () => {
     await page.keyboard.press('Tab');
     await expect(rowButton(page, 'Delete', '1.1')).toBeFocused();
     await page.keyboard.press('Enter');
-    const dialog = page.getByRole('alertdialog', { name: 'Delete row 1.1?' });
+    const dialog = page.getByRole('alertdialog', { name: /^Delete 1\.1 .+\?$/ });
     await expect(dialog).toContainText('Row 1.1 and everything typed into it will be deleted. This cannot be undone.');
     await dialog.getByRole('button', { name: 'Delete row' }).click();
     await expect(dialog).toHaveCount(0);

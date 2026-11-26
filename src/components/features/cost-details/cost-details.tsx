@@ -5,6 +5,7 @@ import { ColumnTag } from '@/components/shared/column-tag';
 import { COMPACT_BOX_PADDING } from '@/components/shared/compact-padding';
 import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
+import { RowName } from '@/components/shared/row-name';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/cn';
@@ -25,7 +26,6 @@ import {
   NOT_APPLICABLE_NOTE,
   NOT_CALCULATED_BODY,
   NOT_CALCULATED_TITLE,
-  PART_NAME_FALLBACK,
   ROW_LABEL,
   RULES_READ_ONLY,
   RULES_ROUNDING,
@@ -71,7 +71,9 @@ function RowHeader({ view }: { readonly view: NodeCostsView }) {
       <CardContent className={cn('flex flex-wrap items-baseline gap-x-s-3 gap-y-s-1', COMPACT_BOX_PADDING)}>
         <span className="text-label font-semibold text-ink-2">{ROW_LABEL}</span>
         <span className="text-body font-semibold text-ink tabular-nums">{row.slNo}</span>
-        <span className={cn('min-w-0 flex-1 text-body text-ink', BREAK_LONG_NAMES)}>{row.name === '' ? PART_NAME_FALLBACK : row.name}</span>
+        <span className={cn('min-w-0 flex-1 text-body text-ink', BREAK_LONG_NAMES)}>
+          <RowName label={row.name} kindLabel={row.kindLabel} />
+        </span>
       </CardContent>
     </Card>
   );

@@ -8,6 +8,7 @@ import { fieldVisibility, readTyped, watchersOf } from '@/lib/estimates/form-val
 import { planAfterNewerPart, type FieldConflict } from '@/lib/estimates/part-conflict';
 import type { FlushMode, SaveGate } from '@/lib/estimates/save-gate';
 import type { Completeness } from '@/lib/estimates/tree-client';
+import { PART_NAME_KEYS } from '@/lib/estimate/part-name-keys';
 import { systemClock } from '@/lib/time';
 
 import { ESTIMATE_IGNORED_CODE } from '../estimate-ignore/ignore-codes';
@@ -57,6 +58,8 @@ export interface UsePartValuesProps {
   readonly onSaved: (saved: SavedPart) => void;
   /** The server says the part is not as the person saw it: the tree is read again. */
   readonly onChanged: () => void;
+  /** The person left Description or Part No. with a changed text: the row's name in the tree is now this (its Description, else its Part No., else an empty text; AQP-447, NAME-4). */
+  readonly onNamed: (id: string, label: string) => void;
   /** The server refused a save with the 409 of an ignored estimate (CR-01 item 7D): the page says so once, in one alert, and nothing more is sent. */
   readonly onServerIgnored: () => void;
   /** A save changed the part, at this time. */
@@ -81,7 +84,7 @@ export interface UsePartValuesProps {
  * of Save draft only in what it says. Nothing under a field and no alert, because the person may be typing in it: a value the rule refuses is left unsent and unsaved, the text shown is not rewritten, and a failure
  * is one polite status (`autosaveFailedAt`, `use-autosave-trail.ts`). A conflict pauses it until the person has chosen.
  */
-export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onServerIgnored, onWrote, gate }: UsePartValuesProps) {
+export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onNamed, onServerIgnored, onWrote, gate }: UsePartValuesProps) {
   const partId = part.id;
   const [stored, setStored] = useState<Loaded<PartInputs>>(LOADING);
   const [texts, setTexts] = useState<Readonly<Record<string, string>>>({});
@@ -348,7 +351,21 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     // the box alone changes nothing and a part with nothing typed stays EMPTY (STORY-05.04 AC-3).
     showText(field.id, standIn(field, check.value) ?? '');
     if (standIn(field, settledValue(field)) === standIn(field, check.value)) return;
+    nameRow(field, check.value ?? '');
     queueSave(field, check.value ?? '');
+  }
+
+  /**
+   * The tree's row takes its name when a field that names it is left with a new text (AQP-447, DEF-090; ruling item 2): not on each key, and without waiting for the save. The name is the first of Description and
+   * Part No. that holds a text, the committed one for the field just left and what the server holds for the other, so clearing Description falls back to Part No. (the server's rule, `partNameOf`).
+   */
+  function nameRow(left: FormField, value: string): void {
+    if (left.nameKey === undefined) return;
+    const textOf = (key: (typeof PART_NAME_KEYS)[number]): string => {
+      const field = fields.find((candidate) => candidate.nameKey === key);
+      return (field === undefined ? '' : field.id === left.id ? value : (settledValue(field) ?? '')).trim();
+    };
+    onNamed(partId, PART_NAME_KEYS.map(textOf).find((text) => text !== '') ?? '');
   }
 
   /** Queues the save of one field's value, behind the saves already queued. `automatic` is the 30-second save's (STORY-05.10): a failure of it is told quietly. */

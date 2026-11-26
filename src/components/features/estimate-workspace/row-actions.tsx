@@ -7,15 +7,17 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import type { NodeKind } from '@/lib/estimate/node-kinds';
 import type { PartItem } from '@/lib/estimates/tree-client';
+import { rowNameOf } from '@/lib/estimates/row-name';
 import { actionsLabel, addActionOf, addFastenerLabel, addUnderLabel, deleteRowLabel, moveRowLabel } from '@/lib/estimates/tree-actions';
 
 import { AddNodeMenu } from './add-node-menu';
 import { AddNodeTrigger, ROW_ACTION_LOOK, ROW_ACTION_SIZE, UNAVAILABLE_LOOK } from './add-node-trigger';
-import { TREE_PART_NAME } from './estimate-texts';
 import { MoveHandle } from './move-handle';
 
 export interface RowActionsProps {
   readonly part: PartItem;
+  /** The name of the row's kind (`nodeKindLabel`: Part or Sub-part follows the siblings): it names the row in the buttons' spoken names when the row has no name yet (AQP-446). */
+  readonly kindLabel: string;
   /** Adds a row of this kind last under the row `parentId`. */
   readonly onAdd: (parentId: string, nodeKind: NodeKind) => void;
   /** Opens the confirmation of the delete of this row (nothing is sent yet). */
@@ -53,9 +55,9 @@ const HIDDEN_UNTIL_NEEDED =
  * The "-" opens the existing confirmation, which names the row and every row under it. Each button's name is its tooltip and its spoken name, and says which row it is for. Tab moves from a row to these buttons.
  * It is drawn only where the person may change the inputs (`treeActionsOffered`); the server asks again.
  */
-export function RowActions({ part, onAdd, onDelete, upTo, downTo, onMoveTo, busy = false, describedBy, showing = false, holdsPart = false }: RowActionsProps) {
+export function RowActions({ part, kindLabel, onAdd, onDelete, upTo, downTo, onMoveTo, busy = false, describedBy, showing = false, holdsPart = false }: RowActionsProps) {
   const add = addActionOf(part.nodeKind);
-  const name = part.label === '' ? TREE_PART_NAME : part.label;
+  const name = rowNameOf(part.label, kindLabel);
   const remove = deleteRowLabel(part.slNo, name);
   const why = busy && describedBy !== undefined ? { 'aria-describedby': describedBy } : {};
   return (
