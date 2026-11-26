@@ -160,7 +160,8 @@ describe('AC-2: every row shows its own BG with its count beside it, and a paren
 
   it('the tree folds away as a panel that is open: no script is needed for the drawer', async () => {
     const html = render(await current());
-    expect(html).toMatch(/<details[^>]*open=""[^>]*>\s*<summary[^>]*>Parts tree<\/summary>/);
+    // The summary also carries the open row under 1024 px ("Parts tree · 1 Name", AQP-488), a span that is hidden from 1024 px.
+    expect(html).toMatch(/<details[^>]*open=""[^>]*>\s*<summary[^>]*>Parts tree(?:<span[^>]*>[^<]*<\/span>)?<\/summary>/);
     expect(html).not.toContain('<script');
   });
 });
@@ -212,7 +213,8 @@ describe('AC-6: not calculated', () => {
     expect(html).toMatch(/role="status"[^>]*>[\s\S]*The Engineer has not calculated/);
     expect(html).toContain('Not calculated');
     expect(html).not.toContain('How the total is built');
-    expect(withoutIcons(html)).not.toMatch(/\d+\.\d\d/);
+    // What is drawn as text: the classes of the page (a size such as 0.06em) are not a figure.
+    expect(withoutIcons(html).replace(/<[^>]*>/g, ' ')).not.toMatch(/\d+\.\d\d/);
     expect(html).not.toContain('₹');
     expect(countOf(html, '>—<')).toBeGreaterThanOrEqual(4);
   });
@@ -246,7 +248,7 @@ describe('AC-1, AC-4 and AC-5: the cleared state', () => {
     expect(html).toContain('You set it when you approve, after Recalculate.');
     expect(countOf(html, '>Cleared<')).toBeGreaterThanOrEqual(4);
     expect(html).toContain('24 nos');
-    expect(withoutIcons(html)).not.toMatch(/\d+\.\d\d/);
+    expect(withoutIcons(html).replace(/<[^>]*>/g, ' ')).not.toMatch(/\d+\.\d\d/);
     expect(html).not.toContain('How the total is built');
     expect(html).toContain('>Recalculate</button>');
     expect(html).toContain('Recalculate first. Approving is available once the figures have been calculated again.');
@@ -284,7 +286,8 @@ describe('AC-1, AC-4 and AC-5: the cleared state', () => {
 describe('AC-9: the tiles show a skeleton while a recalculation is under way, with no script', () => {
   it('each tile figure is drawn with a hidden-while-busy figure and a skeleton that appears when the bar is busy (a CSS rule, so nothing is sent to the browser)', async () => {
     const html = render(await current({ bl: '1234567.89', inputsRevision: 4 }));
-    expect(countOf(html, 'data-slot="skeleton"')).toBe(3);
+    // The tiles' three; the inputs block under them has skeletons of its own while its form is read (AQP-488).
+    expect(countOf(html.slice(0, html.indexOf('data-review-columns')), 'data-slot="skeleton"')).toBe(3);
     expect(html).toContain('group-has-[[aria-busy=true]]/review');
   });
 });
@@ -763,9 +766,11 @@ describe('STORY-06.10 AC-3, AC-4: the quantity warning on the calculation in vie
   it('each warned row carries the mark "Quantity 0" (icon and words) in the tree and in "How the total is built", and a row that did not go ahead does not', async () => {
     const html = render(await current({ warnings: WARNED }));
     // The tree and the table: one mark each, and only on the warned row (the item), not on 1.1 and 1.1.1.
-    expect(countOf(html, 'data-quantity-tag=""')).toBe(2);
-    expect(countOf(html, 'Quantity 0')).toBe(2);
-    const tree = html.slice(html.indexOf('Parts tree'), html.indexOf('How the total is built'));
+    // The tree, the table and, since AQP-488 (ruling 2026-11-27 section 3.3), the row line of the open row, which is the warned row when it is the first.
+    const row = html.slice(html.indexOf('data-row-line'), html.indexOf('</p>', html.indexOf('data-row-line')));
+    expect(countOf(html, 'data-quantity-tag=""')).toBe(2 + countOf(row, 'data-quantity-tag=""'));
+    expect(countOf(html, 'Quantity 0')).toBe(2 + countOf(row, 'Quantity 0'));
+    const tree = html.slice(html.indexOf('data-review-tree'), html.indexOf('id="row-inputs"'));
     expect(countOf(tree, 'Quantity 0')).toBe(1);
     expect(tree.indexOf('Quantity 0')).toBeLessThan(tree.indexOf('1.1'));
   });

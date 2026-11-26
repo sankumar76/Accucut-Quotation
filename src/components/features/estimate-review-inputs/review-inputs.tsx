@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { PERSISTENT_MENU_MIN_WIDTH } from '@/lib/design-tokens';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 import type { PartItem } from '@/lib/estimates/tree-client';
 
@@ -25,7 +26,7 @@ export interface ReviewInputsProps {
 }
 
 const noop = (): void => undefined;
-const WIDE = '(min-width: 1024px)';
+const WIDE = `(min-width: ${PERSISTENT_MENU_MIN_WIDTH}px)`;
 
 /**
  * The Lead's and the Admin's view of one row's inputs on SCR-06 (AQP-488, DEF-131 Stage 1; UX ruling `lead-admin-edit-inputs-2026-11-27.md` section 3): the **Engineer's own form**, `PartForm`, with `editable` false
