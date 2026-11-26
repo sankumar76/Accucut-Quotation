@@ -19,7 +19,9 @@
 2. **Prepared** (formerly Submitted): a Lead or Admin may edit directly, with nothing needed first: no unlock and no step-up. The figures clear at once, and approval is refused until a Recalculate. The status stays Prepared.
 3. **Approved or Quoted**: refused (409 `ESTIMATE_APPROVED_IS_LOCKED`). The Lead or Admin first uses the existing Unlock, which needs a reason but no step-up, as built. The estimate goes back to Draft, and rule 1 applies.
 4. **Ignored** (whatever the status underneath): refused (409 `ESTIMATE_IGNORED`). Restore first.
-5. **Every** Lead or Admin input change writes one audit entry in the same transaction, and the save fails if the entry fails. The Engineer's rights and screens do not change, and the tree's structure actions stay closed to a Lead or Admin.
+5. **Every** Lead or Admin change writes one audit entry in the same transaction, and the write fails if the entry fails. That covers an input value, a picture, and a part added, moved or deleted (v1.1: the delivery lead widened the scope to the parts tree). The Engineer's rights and screens do not change.
+
+> **v1.1 (2026-11-27, later): the delivery lead's two answers, relayed by the orchestrator.** (1) **Staging A:** the view merges by the end of Sun 29 Nov. The edit merges by the end of Wed 2 Dec, target Tue 1 Dec, so section 6's Sunday gates for the edit are withdrawn. (2) **"Also the parts tree":** a Lead and an Admin add, move and delete rows like an Engineer. **This reverses v1.0's 403 on tree structure writes.** Those writes stay allowed, as built, and gain audit entries (section 3.9). Where v1.0 text says "403" for the tree, section 3.9 governs.
 
 ## 1. What exists on `master` today (verified in code)
 
@@ -123,6 +125,37 @@ An edit changes **no status**, so the task stays in its tab: Draft and Prepared 
 | A service built without `audit` | Refuses a Lead or Admin save |
 | Direct database edits, scripts, import | None exists for inputs. Any later one must use `saveInputs`. |
 
+### 3.9 The parts tree for a Lead or Admin (v1.1; replaces 3.2 item 3 and the tree row of 3.8)
+
+**Statuses.** These are the same rules as the inputs (3.1), because every tree write already goes through `lockForChange`, which runs `assertEditable` under the row lock. Draft and Prepared (not ignored) are allowed. Approved and Quoted give 409 `ESTIMATE_APPROVED_IS_LOCKED`, so the Lead unlocks first. Ignored gives 409 `ESTIMATE_IGNORED`, so they restore first. No server rule changes. The 2,000-part limit (`TREE_FULL`) and the kind rules (`NODE_KIND_NOT_ALLOWED`, `MOVE_ACROSS_PARENTS`) are unchanged.
+
+**Audit events** (new and wired; category `input_change`, "Input change"; written only when `viewer.role !== 'ENGINEER'`, in the write's own transaction, after the write and before commit. If the entry fails, the write fails. A write that changes nothing writes no entry. Object: the estimate, labelled with the task code. `after.actorRole` holds `'LEAD'` or `'ADMIN'`.)
+
+| Event | `before` | `after` | Words on SCR-16 |
+|---|---|---|---|
+| `estimate.part_added` | `{}` | `{ actorRole, part: { slNo, kind }, parent: { slNo, name } \| null }` | "Added Sub-assembly 1.4 under 1 Frame" |
+| `estimate.part_moved` | `{ part: { slNo, name, kind } }` | `{ actorRole, part: { slNo, name, kind } }` (the Sl. No after the move) | "Moved 1.4 Top cover to 1.2" |
+| `estimate.part_deleted` | `{ part: { slNo, name, kind }, rows: <count>, list: [{ slNo, name, kind }] }`, where `list` holds at most 100 rows in reading order, with `truncated: true` beyond | `{ actorRole }` | "Deleted 1.4 Top cover and 3 rows under it" |
+| Picture | `estimate.inputs_changed`, field Part Model (3.2 (2)) | | "1.4 Top cover: Part Model, Picture replaced" |
+
+- The input **values** of deleted rows are not copied into the log. The log stays bounded, and the same goes for an Engineer's delete. For an estimate that was calculated, the last calculation record still holds its copy of the tree (section 4.8), so the deleted values are recoverable from it.
+- A batch delete writes **one** entry (the root row and its count), never one per row.
+- Names are the `partNameOf` text at the time, which can be empty for a new row, and kinds are the stored node kinds (ADR-020).
+
+**Concurrency with an Engineer at the same moment** (all as built; nothing new):
+- Every tree write and every input save takes the **estimate row lock**, so they run one at a time, and `inputs_revision` rises once per write or not at all.
+- **Move** checks the part's `revision`. If it changed, the answer is 409 with the fresh tree.
+- **Delete** checks the part's `revision`, the **count** the person was shown, and the **subtree fingerprint**. If the Engineer typed into, added under or moved a row inside it since, nothing is deleted, and the answer is 409 with the fresh tree. The Lead sees the dialog's existing conflict words and the tree reloads.
+- **Add** has no revision check: it goes last under its parent, both adds succeed, and the Sl. No values are read from the layout each time.
+- If the Engineer saves a part that a Lead has just deleted, the answer is 404, and the workspace reads the tree again (the existing handling).
+- Two Leads: the same rules apply.
+
+**Figures and approval.** Every add, move and delete already raises `inputs_revision` (section 4.8; a move clears too, A-29), so the figures clear and approval is refused (`TOTALS_OUT_OF_DATE`) until Recalculate. A new row with blank required inputs makes Recalculate answer 422 `CALCULATE_BLOCKED`, naming it (6a A-5), so the Lead fills it first. The status stays as it is. The approved price (BO) is untouched. There is no step-up: the delete's existing confirmation dialog, with its row count, is the safeguard, and the audit entry is the trace.
+
+**Screen.** Reuse the Engineer's tree actions: the add menu, row actions, move handle and menu, drag reorder, and the delete dialog from `components/features/estimate-workspace/`. Do not write a second copy. They are fetched lazily (first-open loader) only when the estimate is editable for this Lead or Admin. Whether SCR-06 shows them on its own review tree or swaps in the Engineer's tree while editing is the ux-expert's call. Either way the server rules above hold. Any tree write ends with the same once-only refresh from current to cleared (6a A-7).
+
+**Tests to add** (replacing v1.0's 403 tests): integration, per event: one row with the right `before`, `after` and `actorRole`; no row for an Engineer; no row for a no-op move; rollback on audit failure. Lead delete against an Engineer's save in the same subtree gives 409, with nothing deleted. Approved, Quoted or Ignored gives 409 with no row. E2E at three widths with axe: a Lead adds a row, fills it and recalculates, then moves a row and deletes a row with the dialog. The ledger stays at +0 (the review spec's existing people). Unit: describe texts and the cap of 100 rows on `list`. Keep `image.test.ts:265` and the tree tests that assert a Lead may write, and add the audit assertions to them.
+
 ## 4. Security: server-side checks and tests
 
 **Checks, in order, on every Lead or Admin input write:** session (401). Manifest role (403; the tree write is 403 by role). Estimate exists and `mayOpen` (404). Row lock, then `assertEditable` (409 `ESTIMATE_IGNORED` or `ESTIMATE_NOT_EDITABLE` / `ESTIMATE_APPROVED_IS_LOCKED`). Part in the estimate (404). Part `revision` (409 `PART_CHANGED`). Field validation (422: a field must be on the form, a person-typed input and not Restricted). Conditional write. Audit entry. Commit.
@@ -163,6 +196,26 @@ An edit changes **no status**, so the task stays in its tab: Draft and Prepared 
 - Lane 2 and lane 3 both touch SCR-06's review components and the first-load headroom (R-2). The view merges first, and the edit rebases on it. Only one PR on the route at a time states the Stage 11b figure against the ceiling.
 - The freeze on Thu 3 Dec is not at risk unless the combined review finds a Blocker late on Wed 2 Dec.
 
+### 6.1 Effort and date after v1.1 (governs over the stage 2 rows and the date text above)
+
+| Stage 2 part | Work | Hours |
+|---|---|---|
+| 2a Inputs edit | v1.0's 12 h minus the tree 403 (1 h) | 11 h |
+| 2b Parts tree | Three audit events, their schemas and wiring in `addPart`, `moveNode` and `deleteNode` 2.5 h; unit 0.5 h; integration 2 h; SCR-06 tree actions reused, lazy, editable-gated 5.5 h; E2E at three widths with axe 2 h; Stage 11b measure and any trim 0.5 h | 13 h |
+| Review | Combined review 2.5 h (one, covering both) plus fixes 2 h | 4.5 h |
+| **Stage 2 total** | | **28.5 h** (was 15.5 h) |
+
+Stage 1 (view) is unchanged at 6.5 h, on lane 3, merged by the end of Sun 29 Nov.
+
+**Can the full edit scope (inputs and tree) be safely merged by the end of Wed 2 Dec with one lane (lane 2)? Yes, but only if lane 2 does nothing else from now until then.** That is about 28.5 h against about 4.5 lane-days (Fri 27 evening to Wed 2 Dec), leaving about one day of margin for CI rounds and review turnaround. If lane 2 also keeps its other items (DL-416 (5): the DEF-103 queue Sev-2, DEF-096, DEF-121), **the answer is no.** Three PRs, in this order:
+1. **Server (audit for inputs, picture and the tree), about 8.5 h.** Merged by the end of Sun 29 Nov. It closes R-1 by itself.
+2. **Inputs edit UI (2a), about 6 h of UI and tests.** Merged by the end of Tue 1 Dec, after the combined review (which covers 1 and 2).
+3. **Tree UI on SCR-06 (2b screen part), about 7.5 h.** Merged by the end of Wed 2 Dec. **This is the part at risk.** It also competes for the about 483 B of first-load headroom (R-2) after the view and the inputs edit.
+
+**If PR 3 misses Wed 2 Dec,** the server already allows a Lead's tree writes, audited, but no screen offers them. Nothing is untraced or unsafe. It would ship in the first update.
+
+**The one question for the delivery lead (proposed):** "Lane 2 can deliver the input edit by Tue 1 Dec and the parts-tree edit by Wed 2 Dec only if it drops everything else, including the queue fix DEF-103 (a must-fix before G8). That fix would then move to lane 1 or lane 3. Do you want (A) lane 2 dedicated to the edit, with its other items moved to another lane (recommended), or (B) the input edit by Tue 1 Dec and the parts-tree edit in the first update after go-live?"
+
 ## 6a. Answers to the ux-expert's open points (ruling `docs/03-ux/rulings/lead-admin-edit-inputs-2026-11-27.md`, a50a4e1d)
 
 | Point | Answer |
@@ -179,7 +232,7 @@ An edit changes **no status**, so the task stays in its tab: Draft and Prepared 
 ## 7. Issues for other roles
 
 - **orchestrator:** asks the delivery lead DL-432's staging question (A: view by Sunday, edit by Tue 1 Dec, cut-off Wed 2 Dec). Recommended: A.
-- **master:** (1) records that the tree's structure writes by a Lead or Admin become **403**, replacing DL-303 (3)'s "left as built". This matches PRD 0.62's waiver. (2) The brief said Unlock has a step-up: **it does not, as built**, and this note adds none.
+- **master:** (1) *Withdrawn in v1.1:* the tree 403 is not built. The writes stay allowed, as DL-303 (3) left them, and are now audited (3.9). The product-manager lifts PRD 0.62's tree waiver. (2) The brief said Unlock has a step-up: **it does not, as built**, and this note adds none.
 - **product-manager:** PRD 0.62 ED-AC-7 says "the edit route accepts a save only from a Lead or Admin". The same route also takes the Engineer's own Draft saves (FR-064). Suggested wording: "a Lead's or Admin's save is accepted only through the role's rules in this note, and an Engineer's rights are unchanged". ED-AC-6: the event is `estimate.inputs_changed`, and Engineer saves stay unaudited.
 - **ux-expert:** the panel must reuse `PartForm`. Rule-hidden fields follow the Engineer's form unless you rule otherwise. After a save on Prepared, the tiles must visibly show "cleared, Recalculate".
 - **qa-engineer:** DEF-131's QA acceptance #2 ("no PUT from that screen") holds for stage 1 only. Stage 2 adds the PATCH by design.
@@ -188,3 +241,4 @@ An edit changes **no status**, so the task stays in its tab: Draft and Prepared 
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | 2026-11-27 | First issue, for DEF-131 and DL-432 |
+| 1.1 | 2026-11-27 | The delivery lead's answers: staging A (edit by Wed 2 Dec, Sunday gates withdrawn) and "also the parts tree". The tree 403 is reversed. Section 3.9 adds `estimate.part_added`, `part_moved` and `part_deleted`, with the tree's concurrency, figures and approval. Section 6.1: stage 2 is 28.5 h. Wed 2 Dec holds only with lane 2 dedicated. Master's item (1) in section 7 is withdrawn. |
