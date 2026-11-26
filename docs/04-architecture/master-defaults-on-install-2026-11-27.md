@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | **Proposed**. Design only, no product code. Q-MD-1 (section 7) goes to the delivery lead |
+| Status | **PARKED.** Parked 27 Nov at the delivery lead's request (DL to follow); not scheduled. The customer enters the masters by hand. G-MD-1 (README first-use line) still goes in before the freeze. Q-MD-1 (section 7) is overtaken by the parking. Before parking: Proposed, design only, no product code |
 | Author | solution-architect |
 | Request | The delivery lead, 2026-11-27 (relayed by the orchestrator, Jira AQP-1): a fresh install should start with default values in the Process Master and the Material Master |
 | As built | `origin/master` 744a8fa5 |
@@ -219,8 +219,8 @@ So the row is **one default for one rate**, stored as data. **It changes no calc
 
 | Sheet column | Field (Prisma / column) | Check | Fit |
 |---|---|---|---|
-| Material in drawing | `materialInDrawing` / `material_in_drawing` | Not blank, unique without regard to case, not "Not applicable" | The name the Engineer picks in column E. "MS sheet, cold rolled", "SS sheet, grade A" and "Aluminium sheet, 5-series" fit. A comma is allowed |
-| Material considered | `materialConsidered` / `material_considered` | Not blank | The mapping shown in column F: "Mild steel", "Stainless steel", "Aluminium" fit |
+| Material in drawing | `materialInDrawing` / `material_in_drawing` | Not blank, unique without regard to case, not "Not applicable" | The name the Engineer picks in column E. Names of the kind used on drawings (a grade and form after the material) fit; a comma is allowed |
+| Material considered | `materialConsidered` / `material_considered` | Not blank | The mapping shown in column F. A plain material name fits |
 | Price per kg ₹ | `pricePerKg` / `price_per_kg` | 0 or more | Material Rate (I) in AK. ₹ per kg |
 | Specific gravity | `specificGravity` / `specific_gravity` | Above 0 | Used in M |
 | Scrap rate per kg | `scrapRate` / `scrap_rate` (SPEC name `Material-Scrap-Rate`, D-39) | 0 or more | ₹ per kg, used in AK |
