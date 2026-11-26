@@ -18,6 +18,8 @@ export interface AddNodeMenuPanelProps {
   readonly unavailable?: boolean;
   /** The ID of the line that says why it is unavailable, when it is on screen: the trigger is described by it. Only with `unavailable`. */
   readonly describedBy?: string;
+  /** The row already holds a Part (AQP-449, DEF-092): its Part item then reads "Sub-part", the name the new Part will have. Absent: it holds none and the item reads "Part". The item adds a PART either way. */
+  readonly holdsPart?: boolean;
   /** Opened with Enter, Space or ArrowDown: focus goes to the first item. A pointer open leaves it on the menu. */
   readonly keyboard: boolean;
 }
@@ -37,13 +39,13 @@ const FAILURE_MESSAGE = 'The menu did not open. Check your connection and try ag
  * trigger that replaces it: the menu's code is not in the first load of the page. The first press fetches the code (the pressed look and `aria-busy` while it comes) and the menu then opens in the same place; a
  * failed request shows a line and the next press asks again. Same pattern as the account menu (`account-menu.tsx`).
  */
-export function AddNodeMenu({ id, label, nodeKinds, onChoose, unavailable, describedBy }: AddNodeMenuProps) {
+export function AddNodeMenu({ id, label, nodeKinds, onChoose, holdsPart, unavailable, describedBy }: AddNodeMenuProps) {
   const first = useFirstOpen<AddNodeMenuPanelProps>({ id, load: loadPanel });
   const failureId = `${id}-failure`;
 
   if (first.shown && first.Overlay !== null) {
     const Panel = first.Overlay;
-    return <Panel label={label} nodeKinds={nodeKinds} onChoose={onChoose} keyboard={first.keyboard} {...(unavailable === true ? { unavailable, ...(describedBy === undefined ? {} : { describedBy }) } : {})} />;
+    return <Panel label={label} nodeKinds={nodeKinds} onChoose={onChoose} keyboard={first.keyboard} {...(holdsPart === true ? { holdsPart } : {})} {...(unavailable === true ? { unavailable, ...(describedBy === undefined ? {} : { describedBy }) } : {})} />;
   }
 
   // While a change is on its way the trigger does nothing (and keeps the focus): no press, Enter, Space or arrow starts the first open.
