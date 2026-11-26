@@ -110,3 +110,72 @@ test('NAME-1 to NAME-4, KIND-1: rows show their kind and their name; a new row i
     ['1.3.1', ''],
   ]);
 });
+
+/**
+ * DEF-132, step 1 (DL-439): a diagnostic and nothing else. On a `master` push the case at the top failed attempt 1 at the wait for "Added 1.1.1 Part. Type a Description to name it." (15 s, no pointer-interception line) and
+ * the retry passed. These two hooks write, on EVERY attempt, what the page and the network did around that status, so the next red shows which of three things happened: the add request was never sent or was refused; the answer
+ * came and the status text was never written (or was written and replaced); or the text was there more than once (the wait wants exactly one element). They wait for nothing, click nothing and change no assertion, support file or budget.
+ *
+ * Lines, to the job log and as the attachment `def-132-status`, each starting `[DEF-132 status] <width> attempt <n> |`: every POST to `/nodes` (request time, answer time and code, in ms from the first line), every change of the
+ * text of any `role="status"` element in the page (what was written, when), and at the end the status elements now and how many hold the added-row text.
+ */
+const STATUS_RECORDER = (): void => {
+  const log: Array<{ at: number; text: string }> = [];
+  Reflect.set(window, '__statusLog', log);
+  let last = '';
+  const read = (): string =>
+    JSON.stringify(
+      [...document.querySelectorAll('[role="status"]')]
+        .map((element) => (element.textContent ?? '').trim())
+        .filter((text) => text !== ''),
+    );
+  new MutationObserver(() => {
+    const now = read();
+    if (now === last) return;
+    last = now;
+    log.push({ at: performance.timeOrigin + performance.now(), text: now });
+  }).observe(document, { subtree: true, childList: true, characterData: true });
+};
+
+const NETWORK = new WeakMap<Page, string[]>();
+const isAdd = (url: string, method: string): boolean => method === 'POST' && /\/api\/v1\/estimates\/[^/]+\/nodes$/.test(new URL(url).pathname);
+
+test.beforeEach(async ({ page }) => {
+  const lines: string[] = [];
+  NETWORK.set(page, lines);
+  await page.addInitScript(STATUS_RECORDER);
+  page.on('request', (request) => {
+    if (isAdd(request.url(), request.method())) lines.push(`${String(Date.now())} request POST nodes`);
+  });
+  page.on('response', (response) => {
+    if (isAdd(response.url(), response.request().method())) lines.push(`${String(Date.now())} answer POST nodes ${String(response.status())}`);
+  });
+  page.on('requestfailed', (request) => {
+    if (isAdd(request.url(), request.method())) lines.push(`${String(Date.now())} FAILED POST nodes ${request.failure()?.errorText ?? ''}`);
+  });
+});
+
+test.afterEach(async ({ page }, testInfo) => {
+  const lines = [...(NETWORK.get(page) ?? [])];
+  try {
+    if (!page.isClosed()) {
+      const seen = await page.evaluate(() => {
+        const recorded: unknown = Reflect.get(window, '__statusLog');
+        const statuses = [...document.querySelectorAll('[role="status"]')].map((element) => (element.textContent ?? '').trim()).filter((text) => text !== '');
+        const holding = [...document.querySelectorAll('*')].filter((element) => element.children.length === 0 && (element.textContent ?? '').includes('Added 1.1.1 Part')).length;
+        return { recorded: Array.isArray(recorded) ? recorded : [], statuses, holding };
+      });
+      for (const entry of seen.recorded) {
+        if (typeof entry === 'object' && entry !== null && 'at' in entry && 'text' in entry) lines.push(`${String(Math.round(Number(entry.at)))} status ${String(entry.text).slice(0, 300)}`);
+      }
+      lines.push(`${String(Date.now())} end: ${String(seen.statuses.length)} status elements with text, ${String(seen.holding)} elements hold "Added 1.1.1 Part": ${JSON.stringify(seen.statuses).slice(0, 300)}`);
+    }
+  } catch (error) {
+    lines.push(`${String(Date.now())} not readable: ${error instanceof Error ? (error.message.split('\n')[0] ?? '') : 'unknown'}`);
+  }
+  const sorted = lines.sort((a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10));
+  const first = Number.parseInt(sorted[0] ?? '0', 10);
+  const report = sorted.map((line) => `[DEF-132 status] ${testInfo.project.name} attempt ${String(testInfo.retry + 1)} | +${String(Number.parseInt(line, 10) - first)} ms ${line.slice(line.indexOf(' ') + 1)}`);
+  process.stdout.write(`${report.join('\n')}\n`);
+  await testInfo.attach('def-132-status', { body: report.join('\n'), contentType: 'text/plain' }).catch(() => undefined);
+});
