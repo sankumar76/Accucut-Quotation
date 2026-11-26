@@ -283,6 +283,19 @@
   }
 }
 
+/* The two kinds of pointer of the parts tree's row toolbar (AQP-448, DEF-091; UX ruling 2026-11-26 item 3). `mouse:` is a pointer that hovers and points finely; `touch:` is every other pointer, so that no device is left
+   with neither. They are not tied to a width (a phone with a mouse is a mouse, a 1366 px touch screen is a finger). */
+@custom-variant mouse {
+  @media (hover: hover) and (pointer: fine) {
+    @slot;
+  }
+}
+@custom-variant touch {
+  @media not ((hover: hover) and (pointer: fine)) {
+    @slot;
+  }
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;

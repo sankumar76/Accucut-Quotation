@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -23,6 +27,7 @@ const NODES: ReadonlyArray<PartItem> = [
   part('f1', 'p1', '1.1.1.1', 'FASTENER', 'Nut'),
 ];
 
+const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const noop = (): void => undefined;
 const actions = (node: PartItem): string => renderToStaticMarkup(createElement(RowActions, { part: node, kindLabel: NODE_KIND_NAMES[node.nodeKind], onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop }));
 const count = (html: string, text: string): number => html.split(text).length - 1;
@@ -134,21 +139,32 @@ describe('AQP-418 (DEF-075): the toolbar of a row never floats over the row', ()
     expect(actions(part('x', null, '3', 'MAIN_ASSEMBLY'))).toContain('aria-label="Actions for 3 Main Assembly"');
   });
 
-  it('is clipped (sr-only) until the row is shown, never by opacity, display or visibility, and has no hover or touch variant', () => {
+  it('is clipped (sr-only) until a cause shows it, and never by opacity, display or visibility', () => {
     const classes = group(actions(NODES[1] as PartItem));
     expect(classes).toContain('sr-only');
     for (const token of classes) {
-      expect(token, token).not.toMatch(/opacity|invisible|pointer-coarse|hover|(^|:)hidden$|(^|:)collapse$/);
+      expect(token, token).not.toMatch(/opacity|invisible|(^|:)hidden$|(^|:)collapse$/);
     }
-    const html = actions(NODES[1] as PartItem);
-    expect(html).not.toContain('opacity-0');
-    expect(html).not.toContain('pointer-coarse');
-    expect(html).not.toContain('group-hover');
+    expect(actions(NODES[1] as PartItem)).not.toContain('opacity-0');
   });
 
-  it('is shown by the open row, by focus that is visible in the row, and by a menu of the row that is open', () => {
+  it('is shown by the hovered row for a mouse and by the open row for a finger, and the open row never shows it for a mouse (AQP-448, DEF-091 TB-1, TB-2, TB-4, TB-6)', () => {
     const classes = group(actions(NODES[1] as PartItem));
-    expect(classes).toContain('group-has-[[aria-current=true]]/row:not-sr-only');
+    expect(classes).toContain('mouse:group-hover/row:not-sr-only');
+    expect(classes).toContain('touch:group-has-[[aria-current=true]]/row:not-sr-only');
+    // The open row is a cause only on a touch screen, and hover only on a mouse: no token names either without its pointer, which is what left the toolbar under the last added row.
+    expect(classes.filter((token) => token.includes('aria-current') && !token.startsWith('touch:'))).toEqual([]);
+    expect(classes.filter((token) => token.includes('hover') && !token.startsWith('mouse:'))).toEqual([]);
+  });
+
+  it('defines the two pointers once, in the style sheet: a mouse hovers and points finely, a finger is every other pointer (so no device is left with neither)', () => {
+    const globals = readFileSync(join(ROOT, 'src/app/globals.css'), 'utf8').replaceAll('\r\n', '\n');
+    expect(/@custom-variant mouse \{([\s\S]*?)\n\}/.exec(globals)?.[1]).toContain('@media (hover: hover) and (pointer: fine)');
+    expect(/@custom-variant touch \{([\s\S]*?)\n\}/.exec(globals)?.[1]).toContain('@media not ((hover: hover) and (pointer: fine))');
+  });
+
+  it('is shown by focus that is visible in the row, and by a menu of the row that is open, for either pointer', () => {
+    const classes = group(actions(NODES[1] as PartItem));
     expect(classes).toContain('group-has-[:focus-visible]/row:not-sr-only');
     // The branch arrows carry aria-expanded too: only a button that opens a menu (the move handle, the "+") keeps the toolbar shown.
     expect(classes).toContain('group-has-[[aria-haspopup][aria-expanded=true]]/row:not-sr-only');
