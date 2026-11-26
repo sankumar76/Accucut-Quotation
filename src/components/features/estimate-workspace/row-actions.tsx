@@ -38,18 +38,19 @@ export interface RowActionsProps {
 }
 
 /**
- * When the toolbar is in view (AQP-418, DEF-075; UX design of AQP-406 comment 12939). It is `sr-only`: clipped to 1 px with no hit area, and still in the tab order and in the accessibility tree (never `opacity-0`,
- * `hidden`, `invisible` or `display: none`, which either take presses or take the buttons away). It is in view (`not-sr-only`) on the open row (`aria-current`), while focus is visible anywhere in the row
- * (Tab onto the link shows it before Tab reaches a button), and while a menu of the row is open (the move handle's or the "+": `aria-haspopup`, so the arrows, which also carry `aria-expanded`, do not count).
- * There is no hover look and no touch variant: hover only tints the row. The classes read `group/row`, the row of `PartsTreeList`. It is also in view while a press holds it (`data-hold`, `press-hold.ts`, AQP-419 rule P): the
+ * When the toolbar is in view (AQP-418, DEF-075; AQP-448, DEF-091; UX ruling 2026-11-26 item 3). It is `sr-only`: clipped to 1 px with no hit area, and still in the tab order and in the accessibility tree (never `opacity-0`,
+ * `hidden`, `invisible` or `display: none`, which either take presses or take the buttons away). It is in view (`not-sr-only`) for a mouse (`mouse:`, globals.css) on the row the pointer is over, which includes its own toolbar
+ * line, so the pointer can go down onto it; for a finger (`touch:`) on the open row (`aria-current`) only; and for either while focus is visible anywhere in the row (Tab onto the link shows it before Tab reaches a
+ * button) and while a menu of the row is open (the move handle's or the "+": `aria-haspopup`, so the arrows, which also carry `aria-expanded`, do not count). The open row is **not** a cause for a mouse: an add opens the new row,
+ * and its toolbar stayed in view under the last row added. The classes read `group/row`, the row of `PartsTreeList`. It is also in view while a press holds it (`data-hold`, `press-hold.ts`, AQP-419 rule P): the
  * toolbars that were in view when a pointer went down stay as they were until the press is over, so a press that moves the focus does not move the row it is aimed at.
  */
 const HIDDEN_UNTIL_NEEDED =
-  'sr-only data-hold:not-sr-only group-has-[[aria-current=true]]/row:not-sr-only group-has-[:focus-visible]/row:not-sr-only group-has-[[aria-haspopup][aria-expanded=true]]/row:not-sr-only';
+  'sr-only data-hold:not-sr-only mouse:group-hover/row:not-sr-only touch:group-has-[[aria-current=true]]/row:not-sr-only group-has-[:focus-visible]/row:not-sr-only group-has-[[aria-haspopup][aria-expanded=true]]/row:not-sr-only';
 
 /**
  * The toolbar of one row of the parts tree (CR-01 item 3C, UX spec section 0.9 row 3): the **move handle** (3D: a drag among the rows with the same parent, or a click for Move up / Move down), the **"+"** and the **"-"**, in a group named after the
- * row, on a line of its own under the row's name (AQP-418, DEF-075: it never floats over a row, so a press on a name is always a press on the row). It is in view on the open row, on keyboard focus within the row and while one of its menus or its delete
+ * row, on a line of its own under the row's name (AQP-418, DEF-075: it never floats over a row, so a press on a name is always a press on the row). It is in view on the hovered row (a mouse), on the open row (touch), on keyboard focus within the row and while one of its menus or its delete
  * confirmation is open, and clipped otherwise (`HIDDEN_UNTIL_NEEDED`). The "+" offers exactly the kinds that `ALLOWED_CHILDREN`
  * allows under this row (`addActionOf`): a menu for a Main Assembly or a Sub-Assembly (its code loads on the first open, `AddNodeMenu`), the Fastener at once for a Part or a Sub-part, and no "+" at all on a Fastener.
  * The "-" opens the existing confirmation, which names the row and every row under it. Each button's name is its tooltip and its spoken name, and says which row it is for. Tab moves from a row to these buttons.
