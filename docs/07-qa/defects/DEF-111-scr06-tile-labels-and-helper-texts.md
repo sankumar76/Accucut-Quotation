@@ -1,12 +1,12 @@
-# DEF-111: SCR-06 tile labels and helper texts differ from the design ("(INR)" suffix, "BL / total Tool Cost (INR)", "Total Tool Cost Rs n from k parts. File cell BN2.", the BL helper) (conformance; Product; Sev-4 proposed; Jira AQP-467, GitHub #762)
+# DEF-111: SCR-06 tile labels and helper texts differ from the design ("(INR)" suffix, "BL / total Tool Cost (INR)", "Total Tool Cost Rs n from k parts. File cell BN2.", the BL helper) (conformance; Product; Sev-4; Jira AQP-467, GitHub #762)
 
 | Field | Value |
 |-------|-------|
 | Story / AC | AQP-319 (STORY-06.02); SCR-06 Estimate review; the ux-expert's batch 2, item S. The mock-up and spec text quoted below. |
-| Severity | **Sev-4 proposed by QA** (the ux-expert's word: Minor); **master grades.** |
+| Severity | **Sev-4, graded by master 2026-11-26 (DL-414 (2), DL-416 (4)).** QA proposed Sev-4 (the ux-expert's word: Minor). |
 | Priority | P4 (Jira Low) (labels `sev-4`, `final-review`, `conformance`) |
 | Type | **Product** (conformance deviation of the running build from the SCR mock-up) |
-| Status | **Open (new), 2026-11-26 (qa-engineer, from the ux-expert's batch 2).** Not yet graded by master. |
+| Status | **Open (new), 2026-11-26 (qa-engineer, from the ux-expert's batch 2).** **Graded by master 2026-11-26 (DL-414, DL-416): Sev-4; no lane before the freeze (first update, DL-417).** Open. |
 | Jira / GitHub | [AQP-467](https://sankumar76.atlassian.net/browse/AQP-467) / [#762](https://github.com/sankumar76/Accucut-Quotation/issues/762) (labels bug, sev-4, ai-delivery, final-review, conformance; Jira also aiid-DEF-111, agent-qa-engineer). Relates to AQP-1 and the first owning story. Searched first: no earlier Bug for this deviation. |
 | Found by / date | The ux-expert (DL-411 conformance check), batch 2, 26 Nov 2026; logged by qa-engineer, 2026-11-26 |
 | Build / commit | production build of `master` `e3dc5b0b`, invented data (the ux-expert's file `qa-batch-2.md`); QA did not run it |
@@ -21,17 +21,19 @@
 ## Ruling check
 **The ux-expert asks that the wording be checked against D-16 before filing; QA has not done that check** (master or the product-manager to confirm which wording D-16 fixes). **Not a deviation:** the Indian digit grouping (6,48,56,863.01) is the ux-spec rule ('INR as 1,23,456.78 (Indian grouping)', line 505); the mock-up's 12,951.53 is a smaller figure.
 
+**Graded and checked 2026-11-26 (qa-engineer, after DL-414 and DL-416).** **D-16 check, 26 Nov:** D-16 (`docs/01-discovery/requirements-catalog.md:44`, `project-brief.md:55`) fixes only that the export has one total and shows the total Tool Cost; it names no tile wording. The ux-spec's own SCR-06 wireframe (`ux-spec.md:702`) reads "BL Total Unit Production Price" and "BN BL / total Tool Cost" without "(INR)", and the SPEC section 7.4 column names carry "(INR)". No decision or AC fixes the tile labels, so **no change: stays Sev-4.**
+
 ## Proof (proposed; master and the ux-expert set it)
 The screen reads as the design above at the widths named; the hands-on check repeated by the ux-expert on the fix's build; the existing assertions kept; first-load figure stated if the estimate page changes; no cost data on the Engineer view (NFR-002).
 
 ## Fix & Verification  _(developer / ux-expert / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Graded (type, severity, lane) | master | | |
+| Graded (type, severity, lane) | master | 2026-11-26 | DL-414, DL-416: Sev-4, no lane before the freeze (first update, DL-417) |
 | Fixed | developer | | |
 | Regression test added | developer | | |
 | Hands-on check repeated | ux-expert | | |
 | Verified | qa-engineer | | |
 
 ## Records
-Jira Bug AQP-467 and GitHub issue #762, created 2026-11-26 and cross-linked. Related: AQP-1 and the stories above; DEF-093 to DEF-105 (batch 1); DL-409 to DL-412; test plan 0.3.66. Source: the ux-expert's conformance check (DL-411), batch 2, read from `qa-batch-2.md`; none of these is an accepted deviation (the ux-expert read docs/03-ux/rulings and DL-409 to DL-412). QA did not run the build; the ux-expert's severity word is shown beside QA's proposed grade, and master grades.
+Jira Bug AQP-467 and GitHub issue #762, created 2026-11-26 and cross-linked. Related: AQP-1 and the stories above; DEF-093 to DEF-105 (batch 1); DL-409 to DL-412; test plan 0.3.66; graded in DL-414 and DL-416, test plan 0.3.68. Source: the ux-expert's conformance check (DL-411), batch 2, read from `qa-batch-2.md`; none of these is an accepted deviation (the ux-expert read docs/03-ux/rulings and DL-409 to DL-412). QA did not run the build; the ux-expert's severity word is shown beside QA's proposed grade, and master grades.
