@@ -6,7 +6,7 @@
 | Severity | **Sev-2, type Product (master, DL-409 (A); DL-410 (A)).** A new Assembly, Sub-Assembly or Part could not be named or renamed from what the delivery lead saw. (Proposed at filing by the orchestrator: Sev-2.) |
 | Priority | P2 (Jira High) (labels `sev-2`, `final-review`) |
 | Type | **Product** (it was provisional until the design reference; DL-410 settled it). |
-| Status | **Open, ruled (DL-409, DL-410, DL-411, DL-413), 2026-11-26.** Fix in lane 1 with DEF-089. Not yet built or proved. |
+| Status | **VERIFIED and CLOSED 2026-11-27 (qa-engineer, on the ux-expert's hands-on re-check pass 1 and the CI of `master` `c30b349f`): Closed now; the announcement's screen-reader reading and the real-pointer add are kept for the final regression.** (the tracker issues were already closed by the PR's merge; QA's verification is recorded here and on both.) **Open, ruled (DL-409, DL-410, DL-411, DL-413), 2026-11-26.** Fix in lane 1 with DEF-089. Not yet built or proved. |
 | Jira / GitHub | [AQP-447](https://sankumar76.atlassian.net/browse/AQP-447) / [#738](https://github.com/sankumar76/Accucut-Quotation/issues/738) (labels bug, sev-2, ai-delivery, final-review; Jira also aiid-DEF-090, agent-qa-engineer). Relates to AQP-1 and the stories above. Searched first: JQL on `aiid-DEF-090` and the title words, and a GitHub search: nothing. |
 | Found by / date | The delivery lead, in the demo at master e3dc5b0b (26 Nov 2026), relayed by the orchestrator; read and logged by qa-engineer, 2026-11-26 |
 | Build / commit | `master` `e3dc5b0b` (code read with `git show origin/master:<path>`; no browser run by QA) |
@@ -49,7 +49,13 @@ To be set with the ruling.
 | Design reference | ux-expert, solution-architect | | |
 | Fixed | developer | | |
 | Regression test added | developer | | |
-| Verified | qa-engineer | | |
+| Verified | qa-engineer | 2026-11-27 | the ux-expert's pass 1 on `c30b349f` and its CI; closed |
+
+## Verified and closed (qa-engineer, 2026-11-27; test plan 0.3.97)
+**Evidence:** the ux-expert's hands-on re-check pass 1 (`docs/03-ux/rulings/hands-on-recheck-1-2026-11-27.md`, records-u 9e4d6272): scripted Playwright (Chromium, not the Playwright MCP) at 360, 768 and 1366 px against a throwaway PostgreSQL 17 database and invented estimates, on a production build of `master` `c30b349f`. Conforms at 360 and 1366 (768 not driven): the Description typed on an unnamed row and Tab renamed the tree row with no save press. **Not exercised by the pass:** the add announcement ('Added 1.5 Part. Type a Description to name it.'), the new row taking focus after an add, and the Description hint ('Names this row in the parts tree.').
+**CI, read by QA on the same push** (`c30b349f`, CI 45854831021 and Windows package 45854831146, both `success`): 0 failed, 1 flaky (`estimate-warning.spec.ts:117` [tablet], unrelated, test plan 0.3.95); the E2E and unit cases of the fix are in the suite and passed; no DEF-085 miss and no interception line.
+**QA's decision: closed now.** The announcement, the new row's focus and its name are asserted by `estimate-tree-names.spec.ts:52`, which passed attempt 1 at all three widths on `c30b349f` (desktop 16.7 s, tablet 23.6 s, mobile 15.0 s) and on `d2b58f04`. **Kept for the final regression:** the live-region reading by a screen reader and the add by a real pointer, re-run with DEF-129's redesigned toolbar (an add is made through the toolbar).
+**Not covered by this closure (all defects of this pass):** the Indian digit grouping of the figures (the conformance report's open check), drag reorder, the unsaved-changes dialog, Picture too large, and an accessibility scan were not part of the pass; the final regression's keyboard, screen-reader and axe checks remain.
 
 ## Records
 Jira Bug AQP-447 and GitHub issue #738, created 2026-11-26 and cross-linked. Related: AQP-1; the neighbours DEF-089 to DEF-092 were filed together from the same demo (AQP-446, AQP-447, AQP-448, AQP-449); DL-377 (item 8); DEF-081 (AQP-424), DEF-075, DEF-076; test plan 0.3.64. Detail and evidence are read from `origin/master` e3dc5b0b (code read, not run); QA ran no browser for this record. Master's and the architect's causes and the ux-expert's design reference follow on the Jira Bug.

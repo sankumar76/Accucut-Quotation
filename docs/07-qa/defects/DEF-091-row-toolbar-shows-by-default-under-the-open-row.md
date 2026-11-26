@@ -6,7 +6,7 @@
 | Severity | **Sev-3, type Product (master, DL-409 (A), (C)).** (Proposed at filing by the orchestrator: Sev-3.) |
 | Priority | P3 (Jira Medium) (labels `sev-3`, `final-review`) |
 | Type | **Product.** |
-| Status | **Open, ruled (DL-409, DL-410, DL-411, DL-413), 2026-11-26.** Fix in lane 2 (owns `estimate-tree.spec.ts`). Not yet built or proved. |
+| Status | **VERIFIED and CLOSED 2026-11-27 (qa-engineer, on the ux-expert's hands-on re-check pass 1 and the CI of `master` `c30b349f`): Closed now for visibility; the keyboard rule, TB-3 and TB-5 move to DEF-129's proof; the 42 px shift stays DEF-129.** (the tracker issues were already closed by the PR's merge; QA's verification is recorded here and on both.) **Open, ruled (DL-409, DL-410, DL-411, DL-413), 2026-11-26.** Fix in lane 2 (owns `estimate-tree.spec.ts`). Not yet built or proved. |
 | Jira / GitHub | [AQP-448](https://sankumar76.atlassian.net/browse/AQP-448) / [#739](https://github.com/sankumar76/Accucut-Quotation/issues/739) (labels bug, sev-3, ai-delivery, final-review; Jira also aiid-DEF-091, agent-qa-engineer). Relates to AQP-1 and the stories above. Searched first: JQL on `aiid-DEF-091` and the title words, and a GitHub search: nothing. |
 | Found by / date | The delivery lead, in the demo at master e3dc5b0b (26 Nov 2026), relayed by the orchestrator; read and logged by qa-engineer, 2026-11-26 |
 | Build / commit | `master` `e3dc5b0b` (code read with `git show origin/master:<path>`; no browser run by QA) |
@@ -48,7 +48,13 @@ To be set with the ruling; any change keeps the DEF-075 and DEF-076 behaviours (
 | Design reference | ux-expert, solution-architect | | |
 | Fixed | developer | | |
 | Regression test added | developer | | |
-| Verified | qa-engineer | | |
+| Verified | qa-engineer | 2026-11-27 | the ux-expert's pass 1 on `c30b349f` and its CI; closed |
+
+## Verified and closed (qa-engineer, 2026-11-27; test plan 0.3.97)
+**Evidence:** the ux-expert's hands-on re-check pass 1 (`docs/03-ux/rulings/hands-on-recheck-1-2026-11-27.md`, records-u 9e4d6272): scripted Playwright (Chromium, not the Playwright MCP) at 360, 768 and 1366 px against a throwaway PostgreSQL 17 database and invented estimates, on a production build of `master` `c30b349f`. Conforms for what was filed, at 1366 (mouse): with the pointer away no toolbar is in view (0 of 7 rows); hovering row 1.1 shows its toolbar alone (38 px high); moving away hides it; at 768 and 360 (touch) only the selected row's toolbar is in view. **Not exercised by the pass:** keyboard focus-within, and the touch rule on a tablet with a keyboard (the 26 Nov TB-3 and TB-5). **The shift:** hovering 1.1 moved every row below it down 42 px: that is DEF-129 (Sev-2), not re-opened here.
+**CI, read by QA on the same push** (`c30b349f`, CI 45854831021 and Windows package 45854831146, both `success`): 0 failed, 1 flaky (`estimate-warning.spec.ts:117` [tablet], unrelated, test plan 0.3.95); the E2E and unit cases of the fix are in the suite and passed; no DEF-085 miss and no interception line.
+**QA's decision: closed now for the visibility rules (hover, selection, touch; never by default).** **Kept, and moved to DEF-129's proof:** the keyboard rule (a toolbar in view while focus is in its row) and TB-3 and TB-5, re-run on the redesigned toolbar (TB-1 to TB-6, TS-7 and TS-8), because the toolbar is being rebuilt and a check on the old one would not carry over. **The row shift is DEF-129's.**
+**Not covered by this closure (all defects of this pass):** the Indian digit grouping of the figures (the conformance report's open check), drag reorder, the unsaved-changes dialog, Picture too large, and an accessibility scan were not part of the pass; the final regression's keyboard, screen-reader and axe checks remain.
 
 ## Records
 Jira Bug AQP-448 and GitHub issue #739, created 2026-11-26 and cross-linked. Related: AQP-1; the neighbours DEF-089 to DEF-092 were filed together from the same demo (AQP-446, AQP-447, AQP-448, AQP-449); DL-377 (item 8); DEF-081 (AQP-424), DEF-075, DEF-076; test plan 0.3.64. Detail and evidence are read from `origin/master` e3dc5b0b (code read, not run); QA ran no browser for this record. Master's and the architect's causes and the ux-expert's design reference follow on the Jira Bug.
