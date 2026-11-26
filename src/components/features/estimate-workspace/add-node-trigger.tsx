@@ -13,7 +13,7 @@ export const ROW_ACTION_SIZE = 'fine-wide:h-(--control-h-row) fine-wide:w-(--con
  * button's own variant, so it wins over the ghost's red (`cn` keeps the later class). The "-" adds its own red hover on top (`row-actions.tsx`).
  */
 export const ROW_ACTION_LOOK =
-  'text-ink-2 hover:bg-surface-2 hover:text-ink active:bg-border active:text-ink active:shadow-pressed enabled:aria-busy:bg-border enabled:aria-busy:text-ink enabled:aria-busy:shadow-pressed';
+  '[scroll-margin-block:40px] text-ink-2 hover:bg-surface-2 hover:text-ink active:bg-border active:text-ink active:shadow-pressed enabled:aria-busy:bg-border enabled:aria-busy:text-ink enabled:aria-busy:shadow-pressed';
 
 /** The look of an action that cannot be taken at the moment (`aria-disabled`, not `disabled`: the button keeps the keyboard focus). */
 export const UNAVAILABLE_LOOK = 'cursor-not-allowed opacity-60';
