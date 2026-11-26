@@ -559,7 +559,7 @@ test.describe('AC-7, AC-8, AC-9, AC-10: what the Engineer is shown', () => {
     await signInAs(page, owner);
     // The notice (its own words, the remarks as typed), the badge, read-only inputs that stay focusable, no controls that change anything.
     await page.goto(`/estimates/${code}`);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
     const notice = noticeOf(page);
     await expect(notice).toContainText(`This task was ignored on`);
     await expect(notice).toContainText(`by ${lead.name}.`);

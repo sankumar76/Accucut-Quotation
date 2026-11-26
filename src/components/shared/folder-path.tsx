@@ -9,8 +9,10 @@ import { cn } from '@/lib/cn';
 import { BREAK_LONG_NAMES } from './break-long-names';
 import { Icon } from './icon';
 
-/** The sentence that says why a link to a network folder may not open (UX spec SCR-04, FR-033). It is text on the page, not only a tooltip. */
-export const FOLDER_LINK_NOTE = 'Your browser may block links to network folders. If nothing opens, choose Copy path and paste it into File Explorer.';
+import { FOLDER_LINK_NOTE } from './folder-path-texts';
+
+/** The sentence that says why a link to a network folder may not open: written in `folder-path-texts.ts`, which a server component can import; re-exported here for the client files that always had it from here. */
+export { FOLDER_LINK_NOTE };
 export const COPY_PATH_LABEL = 'Copy path';
 export const PATH_COPIED_MESSAGE = 'Path copied to the clipboard.';
 export const PATH_NOT_COPIED_MESSAGE = 'The path could not be copied. Select it and copy it yourself.';
@@ -25,6 +27,8 @@ export interface FolderPathProps {
    * instead (STORY-04.02, SCR-03), and the link keeps it as its tooltip.
    */
   readonly showNote?: boolean;
+  /** Only the Copy path button and its message, for the head of SCR-06 where Open folder is a button of its own (AQP-452). The path and the note are not drawn; a failed copy shows the path in its message so it can be selected. */
+  readonly copyOnly?: boolean;
 }
 
 type CopyState = 'idle' | 'copied' | 'failed';
@@ -33,11 +37,17 @@ type CopyState = 'idle' | 'copied' | 'failed';
 const COPY_MESSAGES: Readonly<Record<CopyState, string>> = { idle: '', copied: PATH_COPIED_MESSAGE, failed: PATH_NOT_COPIED_MESSAGE };
 
 /**
+ * What the message says. Where the path is drawn on the page ("Select it and copy it yourself") the sentence is enough; where only the button is (SCR-06's head, `copyOnly`, AQP-452) there is nothing to select,
+ * and the UX spec has no wording for that case, so a failed copy shows the path itself, as text that can be selected.
+ */
+export const copyMessage = (state: CopyState, path: string, copyOnly: boolean): string => (state === 'failed' && copyOnly ? `${PATH_NOT_COPIED_MESSAGE} ${path}` : COPY_MESSAGES[state]);
+
+/**
  * The folder of a task as everyone sees it (STORY-04.01 AC-4; FR-033): the path as a link, a **Copy path** button, and the sentence that explains a link that
  * does not open. Shared by the assign screen, the queue and the workspace. The copy is announced in a polite live region ("Path copied to the clipboard.").
  * The path is shown as plain text (React encodes it); the link comes from the server and is only used as given.
  */
-export function FolderPath({ path, url, showNote = true }: FolderPathProps) {
+export function FolderPath({ path, url, showNote = true, copyOnly = false }: FolderPathProps) {
   const noteId = useId();
   const [state, setState] = useState<CopyState>('idle');
 
@@ -48,6 +58,20 @@ export function FolderPath({ path, url, showNote = true }: FolderPathProps) {
     } catch {
       setState('failed');
     }
+  }
+
+  if (copyOnly) {
+    return (
+      <>
+        <Button variant="secondary" onClick={() => void copy()}>
+          <Icon icon={Copy} />
+          {COPY_PATH_LABEL}
+        </Button>
+        <span role="status" className={cn('text-label font-semibold text-ink', BREAK_LONG_NAMES)}>
+          {copyMessage(state, path, true)}
+        </span>
+      </>
+    );
   }
 
   return (

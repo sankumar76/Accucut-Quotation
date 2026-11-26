@@ -71,7 +71,7 @@ async function signInAsNewLead(page: Page, testInfo: TestInfo): Promise<void> {
 async function openedAsLead(page: Page, subject: Subject): Promise<void> {
   const response = await page.goto(`/estimates/${subject.code}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(subject.code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${subject.code}`);
 }
 
 /**

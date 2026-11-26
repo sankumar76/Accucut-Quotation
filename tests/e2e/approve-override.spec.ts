@@ -68,7 +68,7 @@ async function openedAsLead(page: Page, testInfo: Parameters<typeof signInAsLead
   await signInAsLead(page, testInfo);
   const response = await page.goto(`/estimates/${code}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
   await expect(approveButton(page)).toBeEnabled();
   await waitUntilHydrated(page, APPROVE_BUTTON_ID);
   return { owner, code };

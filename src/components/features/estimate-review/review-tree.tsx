@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { PartsTreeList } from '@/components/shared/parts-tree-list';
+import { TREE_COLUMN_PANEL, TREE_COLUMN_SUMMARY } from '@/components/shared/tree-column-panel';
 import { TreeLegend } from '@/components/shared/tree-legend';
 import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import { rowNameOf } from '@/lib/estimates/row-name';
@@ -17,13 +18,7 @@ import { COUNT_FIELD_NAME, TREE_CLEARED_LINE, TREE_EMPTY, TREE_TITLE, treeLegend
  * be folded away to leave the tiles and the table in view (the "drawer" of the UX spec) with no script: nothing here ships to the browser as code.
  */
 
-/**
- * The panel (AQP-465, DEF-108). Below 1024 px it is the foldable `details` it was. From 1024 px it is the left column of the review (`estimate-review.tsx`): sticky below the top bar, as high as the window leaves it
- * (the sticky offsets are measured by `use-sticky-offsets`, with the top bar's height as the fallback) with a scroll of its own, and no longer foldable: the summary takes no press, and the content is shown even if
- * the element were closed (`::details-content`, which a browser that does not know it simply ignores).
- */
-const TREE_PANEL =
-  'rounded-md border border-border bg-surface-2 min-[1024px]:sticky min-[1024px]:top-[var(--sticky-top,var(--topbar-h))] min-[1024px]:max-h-[calc(100dvh-var(--sticky-top,var(--topbar-h))-var(--sticky-bottom,0px)-var(--s-4))] min-[1024px]:overflow-y-auto min-[1024px]:[&::details-content]:[content-visibility:visible]';
+// The panel, its summary and the page layout are shared with SCR-07 (`tree-column-panel.ts`, AQP-465 and AQP-452).
 
 export interface ReviewTreeProps {
   /** The task code of the estimate, for the address of each row's cost details (STORY-06.03). */
@@ -45,8 +40,8 @@ export interface ReviewTreeProps {
  */
 export function ReviewTreeFrame({ selectedName, letters, state, edit = false, children }: { readonly selectedName: string; readonly letters: CostsView['letters']; readonly state: CostsView['state']; readonly edit?: boolean; readonly children: ReactNode }) {
   return (
-    <details open data-review-tree="" {...(edit ? { 'data-review-tree-edit': '' } : {})} className={TREE_PANEL}>
-      <summary className="flex min-h-(--control-h) cursor-pointer items-center px-s-4 text-body font-semibold text-ink min-[1024px]:pointer-events-none min-[1024px]:cursor-default">{TREE_TITLE}
+    <details open data-review-tree="" {...(edit ? { 'data-review-tree-edit': '' } : {})} className={TREE_COLUMN_PANEL}>
+      <summary className={TREE_COLUMN_SUMMARY}>{TREE_TITLE}
         {/* Under 1024 px the panel folds after a row is chosen, and its summary says which row is open, so the way back to the tree is one press (AQP-488). */}
         {selectedName === '' ? null : <span className="ml-s-2 min-w-0 font-normal text-ink-2 min-[1024px]:hidden">{`· ${selectedName}`}</span>}
       </summary>

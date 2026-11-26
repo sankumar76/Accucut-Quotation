@@ -66,7 +66,8 @@ describe('AC-1: six panels, and in each line the tag, the name, the formula, the
     const html = render(await viewOf());
     expect(html).toContain('Unit Production Price');
     expect(html).toContain('₹ 451.40');
-    expect(textOf(html)).toContain('3 nos for the whole order, already included in the price');
+    // AQP-452 (DEF-113): the box says what the count is in the words of the mock-up.
+    expect(textOf(html)).toContain('Its count for the whole order, QTY per Assy 3, is already included.');
     expect(html).toContain('border-nav bg-nav text-on-fill');
     expect(countOf(html, 'bg-nav text-on-fill')).toBeGreaterThanOrEqual(1);
   });
@@ -167,7 +168,7 @@ describe('AC-7: the states with nothing current show the row header and no stage
     expect(text).toContain('Go to the estimate to Recalculate');
     expect(text).not.toContain('once the estimate is calculated again');
     expect(html).toContain(`href="/estimates/${CODE}"`);
-    expect(text).toContain('Part 1 Invented Bracket');
+    expect(text).toContain('Cost details for one row 1 · Invented Bracket');
     expect(html).toContain('role="status"');
     expect(html).not.toContain('<details');
     for (const absent of ['451.40', '15.99', 'Material-Scrap-Rate', 'Cutting-Rate-per-Sec', 'Stage total', 'Excel column']) expect(html, absent).not.toContain(absent);
@@ -188,7 +189,7 @@ describe('AC-7: the states with nothing current show the row header and no stage
       const html = render(await viewOf(options));
       expect(html).toContain('>Cost details</h1>');
       expect(textOf(html)).toContain('Back to the estimate');
-      expect(textOf(html)).toContain('Part 1 Invented Bracket');
+      expect(textOf(html)).toContain('Cost details for one row 1 · Invented Bracket');
     }
   });
 });
@@ -209,7 +210,8 @@ describe('AC-9 (without a browser): formulas are text, `details` and `summary` a
   it('has one h1, and the stages are named by one (visually hidden) h2 so the headings never skip a level', async () => {
     const html = render(await viewOf());
     expect(countOf(html, '<h1')).toBe(1);
-    expect(countOf(html, '<h2')).toBe(1);
+    // The row's own heading (AQP-452) and the stages' hidden one: two h2 under the h1, none skipped.
+    expect(countOf(html, '<h2')).toBe(2);
     expect(html).toContain('The six stages');
   });
 });

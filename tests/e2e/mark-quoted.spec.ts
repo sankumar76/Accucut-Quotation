@@ -44,7 +44,7 @@ async function openedApproved(page: Page, testInfo: Parameters<typeof approvedEs
   const approved = await approvedEstimate(page, testInfo);
   const response = await page.goto(`/estimates/${approved.code}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(approved.code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${approved.code}`);
   await expect(markButton(page)).toBeEnabled();
   await waitUntilHydrated(page, '#review-mark-quoted');
   return approved;
@@ -238,7 +238,7 @@ test.describe('AC-1, AC-2, AC-3: who is offered it and who is refused', () => {
     await ignoreEstimate(owner.id, lead.id);
     const response = await page.goto(`/estimates/${code}`);
     expect(response?.status()).toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
     await expect(page.locator('#review-ignored-notice')).toBeVisible();
     await expect(page.locator('#review-actions')).toHaveCount(0);
     await expect(unlockButton(page)).toHaveCount(0);

@@ -132,6 +132,8 @@ describe('AC-5: no review code reaches the Engineer', () => {
   const TREE_SHELL = `${TREE_EDITOR_FOLDER}review-edit-shell.tsx`;
   // ... fetched after the page is up by a thin client shell, which the review draws (the autosave, the leave guard and its dialog stay out of the first load, `overlay-imports.test.ts`).
   const LAZY_REVIEW_FORM = 'src/components/features/estimate-workspace/lazy-review-form.tsx';
+  // SCR-06's head draws Copy path with `FolderPath` (`copyOnly`, AQP-452), the shared client button the queue and SCR-05 already carry: it is in the route's chunks already and holds no figure.
+  const FOLDER_PATH_BUTTON = 'src/components/shared/folder-path.tsx';
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
   const reviewFiles = ALL.filter((file) => file.path.startsWith(REVIEW_FOLDER));
 
@@ -158,6 +160,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     clientFiles.delete(TREE_EDITOR);
     clientFiles.delete(TREE_SHELL);
     clientFiles.delete(LAZY_REVIEW_FORM);
+    clientFiles.delete(FOLDER_PATH_BUTTON);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
       const base = specifier.startsWith('@/') ? `src/${specifier.slice(2)}` : join(from, '..', specifier).replaceAll('\\', '/');
@@ -437,6 +440,16 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(shell).not.toMatch(/^import (?!type).*from '\.\/review-tree-editor'/m);
     expect(ALL.filter((file) => file.path !== TREE_SHELL && /from '[^']*review-edit-shell'/.test(file.text)).map((file) => file.path)).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
     expect(ALL.filter((file) => file.path !== TREE_EDITOR && /from '[^']*review-tree-editor'/.test(file.text)).map((file) => file.path)).toEqual([TREE_SHELL]);
+  });
+
+  it('AQP-452 ADR-016: the Copy path button SCR-06 shares with the queue and SCR-05 imports no figure, schema, service or repository, and fetches nothing', () => {
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    for (const path of ['src/components/shared/folder-path.tsx', 'src/components/shared/folder-path-texts.ts']) {
+      const code = strip(ALL.find((file) => file.path === path)?.text ?? '');
+      expect(code.length, path).toBeGreaterThan(50);
+      expect(code, path).not.toMatch(/schemas\/|estimate-review|@\/server\/|calculation-|row-outputs|product-totals|figure-state|estimates-client|fetch\(/);
+    }
+    expect(ALL.find((file) => file.path === 'src/components/shared/folder-path-texts.ts')?.text ?? '').not.toMatch(/use client/);
   });
 
   it('nothing outside the review imports a file of its folder except the review page and the tree island, which draws the review\'s own row, frame and words', () => {

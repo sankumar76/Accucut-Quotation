@@ -7,6 +7,7 @@ import { Notice } from '@/components/shared/notice';
 import { warnedNodeIds } from '@/components/shared/quantity-tag';
 import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import { rowNameOf } from '@/lib/estimates/row-name';
+import { TREE_COLUMN_LAYOUT } from '@/components/shared/tree-column-panel';
 import { WarningNotice } from '@/components/shared/warning-notice';
 import type { RoleName } from '@/lib/auth/roles';
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
@@ -19,7 +20,7 @@ import type { CostsView } from '@/server/views/schemas/costs';
 import { ReviewEditShell } from '../estimate-review-edit/review-edit-shell';
 import { PartHead } from '../estimate-workspace/part-head';
 import { PartForm } from '../estimate-workspace/part-form';
-import { WorkspaceHeader, type WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
+import type { WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
 import { BuildTable } from './build-table';
 import { CancelledNotice } from './cancelled-notice';
@@ -29,6 +30,7 @@ import { RatesChangedNotice } from './rates-changed-notice';
 import { approveOffer, cancelOffer, ignoreOffer, quoteOffer, removeOffer, ReviewActions } from './review-actions';
 import { REVIEW_RESTORE_ID } from './review-ids';
 import { ReviewRowLine } from './review-row-line';
+import { ReviewHead } from './review-head';
 import { ReviewTree } from './review-tree';
 import { selectedRow } from './selected-row';
 import { UnlockedNotice } from './unlocked-notice';
@@ -174,13 +176,14 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
         };
   return (
     <div className="is-compact group/review contents">
-      <WorkspaceHeader
+      <ReviewHead
         view={{ ...header, ignored: isIgnored }}
+        engineerName={engineerName}
         noCustomerText={REVIEW_NO_CUSTOMER}
         // While the estimate is ignored there is no download chip and no Change customer: it is read-only until it is restored (CR-01 item 7D, A-CR01-8), and the notice below says so.
         downloadMarker={isIgnored ? null : <DownloadChip marker={download} />}
         // Change customer (CR-01 item 6, AC-12): on an estimate that is not approved and not ignored only; the review is the Lead's and the Admin's, and the server refuses anyone else all the same.
-        customerAction={isLocked(header.status) || isIgnored ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} />}
+        customerAction={isLocked(header.status) || isIgnored ? null : <ChangeCustomerButton estimateId={estimateId} current={customer} inline />}
         notice={
           ignored === null ? null : (
             <IgnoredNotice
@@ -223,7 +226,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           the page: a different gap moved the page by a few pixels and with it the axe target-size reading of the header's Change customer button at 768 px. */}
       {/* "How the total is built" is above the two columns at every width (UX ruling 2026-11-27 section 3.8; AQP-488): the tree and the row's inputs are the two columns below it. */}
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
-      <div data-review-columns="" className="flex flex-col gap-s-4 md:gap-s-5 min-[1024px]:grid min-[1024px]:grid-cols-[var(--tree-w)_minmax(0,1fr)] min-[1024px]:items-start">
+      <div data-review-columns="" className={TREE_COLUMN_LAYOUT}>
         {editTree ? (
           // A Draft or a Prepared estimate that can be corrected: the read-only columns below are what the first paint shows, and the thin shell swaps the editing island in once its code has arrived (a bare import(), so
           // none of it is in the first load). The first paint says what the island says, with no control, so nothing typed is lost to a form that cannot save.

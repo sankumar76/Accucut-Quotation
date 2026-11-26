@@ -38,7 +38,7 @@ async function openAsLead(page: Page, code: string, testInfo: Parameters<typeof 
   await signInAsLead(page, testInfo);
   const response = await page.goto(`/estimates/${code}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
 }
 
 /** An estimate the Engineer calculated and whose count then changed, opened as a Lead: the figures are cleared. */
