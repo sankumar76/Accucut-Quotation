@@ -37,7 +37,9 @@ export default async function CostDetailsPage({ params }: PageProps) {
   if (workspace === null) notFound();
   const view = await costsOfRow(viewer, workspace.estimateId, slNo);
   if (view === null) notFound();
-  return <CostDetails view={view} code={workspace.code} calculatedAt={view.details === null ? null : formatIst(new Date(view.details.calculatedAt))} />;
+  // The parts tree column (AQP-452, QLT-789-01): the estimate's rows, read as the Engineer's tree is read: names and kinds and no figure, so the page does not run the review's costs read for them.
+  const tree = await getEstimateService().getTree(viewer, workspace.estimateId);
+  return <CostDetails view={view} code={workspace.code} calculatedAt={view.details === null ? null : formatIst(new Date(view.details.calculatedAt))} tree={tree} />;
 }
 
 /** The row's answer, or `null` for a part that is not in this estimate (the service's 404). Any other fault is not turned into "not found". */

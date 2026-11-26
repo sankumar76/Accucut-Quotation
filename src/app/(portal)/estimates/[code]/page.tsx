@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ESTIMATE_META_DESCRIPTION, ESTIMATE_META_TITLE } from '@/components/features/estimate-workspace/estimate-texts';
 import { EngineerIgnoredNotice } from '@/components/features/estimate-ignore/engineer-ignored-notice';
 import { EstimateWorkspace } from '@/components/features/estimate-workspace/estimate-workspace';
+import { TaskCards } from '@/components/features/estimate-workspace/task-cards';
 import { assertNever } from '@/lib/assert-never';
 import { formatIst, systemClock } from '@/lib/time';
 import { getEstimateService } from '@/server/composition';
@@ -58,7 +59,16 @@ export default async function EstimatePage({ params, searchParams }: PageProps) 
   switch (user.role) {
     case 'ENGINEER':
       // The Engineer's notice of an ignored task is a server component with no script, handed in as an element: drawn at first paint, outside the client form (UX 12944 section 4).
-      return <EstimateWorkspace header={header} estimateId={workspace.estimateId} userId={user.id} ignored={ignored !== null} notice={ignored === null ? undefined : <EngineerIgnoredNotice ignored={ignored} />} />;
+      return (
+        <EstimateWorkspace
+          header={header}
+          estimateId={workspace.estimateId}
+          userId={user.id}
+          ignored={ignored !== null}
+          notice={ignored === null ? undefined : <EngineerIgnoredNotice ignored={ignored} />}
+          cards={<TaskCards view={header} />}
+        />
+      );
     case 'LEAD':
     case 'ADMIN': {
       // SCR-06 is Restricted: it is loaded here, on the Lead's and the Admin's branch only, and never imported by this file (NFR-002).

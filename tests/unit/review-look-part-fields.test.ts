@@ -129,9 +129,9 @@ describe('the review look of the part form (RO-5, RO-11)', () => {
 });
 
 describe('the Engineer\'s form is unchanged without the prop', () => {
-  it('keeps the intro, the hints and the locked notice', () => {
+  it('keeps the hints and the locked notice (the intro sentence is the subtitle of the head since AQP-452, not of the form)', () => {
     const html = render();
-    expect(html).toContain('Every field is needed to Calculate');
+    expect(html).not.toContain('Every field is needed to Calculate');
     expect(html).toContain('Enter the length in millimetres.');
     expect(html).toContain('This estimate can no longer be changed.');
     expect(html).not.toContain('Not entered');
