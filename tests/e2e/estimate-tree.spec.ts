@@ -637,11 +637,11 @@ test.describe('AC-3: delete asks first and names the count', () => {
     const dialog = page.getByRole('alertdialog', { name: /^Delete 1 .+\?$/ });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('This also deletes the 2 rows under it (1.1 Sub-part, 1.2 Sub-part) and everything entered for them. The remaining parts are renumbered. This cannot be undone.');
-    await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused();
+    await expect(dialog.getByRole('button', { name: 'Keep it' })).toBeFocused();
     await expect(dialog.getByRole('button', { name: 'Delete 3 rows' })).toBeVisible();
     await expectNoAxeViolations(page);
 
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await dialog.getByRole('button', { name: 'Keep it' }).click();
     await expect(dialog).toHaveCount(0);
     expect(await slNumbers(page)).toEqual(['1', '1.1', '1.2']);
   });
@@ -961,7 +961,7 @@ test.describe('AQP-448 (DEF-091): when the row toolbar is in view', () => {
     await expect(page.getByRole('alertdialog')).toBeVisible();
     await pointerAway(page);
     await expectToolbarsOn(page, mouse, '1.1');
-    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('button', { name: 'Keep it' }).click();
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await pointerAway(page);
     await expectToolbarsOn(page, mouse);

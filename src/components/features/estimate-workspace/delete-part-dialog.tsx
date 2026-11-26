@@ -18,11 +18,15 @@ import type { DeleteTarget } from './use-parts-tree';
 /** "Delete 1.1 Sub-Assembly?": the row's number and its name (its Description, else its Part No., else its kind's own name), as the button that opened the dialog names it (AQP-446). */
 const deleteTitle = (slNo: string, name: string): string => `Delete ${slNo} ${name}?`;
 const rowCount = (count: number): string => `${count} row${count === 1 ? '' : 's'}`;
-/** The most rows the sentence names one by one; a longer list ends "and 7 more", so a tree of hundreds of rows does not make a wall of text (the count and the button still say how many). */
-const MOST_ROWS_NAMED = 10;
+/**
+ * How many rows the sentence names (UX spec 0.31 item 7, the product-wide rule for a list of rows): up to 11 rows are all named; from 12 the first 10 and "and N more rows", so N is 2 or more and "rows" is always plural
+ * ("and 1 more row" saves nothing). The count in the sentence and on the button is always the full one.
+ */
+const NAMED_ROWS = 10;
+const ALL_NAMED_UP_TO = 11;
 const namedRows = (under: DeleteTarget['under']): string => {
-  const shown = under.slice(0, MOST_ROWS_NAMED).map((row) => `${row.slNo} ${row.name}`);
-  return under.length > MOST_ROWS_NAMED ? `${shown.join(', ')} and ${under.length - MOST_ROWS_NAMED} more` : shown.join(', ');
+  const names = (rows: DeleteTarget['under']): string => rows.map((row) => `${row.slNo} ${row.name}`).join(', ');
+  return under.length <= ALL_NAMED_UP_TO ? names(under) : `${names(under.slice(0, NAMED_ROWS))} and ${under.length - NAMED_ROWS} more rows`;
 };
 /**
  * SCR-05 "Delete part" (DEF-099, UX spec section 0.9 row 3): for a row with rows under it, "This also deletes the 3 rows under it (1.1.1 Corner gusset, 1.1.2 Cross brace, 1.1.3 Hex bolt set M6) and everything entered for them. The
@@ -34,7 +38,8 @@ export const deleteDescription = (slNo: string, parts: number, under: DeleteTarg
     ? `Row ${slNo} and everything typed into it will be deleted. This cannot be undone.`
     : `This also deletes the ${rowCount(parts - 1)} under it (${namedRows(under)}) and everything entered for ${parts === 2 ? 'it' : 'them'}. The remaining parts are renumbered. This cannot be undone.`;
 const deleteConfirm = (parts: number): string => (parts === 1 ? 'Delete row' : `Delete ${parts} rows`);
-const DELETE_CANCEL = 'Cancel';
+/** The safe choice, a verb (UX spec Dialogs: "Delete 3 parts", "Keep it", never "OK"); focus starts on it. */
+const DELETE_CANCEL = 'Keep it';
 
 export interface DeletePartDialogProps {
   readonly target: DeleteTarget | null;

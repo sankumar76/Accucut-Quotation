@@ -31,12 +31,24 @@ describe('the words of the delete dialog (DEF-099 [G])', () => {
     expect(deleteDescription('2', 1, [])).toBe('Row 2 and everything typed into it will be deleted. This cannot be undone.');
   });
 
-  it('names the first ten and counts the rest, so a branch of hundreds of rows is not a wall of text', () => {
-    const many = Array.from({ length: 25 }, (_, index) => ({ slNo: `1.${index + 1}`, name: 'Part' }));
-    const text = deleteDescription('1', 26, many);
-    expect(text).toContain('the 25 rows under it (1.1 Part, 1.2 Part');
-    expect(text).toContain('1.10 Part and 15 more)');
-    expect(text).not.toContain('1.11 Part');
+  const rows = (count: number) => Array.from({ length: count }, (_, index) => ({ slNo: `1.${index + 1}`, name: 'Part' }));
+
+  it('names 10 rows and 11 rows all, with no "more" (UX spec 0.31 item 7)', () => {
+    for (const count of [10, 11]) {
+      const text = deleteDescription('1', count + 1, rows(count));
+      expect(text, String(count)).toContain(`1.${count} Part)`);
+      expect(text, String(count)).not.toContain('more');
+    }
+  });
+
+  it('names the first ten and says "and 2 more rows" at 12 rows, and counts the rest beyond that, never "and 1 more row"', () => {
+    const twelve = deleteDescription('1', 13, rows(12));
+    expect(twelve).toContain('the 12 rows under it (1.1 Part, 1.2 Part');
+    expect(twelve).toContain('1.10 Part and 2 more rows)');
+    expect(twelve).not.toContain('1.11 Part');
+    const many = deleteDescription('1', 26, rows(25));
+    expect(many).toContain('1.10 Part and 15 more rows)');
+    for (const count of [1, 2, 10, 11, 12, 13, 25]) expect(deleteDescription('1', count + 1, rows(count)), String(count)).not.toContain('and 1 more row');
   });
 });
 
