@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 import { createDisposableUser, E2E_ADMIN } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TABLET_MIN_WIDTH, TOUCH_TARGET, waitUntilHydrated, widthOf } from './support/design-system';
@@ -56,23 +56,23 @@ async function pressWithKeyboard(button: Locator): Promise<void> {
 
 test.describe('the list', () => {
   test('AC-1, AC-7: shows name, e-mail, role and status, does not scroll sideways and has no axe violations', async ({ page }, testInfo) => {
-    const person = await createDisposableUser('managed', testInfo);
-    await openUsers(page);
-    const row = rowOf(page, person.name);
-    await expect(row).toContainText(person.email);
-    await expect(row).toContainText('Engineer');
-    await expect(row).toContainText('Active');
-    await expect(rowOf(page, E2E_ADMIN.name)).toContainText('Admin');
-    // STORY-01.05 T7: on the phone card, and only there, the Admin's own row says in text why Reset password is disabled; no other card does.
-    if ((await widthOf(page)) < TABLET_MIN_WIDTH) {
-      await expect(rowOf(page, E2E_ADMIN.name).getByText(OWN_PHONE_LINE, { exact: true })).toBeVisible();
-      await expect(rowOf(page, person.name).getByText(OWN_PHONE_LINE)).toHaveCount(0);
-      await expect(page.getByText(OWN_PHONE_LINE)).toHaveCount(1);
-    } else {
-      await expect(page.getByText(OWN_PHONE_LINE)).toBeHidden();
+    // AQP-383 / DEF-053, the cause step (DL-427): a diagnostic and nothing else. This case has timed out at 30 s on both attempts on several `master` pushes and the cause is not known. On EVERY attempt it
+    // writes one line a step to the job log, `[DEF-053 timing] <width> attempt <n> | <step>: <ms> ms (<total> ms)`, each the moment its step ends, so a case that times out still shows the step it was in, and a
+    // "still inside" line at 25 s. Steps: the person (one argon2id hash), the page load, the hydration wait, the row checks, the phone-card text, the sideways-scroll check and the whole-page axe scan; after
+    // the hydration it also writes how many people and DOM nodes the list has. It waits for nothing and changes no assertion, budget or scan: the checks are `listCase`, at the end of the file, in the same order
+    // as they were, and `timeSteps` is its stopwatch. The case stays on this line and the cases after it keep theirs (the census and the rules name `:58`, `:292` and `:329`).
+    // The checks as they were: the person made for this case; /users opened; the row shows the e-mail, Engineer and Active; the Admin row says Admin; on the phone the Admin card says why Reset is
+    // disabled and no other card does; no sideways scroll; and one whole-page axe scan with 0 violations. The same lines are attached to the report as `def-053-timing`.
+    // The cost of the diagnostic: one count of the list rows and one count of the DOM nodes, taken once after the hydration wait, and a 25 s timer that only writes a line.
+    // It is removed with the split of this case (step 2 of DEF-053), which keeps every one of these checks and the same axe scan.
+    // Nothing about the case may change what it proves while it is here; see the PR that added it for the figures it gave.
+    // (Playwright reports the line of `test(`, so the shape of this block is kept to the number of lines of the case it replaced.)
+    const timing = timeSteps(testInfo);
+    try {
+      await listCase(page, testInfo, timing);
+    } finally {
+      await timing.finish();
     }
-    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
-    await expectNoAxeViolations(page);
   });
 
   test('AC-7: controls are at least 44 px, and the icon buttons of a table row at least 36 px', async ({ page }, testInfo) => {
@@ -351,3 +351,63 @@ test.describe('deactivate and activate (AC-1, AC-2, AC-7)', () => {
     await expect(rowOf(page, person.name).getByRole('button', { name: `Deactivate ${person.name}` })).toBeVisible();
   });
 });
+
+/** The checks of the case at `:58` (AQP-383), in their order, as they were; `timing` only writes the time each step took. The person is made first, as before; `openUsers` is split so that its page load and its hydration wait are timed apart. */
+async function listCase(page: Page, testInfo: TestInfo, timing: ReturnType<typeof timeSteps>): Promise<void> {
+  const person = await createDisposableUser('managed', testInfo);
+  timing.done('the person (createDisposableUser)', 'the page load');
+  await page.goto('/users');
+  await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
+  timing.done('the page load (goto and the heading)', 'the hydration wait');
+  // The buttons are plain HTML until React has attached their handlers; a press before that is lost (DEF-011).
+  await waitUntilHydrated(page, 'main button[data-action="add"]');
+  timing.done('the hydration wait', 'the row checks');
+  timing.note(`the list holds ${String(await page.locator('[data-user-id]').count())} people and ${String(await page.evaluate(() => document.querySelectorAll('*').length))} DOM nodes`);
+  const row = rowOf(page, person.name);
+  await expect(row).toContainText(person.email);
+  await expect(row).toContainText('Engineer');
+  await expect(row).toContainText('Active');
+  await expect(rowOf(page, E2E_ADMIN.name)).toContainText('Admin');
+  timing.done('the row checks (the person and the Admin)', 'the phone-card text');
+  // STORY-01.05 T7: on the phone card, and only there, the Admin's own row says in text why Reset password is disabled; no other card does.
+  if ((await widthOf(page)) < TABLET_MIN_WIDTH) {
+    await expect(rowOf(page, E2E_ADMIN.name).getByText(OWN_PHONE_LINE, { exact: true })).toBeVisible();
+    await expect(rowOf(page, person.name).getByText(OWN_PHONE_LINE)).toHaveCount(0);
+    await expect(page.getByText(OWN_PHONE_LINE)).toHaveCount(1);
+  } else {
+    await expect(page.getByText(OWN_PHONE_LINE)).toBeHidden();
+  }
+  timing.done('the phone-card text', 'the sideways-scroll check');
+  expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  timing.done('the sideways-scroll check', 'the axe scan');
+  await expectNoAxeViolations(page);
+  timing.done('the axe scan (the whole page)', 'the end');
+}
+
+/** The stopwatch of the case: a line to the job log the moment each step ends (so a time-out still shows where it was), a "still inside" line at 25 s, and the same lines attached to the report as `def-053-timing`. */
+function timeSteps(testInfo: TestInfo) {
+  const startedAt = Date.now();
+  let stepStart = startedAt;
+  let current = 'the person';
+  const lines: string[] = [];
+  const say = (text: string): void => {
+    const line = `[DEF-053 timing] ${testInfo.project.name} attempt ${String(testInfo.retry + 1)} | ${text}`;
+    lines.push(line);
+    process.stdout.write(`${line}\n`);
+  };
+  const watchdog = setTimeout(() => say(`still inside "${current}" at ${String(Date.now() - startedAt)} ms`), 25_000);
+  return {
+    done(name: string, next: string): void {
+      const now = Date.now();
+      say(`${name}: ${String(now - stepStart)} ms (${String(now - startedAt)} ms)`);
+      stepStart = now;
+      current = next;
+    },
+    note: say,
+    async finish(): Promise<void> {
+      clearTimeout(watchdog);
+      say(`end: ${String(Date.now() - startedAt)} ms`);
+      await testInfo.attach('def-053-timing', { body: lines.join('\n'), contentType: 'text/plain' }).catch(() => undefined);
+    },
+  };
+}
