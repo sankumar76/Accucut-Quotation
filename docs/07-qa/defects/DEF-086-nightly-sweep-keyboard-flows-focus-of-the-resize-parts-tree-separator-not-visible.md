@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Moderate (master, DL-389 (3)), type Product.** The failure is the project's stricter sweep rule (focus drawn by the element or a near ancestor), not an AA violation, so DL-094's Sev-2 does not apply (DL-358 (1): name the right criterion). The revert removes it from `master`. |
 | Priority | P3 (Jira Medium, label `sev-3`) |
 | Type | **Product** (placement of the focus indicator) |
-| Status | **Open (new), 2026-11-25 (qa-engineer, on master's DL-389 (3)).** If the revert (PR #724) has not squashed before tonight's Nightly, that red is this Bug, not a new item. It **binds the re-land** (below). |
+| Status | **CLOSED (Verified, Closed), 2026-11-26 (qa-engineer): the close-out of the binding (2) is met.** The re-land is #727 (squash `0244e930`, 25 Nov 12:13Z). **The first scheduled Nightly after its squash is run 45792571776** (`schedule`, head `6085f71e`, created 2026-11-26T09:30:20Z): the job 'Sweep, keyboard flows and browsers (NFR-016, NFR-018, NFR-019)' (139815046953, 09:30:24Z to 09:35:36Z) is `success`, `Running 175 tests using 4 workers`, `175 passed (2.6m)`, 0 failed, 0 `✘`; **`keyboard-flows.spec.ts:112` passed at [chromium-1366] (no. 84, 8.2 s) and at [chromium-360] (11.0 s), attempt 1**, and the other four flows passed at both widths. The sweep's rule and support files were not changed. In the same Nightly, 'Lighthouse reference run', 'Warm the Playwright cache' and 'Capacity and latency (NFR-010, NFR-011)' are `success`; only 'CI feedback time' is `failure` (its step 'CI feedback time of the required job': p95 31 m 29 s, median 22 m 11 s over 10 runs, the frozen measurement of DL-286 / DL-390, not this defect). The Nightly run as a whole is `failure` for that job alone. Earlier status: Open (new), 2026-11-25 (qa-engineer, on master's DL-389 (3)). |
 | Jira / GitHub | [AQP-442](https://sankumar76.atlassian.net/browse/AQP-442) / [#726](https://github.com/sankumar76/Accucut-Quotation/issues/726) (labels bug, sev-3, ai-delivery; Jira also aiid-DEF-086, agent-qa-engineer). Relates to AQP-426 and AQP-1; DEF-085 (AQP-441) is the neighbour but a different symptom, cause and check. Searched first: JQL on `aiid-DEF-086` and 'Resize parts tree', and a GitHub search: nothing. |
 | Found by / date | CI (Nightly sweep); read and logged by qa-engineer, 2026-11-25; classified by master, DL-389 |
 | Build / commit | PR #723's head `0499e355` (branch `fix/AQP-1-std-c-04-tls-front-loopback`), which holds #721 (squash `0c201e65`) |
@@ -39,11 +39,11 @@ The focus of every element reached by Tab is visible by the sweep's rule: the fo
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
 | #721 reverted (PR #724) | orchestrator | | |
-| Re-land with the focus ring on the focusable box | developer | | |
+| Re-land with the focus ring on the focusable box | developer | 2026-11-25 | PR #727, squash `0244e930` |
 | ux-expert's written confirmation; AC-9 amended | ux-expert, product-owner | | |
-| Proof: the re-land's sweep `keyboard-flows.spec.ts` passes at [chromium-1366] | qa-engineer | | |
-| Proof: first Nightly after the squash is green | qa-engineer | | |
-| Closed | qa-engineer | | |
+| Proof: the re-land's sweep `keyboard-flows.spec.ts` passes at [chromium-1366] | qa-engineer | 2026-11-26 | Nightly 45792571776, job 139815046953: :112 [chromium-1366] 8.2 s, attempt 1 |
+| Proof: first Nightly after the squash is green | qa-engineer | 2026-11-26 | the same job `success` (175 passed); the Nightly's only red job is 'CI feedback time' (frozen, DL-286 / DL-390) |
+| Closed | qa-engineer | 2026-11-26 | AQP-442 Done, #726 closed |
 
 ## Records
 Jira Bug AQP-442 and GitHub issue #726, created 2026-11-25 and cross-linked. Related: AQP-426, AQP-1, DEF-085 (AQP-441); #721, #723, #724; DL-389 (master's ruling), DL-388, DL-358 (1), DL-094; test plan 0.3.58; Nightly run 45569109316, job 139051091918.

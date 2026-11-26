@@ -1,8 +1,8 @@
-# DEF-120: status words: an Engineer on a reloaded Prepared estimate sees only "This estimate can no longer be changed." (SCR-05), and the Approved badge reads "Approved and locked" (SCR-06) (conformance; Product; Sev-4; Jira AQP-477, GitHub #771)
+# DEF-120: status words: an Engineer on a reloaded Prepared estimate sees only "This estimate can no longer be changed." (SCR-05)) (conformance; Product; Sev-4; Jira AQP-477, GitHub #771)
 
 | Field | Value |
 |-------|-------|
-| Story / AC | AQP-299 (STORY-06.01), AQP-319; SCR-05 (Engineer) and SCR-06; the ux-expert's report, rows C-05-15, C-06-06. The mock-up and spec text quoted below. |
+| Story / AC | AQP-299 (STORY-06.01), AQP-319; SCR-05 (Engineer); the ux-expert's report, row C-05-15 (row C-06-06 was trimmed, see Ruling check). The mock-up and spec text quoted below. |
 | Severity | **Sev-4, graded by master 2026-11-26 (DL-414 (2), DL-416 (4)).** QA proposed Sev-4 (the ux-expert's word: Minor). |
 | Priority | P4 (Jira Low) (labels `sev-4`, `final-review`, `conformance`) |
 | Type | **Product** (conformance deviation of the running build from the SCR mock-up) |
@@ -13,15 +13,15 @@
 | Environment | the ux-expert's hands-on check at the widths named |
 
 ## Design (mock-up and spec)
-[C-05-15] Prepared (Engineer): the notice 'Prepared. Your inputs are now read-only. A Lead or Admin reviews them. If something has to change, ask them.' [C-06-06] the status badge 'Approved'.
+Prepared (Engineer): the notice 'Prepared. Your inputs are now read-only. A Lead or Admin reviews them. If something has to change, ask them.'
 
 ## Build (what the ux-expert saw)
-[C-05-15] On reload only 'This estimate can no longer be changed.' (the Prepared notice shows only right after the press). [C-06-06] 'Approved and locked'.
+On reload only 'This estimate can no longer be changed.' (the Prepared notice shows only right after the press).
 
 ## Ruling check
 Copy-only, grouped. No conflicting ruling found.
 
-**Graded and checked 2026-11-26 (qa-engineer, after DL-414 and DL-416).** **Scan note (26 Nov):** the second item (the Approved badge reads "Approved and locked") is not a deviation from an agreed text: AQP-296 AC-1 and AQP-297 AC-6 were amended after review round 1 to one status badge with "Approved and locked" in the header (DL-216 (2), option A, product-owner). The first item (the Prepared sentence on SCR-05) stays. Suggested: master removes the second item from this defect.
+**Graded and checked 2026-11-26 (qa-engineer, after DL-414 and DL-416).** **Trimmed 2026-11-26 (master, DL-418 (3)):** the second item (C-06-06, the Approved badge reads "Approved and locked") is removed: AQP-296 AC-1 and AQP-297 AC-6 were amended to exactly that wording (DL-216 (2), option A). The Prepared sentence on SCR-05 stays, Sev-4.
 
 ## Proof (proposed; master and the ux-expert set it)
 The screen reads as the design above at the widths named; the hands-on check repeated by the ux-expert on the fix's build; the existing assertions kept; no cost data on the Engineer view (NFR-002).
