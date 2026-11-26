@@ -62,8 +62,10 @@ const DRAWING_REGION = 'hidden lg:block lg:shrink-0 lg:w-(--drawing-region-width
  * SCR-05 mock-up draws the form on the page itself. The tree is 320 px now, and a form card with 24 px of padding and a border would cost the form 50 px: at 1280 px the section cards would fall from two columns to one, and a 340 px
  * drawing region would no longer have its whole width (STORY-10.06 AC-2). Below 1024 px the form is a card, as it was.
  */
-const FORM_CARD = 'lg:flex-1 lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none';
-const FORM_CARD_BODY = 'flex lg:p-0';
+// The form's card is a card from 768 to 1023 px only. On a phone (AQP-458, DEF-101) it has no border, fill or padding either: the section cards are the form's own cards, as the mock-up draws them, and the width
+// they keep is what lets their fields flow two to a row at 360 px (a card inside a card left 268 px, less than the 292 px that two 140 px columns and a 12 px gap need). From 1024 px it is the same, beside the tree.
+const FORM_CARD = 'max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:shadow-none lg:flex-1 lg:rounded-none lg:border-0 lg:bg-transparent lg:shadow-none';
+const FORM_CARD_BODY = 'flex max-md:p-0 lg:p-0';
 
 /** The alert of an estimate that was ignored while the Engineer worked (CR-01 item 7D): fetched only when the server says so, by a bare `import()`, so it is in no first load (NFR-009). */
 const loadIgnoredAlert = () => import('../estimate-ignore/engineer-ignored-alert').then((module) => module.EngineerIgnoredAlert);
