@@ -254,6 +254,16 @@ describe('item 10: in the workspace the tree card sits beside the form card, not
     expect(formCard).toMatch(/data-slot="card-content" class="[^"]*lg:p-0/);
   });
 
+  it('has no border, fill or padding on a phone either (AQP-458, DEF-101), so the section cards keep the width two 140 px columns need at 360 px', () => {
+    const open = html.lastIndexOf('<div', html.indexOf('data-form-area'));
+    const card = html.slice(open, html.indexOf('>', open));
+    for (const name of ['max-md:border-0', 'max-md:bg-transparent', 'max-md:shadow-none', 'max-md:rounded-none']) expect(card, name).toContain(name);
+    expect(formCard).toMatch(/data-slot="card-header" class="[^"]*max-md:px-0/);
+    expect(formCard).toMatch(/data-slot="card-content" class="[^"]*max-md:p-0/);
+    // From 768 to 1023 px it is still a card: no unprefixed removal.
+    expect(card).not.toMatch(/(^|\s)(border-0|bg-transparent|shadow-none)(\s|")/);
+  });
+
   it('has the head "Parts tree" before the form card and none inside it', () => {
     expect(html.indexOf('Parts tree</h2>')).toBeGreaterThan(-1);
     expect(html.indexOf('Parts tree</h2>')).toBeLessThan(html.indexOf('data-form-area'));
