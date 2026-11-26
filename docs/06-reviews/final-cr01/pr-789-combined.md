@@ -131,8 +131,43 @@ Lane 3 moved the head while this review was being written: `0d3db28f` ("trim the
 
 n/a (round 1).
 
+## Round 2 (re-review of `3464c629..6f32bbda`, 2026-11-26) — APPROVE WITH COMMENTS
+
+Scope: `6c26cf19` (the review findings), `e99a7571` (copy-only failure shows the path; figure-free guard for `folder-path`), `4ed75beb` (SCR-05's cards as a server module), `a1f093dd` and `6f32bbda` (tests only), and two merges of `master`. PR review [6076490159](https://github.com/sankumar76/Accucut-Quotation/pull/789#pullrequestreview-6076490159); a reply in each of the nine round-1 threads; label `review:quality-approved`.
+
+**Checks run.**
+- CI run **45841422295** at `6f32bbda`: all 6 jobs green.
+- Nightly 45841422280: its only failure is "CI feedback time", a timing metric that also failed on `026352fe`; not code.
+- 23 test files at `026352fe` in a temporary scratchpad worktree, since removed: **975 passed** (architecture, security, cost-details, page-head, review-head, part-fields). The developer worktree `aqp-402` had moved to another lane's branch, so a run there was discarded.
+- The later commits `e99a7571` to `6f32bbda` are covered by the CI run of record.
+
+| Finding | Round-2 status | Evidence |
+|---------|----------------|----------|
+| QLT-789-07 (Critical) | **Fixed** | SCR-06's head is `estimate-review/review-head.tsx` with `review-head-texts.ts`, and SCR-05's cards are `estimate-workspace/task-cards.tsx`. All three start with `import 'server-only'`, and their importers are server modules: `TaskCards` is drawn by the page and handed to the client workspace as an element. `WorkspaceHeader` is SCR-05's head alone. **Stage 11b, job 139983784630: `/estimates/[code]` 192,008 B**, 492 B under the DL-424 ceiling and **−154 B against master** (192,162 B both at the merge base `a6eb9809`, run 45832168454, and at `5a496d16`, run 45842343024; the one later master commit, #795, touches only queue files). With #791's about +150 B the route would be about 192,160 B |
+| QLT-789-01 (Major) | **Fixed** | `getEstimateService().getTree`; `CostTree` is typed on `CostTreeNode` (`id`, `parentId`, `slNo`, `nodeKind`, `label`), which has no figures. The security list is back to three entries with exact equality |
+| QLT-789-02 | **Fixed** | The E2E strips the `[data-sl-no]` cells and asserts no `\d\.\d{2}` (and no `₹`). A unit fixture with figures asserts none is drawn |
+| QLT-789-03 | **Fixed** | The description is a `div` (`data-page-head-description`) |
+| QLT-789-04 | **Fixed** | `max-[1023px]:order-last`. The E2E below 1024 px asserts the stages start above the tree |
+| QLT-789-05 | Info, **accepted** | The seeded units only, as reasoned |
+| QLT-789-06, SEC-789-01, SEC-789-02 | Info, stand | — |
+| QLT-789-08 | **Fixed** | The message is visible text |
+| QLT-789-09 | **Fixed** | `workspace-head-texts.ts` is removed; `review-head-texts.ts` is really server-only |
+| QLT-789-10 (found in round 2, before posting; fixed in `e99a7571`) | **Fixed** | A failed copy in copy-only mode said "Select it" with no path on the page. `copyMessage` now adds the path (unit-tested). The path is the same folder path the Engineer sees on SCR-05, not Restricted |
+
+**Round-2 notes**
+
+| ID | Severity | File:line | Note |
+|----|----------|-----------|------|
+| QLT-789-11 | Info (accepted) | `tests/unit/estimate-review-architecture.test.ts:122` | **The new exception (`folder-path.tsx`) is narrow and justified, and does not weaken the rule.** It names one file, and any other client file the review folder imports still fails. The file is figure-free (imports `lucide-react`, React, `Button`, `cn` and shared helpers) and is already in the route's client bundle through SCR-05. `e99a7571` pins it, and `folder-path-texts.ts`, against schema, review, `@/server/`, calculation, figure-state, `estimates-client` and `fetch(`, as the nine sibling exceptions are pinned |
+| QLT-789-12 | Info (accepted) | `tests/e2e/estimate-save.spec.ts:316` | The two-tab axe check now runs from the top of the page. Filling Length centred the field, leaving a parts-tree button half behind the sticky top bar at 768 px, which axe's target-size reads as small. The rules and the page are unchanged, and the 44 px cases still assert the buttons' size, so what is checked is not loosened |
+
+**Master merge.** `part-fields.tsx` keeps master's `PartHead` and `PartProgress` and drops only the form's `FORM_INTRO` line, which DEF-095 moved into the head's description. The sentence appears once.
+
+**Open after round 2:** Blocker 0, Critical 0, Major 0, Minor 0, Info 5 (QLT-789-05, -06, -11, -12; SEC-789-01, -02 count as notes). **Verdict at `6f32bbda`: APPROVE WITH COMMENTS.** DL-422: +0.
+
 ## Hand-off
 - Status: COMPLETE
 - GitHub: PR review [6074559283](https://github.com/sankumar76/Accucut-Quotation/pull/789#pullrequestreview-6074559283) (COMMENT, 9 inline comments, at `3464c629`); label `review:quality-changes-requested`
 - Verdict at `3464c629`: REQUEST CHANGES, **merge stop** (Blocker 0, Critical 1, Major 1, Minor 4, Info 5). QLT-789-07: 192,793 B is still 293 B over the DL-424 ceiling, and must be trimmed (move SCR-06's head out of the client `WorkspaceHeader`) or decided by master and the product-manager before the squash. NFR-002 holds.
 - Recommended next agent: developer (QLT-789-07, QLT-789-01, then -02, -03, -04), then a short re-review of the new diff, then orchestrator: merge on fully green CI with Stage 11b at most 192,500 B, by the end of Wed 2 Dec.
+- **Round 2 (`6f32bbda`):** APPROVE WITH COMMENTS (Blocker 0, Critical 0, Major 0, Minor 0, Info 5). Every round-1 finding is fixed or accepted. `/estimates/[code]` is 192,008 B (−154 B against master). Next: orchestrator merges on fully green CI, re-reading Stage 11b after updating the branch (DL-424).
