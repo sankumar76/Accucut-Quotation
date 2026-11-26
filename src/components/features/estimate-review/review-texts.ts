@@ -51,7 +51,13 @@ export const COUNT_FIELD_NAME = 'QTY per Assy';
 export const rowCurrencies = (usd: string, eur: string): string => `In US dollars $ ${usd}, in euros € ${eur}`;
 
 /** "How the total is built" (AC-3, UX-02). */
-export const BUILD_TITLE = (unitPriceLetter: string): string => `How the total is built (the ${unitPriceLetter} of every row added up)`;
+export const BUILD_TITLE = 'How the total is built';
+/** The words on the line of the collapsible section, one for each state (AQP-468, DEF-112; ux-expert ruling 2026-11-28): "Show" while it is closed, "Hide" while it is open. */
+export const BUILD_SHOW = 'Show';
+export const BUILD_HIDE = 'Hide';
+/** The explanation at the top of the section (the mock-up's paragraph, up to the worked example), with the column letters of the calculation. */
+export const buildExplanation = (countName: string, countLetter: string, unitPriceLetter: string): string =>
+  `The Engineer types the count for the whole order on every row (${countName}, column ${countLetter}). Each row's cost (column ${unitPriceLetter}) already includes its own count, so the total is the ${unitPriceLetter} of every row added together. Nothing is multiplied by the rows above.`;
 export const BUILD_REGION_LABEL = 'How the total is built, scrollable';
 export const BUILD_CAPTION = 'One line for each row, with its count and its own figure, ending with the total';
 export const BUILD_HEAD_SL_NO = 'Sl. No';
