@@ -141,14 +141,16 @@ test.describe('an Engineer', () => {
     await expect(page.getByRole('tablist', { name: 'Task queues' })).toBeVisible();
     await expect(page.getByRole('tabpanel')).toBeVisible();
     await tab(page, 'Open').focus();
-    await page.keyboard.press('ArrowRight');
-    await expect(tab(page, 'Closed')).toHaveAttribute('aria-selected', 'true');
-    await expect.poll(() => visibleCodes(page)).toEqual([own.closed.code]);
+    // FR-034 order: Open, Overdue, Closed, Ignored (DEF-103).
     await page.keyboard.press('ArrowRight');
     await expect(tab(page, 'Overdue')).toHaveAttribute('aria-selected', 'true');
     await expect.poll(() => visibleCodes(page)).toEqual([own.overdue.code]);
-    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowRight');
     await expect(tab(page, 'Closed')).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(() => visibleCodes(page)).toEqual([own.closed.code]);
+    await page.keyboard.press('ArrowLeft');
+    await expect(tab(page, 'Overdue')).toHaveAttribute('aria-selected', 'true');
+    expect(await page.getByRole('tab').allTextContents().then((names) => names.map((name) => name.replace(/\d+$/, '')))).toEqual(['Open', 'Overdue', 'Closed', 'Ignored']);
   });
 
   test('AC-4: with no task, each tab says so in the Engineer\'s words, with no Assign button', async ({ page }, testInfo) => {
