@@ -71,7 +71,7 @@ test.describe('AC-1, AC-6: the sections, their headers, the strip and the placeh
       else await expect(card).toContainText(section.count);
       // DEF-098: the number is a tile of its own, and the count beside the range tag reads "0 of 4" (the word "complete" is for a screen reader).
       await expect(card.locator('[data-section-no]')).toHaveText(section.number);
-      if (section.count !== null) await expect(card.locator('[data-section-count]')).toHaveText(section.count.replace(' complete', ''), { useInnerText: true });
+      if (section.count !== null) await expect(card.locator('[data-section-count]')).toHaveText(section.count);
     }
     for (const [letter, name] of [
       ['P', 'Cutting Time'],
