@@ -58,6 +58,8 @@
   --drawing-region-width: 0px;
   --page-max: 1320px;
   --menu-w: 264px;
+  /* The width of the card in the centred column of the pages a signed-out person uses (SCR-01, SCR-02, SCR-04; AQP-459); the page adds its 16 px gutters to it. A named token, as the spacing scale is replaced (`--spacing-*: initial`) and `max-w-120` draws nothing (#395). */
+  --column-w: 480px;
   --switch-w: 52px;
   --switch-travel: 20px;
   --logo-size: 56px;
