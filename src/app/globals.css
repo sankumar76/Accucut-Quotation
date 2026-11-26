@@ -357,6 +357,16 @@ html[data-tree-resizing] [data-tree-hit] [role='tooltip'] {
 
 /* The loading shimmer of the Skeleton component. */
 @layer components {
+  /*
+   * The "+" menu of a parts-tree row opens in line under its row (AQP-451, DEF-094; UX spec section 0.9 row 3): its content is a block in the row's own group, not a floating panel. Radix still wraps it in a
+   * positioning element that is `fixed` and moved by an inline transform; this takes that element out of the floating position, for the in-line menu only (`data-inline-menu`, add-node-menu-panel.tsx).
+   */
+  [data-radix-popper-content-wrapper]:has(> [data-inline-menu]) {
+    position: static !important;
+    transform: none !important;
+    min-width: 0 !important;
+  }
+
   .skeleton-shimmer {
     background: linear-gradient(90deg, var(--surface-2) 25%, var(--skeleton-hi) 50%, var(--surface-2) 75%);
     background-size: 200% 100%;
