@@ -96,3 +96,35 @@
 - **master:** if QLT-799-01 is deferred, record it and file a `tech-debt` issue.
 - **delivery lead (the owner of `CLAUDE.md`, append-only):** §1 "Build command" still reads `prisma generate && next build` and the stack row says "Docker Compose for deployment". Both are stale (ADR-015).
 - **solution-architect:** the hosting release on a managed host (decided 2026-11-23) will add a new build path. It must make the bundle after `next build`, inside whatever folder the server runs in, and be added to `export-bundle-paths.test.ts`. If it serves `.next/standalone/server.js`, the bundle must be made in `.next/standalone/.next/`.
+
+## Round 2 at `d4afb2ac` (fix commit `b2adee06`, then a merge of `master`)
+
+**Verdict: APPROVE WITH COMMENTS.** All five findings are fixed and verified. Open: Blocker 0, Critical 0, Major 0, Minor 0, Info 5 (SEC-799-01, SEC-799-02, QLT-799-07 unchanged; QLT-799-09 and QLT-799-10 are new). There is no merge stop under §9 item 2. The squash still needs E2E shards 1 to 4 green in run 45844480678; they were pending when this was written. Only the diff since review 6076191399 was reviewed. The merge commit brings in only `master`'s #795 (task queue tabs): `git diff origin/master...d4afb2ac` holds just this PR's 6 files.
+
+| Prior finding | Result | Evidence |
+|---|---|---|
+| QLT-799-01 Major | **Fixed** | `register()` is now `async`. `thread-runner` and the logger are loaded with `await import(...)` inside the `NEXT_RUNTIME === 'nodejs'` and `NODE_ENV === 'production'` block. **Stage 9 of run 45844480678 (job 139994634087, checkout of merge `c5c54fb`): 0 "Edge Runtime" / "build encountered" / "Ecmascript file had an error" lines, the same as master.** New unit test: the static imports are exactly `@/lib/env` and `next` (mutant "static import re-added" killed) |
+| QLT-799-02 Minor | **Fixed** | `thread-runner.ts:64` gives a source-folder repair and an installed-Windows-release repair (`C:\Accucut\current\update.ps1`, the next release; the running release is refused). Pinned in `instrumentation.test.ts` |
+| QLT-799-03 Minor | **Fixed** | The round-1 survivors are now killed: M03 `;`, M09 sweep config, M11 commented-out line, M12 disabled exit check (mutation run on a scratch `git archive d4afb2ac`, baseline 26 of 26 green) |
+| QLT-799-04 Minor | **Fixed** | `README.md:375` is now `npm run build`. A README test refuses any line that is exactly `npx next build` |
+| QLT-799-05 Minor | **Fixed** | `logger.error({ code: 'EXPORT_THREAD_MISSING' }, problem)` (pino, structured). The block sits in a `try`/`catch`. A throwing logger leaves the start untouched (test; mutant "catch removed" killed) |
+| QLT-799-06 Info | **Fixed** | the `try`/`catch` above |
+| QLT-799-08 Info | **Fixed** | Test title reworded; scratch folders removed in `afterEach` |
+| SEC-799-01, QLT-799-07, SEC-799-02 Info | Unchanged (they need no action) | |
+
+**Checks asked for in round 2**
+
+| Check | Result | Evidence |
+|---|---|---|
+| Edge build | **0 Edge Runtime warnings, the same as master** | job 139994634087 log, `grep -cE "Edge Runtime\|build encountered\|Ecmascript file had an error"` = 0; `✓ Compiled successfully`; `Export thread bundle: …/.next/export-worker.mjs` |
+| Env-check exit before any `await` | **Yes, by reading the code** | `src/instrumentation.ts`: `loadAppEnv()`, `loadExportEnv()` and the `catch` with `process.stderr.write` and `process.exit(1)` all come before the first `await import(...)`. An async function runs synchronously up to its first `await`, so the exit is as immediate as before. **Not pinned by a test** (QLT-799-09) |
+| Stage 11b `/estimates/[code]` | **192,162 B**, the same as master and round 1, 338 B under 192,500 B | same job: `PASS /estimates/[code] gzip 192,162` |
+| Unit tests at the head | 68 of 68 passed: `export-bundle-paths`, `instrumentation`, `export-timeout-setting`, `export/thread` (worktree `aqp-403`, read-only) | |
+| NFR-002, export logic, secrets | Unchanged; none | the diff touches only the start-up check, its text, tests and the README |
+
+**New findings (Info only)**
+
+| ID | Severity | File:line | Issue | Fix (optional) |
+|---|---|---|---|---|
+| QLT-799-09 | Info | `tests/unit/instrumentation.test.ts` (DEF-001 cases) | "The exit is made before any `await`" is a claim in the doc comment but not a test. A mutant that adds `await Promise.resolve()` before `loadAppEnv()` survives, because the tests `await` the rejection. The behaviour is the same today, since Next.js awaits `register()` before it serves | `const pending = register(); expect(exit).toHaveBeenCalledWith(1); await expect(pending).rejects.toThrow(ExitCalled);` |
+| QLT-799-10 | Info | `src/instrumentation.ts` (the empty `catch`) | If the dynamic import itself fails, nothing is written at start-up. This is intended (the check must never stop the start), and the export's own per-request error still logs `EXPORT_THREAD_MISSING` or `FAILED`. Coding standards §1 asks for no silent swallow; the comment explains this one | Optional: `process.stderr.write('The export bundle check could not run.\n')` in the `catch` |
