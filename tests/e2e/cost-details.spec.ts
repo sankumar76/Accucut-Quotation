@@ -218,6 +218,15 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     await expect(page.getByRole('main')).toContainText('Every calculated value for this row, in six stages, each with its formula. Lead and Admin only.');
     await expect(page.getByRole('main')).toContainText('Cost details for one row');
     await expect(page.getByRole('main').getByText('This row, on screen and in the Excel row')).toBeVisible();
+    // The parts tree column: a link for each row to its own cost details, the open row marked, names and kinds and no figure; from 1024 px it is a column of the tree's width.
+    const tree = page.getByRole('navigation', { name: 'Parts tree' });
+    await expect(tree.getByRole('link').first()).toHaveAttribute('aria-current', 'page');
+    await expect(tree.locator('[aria-current="page"]')).toHaveCount(1);
+    await expect(tree).not.toContainText('₹');
+    if ((page.viewportSize()?.width ?? 0) >= 1024) {
+      const box = await page.locator('[data-cost-tree]').boundingBox();
+      expect(Math.round(box?.width ?? 0)).toBe(Number.parseInt(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--tree-w')), 10));
+    }
 
     await expect(page.locator('details[data-stage]')).toHaveCount(6);
     for (const [index, title] of STAGE_TITLES.entries()) await expect(stage(page, index + 1).locator('summary')).toContainText(title);

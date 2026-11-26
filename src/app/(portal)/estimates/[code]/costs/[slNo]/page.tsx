@@ -4,7 +4,7 @@ import { CostDetails } from '@/components/features/cost-details/cost-details';
 import { COST_DETAILS_META_TITLE } from '@/components/features/cost-details/cost-details-texts';
 import { NotFoundError } from '@/lib/errors';
 import { formatIst } from '@/lib/time';
-import { getCostDetailsService, getEstimateService } from '@/server/composition';
+import { getCostDetailsService, getEstimateReviewService, getEstimateService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
 import type { EstimateViewer } from '@/server/services/estimate-service';
 import type { NodeCostsView } from '@/server/views/schemas/node-costs';
@@ -37,7 +37,9 @@ export default async function CostDetailsPage({ params }: PageProps) {
   if (workspace === null) notFound();
   const view = await costsOfRow(viewer, workspace.estimateId, slNo);
   if (view === null) notFound();
-  return <CostDetails view={view} code={workspace.code} calculatedAt={view.details === null ? null : formatIst(new Date(view.details.calculatedAt))} />;
+  // The parts tree column (AQP-452): the estimate's rows with their names and kinds, read the way the review reads them. The screen draws no figure of them.
+  const { nodes } = await getEstimateReviewService().getCosts(viewer, workspace.estimateId);
+  return <CostDetails view={view} code={workspace.code} calculatedAt={view.details === null ? null : formatIst(new Date(view.details.calculatedAt))} tree={nodes} />;
 }
 
 /** The row's answer, or `null` for a part that is not in this estimate (the service's 404). Any other fault is not turned into "not found". */

@@ -5,11 +5,13 @@ import { ColumnTag } from '@/components/shared/column-tag';
 import { COMPACT_BOX_PADDING } from '@/components/shared/compact-padding';
 import { Notice } from '@/components/shared/notice';
 import { PageHead } from '@/components/shared/page-head';
+import { TREE_COLUMN_LAYOUT } from '@/components/shared/tree-column-panel';
 import { RowName } from '@/components/shared/row-name';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/cn';
 import { formatCount, formatFigure, formatRupees, NO_FIGURE } from '@/lib/money';
+import type { CostNode } from '@/server/views/schemas/costs';
 import type { NodeCostsView } from '@/server/views/schemas/node-costs';
 
 import {
@@ -37,6 +39,7 @@ import {
   STAGES_HEADING,
   TASK_QUEUE_LABEL,
 } from './cost-details-texts';
+import { CostTree } from './cost-tree';
 import { PhoneStages } from './phone-stages';
 import { StagePanel } from './stage-panel';
 
@@ -56,6 +59,8 @@ export interface CostDetailsProps {
   readonly code: string;
   /** The time of the calculation written in IST (`formatIst`), or `null` while there is no calculation. */
   readonly calculatedAt: string | null;
+  /** Every row of the estimate (names and kinds, no figure) for the parts tree column. Left out, no column is drawn (AQP-452). */
+  readonly tree?: ReadonlyArray<CostNode> | undefined;
 }
 
 function EstimateLink({ code, label, variant }: { readonly code: string; readonly label: string; readonly variant: 'secondary' | 'ghost' }) {
@@ -136,16 +141,10 @@ function Stages({ view, calculatedAt }: { readonly view: NodeCostsView; readonly
   );
 }
 
-export function CostDetails({ view, code, calculatedAt }: CostDetailsProps) {
+export function CostDetails({ view, code, calculatedAt, tree }: CostDetailsProps) {
   const { state } = view;
-  return (
-    <div className="is-compact contents">
-      <PageHead
-        crumbs={[{ label: TASK_QUEUE_LABEL, href: '/queue' }, { label: code, href: `/estimates/${encodeURIComponent(code)}` }, { label: COST_DETAILS_CRUMB(view.row.slNo) }]}
-        title={COST_DETAILS_TITLE}
-        description={COST_DETAILS_DESCRIPTION}
-        actions={<EstimateLink code={code} label={BACK_TO_ESTIMATE} variant="secondary" />}
-      />
+  const body = (
+    <div className="flex min-w-0 flex-col gap-s-4">
       <RowHeader view={view} />
       {state === 'none' ? (
         <Notice tone="info" role="status" title={NOT_CALCULATED_TITLE}>
@@ -170,6 +169,24 @@ export function CostDetails({ view, code, calculatedAt }: CostDetailsProps) {
           <PhoneStages />
         </div>
       ) : null}
+    </div>
+  );
+  return (
+    <div className="is-compact contents">
+      <PageHead
+        crumbs={[{ label: TASK_QUEUE_LABEL, href: '/queue' }, { label: code, href: `/estimates/${encodeURIComponent(code)}` }, { label: COST_DETAILS_CRUMB(view.row.slNo) }]}
+        title={COST_DETAILS_TITLE}
+        description={COST_DETAILS_DESCRIPTION}
+        actions={<EstimateLink code={code} label={BACK_TO_ESTIMATE} variant="secondary" />}
+      />
+      {tree === undefined ? (
+        body
+      ) : (
+        <div className={TREE_COLUMN_LAYOUT}>
+          <CostTree code={code} nodes={tree} openSlNo={view.row.slNo} />
+          {body}
+        </div>
+      )}
     </div>
   );
 }

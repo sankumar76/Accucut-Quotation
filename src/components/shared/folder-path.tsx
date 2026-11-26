@@ -32,11 +32,6 @@ type CopyState = 'idle' | 'copied' | 'failed';
 /** What the live region says in each state; it is empty until a copy has been tried, so nothing is announced on load. */
 const COPY_MESSAGES: Readonly<Record<CopyState, string>> = { idle: '', copied: PATH_COPIED_MESSAGE, failed: PATH_NOT_COPIED_MESSAGE };
 
-/**
- * The folder of a task as everyone sees it (STORY-04.01 AC-4; FR-033): the path as a link, a **Copy path** button, and the sentence that explains a link that
- * does not open. Shared by the assign screen, the queue and the workspace. The copy is announced in a polite live region ("Path copied to the clipboard.").
- * The path is shown as plain text (React encodes it); the link comes from the server and is only used as given.
- */
 /** Copies the path to the clipboard and says how it went. */
 function useCopyPath(path: string): { readonly state: CopyState; readonly copy: () => Promise<void> } {
   const [state, setState] = useState<CopyState>('idle');
@@ -70,6 +65,11 @@ export function CopyPathButton({ path }: { readonly path: string }) {
   );
 }
 
+/**
+ * The folder of a task as everyone sees it (STORY-04.01 AC-4; FR-033): the path as a link, a **Copy path** button, and the sentence that explains a link that
+ * does not open. Shared by the assign screen, the queue and the workspace. The copy is announced in a polite live region ("Path copied to the clipboard.").
+ * The path is shown as plain text (React encodes it); the link comes from the server and is only used as given.
+ */
 export function FolderPath({ path, url, showNote = true }: FolderPathProps) {
   const noteId = useId();
   const { state, copy } = useCopyPath(path);

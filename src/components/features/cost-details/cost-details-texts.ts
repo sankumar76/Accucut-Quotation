@@ -15,6 +15,8 @@ export const COST_DETAILS_DESCRIPTION = 'Every calculated value for this row, in
 export const TASK_QUEUE_LABEL = 'Task queue';
 /** The eyebrow over the row's heading. */
 export const ROW_EYEBROW = 'Cost details for one row';
+/** The title of the parts tree column, as SCR-06's. */
+export const COST_TREE_TITLE = 'Parts tree';
 /** The tag of the one box of the row, and the sentences in it (the mock-up; the same words as SCR-06's "How the total is built"). The letters are the version's, never typed. */
 export const BOX_TAG = 'This row, on screen and in the Excel row';
 export const COUNT_FIELD_NAME = 'QTY per Assy';
