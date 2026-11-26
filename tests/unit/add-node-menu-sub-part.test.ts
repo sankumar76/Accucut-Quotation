@@ -52,7 +52,12 @@ function menu(nodeKinds: ReadonlyArray<NodeKind>, extra: Props = {}) {
   return { items, header, onChoose };
 }
 
-const names = (items: ReadonlyArray<ReactElement<Props>>): unknown[] => items.map((item) => item.props['aria-label']);
+/**
+ * The name of an item as a screen reader says it: the words of its name span. The item has no `aria-label` (axe `label-content-name-mismatch`, WCAG 2.5.3: a name that is not the visible text is a violation), and its hint
+ * is `aria-hidden`, so the hint is not part of the name; it is the item's description (`aria-describedby`, which may point at hidden text).
+ */
+const nameOf = (item: ReactElement<Props> | undefined): string => textOf(elementsIn(item?.props['children'] as ReactNode).find((element) => 'data-item-name' in element.props)?.props['children'] as ReactNode);
+const names = (items: ReadonlyArray<ReactElement<Props>>): unknown[] => items.map((item) => nameOf(item));
 
 describe('AQP-449: the Part item of the "+" menu names what the person will get', () => {
   it.each([
@@ -60,7 +65,7 @@ describe('AQP-449: the Part item of the "+" menu names what the person will get'
     ['a Main Assembly', MAIN_ASSEMBLY_MENU],
   ])('reads "Part" under %s that holds no Part, with the hint for the first part', (_row, kinds) => {
     const { items } = menu(kinds, { holdsPart: false });
-    const item = items.find((candidate) => candidate.props['aria-label'] === 'Part');
+    const item = items.find((candidate) => nameOf(candidate) === 'Part');
     expect(textOf(item?.props['children'] as ReactNode)).toBe('PartThe first part under this row. A second one is called "Sub-part"');
     expect(names(items)).not.toContain('Sub-part');
   });
@@ -70,7 +75,7 @@ describe('AQP-449: the Part item of the "+" menu names what the person will get'
     ['a Main Assembly', MAIN_ASSEMBLY_MENU],
   ])('reads "Sub-part", in its name and its text, under %s that already holds a Part, with the hint that both are called so', (_row, kinds) => {
     const { items } = menu(kinds, { holdsPart: true });
-    const item = items.find((candidate) => candidate.props['aria-label'] === 'Sub-part');
+    const item = items.find((candidate) => nameOf(candidate) === 'Sub-part');
     expect(textOf(item?.props['children'] as ReactNode)).toBe('Sub-partA part is already here, so both are called "Sub-part"');
     expect(names(items)).not.toContain('Part');
   });
@@ -97,7 +102,10 @@ describe('AQP-449: the Part item of the "+" menu names what the person will get'
     for (const item of items) {
       const hintId = item.props['aria-describedby'];
       expect(typeof hintId).toBe('string');
-      expect(elementsIn(item.props['children'] as ReactNode).some((element) => element.props['id'] === hintId)).toBe(true);
+      const hint = elementsIn(item.props['children'] as ReactNode).find((element) => element.props['id'] === hintId);
+      expect(hint?.props['aria-hidden']).toBe(true);
+      // No `aria-label`: the name is the visible name span (WCAG 2.5.3, axe label-content-name-mismatch).
+      expect(item.props).not.toHaveProperty('aria-label');
     }
   });
 });

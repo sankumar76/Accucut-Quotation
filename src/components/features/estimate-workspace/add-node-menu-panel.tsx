@@ -78,13 +78,14 @@ export function AddNodeMenuPanel({ label, nodeKinds, onChoose, keyboard, holdsPa
         {nodeKinds.map((nodeKind) => {
           const { name, hint } = itemText(nodeKind, holdsPart);
           const hintId = `add-node-hint-${nodeKind}`;
-          // The name stays the plain word (it is what a screen reader says and what a test finds); the hint is its description.
+          // The name is the visible name span, with no `aria-label` (a label that is not the item's visible text fails WCAG 2.5.3, axe `label-content-name-mismatch`); the hint is `aria-hidden`, so it is not part of the name,
+          // and the item is described by it (`aria-describedby` may point at hidden text).
           return (
-            <DropdownMenuItem key={nodeKind} aria-label={name} aria-describedby={hintId} disabled={unavailable === true} onSelect={() => onChoose(nodeKind)} className="py-s-2">
+            <DropdownMenuItem key={nodeKind} aria-describedby={hintId} disabled={unavailable === true} onSelect={() => onChoose(nodeKind)} className="py-s-2">
               <NodeKindIcon kind={nodeKind} />
               <span className="flex flex-col">
-                <span>{name}</span>
-                <span id={hintId} className="text-label font-normal text-ink-2">
+                <span data-item-name="">{name}</span>
+                <span id={hintId} aria-hidden={true} className="text-label font-normal text-ink-2">
                   {hint}
                 </span>
               </span>
