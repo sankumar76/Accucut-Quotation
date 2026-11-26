@@ -16,7 +16,16 @@ vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof im
  */
 
 // The control listens on the page for pagehide when it mounts; the harness runs that effect, and a node test has no window.
-vi.stubGlobal('window', { addEventListener: () => undefined, removeEventListener: () => undefined });
+const pageListeners = new Map<string, () => void>();
+vi.stubGlobal('window', { addEventListener: (type: string, listener: () => void) => pageListeners.set(type, listener), removeEventListener: (type: string) => pageListeners.delete(type) });
+// A reset on pagehide must be committed before the page is frozen (SEC-787-01): the control wraps it in `flushSync`, which the test counts.
+const flushed = vi.hoisted(() => ({ count: 0 }));
+vi.mock('react-dom', () => ({
+  flushSync: (work: () => void) => {
+    flushed.count += 1;
+    work();
+  },
+}));
 
 type Props = Record<string, unknown>;
 
@@ -70,6 +79,34 @@ describe('the field and its button', () => {
     expect(initial.props['type']).toBe('button');
     expect(initial.props['aria-label']).toBe('Show password');
     expect(initial.props['aria-pressed']).toBe(false);
+  });
+});
+
+describe('the review of AQP-787 (SEC-787-01, QLT-787-01 to QLT-787-04)', () => {
+  it('commits the reset of a page that is left at once (flushSync), so a page frozen into the back/forward cache holds a hidden password', () => {
+    const control = mount();
+    (control.parts().button.props['onClick'] as () => void)();
+    expect(control.parts().input.props['type']).toBe('text');
+    const before = flushed.count;
+    pageListeners.get('pagehide')?.();
+    expect(flushed.count).toBe(before + 1);
+    expect(control.parts().input.props['type']).toBe('password');
+  });
+
+  it('hides the eye that Edge draws inside a password field, so there is one eye', () => {
+    expect(mount().parts().input.props['className']).toContain('[&::-ms-reveal]:hidden');
+  });
+
+  it('disables the button with the field, so a disabled field has no live eye', () => {
+    expect(mount({ disabled: true }).parts().button.props['disabled']).toBe(true);
+    expect(mount().parts().button.props['disabled']).toBeFalsy();
+  });
+
+  it('keeps the thick border of an invalid field clear of the button\'s fill', () => {
+    const { input, button } = mount().parts();
+    expect(input.props['className']).toContain('peer');
+    expect(button.props['className']).toContain('peer-aria-invalid:border-y-2');
+    expect(button.props['className']).toContain('peer-aria-invalid:border-r-2');
   });
 });
 
@@ -133,14 +170,13 @@ describe('hideWhenLeft: a submit of the form and a page that is left hide the pa
   }
 
   it('hides on the form\'s submit and on pagehide, and takes both listeners away with the control', () => {
-    const { form, page, fire, count, node } = fakes();
+    const { page, fire, count, node } = fakes();
     const hide = vi.fn();
     const stop = hideWhenLeft(node as unknown as Element, hide, page as unknown as Window);
-    void form;
     fire('form:submit');
     fire('page:pagehide');
     expect(hide).toHaveBeenCalledTimes(2);
-    stop?.();
+    stop();
     expect(count()).toBe(0);
   });
 

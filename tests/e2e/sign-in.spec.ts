@@ -114,6 +114,14 @@ test.describe('SCR-01 at this width (AC-8)', () => {
     await password.fill('an-invented-wrong-password');
     await page.getByRole('button', { name: 'Show password' }).click();
     await expect(password).toHaveAttribute('type', 'text');
+    // A page that is left (and may be frozen into the back/forward cache) holds a hidden password: the reset is committed in the same task as the event, before anything else can run (SEC-787-01).
+    const typeAfterPagehide = await page.evaluate(() => {
+      window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      return document.querySelector('#password')?.getAttribute('type');
+    });
+    expect(typeAfterPagehide).toBe('password');
+    await page.getByRole('button', { name: 'Show password' }).click();
+    await expect(password).toHaveAttribute('type', 'text');
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(noticeOf(page)).toContainText(ERROR_TITLE);
     await expect(password).toHaveAttribute('type', 'password');
