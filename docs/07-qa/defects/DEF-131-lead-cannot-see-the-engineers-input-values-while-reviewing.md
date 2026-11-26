@@ -79,6 +79,8 @@ The ruling is the design and its checks are the acceptance. **View (Stage 1) is 
 | ED-37 | axe at three widths with the toolbar in view, the '+' menu open, the delete dialog open and a conflict notice showing: no serious or critical finding (every PR that changes an overlay runs axe with it open, DL-419 (4)) | axe in E2E |
 | QA additions | The tree routes in the authZ matrix (above): **no write path remains untraced** (RISK-038); the PR states its Stage 11b figure against the 192,500 B ceiling (the island, its lazy imports and the reused tree files share about 483 B of headroom with Row V and PR 2); person ledger +0 (the ruling's cases reuse the Lead, Admin and Engineer the review spec already makes; a new case is not placed after `users.spec.ts`) | PR run; the Stage 11b line |
 
+**Superseded by the DEF-129 no-shift ruling (`tree-toolbar-no-shift-2026-11-27.md`, records-u 7530e53f):** the sentence of 4.7 (a) 'The review tree is no taller than today until the person points at a row' is withdrawn; the review tree reserves a 40 px slot under every row with a toolbar (a mouse), so the Lead's tree is taller (about 100 px a row) and no row moves; **ED-32 (toolbar visibility), ED-34 (widths) and ED-35 are read against the new layout, and DEF-129's TS-17 (the Lead's review tree passes TS-1 to TS-7 and TS-9 to TS-12) is part of PR 3's proof.** The SCR-06 mock-up's floating toolbar is not the reference.
+
 Open points of the ruling that QA carries: **O-1** whether the Engineer's `usePartsTree` can serve the review's island (the behaviour does not change); **O-2** whether 06.04's refused-Recalculate message already names parts and fields; **O-3** whether `Calculating. This takes a moment.` stays.
 
 ### Open points QA carries
