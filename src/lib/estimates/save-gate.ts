@@ -7,7 +7,7 @@
  * **The same two facts say whether anything typed would be lost** (STORY-05.08 AC-4): `isDirty()` is true while a save is in flight or a field shows a value the server does not hold, and
  * the warning on leaving, the guard on choosing another part and Save draft all read it from here, so there is one save path and one answer.
  */
-export type FlushMode = 'draft' | 'auto';
+export type FlushMode = 'draft' | 'auto' | 'leave';
 
 export interface SaveGate {
   /** A save was queued: `settle()` waits for it. */
@@ -26,7 +26,10 @@ export interface SaveGate {
   readonly subscribe: (listener: () => void) => () => void;
   /** A part form offers the way to send again what it shows (Save draft, STORY-05.08 AC-1; the 30-second save, STORY-05.10). It is told which of the two asks. Answers the way to withdraw it. */
   readonly offerFlush: (flush: (mode: FlushMode) => void) => () => void;
-  /** Asks every part form that offered one to send again what it shows: `draft` (the default) is a press of Save draft, `auto` is the 30-second tick, which says nothing under a field. The saves it starts are tracked like any other. */
+  /**
+   * Asks every part form that offered one to send again what it shows: `draft` (the default) is a press of Save draft, `auto` is the 30-second tick, which says nothing under a field, and `leave` is the
+   * tab becoming hidden or the page being left (STORY-05.10 AC-7a, AC-7b): an `auto` whose requests also survive the page going away. The saves it starts are tracked like any other.
+   */
   readonly flush: (mode?: FlushMode) => void;
 }
 

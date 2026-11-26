@@ -196,9 +196,20 @@ export interface SaveInputsRequest {
   readonly values: Readonly<Record<string, string>>;
 }
 
-/** `PATCH /api/v1/estimates/{id}/nodes/{nodeId}/inputs`: the answer is the part as it is now. A refusal of a value carries the server's words under the field's ID. */
-export function savePartInputs(estimateId: string, nodeId: string, request: SaveInputsRequest, doFetch: Fetch = fetch): Promise<Outcome<PartInputs>> {
-  return sendJson(doFetch, `${base(estimateId)}/nodes/${encodeURIComponent(nodeId)}/inputs`, { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify(request) }, toPartInputs);
+/**
+ * A browser refuses a `keepalive` request whose body is over 64 KiB (and all such requests in flight together share that limit): the call would fail before anything is sent. A save of one field is a few hundred
+ * bytes, so this is far above any real one; a body over it is sent as an ordinary request (it still goes when the tab is only hidden, and the warning on leaving still guards the text).
+ */
+const KEEPALIVE_BODY_LIMIT_BYTES = 60_000;
+
+/**
+ * `PATCH /api/v1/estimates/{id}/nodes/{nodeId}/inputs`: the answer is the part as it is now. A refusal of a value carries the server's words under the field's ID. `keepalive` is the save of a tab that is hidden or a
+ * page that is being left (STORY-05.10 AC-7a, AC-7b): the same request, with the browser asked to finish it even if the page goes away (it keeps the cookies and the `Origin` header of any same-origin request).
+ */
+export function savePartInputs(estimateId: string, nodeId: string, request: SaveInputsRequest, doFetch: Fetch = fetch, keepalive = false): Promise<Outcome<PartInputs>> {
+  const body = JSON.stringify(request);
+  const survives = keepalive && new TextEncoder().encode(body).length <= KEEPALIVE_BODY_LIMIT_BYTES;
+  return sendJson(doFetch, `${base(estimateId)}/nodes/${encodeURIComponent(nodeId)}/inputs`, { method: 'PATCH', headers: JSON_HEADERS, body, ...(survives ? { keepalive: true } : {}) }, toPartInputs);
 }
 
 /** `GET /api/v1/options/materials`: the materials to choose from, by name, with Material Considered. */
