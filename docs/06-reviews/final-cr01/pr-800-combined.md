@@ -175,9 +175,39 @@ n/a (round 1).
 
 **Open after round 2:** Blocker 0, **Critical 1** (QLT-800-07, conditional on the run of record), Major 0, Minor 1 (QLT-800-01), Info 5 (SEC-800-01 to -04, QLT-800-08). **Verdict at `984bf245`: REQUEST CHANGES — merge stop at this head.** DL-422: +0.
 
+## Round 3 (re-review of `984bf245..46e03a1a`, 2026-11-26) — APPROVE WITH COMMENTS, one condition before merge
+
+**Scope.**
+- Lane 3's commits `e628a1f8`, `5ca14db0` and `3242e62f`. A lazy shell was tried, then removed: lane 3's local build with the client-reference manifest showed that every client module of the route, including those behind `import()`, sits in the same 7 route chunks, so a wrapper only added code.
+- They net out to three changes: `PartForm` is drawn directly; the row's `PartHead` and row line are server markup **above** it; `FieldRenderer` is trimmed. There is also a new guard test.
+- The merge `46e03a1a` of master `c30b349f` (#791). The branch is **0 behind**.
+- **The ceiling is now 193,500 B:** PRD v0.65 (2026-11-27, the product-manager's ruling, time-limited to G8; read in `docs/02-product/prd.md:5`, `:209`, `:764`).
+- PR review [6077675216](https://github.com/sankumar76/Accucut-Quotation/pull/800#pullrequestreview-6077675216); replies in the QLT-800-07 thread and the three round-2 threads; label `review:quality-approved`.
+
+**Checks run.**
+- 20 test files at `46e03a1a` in a temporary scratchpad worktree, since removed: **777 passed**. They include the architecture test with the new guard, screen, review-look, block, `part-form-lazy`, `overlay-imports`, `source-conventions` and the security tests.
+- A node probe of the guard's expression: it catches a planted `@/server/views/schemas/costs` import and ignores a mention in a comment.
+- CI run 45859281146: Stages 1 to 11b **success**; the E2E shards were still running when this was published.
+
+| Point / finding | Round-3 status | Evidence |
+|-----------------|----------------|----------|
+| NFR-002 at the boundary (SEC-800-04) | **Holds, narrower** | `estimate-review.tsx` draws `PartHead` and `rowLine` on the server above `PartForm`, so `review` is `{ notice, showing }`, two strings. `PartForm` gets ids, `editable={false}` and the mapped `nodes`: no element, no function, no figure. The Engineer's path is unchanged: `PartFields` draws its own `PartHead` with the ref when `review` is absent; `titleElement()` uses the ref first; the `FieldRenderer` refactor gives the Engineer the same DOM (the hidden span is review-only); and `EstimateWorkspace` passes every callback, `missing` and `gate`. Pinning the `<PartForm` props and the `partItems` keys stays optional: that boundary exists only on the Lead's and Admin's page |
+| QLT-800-01 | **Fixed** | `estimate-review-architecture.test.ts`: `part-form.tsx`, `part-fields.tsx`, `review-look.ts` and `review-look-texts.ts`, comments stripped, do not match `schemas/`, `estimate-review/`, `@/server/`, `calculation-`, `row-outputs`, `product-totals`, `figure-state` or `costs`. These are the modules every Engineer downloads, so this is the NFR-002 guard. The importer pin no longer applies (no island; `PartForm` is shared by design) |
+| QLT-800-02 to -06 | **Still hold** | No change to the class-only strip, the counts or the path. `UnitInput`'s `cn` stays, and the review look still passes its class. The RO-3 E2E is unchanged except that the title is read from `#row-inputs` |
+| QLT-800-07 | **Fixed (PRD v0.65)** | **Stage 11b, job 140045762982: `/estimates/[code]` 192,656 B**, which is **+365 B against master** (192,291 B at `c30b349f`, run 45854831021, job 140030342539, #791 in) and **844 B under 193,500 B**. With #789's ~−154 B the run of record should be about 192,500 B |
+| QLT-800-08 | Info, **accepted** | Moving the state would not reduce the first load (lane 3's chunk measurement). No behaviour change for the Engineer |
+| QLT-800-09 (new) | Info | `field-renderer.tsx:64`: uneven indentation inside `draw`. No behaviour change; cross-reference for reviewer-standards |
+
+**Condition before merge (DL-438).** #789 is still open. After it merges and lane 3 merges it in:
+- `git show --cc` of `estimate-review.tsx` (SEC-800-03), because it sits on the NFR-002 boundary.
+- Stage 11b of that run of record must read at or under 193,500 B, stated in the PR body.
+
+**Open after round 3:** Blocker 0, Critical 0, Major 0, Minor 0, Info 6 (SEC-800-01 to -04, QLT-800-08, QLT-800-09). **Verdict at `46e03a1a`: APPROVE WITH COMMENTS**, subject to the condition above. DL-422: +0.
+
 ## Hand-off
 - Status: COMPLETE
 - GitHub: PR review [6076703907](https://github.com/sankumar76/Accucut-Quotation/pull/800#pullrequestreview-6076703907) (COMMENT, 7 inline comments, at `37a3a1a7`); label `review:quality-changes-requested`
 - Verdict at `37a3a1a7`: REQUEST CHANGES, **merge stop** (Blocker 0, Critical 1, Major 0, Minor 4, Info 5). QLT-800-07 (DL-424): 192,895 B is 395 B over the ceiling, and still over with #789 in. NFR-002, read-only and access control hold
 - **Round 2 (`984bf245`):** REQUEST CHANGES, merge stop at this head (Blocker 0, Critical 1, Major 0, Minor 1, Info 5). Stage 11b is 192,538 B: +376 B against master and 38 B over. QLT-800-01's guard is still missing. #789's `estimate-review.tsx` resolution is to be checked when #789 merges.
+- **Round 3 (`46e03a1a`):** APPROVE WITH COMMENTS (Blocker 0, Critical 0, Major 0, Minor 0, Info 6). Stage 11b is 192,656 B: +365 B against master and 844 B under PRD v0.65's 193,500 B. Before merge: #789 merged in, my `git show --cc` check of `estimate-review.tsx`, and the run of record's Stage 11b at or under 193,500 B.
 - Recommended next agent: developer (QLT-800-07, then QLT-800-01 to -04), then the merge of #789 in and the run of record, then a short re-review of that resolution, then orchestrator: mark ready and merge on fully green CI with Stage 11b at or under 192,500 B.
