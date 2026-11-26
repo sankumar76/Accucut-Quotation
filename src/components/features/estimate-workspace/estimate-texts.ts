@@ -35,7 +35,7 @@ export const FORM_AREA_TITLE = 'Parts and inputs';
 export const FORM_INTRO = 'Every field is needed to Calculate. Enter 0 where a part needs nothing. Numbers allow up to 2 decimals.';
 export const FORM_LOADING = 'Loading the form';
 export const FORM_LOAD_FAILED_TITLE = 'We could not load the form';
-export const FORM_NO_PART = 'Choose a part in the tree to fill in its form, or add the first one with "New item".';
+export const FORM_NO_PART = 'Choose a part in the tree to fill in its form, or add the first one with "Add main assembly".';
 export const FORM_LOCKED = 'This estimate can no longer be changed.';
 export const lastSavedText = (when: string): string => `Last saved ${when}`;
 export const NOT_SAVED_YET = 'Nothing saved yet';
