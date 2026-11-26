@@ -479,6 +479,20 @@ describe('AQP-446 and AQP-447: the name of a row in the tree', () => {
     expect(state().nodes?.find((node) => node.id === 'p1')?.label).toBe('');
   });
 
+  it('lists the rows under the row in the delete dialog, each by its number and its name (DEF-099)', async () => {
+    const { state } = await open();
+    state().askDelete('m1');
+    expect(state().deleting?.under).toEqual([
+      { slNo: '1.1', name: 'Sub-part' },
+      { slNo: '1.2', name: 'Sub-part' },
+    ]);
+    state().applyLabel('s1', 'Corner gusset');
+    state().askDelete('m1');
+    expect(state().deleting?.under[0]).toEqual({ slNo: '1.1', name: 'Corner gusset' });
+    state().askDelete('p1');
+    expect(state().deleting?.under).toEqual([]);
+  });
+
   it('names the row in the delete dialog by its name, else by its kind', async () => {
     const { state } = await open();
     state().askDelete('p1');
