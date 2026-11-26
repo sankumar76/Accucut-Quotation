@@ -150,11 +150,11 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     // shown as SCR-05 shows it after saving (two decimals), so numbers are compared as numbers.
     const held = await page.evaluate(async (id) => {
       const response = await fetch(`/api/v1/estimates/${id}/nodes/${id}`);
-      return { status: response.status, inputs: ((await response.json()) as { inputs: Record<string, string> }).inputs };
+      return { status: response.status, inputs: ((await response.json()) as { inputs: ReadonlyArray<{ fieldId: string; value: string }> }).inputs };
     }, owner.id);
     expect(held.status).toBe(200);
     let compared = 0;
-    for (const [fieldId, stored] of Object.entries(held.inputs)) {
+    for (const { fieldId, value: stored } of held.inputs) {
       const box = form.locator(`input#${controlIdFor(fieldId)}, textarea#${controlIdFor(fieldId)}`);
       if ((await box.count()) === 0 || stored === '') continue;
       const shown = await box.inputValue();
@@ -472,6 +472,10 @@ test.describe('DEF-079: "View cost details" is a 44 px control on a touch layout
     await expect(link).toHaveCount(1);
     await expectLinkTarget(page, '"View cost details"', link);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    // Reading the link scrolled it into view, and at 768 px that leaves another link of the page (the folder's) half behind the sticky top bar, which axe reads as a target too small (target-size): where it falls moves with the
+    // lines above it (AQP-488 moved the build panel above the tree). The scan is the whole page from its top, with no rule excluded; the link has been read above (the same pattern as estimate-save, AQP-452).
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(link).toHaveCount(1);
     await expectNoAxeViolations(page);
   });
 
