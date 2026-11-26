@@ -5,8 +5,8 @@
 | Story / AC | STORY-01.09 (AQP-356, Done), AC-2: 'a wrong password is 422 under the password field with the field emptied and focused, the choice kept, the dialog still open, and nothing changed; the password is in no response'. **No AC is shown to fail:** both attempts end on `Test timeout of 30000ms exceeded.`; no attempt shows an `expect` message, a received value or an axe violation list. |
 | Severity | **Sev-3 Moderate, proposed by QA; master grades.** A Test-type defect that fails closed (a red required check when both attempts fail), workaround a re-run (R16, once per head), no product behaviour shown to be wrong. It is in a section 9 item 2 area (authentication, the step-up), which is why it is filed on the first both-attempts failure and not left on a watch. |
 | Priority | P3 (Jira Medium; labels `sev-3`, `final-review`) |
-| Type | **Test (E2E, Playwright, `desktop`; duration-tail class); product not excluded for one step.** Attempt 1 has no trace (`trace: 'on-first-retry'`), so whether the last POST was slow or the 30 s were spent before it is not proven. No 5xx, 429 or wrong status was seen on any reading of the case. |
-| Status | **Open (new), 2026-11-26.** Attempt 2 of run 45815929555 (the R16 re-run of shard 3) passed, `:185` 19.0 s on a 0.80 draw (see 'Attempt 2' below). Owner proposal: developer, hardening-window test lane (test-only fix); master rules the grade, type and lane. |
+| Type | **Test, product excluded (master, DL-426 (C): QA's code read found no throttle or delay on the path, and the case passes in 10.8 s on fast draws); a duration-tail Test defect of the DEF-080 and DEF-084 class.** QA's first reading was 'product not excluded for one step' (attempt 1 has no trace); master's ruling stands. Attempt 1 has no trace (`trace: 'on-first-retry'`), so whether the last POST was slow or the 30 s were spent before it is not proven. No 5xx, 429 or wrong status was seen on any reading of the case. |
+| Status | **Open, graded by master 2026-11-26 (DL-426 (C)): Sev-3, type Test, product excluded; fixed by a test-only split keeping every assertion (no combined review, as for the DEF-084 split; QA maps every assertion before and after); person ledger +0 (DL-422); lane: the next free one after the Sev-2s, by the cut-offs, otherwise listed at G8 with its readings.** Earlier: Open (new), 2026-11-26. Attempt 2 of run 45815929555 (the R16 re-run of shard 3) passed, `:185` 19.0 s on a 0.80 draw (see 'Attempt 2' below). Owner proposal: developer, hardening-window test lane (test-only fix); master rules the grade, type and lane. |
 | Jira / GitHub | [AQP-485](https://sankumar76.atlassian.net/browse/AQP-485) / [#792](https://github.com/sankumar76/Accucut-Quotation/issues/792) (labels bug, sev-3, ai-delivery, final-review; Jira also aiid-DEF-128, agent-qa-engineer). Relates to AQP-356, AQP-383 (DEF-053, the same family: a `/users` page grown by earlier specs), AQP-1. Searched first: JQL on `aiid-DEF-128` and text `admin-handover`, and a GitHub search for DEF-128: nothing. |
 | Found by / date | CI (a PR run); read and logged by qa-engineer, 2026-11-26, at the orchestrator's request |
 | Build / commit | PR #780 (AQP-475, `fix/AQP-475-scr07-stage-cards`), head `bff9f23b`, 0 behind `master` `40feaa53`; it changes only cost-details UI files, so it cannot reach `admin-handover.spec.ts` or the handover route. |
@@ -46,10 +46,12 @@ The same spec's other `[desktop]` cases in that run passed: :171 16.0 s, :115 21
 2. **Proof:** on the fix PR's run of record and the first two `master` pushes after the squash, every `admin-handover.spec.ts` case at all three widths under 25 s on attempt 1, and no time-out. QA reads each from the job logs.
 3. **Until then:** a first-attempt failure of `:185` is read under this Bug; R16 allows one re-run per head (used on #780); a `master` push is never re-run.
 
+**Proof (DL-426 (C)):** each new case attempt 1 under 25 s at three widths on the fix PR's run of record and the first two `master` pushes; QA checks that every assertion is mapped before and after.
+
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref (commit / test) |
 |------|----|------|---------------------|
-| Graded (type, severity, lane) | master | | |
+| Graded (type, severity, lane) | master | 2026-11-26 | DL-426 (C) |
 | Cause found | developer | | |
 | Fixed | developer | | |
 | Regression test | developer | | |
