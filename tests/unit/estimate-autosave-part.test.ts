@@ -44,7 +44,7 @@ const IST_TEN_FORTY_TWO = new Date('2026-11-20T05:12:00.000Z');
 async function open(editable = true, onWrote: (at: string) => void = () => undefined) {
   partServer.reset({ a: '1.00', b: '1.00' });
   const gate = createSaveGate();
-  const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable, fields: [A, B, C], onSaved: () => undefined, onChanged: () => undefined, onServerIgnored: () => undefined, onWrote, gate };
+  const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable, fields: [A, B, C], onSaved: () => undefined, onChanged: () => undefined, onNamed: () => undefined, onServerIgnored: () => undefined, onWrote, gate };
   const hook = renderHook(usePartValues, props);
   hook.render();
   await flushMicrotasks();

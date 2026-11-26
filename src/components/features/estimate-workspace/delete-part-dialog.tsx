@@ -15,7 +15,8 @@ import { Button } from '@/components/ui/button';
 import type { DeleteTarget } from './use-parts-tree';
 
 /** The dialog's own words, here and not in `estimate-texts.ts`, which the first load carries whole: this dialog is fetched after the page is up (NFR-009). */
-const deleteTitle = (slNo: string): string => `Delete row ${slNo}?`;
+/** "Delete 1.1 Sub-Assembly?": the row's number and its name (its Description, else its Part No., else its kind's own name), as the button that opened the dialog names it (AQP-446). */
+const deleteTitle = (slNo: string, name: string): string => `Delete ${slNo} ${name}?`;
 const rowCount = (count: number): string => `${count} row${count === 1 ? '' : 's'}`;
 /** "This also deletes the 2 rows under it and everything typed into them. This cannot be undone." for a row with rows under it; a shorter one for a row with none. The rows under a row can be assemblies and Fasteners, so they are "rows" (PM ruling DL-303; UX spec section 0.9 row 3). */
 const deleteDescription = (slNo: string, parts: number): string =>
@@ -45,7 +46,7 @@ export function DeletePartDialog({ target, open, deleting, onConfirm, onCancel, 
     <AlertDialog open={open} onOpenChange={(next) => (next ? undefined : onCancel())}>
       <AlertDialogContent onCloseAutoFocus={onCloseAutoFocus}>
         <AlertDialogHeader>
-          <AlertDialogTitle>{target === null ? '' : deleteTitle(target.slNo)}</AlertDialogTitle>
+          <AlertDialogTitle>{target === null ? '' : deleteTitle(target.slNo, target.name)}</AlertDialogTitle>
           <AlertDialogDescription>{target === null ? '' : deleteDescription(target.slNo, target.parts)}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

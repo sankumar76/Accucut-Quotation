@@ -12,7 +12,6 @@ export const COST_DETAILS_META_TITLE = 'Cost details';
 export const BACK_TO_ESTIMATE = 'Back to the estimate';
 export const STAGES_HEADING = 'The six stages';
 export const ROW_LABEL = 'Part';
-export const PART_NAME_FALLBACK = 'Part';
 export const COUNT_UNIT = 'nos';
 export const COUNT_HINT = 'for the whole order, already included in the price';
 export const BOX_NAME = 'Unit Production Price';

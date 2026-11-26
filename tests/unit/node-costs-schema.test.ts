@@ -10,7 +10,7 @@ import { NODE_COST_LINE_KINDS, NODE_COST_STATES, nodeCostsSchema } from '@/serve
 
 const line = { letter: 'AK', name: 'Material Cost', kind: 'calculated', group: null, unit: null, formula: '(M * I) - (O * Material-Scrap-Rate)', working: '(2.8260 × 58.00) - (0.4260 × 22.00)', value: '154.54', blank: false, hidden: false };
 const stage = { number: 2, name: 'Material Cost', subHeadings: [], lines: [line], total: { letters: ['AK'], value: '154.54', shownLinesSum: null } };
-const row = { nodeId: 'node-1', slNo: '1.2', name: 'Invented bracket' };
+const row = { nodeId: 'node-1', slNo: '1.2', name: 'Invented bracket', kindLabel: 'Part' };
 const details = { calculatedAt: '2026-11-05T05:12:00.000Z', configurationNumber: 9, letters: { count: 'H', unitPrice: 'BG' }, count: '2', notApplicable: false, hiddenLineCount: 0, stages: [stage] };
 const current = { state: 'current', row, details };
 
@@ -29,7 +29,7 @@ describe('the answer, and exactly what it may hold', () => {
 
   it('holds these keys and no others, at every level', () => {
     expect(Object.keys(nodeCostsSchema.shape).sort()).toEqual(['details', 'row', 'state']);
-    expect(Object.keys(nodeCostsSchema.shape.row.shape).sort()).toEqual(['name', 'nodeId', 'slNo']);
+    expect(Object.keys(nodeCostsSchema.shape.row.shape).sort()).toEqual(['kindLabel', 'name', 'nodeId', 'slNo']);
     const detailsShape = nodeCostsSchema.shape.details.unwrap().shape;
     expect(Object.keys(detailsShape).sort()).toEqual(['calculatedAt', 'configurationNumber', 'count', 'hiddenLineCount', 'letters', 'notApplicable', 'stages']);
     expect(Object.keys(detailsShape.letters.shape).sort()).toEqual(['count', 'unitPrice']);

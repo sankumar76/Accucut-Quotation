@@ -432,7 +432,7 @@ test.describe('AC-4, AC-5, AC-7: typing, refusing and saving', () => {
     // A mouse shows the toolbar of the hovered row, not of the open one (AQP-448), so the pointer goes on the row first; on a touch screen the open row shows it.
     await tree(page).getByRole('link').first().hover();
     await tree(page).getByRole('button', { name: /^Delete 1 / }).click();
-    const dialog = page.getByRole('alertdialog', { name: 'Delete row 1?' });
+    const dialog = page.getByRole('alertdialog', { name: /^Delete 1 .+\?$/ });
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Delete row' }).click();
     await expect(dialog).toHaveCount(0);

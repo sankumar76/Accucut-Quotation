@@ -333,7 +333,7 @@ describe('rule P2: the second press of a double click on a name (acceptance chec
 describe('the toolbar of a row reads the hold', () => {
   const part: PartItem = { id: 'p-1', parentId: null, slNo: '1', label: 'Frame', nodeKind: 'MAIN_ASSEMBLY', completeness: 'EMPTY', revision: 1 };
   const group = (showing: boolean): ReactElement<{ className: string }> =>
-    RowActions({ part, onAdd: vi.fn(), onDelete: vi.fn(), upTo: null, downTo: null, onMoveTo: vi.fn(), showing }) as ReactElement<{ className: string }>;
+    RowActions({ part, kindLabel: 'Part', onAdd: vi.fn(), onDelete: vi.fn(), upTo: null, downTo: null, onMoveTo: vi.fn(), showing }) as ReactElement<{ className: string }>;
 
   it('is in view while it carries data-hold, besides the hovered row, the open row on a touch screen, visible focus and an open menu, and is clipped otherwise', () => {
     const classes = group(false).props.className.split(' ');

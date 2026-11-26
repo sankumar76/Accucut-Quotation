@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { RowActions } from '@/components/features/estimate-workspace/row-actions';
 import { TreePanel } from '@/components/features/estimate-workspace/tree-panel';
 import type { PartsTreeState } from '@/components/features/estimate-workspace/use-parts-tree';
-import type { NodeKind } from '@/lib/estimate/node-kinds';
+import { NODE_KIND_NAMES, type NodeKind } from '@/lib/estimate/node-kinds';
 import type { PartItem } from '@/lib/estimates/tree-client';
 
 /**
@@ -29,7 +29,7 @@ const NODES: ReadonlyArray<PartItem> = [
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const noop = (): void => undefined;
-const actions = (node: PartItem): string => renderToStaticMarkup(createElement(RowActions, { part: node, onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop }));
+const actions = (node: PartItem): string => renderToStaticMarkup(createElement(RowActions, { part: node, kindLabel: NODE_KIND_NAMES[node.nodeKind], onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop }));
 const count = (html: string, text: string): number => html.split(text).length - 1;
 
 function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
@@ -53,6 +53,7 @@ function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
     confirmDelete: () => Promise.resolve(),
     cancelDelete: noop,
     applySaved: noop,
+    applyLabel: noop,
     readAgain: noop,
   };
 }
@@ -111,11 +112,11 @@ describe('RowActions: the "+" of a row (AC-1, AC-2, 14.30)', () => {
     for (const node of NODES) expect(actions(node)).toContain(`aria-label="Delete ${node.slNo} ${node.label}"`);
   });
 
-  it('uses the 44 px square, and 36 px from 1024 px with a fine pointer, and names a row with no name "Part"', () => {
+  it('uses the 44 px square, and 36 px from 1024 px with a fine pointer, and names a row with no name by its kind (AQP-446)', () => {
     const html = actions(part('x', null, '3', 'MAIN_ASSEMBLY'));
     expect(html).toContain('h-(--control-h)');
     expect(html).toContain('fine-wide:h-(--control-h-row)');
-    expect(html).toContain('aria-label="Delete 3 Part"');
+    expect(html).toContain('aria-label="Delete 3 Main Assembly"');
   });
 });
 
@@ -129,13 +130,13 @@ const group = (html: string): string[] => classesOf(html, 'data-row-actions');
 const groupTokens = (html: string, node: PartItem): string[] => classesOf(html, 'aria-label="Actions for ' + node.slNo + ' ' + node.label + '"');
 
 describe('AQP-418 (DEF-075): the toolbar of a row never floats over the row', () => {
-  it('is one group named after its row ("Actions for <number> <name>"), and names a row with no name "Part"', () => {
+  it('is one group named after its row ("Actions for <number> <name>"), and names a row with no name by its kind (AQP-446)', () => {
     for (const node of NODES) {
       const html = actions(node);
       expect(html).toContain('role="group"');
       expect(html).toContain(`aria-label="Actions for ${node.slNo} ${node.label}"`);
     }
-    expect(actions(part('x', null, '3', 'MAIN_ASSEMBLY'))).toContain('aria-label="Actions for 3 Part"');
+    expect(actions(part('x', null, '3', 'MAIN_ASSEMBLY'))).toContain('aria-label="Actions for 3 Main Assembly"');
   });
 
   it('is clipped (sr-only) until a cause shows it, and never by opacity, display or visibility', () => {
@@ -171,14 +172,14 @@ describe('AQP-418 (DEF-075): the toolbar of a row never floats over the row', ()
   });
 
   it('is shown at once while the delete confirmation of this row is open (showing), and not otherwise', () => {
-    const shown = renderToStaticMarkup(createElement(RowActions, { part: NODES[2] as PartItem, onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop, showing: true }));
+    const shown = renderToStaticMarkup(createElement(RowActions, { part: NODES[2] as PartItem, kindLabel: 'Part', onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop, showing: true }));
     expect(group(shown)).toContain('not-sr-only');
     expect(group(shown)).not.toContain('sr-only');
     expect(group(actions(NODES[2] as PartItem))).not.toContain('not-sr-only');
   });
 
   it('never reads busy: the same classes with a change on its way, so nothing is clipped, moved or unmounted under a focused button (AQP-343)', () => {
-    const busy = renderToStaticMarkup(createElement(RowActions, { part: NODES[2] as PartItem, onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop, busy: true }));
+    const busy = renderToStaticMarkup(createElement(RowActions, { part: NODES[2] as PartItem, kindLabel: 'Part', onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop, busy: true }));
     expect(group(busy)).toEqual(group(actions(NODES[2] as PartItem)));
     expect(busy).toContain('aria-label="Delete 1.1.1 Plate"');
   });
@@ -202,7 +203,7 @@ describe('AQP-418 (DEF-075): the toolbar slot of a row in the panel', () => {
   });
 
   it('passes showing to the row whose delete confirmation is open and to no other', () => {
-    const target = { id: 'p1', slNo: '1.1.1', revision: 1, parentId: 's1', parts: 2, subtree: 'x', removedIds: [] };
+    const target = { id: 'p1', slNo: '1.1.1', name: 'Plate', revision: 1, parentId: 's1', parts: 2, subtree: 'x', removedIds: [] };
     const standing = (html: string): string[] => NODES.filter((node) => groupTokens(html, node).includes('not-sr-only')).map((node) => node.slNo);
     expect(standing(panel(NODES, true, { deleting: target, deleteOpen: true }))).toEqual(['1.1.1']);
     expect(standing(panel(NODES, true, { deleting: target, deleteOpen: false }))).toEqual([]);
