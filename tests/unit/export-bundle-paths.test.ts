@@ -20,6 +20,8 @@ describe('the ways a server is built make the export thread bundle after the bui
     const build = scripts['build'] ?? '';
     expect(build).toContain('next build');
     expect(build.indexOf(BUNDLE_STEP), build).toBeGreaterThan(build.indexOf('next build'));
+    // Joined by `&&`: with `;` a failed `next build` would still end green, and a build without the bundle would look finished.
+    expect(build).toMatch(/next build && tsx scripts\/build-export-worker\.ts/);
     const dev = scripts['dev'] ?? '';
     expect(dev.indexOf(BUNDLE_STEP), dev).toBeGreaterThanOrEqual(0);
     expect(dev.indexOf(BUNDLE_STEP)).toBeLessThan(dev.indexOf('next dev'));
@@ -35,21 +37,24 @@ describe('the ways a server is built make the export thread bundle after the bui
     }
   });
 
-  it('the Playwright servers make the bundle: the development one before `next dev`, the production one after `next build`', () => {
-    const config = read('playwright.config.ts');
-    expect(config).toMatch(/npx tsx scripts\/build-export-worker\.ts && npx next dev/);
-    expect(config).toMatch(/npx next build && npx tsx scripts\/build-export-worker\.ts && npx next start/);
+  it.each(['playwright.config.ts', 'playwright.sweep.config.ts'])('%s: a server it builds makes the bundle after `next build`', (file) => {
+    expect(read(file)).toMatch(/npx next build && npx tsx scripts\/build-export-worker\.ts && npx next start/);
   });
 
-  it('the Windows package makes it inside the package, after the standalone folder is copied (which would wipe it), and stops without it', () => {
+  it('the Playwright development server makes the bundle before `next dev`', () => {
+    expect(read('playwright.config.ts')).toMatch(/npx tsx scripts\/build-export-worker\.ts && npx next dev/);
+  });
+
+  it('the Windows package makes it inside the package (the app folder that the standalone copy fills), as a line that runs, and stops without it', () => {
     const script = read('scripts/package-windows.ps1');
     const copied = script.indexOf('Copy-PackageFolder -Source $standalone -Destination $app');
-    const bundled = script.indexOf("New-EsbuildBundle -Entry 'src/worker/export-thread.ts' -OutFile (Join-Path $app '.next\\export-worker.mjs')");
+    // Anchored to the start of the line: the same text inside a comment (`# New-EsbuildBundle ...`) does not count (QLT-799-03).
+    const bundled = /^[ \t]*New-EsbuildBundle -Entry 'src\/worker\/export-thread\.ts' -OutFile \(Join-Path \$app '\.next\\export-worker\.mjs'\)/m.exec(script);
     expect(copied).toBeGreaterThan(0);
-    expect(bundled).toBeGreaterThan(copied);
-    // The helper stops the package on an esbuild failure and on a missing file: a release cannot be made without the bundle.
-    expect(script).toContain('throw "esbuild failed for');
-    expect(script).toContain('throw "esbuild wrote no file for');
+    expect(bundled?.index ?? -1).toBeGreaterThan(copied);
+    // The helper stops the package on an esbuild failure and on a missing file: a release cannot be made without the bundle. The checks themselves are pinned, not only their words.
+    expect(script).toMatch(/^[ \t]*if \(\$LASTEXITCODE -ne 0\) \{ throw "esbuild failed for/m);
+    expect(script).toMatch(/^[ \t]*if \(-not \(Test-Path -LiteralPath \$OutFile\)\) \{ throw "esbuild wrote no file for/m);
   });
 
   it('the bundle is where the server looks: `.next/export-worker.mjs` under the folder it runs in', () => {
@@ -95,5 +100,11 @@ describe('the README says it', () => {
     expect(row).toContain('`npx prisma generate && npx next build && npx tsx scripts/build-export-worker.ts`');
     expect(row).toContain('Never run `next build` alone');
     expect(row).toContain('a demo included');
+  });
+
+  it('has no instruction that builds with `npx next build` alone (QLT-799-04): no README line is the bare build', () => {
+    const lines = read('README.md').split('\n');
+    const alone = lines.map((line, index) => ({ line: line.trim(), index })).filter(({ line }) => line === 'npx next build');
+    expect(alone, 'a README line that is exactly `npx next build`').toEqual([]);
   });
 });

@@ -61,7 +61,7 @@ export function exportThreadFile(folder: string): string {
 export function exportThreadProblem(folder: string, exists: (path: string) => boolean = existsSync): string | null {
   const file = exportThreadFile(folder);
   if (exists(file)) return null;
-  return `The export thread bundle is missing: ${file}. Downloading a workbook will fail (EXPORT_THREAD_MISSING) until it is made. \`next build\` alone does not make it: run \`npx tsx scripts/build-export-worker.ts\` in ${folder}, or build with \`npm run build\`, then start the server again.`;
+  return `The export thread bundle is missing: ${file}. Downloading a workbook will fail (EXPORT_THREAD_MISSING) until it is made. From a source folder (a demo or a development copy; \`next build\` alone does not make it): run \`npx tsx scripts/build-export-worker.ts\` in ${folder}, or build with \`npm run build\`, then start the server again. On an installed Windows release, which has no npm and no source: the file comes with the release package, so ask whoever maintains the release to update to the next release with \`C:\\Accucut\\current\\update.ps1\` (the install guide, "Update"; the running release is refused).`;
 }
 
 /** A build that takes longer than the proxy's read timeout (architecture section 4.6: at least 120 s) has nobody left to receive the file. */

@@ -372,7 +372,7 @@ Admin to sign in as, and the portal allows **one active Admin**, so there are tw
   (never staging), and the password is never printed.
 
   ```sh
-  npx next build
+  npm run build
   # bash; in PowerShell set the two variables with $env:NAME = "value"
   export MEASUREMENT_ADMIN_EMAIL=perf-admin@example.test MEASUREMENT_ADMIN_PASSWORD=<an invented password of your choice>
   npx tsx scripts/ensure-measurement-user.ts
