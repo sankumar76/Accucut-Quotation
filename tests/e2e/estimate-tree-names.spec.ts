@@ -6,7 +6,7 @@ import { canaryTaskCodeFor } from '../support/estimate-recipe';
 
 import { connectToTestDatabase, ensureCanaryCustomers, setCanaryCustomer } from './support/auth';
 import { waitUntilHydrated } from './support/design-system';
-import { control, fieldIdOf, isPhone, nextSave, signInAsNewEngineer, tree } from './support/part-form';
+import { control, fieldIdOf, isPhone, nextSave, revealRowToolbar, signInAsNewEngineer, tree } from './support/part-form';
 
 /**
  * AQP-446 (DEF-089) and AQP-447 (DEF-090): the parts tree shows each row's kind and name as SCR-05 draws them, and a row is named through its Description (UX ruling
@@ -80,6 +80,7 @@ test('NAME-1 to NAME-4, KIND-1: rows show their kind and their name; a new row i
 
   // Adding a row: the status says what was added and how to name it, and the focus is on the new row's link.
   await row(page, '1.1').click();
+  await revealRowToolbar(row(page, '1.1'));
   await rowButton(page, 'Add under', '1.1').click();
   await page.getByRole('menuitem', { name: 'Part', exact: true }).click();
   await expect(page.getByText('Added 1.1.1 Part. Type a Description to name it.')).toHaveCount(1);

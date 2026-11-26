@@ -132,3 +132,17 @@ export async function showTree(page: Page): Promise<void> {
   if (isPhone(page)) await page.getByRole('button', { name: /^Parts tree/ }).click();
   await expect(tree(page)).toBeVisible();
 }
+
+/**
+ * Brings the toolbar of a parts-tree row into view and waits until it is (AQP-486, DEF-129; the rule is AQP-448: a mouse shows the toolbar of the hovered row, a finger the open row's). The toolbar is clipped to 1 px
+ * while it is not in view, at the foot of its own row and over the next one, so a press aimed at a button before the toolbar is in view lands on the next row, and a scroll that Playwright does for an action moves
+ * the row from under the pointer and takes the toolbar away again. So: the row is scrolled to the middle of the screen, clear of the fixed bar at the foot, the pointer is put on it, and the height of the toolbar's
+ * group is waited for (a state, not a time). The press that follows needs no scroll. On a touch screen the hover changes nothing and the row must be the open one, which a test makes it by choosing it first.
+ * `row` is the row's link.
+ */
+export async function revealRowToolbar(row: Locator): Promise<void> {
+  await row.evaluate((link) => link.scrollIntoView({ block: 'center' }));
+  await row.hover();
+  const group = row.locator('xpath=ancestor::li[@data-part-row][1]').locator('[data-row-actions]').first();
+  await expect.poll(async () => (await group.boundingBox())?.height ?? 0, 'the toolbar of the row is in view').toBeGreaterThan(1);
+}

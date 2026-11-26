@@ -6,6 +6,7 @@ import { defined } from '../support/defined';
 
 import { connectToTestDatabase, createDisposableUser, E2E_PASSWORD, ensureCanaryCustomers, setCanaryCustomer, signInWithoutThePage, useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow, ROW_TARGET, TOUCH_TARGET, waitUntilHydrated } from './support/design-system';
+import { revealRowToolbar } from './support/part-form';
 
 /**
  * STORY-05.02 T7 (AC-1 to AC-3, AC-6, AC-9): the parts tree of SCR-05 for an Engineer, at 360x800, 768x1024 and 1366x768 on the development server. Each test signs in
@@ -119,7 +120,8 @@ const topOf = (link: Locator): Promise<number> => link.evaluate((element) => ele
  * is elsewhere (after an add, a drag or a dialog) reveals the toolbar of its row first. On a touch screen the row must be the open one, and the hover changes nothing.
  */
 async function reveal(page: Page, slNo: string): Promise<void> {
-  await part(page, slNo).hover();
+  // The row is scrolled to the middle of the screen first (AQP-486, DEF-129): a scroll that Playwright does for the press takes the pointer off the row and the toolbar goes with it.
+  await revealRowToolbar(part(page, slNo));
   await expect.poll(() => toolbarHeightOf(page, slNo), `the toolbar of ${slNo} is in view`).toBeGreaterThan(1);
 }
 
