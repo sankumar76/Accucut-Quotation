@@ -204,6 +204,20 @@ n/a (round 1).
 
 **Open after round 3:** Blocker 0, Critical 0, Major 0, Minor 0, Info 6 (SEC-800-01 to -04, QLT-800-08, QLT-800-09). **Verdict at `46e03a1a`: APPROVE WITH COMMENTS**, subject to the condition above. DL-422: +0.
 
+## Merge check of #789 into #800 (`git show --cc d3098abd`, 2026-11-26) — merge OK; the round-3 condition is met
+
+`d3098abd` merges master `69ba8d98` (#789 merged) into `f554460d`; the branch is **0 behind**. There were four conflicts, in `estimate-review.tsx`, `review-tree.tsx`, `part-fields.tsx` and the architecture test. PR review [6080044998](https://github.com/sankumar76/Accucut-Quotation/pull/800#pullrequestreview-6080044998).
+
+| Check | Result | Evidence |
+|-------|--------|----------|
+| NFR-002 boundary intact | **Yes** | `estimate-review.tsx` keeps both import sets and renders #789's `ReviewHead`, with `WorkspaceHeader` now type-only. `review-head.tsx` and `review-head-texts.ts` keep `import 'server-only'`. `TREE_COLUMN_LAYOUT` wraps the tree and the inputs block, which is unchanged from round 3 (server `PartHead` and row line above `PartForm`; `partItems` mapped from `id`, `parentId`, `slNo`, `nodeKind`, `name`; `review` with two strings); only the stale comment changed. `review-tree.tsx` uses #789's `TREE_COLUMN_PANEL` and `TREE_COLUMN_SUMMARY` with the open-row span. `part-fields.tsx` takes #789's side (no `FORM_INTRO` left) and keeps the review-only `PartHead` condition |
+| No guard dropped | **Yes** | The architecture test has 24 cases: each parent's 23, which share 22, plus #789's `folder-path` guard and #800's part-form, part-fields and review-look guard. Both exemptions are present, and no test title of either parent is missing. `rates-changed-restricted.test.ts` still has exactly three entries |
+| Stage 11b of the run of record | **192,507 B ≤ 193,500 B** | Run 45889015098, job 140146774872: 993 B under the ceiling (PRD v0.65) and **+379 B against master** (192,128 B at `69ba8d98`, job 140145776791) |
+| Commits since round 3 (`538cceb2`, `7778a2aa`, `f554460d`) | **Sound** | The tree link's name contains its visible text (WCAG 2.5.3). The RO-3 E2E reads the inputs as the API's array and still requires more than 3 comparisons. `lead-warning.spec.ts` asserts exact counts of 3 and a visible tree mark. The row-line regex accepts `—` for `$` and `€` (`formatFigure` with no rate) and still requires the `₹` figure. The DEF-079 axe scan runs from the top with no rule excluded: **QLT-800-10, Info, accepted** (the same pattern as QLT-789-12) |
+| Tests | **953 passed** | 29 files at `d3098abd` in a temporary scratchpad worktree, since removed. CI 45889015098: Stages 1 to 11b green; the E2E shards were still running when this was published |
+
+**Open:** Blocker 0, Critical 0, Major 0, Minor 0, Info 7 (SEC-800-01 to -04, QLT-800-08, -09, -10). **APPROVE WITH COMMENTS stands at `d3098abd`.**
+
 ## Hand-off
 - Status: COMPLETE
 - GitHub: PR review [6076703907](https://github.com/sankumar76/Accucut-Quotation/pull/800#pullrequestreview-6076703907) (COMMENT, 7 inline comments, at `37a3a1a7`); label `review:quality-changes-requested`
