@@ -7,6 +7,8 @@ import { descendantIds } from '@/lib/estimate/tree';
 import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, type EstimateViewer } from '@/server/services/estimate-service';
 import { CHOOSE_MATERIAL_MESSAGE, FIELD_NOT_SAVABLE_MESSAGE, PART_CHANGED_CODE } from '@/server/services/estimate-inputs';
 
+import { withAuditContext } from '../support/customer-change';
+import { createAuditSink } from '../support/fake-audit-sink';
 import { defined } from '../support/defined';
 import { inputsDependencies } from '../support/estimate-inputs-deps';
 import { createFakeEstimateWorld, type FakeEstimate, type FakeNode } from '../support/fake-estimates';
@@ -66,7 +68,7 @@ const admin: EstimateViewer = { id: '00000000-0000-4000-8000-0000000000c1', role
 function setUp(initial: ReadonlyArray<FakeEstimate> = [estimate()], nodes: ReadonlyArray<FakeNode> = [node(PART), node(CHILD, { parentId: PART })]) {
   const world = createFakeEstimateWorld(() => [], initial, nodes);
   const masters = createFakeMasterRepository(undefined, MATERIAL_CANARIES);
-  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies(masters) });
+  const service = withAuditContext(createEstimateService({ audit: createAuditSink().service, estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies(masters) }));
   const stored = (id = PART): FakeNode => defined(world.nodes.find((candidate) => candidate.id === id));
   const inputsRevision = (): number => defined(world.estimates.find((candidate) => candidate.id === ESTIMATE)).inputsRevision;
   return { world, masters, service, stored, inputsRevision };

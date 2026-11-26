@@ -7,6 +7,7 @@ import { describeInsertAudit, describeInsertBefore } from '../../lib/config/fiel
 import { describeRevertAfter, describeRevertBefore } from '../../lib/config/revert';
 import { MAX_REASON_LENGTH } from '../../lib/estimate/approve-price';
 import { IGNORE_REMARKS_MAX_LENGTH } from '../../lib/estimate/ignore-words';
+import { NODE_KIND_NAMES, NODE_KINDS } from '../../lib/estimate/node-kinds';
 import { ESTIMATE_STATUSES, type EstimateStatus } from '../../lib/estimate/state-machine';
 import { taskStatusOf } from '../../lib/estimate/task-status';
 import { QTY_ZERO_CODE } from '../../lib/estimate/warning-copy';
@@ -114,6 +115,34 @@ function defineEvent<Before extends StoredShape, After extends StoredShape>(
 // ---- Shape of the estimate's customer change (SCR-16 "Task change"; CR-01 item 6) --------------------------------------------------
 /** The customer an estimate was for or is for: the name and the short name, or null for an estimate that had none. Names only: no contact detail and no rate. */
 const estimateCustomerState = z.strictObject({ customer: z.strictObject({ name: z.string().min(1), shortName: z.string().min(1) }).nullable() });
+
+// ---- The shapes of a Lead's or an Admin's changes of inputs, pictures and the tree (DEF-131 stage 2; architecture note lead-admin-input-edit-2026-11-27, sections 3.4 and 3.9) ----------------------------------
+// Every state is strict, so no figure, rate, formula or input value of a deleted row has a key to sit in (NFR-002, NFR-007). The actor's role is kept in the after state (an entry has no role column and a role can change
+// later), and it can only be a Lead or an Admin: the Engineer's own writes are not audited.
+const inputActorRole = z.enum(['LEAD', 'ADMIN']);
+/** The most rows a delete entry lists; a bigger delete says so (`truncated`) and keeps the count. */
+export const DELETED_ROWS_LISTED = 100;
+const inputField = z.strictObject({ letter: z.string().min(1).max(10), label: z.string().min(1).max(200), value: z.string().max(2_000).nullable() });
+const inputPart = z.strictObject({ slNo: z.string().min(1).max(60), name: z.string().max(200) });
+const inputsBefore = z.strictObject({ part: inputPart, fields: z.array(inputField).min(1).max(60) });
+const inputsAfter = z.strictObject({ actorRole: inputActorRole, part: inputPart, fields: z.array(inputField).min(1).max(60) });
+const treeKind = z.enum(NODE_KINDS);
+const treeRow = z.strictObject({ slNo: z.string().min(1).max(60), name: z.string().max(200), kind: treeKind });
+const partAddedAfter = z.strictObject({ actorRole: inputActorRole, part: z.strictObject({ slNo: z.string().min(1).max(60), kind: treeKind }), parent: inputPart.nullable() });
+const partMovedBefore = z.strictObject({ part: treeRow });
+const partMovedAfter = z.strictObject({ actorRole: inputActorRole, part: treeRow });
+// Two shapes and no optional key (an optional key is not JSON): the whole list, or the first rows of it with `truncated: true`.
+const deletedList = { part: treeRow, rows: z.number().int().min(1), list: z.array(treeRow).max(DELETED_ROWS_LISTED) };
+const partDeletedBefore = z.union([z.strictObject(deletedList), z.strictObject({ ...deletedList, truncated: z.literal(true) })]);
+const partDeletedAfter = z.strictObject({ actorRole: inputActorRole });
+
+const describeRow = (row: { readonly slNo: string; readonly name: string }): string => (row.name === '' ? row.slNo : `${row.slNo} ${row.name}`);
+/** "1.4 Top cover: Length 450; Width Not entered": the part, then each changed field with its text (a blank is "Not entered"). */
+const describeInputFields = (state: z.output<typeof inputsBefore>): string => `${describeRow(state.part)}: ${state.fields.map((field) => `${field.label} ${field.value ?? 'Not entered'}`).join('; ')}`;
+function describeRowsDeleted(before: z.output<typeof partDeletedBefore>): string {
+  const under = before.rows - 1;
+  return under === 0 ? describeRow(before.part) : `${describeRow(before.part)} and ${String(under)} ${under === 1 ? 'row' : 'rows'} under it`;
+}
 
 /** "Brightwater Controls (BWC)", or "No customer" for an estimate that had none. */
 function describeEstimateCustomer(state: z.output<typeof estimateCustomerState>): string {
@@ -736,6 +765,46 @@ export const AUDIT_EVENTS = {
     before: assignmentState,
     after: assignmentState,
     describe: describeReassigned,
+  }),
+
+  // ---- Wired in DEF-131 stage 2: a Lead or an Admin changes a part's inputs or picture, or the tree --------------------------------------------
+  // Written only when the person who writes is a Lead or an Admin (an Engineer's own writes are not audited), in the write's own transaction under the estimate's row lock, so the write fails when the entry cannot be
+  // written. The object is the estimate, labelled with the task code. A write that changes nothing writes no entry. The picture goes through `estimate.inputs_changed` as the Part Model field, with the words
+  // "Picture added", "Picture replaced" or "Picture removed" and never its bytes or its file name.
+  'estimate.inputs_changed': defineEvent({
+    objectType: 'estimate',
+    category: 'input_change',
+    status: 'wired',
+    before: inputsBefore,
+    after: inputsAfter,
+    describe: (before, after) => ({ before: describeInputFields(before), after: describeInputFields(after) }),
+  }),
+  'estimate.part_added': defineEvent({
+    objectType: 'estimate',
+    category: 'input_change',
+    status: 'wired',
+    before: z.strictObject({}),
+    after: partAddedAfter,
+    describe: (_before, after) => ({
+      before: NO_DETAIL.before,
+      after: `Added ${NODE_KIND_NAMES[after.part.kind]} ${after.part.slNo} ${after.parent === null ? 'at the top' : `under ${describeRow(after.parent)}`}`,
+    }),
+  }),
+  'estimate.part_moved': defineEvent({
+    objectType: 'estimate',
+    category: 'input_change',
+    status: 'wired',
+    before: partMovedBefore,
+    after: partMovedAfter,
+    describe: (before, after) => ({ before: describeRow(before.part), after: `Moved ${describeRow(before.part)} to ${after.part.slNo}` }),
+  }),
+  'estimate.part_deleted': defineEvent({
+    objectType: 'estimate',
+    category: 'input_change',
+    status: 'wired',
+    before: partDeletedBefore,
+    after: partDeletedAfter,
+    describe: (before) => ({ before: describeRowsDeleted(before), after: `Deleted ${describeRowsDeleted(before)}` }),
   }),
 } as const;
 

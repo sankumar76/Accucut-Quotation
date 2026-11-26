@@ -9,7 +9,9 @@ import type { EstimateNodeRepository, NodeRecord } from '../repositories/estimat
 import type { ImageRepository, PictureRecord, StoredImage } from '../repositories/image-repository';
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
+import type { AuditContext } from './audit-service';
 import type { EstimateViewer } from './estimate-service';
+import type { InputChangeAudit } from './input-change-audit';
 import { PART_CHANGED_CODE, PART_CHANGED_MESSAGE } from './estimate-inputs';
 
 /**
@@ -44,9 +46,9 @@ export interface PictureUpload {
 
 export interface ImageService {
   /** Adds or replaces the part's picture (`PUT .../nodes/{nodeId}/image`). 404, 409, 413 and 415 in the order above. */
-  putPicture(viewer: EstimateViewer, estimateId: string, nodeId: string, upload: PictureUpload): Promise<PartPicture>;
+  putPicture(viewer: EstimateViewer, estimateId: string, nodeId: string, upload: PictureUpload, audit?: AuditContext): Promise<PartPicture>;
   /** Removes the part's picture (`DELETE .../nodes/{nodeId}/image`). 404 and 409; a part with none is answered as it is. */
-  removePicture(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<PartPicture>;
+  removePicture(viewer: EstimateViewer, estimateId: string, nodeId: string, audit?: AuditContext): Promise<PartPicture>;
   /** The stored type and bytes of a picture (`GET /api/v1/images/{id}`), or a 404 for one that is not this person's or does not exist. */
   getPicture(viewer: EstimateViewer, imageId: string): Promise<StoredImage>;
   /** The picture a part points at, for a read of the part: null when it has none. Takes no lock. */
@@ -65,6 +67,8 @@ export interface ImageServiceDependencies {
   readonly bumpInputsRevision: (estimateId: string, tx: Transaction) => Promise<void>;
   /** Whether this person may open an estimate whose task belongs to this Engineer (an Admin and a Lead any, an Engineer their own). */
   readonly mayOpen: (viewer: EstimateViewer, engineerId: string) => boolean;
+  /** The trail of a Lead's or an Admin's picture change (DEF-131 stage 2): none for an Engineer's, and a refusal for a Lead's or an Admin's when the service has no audit. */
+  readonly traces: InputChangeAudit;
 }
 
 /** The hash a picture is told apart by: the SHA-256 of its bytes, as lower-case hex. */
@@ -75,7 +79,7 @@ function refusal(check: { readonly status: 413 | 415; readonly code: string; rea
   return check.status === 413 ? new PayloadTooLargeError(check.message, { code: PICTURE_TOO_LARGE_CODE }) : new UnsupportedMediaTypeError(check.message, { code: check.code });
 }
 
-export function createImageService({ nodes, images, transactions, currentConfiguration, lockForChange, bumpInputsRevision, mayOpen }: ImageServiceDependencies): ImageService {
+export function createImageService({ nodes, images, transactions, currentConfiguration, lockForChange, bumpInputsRevision, mayOpen, traces }: ImageServiceDependencies): ImageService {
   const unchanged = (part: NodeRecord, picture: PictureRecord | null, completenessOf: CompletenessReader): PartPicture => ({ id: part.id, revision: part.revision, completeness: completenessOf(part.inputs), picture });
 
   /** The rule for the registry as it is now, read before the transaction opens (a version never changes), so it holds no connection and no lock while it is read. */
@@ -102,8 +106,11 @@ export function createImageService({ nodes, images, transactions, currentConfigu
     imageId === null ? Promise.resolve(null) : images.findPicture(estimateId, imageId, tx);
 
   return {
-    async putPicture(viewer, estimateId, nodeId, upload) {
+    async putPicture(viewer, estimateId, nodeId, upload, audit) {
+      // A Lead's or an Admin's change is traced (DEF-131): asked first, so a service with no audit refuses it before anything is read or written.
+      const trace = traces.traceFor(viewer, audit);
       const completenessOf = await completenessReader();
+      const document = await currentConfiguration();
       return transactions.run(async (tx) => {
         const { id, part } = await lockedPart(viewer, estimateId, nodeId, tx);
         // The name is display text and is made safe before anything else reads it, the refusals' words included.
@@ -113,16 +120,22 @@ export function createImageService({ nodes, images, transactions, currentConfigu
         const stored = await images.storeImage(id, { sha256: sha256Of(upload.bytes), mime: check.mime, fileName, bytes: upload.bytes }, tx);
         // The same picture again (the same bytes for the same part) is no change: no write and no new revision, so a repeated request cannot clear a total (section 4.8).
         if (part.imageId === stored.id) return unchanged(part, stored, completenessOf);
-        return point(id, part, stored, completenessOf, tx);
+        const pointed = await point(id, part, stored, completenessOf, tx);
+        await trace?.pictureChanged(tx, { estimateId: id, document, part, did: part.imageId === null ? 'added' : 'replaced' });
+        return pointed;
       });
     },
 
-    async removePicture(viewer, estimateId, nodeId) {
+    async removePicture(viewer, estimateId, nodeId, audit) {
+      const trace = traces.traceFor(viewer, audit);
       const completenessOf = await completenessReader();
+      const document = await currentConfiguration();
       return transactions.run(async (tx) => {
         const { id, part } = await lockedPart(viewer, estimateId, nodeId, tx);
         if (part.imageId === null) return unchanged(part, null, completenessOf);
-        return point(id, part, null, completenessOf, tx);
+        const pointed = await point(id, part, null, completenessOf, tx);
+        await trace?.pictureChanged(tx, { estimateId: id, document, part, did: 'removed' });
+        return pointed;
       });
     },
 

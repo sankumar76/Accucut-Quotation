@@ -12,7 +12,9 @@ import type { EstimateNodeRepository } from '../repositories/estimate-node-repos
 import type { MasterRepository } from '../repositories/master-repository';
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
+import type { AuditContext } from './audit-service';
 import type { EstimateViewer } from './estimate-service';
+import type { InputChangeAudit } from './input-change-audit';
 
 /**
  * The part form's two routes and the one rule that shapes what a part's `inputs` may hold (STORY-05.03; architecture sections 4.8, 6 "Estimate form" and "Save inputs",
@@ -89,7 +91,7 @@ export interface EstimateInputsDependencies {
    * lock, in the transaction that writes. It reads no number, and the delete of a material takes the same row `FOR UPDATE`, so the two serialise. And the one read of a treatment's
    * name (`findTreatmentOptionById`, STORY-05.06): an ID and a name, no lock, because a part refers to a treatment by no key.
    */
-  readonly materials: Pick<MasterRepository, 'lockMaterialForUse' | 'findTreatmentOptionById'>;
+  readonly materials: Pick<MasterRepository, 'lockMaterialForUse' | 'findTreatmentOptionById' | 'listMaterialOptions' | 'findNotApplicableMaterialOption'>;
   /** The field registry a save is checked against: the latest version (cached per version by `getCurrentVersion`). */
   readonly currentConfiguration: () => Promise<ConfigDocument>;
   /**
@@ -104,13 +106,15 @@ export interface EstimateInputsDependencies {
   readonly lockForChange: (viewer: EstimateViewer, estimateId: string, tx: Transaction) => Promise<string>;
   /** Raises the estimate's `inputs_revision` by one, in the caller's transaction. */
   readonly bumpInputsRevision: (estimateId: string, tx: Transaction) => Promise<void>;
+  /** The trail of a Lead's or an Admin's save (DEF-131 stage 2): none for an Engineer's, and a refusal for a Lead's or an Admin's when the service has no audit. */
+  readonly traces: InputChangeAudit;
 }
 
 export interface EstimateInputs {
   /** The sections of the form and the time of the last save (`GET /api/v1/estimates/{id}/form`). The same for every role. */
   getForm(viewer: EstimateViewer, estimateId: string): Promise<EstimateForm>;
   /** Saves values into a part (`PATCH /api/v1/estimates/{id}/nodes/{nodeId}/inputs`). 404, 409 (not editable, or a stale revision), 422 under each field at fault. */
-  saveInputs(viewer: EstimateViewer, estimateId: string, request: SaveInputsRequest): Promise<SavedInputs>;
+  saveInputs(viewer: EstimateViewer, estimateId: string, request: SaveInputsRequest, audit?: AuditContext): Promise<SavedInputs>;
   /** Of what is stored in a part of this estimate, the values of fields of its form, in the registry the form is built from (`configurationFor`): what may be sent back. */
   visibleInputs(estimateId: string, inputs: Readonly<Record<string, unknown>>): Promise<Readonly<Record<string, string>>>;
 }
@@ -134,7 +138,7 @@ function typedValues(document: ConfigDocument, inputs: Readonly<Record<string, u
 }
 
 export function createEstimateInputs(dependencies: EstimateInputsDependencies): EstimateInputs {
-  const { nodes, materials, currentConfiguration, configurationFor, transactions, openForRead, lockForChange, bumpInputsRevision } = dependencies;
+  const { nodes, materials, currentConfiguration, configurationFor, transactions, openForRead, lockForChange, bumpInputsRevision, traces } = dependencies;
 
   /**
    * Treatment / Color: the shape first (`readTreatmentInput`, the browser's own rule), then the row. "Other" keeps the typed words; a listed entry and "Not applicable" take the row's name and
@@ -200,10 +204,14 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
       return { sections: buildFormSections(document), lastSavedAt: written === null ? null : written.toISOString() };
     },
 
-    async saveInputs(viewer, estimateId, request) {
+    async saveInputs(viewer, estimateId, request, audit) {
+      // A Lead's or an Admin's save is traced (DEF-131): asked first, so a service with no audit refuses it before anything is read or written. An Engineer's has no trace.
+      const trace = traces.traceFor(viewer, audit);
       // A registry version never changes, so it is read before the transaction: it holds neither a second connection nor the estimate's lock while it is read (review SQR-03).
       const document = await currentConfiguration();
       const completenessOf = createCompletenessReader(document);
+      // The names of the materials, for the entry's words, read before the transaction too, and only when this save names the material field.
+      const materialNames = trace !== null && Object.keys(request.values).some((fieldId) => formFieldById(document, fieldId)?.rule.type === 'select') ? await traces.materialNames() : new Map<string, string>();
       return transactions.run(async (tx) => {
         const id = await lockForChange(viewer, estimateId, tx);
         const part = await nodes.findNode(id, request.nodeId, tx);
@@ -237,6 +245,8 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
         const saved = await nodes.saveInputs(id, part.id, part.revision, next, tx);
         if (saved === null) throw new ConflictError(PART_CHANGED_MESSAGE, { code: PART_CHANGED_CODE });
         await bumpInputsRevision(id, tx);
+        // The entry of a Lead's or an Admin's change, in this transaction: if it cannot be written, the save is rolled back with it.
+        await trace?.inputsChanged(tx, { estimateId: id, document, before: part, after: saved, materialNames });
         return { id: saved.id, revision: saved.revision, completeness: completenessOf(saved.inputs), inputs: typedValues(document, saved.inputs) };
       });
     },
