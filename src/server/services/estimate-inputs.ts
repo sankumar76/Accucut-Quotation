@@ -246,7 +246,7 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
         if (saved === null) throw new ConflictError(PART_CHANGED_MESSAGE, { code: PART_CHANGED_CODE });
         await bumpInputsRevision(id, tx);
         // The entry of a Lead's or an Admin's change, in this transaction: if it cannot be written, the save is rolled back with it.
-        await trace?.inputsChanged(tx, { estimateId: id, document, before: part, after: saved, materialNames });
+        if (trace !== null) await trace.audit.recordMany(tx, await trace.inputsChanged(tx, { estimateId: id, document, before: part, after: saved, materialNames }));
         return { id: saved.id, revision: saved.revision, completeness: completenessOf(saved.inputs), inputs: typedValues(document, saved.inputs) };
       });
     },

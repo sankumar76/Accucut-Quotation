@@ -243,6 +243,8 @@ const mayOpen = (viewer: EstimateViewer, engineerId: string): boolean => viewer.
 
 /** What an answer is built with, once: how complete a part is, and its name. Both are read from the part's inputs with no query per part. */
 interface ViewReaders {
+  /** The registry this estimate's form is built from, read here with the rest so that no write reads it on a second connection while it holds the estimate's lock (the audit entry of a Lead's tree write names rows by it). */
+  readonly document: ConfigDocument;
   readonly completenessOf: CompletenessReader;
   /** The part's name: its Description, else its Part No., else an empty text (`partNameOf`, the reader SCR-06 and SCR-07 use). An input typed by the person, never a figure (AQP-446, DEF-089). */
   readonly nameOf: (inputs: Readonly<Record<string, unknown>>) => string;
@@ -349,7 +351,7 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
    */
   const viewReaders = async (estimateId: string): Promise<ViewReaders> => {
     const [current, document] = await Promise.all([currentConfiguration(), configurationFor(estimateId)]);
-    return { completenessOf: createCompletenessReader(current), nameOf: (typed) => partNameOf(document, typed) };
+    return { document, completenessOf: createCompletenessReader(current), nameOf: (typed) => partNameOf(document, typed) };
   };
 
   // The trail of a Lead's or an Admin's writes to inputs, pictures and the tree (DEF-131 stage 2): written in each write's own transaction, so the write fails when the entry cannot be written.
@@ -446,7 +448,7 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
         const after = insertNode(placedOf(before), { id: created.id, parentId, index });
         const shifted = changedPlacements([...placedOf(before), { id: created.id, parentId, sortIndex: index }], after);
         const tree = await finishChange(id, shifted, readers, tx);
-        if (trace !== null) await trace.partAdded(tx, { estimateId: id, document: await configurationFor(id), nodeId: created.id, after: await nodes.listNodes(id, tx) });
+        if (trace !== null) await trace.audit.recordMany(tx, await trace.partAdded(tx, { estimateId: id, document: readers.document, nodeId: created.id, after: await nodes.listNodes(id, tx) }));
         return { nodeId: created.id, nodes: tree };
       });
     },
@@ -474,7 +476,7 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
         );
         await estimates.bumpInputsRevision(id, tx);
         const after = await nodes.listNodes(id, tx);
-        if (trace !== null) await trace.partMoved(tx, { estimateId: id, document: await configurationFor(id), nodeId: part.id, before, after });
+        if (trace !== null) await trace.audit.recordMany(tx, await trace.partMoved(tx, { estimateId: id, document: readers.document, nodeId: part.id, before, after }));
         return viewsOf(after, readers);
       });
     },
@@ -492,7 +494,7 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
         const members = before.filter((record) => doomed.includes(record.id));
         if (part.revision !== request.revision || doomed.length !== request.parts || subtreeFingerprint(members) !== request.subtree) throw new TreeChangedError(viewsOf(before, readers));
         await nodes.deleteNodes(id, doomed, tx);
-        if (trace !== null) await trace.partDeleted(tx, { estimateId: id, document: await configurationFor(id), nodeId: part.id, before, doomed });
+        if (trace !== null) await trace.audit.recordMany(tx, await trace.partDeleted(tx, { estimateId: id, document: readers.document, nodeId: part.id, before, doomed }));
         const placed = placedOf(before);
         const remaining = placed.filter((place) => !doomed.includes(place.id));
         return finishChange(id, changedPlacements(remaining, removeNodes(placed, doomed)), readers, tx);

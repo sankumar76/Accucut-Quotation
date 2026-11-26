@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { AUDIT_CATEGORIES, auditCategoryLabel } from '@/lib/audit/categories';
+import { MAX_ENTRY_FIELDS } from '@/lib/estimate/input-change';
 import { AUDIT_EVENTS, eventsInCategory } from '@/server/services/audit-events';
 
 /**
@@ -30,6 +31,14 @@ describe('ED-14: estimate.inputs_changed', () => {
     expect(event.before.safeParse(before).success).toBe(true);
     expect(event.after.safeParse(after).success).toBe(true);
     expect(event.after.safeParse({ ...after, actorRole: 'ADMIN' }).success).toBe(true);
+  });
+
+  it('holds every field a save can carry (64 values and the fields a rule zeroes beside them), and not an unbounded list (QLT-805-04)', () => {
+    const many = (count: number) => Array.from({ length: count }, (_, index) => ({ letter: 'J', label: `Field ${String(index)}`, value: '1.00' }));
+    expect(event.after.safeParse({ ...after, fields: many(64) }).success).toBe(true);
+    expect(event.after.safeParse({ ...after, fields: many(MAX_ENTRY_FIELDS) }).success).toBe(true);
+    expect(event.after.safeParse({ ...after, fields: many(MAX_ENTRY_FIELDS + 1) }).success).toBe(false);
+    expect(event.before.safeParse({ ...before, fields: many(64) }).success).toBe(true);
   });
 
   it('refuses an Engineer as the actor, a key that is not in the shape, and a figure key anywhere', () => {

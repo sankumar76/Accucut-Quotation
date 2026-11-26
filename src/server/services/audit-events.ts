@@ -7,6 +7,7 @@ import { describeInsertAudit, describeInsertBefore } from '../../lib/config/fiel
 import { describeRevertAfter, describeRevertBefore } from '../../lib/config/revert';
 import { MAX_REASON_LENGTH } from '../../lib/estimate/approve-price';
 import { IGNORE_REMARKS_MAX_LENGTH } from '../../lib/estimate/ignore-words';
+import { MAX_ENTRY_FIELDS } from '../../lib/estimate/input-change';
 import { NODE_KIND_NAMES, NODE_KINDS } from '../../lib/estimate/node-kinds';
 import { ESTIMATE_STATUSES, type EstimateStatus } from '../../lib/estimate/state-machine';
 import { taskStatusOf } from '../../lib/estimate/task-status';
@@ -124,8 +125,8 @@ const inputActorRole = z.enum(['LEAD', 'ADMIN']);
 export const DELETED_ROWS_LISTED = 100;
 const inputField = z.strictObject({ letter: z.string().min(1).max(10), label: z.string().min(1).max(200), value: z.string().max(2_000).nullable() });
 const inputPart = z.strictObject({ slNo: z.string().min(1).max(60), name: z.string().max(200) });
-const inputsBefore = z.strictObject({ part: inputPart, fields: z.array(inputField).min(1).max(60) });
-const inputsAfter = z.strictObject({ actorRole: inputActorRole, part: inputPart, fields: z.array(inputField).min(1).max(60) });
+const inputsBefore = z.strictObject({ part: inputPart, fields: z.array(inputField).min(1).max(MAX_ENTRY_FIELDS) });
+const inputsAfter = z.strictObject({ actorRole: inputActorRole, part: inputPart, fields: z.array(inputField).min(1).max(MAX_ENTRY_FIELDS) });
 const treeKind = z.enum(NODE_KINDS);
 const treeRow = z.strictObject({ slNo: z.string().min(1).max(60), name: z.string().max(200), kind: treeKind });
 const partAddedAfter = z.strictObject({ actorRole: inputActorRole, part: z.strictObject({ slNo: z.string().min(1).max(60), kind: treeKind }), parent: inputPart.nullable() });

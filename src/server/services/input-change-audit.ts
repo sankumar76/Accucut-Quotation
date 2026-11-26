@@ -8,7 +8,7 @@ import type { EstimateRepository } from '../repositories/estimate-repository';
 import type { MasterRepository } from '../repositories/master-repository';
 import type { Transaction } from '../repositories/transaction';
 
-import type { AuditContext, AuditService } from './audit-service';
+import type { AnyAuditEntryInput, AuditContext, AuditService } from './audit-service';
 import { DELETED_ROWS_LISTED } from './audit-events';
 import type { EstimateViewer } from './estimate-service';
 
@@ -32,22 +32,27 @@ export interface InputChangeAuditDependencies {
   readonly materials: Pick<MasterRepository, 'listMaterialOptions' | 'findNotApplicableMaterialOption'>;
 }
 
+/** The entries a write builds (none when nothing changed); the owner of the write's transaction records them, so the trail is checked where the transaction is (`audit-transaction-architecture.test.ts`). */
+export type Entries = Promise<ReadonlyArray<AnyAuditEntryInput>>;
+
 /** What the picture of a part did. */
 export type PictureChange = 'added' | 'replaced' | 'removed';
 
 const PICTURE_WORDS: Readonly<Record<PictureChange, string>> = { added: 'Picture added', replaced: 'Picture replaced', removed: 'Picture removed' };
 
 export interface Trace {
+  /** The audit service the owner of the write records the entries with, in its own transaction (`recordMany`). */
+  readonly audit: AuditService;
   /** A save of inputs changed these fields of a part (`before` the stored part, `after` as saved). Writes nothing when no field of the form differs. */
-  inputsChanged(tx: Transaction, change: { readonly estimateId: string; readonly document: ConfigDocument; readonly before: NodeRecord; readonly after: NodeRecord; readonly materialNames: ReadonlyMap<string, string> }): Promise<void>;
+  inputsChanged(tx: Transaction, change: { readonly estimateId: string; readonly document: ConfigDocument; readonly before: NodeRecord; readonly after: NodeRecord; readonly materialNames: ReadonlyMap<string, string> }): Entries;
   /** The Part Model picture of a part was added, replaced or removed. */
-  pictureChanged(tx: Transaction, change: { readonly estimateId: string; readonly document: ConfigDocument; readonly part: NodeRecord; readonly did: PictureChange }): Promise<void>;
+  pictureChanged(tx: Transaction, change: { readonly estimateId: string; readonly document: ConfigDocument; readonly part: NodeRecord; readonly did: PictureChange }): Entries;
   /** A row was added: it is in the tree as `after` lists it. */
-  partAdded(tx: Transaction, change: { readonly estimateId: string; readonly document: ConfigDocument; readonly nodeId: string; readonly after: ReadonlyArray<NodeRecord> }): Promise<void>;
+  partAdded(tx: Transaction, change: { readonly estimateId: string; readonly document: ConfigDocument; readonly nodeId: string; readonly after: ReadonlyArray<NodeRecord> }): Entries;
   /** A row was moved among its siblings: it is where `before` and `after` list it. */
-  partMoved(tx: Transaction, change: { readonly estimateId: string; readonly document: ConfigDocument; readonly nodeId: string; readonly before: ReadonlyArray<NodeRecord>; readonly after: ReadonlyArray<NodeRecord> }): Promise<void>;
+  partMoved(tx: Transaction, change: { readonly estimateId: string; readonly document: ConfigDocument; readonly nodeId: string; readonly before: ReadonlyArray<NodeRecord>; readonly after: ReadonlyArray<NodeRecord> }): Entries;
   /** A row and the rows under it (`doomed`, the root first) were deleted from the tree as `before` lists it. */
-  partDeleted(tx: Transaction, change: { readonly estimateId: string; readonly document: ConfigDocument; readonly nodeId: string; readonly before: ReadonlyArray<NodeRecord>; readonly doomed: ReadonlyArray<string> }): Promise<void>;
+  partDeleted(tx: Transaction, change: { readonly estimateId: string; readonly document: ConfigDocument; readonly nodeId: string; readonly before: ReadonlyArray<NodeRecord>; readonly doomed: ReadonlyArray<string> }): Entries;
 }
 
 export interface InputChangeAudit {
@@ -75,39 +80,40 @@ export function createInputChangeAudit({ audit, estimates, nodes, materials }: I
   function build(auditService: AuditService, context: AuditContext, actorRole: 'LEAD' | 'ADMIN'): Trace {
     const object = async (estimateId: string, tx: Transaction) => ({ id: estimateId, label: await codeOf(estimateId, tx) });
     return {
+      audit: auditService,
       async inputsChanged(tx, { estimateId, document, before, after, materialNames }) {
         const fields = changedFields(document, before.inputs, after.inputs, materialNames);
-        if (fields.after.length === 0) return;
+        if (fields.after.length === 0) return [];
         const { slNoOf } = numbered(await nodes.listNodes(estimateId, tx));
         const slNo = slNoOf.get(after.id) ?? '';
-        await auditService.record(tx, {
+        return [{
           event: 'estimate.inputs_changed',
           ...context,
           object: await object(estimateId, tx),
           before: { part: { slNo, name: cut(partNameOf(document, before.inputs)) }, fields: [...fields.before] },
           after: { actorRole, part: { slNo, name: cut(partNameOf(document, after.inputs)) }, fields: [...fields.after] },
-        });
+        }];
       },
 
       async pictureChanged(tx, { estimateId, document, part, did }) {
         const field = changedPictureField(document);
         const { slNoOf } = numbered(await nodes.listNodes(estimateId, tx));
         const part3 = { slNo: slNoOf.get(part.id) ?? '', name: cut(partNameOf(document, part.inputs)) };
-        await auditService.record(tx, {
+        return [{
           event: 'estimate.inputs_changed',
           ...context,
           object: await object(estimateId, tx),
           before: { part: part3, fields: [{ ...field, value: did === 'added' ? null : 'Picture' }] },
           after: { actorRole, part: part3, fields: [{ ...field, value: PICTURE_WORDS[did] }] },
-        });
+        }];
       },
 
       async partAdded(tx, { estimateId, document, nodeId, after }) {
         const { slNoOf, byId } = numbered(after);
         const added = byId.get(nodeId);
-        if (added === undefined) return;
+        if (added === undefined) return [];
         const parent = added.parentId === null ? undefined : byId.get(added.parentId);
-        await auditService.record(tx, {
+        return [{
           event: 'estimate.part_added',
           ...context,
           object: await object(estimateId, tx),
@@ -117,45 +123,38 @@ export function createInputChangeAudit({ audit, estimates, nodes, materials }: I
             part: { slNo: slNoOf.get(nodeId) ?? '', kind: added.nodeKind },
             parent: parent === undefined ? null : { slNo: slNoOf.get(parent.id) ?? '', name: cut(partNameOf(document, parent.inputs)) },
           },
-        });
+        }];
       },
 
       async partMoved(tx, { estimateId, document, nodeId, before, after }) {
         const was = numbered(before);
         const now = numbered(after);
         const row = now.byId.get(nodeId);
-        if (row === undefined) return;
+        if (row === undefined) return [];
         const name = cut(partNameOf(document, row.inputs));
-        await auditService.record(tx, {
+        return [{
           event: 'estimate.part_moved',
           ...context,
           object: await object(estimateId, tx),
           before: { part: { slNo: was.slNoOf.get(nodeId) ?? '', name, kind: row.nodeKind } },
           after: { actorRole, part: { slNo: now.slNoOf.get(nodeId) ?? '', name, kind: row.nodeKind } },
-        });
+        }];
       },
 
       async partDeleted(tx, { estimateId, document, nodeId, before, doomed }) {
         const { slNoOf, byId } = numbered(before);
         const root = byId.get(nodeId);
-        if (root === undefined) return;
+        if (root === undefined) return [];
         const gone = new Set(doomed);
         // The rows in reading order, the root first; no input value is copied, so the entry stays small and holds nothing a person typed beyond the row's name.
         const rows = buildTree(before)
           .filter((entry) => gone.has(entry.node.id))
           .map((entry) => ({ slNo: entry.slNo, name: cut(partNameOf(document, entry.node.inputs)), kind: entry.node.nodeKind }));
-        await auditService.record(tx, {
-          event: 'estimate.part_deleted',
-          ...context,
-          object: await object(estimateId, tx),
-          before: {
-            part: { slNo: slNoOf.get(nodeId) ?? '', name: cut(partNameOf(document, root.inputs)), kind: root.nodeKind },
-            rows: rows.length,
-            list: rows.slice(0, DELETED_ROWS_LISTED),
-            ...(rows.length > DELETED_ROWS_LISTED ? { truncated: true as const } : {}),
-          },
-          after: { actorRole },
-        });
+        const part = { slNo: slNoOf.get(nodeId) ?? '', name: cut(partNameOf(document, root.inputs)), kind: root.nodeKind };
+        const list = rows.slice(0, DELETED_ROWS_LISTED);
+        // Two shapes and no optional key (an optional key is not JSON): `truncated: true` is there only when the list was cut.
+        const listed = rows.length > DELETED_ROWS_LISTED ? { part, rows: rows.length, list, truncated: true as const } : { part, rows: rows.length, list };
+        return [{ event: 'estimate.part_deleted', ...context, object: await object(estimateId, tx), before: listed, after: { actorRole } }];
       },
     };
   }

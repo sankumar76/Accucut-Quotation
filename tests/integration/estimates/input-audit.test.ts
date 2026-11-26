@@ -13,7 +13,7 @@ import { entriesFor, insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { auditFor } from '../../support/customer-change';
 import { defined } from '../../support/defined';
-import { smallPng } from '../../support/pictures';
+import { pngOfSize, smallPng } from '../../support/pictures';
 import { seedConfig, seedFieldAt } from '../../support/seed-config';
 
 /**
@@ -23,6 +23,8 @@ import { seedConfig, seedFieldAt } from '../../support/seed-config';
  * be written; and a service built without the audit trail refusing a Lead's or an Admin's write before it reads or writes anything. Every name, path and date is invented.
  */
 
+/** What a Lead's save may cost on 500 rows, entry included (QLT-805-06). */
+const MEASURE_LIMIT_MS = 1_000;
 const PATH = '\\\\invented-server\\invented-share\\RFQ-123';
 let taskCounter = 0;
 /** The task code of the current test: its own, so no cleanup is needed (a part's picture is immutable, so its estimate cannot be deleted) and the audit log (immutable too) is read by the estimate's own ID. */
@@ -69,14 +71,14 @@ afterAll(async () => {
 });
 
 /** Arjun's estimate in this status (not ignored), with one Main Assembly, whose ID is returned. */
-async function setUp(status: 'DRAFT' | 'PREPARED' | 'APPROVED' = 'DRAFT'): Promise<string> {
+async function setUp(status: 'DRAFT' | 'PREPARED' | 'APPROVED' | 'QUOTED' = 'DRAFT'): Promise<string> {
   taskCounter += 1;
   CODE = `Q-2026-${String(9300 + taskCounter)}`;
   const task = await db.owner.query<{ id: string }>(
     `INSERT INTO tasks (code, engineer_id, assigned_by, folder_path, deadline_at, title, subject) VALUES ($1, $2::uuid, $3::uuid, $4, '2026-11-12T11:30:00Z', 'Invented task', 'Invented subject') RETURNING id::text AS id`,
     [CODE, arjunId, leadId, PATH],
   );
-  estimateId = defined((await db.owner.query<{ id: string }>('INSERT INTO estimates (task_id, status) VALUES ($1::uuid, $2::estimate_status) RETURNING id::text AS id', [defined(task.rows[0]).id, status])).rows[0]).id;
+  estimateId = defined((await db.owner.query<{ id: string }>("INSERT INTO estimates (task_id, status, quoted_at, quoted_by) VALUES ($1::uuid, $2::estimate_status, CASE WHEN $2 = 'QUOTED' THEN now() END, CASE WHEN $2 = 'QUOTED' THEN $3::uuid END) RETURNING id::text AS id", [defined(task.rows[0]).id, status, leadId])).rows[0]).id;
   const made = await db.owner.query<{ id: string }>("INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index, node_kind) VALUES ($1::uuid, NULL, 0, 'MAIN_ASSEMBLY') RETURNING id::text AS id", [estimateId]);
   return defined(made.rows[0]).id;
 }
@@ -152,9 +154,19 @@ describe('ED-14: a Lead\'s or an Admin\'s save of inputs writes one entry, in th
     expect(await entries()).toEqual([]);
   });
 
-  it.each(['APPROVED'] as const)('an estimate that is %s refuses the save (409) with no write and no entry', async (status) => {
+  it.each(['APPROVED', 'QUOTED'] as const)('an estimate that is %s refuses the save (409) with no write and no entry', async (status) => {
     const node = await setUp(status);
     await expect(build(auditFor(db)).saveInputs(lead(), estimateId, { nodeId: node, revision: 1, values: { [LENGTH]: '450' } }, context(lead()))).rejects.toBeInstanceOf(ConflictError);
+    expect(await entries()).toEqual([]);
+    expect(await revisionOf(node)).toBe(1);
+  });
+
+  it('an approved estimate refuses an Admin\'s save too, and a Quoted one refuses a picture and a tree write: no write, no entry', async () => {
+    const node = await setUp('QUOTED');
+    const service = build(auditFor(db));
+    await expect(service.saveInputs(admin(), estimateId, { nodeId: node, revision: 1, values: { [LENGTH]: '450' } }, context(admin()))).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.putPicture(lead(), estimateId, node, { name: 'invented-drawing.png', bytes: smallPng() }, context(lead()))).rejects.toBeInstanceOf(ConflictError);
+    await expect(service.addPart(lead(), estimateId, { parentId: node, nodeKind: 'SUB_ASSEMBLY' }, context(lead()))).rejects.toBeInstanceOf(ConflictError);
     expect(await entries()).toEqual([]);
     expect(await revisionOf(node)).toBe(1);
   });
@@ -177,7 +189,7 @@ describe('ED-14: a Lead\'s or an Admin\'s save of inputs writes one entry, in th
 
   it('an entry that cannot be written rolls the save back: the part, its revision and the estimate\'s are as they were', async () => {
     const node = await setUp();
-    const failing: AuditService = { ...auditFor(db), record: () => Promise.reject(new Error('invented audit failure')) };
+    const failing: AuditService = { ...auditFor(db), recordMany: () => Promise.reject(new Error('invented audit failure')) };
     await expect(build(failing).saveInputs(lead(), estimateId, { nodeId: node, revision: 1, values: { [LENGTH]: '450' } }, context(lead()))).rejects.toThrow('invented audit failure');
     expect(await revisionOf(node)).toBe(1);
     expect(await inputsRevision()).toBe(0);
@@ -202,14 +214,32 @@ describe('ED-14: a Lead\'s or an Admin\'s change of the Part Model picture write
     const node = await setUp();
     const service = build(auditFor(db));
     await service.putPicture(lead(), estimateId, node, upload('invented-drawing.png'), context(lead()));
+    await service.putPicture(lead(), estimateId, node, { name: 'invented-second.png', bytes: pngOfSize(2_000) }, context(lead()));
     await service.removePicture(lead(), estimateId, node, context(lead()));
     const stored = await entries();
-    expect(stored.map((entry) => defined((defined(entry.after) as { fields: Array<{ value: string }> }).fields[0]).value)).toEqual(['Picture added', 'Picture removed']);
+    expect(stored.map((entry) => defined((defined(entry.after) as { fields: Array<{ value: string }> }).fields[0]).value)).toEqual(['Picture added', 'Picture replaced', 'Picture removed']);
+    expect(stored.map((entry) => defined((defined(entry.before) as { fields: Array<{ value: string | null }> }).fields[0]).value)).toEqual([null, 'Picture', 'Picture']);
     for (const entry of stored) {
       expect(entry.after_text).not.toContain('invented-drawing');
       expect(entry.before_text).not.toContain('invented-drawing');
+      expect(entry.after_text).not.toContain('invented-second');
       expect(entry.after).toMatchObject({ actorRole: 'LEAD' });
     }
+  });
+
+  it('an entry that cannot be written rolls a picture add and a picture removal back', async () => {
+    const node = await setUp();
+    const failing: AuditService = { ...auditFor(db), recordMany: () => Promise.reject(new Error('invented audit failure')) };
+    await expect(build(failing).putPicture(lead(), estimateId, node, upload('invented-drawing.png'), context(lead()))).rejects.toThrow('invented audit failure');
+    expect((await db.owner.query<{ image_id: string | null }>('SELECT image_id::text AS image_id FROM estimate_nodes WHERE id = $1::uuid', [node])).rows[0]?.image_id).toBeNull();
+    expect(await revisionOf(node)).toBe(1);
+    expect(await inputsRevision()).toBe(0);
+    await build(auditFor(db)).putPicture(lead(), estimateId, node, upload('invented-drawing.png'), context(lead()));
+    const revision = await revisionOf(node);
+    const estimateRevision = await inputsRevision();
+    await expect(build(failing).removePicture(lead(), estimateId, node, context(lead()))).rejects.toThrow('invented audit failure');
+    expect((await db.owner.query<{ image_id: string | null }>('SELECT image_id::text AS image_id FROM estimate_nodes WHERE id = $1::uuid', [node])).rows[0]?.image_id).not.toBeNull();
+    expect({ revision: await revisionOf(node), estimate: await inputsRevision() }).toEqual({ revision, estimate: estimateRevision });
   });
 
   it('the same picture again, and a removal where there is none, write nothing; an Engineer\'s picture writes no entry', async () => {
@@ -243,14 +273,35 @@ describe('ED-14: a Lead\'s or an Admin\'s write to the tree writes one entry', (
     const second = await insertChild(root, 1);
     const service = build(auditFor(db));
     const revision = await revisionOf(second);
+    const firstRevision = await revisionOf(first);
     await service.moveNode(lead(), estimateId, { nodeId: second, revision, parentId: root, index: 0 }, context(lead()));
     const stored = await entries();
     expect(stored).toHaveLength(1);
+    expect(defined(stored[0]).event).toBe('estimate.part_moved');
     expect(defined(stored[0]).before).toEqual({ part: { slNo: '1.2', name: '', kind: 'PART' } });
     expect(defined(stored[0]).after).toEqual({ actorRole: 'LEAD', part: { slNo: '1.1', name: '', kind: 'PART' } });
     await service.moveNode(lead(), estimateId, { nodeId: second, revision: await revisionOf(second), parentId: root, index: 0 }, context(lead()));
     expect(await entries()).toHaveLength(1);
-    expect(await revisionOf(first)).toBeGreaterThanOrEqual(0);
+    // The row that only shifted keeps its revision, and the row that moved has a new one: the entry is of the move, and a no-op writes nothing more.
+    expect(await revisionOf(first)).toBe(firstRevision);
+    expect(await revisionOf(second)).toBe(revision + 1);
+  });
+
+  it('an entry that cannot be written rolls a move and a delete back: the order, the rows and both revisions are as they were', async () => {
+    const root = await setUp();
+    const first = await insertChild(root, 0);
+    const second = await insertChild(root, 1);
+    const failing: AuditService = { ...auditFor(db), recordMany: () => Promise.reject(new Error('invented audit failure')) };
+    const order = async (): Promise<string[]> => (await db.owner.query<{ id: string }>('SELECT id::text AS id FROM estimate_nodes WHERE parent_id = $1::uuid ORDER BY sort_index', [root])).rows.map((row) => row.id);
+    const before = { order: await order(), revision: await revisionOf(second), estimate: await inputsRevision() };
+    await expect(build(failing).moveNode(lead(), estimateId, { nodeId: second, revision: before.revision, parentId: root, index: 0 }, context(lead()))).rejects.toThrow('invented audit failure');
+    expect({ order: await order(), revision: await revisionOf(second), estimate: await inputsRevision() }).toEqual(before);
+    expect(before.order).toEqual([first, second]);
+    const nodes = await createEstimateNodeRepository(db.prisma).listNodes(estimateId);
+    const { subtreeFingerprint } = await import('@/lib/estimate/subtree-fingerprint');
+    await expect(build(failing).deleteNode(lead(), estimateId, { nodeId: second, revision: before.revision, parts: 1, subtree: subtreeFingerprint(nodes.filter((node) => node.id === second)) }, context(lead()))).rejects.toThrow('invented audit failure');
+    expect(await order()).toEqual(before.order);
+    expect(await inputsRevision()).toBe(before.estimate);
   });
 
   it('delete: one entry for the root and its rows, with no input value; an Engineer\'s delete writes none', async () => {
@@ -268,6 +319,7 @@ describe('ED-14: a Lead\'s or an Admin\'s write to the tree writes one entry', (
     await service.deleteNode(lead(), estimateId, { nodeId: part, revision: await revisionOf(part), parts: 3, subtree: subtreeFingerprint(doomed) }, context(lead()));
     const stored = await entries();
     expect(stored).toHaveLength(1);
+    expect(defined(stored[0]).event).toBe('estimate.part_deleted');
     expect(defined(stored[0]).before).toEqual({
       part: { slNo: '1.1', name: 'Invented bracket', kind: 'PART' },
       rows: 3,
@@ -297,7 +349,7 @@ describe('ED-14: a Lead\'s or an Admin\'s write to the tree writes one entry', (
 
   it('a tree write that cannot be audited rolls back with its entry, and a service without the trail refuses a Lead\'s write', async () => {
     const root = await setUp();
-    const failing: AuditService = { ...auditFor(db), record: () => Promise.reject(new Error('invented audit failure')) };
+    const failing: AuditService = { ...auditFor(db), recordMany: () => Promise.reject(new Error('invented audit failure')) };
     await expect(build(failing).addPart(lead(), estimateId, { parentId: root, nodeKind: 'SUB_ASSEMBLY' }, context(lead()))).rejects.toThrow('invented audit failure');
     expect((await db.owner.query('SELECT 1 FROM estimate_nodes WHERE estimate_id = $1::uuid', [estimateId])).rowCount).toBe(1);
     await expect(build(undefined).addPart(lead(), estimateId, { parentId: root, nodeKind: 'SUB_ASSEMBLY' })).rejects.toThrow('audit trail');
@@ -308,5 +360,23 @@ describe('ED-14: a Lead\'s or an Admin\'s write to the tree writes one entry', (
     const root = await setUp('APPROVED');
     await expect(build(auditFor(db)).addPart(lead(), estimateId, { parentId: root, nodeKind: 'SUB_ASSEMBLY' }, context(lead()))).rejects.toBeInstanceOf(ConflictError);
     expect(await entries()).toEqual([]);
+  });
+});
+
+describe('QLT-805-06: what the trail costs on a 500-row tree', () => {
+  it('a Lead\'s save on a tree of 500 rows, entry included, is read and written in well under a second', async () => {
+    const root = await setUp();
+    await db.owner.query("INSERT INTO estimate_nodes (estimate_id, parent_id, sort_index, node_kind) SELECT $1::uuid, $2::uuid, g, 'PART' FROM generate_series(0, 498) AS g", [estimateId, root]);
+    const service = build(auditFor(db));
+    const engineer = build(auditFor(db));
+    const started = performance.now();
+    await service.saveInputs(lead(), estimateId, { nodeId: root, revision: 1, values: { [LENGTH]: '450' } }, context(lead()));
+    const withTrail = performance.now() - started;
+    const plainStart = performance.now();
+    await engineer.saveInputs(arjun(), estimateId, { nodeId: root, revision: 2, values: { [LENGTH]: '460' } });
+    const without = performance.now() - plainStart;
+    // Measured on the developer's PC: the Lead's save costs one more read of the tree (the row's number) and one insert; stated in the pull request.
+    expect(withTrail, `a save on 500 rows with the trail took ${withTrail.toFixed(0)} ms (without it ${without.toFixed(0)} ms)`).toBeLessThan(MEASURE_LIMIT_MS);
+    expect((await entries()).map((entry) => entry.event)).toEqual(['estimate.inputs_changed']);
   });
 });

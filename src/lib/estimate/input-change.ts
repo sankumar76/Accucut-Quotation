@@ -1,6 +1,8 @@
 import type { ConfigDocument } from '../fields/schema';
 
 import { buildFormSections, type FormFieldView } from './form-fields';
+import { OTHER_TREATMENT_ID } from '../masters/system-entries';
+
 import { treatmentChoiceOf } from './treatment-value';
 
 /**
@@ -27,6 +29,12 @@ export interface FieldChanges {
 /** The words for a material that the Material Master no longer lists (deleted since it was chosen), so the entry still says something and never shows an ID. */
 export const REMOVED_MATERIAL_TEXT = 'A removed material';
 
+/**
+ * The most fields one entry holds: more than a save can carry (64 values) and every field a rule can zero beside them, and more than the form has, so a diff is never cut and an entry is never refused for its size
+ * (a refused entry would roll the save back). Read by the event's schema.
+ */
+export const MAX_ENTRY_FIELDS = 200;
+
 /** The longest text one field keeps in an entry; a longer one is cut, so a long remark can never make the entry refuse (and the save with it). */
 export const MAX_ENTRY_VALUE_LENGTH = 2_000;
 
@@ -36,7 +44,9 @@ function displayOf(field: FormFieldView, stored: unknown, materialNames: Readonl
   switch (field.rule.type) {
     case 'treatment': {
       const choice = treatmentChoiceOf(stored);
-      return choice === null || choice.text === '' ? null : choice.text;
+      // "Other" is shown with its words, as the person sees it, so a change between a listed treatment and "Other" with the same words is a change the entry shows (QLT-805-03).
+      if (choice === null || choice.text === '') return null;
+      return choice.id === OTHER_TREATMENT_ID ? `Other: ${choice.text}` : choice.text;
     }
     case 'select':
       return typeof stored === 'string' && stored !== '' ? (materialNames.get(stored.toLowerCase()) ?? REMOVED_MATERIAL_TEXT) : null;
@@ -58,6 +68,7 @@ export function changedFields(document: ConfigDocument, before: Readonly<Record<
     const from = displayOf(field, before[field.id], materialNames);
     const to = displayOf(field, after[field.id], materialNames);
     if (from === to) continue;
+    if (was.length >= MAX_ENTRY_FIELDS) break;
     was.push({ letter: field.letter, label: field.label, value: from === null ? null : from.slice(0, MAX_ENTRY_VALUE_LENGTH) });
     now.push({ letter: field.letter, label: field.label, value: to === null ? null : to.slice(0, MAX_ENTRY_VALUE_LENGTH) });
   }

@@ -141,6 +141,8 @@ const SERVICES = {
     'export-service',
     // STORY-05.07: the picture half of the estimate service (add, replace, remove, read). Built by the estimate service; no Engineer view has a use for it.
     'image-service',
+    // DEF-131 stage 2 (FR-116): builds the audit entries of a Lead's or an Admin's change of inputs, picture and tree (part names, numbers, the display text of the changed fields); built by the estimate service, called by no view.
+    'input-change-audit',
     'exchange-rate-service',
     'masters-service',
     'password-policy',

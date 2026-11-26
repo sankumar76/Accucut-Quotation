@@ -65,8 +65,17 @@ describe('ED-14: values are shown as words, never as IDs', () => {
 
   it('shows a treatment by its words and not by its ID', () => {
     const result = diff({}, { [TREATMENT.id]: { id: OTHER_TREATMENT_ID, text: 'Invented blue finish' } });
-    expect(result.after[0]).toEqual({ letter: 'G', label: TREATMENT.label, value: 'Invented blue finish' });
+    expect(result.after[0]).toEqual({ letter: 'G', label: TREATMENT.label, value: 'Other: Invented blue finish' });
     expect(JSON.stringify(result)).not.toContain(OTHER_TREATMENT_ID);
+  });
+
+  it('shows a change between a listed treatment and "Other" with the same words as a change (QLT-805-03)', () => {
+    const listed = { id: '33333333-3333-4333-8333-333333333333', text: 'Invented blue finish' };
+    const other = { id: OTHER_TREATMENT_ID, text: 'Invented blue finish' };
+    const result = diff({ [TREATMENT.id]: listed }, { [TREATMENT.id]: other });
+    expect(result.before).toEqual([{ letter: 'G', label: TREATMENT.label, value: 'Invented blue finish' }]);
+    expect(result.after).toEqual([{ letter: 'G', label: TREATMENT.label, value: 'Other: Invented blue finish' }]);
+    expect(diff({ [TREATMENT.id]: listed }, { [TREATMENT.id]: { ...listed } })).toEqual({ before: [], after: [] });
   });
 
   it('shows a flag as Yes or No', () => {

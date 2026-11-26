@@ -121,7 +121,7 @@ export function createImageService({ nodes, images, transactions, currentConfigu
         // The same picture again (the same bytes for the same part) is no change: no write and no new revision, so a repeated request cannot clear a total (section 4.8).
         if (part.imageId === stored.id) return unchanged(part, stored, completenessOf);
         const pointed = await point(id, part, stored, completenessOf, tx);
-        await trace?.pictureChanged(tx, { estimateId: id, document, part, did: part.imageId === null ? 'added' : 'replaced' });
+        if (trace !== null) await trace.audit.recordMany(tx, await trace.pictureChanged(tx, { estimateId: id, document, part, did: part.imageId === null ? 'added' : 'replaced' }));
         return pointed;
       });
     },
@@ -131,10 +131,12 @@ export function createImageService({ nodes, images, transactions, currentConfigu
       const completenessOf = await completenessReader();
       const document = await currentConfiguration();
       return transactions.run(async (tx) => {
-        const { id, part } = await lockedPart(viewer, estimateId, nodeId, tx);
+        const id = await lockForChange(viewer, estimateId, tx);
+        const part = await nodes.findNode(id, nodeId, tx);
+        if (part === null) throw new NotFoundError();
         if (part.imageId === null) return unchanged(part, null, completenessOf);
         const pointed = await point(id, part, null, completenessOf, tx);
-        await trace?.pictureChanged(tx, { estimateId: id, document, part, did: 'removed' });
+        if (trace !== null) await trace.audit.recordMany(tx, await trace.pictureChanged(tx, { estimateId: id, document, part, did: 'removed' }));
         return pointed;
       });
     },
