@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ReviewTree } from '@/components/features/estimate-review/review-tree';
-import { AddNodeMenuPanel } from '@/components/features/estimate-workspace/add-node-menu-panel';
 import { TreeNode } from '@/components/features/estimate-workspace/tree-node';
 import { NodeKindIcon } from '@/components/shared/node-kind-icon';
 import { TreeLegend } from '@/components/shared/tree-legend';
@@ -12,7 +11,7 @@ import { NODE_KINDS, type NodeKind } from '@/lib/estimate/node-kinds';
 import type { PartItem } from '@/lib/estimates/tree-client';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { renderHook } from '../support/hook-harness';
+import { renderPanel, type MenuPanelProps } from '../support/menu-panel';
 
 // The "+" menu is called as a function and the elements it returns are read (no DOM), as in `add-node-menu-unavailable.test.ts`.
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), ...(await import('../support/hook-harness')).reactHooks }));
@@ -66,7 +65,7 @@ describe('ruling 1: the kind icon is a 24 px tile with an 18 px glyph', () => {
   });
 
   it('is the same tile in the "+" menu, one for each kind it offers', () => {
-    const tree = renderHook(AddNodeMenuPanel, { label: 'Add under 1 Hopper', nodeKinds: ['SUB_ASSEMBLY', 'PART', 'FASTENER'], onChoose: vi.fn(), keyboard: false } as Parameters<typeof AddNodeMenuPanel>[0]).render();
+    const tree = renderPanel({ label: 'Add under 1 Hopper', nodeKinds: ['SUB_ASSEMBLY', 'PART', 'FASTENER'], onChoose: vi.fn(), keyboard: false } as MenuPanelProps).render();
     const seen: NodeKind[] = [];
     const walk = (node: ReactNode): void => {
       if (Array.isArray(node)) node.forEach(walk);
