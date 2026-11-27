@@ -25,6 +25,9 @@ export const boxFigureNote = (priceLetter: string, count: string): string =>
 export const boxCurrencies = (usd: string, eur: string, usdLetter: string, eurLetter: string): string => `In US dollars $ ${usd}, in euros € ${eur} (${usdLetter} and ${eurLetter} of this row).`;
 export const BOX_ROUNDING = 'Figures are shown to 2 decimals. Totals add the unrounded values and round once, so adding the shown figures by hand can differ by a few hundredths.';
 export const BACK_TO_ESTIMATE = 'Back to the estimate';
+/** The link in the row's header to the Lead's and the Admin's view of this row's inputs (AQP-496, DEF-139, RO-18); its name for a screen reader begins with the visible words and says the row. */
+export const VIEW_INPUTS = 'View inputs';
+export const viewInputsOf = (slNo: string): string => `${VIEW_INPUTS} of ${slNo}`;
 export const STAGES_HEADING = 'The six stages';
 export const ROW_LABEL = 'Part';
 export const COUNT_UNIT = 'nos';

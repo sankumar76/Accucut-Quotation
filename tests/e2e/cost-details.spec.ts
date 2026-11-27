@@ -326,6 +326,14 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     await expect(page).toHaveURL(new RegExp(`/estimates/${code}/costs/1$`));
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cost details');
     await expect(page.locator('details[data-stage]')).toHaveCount(6);
+    // AQP-496 (DEF-139, RO-18): the row's header has the way back to this row's inputs, in the Lead's view of the estimate page.
+    const viewInputs = page.getByRole('link', { name: 'View inputs of 1', exact: false });
+    await expect(viewInputs).toHaveText('View inputs');
+    await expect(viewInputs).toHaveAttribute('href', `/estimates/${code}?row=1#row-inputs`);
+    await viewInputs.click();
+    await expect(page).toHaveURL(new RegExp(`/estimates/${code}\\?row=1#row-inputs$`));
+    await expect(page.locator('#row-inputs')).toBeVisible();
+    await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
   });
 
   test('a part that is not in the estimate, and an address that is no Sl. No, are "not found"', async ({ page }, testInfo) => {
@@ -433,6 +441,12 @@ test.describe('AC-9: layout and accessibility', () => {
     await calculateAsEngineer(page, owner, code);
     await signInAsLead(page, testInfo);
     await openCostDetails(page, code);
+    // AQP-496 (RO-18): the link is in the row header at every width, and on a touch layout it is a control tall enough to press (NFR-017).
+    const viewInputs = page.getByRole('link', { name: /^View inputs of 1/ });
+    await expect(viewInputs).toBeVisible();
+    if (!(await page.evaluate(() => window.matchMedia('(min-width: 1024px) and (pointer: fine)').matches))) {
+      expect((await viewInputs.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
 
     // The script of the phone's accordion runs after load; the assertions wait for it.
     if (isPhone(page)) {
