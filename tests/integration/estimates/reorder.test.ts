@@ -7,6 +7,7 @@ import { createImageRepository } from '@/server/repositories/image-repository';
 import { createTransactionRunner } from '@/server/repositories/transaction';
 import { createEstimateService, MOVE_ACROSS_PARENTS_CODE, type EstimateService, type EstimateViewer } from '@/server/services/estimate-service';
 
+import { auditFor, withAuditContext } from '../../support/customer-change';
 import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
@@ -37,13 +38,14 @@ const admin: EstimateViewer = { get id() { return adminId; }, role: 'ADMIN' };
 
 beforeAll(async () => {
   db = await openAuthDatabase();
-  service = createEstimateService({
+  service = withAuditContext(createEstimateService({
+    audit: auditFor(db),
     estimates: createEstimateRepository(db.prisma),
     nodes: createEstimateNodeRepository(db.prisma),
     images: createImageRepository(db.prisma),
     transactions: createTransactionRunner(db.prisma),
     ...inputsDependencies(),
-  });
+  }));
   leadId = await insertPersonAsOwner(db, 'Reorder Lead', 'LEAD');
   adminId = await insertPersonAsOwner(db, 'Reorder Admin', 'ADMIN');
   arjunId = await insertPersonAsOwner(db, 'Reorder Arjun', 'ENGINEER');

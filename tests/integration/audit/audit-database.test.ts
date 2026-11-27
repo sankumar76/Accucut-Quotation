@@ -223,6 +223,11 @@ describe('AC-3: one test per event type (the wired events of the registry: six u
     // CR-01 item 7D (AQP-401): an estimate ignored with remarks, and restored; the one test is theirs, against the real estimate row lock.
     'estimate.ignored': 'tests/integration/estimates/ignore-restore.test.ts',
     'estimate.restored': 'tests/integration/estimates/ignore-restore.test.ts',
+    // DEF-131 stage 2 (FR-116): a Lead's or an Admin's change of a part's inputs or picture, and of the tree: each written in the write's own transaction, against the real estimate row lock.
+    'estimate.inputs_changed': 'tests/integration/estimates/input-audit.test.ts',
+    'estimate.part_added': 'tests/integration/estimates/input-audit.test.ts',
+    'estimate.part_moved': 'tests/integration/estimates/input-audit.test.ts',
+    'estimate.part_deleted': 'tests/integration/estimates/input-audit.test.ts',
     // STORY-04.07: a task given to another Engineer, a new deadline, or both; the one test is the reassign's own, against the real estimate and task row locks.
     'task.reassigned': 'tests/integration/tasks/reassign.test.ts',
     // STORY-08.02: a formula of the field registry changed; the one test is the save's own, against the real configuration table.

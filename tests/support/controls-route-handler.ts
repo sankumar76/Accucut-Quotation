@@ -14,6 +14,23 @@ const DROPPED = /Request context disposed|Response has been disposed|Route is al
 
 export const isDroppedRequest = (error: unknown): boolean => error instanceof Error && DROPPED.test(error.message);
 
+/**
+ * The one fault of the teardown that is not the test's (AQP-444, DEF-088 reopened; DL-419 (B)): `page.unrouteAll` answers "Target page, context or browser has been closed" when the page or the context is already gone,
+ * which is what a case that has timed out leaves behind. Nothing is left to unroute then. This exact message only.
+ */
+const TARGET_CLOSED = /Target page, context or browser has been closed/;
+
+export const isClosedTarget = (error: unknown): boolean => error instanceof Error && TARGET_CLOSED.test(error.message);
+
+/** Runs the unroute at teardown and ignores exactly the fault of a page that is already closed; every other fault is rethrown, so a real one is never hidden. */
+export async function stopRoutes(unroute: () => Promise<void>): Promise<void> {
+  try {
+    await unroute();
+  } catch (error) {
+    if (!isClosedTarget(error)) throw error;
+  }
+}
+
 /** The part of a fetched chunk that is read. */
 export interface FetchedChunk {
   readonly text: () => Promise<string>;

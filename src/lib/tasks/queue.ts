@@ -9,7 +9,8 @@
 
 import type { DisplayStatus } from '../estimate/task-status';
 
-export const QUEUE_TABS = ['open', 'closed', 'overdue', 'ignored'] as const;
+/** The tabs in the order the screen draws them, which is FR-034's: Open, Overdue, Closed, Ignored (DEF-103; SCR-03). The tab strip and the arrow keys follow this list. */
+export const QUEUE_TABS = ['open', 'overdue', 'closed', 'ignored'] as const;
 
 export type QueueTab = (typeof QUEUE_TABS)[number];
 

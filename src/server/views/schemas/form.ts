@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { PART_NAME_KEYS } from '../../../lib/estimate/part-name-keys';
 import { MAX_LONG_TEXT_LENGTH } from '../../../lib/estimate/validation';
 import { partInputsSchema, revisionSchema } from './tree';
 
@@ -63,6 +64,8 @@ const formFieldSchema = z.strictObject({
   defaultValue: z.string().nullable(),
   required: z.boolean(),
   editable: z.boolean(),
+  /** Set on Description and on Part No., the two fields that name a row of the parts tree (AQP-446); a key, never a figure. Absent on every other field. */
+  nameKey: z.enum(PART_NAME_KEYS).optional(),
   /** When the registry hides the field (Fasteners Qty and Cost): the field it watches and the values that hide it. Field IDs and the words "None" and blank: never a figure. */
   visibleWhen: z.strictObject({ fieldId: z.uuid(), values: z.array(z.string()).readonly() }).nullable(),
   rule: ruleSchema,

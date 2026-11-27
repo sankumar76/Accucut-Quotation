@@ -57,7 +57,7 @@ test.describe('AC-6: the five journeys', () => {
     await expectOnQueue(page, 'My tasks');
     await page.getByRole('main').getByRole('link', { name: code, exact: true }).first().click();
     await expect(page).toHaveURL(new RegExp(`/estimates/${code}$`));
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
   });
 
   test('estimate form and Calculate: a field is saved when it is left, and Calculate prepares the estimate', async ({ page, browserName }, testInfo) => {
@@ -86,7 +86,7 @@ test.describe('AC-6: the five journeys', () => {
     await calculateWithoutThePage(page, owner);
     await signInAsLead(page, testInfo);
     await page.goto(`/estimates/${code}`);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
     await expect(page.locator('#review-approve')).toBeEnabled();
     await waitUntilHydrated(page, '#review-approve');
     await page.locator('#review-approve').click();

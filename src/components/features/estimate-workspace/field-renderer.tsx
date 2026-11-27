@@ -1,7 +1,7 @@
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 
 import { ColumnTag } from '@/components/shared/column-tag';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, type FieldControlProps } from '@/components/shared/form-field';
 import { UnitInput } from '@/components/shared/unit-input';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -12,6 +12,7 @@ import { lengthProblem } from '@/lib/estimates/form-values';
 import { MATERIAL_LOADING, MATERIAL_PLACEHOLDER, OPTION_PLACEHOLDER } from './estimate-texts';
 import { controlIdFor, FIELD_MARK } from './field-ids';
 import { readOnlySelectProps } from './read-only-select';
+import { NOT_ENTERED } from './review-look-texts';
 import { TreatmentSelect } from './treatment-select';
 import type { Loaded } from './use-form-definition';
 
@@ -31,7 +32,15 @@ export interface FieldRendererProps {
   readonly onChange: (text: string) => void;
   /** The person left the field, or chose from a list (then with the choice's text). */
   readonly onCommit: (override?: string) => void;
+  /**
+   * The Lead's and the Admin's read-only view (AQP-488, DEF-131; UX ruling `lead-admin-edit-inputs-2026-11-27.md` 3.4): an empty field says "Not entered", in the box in `--ink-2` and italic, and as a hidden
+   * description a screen reader reads after the label. A field that follows something (Sl. No., Material Considered) is left as it is.
+   */
+  readonly review?: boolean;
 }
+
+/** The classes of the words "Not entered" in a box: italic, and `--ink-2` (4.5:1), not the faint `--ink-3` of a placeholder. */
+const NOT_ENTERED_LOOK = 'placeholder:italic placeholder:text-ink-2';
 
 export const controlIdOf = (field: Pick<FormFieldView, 'id'>): string => controlIdFor(field.id);
 
@@ -40,8 +49,11 @@ export const controlIdOf = (field: Pick<FormFieldView, 'id'>): string => control
  * "Accessibility"), the hint under it, the unit beside it, and the control the field's rule asks for: a number or a text box, the materials or the treatments as a drop-down, or, for a field that
  * follows something else (Sl. No., Material Considered), a read-only box with the shaded look. The surface-treatment flags are drawn together by `SurfaceTreatments`, never one by one here. Nothing here knows a field by its name: what it is and says comes from the server's form.
  */
-export function FieldRenderer({ field, missing, text, error, editable, materials, onChange, onCommit }: FieldRendererProps) {
+export function FieldRenderer({ field, missing, text, error, editable, materials, onChange, onCommit, review = false }: FieldRendererProps) {
   const id = controlIdOf(field);
+  const empty = review && field.rule.type !== 'derived' && text.trim() === '';
+  const emptyId = `${id}-empty`;
+  const placeholder = empty ? NOT_ENTERED : undefined;
   const readOnly = !editable || !field.editable;
   const mark = field.editable && editable ? 'true' : undefined;
   const tag = <ColumnTag letter={field.letter} kind={field.kind} />;
@@ -49,104 +61,124 @@ export function FieldRenderer({ field, missing, text, error, editable, materials
   // A long text is told so while it is typed (Remarks, STORY-05.04 AC-4): the box lets it run over, so the message is seen and the text is kept; the same words come back on leaving.
   const shownError = error ?? lengthProblem(field.rule, text) ?? (missing !== undefined && text.trim() === '' ? missing : undefined);
 
-  return (
-    <FormField id={id} label={field.label} tag={tag} tagFirst {...(field.hint === null ? {} : { hint: field.hint })} {...(shownError === undefined ? {} : { error: shownError })}>
-      {(control) => {
-        const rule = field.rule;
-        if (rule.type === 'select') {
-          const choices = materials.status === 'ready' ? materials.value : [];
-          const unlisted = text !== '' && !choices.some((choice) => choice.id === text);
-          return (
-            <NativeSelect
-              {...control}
-              {...common}
-              {...readOnlySelectProps(readOnly)}
-              disabled={materials.status !== 'ready'}
-              aria-busy={materials.status === 'loading' || undefined}
-              value={text}
-              onChange={(event: ChangeEvent<HTMLSelectElement>) => {
-                if (readOnly) return;
-                onChange(event.target.value);
-                onCommit(event.target.value);
-              }}
-            >
-              <option value="">{materials.status === 'loading' ? MATERIAL_LOADING : MATERIAL_PLACEHOLDER}</option>
-              {unlisted ? <option value={text}>{text}</option> : null}
-              {choices.map((choice) => (
-                <option key={choice.id} value={choice.id}>
-                  {choice.name}
-                </option>
-              ))}
-            </NativeSelect>
-          );
-        }
-        if (rule.type === 'choice') {
-          // A list the Admin gave (STORY-08.08): the browser's own select, as Material in Drawing, with the options in their stored order and none the Admin did not give. A value held that is no longer listed is
-          // shown and kept, so nothing the person entered is hidden. The unit, when there is one, stands beside the list.
-          const unlisted = text !== '' && !rule.options.includes(text);
-          const select = (
-            <NativeSelect
-              {...control}
-              {...common}
-              {...readOnlySelectProps(readOnly)}
-              value={text}
-              onChange={(event: ChangeEvent<HTMLSelectElement>) => {
-                if (readOnly) return;
-                onChange(event.target.value);
-                onCommit(event.target.value);
-              }}
-            >
-              <option value="">{OPTION_PLACEHOLDER}</option>
-              {unlisted ? <option value={text}>{text}</option> : null}
-              {rule.options.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </NativeSelect>
-          );
-          return field.unit === null ? (
-            select
-          ) : (
-            <div className="flex items-center gap-s-2">
-              {select}
-              <span className="text-label whitespace-nowrap text-ink-2">{field.unit}</span>
-            </div>
-          );
-        }
-        if (rule.type === 'treatment') {
-          return <TreatmentSelect control={control} name={field.id} maxLength={rule.maxLength} text={text} readOnly={readOnly} marked={mark !== undefined} onChange={onChange} onCommit={onCommit} />;
-        }
-        if (rule.type === 'text' && rule.multiline) {
-          return (
+  const draw = (control: FieldControlProps): ReactNode => {
+    const rule = field.rule;
+      if (rule.type === 'select') {
+        const choices = materials.status === 'ready' ? materials.value : [];
+        const unlisted = text !== '' && !choices.some((choice) => choice.id === text);
+        return (
+          <NativeSelect
+            {...control}
+            {...common}
+            {...readOnlySelectProps(readOnly)}
+            disabled={materials.status !== 'ready'}
+            aria-busy={materials.status === 'loading' || undefined}
+            value={text}
+            onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+              if (readOnly) return;
+              onChange(event.target.value);
+              onCommit(event.target.value);
+            }}
+          >
+            <option value="">{materials.status === 'loading' ? MATERIAL_LOADING : (placeholder ?? MATERIAL_PLACEHOLDER)}</option>
+            {unlisted ? <option value={text}>{text}</option> : null}
+            {choices.map((choice) => (
+              <option key={choice.id} value={choice.id}>
+                {choice.name}
+              </option>
+            ))}
+          </NativeSelect>
+        );
+      }
+      if (rule.type === 'choice') {
+        // A list the Admin gave (STORY-08.08): the browser's own select, as Material in Drawing, with the options in their stored order and none the Admin did not give. A value held that is no longer listed is
+        // shown and kept, so nothing the person entered is hidden. The unit, when there is one, stands beside the list.
+        const unlisted = text !== '' && !rule.options.includes(text);
+        const select = (
+          <NativeSelect
+            {...control}
+            {...common}
+            {...readOnlySelectProps(readOnly)}
+            value={text}
+            onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+              if (readOnly) return;
+              onChange(event.target.value);
+              onCommit(event.target.value);
+            }}
+          >
+            <option value="">{placeholder ?? OPTION_PLACEHOLDER}</option>
+            {unlisted ? <option value={text}>{text}</option> : null}
+            {rule.options.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </NativeSelect>
+        );
+        return field.unit === null ? (
+          select
+        ) : (
+          <div className="flex items-center gap-s-2">
+            {select}
+            <span className="text-label whitespace-nowrap text-ink-2">{field.unit}</span>
+          </div>
+        );
+      }
+      if (rule.type === 'treatment') {
+        return <TreatmentSelect control={control} name={field.id} maxLength={rule.maxLength} text={text} readOnly={readOnly} marked={mark !== undefined} placeholder={placeholder} onChange={onChange} onCommit={onCommit} />;
+
+      }
+      if (rule.type === 'text' && rule.multiline) {
+        return (
             <Textarea
               {...control}
               {...common}
               readOnly={readOnly}
               aria-readonly={readOnly || undefined}
               enterKeyHint="next"
+              {...(placeholder === undefined ? {} : { placeholder, className: NOT_ENTERED_LOOK })}
               value={text}
               onChange={(event) => onChange(event.target.value)}
               onBlur={() => onCommit()}
             />
-          );
-        }
-        const input = {
-          ...control,
-          ...common,
-          readOnly,
-          'aria-readonly': readOnly || undefined,
-          value: text,
-          autoComplete: 'off',
-          enterKeyHint: 'next',
-          onChange: (event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value),
-          onBlur: () => onCommit(),
-        } as const;
-        if (rule.type === 'number') {
-          return field.unit === null ? <Input {...input} inputMode="decimal" /> : <UnitInput {...input} unit={field.unit} inputMode="decimal" />;
-        }
-        if (rule.type === 'text') return <Input {...input} maxLength={rule.maxLength} />;
-        return <Input {...input} aria-readonly="true" />;
+        );
+      }
+      const input = {
+        ...control,
+        ...common,
+        readOnly,
+        'aria-readonly': readOnly || undefined,
+        value: text,
+        autoComplete: 'off',
+        enterKeyHint: 'next',
+        ...(placeholder === undefined ? {} : { placeholder, className: NOT_ENTERED_LOOK }),
+        onChange: (event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value),
+        onBlur: () => onCommit(),
+      } as const;
+      if (rule.type === 'number') {
+        return field.unit === null ? <Input {...input} inputMode="decimal" /> : <UnitInput {...input} unit={field.unit} inputMode="decimal" />;
+      }
+      if (rule.type === 'text') {
+        return <Input {...input} maxLength={rule.maxLength} />;
+      }
+      return <Input {...input} aria-readonly="true" />;
+  };
+
+  return (
+    <FormField id={id} label={field.label} tag={tag} tagFirst {...(field.hint === null ? {} : { hint: field.hint })} {...(shownError === undefined ? {} : { error: shownError })}>
+      {(given) => {
+        // An empty field of the review look: the hidden words are the control's description too (a placeholder is not reliably read).
+        const control = empty ? { ...given, 'aria-describedby': [given['aria-describedby'], emptyId].filter((part) => part !== undefined).join(' ') } : given;
+        return (
+          <>
+            {draw(control)}
+            {empty ? (
+              <span id={emptyId} className="sr-only">
+                {NOT_ENTERED}
+              </span>
+            ) : null}
+          </>
+        );
       }}
     </FormField>
   );

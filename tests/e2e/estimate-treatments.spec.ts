@@ -290,6 +290,10 @@ test.describe('AC-8: the screen at 360, 768 and 1366 px', () => {
       expect(size?.width ?? 0).toBeGreaterThanOrEqual(TOUCH_TARGET);
     }
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    // The same scan, the same rules and the same open list, from the top of the page as every other form scan is (`expectFormAccessible` is a scroll to the top and `expectNoAxeViolations`). Where the click left the page, two inputs
+    // of section 06 sat half behind the sticky top bar, and axe's target-size rule judged them by that overlap (AQP-454 moved the point). The list is asserted open after the scroll, so the scan covers it.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(list(page)).toBeVisible();
     await expectNoAxeViolations(page);
     await page.keyboard.press('Escape');
     await expect(list(page)).toHaveCount(0);

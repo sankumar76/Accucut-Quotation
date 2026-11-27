@@ -47,7 +47,7 @@ import {
  * or asks for more. It decides nothing: which tasks a person sees, their order and the counts are the server's, and every request carries the filters, so the counts of the
  * three tabs follow them. The filters are written back into the browser's address after every change, so a filtered queue can be copied and bookmarked (AC-4).
  *
- * **Four tabs** (CR-01 item 7D, AQP-401): Open, Closed, Overdue and Ignored, the last for the tasks a Lead or an Admin set aside. Below 480 px they are a 2 by 2 grid (each tab 44 px high, none out of view and no sideways
+ * **Four tabs** (CR-01 item 7D, AQP-401; the order is FR-034's, DEF-103): Open, Overdue, Closed and Ignored, the last for the tasks a Lead or an Admin set aside. Below 480 px they are a 2 by 2 grid (each tab 44 px high, none out of view and no sideways
  * scroll: four labels with counts do not fit one row at 360 px, and a strip that scrolls would hide the one tab this change adds, WCAG 1.4.10, 2.5.8); from 480 px they are one row. The Ignored tab's intro line says whose
  * tasks these are. No new component and no new client code: one more tab value, its labels and texts, and a remarks line in the rows.
  *

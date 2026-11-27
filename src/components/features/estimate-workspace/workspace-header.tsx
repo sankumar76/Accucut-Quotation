@@ -1,23 +1,16 @@
-import { CalendarClock } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
-import { FolderPath } from '@/components/shared/folder-path';
-import { Icon } from '@/components/shared/icon';
-import { PageHeader } from '@/components/shared/page-header';
+import { DuePill } from '@/components/shared/due-pill';
+import { PageHead } from '@/components/shared/page-head';
 import { StatusBadge } from '@/components/shared/status-badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { cn } from '@/lib/cn';
-import { NO_CUSTOMER_SET_MESSAGE } from '@/lib/estimate/calculate-words';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
 
-import { CUSTOMER_NAME_LABEL, CUSTOMER_SHORT_NAME_LABEL, FOLDER_TITLE, IDENTITY_LABEL, NO_LINK_NOTE, NOTES_FROM_PREFIX, SHORT_NAME_NOT_SET, SUBJECT_LABEL } from './estimate-texts';
+import { FORM_INTRO } from './estimate-texts';
 
 /**
- * The top of SCR-05 and of SCR-06 (STORY-05.01 AC-1; UX-15; CR-01 item 6): the task code, its status, the deadline, the customer, its short name and the subject (read-only, as labelled text, for every
- * role: they are set when the task is assigned and an Engineer cannot change them), the folder and the notes typed when the task was assigned. It holds no state and needs no script of its own; the folder's
- * "Copy path" is `FolderPath`. The customer is a name and a short name and nothing else (NFR-002), so it is the same for every role that may open the task. SCR-06 passes a Change customer action to sit among the
- * header actions (`customerAction`); SCR-05 passes none, so an Engineer has no control to change it.
+ * The top of SCR-05 (STORY-05.01 AC-1; UX-15; CR-01 item 6; AQP-452, DEF-095): the page head (a breadcrumb "My tasks / code", "Estimate <code>" with its status badge, the title and the sentence of the form under it, and
+ * the due pill), then the notice and the cards it is handed. The customer, its short name, the subject and the folder are `TaskCards`, a server module (read-only, as labelled text: they are set when the task is
+ * assigned and an Engineer cannot change them). It holds no state. SCR-06 has its own head, a server module in the review folder (`ReviewHead`), so none of its code is in this client bundle (NFR-009).
  */
 
 export interface WorkspaceHeaderView {
@@ -41,80 +34,27 @@ export interface WorkspaceHeaderView {
 
 export interface WorkspaceHeaderProps {
   readonly view: WorkspaceHeaderView;
-  /** What the name field says while there is no customer: the Engineer's neutral sentence by default, "Not set" on SCR-06. */
-  readonly noCustomerText?: string;
-  /** SCR-06's Change customer action, drawn first among the actions of the page header (at the top of the screen: a control inside the identity card sat under the sticky top bar once the page was scrolled to the end of a short review, and axe read it as a target too small and too close, AQP-390). */
-  readonly customerAction?: ReactNode;
-  /** SCR-06's download marker chip (STORY-CR01.7E AC-5): drawn after the status, for a Lead and an Admin. SCR-05 passes none, so an Engineer's header has no marker (NFR-002). */
-  readonly downloadMarker?: ReactNode;
   /**
-   * The notice of an ignored estimate (CR-01 item 7D, AQP-401 AC-8; UX 12944 sections 2 and 4), directly under the page header and above the identity and folder cards, with the task's notes. SCR-05 hands in the Engineer's
-   * server-rendered notice as an element, so it is drawn at first paint and adds no client code; SCR-06 hands in the Lead's.
+   * The notice of an ignored estimate (CR-01 item 7D, AQP-401 AC-8; UX 12944 sections 2 and 4), directly under the page header and above the identity and folder cards, with the task's notes. SCR-05 hands in th
+   * server-rendered notice as an element, so it is drawn at first paint and adds no client code.
    */
   readonly notice?: ReactNode;
+  /** The customer and folder cards, **server-rendered** and handed in as an element (`TaskCards`), so their code is not in the client bundle (NFR-009; the ceiling of PRD 0.58). */
+  readonly cards?: ReactNode;
 }
 
-/** One labelled value of the identity card: the label is visible text, the value is text (not a disabled input). */
-function Identity({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-s-1">
-      <dt className="text-label font-semibold text-ink-2">{label}</dt>
-      <dd className={cn('text-body text-ink', BREAK_LONG_NAMES)}>{children}</dd>
-    </div>
-  );
-}
-
-export function WorkspaceHeader({ view, noCustomerText = NO_CUSTOMER_SET_MESSAGE, customerAction, downloadMarker, notice }: WorkspaceHeaderProps) {
+export function WorkspaceHeader({ view, notice, cards }: WorkspaceHeaderProps) {
   return (
     <>
-      <PageHeader
-        title={view.code}
-        description={view.title}
-        actions={
-          <div className="flex flex-wrap items-center gap-s-3">
-            {customerAction}
-            <StatusBadge status={view.ignored === true ? 'IGNORED' : view.status} variant="header" />
-            {downloadMarker}
-            <span className="inline-flex items-center gap-s-1 text-body font-semibold text-ink">
-              <Icon icon={CalendarClock} size="small" />
-              {`Due ${view.deadlineLabel}`}
-            </span>
-          </div>
-        }
+      <PageHead
+        crumbs={[{ label: 'My tasks', href: '/queue' }, { label: view.code }]}
+        title={`Estimate ${view.code}`}
+        badges={<StatusBadge status={view.ignored === true ? 'IGNORED' : view.status} variant="header" />}
+        description={`${view.title} · ${FORM_INTRO}`}
+        actions={<DuePill label={view.deadlineLabel} />}
       />
       {notice}
-      <Card aria-label={IDENTITY_LABEL}>
-        <CardContent>
-          <dl className="grid gap-s-4 sm:grid-cols-3">
-            <Identity label={CUSTOMER_NAME_LABEL}>
-              {view.customer === null ? noCustomerText : view.customer.name}
-            </Identity>
-            <Identity label={CUSTOMER_SHORT_NAME_LABEL}>{view.customer === null ? SHORT_NAME_NOT_SET : <span className="font-mono">{view.customer.shortName}</span>}</Identity>
-            <Identity label={SUBJECT_LABEL}>{view.subject}</Identity>
-          </dl>
-        </CardContent>
-      </Card>
-      <Card aria-labelledby="estimate-folder-title">
-        <CardHeader>
-          <CardTitle id="estimate-folder-title">{FOLDER_TITLE}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-s-3">
-          {view.folderUrl === null ? (
-            <div className="flex flex-col gap-s-1">
-              <span className={cn('font-mono text-body', BREAK_LONG_NAMES)}>{view.folderPath}</span>
-              <span className="text-label text-ink-2">{NO_LINK_NOTE}</span>
-            </div>
-          ) : (
-            <FolderPath path={view.folderPath} url={view.folderUrl} />
-          )}
-          {view.notes === null ? null : (
-            <p className={cn('text-body whitespace-pre-wrap', BREAK_LONG_NAMES)}>
-              <strong>{`${NOTES_FROM_PREFIX} ${view.assignedByName}: `}</strong>
-              {view.notes}
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      {cards}
     </>
   );
 }
