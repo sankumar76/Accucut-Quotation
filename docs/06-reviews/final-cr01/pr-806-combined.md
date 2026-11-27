@@ -325,6 +325,8 @@ PR review [6083908499](https://github.com/sankumar76/Accucut-Quotation/pull/806#
 | QLT-806-11 | Minor | `tests/e2e/estimate-review-tree.spec.ts:122` | The two-option guard became a filter: one-option drop-downs are skipped, so they get no `:open`, `aria-readonly` or dashed-border check. Fix as in (c). Hardening window, or this PR if quick |
 | PRF-806-01 | Info (for master) | `src/components/features/estimate-workspace/lazy-review-form.tsx:22` | (v') +26 / +28 ms over the band and (iv') TBT +17 %: the edit island's hydration work, with 0 reads and identical statements. For master's reading under DL-457 (3) and DL-461; my recommendation is above |
 
+PR review [6088096555](https://github.com/sankumar76/Accucut-Quotation/pull/806#pullrequestreview-6088096555) (COMMENT, 2 inline comments, at `b6c40208`); label stays `review:quality-approved`.
+
 **Open after round 4:** Blocker 0, Critical 0, Major 0, Minor 3 (QLT-806-04, -05, -11), Info 8 (QLT-806-07 to -10; SEC-806-01 to -03; PRF-806-01). **Verdict at `b6c40208`: APPROVE WITH COMMENTS.** The run of record is fully green with Stage 11b at 193,012 B. The proof's two misses go to master.
 
 ## Hand-off
