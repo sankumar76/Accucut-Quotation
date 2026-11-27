@@ -1,11 +1,17 @@
 import { readFileSync } from 'node:fs';
 
+import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FORM_LOADING, sectionLinkText } from '@/components/features/estimate-workspace/estimate-texts';
+import { FORM_LOADING, FORM_LOCKED, sectionLinkText } from '@/components/features/estimate-workspace/estimate-texts';
 import { SURFACE_HINT } from '@/components/features/estimate-workspace/surface-texts';
 import * as layout from '@/components/shared/form-layout';
+import { Notice } from '@/components/shared/notice';
+import { inputsNotice } from '@/components/features/estimate-review/review-texts';
+import { SURFACE_LABEL, SURFACE_NONE_SELECTED } from '@/components/features/estimate-workspace/surface-texts';
+import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
+import { parseForm, parsePartInputs } from '@/lib/estimates/form-client';
 import { sectionProgress, shownSections } from '@/lib/estimates/form-shown';
 
 import { CUSTOMER_RECIPE_ID } from '../support/customer-canary';
@@ -229,7 +235,16 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
      */
     const decode = (text: string): string => text.replaceAll('&amp;', '&').replaceAll('&#x27;', "'").replaceAll('&quot;', '"').replaceAll('&lt;', '<').replaceAll('&gt;', '>');
 
-    function strictViolations(ghost: string, allowedTexts: ReadonlyArray<string>, classTokens: ReadonlySet<string>): string[] {
+    /** A real notice in the ghost (the locked Engineer's, the Lead's): its icon is one exact piece of markup, the one the icon component draws, and its parts carry the alert's own data-slots. Nothing else is loosened. */
+    interface Allowance {
+      readonly markup?: ReadonlyArray<string>;
+      readonly slots?: ReadonlySet<string>;
+    }
+
+    function strictViolations(raw: string, allowedTexts: ReadonlyArray<string>, classTokens: ReadonlySet<string>, allowance: Allowance = {}): string[] {
+      // The known icon is taken out by its whole text, exact and long: a changed icon is no longer that text and is scanned as it stands.
+      let ghost = raw;
+      for (const piece of allowance.markup ?? []) ghost = ghost.split(piece).join('');
       const problems: string[] = [];
       const allowed = new Set(allowedTexts);
       for (const match of ghost.matchAll(/>([^<>]+)</g)) {
@@ -246,6 +261,7 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
         'data-ghost-wide': (value) => value === '',
         'data-ghost-picture': (value) => value === '',
         'data-ghost-grid': (value) => value === '',
+        'data-slot': (value) => allowance.slots?.has(value) === true,
         style: (value) => /^--n:\d+$/.test(value),
         class: (value) => value.split(/\s+/).filter((token) => token !== '').every((token) => classTokens.has(token)),
       };
@@ -264,12 +280,14 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
         .replaceAll('\r\n', '\n')
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/^\s*\/\/.*$/gm, '');
-    function classTokensOfTheCode(): ReadonlySet<string> {
+    function classTokensOfTheCode(withNotice = false): ReadonlySet<string> {
       const tokens = new Set<string>();
       for (const value of Object.values(layout)) if (typeof value === 'string') for (const token of value.split(/\s+/)) tokens.add(token);
-      for (const path of ['src/components/features/estimate-workspace/part-form-ghost.tsx', 'src/components/features/estimate-workspace/surface-chips.tsx', 'src/components/ui/skeleton.tsx', 'src/components/ui/card.tsx']) {
+      const files = ['src/components/features/estimate-workspace/part-form-ghost.tsx', 'src/components/features/estimate-workspace/surface-chips.tsx', 'src/components/ui/skeleton.tsx', 'src/components/ui/card.tsx'];
+      if (withNotice) files.push('src/components/ui/alert.tsx', 'src/components/shared/notice.tsx', 'src/components/shared/break-long-names.ts', 'src/components/shared/icon.tsx');
+      for (const path of files) {
         for (const literal of codeOf(path).matchAll(/(["'])((?:(?!\1)[^\n\\])*)\1/g)) {
-          for (const token of (literal[2] ?? '').split(/\s+/)) if (/^[a-z0-9][a-z0-9:[\]()_./&>=*,%#!~+-]*$/.test(token)) tokens.add(token);
+          for (const token of (literal[2] ?? '').split(/\s+/)) if (/^[a-z0-9[!-][a-z0-9:[\]()_./&>=*,%#!~+-]*$/.test(token)) tokens.add(token);
         }
       }
       return tokens;
@@ -305,6 +323,70 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
       const tokens = classTokensOfTheCode();
       for (const word of ['rate', 'rates', 'price', 'prices', 'cost', 'costs', 'formula', 'formulas', 'Machining', '450', '45', '$', '€', '₹']) expect(tokens.has(word), word).toBe(false);
     });
+
+    /** The icon of an info notice, exactly as the icon component draws it, and the alert's data-slots: what a notice in a ghost may add. */
+    const NOTICE_ALLOWANCE: Allowance = (() => {
+      const svg = /<svg[\s\S]*?<\/svg>/.exec(renderToStaticMarkup(createElement(Notice, { tone: 'info' }, 'x')))?.[0] ?? '';
+      expect(svg.length, 'the notice draws an icon').toBeGreaterThan(100);
+      return { markup: [svg], slots: new Set(['alert', 'alert-description']) };
+    })();
+
+    async function theLeadGhost(): Promise<{ readonly ghost: string; readonly allowed: ReadonlyArray<string> }> {
+      harness.signInAs('LEAD');
+      const element = (await EstimatePage({ params: Promise.resolve({ code: CODE }), searchParams: Promise.resolve({}) })) as { props: Record<string, unknown> };
+      const seed = element.props['seed'] as { form: unknown; part: unknown };
+      const form = defined(parseForm(seed.form));
+      const texts = defined(parsePartInputs(seed.part)).inputs;
+      const { ghost } = splitGhost(renderToStaticMarkup(element as never));
+      expect(ghost, 'the review draws the ghost').not.toBe('');
+      const allowed = [
+        FORM_LOADING,
+        SURFACE_LABEL,
+        SURFACE_NONE_SELECTED,
+        QTY_PER_ASSY_HINT,
+        inputsNotice('DRAFT', false, 'none'),
+        ...shownSections(form.sections, texts).flatMap((section) => {
+          const counts = sectionProgress(section, texts, {});
+          return counts.total === 0 ? [] : [`${String(counts.complete)} of ${String(counts.total)}`];
+        }),
+        // The review look drops every hint but the quantity's (reviewField): a hint of the Engineer's form in the Lead's ghost is a violation.
+        ...form.sections.flatMap((section) => [section.name, section.columnRange, sectionLinkText(section.number, section.shortName)]),
+      ];
+      return { ghost, allowed };
+    }
+
+    it('SEC-833-04: the Lead ghost, from the Lead seed bodies, passes the same strict scan (the review look: no hint but the quantity one; the treatments as "None selected")', async () => {
+      const { ghost, allowed } = await theLeadGhost();
+      expect(strictViolations(ghost, allowed, classTokensOfTheCode(true), NOTICE_ALLOWANCE)).toEqual([]);
+    });
+
+    it('QLT-833-14: the Engineer ghost of a locked estimate (its notice and icon) passes it too', async () => {
+      estimate().status = 'APPROVED';
+      const { ghost, allowed } = await theGhostAndItsAllowedTexts();
+      expect(ghost).toContain(FORM_LOCKED);
+      expect(strictViolations(ghost, [...allowed, FORM_LOCKED], classTokensOfTheCode(true), NOTICE_ALLOWANCE)).toEqual([]);
+    });
+
+    const NOTICE_MUTANTS: ReadonlyArray<{ readonly name: string; readonly change: (ghost: string) => string }> = [
+      { name: 'a text "Machining rate 450.00 per hour"', change: (ghost) => ghost.replace('<div inert', () => '<span>Machining rate 450.00 per hour</span><div inert') },
+      { name: 'a class value "rate"', change: (ghost) => ghost.replace(' class="', () => ' class="rate ') },
+      { name: 'a title attribute', change: (ghost) => ghost.replace('<div inert', () => '<div title="Qty*Rate" inert') },
+      { name: 'a changed icon (a path of the icon rewritten)', change: (ghost) => ghost.replace(/<svg[^>]*>/, (open) => open + '<text>rate 450</text>') },
+      { name: 'an alert data-slot that is not the alert\'s', change: (ghost) => ghost.replace('data-slot="alert"', () => 'data-slot="rate"') },
+    ];
+    for (const mutant of NOTICE_MUTANTS) {
+      it(`fails, for the Lead ghost and for the locked Engineer ghost, when it holds ${mutant.name}`, async () => {
+        const lead = await theLeadGhost();
+        const changedLead = mutant.change(lead.ghost);
+        expect(changedLead, 'the mutant changed the Lead ghost').not.toBe(lead.ghost);
+        expect(strictViolations(changedLead, lead.allowed, classTokensOfTheCode(true), NOTICE_ALLOWANCE), mutant.name).not.toEqual([]);
+        estimate().status = 'APPROVED';
+        const locked = await theGhostAndItsAllowedTexts();
+        const changedLocked = mutant.change(locked.ghost);
+        expect(changedLocked, 'the mutant changed the locked ghost').not.toBe(locked.ghost);
+        expect(strictViolations(changedLocked, [...locked.allowed, FORM_LOCKED], classTokensOfTheCode(true), NOTICE_ALLOWANCE), mutant.name).not.toEqual([]);
+      });
+    }
 
     /** The reviewer's 23 values (SEC-833-01 to -03) put in each of 11 places, and the lane's 11 mutants: every one must fail the scan. */
     const VALUES: ReadonlyArray<string> = [
