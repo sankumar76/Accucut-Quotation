@@ -129,3 +129,96 @@ For production use `classTokens` should come from the code (the exported strings
 - Open questions: none
 - Risks raised: none new
 - Recommended next agent: developer (lane 2) for SEC-833-01 to -04; then reviewer-performance for the delta (the stricter scan and my matrix re-run)
+
+---
+
+# Round 2: delta `517d367a..1d435f9b` (the strict scan), security lens
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-performance (combined review, round 2) |
+| Commits reviewed | `d4bd3753` (the card count block), `d9d29ce7` (the strict scan, 253 mutants), `3e82ff6c` (e2e wait), `b359f21f` (the Lead and locked Engineer ghosts scanned, the icon allowance), `1d435f9b` (the picture box follows `editable`; the Engineer count says 0 of the total; an Approved swap case). Head `1d435f9b`, which did not move |
+| Date | 2026-11-27 |
+| GitHub review | [pullrequestreview-6090665823](https://github.com/sankumar76/Accucut-Quotation/pull/833#pullrequestreview-6090665823) (COMMENT, 2 inline comments) |
+| **Verdict (at `1d435f9b`)** | **APPROVE WITH COMMENTS.** Open: **0 Blocker, 0 Critical, 0 Major, 1 Minor (SEC-833-07), 2 Info (SEC-833-08, -09)**. **SEC-833-01, -02, -03 and -04 are resolved.** The E2E shards of run 46027662255 were running when I wrote this and are not read |
+
+## The matrix against the PR's actual scan
+
+I ran the PR's own `strictViolations`, `classTokensOfTheCode`, `NOTICE_ALLOWANCE`, `theGhostAndItsAllowedTexts` and `theLeadGhost`, unchanged, in my own worktree at `1d435f9b` (a copy of `estimate-page.test.ts` with my block added; node_modules by junction as before, `src/generated` copied; removed afterwards, junction first), with the round-1 matrix (23 values × 11 places = 253 cells) on **three real ghosts**.
+
+| Ghost | Baseline violations | Cells | Survivors | Regressions against the old whole-page scan |
+|-------|---------------------|-------|-----------|---------------------------------------------|
+| Engineer (20,800 characters) | none | 253 | **0** | **0** |
+| Lead, from the seed (20,327) | none | 253 | **0** | **0** |
+| Locked Engineer, Approved (21,455) | none | 253 | **0** | **0** |
+
+Every input the old scan rejected is still rejected on all three ghosts, and so are the 64 cells it never rejected. The PR's own tests (`estimate-page.test.ts`, `part-form-ghost.test.ts`) pass in my run.
+
+| Round-1 finding | Status |
+|-----------------|--------|
+| SEC-833-01 (Blocker): `class` values unscanned | **Resolved.** A class is checked by token against tokens read from the code (123 tokens; 154 with the notice files), none containing a word of the old scan, none a bare number |
+| SEC-833-02 (Critical): `replaceAll` of short allowed texts | **Resolved.** No `replaceAll` on the markup; attributes by exact (name, value); no comment, script, style, `<?` or CDATA; single or no quotes refused |
+| SEC-833-03 (Major): weak figure check | **Resolved** by exact values (a figure cannot be in an attribute that has one allowed value) |
+| SEC-833-04 (Minor): only the Engineer's Draft scanned | **Resolved.** The Lead's ghost and the locked Engineer's ghost are scanned, each with its own allowed list; the notice is allowed by exact markup |
+
+## The icon allowance cannot carry a word or a figure
+
+It is one string of 343 characters, rendered from the real `Notice` at test time and taken out of the markup whole before the scan. It has no text between its tags, no word of the old scan, and its 20 numbers are the `xmlns` address, the sizes, the `viewBox` and the circle and path geometry. Its attributes are `xmlns`, `width`, `height`, `viewBox`, `fill`, `stroke`, `stroke-width`, `stroke-linecap`, `stroke-linejoin`, `class`, `aria-hidden` and, on the shapes, `cx`, `cy`, `r`, `d`. A changed icon is not that string, so it is not removed and fails (the PR's mutant: `<text>rate 450</text>` inside the svg). `data-slot` is accepted only as `alert` or `alert-description` and only where the allowance is given, so the plain Engineer ghost refuses any `data-slot`. The icon is the component's own output with no data in it; any data that reached it would change the string.
+
+## SEC-833-07 (Minor, new): the scan reads text, valued attributes and comments, not the markup's skeleton
+
+On all three ghosts, **11 of 13 extra mutants survive** that the old whole-page scan rejected (a word anywhere in the markup):
+
+| Mutant | Engineer | Lead | Locked |
+|--------|----------|------|--------|
+| an attribute after a newline (`<div\ntitle="Qty*Rate 450" inert`) | survives | survives | survives |
+| an attribute after a tab | survives | survives | survives |
+| an attribute after a slash (`<div/title=…`) | survives | survives | survives |
+| a space before the `=` | survives | survives | survives |
+| a space after the `=` | survives | survives | survives |
+| a bare attribute `rate` | survives | survives | survives |
+| a bare attribute `data-cost` | survives | survives | survives |
+| an element `<x-rate></x-rate>` | survives | survives | survives |
+| an element `<cost-cell></cost-cell>` | survives | survives | survives |
+| `<!DOCTYPE rate 450>` | survives | survives | survives |
+| a text `&#114;ate 450` (numeric entity) | rejected | rejected | rejected |
+| an upper-case attribute name `TITLE=` | rejected | rejected | rejected |
+| a text appended after the ghost's end | (excluded: the page scan cuts the ghost by depth and the old scan reads what is left, so this is not a case) | | |
+
+React's serializer writes none of these forms (one space, double quotes, tag names from the code), so a regression needs `dangerouslySetInnerHTML` or a lower-case custom tag in JSX. That is why this is Minor and not a merge condition. **Fix (about 15 lines, validated):** after the existing checks, blank every quoted value and every text node, then require the skeleton to be tags of known names (the ghost's code draws `div`, `span`, `p`, `ul`, `li`) whose attributes are of known names (the `exact` table, plus the svg's, which the allowance removes) with one space between them; refuse the old word regex in the skeleton and any `<` that is not a plain tag. I ran it on the same three ghosts: **it rejects all 11 survivors and accepts the three real ghosts.** The function:
+
+```ts
+function skeletonViolations(raw: string, allowance: Allowance, tags: ReadonlySet<string>, attributeNames: ReadonlySet<string>): string[] {
+  let ghost = raw;
+  for (const piece of allowance.markup ?? []) ghost = ghost.split(piece).join('');
+  const problems: string[] = [];
+  const skeleton = ghost.replace(/"[^"]*"/g, '""').replace(/'[^']*'/g, "''").replace(/>[^<>]+</g, '><');
+  if (/\b(rates?|prices?|costs?|formulas?)\b/i.test(skeleton)) problems.push('a word of the old scan in the skeleton');
+  for (const piece of skeleton.split(/(?=<)/)) {
+    if (piece === '') continue;
+    const tag = /^<(\/?)([a-z][a-z0-9-]*)((?: [a-zA-Z][\w:-]*(?:=""|=''))*)>/.exec(piece);
+    if (tag === null) { problems.push(`not a plain tag: ${piece.slice(0, 40)}`); continue; }
+    if (!tags.has(tag[2] ?? '')) problems.push(`tag ${tag[2] ?? ''}`);
+    for (const attribute of (tag[3] ?? '').matchAll(/ ([a-zA-Z][\w:-]*)=/g)) if (!attributeNames.has(attribute[1] ?? '')) problems.push(`attribute name ${attribute[1] ?? ''}`);
+    if (piece.slice(tag[0].length).replace(/^[^<]*/, '') !== '') problems.push('stray text');
+  }
+  return problems;
+}
+```
+
+## Info
+
+- **SEC-833-08:** the guard "no word of the old scan is a class token" (`estimate-page.test.ts:322`) runs for the plain token set only. The Lead's and the locked Engineer's ghosts use `classTokensOfTheCode(true)` (154 tokens from 8 files). Both sets are clean today; the tokens are every lower-case string literal in those files, so a future literal `'rate'` there would be allowed in a class. Run the guard over both sets.
+- **SEC-833-09 (performance lens):** the ghost now draws each card's count as an invisible text ("0 of N" for the Engineer; the part's own count for the Lead; a few digits, derived from the definition by the form's own rule and checked by exact text, so it cannot carry another number). The ghost's markup is 20,800 characters for the Engineer (20,327 before), a few KB gzipped (estimate). No client JavaScript is added.
+
+## CI at `1d435f9b` (run 46027662255)
+
+Stages 1 to 11b **passed**: unit 552 files, 11,896 tests; unit, integration, security and acceptance 728 files, 17,777 tests. **Stage 11b `/estimates/[code]` gzip 193,080 B**, within DL-468's 194,000 B (+3 B on `517d367a`'s 193,077 B). E2E shards 1 to 4 running when I wrote this; not read.
+
+## Hand-off (round 2)
+- Status: COMPLETE
+- Artefacts written/updated: `docs/06-reviews/final-cr01/pr-833-combined.md` (round-2 section)
+- Jira / GitHub updates: PR #833 COMMENT review 6090665823 (2 inline comments); Jira AQP-502 comment
+- Open questions: none
+- Risks raised: none new
+- Recommended next agent: developer (lane 2) for SEC-833-07 (recommended, not a merge condition) and SEC-833-08; then master/orchestrator once the run is fully green
