@@ -191,9 +191,12 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await calculateWithoutThePage(page, owner);
     await openAsLead(page, testInfo, code, 'ADMIN');
     await expect(tiles(page)).toContainText('File cell BL2');
-    // The Admin sees the same inputs block, read-only (AQP-488).
+    // The Admin sees the same inputs block as the Lead and may correct it while the estimate is Prepared (FR-116; ux ruling lead-admin-edit-inputs, UD-1 brought back): the field takes input and the block does not say "Read-only".
     await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
-    await expect(page.locator('#row-inputs')).toContainText('Read-only.');
+    const field = control(page, 'J');
+    await expect(field).toBeEnabled();
+    await expect(field).not.toHaveAttribute('aria-readonly', 'true');
+    await expect(page.locator('#row-inputs')).not.toContainText('Read-only');
   });
 });
 

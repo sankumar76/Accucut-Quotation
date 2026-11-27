@@ -65,13 +65,9 @@ export function ReviewForm({ review, editable, ...props }: ReviewFormProps) {
     setAnnouncement(SAVED_CLEARED_LINE);
     refresh();
   }, [review.figuresCurrent, refresh]);
-  const refuse = useCallback(
-    (kind: 'locked' | 'ignored'): void => {
-      setRefused(kind);
-      refresh();
-    },
-    [refresh],
-  );
+  // The block turns read-only in the server's words and what was typed stays on screen (ED-12). The page is **not** drawn again here: it would swap this form for the plain read-only one and the typed text, which
+  // was never stored, would go with it. The rest of the page shows the new state the next time it is read.
+  const refuse = useCallback((kind: 'locked' | 'ignored'): void => setRefused(kind), []);
 
   const notice = reviewNotice(refused, review.notice);
   return (

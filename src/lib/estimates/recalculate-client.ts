@@ -40,7 +40,8 @@ const UNSAVED: Outcome<true> = { status: 'refused', httpStatus: 0, code: 'RECALC
  * nothing is left unsaved. With no inputs block (an Approved estimate, an Engineer-less page) the gate is empty and the press goes at once.
  */
 export async function press(estimateId: string, acknowledged?: number): Promise<Outcome<true>> {
-  reviewSaveGate.flush('draft');
+  // Only when something is typed and not yet saved, or a save is on its way: a form that shows what the server holds is not asked to send it again (each such request is a save of a value that changes nothing).
+  if (reviewSaveGate.isDirty()) reviewSaveGate.flush('draft');
   if (!(await reviewSaveGate.settle())) return UNSAVED;
   return acknowledged === undefined ? recalculateEstimate(estimateId) : recalculateAnyway(estimateId, acknowledged);
 }
