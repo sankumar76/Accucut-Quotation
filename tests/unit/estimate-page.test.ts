@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { FORM_LOADING, sectionLinkText } from '@/components/features/estimate-workspace/estimate-texts';
 import { SURFACE_HINT } from '@/components/features/estimate-workspace/surface-texts';
+import { sectionProgress, shownSections } from '@/lib/estimates/form-shown';
 
 import { CUSTOMER_RECIPE_ID } from '../support/customer-canary';
 import { defined } from '../support/defined';
@@ -256,6 +257,11 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
       const allowed = [
         'Loading the form',
         SURFACE_HINT,
+        // Each card's count, in its invisible words (the block is as wide as the words the form will show): the counts of the definition's defaults, from the form's own rule.
+        ...shownSections(form.sections, {}).flatMap((section) => {
+          const counts = sectionProgress(section, {}, {});
+          return counts.total === 0 ? [] : [`${String(counts.complete)} of ${String(counts.total)}`];
+        }),
         ...form.sections.flatMap((section) => [section.name, section.columnRange, sectionLinkText(section.number, section.shortName), ...section.fields.flatMap((field) => (field.hint === null ? [] : [field.hint]))]),
       ];
       return { ghost, allowed };

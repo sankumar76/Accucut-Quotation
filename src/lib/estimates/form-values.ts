@@ -3,9 +3,9 @@ import { readFlagInput, readTreatmentInput } from '../estimate/treatment-value';
 import { textTooLongMessage, validateNumberInput, validateTextInput, type InputCheck } from '../estimate/validation';
 
 import type { FormField, FormRule } from './form-client';
-import { textOf, type Texts } from './form-shown';
+import type { SectionProgress } from './form-shown';
 
-export { fieldVisibility, MIN_SECTION_WEIGHT, sectionWeight, shownSections, textOf } from './form-shown';
+export { fieldVisibility, MIN_SECTION_WEIGHT, sectionProgress, sectionWeight, shownSections, textOf, type SectionProgress } from './form-shown';
 
 /**
  * What the part form does with one typed value before it asks the server (STORY-05.03 AC-4): read it by its field's rule, so a wrong number is refused on the screen with the
@@ -50,23 +50,6 @@ export function lengthProblem(rule: FormRule, typed: string): string | undefined
 
 /** The fields that watch this one: the fields that showing or hiding it changes. */
 export const watchersOf = <T extends Pick<FormField, 'visibleWhen'>>(fields: ReadonlyArray<T>, fieldId: string): T[] => fields.filter((field) => field.visibleWhen?.fieldId === fieldId);
-
-/** How many of a section's fields are filled: `complete` of `total` (UX spec SCR-05 "Layout rules": "n of m" on every card). */
-export interface SectionProgress {
-  readonly complete: number;
-  readonly total: number;
-}
-
-/**
- * The "n of m complete" of one card (STORY-05.04 AC-1, AC-6). A field is counted if a person types or chooses it and Calculate needs it; it is complete when it shows a value and has no
- * message under it. The placeholders of a later story are in no list of `fields`, so the counts leave them out until their story builds them. The count follows what is typed, as the
- * form shows it; the server judges completeness at Calculate (STORY-05.09).
- */
-export function sectionProgress(section: { readonly fields: ReadonlyArray<Pick<FormField, 'id' | 'defaultValue' | 'editable' | 'required'>> }, texts: Texts, errors: Texts): SectionProgress {
-  const counted = section.fields.filter((field) => field.editable && field.required);
-  const complete = counted.filter((field) => textOf(field, texts).trim() !== '' && errors[field.id] === undefined).length;
-  return { complete, total: counted.length };
-}
 
 /**
  * The count of the whole part (STORY-05.11 AC-1): the sum of the cards' counts. Part Model is in no card's count (it is no typed field) and a field the registry hides for what is typed is in none

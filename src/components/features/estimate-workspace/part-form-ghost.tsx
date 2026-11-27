@@ -15,6 +15,7 @@ import {
   PICTURE_ZONE_HEIGHT_UNHINTED,
   PROGRESS_BAR_WIDTH,
   PROGRESS_ROW,
+  COUNT_TEXT,
   RANGE_CHIP,
   STRIP_BOX,
   STRIP_ITEM,
@@ -28,7 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { parseForm, parsePartInputs, type FormField, type FormSection, type FormView } from '@/lib/estimates/form-client';
 import { decodeTreatment, isOtherTreatment } from '@/lib/estimate/treatment-value';
-import { sectionWeight, shownSections } from '@/lib/estimates/form-shown';
+import { sectionProgress, sectionWeight, shownSections } from '@/lib/estimates/form-shown';
 
 import { FORM_LOADING, sectionLinkText } from './estimate-texts';
 import { reviewField } from './review-look';
@@ -62,7 +63,11 @@ type CardShare = CSSProperties & Record<'--n', number>;
 
 /** The ghost carries none of the form's own markers (PF-9.4): the shared `Card` and `Skeleton` set `data-slot`, and a prop of `undefined` after it leaves the attribute out. */
 const NO_SLOT = { 'data-slot': undefined } as const;
-const Grey = ({ className }: { readonly className: string }) => <Skeleton {...NO_SLOT} className={className} />;
+const Grey = ({ className, children }: { readonly className: string; readonly children?: ReactNode }) => (
+  <Skeleton {...NO_SLOT} className={className}>
+    {children}
+  </Skeleton>
+);
 
 /** The control a field will have, as a grey block of the control's own height (PF-3); the picture, a multi-line box and the surface treatments are the ones that take the whole row or more. */
 function ghostControl(field: FormField, texts: Readonly<Record<string, string>>): { readonly control: ReactNode; readonly marker: 'wide' | 'picture' | null } {
@@ -112,6 +117,7 @@ function GhostTreatments({ flags, review, texts }: { readonly flags: ReadonlyArr
 function GhostCard({ section, review, texts }: { readonly section: FormSection; readonly review: boolean; readonly texts: Readonly<Record<string, string>> }) {
   const share: CardShare = { '--n': sectionWeight(section) };
   const flags = section.fields.filter((field) => field.rule.type === 'flag');
+  const counts = sectionProgress(section, texts, {});
   return (
     <Card {...NO_SLOT} style={share} className={CARD_SHARE}>
       <CardHeader {...NO_SLOT} className={CARD_HEADER}>
@@ -120,7 +126,14 @@ function GhostCard({ section, review, texts }: { readonly section: FormSection; 
           <span className="min-w-0">{section.name}</span>
         </CardTitle>
         <span className={RANGE_CHIP}>{section.columnRange}</span>
-        <Grey className="h-s-4 w-10" />
+        {counts.total === 0 ? null : (
+          // The card's count ("4 of 4"), as a grey block the width of its words: the header wraps by what it holds, so a block of the wrong width wraps it differently (360 px, DEF-145). The words are invisible and carry no value; the form shows the count, the ghost its place.
+          <p className={COUNT_TEXT}>
+            <Grey className="w-fit">
+              <span className="invisible">{`${String(counts.complete)} of ${String(counts.total)}`}</span>
+            </Grey>
+          </p>
+        )}
       </CardHeader>
       <CardContent {...NO_SLOT} className={FIELDS}>
         {flags.length > 0 ? <GhostTreatments flags={flags} review={review} texts={texts} /> : null}
