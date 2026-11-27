@@ -185,7 +185,7 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     const tableBox = defined(await table.boundingBox());
     expect(exampleBox.y + exampleBox.height).toBeLessThanOrEqual(tableBox.y + 1);
     expect(roundingBox.y + roundingBox.height).toBeLessThanOrEqual(tableBox.y + 1);
-    for (const cell of await table.getByRole('row').nth(1).getByRole('cell').nth(1).allInnerTexts()) expect(cell).toMatch(/^(Main Assembly|Sub-Assembly|Part|Sub-part|Fastener)(: S.*)?$/);
+    for (const cell of await table.getByRole('row').nth(1).getByRole('cell').nth(1).allInnerTexts()) expect(cell).toMatch(/^(Main Assembly|Sub-Assembly|Part|Sub-part|Fastener)(: \S.*)?$/);
     await expect(buildPanel(page)).toContainText("The Engineer types the count for the whole order on every row (QTY per Assy, column H). Each row's cost (column BG) already includes its own count, so the total is the BG of every row added together. Nothing is multiplied by the rows above.");
     await expectColumns(page);
   });

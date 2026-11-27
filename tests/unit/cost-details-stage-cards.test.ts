@@ -43,7 +43,7 @@ describe('AQP-475: the stage is a numbered collapsible card', () => {
     const card = stageOf(await page(), 2);
     const tile = card.match(/<span[^>]*data-stage-number[^>]*>/)?.[0] ?? '';
     expect(tile).toContain('size-[28px]');
-    expect(tile).not.toMatch(/(^|[s"])size-8([s"]|$)/);
+    expect(tile).not.toMatch(/(^|[\s"])size-8([\s"]|$)/);
   });
 
   it('shows no "Stage total:" words on screen, only the figure at the right, and keeps the words for a screen reader', async () => {

@@ -224,7 +224,7 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
       const [treeTop, headingTop] = await Promise.all([panel.boundingBox(), page.getByText('Cost details for one row').boundingBox()]);
       expect(treeTop?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(headingTop?.y ?? 0);
       await expect(panel).not.toHaveAttribute('open', '');
-      await expect(panel.locator('summary')).toHaveText(/^Parts tree · d+(.d+)* /);
+      await expect(panel.locator('summary')).toHaveText(/^Parts tree · \d+(\.\d+)* /);
       await panel.locator('summary').click();
       await expect(panel).toHaveAttribute('open', '');
       expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
