@@ -70,6 +70,11 @@ test.describe('the Lead\'s inputs on SCR-06, one check each', () => {
     // The press is the click that leaves the field, and it asks the form to send what it shows, so the value may go twice (the second changes nothing); every save is answered before the request.
     expect(order.at(-1)).toBe('calculated');
     expect(order.length).toBeGreaterThan(1);
+    // What the part holds is what was typed: the route answers `inputs` as a list of { fieldId, value }.
+    const tree = (await (await page.request.get(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/tree`)).json()) as { nodes: ReadonlyArray<{ id: string; slNo: string }> };
+    const partId = defined(tree.nodes.find((row) => row.slNo === '1.1')).id;
+    const held = (await (await page.request.get(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes/${partId}`)).json()) as { inputs: ReadonlyArray<{ fieldId: string; value: string }> };
+    expect(held.inputs.some(({ fieldId, value }) => fieldId === fieldIdOf('H') && Number(value) === 3)).toBe(true);
   });
 
   test('ED-8: in a Draft the Engineer saves the part after the Lead opened it: the Lead\'s save is refused as changed elsewhere, with the two choices, and nothing is overwritten silently', async ({ page, browser }, testInfo) => {
