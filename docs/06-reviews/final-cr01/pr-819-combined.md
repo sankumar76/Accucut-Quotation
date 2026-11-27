@@ -77,3 +77,22 @@ Neither can match the real text ("Calculated total (BL)", "₹ 12,951.53"); I ch
 
 - **developer:** fix the two regular expressions (QLT-819-01), then re-run CI; QLT-819-02 while there.
 - **orchestrator:** do not merge until all three widths of `approve.spec.ts:225` are green.
+
+## Round 2 at `eafe8446` (one commit on `e86d29ef`; CI run 45930548297)
+
+**Verdict: APPROVE WITH COMMENTS.** QLT-819-01 (Blocker) and QLT-819-02 (Minor) are fixed, and QLT-819-03 (Info) too. Open findings: Blocker 0, Critical 0, Major 0, Minor 0, Info 3. There is no merge stop under §9 item 2. CI run 45930548297 is **green in every job**. `master` has since moved to `1b30b17f` (#818). #818 touches **no file of this PR**, so the update is mechanical, but the squash needs the checks green on the updated head.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Every pattern in the diff, run against the real text in Node | **All match, and all reject the broken forms** | Lines 233-236 at `eafe8446`, read as bytes: `^Calculated total \(B[A-Z]\)$` matches "Calculated total (BL)" and rejects "Calculated total BL". `^₹ [\d,]+\.\d{2}$` matches "₹ 12,951.53", "₹ 1,23,456.78" and "₹ 0.00", and rejects "₹ dd.dd" and "₹ 12951x53". `^Customer$` matches. `Starts as the calculated total\. Edit it to set a different price\.` matches the hint alone and inside a longer description, and rejects a changed dot. **Every** regex the PR adds against `master` (`git diff origin/master...eafe8446`) was listed: none lost a backslash |
+| `DialogDescription` wiring | **Right** | The lead-in is `<DialogDescription className="text-body text-ink">` inside `DialogHeader`. `DialogContent` no longer passes `aria-describedby`, so Radix wires the description's own id. `LEAD_IN_ID` and the `<p>` are gone. The unit case for the old id is removed (8 cases now); the E2E accessible-description assertion covers it |
+| The accessible description in a browser | **Holds** | E2E `approve.spec.ts:232` (`toHaveAccessibleDescription(<the lead-in>)`) passes in the AC-1 case at all three widths |
+| Shard-3 desktop result for the case | **Pass** | Job 140282084446: `✓ 335 [desktop] approve.spec.ts:225:3 (13.5s)`. Mobile `✓ (8.4s)` (job 140282084423), tablet `✓ (18.5s)` (job 140282084292). No retry, no flaky mark |
+| Stage 11b ≤ 193,500 B | **192,558 B** | Job 140282084144: `PASS /estimates/[code] gzip 192,558`, the same as round 1 (+16 B against `2e11c44d`), 942 B under 193,500 B. Moving the lead-in into the dialog changed nothing in the first load: the dialog is a bare `import()` |
+| Unit and architecture | **Pass** | `approve-summary.test.ts (8)`, `estimate-review-architecture.test.ts (24)` |
+| Behaviour, NFR-002, escaping | Unchanged since round 1 | The diff touches only the lead-in's component, the summary markup and the E2E patterns |
+
+**Info, new:**
+- **QLT-819-06:** at tablet width every `approve.spec.ts` case in shard 2 took 18 to 25 s in this run, including unchanged ones (`:312` 24.7 s, `:349` 22.5 s), on a 22.1-minute shard. So it is the runner, not this PR (the AC-1 case was 8.3 s on master). The file is the one known to be flaky near its 30 s limit, so it is worth watching on the updated head, without widening any timeout.
+
+**Info, still open:** QLT-819-04 (an `as unknown as` cast in the unit test) and QLT-819-05 (the Customer row's `not.toBeEmpty()`), both optional.
