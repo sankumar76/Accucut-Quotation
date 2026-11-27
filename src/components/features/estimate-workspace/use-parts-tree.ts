@@ -100,11 +100,6 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
   const [loadFailed, setLoadFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(options.initialSelectedId ?? null);
-  // The island's callback, read when a change has gone through (a ref, so a new function each render never restarts anything).
-  const onWrote = useRef(options.onWrote);
-  useEffect(() => {
-    onWrote.current = options.onWrote;
-  });
   const [busy, setBusy] = useState(false);
   // A change has been open for more than `TREE_STATUS_DELAY_MS`: the screen says so.
   const [waiting, setWaiting] = useState(false);
@@ -168,7 +163,7 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
     if (inFlight.current) return false;
     const onDone = (answer: TreeAnswer): void => {
       done(answer);
-      onWrote.current?.();
+      options.onWrote?.();
     };
     inFlight.current = true;
     setBusy(true);
