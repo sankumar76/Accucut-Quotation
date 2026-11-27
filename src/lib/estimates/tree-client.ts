@@ -55,6 +55,9 @@ function toAnswer(body: unknown): TreeAnswer | null {
   return { nodes, nodeId: typeof nodeId === 'string' && nodeId !== '' ? nodeId : null };
 }
 
+/** The reader of the tree's answer, for a page that hands the same answer to the tree island as a prop (`part-form-seed.ts`). */
+export { toAnswer as parseTreeAnswer };
+
 /** The tree a 409 `TREE_CHANGED` carries, or null for any other refusal. */
 export function treeFromRefusal(refusal: Refusal): ReadonlyArray<PartItem> | null {
   return refusal.httpStatus === 409 && refusal.code === TREE_CHANGED_CODE ? toParts(refusal.body['tree']) : null;

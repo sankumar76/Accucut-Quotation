@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useFormDefinition } from '@/components/features/estimate-workspace/use-form-definition';
+import { usePartsTree } from '@/components/features/estimate-workspace/use-parts-tree';
 import { usePartValues, type UsePartValuesProps } from '@/components/features/estimate-workspace/use-part-form';
 import { TreatmentSeedContext, useTreatmentOptions } from '@/components/features/estimate-workspace/use-treatment-options';
 import type { FormField } from '@/lib/estimates/form-client';
@@ -16,7 +17,7 @@ import { PART_ID, partServer } from '../support/part-server';
  * typed: the seed is the start of the form, not its life. The hooks run with no DOM (`tests/support/hook-harness.ts`); the readers are the real ones, the server is an invented one. Invented ids only.
  */
 
-const loads = vi.hoisted(() => ({ form: vi.fn(), materials: vi.fn(), part: vi.fn(), treatments: vi.fn() }));
+const loads = vi.hoisted(() => ({ form: vi.fn(), materials: vi.fn(), part: vi.fn(), treatments: vi.fn(), tree: vi.fn() }));
 vi.mock('react', async () => (await import('../support/hook-harness')).reactHooks);
 vi.mock('@/lib/estimates/form-client', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/estimates/form-client')>();
@@ -31,6 +32,10 @@ vi.mock('@/lib/estimates/form-client', async (importOriginal) => {
     },
     savePartInputs: server.save,
   };
+});
+vi.mock('@/lib/estimates/tree-client', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/estimates/tree-client')>();
+  return { ...original, loadTree: (...args: unknown[]) => loads.tree(...args) };
 });
 vi.mock('@/lib/estimates/treatment-options-client', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/estimates/treatment-options-client')>();
@@ -48,15 +53,17 @@ const wireField = (id: string) => ({ ...field(id) });
 const FORM_BODY = { sections: [{ id: 's1', number: 1, name: 'Part details', shortName: 'Part', columnRange: 'A to C', fields: [wireField(FIELD_ID)] }], lastSavedAt: '2026-11-27T10:00:00.000Z' };
 const MATERIALS_BODY = { options: [{ id: 'm1', name: 'Invented steel', materialConsidered: 'Steel' }] };
 const TREATMENTS_BODY = { options: [{ id: '00000000-0000-4000-8000-0000000000a1', name: 'Invented coat' }] };
+const TREE_BODY = { nodes: [{ id: PART_ID, parentId: null, slNo: '1', label: 'Invented', nodeKind: 'MAIN_ASSEMBLY', completeness: 'PARTIAL', revision: 3 }] };
 const PART_BODY = { id: PART_ID, revision: 3, completeness: 'PARTIAL', inputs: [{ fieldId: FIELD_ID, value: '4.00' }], picture: null };
 
-const seed = (over: Partial<PartFormSeed> = {}): PartFormSeed => ({ estimateId: 'e', partId: PART_ID, form: FORM_BODY, part: PART_BODY, materials: MATERIALS_BODY, treatments: TREATMENTS_BODY, ...over });
+const seed = (over: Partial<PartFormSeed> = {}): PartFormSeed => ({ estimateId: 'e', partId: PART_ID, form: FORM_BODY, part: PART_BODY, materials: MATERIALS_BODY, treatments: TREATMENTS_BODY, tree: TREE_BODY, ...over });
 
 beforeEach(() => {
   for (const spy of Object.values(loads)) spy.mockReset();
   loads.form.mockResolvedValue({ status: 'ok', value: { sections: [], lastSavedAt: null } });
   loads.materials.mockResolvedValue({ status: 'ok', value: [] });
   loads.treatments.mockResolvedValue({ status: 'ok', value: [] });
+  loads.tree.mockResolvedValue({ status: 'ok', value: { nodes: [], nodeId: null } });
   partServer.reset({ a: '1.00' });
   treatmentContext.value = undefined;
 });
@@ -179,5 +186,37 @@ describe('useTreatmentOptions: the treatments', () => {
     seeded.render();
     await flush();
     expect(loads.treatments).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('usePartsTree: the parts tree of the Lead\'s island (DEF-131 stage 2T, DEF-141)', () => {
+  const treeWith = (given: PartFormSeed | undefined) => renderHook((estimateId: string) => usePartsTree(estimateId, undefined, { seed: given }), 'e');
+
+  it('starts with the rows of the seed, with the first row open and its revision, and reads nothing', async () => {
+    const view = treeWith(seed());
+    const first = view.render();
+    await flush();
+    expect(first.nodes).toEqual([{ id: PART_ID, parentId: null, slNo: '1', label: 'Invented', nodeKind: 'MAIN_ASSEMBLY', completeness: 'PARTIAL', revision: 3 }]);
+    expect(first.selected?.id).toBe(PART_ID);
+    expect(first.selected?.revision).toBe(3);
+    expect(loads.tree).not.toHaveBeenCalled();
+  });
+
+  it('reads from the server with no seed, with a seed of another estimate, with no tree in it and with a tree the reader refuses', async () => {
+    for (const given of [undefined, seed({ estimateId: 'another' }), seed({ tree: undefined }), seed({ tree: { nodes: 'x' } })]) {
+      loads.tree.mockClear();
+      const view = treeWith(given);
+      expect(view.render().nodes).toBeNull();
+      await flush();
+      expect(loads.tree).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('reads the tree again when asked (Try again, a change somewhere else): the seed is the start, not the life', async () => {
+    const view = treeWith(seed());
+    view.render().readAgain();
+    view.render();
+    await flush();
+    expect(loads.tree).toHaveBeenCalledTimes(1);
   });
 });

@@ -10,6 +10,7 @@ import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import { createClearedRefresh } from '@/lib/estimates/cleared-refresh';
 import { addressWithRow, joinRows, removedElsewhere, type OpenRow } from '@/lib/estimates/review-tree-edit';
 import { withoutFilled } from '@/lib/estimates/calculate-missing';
+import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
 import { reviewBlocked, reviewCalculating } from '@/lib/estimates/review-save-gate';
 import type { PartItem } from '@/lib/estimates/tree-client';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
@@ -61,9 +62,11 @@ export interface ReviewTreeEditorProps {
   readonly selectedSlNo: string | null;
   /** The selected row's revision as the server read it when the page was drawn: the block's first paint, until the tree is read. */
   readonly selectedRevision: number;
+  /** What the page read for the open row (DEF-141): the form's data and the parts tree. The island starts from it and reads none of it again: the form reuses the data the server drew it with, and the tree is not read until a change or a retry asks. */
+  readonly seed?: PartFormSeed | undefined;
 }
 
-export function ReviewTreeEditor({ estimateId, code, status, state, letters, nodes, warned, selectedSlNo, selectedRevision }: ReviewTreeEditorProps) {
+export function ReviewTreeEditor({ estimateId, code, status, state, letters, nodes, warned, selectedSlNo, selectedRevision, seed }: ReviewTreeEditorProps) {
   const router = useRouter();
   const [, startRefresh] = useTransition();
   const refresh = useCallback((): void => startRefresh(() => router.refresh()), [router]);
@@ -80,7 +83,7 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
   };
 
   const first = nodes.find((node) => node.slNo === selectedSlNo) ?? nodes[0] ?? null;
-  const tree = usePartsTree(estimateId, refresh, { initialSelectedId: first?.id ?? null, onWrote: wrote });
+  const tree = usePartsTree(estimateId, refresh, { initialSelectedId: first?.id ?? null, onWrote: wrote, seed });
   // The server said no to a change (the estimate is approved, quoted or ignored now): the page is drawn again, and it then draws the read-only tree and the words that say why.
   const refused = tree.problem?.kind === 'refused';
   useEffect(() => {
@@ -175,6 +178,7 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
             estimateId={estimateId}
             part={{ id: shown.id, slNo: shown.slNo, revision: shown.revision }}
             editable
+            seed={seed}
             nodes={items}
             missing={missingFields}
             onSaved={(saved) => {

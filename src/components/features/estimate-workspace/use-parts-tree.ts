@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { Outcome } from '@/lib/api-client';
 import { nodeKindLabel, type NodeKind } from '@/lib/estimate/node-kinds';
-import { addPart, deletePart, loadTree, movePart, treeFromRefusal, type PartItem, type TreeAnswer } from '@/lib/estimates/tree-client';
+import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
+import { addPart, deletePart, loadTree, movePart, parseTreeAnswer, treeFromRefusal, type PartItem, type TreeAnswer } from '@/lib/estimates/tree-client';
 import { addedAnnouncement, deletedAnnouncement, rowNameOf } from '@/lib/estimates/row-name';
 import { deleteGuardOf, partsRemoved, siblingsOf } from '@/lib/estimates/tree-moves';
 
@@ -93,10 +94,13 @@ export interface PartsTreeOptions {
   readonly initialSelectedId?: string | null;
   /** Told after every change this person made that went through (an add, a move, a delete): the island asks the page to be drawn again when that took the figures from current to cleared. */
   readonly onWrote?: () => void;
+  /** The page's seed (DEF-141): when it names this estimate and carries a tree the reader accepts, the tree starts from it and is not read; every later read (Try again, a 409, a change) goes to the server as ever. */
+  readonly seed?: PartFormSeed | undefined;
 }
 
 export function usePartsTree(estimateId: string, onServerIgnored?: () => void, options: PartsTreeOptions = {}) {
-  const [nodes, setNodes] = useState<ReadonlyArray<PartItem> | null>(null);
+  const [seeded] = useState(() => (options.seed !== undefined && options.seed.estimateId === estimateId ? parseTreeAnswer(options.seed.tree) : null));
+  const [nodes, setNodes] = useState<ReadonlyArray<PartItem> | null>(seeded === null ? null : seeded.nodes);
   const [loadFailed, setLoadFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(options.initialSelectedId ?? null);
@@ -109,7 +113,7 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
   const openRequests = useRef(new Set<AbortController>());
   const gone = useRef(false);
   // True once the tree has been read, so a later read that fails is told (the tree on screen may be out of date) and not left silent.
-  const treeRead = useRef(false);
+  const treeRead = useRef(seeded !== null);
   const [problem, setProblem] = useState<TreeProblem | null>(null);
   const [announcement, setAnnouncement] = useState('');
   // The delete the dialog is about, and whether it is open: the dialog keeps its words while it fades out, so the target is not cleared on close.
@@ -121,6 +125,7 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
   const [movedFocus, setMovedFocus] = useState<{ readonly id: string } | null>(null);
 
   useEffect(() => {
+    if (seeded !== null && attempt === 0) return undefined;
     let cancelled = false;
     void loadTree(estimateId).then((outcome) => {
       if (cancelled) return;
@@ -135,7 +140,7 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
     return () => {
       cancelled = true;
     };
-  }, [estimateId, attempt]);
+  }, [estimateId, attempt, seeded]);
 
   useEffect(() => {
     gone.current = false;

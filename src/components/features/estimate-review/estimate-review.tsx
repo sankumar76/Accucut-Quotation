@@ -244,6 +244,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
             warned={[...warned]}
             selectedSlNo={selected === null ? null : selected.slNo}
             selectedRevision={selectedRevision ?? 0}
+            seed={seed}
           >
             {columns}
           </ReviewEditShell>

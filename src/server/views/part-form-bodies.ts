@@ -4,7 +4,7 @@ import { inputEntriesOf } from '@/lib/estimate/part-view';
 
 import { formResponseSchema } from './schemas/form';
 import { materialOptionsResponseSchema, treatmentOptionsResponseSchema } from './schemas/options';
-import { nodeDetailSchema } from './schemas/tree';
+import { nodeDetailSchema, partsTreeSchema } from './schemas/tree';
 
 /**
  * The four answers the part form reads (`GET /estimates/{id}/form`, `GET /estimates/{id}/nodes/{nodeId}`, `GET /options/materials`, `GET /options/treatments`), built **in one place**, so the four routes and the
@@ -28,4 +28,9 @@ export function materialOptionsBody(options: z.input<typeof materialOptionsRespo
 
 export function treatmentOptionsBody(options: z.input<typeof treatmentOptionsResponseSchema>['options']): z.output<typeof treatmentOptionsResponseSchema> {
   return treatmentOptionsResponseSchema.parse({ options });
+}
+
+/** The parts tree as `GET /estimates/{id}/tree` answers it: the rows in reading order, with no figure (NFR-002). The route and the Lead's review page (the tree island's seed) both build it here. */
+export function treeBody(tree: ReadonlyArray<z.input<typeof partsTreeSchema>['nodes'][number]>): z.output<typeof partsTreeSchema> {
+  return partsTreeSchema.parse({ nodes: [...tree] });
 }

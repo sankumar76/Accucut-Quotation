@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { readListBodies, readPartFormBodies, seedOf, type SeedServices } from '@/app/(portal)/estimates/[code]/part-form-seed';
 import { parseForm, parseMaterials, parsePartInputs } from '@/lib/estimates/form-client';
+import { parseTreeAnswer } from '@/lib/estimates/tree-client';
 import { parseTreatmentOptions } from '@/lib/estimates/treatment-options-client';
 import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody } from '@/server/views/part-form-bodies';
 
@@ -38,6 +39,7 @@ const { GET: getForm } = await import('@/app/api/v1/estimates/[id]/form/route');
 const { GET: getNode } = await import('@/app/api/v1/estimates/[id]/nodes/[nodeId]/route');
 const { GET: getMaterials } = await import('@/app/api/v1/options/materials/route');
 const { GET: getTreatments } = await import('@/app/api/v1/options/treatments/route');
+const { GET: getTree } = await import('@/app/api/v1/estimates/[id]/tree/route');
 
 const estimate = () => defined(harness.estimateWorld.estimates[0]);
 const request = (path: string): Request => new Request(`${ORIGIN}${path}`, { method: 'GET', headers: { origin: ORIGIN } });
@@ -82,6 +84,19 @@ describe('the seed is the routes\' own answers (DL-455 2 (a))', () => {
     expect(JSON.parse(JSON.stringify(row.part))).toEqual(await nodeResponse.json());
     expect(JSON.parse(JSON.stringify(lists.materials))).toEqual(await materialsResponse.json());
     expect(JSON.parse(JSON.stringify(lists.treatments))).toEqual(await treatmentsResponse.json());
+  });
+
+  it.each(['LEAD', 'ADMIN'] as const)('as %s the tree body of the page equals what GET /tree answers, as JSON, and the tree reader accepts it (the island\'s seed)', async (role) => {
+    harness.signInAs(role);
+    const id = estimate().id;
+    const viewer = { id: harness.idOf[role], role };
+    const response = await getTree(request(`/api/v1/estimates/${id}/tree`), forEstimate(id));
+    expect(response.status).toBe(200);
+    const row = defined(await readPartFormBodies(services(), viewer, id, id));
+    expect(JSON.parse(JSON.stringify(row.tree))).toEqual(await response.json());
+    expect(parseTreeAnswer(row.tree)).not.toBeNull();
+    expect(Object.keys(defined(seedOf(id, id, defined(await readListBodies(services())), row, true))).sort()).toContain('tree');
+    expect(Object.keys(defined(seedOf(id, id, defined(await readListBodies(services())), row))).sort()).not.toContain('tree');
   });
 
   it('the form reads each body with its own reader, and a body the readers refuse is not a seed', async () => {
@@ -148,9 +163,10 @@ describe('getPartForm is getForm and getNode in one read (the combined read of D
   it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('answers exactly what getForm and getNode answer, as %s', async (role) => {
     const id = estimate().id;
     const viewer = { id: harness.idOf[role], role };
-    const [form, node, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getPartForm(viewer, id, id)]);
+    const [form, node, tree, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getTree(viewer, id), harness.estimateService.getPartForm(viewer, id, id)]);
     expect(asJson(both.form)).toEqual(asJson(form));
     expect(asJson(both.node)).toEqual(asJson(node));
+    expect(asJson(both.tree)).toEqual(asJson(tree));
   });
 
   it('answers the same in every state of the estimate, and with a value typed into the part', async () => {
@@ -161,9 +177,10 @@ describe('getPartForm is getForm and getNode in one read (the combined read of D
     defined(harness.estimateWorld.nodes[0]).inputs = { [typedField.id]: '3' };
     for (const status of ['DRAFT', 'PREPARED', 'APPROVED'] as const) {
       estimate().status = status;
-      const [form, node, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getPartForm(viewer, id, id)]);
+      const [form, node, tree, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getTree(viewer, id), harness.estimateService.getPartForm(viewer, id, id)]);
       expect(asJson(both.form)).toEqual(asJson(form));
       expect(asJson(both.node)).toEqual(asJson(node));
+    expect(asJson(both.tree)).toEqual(asJson(tree));
     }
   });
 
@@ -178,9 +195,10 @@ describe('getPartForm is getForm and getNode in one read (the combined read of D
           estimate().status = status;
           estimate().ignoredAt = ignored ? new Date('2026-11-27T10:00:00.000Z') : null;
           const viewer = { id: harness.idOf[role], role };
-          const [form, node, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getPartForm(viewer, id, id)]);
+          const [form, node, tree, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getTree(viewer, id), harness.estimateService.getPartForm(viewer, id, id)]);
           expect(asJson(both.form), `${role} ${status} ignored=${String(ignored)}`).toEqual(asJson(form));
           expect(asJson(both.node), `${role} ${status} ignored=${String(ignored)}`).toEqual(asJson(node));
+          expect(asJson(both.tree), `${role} ${status} ignored=${String(ignored)}`).toEqual(asJson(tree));
         }
       }
     }
@@ -205,9 +223,10 @@ describe('getPartForm is getForm and getNode in one read (the combined read of D
     estimate().status = 'APPROVED';
     estimate().currentCalculationId = '00000000-0000-4000-8000-0000000000c1';
     estimate().configVersionId = '00000000-0000-4000-8000-0000000000c2';
-    const [form, node, both] = await Promise.all([service.getForm(lead, id), service.getNode(lead, id, id), service.getPartForm(lead, id, id)]);
+    const [form, node, tree, both] = await Promise.all([service.getForm(lead, id), service.getNode(lead, id, id), service.getTree(lead, id), service.getPartForm(lead, id, id)]);
     expect(asJson(both.form)).toEqual(asJson(form));
     expect(asJson(both.node)).toEqual(asJson(node));
+    expect(asJson(both.tree)).toEqual(asJson(tree));
     const labelsOf = (view: typeof form): string[] => view.sections.flatMap((section) => section.fields).map((field) => field.label);
     expect(labelsOf(both.form)).toContain('Frozen invented label');
     expect(labelsOf(await harness.estimateService.getForm(lead, id))).not.toContain('Frozen invented label');
