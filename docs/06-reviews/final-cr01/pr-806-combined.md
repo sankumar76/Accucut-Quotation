@@ -156,8 +156,34 @@ Run 45928301287 (CI, at `a701377e`) was queued when this review was published. *
 
 n/a (round 1; QLT-806-01 and -02 were raised to the orchestrator at `a691e69e` before publication and are fixed in `a701377e`).
 
+## Round 2 (re-review of `a701377e..fabe1d09`, 2026-11-30) — APPROVE WITH COMMENTS, on the condition of a fully green run of record
+
+**Scope.**
+- One commit, `fabe1d09`. Source: `review-page.tsx` (the `catch` in `revisionOf`) and `review-form.tsx` (`reviewNotice` extracted, the same logic). Tests: `part-server.ts` (`lockNextSave`), `use-part-values.test.ts`, `review-form-notice.test.ts`, `review-page-revision.test.ts`.
+- The branch is 0 behind master.
+- PR review [6082793517](https://github.com/sankumar76/Accucut-Quotation/pull/806#pullrequestreview-6082793517); a reply in each of the five round-1 threads; label `review:quality-approved`.
+
+**Checks run.**
+- The 3 new or changed test files at `fabe1d09`, in a temporary scratchpad worktree (since removed, and not modified when removed): **45 passed**.
+- **Mutation 1:** `revisionOf` back to `return 0` for every error. `review-page-revision.test.ts` **fails 2 of 4**.
+- **Mutation 2:** the `LOCKED_CODES` branch disabled (`if (false && …)`). `use-part-values.test.ts` **fails 2 of 38**, both 409 cases.
+- The new tests fail without the code, so they are real.
+
+| Finding | Round-2 status | Evidence |
+|---------|----------------|----------|
+| QLT-806-03 (Major) | **Fixed** | Both codes are covered (`ESTIMATE_APPROVED_IS_LOCKED`, `ESTIMATE_NOT_EDITABLE`): `onLocked` is called once, the typed text stays (`2.00`), there is no problem and no error, the gate is not dirty, nothing is stored, and after the page turns the block read-only (`editable` false) no second save is sent. The Engineer's form, without `onLocked`, keeps the ordinary refused save (gate dirty). `reviewNotice('locked', …)` gives `FORM_LOCKED` ("This estimate can no longer be changed."). The PR body's ED-12 sentence is corrected. Mutation 2 caught |
+| QLT-806-06 (Minor) | **Fixed** | 0 only for `NotFoundError`; any other fault is rethrown. It reaches `src/app/(portal)/estimates/[code]/error.tsx`, which renders the existing `RouteLoadError` with `ESTIMATE_LOAD_ERROR_HEADER`, `ESTIMATE_LOAD_ERROR_TITLE` and `ESTIMATE_LOAD_ERROR_BODY`. Mutation 1 caught |
+| QLT-806-04, -05 (Minor) | Open, hardening window | as ruled in round 1 |
+| QLT-806-07, -08; SEC-806-01 to -03 (Info) | Stand | — |
+| QLT-806-09 (new, Info) | Open | `LOCKED_CODES` is not pinned to the exported code constants: the test and the hook use the same literals, so a server-side rename would pass both. `ReviewForm` dropping `Autosave` and `LeaveGuard` once refused is not rendered in a test. Both are cheap; neither holds the merge |
+
+**Condition (stands).** The run of record 45929518610 (queued at publication) must be fully green. If `estimate-review.spec.ts:102` (AC-2), `:189` (the Admin case) or `:201` (AC-6) fail on desktop again, their error text decides whether the cause is this PR. Stage 11b is expected at 192,747 B: `src` changed only in a server-side `catch` and in the lazily loaded `review-form.tsx`.
+
+**Open after round 2:** Blocker 0, Critical 0, Major 0, Minor 2 (QLT-806-04, -05), Info 6 (QLT-806-07, -08, -09; SEC-806-01 to -03). **Verdict at `fabe1d09`: APPROVE WITH COMMENTS**, on the condition above.
+
 ## Hand-off
 - Status: COMPLETE
 - GitHub: PR review [6082714446](https://github.com/sankumar76/Accucut-Quotation/pull/806#pullrequestreview-6082714446) (COMMENT, 5 inline comments, at `a701377e`); label `review:quality-changes-requested`
 - Verdict at `a701377e`: REQUEST CHANGES (Blocker 0, Critical 0, Major 1, Minor 3, Info 5); no §9 stop. Before merge: QLT-806-03 (a unit test) and a fully green run of record.
 - Recommended next agent: developer (QLT-806-03, then -06), then a short re-review of the new diff, then orchestrator: merge on a fully green run of record.
+- **Round 2 (`fabe1d09`):** APPROVE WITH COMMENTS (Blocker 0, Critical 0, Major 0, Minor 2, Info 6). QLT-806-03 and -06 are fixed and mutation-checked. Condition: the run of record 45929518610 fully green, with Stage 11b at or under 193,500 B.
