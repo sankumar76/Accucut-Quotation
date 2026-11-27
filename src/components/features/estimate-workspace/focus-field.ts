@@ -30,8 +30,11 @@ export function focusFieldWhenPresent(partId: string, fieldId: string): void {
   });
 }
 
-/** Where the focus is when the person has already moved on from a tap on a row: in the drawer opened again, in a menu or in a dialog. */
-const MOVED_ON_SELECTOR = '[role="menu"], [role="dialog"], [role="alertdialog"]';
+/**
+ * Where the focus is when the person has already moved on from a tap on a row: in the drawer opened again, in a menu or in a dialog that is OPEN (`data-state="open"`). The drawer that the tap is closing is still a dialog
+ * for a moment, with `data-state="closed"`, and the focus may still be in it: that is not moving on, and the title takes the focus.
+ */
+const MOVED_ON_SELECTOR = '[role="menu"][data-state="open"], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
 
 /**
  * A tap on a row in the phone drawer opens its form (AQP-490, DEF-133; UX ruling 2026-11-26 item 3 point 7: "tapping the row closes the drawer and shows the form"): the form's title, not a field, takes the focus once that part's

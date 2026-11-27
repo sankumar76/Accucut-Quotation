@@ -102,6 +102,17 @@ describe('focusFieldWhenPresent (STORY-05.09, unchanged by AQP-339)', () => {
   });
 });
 
+/** An element with the focus that lies inside one layer (a role and a data-state), answering `closest` the way the browser does for a list of `[role="x"]` and `[role="x"][data-state="y"]` selectors. */
+const insideLayer = (role: string, state: string): { closest: (selector: string) => object | null } => ({
+  closest: (selector) =>
+    selector.split(',').some((part) => {
+      const found = /^\[role="(\w+)"\](?:\[data-state="(\w+)"\])?$/.exec(part.trim());
+      return found !== null && found[1] === role && (found[2] === undefined || found[2] === state);
+    })
+      ? {}
+      : null,
+});
+
 describe('focusFormTitleWhenPresent (AQP-490, DEF-133)', () => {
   const TITLE_SELECTOR = `[${PART_FORM_ATTRIBUTE}][data-part-id="${PART_ID}"] #${PART_FORM_TITLE_ID}`;
 
@@ -131,7 +142,7 @@ describe('focusFormTitleWhenPresent (AQP-490, DEF-133)', () => {
     const focused: string[] = [];
     present = control(focused, 'title');
     vi.stubGlobal('document', {
-      activeElement: { closest: () => ({}) },
+      activeElement: insideLayer('menu', 'open'),
       querySelector: (selector: string) => {
         queries.push(selector);
         return selector === TITLE_SELECTOR ? present : null;
@@ -141,6 +152,18 @@ describe('focusFormTitleWhenPresent (AQP-490, DEF-133)', () => {
     vi.advanceTimersByTime(RETRY_MILLISECONDS * MAX_ATTEMPTS * 2);
     expect(focused).toEqual([]);
     expect(queries).toEqual([]);
+  });
+
+  it('focus still inside the closing drawer: the title takes the focus (only an OPEN menu or dialog is a place the person moved on to)', () => {
+    const focused: string[] = [];
+    present = control(focused, 'title');
+    // The drawer that the tap is closing: a dialog whose state is already "closed". The selector must not find it.
+    vi.stubGlobal('document', {
+      activeElement: insideLayer('dialog', 'closed'),
+      querySelector: (selector: string) => (selector === TITLE_SELECTOR ? present : null),
+    });
+    focusFormTitleWhenPresent(PART_ID);
+    expect(focused).toEqual(['title']);
   });
 
   it('still takes the focus when it is on the page or on something that is not in a menu or a dialog', () => {
