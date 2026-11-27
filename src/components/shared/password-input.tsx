@@ -58,7 +58,7 @@ export function PasswordInput({ className, ...props }: PasswordInputProps) {
         type="button"
         variant="ghost"
         size="icon"
-        className="absolute inset-y-0 right-0 h-auto w-(--control-h) rounded-l-none rounded-r-md border-y border-r border-transparent bg-clip-padding peer-aria-invalid:border-y-2 peer-aria-invalid:border-r-2 compact-fine:w-(--compact-field-h)"
+        className="absolute inset-y-0 right-0 h-auto w-(--control-h) rounded-l-none rounded-r-md border-y border-r border-transparent bg-clip-padding disabled:border-transparent peer-aria-invalid:border-y-2 peer-aria-invalid:border-r-2 compact-fine:w-(--compact-field-h)"
         disabled={props.disabled}
         aria-pressed={shown}
         aria-label={shown ? 'Hide password' : 'Show password'}

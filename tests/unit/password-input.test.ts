@@ -99,6 +99,8 @@ describe('the review of AQP-787 (SEC-787-01, QLT-787-01 to QLT-787-04)', () => {
 
   it('disables the button with the field, so a disabled field has no live eye', () => {
     expect(mount({ disabled: true }).parts().button.props['disabled']).toBe(true);
+    // QLT-787-07: Button's `disabled:border-border` would draw a 1 px divider inside the disabled field; the eye keeps its border transparent when disabled too.
+    expect(mount({ disabled: true }).parts().button.props['className']).toContain('disabled:border-transparent');
     expect(mount().parts().button.props['disabled']).toBeFalsy();
   });
 
