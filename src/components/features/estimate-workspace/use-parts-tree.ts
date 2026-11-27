@@ -85,13 +85,21 @@ async function withinLimit<T>(run: (signal: AbortSignal) => Promise<T>, open: Se
  * What the parts tree holds and what its buttons do (STORY-05.02 AC-1 to AC-6). The tree is read when the panel appears. Every change is one request, one at a time
  * (`busy`), and the screen shows what the server answers: the new tree, and for a part or a count that changed under the person the fresh tree with a notice, so a
  * second edit never overwrites the first (AC-6). A change is announced in words for a screen reader (`announcement`: "Part renumbered to 1.2"). The part
- * selected is the one the buttons are for; until one is chosen it is the first. Focus is not moved here: the tree moves it with the arrow keys.
+ * selected is the one the buttons are for; until one is chosen it is `options.initialSelectedId` (the review's address), else the first. Focus is not moved here: the tree moves it with the arrow keys.
  */
-export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
+/** What only the review's editing island asks of the hook (DEF-131 stage 2T). */
+export interface PartsTreeOptions {
+  /** The row the page opened on (the review's `?row=`): a row the tree does not hold falls back to the first, as before. */
+  readonly initialSelectedId?: string | null;
+  /** Told after every change this person made that went through (an add, a move, a delete): the island asks the page to be drawn again when that took the figures from current to cleared. */
+  readonly onWrote?: () => void;
+}
+
+export function usePartsTree(estimateId: string, onServerIgnored?: () => void, options: PartsTreeOptions = {}) {
   const [nodes, setNodes] = useState<ReadonlyArray<PartItem> | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(options.initialSelectedId ?? null);
   const [busy, setBusy] = useState(false);
   // A change has been open for more than `TREE_STATUS_DELAY_MS`: the screen says so.
   const [waiting, setWaiting] = useState(false);
@@ -151,8 +159,12 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
    * While a change is on its way the buttons that would start another are `aria-disabled` (`TreePanel`, `RowActions`), so a press is not offered; after `TREE_STATUS_DELAY_MS` the screen says what is going on
    * (`waiting`, and the same words in the live line). A call that still gets here during that time (a menu choice already made) is refused with that line on screen.
    */
-  async function change(send: (signal: AbortSignal) => Promise<Outcome<TreeAnswer>>, onDone: (answer: TreeAnswer) => void, landed: Landed): Promise<boolean> {
+  async function change(send: (signal: AbortSignal) => Promise<Outcome<TreeAnswer>>, done: (answer: TreeAnswer) => void, landed: Landed): Promise<boolean> {
     if (inFlight.current) return false;
+    const onDone = (answer: TreeAnswer): void => {
+      done(answer);
+      options.onWrote?.();
+    };
     inFlight.current = true;
     setBusy(true);
     setProblem(null);
@@ -323,6 +335,8 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
     nodes,
     loadFailed,
     selected,
+    /** The row that was chosen, by its ID, even before the tree is read (the island's first paint draws the page's rows). */
+    selectedId,
     busy,
     waiting,
     movedFocus,

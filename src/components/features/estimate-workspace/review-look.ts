@@ -13,6 +13,11 @@ export interface PartReview {
   readonly showing: string;
   /** The figures are current as the page was drawn (DEF-131 stage 2): a save that changes an input then clears them, and the island asks the page to be drawn again, once. */
   readonly figuresCurrent: boolean;
+  /**
+   * False when the open row changed without a press on a row of the tree (a row just added, the neighbour after a delete, the first row after one was removed by someone else): the title does not take the focus and the tree
+   * does not fold, because the person is working in the tree and its own focus rules say where the focus goes. Absent (true) for the read-only page, where a row is only ever chosen by a press.
+   */
+  readonly byPress?: boolean;
   /** A save changed the part (DEF-131 stage 2): the island asks the page to be drawn again when that took the figures from current to cleared. Only the Lead's and the Admin's editable form gives one (`ReviewForm`, client code: the server hands none). */
   readonly onWrote?: (() => void) | undefined;
   /** A save was refused because the estimate was approved or taken out of the editable states elsewhere (ED-12): the form turns read-only. Given by `ReviewForm` alone. */

@@ -296,14 +296,21 @@ test.describe('AC-1, AC-4, AC-5, AC-8, AC-10: ignore, then restore, with the key
 
     await page.keyboard.press('Tab');
     await expect(restoreSubmitOf(restoreDialog)).toBeFocused();
+    // Observe-only timestamps (nothing is asserted on them): how long the restored page takes to be drawn, and then to be editable (the editing island fetched and swapped in), as a person waits for it.
+    const pressedAt = Date.now();
     await page.keyboard.press('Enter');
     await expect(restoreDialog).toHaveCount(0);
     await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
     await expect(announcerOf(page)).toHaveText(`${code} restored. It is back as Prepared, in Open.`);
     await expect(noticeOf(page)).toHaveCount(0);
     await expect(actionBar(page)).toBeVisible();
+    const drawnAt = Date.now();
     await expect(badgeOf(page)).toHaveAttribute('data-status', 'PREPARED');
     expect(restores).toBe(1);
+    await expect(page.getByRole('button', { name: 'Add main assembly' })).toBeVisible();
+    const editableAt = Date.now();
+    // eslint-disable-next-line no-console -- the measurement of AQP-488 (product cost of the island after Restore), read from the CI log
+    console.log(`[AQP-488 restore timing] ${testInfo.project.name}: page drawn ${String(drawnAt - pressedAt)} ms after the press, tree controls ${String(editableAt - drawnAt)} ms after that`);
     expect(await readLayer(owner.id)).toMatchObject({
       status: 'PREPARED',
       ignoredAtSet: false,

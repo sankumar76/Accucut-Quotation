@@ -144,7 +144,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
   const titleElement = (): HTMLElement | null => title.current ?? document.getElementById(TITLE_ID);
   // A row was chosen on the review (RO-2): once the form shows, the title takes the focus. Not on the first paint of the page, and never from a form the Engineer uses.
   const shown = values.stored.status === 'ready';
-  const chosen = review?.chosen === true;
+  const chosen = review?.chosen === true && review.byPress !== false;
   useEffect(() => {
     if (chosen && shown) titleElement()?.focus();
   }, [chosen, shown]);

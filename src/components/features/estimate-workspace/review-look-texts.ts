@@ -11,4 +11,4 @@ export const NOT_ENTERED = 'Not entered';
  * that turned read-only because the server says the estimate was ignored while the person typed (the page's own words for an ignored estimate).
  */
 export const SAVED_CLEARED_LINE = 'Saved. Every calculated figure is cleared. Press Recalculate to see them again.';
-export const REVIEW_IGNORED_NOTICE = 'Read-only while this RFQ is ignored. Restore it to change an input.';
+export const REVIEW_IGNORED_NOTICE = 'Read-only while this RFQ is ignored. Restore it to change an input or the parts tree.';

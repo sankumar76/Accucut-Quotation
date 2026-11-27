@@ -2,12 +2,13 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 
 import { defined } from '../support/defined';
 
-import { createDisposableUser, E2E_ADMIN, useFreshAddress } from './support/auth';
+import { createDisposableUser, E2E_ADMIN, readEstimateState, useFreshAddress } from './support/auth';
 import { controlIdFor } from '../../src/components/features/estimate-workspace/field-ids';
 import { calculateWithoutThePage, engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
 import { ignoreThroughTheApi } from './support/ignored';
 import { control } from './support/part-form';
+import { addMainAssemblyButton, chooseRow, CLEARED_STATUS, countPageReads, expectTreeControls, readTreeThrough, reviewButton, reviewRow, slNumbersOf } from './support/review-tree';
 import { DEVELOPMENT_URL } from './support/servers';
 import { expectLinkTarget, isTouchLayout } from './support/touch-link';
 
@@ -97,6 +98,48 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     for (const letter of ['BL', 'BN', 'BO']) await expect(tiles(page).getByText(`Excel column ${letter}`, { exact: true })).toHaveCount(1);
     const bl = tiles(page).locator('p').filter({ hasText: RUPEES });
     await expect(bl).toHaveCount(1);
+
+    // DEF-131 stage 2T (ruling 2026-11-27 4.7; ED-18, ED-21, ED-23, ED-24, ED-30, ED-33): a Lead changes the parts of a Prepared estimate. The tree has its controls once the island has read it and no resize handle; "Add main assembly"
+    // adds a row last, opens it, gives its link the focus and says so; every figure is cleared, the page is read once and the change is said once; deleting it asks first, with the safe choice focused and no password; the
+    // estimate stays Prepared.
+    await expectTreeControls(page);
+    const pageReads = countPageReads(page);
+    await addMainAssemblyButton(page).click();
+    await expect(reviewRow(page, '2')).toHaveAttribute('aria-current', 'true');
+    await expect(reviewRow(page, '2')).toBeFocused();
+    await expect(page.getByRole('status').filter({ hasText: 'Added 2 Main Assembly. Type a Description to name it.' })).toHaveCount(1);
+    await expect(page.getByRole('status').filter({ hasText: CLEARED_STATUS })).toHaveCount(1);
+    await expect(tiles(page).getByText(RUPEES)).toHaveCount(0);
+    await expect(page.locator('#review-calculate')).toHaveText('Recalculate');
+    await expect(page.locator('#review-approve')).toBeDisabled();
+    await expect(page.locator('#review-download')).toBeDisabled();
+    await expect.poll(pageReads).toBe(1);
+
+    await chooseRow(page, '2');
+    await reviewButton(page, 'Delete', '2').click();
+    const dialog = page.getByRole('alertdialog', { name: /^Delete 2 .+?$/ });
+    await expect(dialog.getByRole('button', { name: 'Keep it' })).toBeFocused();
+    await expect(dialog.getByRole('textbox')).toHaveCount(0);
+    // ED-26 (4.7 (d) 4): while the dialog is open another session of the same Lead adds a Part under the row. The Delete that was asked for one row is refused, nothing is deleted, the tree is read again and the notice says so;
+    // the next delete names the two rows and removes them in one step.
+    const rowTwo = defined((await readTreeThrough(page.request, owner.id)).find((row) => row.slNo === '2'));
+    const added = await page.request.post(`/api/v1/estimates/${owner.id}/nodes`, { headers: { origin: DEVELOPMENT_URL }, data: { parentId: rowTwo.id, nodeKind: 'PART' } });
+    expect(added.status(), 'another session adds a Part under the row').toBe(201);
+    await dialog.getByRole('button', { name: 'Delete row' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText('The parts were changed by someone else. The tree has been refreshed. Check it and try again.')).toBeVisible();
+    expect(await slNumbersOf(page)).toEqual(['1', '2', '2.1']);
+    await chooseRow(page, '2');
+    await reviewButton(page, 'Delete', '2').click();
+    await dialog.getByRole('button', { name: 'Delete 2 rows' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText('2 rows deleted')).toHaveCount(1);
+    await expect(reviewRow(page, '2')).toHaveCount(0);
+    await expect(reviewRow(page, '1')).toBeFocused();
+    // The figures were already cleared, so the second change reads the page no more and says nothing more (once per change from current to cleared).
+    expect(pageReads()).toBe(1);
+    await expect(page.getByRole('status').filter({ hasText: CLEARED_STATUS })).toHaveCount(1);
+    expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
   });
 
   test('AC-2: every row shows its own figure with its count beside it, and the legend says so', async ({ page }, testInfo) => {
@@ -122,12 +165,14 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(inputs.locator('#part-form-title')).toContainText('1');
     await expect(form).toHaveAccessibleName(/^1/);
     await expect(inputs).toContainText('You can correct inputs. Any change clears every calculated figure; press Recalculate to see them again.');
-    await expect(inputs.locator('[data-row-line]')).toContainText(/^This row: ₹ [\d,]+\.\d{2} \(B[A-Z]\) · \$ [\d,]+\.\d{2} · € [\d,]+\.\d{2} · count [\d,.]+ nos/);
+    await expect(inputs.locator('[data-row-line]')).toContainText(/^This row: ₹ [\d,]+\.\d{2} \(B[A-Z]\) · \$ ([\d,]+\.\d{2}|—) · € ([\d,]+\.\d{2}|—) · count [\d,.]+ nos/);
     await expect(inputs).not.toContainText('Every field is needed to Calculate');
     // The Engineer's Save draft and Calculate are not on this form: the page's own Recalculate is the one way to calculate.
     await expect(inputs.getByRole('button', { name: /^(Save draft|Calculate)$/ })).toHaveCount(0);
     // RO-3 (QLT-800-04): each value the part holds is the value shown, compared by field ID: the part is read as the Lead through the same route the form uses, and every box (a number, a text) shows what it holds. A number is
     // shown as SCR-05 shows it after saving (two decimals), so numbers are compared as numbers.
+    // The fields arrive after the form's code and its definition: the boxes are compared once they are there.
+    await expect(form.getByRole('textbox', { name: /Length/ }).first()).toBeVisible();
     const held = await page.evaluate(async (id) => {
       const response = await fetch(`/api/v1/estimates/${id}/nodes/${id}`);
       return { status: response.status, inputs: ((await response.json()) as { inputs: ReadonlyArray<{ fieldId: string; value: string }> }).inputs };
@@ -193,7 +238,39 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(tiles(page)).toContainText('File cell BL2');
     // The Admin sees the same inputs block, read-only (AQP-488).
     await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
-    await expect(page.locator('#row-inputs')).toContainText('Read-only.');
+    await expect(page.locator('#row-inputs')).toContainText('You can correct inputs.');
+
+    // ED-20, ED-23, ED-35 (ruling 2026-11-27 4.7): an Admin works the tree with the keyboard alone after the first press. The "+" of a Main Assembly offers exactly the kinds that may go under it, a Part is added with the arrows and
+    // Enter, and "-" asks first (no password) and removes the row and the Part under it in one step. (The move by the handle, ED-22, is the Engineer's own control and is held by `estimate-tree.spec.ts`; this case is at the limit of its time.)
+    await expectTreeControls(page);
+    await addMainAssemblyButton(page).click();
+    await expect(reviewRow(page, '2')).toBeFocused();
+    // The menu opens with its first item highlighted and the arrows move down it (Sub-Assembly, Part or Sub-part, Fastener): the keyboard alone, with no mouse and no focus call on an item.
+    const addUnder = async (slNo: string, steps: number, kind: RegExp): Promise<void> => {
+      await reviewButton(page, 'Add under', slNo).focus();
+      await page.keyboard.press('Enter');
+      const menu = page.getByRole('menu');
+      if (slNo === '2') {
+        await expect(menu.getByRole('menuitem')).toHaveCount(3);
+        for (const kindName of [/^Sub-Assembly/, /^(Part|Sub-part)/, /^Fastener/]) await expect(menu.getByRole('menuitem', { name: kindName })).toHaveCount(1);
+      }
+      await expect(menu.getByRole('menuitem').first()).toBeFocused();
+      for (let step = 0; step < steps; step += 1) await page.keyboard.press('ArrowDown');
+      await expect(menu.getByRole('menuitem', { name: kind })).toBeFocused();
+      await page.keyboard.press('Enter');
+    };
+    await addUnder('2', 1, /^Part/);
+    await expect(page.getByRole('status').filter({ hasText: /^Added 2.1 Part. Type a Description to name it./ })).toHaveCount(1);
+    await reviewButton(page, 'Delete', '2').focus();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('alertdialog', { name: /^Delete 2 .+?$/ });
+    await expect(dialog.getByRole('button', { name: 'Keep it' })).toBeFocused();
+    await expect(dialog.getByRole('textbox')).toHaveCount(0);
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Enter');
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByText('2 rows deleted')).toHaveCount(1);
+    expect(await slNumbersOf(page)).toEqual(['1']);
   });
 });
 
@@ -234,7 +311,8 @@ test.describe('AC-6: not calculated', () => {
     await expect(inputs.locator('[data-row-line]')).toContainText(/^This row: — · count /);
     await expect(inputs.getByRole('status').filter({ hasText: 'Showing the inputs of' })).toHaveCount(0);
     await treePanel(page).locator('a[href$="?row=2#row-inputs"]').click();
-    await expect(page).toHaveURL(/\?row=2#row-inputs$/);
+    // A Draft is editable, so the row is chosen in place (the island writes `?row=` with no navigation and no hash); the link keeps its address all the same.
+    await expect(page).toHaveURL(/\?row=2(#row-inputs)?$/);
     await expect(treePanel(page).locator('a[aria-current="true"]')).toHaveAttribute('href', /\?row=2#row-inputs$/);
     await expect(inputs.locator('#part-form-title')).toContainText('2');
     await expect(page.locator('#part-form-title')).toBeFocused();
@@ -260,8 +338,9 @@ test.describe('AC-6: not calculated', () => {
     await length.fill('12.5');
     expect(await ignoreThroughTheApi(page, owner.id, 'Not taken forward, an invented reason.')).toBe(200);
     await length.blur();
-    await expect(inputs).toContainText('Read-only while this RFQ is ignored. Restore it to change an input.');
-    await expect(length).toHaveValue('12.5');
+    await expect(inputs).toContainText('Read-only while this RFQ is ignored. Restore it to change an input or the parts tree.');
+    // The box shows what was typed, formatted as the form does when a field is left.
+    await expect(length).toHaveValue(/^12.5(0)?$/);
     await expect(length).toHaveAttribute('aria-readonly', 'true');
   });
 });
@@ -358,6 +437,8 @@ test.describe('AC-9: layout and accessibility', () => {
     await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
+
+    // (The tree's menu, dialog and fold at three widths with axe, ED-34 and ED-37, are cases of their own in `estimate-review-tree.spec.ts`: this case is at the limit of its 30 s.)
   });
 
   test('not calculated: no sideways scroll and axe finds nothing', async ({ page }, testInfo) => {
