@@ -149,8 +149,15 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
   test('AC-2: the cost-typed inputs have the rupee add-on and the hint "Enter 0 if there is none."; what is typed is shown back as typed, with two decimals, and survives a reload', async ({ page }, testInfo) => {
     await openForm(page, testInfo);
     for (const letter of COST_LETTERS) {
-      await expect(control(page, letter), letter).toHaveAccessibleDescription(COST_HINT);
+      // AQP-482 (DEF-125; DL-420): the unit add-on is the end of the field's description, not a part of its name.
+      await expect(control(page, letter), letter).toHaveAccessibleDescription(`${COST_HINT} ₹`);
+      await expect(control(page, letter), letter).toHaveAccessibleName(/^[^₹]*$/);
       await expect(control(page, letter).locator('xpath=following-sibling::span'), letter).toHaveText('₹');
+    }
+    // AQP-482 (DEF-125; the delivery lead's list of units, DL-420): every other number input has its add-on beside it, read as the end of its description and not as its name (T and U show with Fasteners, below).
+    for (const [letter, unit] of [['H', 'nos'], ['J', 'mm'], ['K', 'mm'], ['L', 'mm'], ['N', 'kg'], ['P', 'sec'], ['Q', 'mm'], ['R', 'nos'], ['V', 'nos'], ['W', 'holes'], ['X', 'holes'], ['Y', 'holes']] as const) {
+      await expect(control(page, letter).locator('xpath=following-sibling::span'), letter).toHaveText(unit);
+      await expect(control(page, letter), letter).toHaveAccessibleDescription(new RegExp(unit + '$'));
     }
     const saved = nextSave(page, 'BM');
     await control(page, 'BM').fill('4321.5');
@@ -172,7 +179,12 @@ test.describe('AC-2, AC-3, AC-4, AC-5: typing into the new fields', () => {
     await control(page, 'S').fill('M6 bolt');
     await expect(control(page, 'T')).toBeVisible();
     await expect(control(page, 'U')).toBeVisible();
-    await expect(control(page, 'T').locator('xpath=following-sibling::span')).toHaveCount(0);
+    // T is a count: "nos" beside it, as its description (AQP-482).
+    await expect(control(page, 'T').locator('xpath=following-sibling::span')).toHaveText('nos');
+    await expect(control(page, 'T')).toHaveAccessibleDescription('nos');
+    // U is the cost of one piece.
+    await expect(control(page, 'U').locator('xpath=following-sibling::span')).toHaveText('₹ / pc');
+    await expect(control(page, 'U')).toHaveAccessibleDescription(`${COST_HINT} ₹ / pc`);
     await control(page, 'S').fill('None');
     await control(page, 'S').blur();
 

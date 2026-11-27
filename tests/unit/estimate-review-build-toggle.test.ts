@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { BuildTable } from '@/components/features/estimate-review/build-table';
+import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import type { CostsView } from '@/server/views/schemas/costs';
 
 import { defined } from '../support/defined';
@@ -42,12 +43,30 @@ describe('AQP-468: "How the total is built" is a collapsible section with Show a
     expect(html).toMatch(/^<details[^>]*group\/build/);
   });
 
-  it('holds the explanation, then the worked example, the per-row table with its total and the rounding sentence', async () => {
+  it('holds the explanation, then the worked example and the rounding sentence, then the per-row table with its total (AQP-491, DEF-134)', async () => {
     const html = await build();
     const explanation = html.indexOf("The Engineer types the count for the whole order on every row (QTY per Assy, column H). Each row&#x27;s cost (column BG) already includes its own count, so the total is the BG of every row added together. Nothing is multiplied by the rows above.");
     expect(explanation).toBeGreaterThan(html.indexOf('</summary>'));
     expect(explanation).toBeLessThan(html.indexOf('<table'));
-    expect(html.indexOf('Worked example:')).toBeGreaterThan(html.indexOf('</table>'));
+    expect(html.indexOf('Worked example:')).toBeGreaterThan(explanation);
+    expect(html.indexOf('Worked example:')).toBeLessThan(html.indexOf('<table'));
+    expect(html.indexOf('Figures are shown to 2 decimals.')).toBeGreaterThan(html.indexOf('Worked example:'));
+    expect(html.indexOf('Figures are shown to 2 decimals.')).toBeLessThan(html.indexOf('<table'));
     expect(html).toContain('Total (the sum of the BG column)');
+  });
+
+  it("names the kind of each named row before its name, 'Main Assembly: Control cabinet', and says a nameless row's kind once (AQP-491, DEF-135)", async () => {
+    const costs: CostsView = await createReviewWorld({ rows: CE1.rows, bl: CE1.bl }).service.getCosts(LEAD, REVIEW_ESTIMATE_ID);
+    const named = { ...costs, nodes: costs.nodes.map((node, index) => (index === 0 ? { ...node, name: 'Control cabinet' } : { ...node, name: '' })) };
+    const html = renderToStaticMarkup(createElement(BuildTable, { letters: named.letters, nodes: named.nodes, totalPrice: null, warned: new Set<string>() }));
+    const cells = [...html.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((match) => (match[1] ?? '').replace(/<[^>]+>/g, '').trim());
+    const first = defined(named.nodes[0]);
+    expect(cells).toContain(`${nodeKindLabel(first, named.nodes)}: Control cabinet`);
+    for (const node of named.nodes.slice(1)) {
+      const kind = nodeKindLabel(node, named.nodes);
+      // No name: the kind is the cell's text, once, as in the tree; never "Part: Part".
+      expect(cells.some((cell) => cell.startsWith(kind) && !cell.startsWith(`${kind}: `))).toBe(true);
+      expect(html).not.toContain(`${kind}: ${kind}`);
+    }
   });
 });

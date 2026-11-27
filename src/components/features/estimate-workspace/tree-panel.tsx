@@ -42,8 +42,10 @@ export interface TreePanelProps {
   readonly tree: PartsTreeState;
   /** True while the person may change the inputs (`treeActionsOffered`, which is `canEditInputs`). Otherwise the part actions are not shown at all (UX-07): the server would refuse them. */
   readonly editable: boolean;
-  /** Enter on a row's link opens its form (STORY-05.03, review SQR-11): the form takes the focus. A press with a mouse or a finger only chooses the row. */
-  readonly onOpen?: (id: string) => void;
+  /** Enter on a row's link opens its form (STORY-05.03, review SQR-11): the form takes the focus. A press with a mouse or a finger only chooses the row, except in the phone drawer (`opensOnPress`). `byKeyboard` says which. */
+  readonly onOpen?: (id: string, byKeyboard: boolean) => void;
+  /** True in the phone drawer: a press on a row opens it (the drawer closes and the form shows, AQP-490), as Enter does. False in the panel beside or above the form, where the form is already in view and a press only chooses the row. */
+  readonly opensOnPress?: boolean;
   /** The parts Calculate found a missing input in (STORY-05.09): each shows a triangle. Client state from the blocked answer. */
   readonly missingIds?: ReadonlySet<string>;
   /**
@@ -80,7 +82,7 @@ function focusTree(event: Event): void {
  * Move down); the buttons that sat above the tree for it, and for Add and Delete, are gone. While a change is on its way every control that would start another is `aria-disabled` and keeps the focus (AQP-343). There is no arrow-key navigation: Tab moves from row to row, to each arrow and to the buttons of a row, and Enter on a row opens its form (PM
  * ruling). All of it is the screen's: every rule is the server's, and what the tree shows is what the server last answered.
  */
-export function TreePanel({ tree, editable, onOpen, missingIds, framed = true, headAction, review, calculating = null }: TreePanelProps) {
+export function TreePanel({ tree, editable, onOpen, opensOnPress = false, missingIds, framed = true, headAction, review, calculating = null }: TreePanelProps) {
   const { nodes, selected } = tree;
   // A change is on its way, or the review's Recalculate is running: the buttons that would start another are not offered (ED-31).
   const busy = tree.busy || calculating !== null;
@@ -149,7 +151,7 @@ export function TreePanel({ tree, editable, onOpen, missingIds, framed = true, h
     );
   } else {
     const holdingPart = parentIdsHoldingPart(nodes);
-    const choose = (id: string, byKeyboard: boolean): void => (byKeyboard && onOpen !== undefined ? onOpen(id) : tree.select(id));
+    const choose = (id: string, byKeyboard: boolean): void => (onOpen !== undefined && (byKeyboard || opensOnPress) ? onOpen(id, byKeyboard) : tree.select(id));
     body = (
       <>
         <PartsTreeList

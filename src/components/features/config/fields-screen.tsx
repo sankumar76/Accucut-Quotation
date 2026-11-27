@@ -1,6 +1,7 @@
 'use client';
 
-import { RotateCcw, Search, SearchX } from 'lucide-react';
+import { History, Plus, RotateCcw, Search, SearchX } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 import { Icon } from '@/components/shared/icon';
@@ -12,19 +13,24 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
-import { listConfigFields, type ConfigFieldRow } from '@/lib/config/fields-client';
-import { filterFields, isKindFilter, KIND_FILTER_OPTIONS, type KindFilter } from '@/lib/config/fields-list';
+import { listConfigFields, readConfigVersionNumber, type ConfigFieldRow } from '@/lib/config/fields-client';
+import { configurationNote, filterFields, isKindFilter, KIND_FILTER_OPTIONS, type KindFilter } from '@/lib/config/fields-list';
 
 import { useMasterList } from '../masters/use-master-list';
 
 import { DELETED_NOTICE_TITLE, DIALOG_FAILED_LINE } from './delete-field-texts';
 import { FieldsList } from './fields-table';
 import {
+  CHECKPOINTS_BUTTON,
+  CHECKPOINTS_PATH,
   CLEAR_FILTERS,
   ERROR_RETRY,
   ERROR_TITLE,
   FIELDS_DESCRIPTION,
+  FIELDS_DESCRIPTION_LEAD,
   FIELDS_TITLE,
+  INSERT_FIELD_BUTTON,
+  INSERT_FIELD_PATH,
   KIND_FILTER_LABEL,
   LOADING_LABEL,
   noMatchTitle,
@@ -68,10 +74,12 @@ interface SearchBarProps {
   readonly onQuery: (query: string) => void;
   readonly onKind: (kind: KindFilter) => void;
   readonly inputRef: RefObject<HTMLInputElement | null>;
+  /** The note of the configuration ("Configuration version 9. 67 columns, A to BO."), once the rows are known. */
+  readonly note: string | null;
 }
 
 /** The search and the kind filter, side by side from 768 px and stacked below it. */
-function SearchBar({ query, kind, onQuery, onKind, inputRef }: SearchBarProps) {
+function SearchBar({ query, kind, onQuery, onKind, inputRef, note }: SearchBarProps) {
   return (
     <CardContent className="flex flex-col gap-s-3 border-b border-border md:flex-row md:items-end">
       <div className="flex min-w-0 flex-1 flex-col gap-s-2">
@@ -106,7 +114,28 @@ function SearchBar({ query, kind, onQuery, onKind, inputRef }: SearchBarProps) {
           ))}
         </NativeSelect>
       </div>
+      {note === null ? null : <p className="text-label text-ink-2 md:flex-1">{note}</p>}
     </CardContent>
+  );
+}
+
+/** The Admin's two buttons in the head of the page (the mock-up, AQP-473): the Checkpoints page, and the wizard that inserts a field. A Lead has neither. */
+function HeadActions() {
+  return (
+    <div className="flex flex-wrap gap-s-2">
+      <Button asChild variant="secondary">
+        <Link href={CHECKPOINTS_PATH}>
+          <Icon icon={History} />
+          {CHECKPOINTS_BUTTON}
+        </Link>
+      </Button>
+      <Button asChild>
+        <Link href={INSERT_FIELD_PATH}>
+          <Icon icon={Plus} />
+          {INSERT_FIELD_BUTTON}
+        </Link>
+      </Button>
+    </div>
   );
 }
 
@@ -158,11 +187,25 @@ export function FieldsScreen({ viewOnly }: FieldsScreenProps) {
   });
   const { read } = list;
   const removal = useFieldsDelete({ readAgain: list.refresh, listFailed: list.status === 'error' });
+  // The number of the current version, for the note under the title: asked once, apart from the list; the note is without it when the answer does not come (nothing else depends on it).
+  const [version, setVersion] = useState<number | null>(null);
 
   // The first read starts when the screen opens: the status is `loading` already, so nothing is set first (`useMasterList`).
   useEffect(() => {
     void read();
   }, [read]);
+  useEffect(() => {
+    let current = true;
+    void readConfigVersionNumber().then((outcome) => {
+      if (current && outcome.status === 'ok') setVersion(outcome.value);
+    });
+    return () => {
+      current = false;
+    };
+  }, []);
+  const first = list.items?.[0];
+  const last = list.items?.at(-1);
+  const note = first === undefined || last === undefined || list.items === null ? null : configurationNote(version, list.items.length, first.letter, last.letter);
 
   const clearFilters = (): void => {
     list.setQuery('');
@@ -172,11 +215,11 @@ export function FieldsScreen({ viewOnly }: FieldsScreenProps) {
 
   return (
     <>
-      <PageHeader title={FIELDS_TITLE} description={FIELDS_DESCRIPTION} />
+      <PageHeader title={FIELDS_TITLE} description={viewOnly ? FIELDS_DESCRIPTION_LEAD : FIELDS_DESCRIPTION} {...(viewOnly ? {} : { actions: <HeadActions /> })} />
       {viewOnly ? <ViewOnlyBanner /> : null}
       <DeleteNotices removal={removal} />
       <Card aria-busy={list.status === 'loading' || undefined}>
-        <SearchBar query={list.query} kind={kind} onQuery={list.setQuery} onKind={setKind} inputRef={search} />
+        <SearchBar query={list.query} kind={kind} onQuery={list.setQuery} onKind={setKind} inputRef={search} note={note} />
         <FieldsResults list={list} onClear={clearFilters} canEdit={!viewOnly} removal={removal} />
       </Card>
       <DeleteDialogHost removal={removal} />

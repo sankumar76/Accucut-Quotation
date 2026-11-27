@@ -1,5 +1,6 @@
 import { getEstimateService } from '@/server/composition';
 import { withRoute } from '@/server/http/with-route';
+import { formBody } from '@/server/views/part-form-bodies';
 import { estimateIdParamsSchema, formResponseSchema } from '@/server/views/schemas';
 
 /**
@@ -14,7 +15,7 @@ export const GET = withRoute({
   params: estimateIdParamsSchema,
   output: formResponseSchema,
   handler: async ({ user, params }) => {
-    const form = await getEstimateService().getForm({ id: user.id, role: user.role }, params.id);
-    return { sections: form.sections, lastSavedAt: form.lastSavedAt };
+    // The same body the Lead's review page hands to the form as props (`part-form-bodies.ts`, DEF-141).
+    return formBody(await getEstimateService().getForm({ id: user.id, role: user.role }, params.id));
   },
 });

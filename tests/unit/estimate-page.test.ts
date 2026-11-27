@@ -25,7 +25,7 @@ vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error:
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
-  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users, getEstimateService: () => shared.estimateService, getEstimateReviewService: () => shared.estimateReviewService, getDownloadMarkerService: () => shared.downloadMarkerService, getCostDetailsService: () => shared.costDetailsService };
+  return { getAuthOptions: () => ({}), getUserRepository: () => shared.users, getEstimateService: () => shared.estimateService, getEstimateReviewService: () => shared.estimateReviewService, getDownloadMarkerService: () => shared.downloadMarkerService, getCostDetailsService: () => shared.costDetailsService, getMastersService: () => shared.mastersService };
 });
 
 const { default: EstimatePage } = await import('@/app/(portal)/estimates/[code]/page');
@@ -61,7 +61,7 @@ describe('AC-1: the Engineer opens their task with no customer', () => {
     expect(html).toContain('\\\\invented-server\\invented-share\\RFQ-canary');
     expect(html).toContain('href="file:////invented-server/invented-share/RFQ-canary"');
     expect(html).toContain('Copy path');
-    expect(html).toContain('Notes from Invented Lead: ');
+    expect(html).toContain('Notes from Invented Lead');
     expect(html).toContain('Invented notes.');
   });
 
@@ -74,15 +74,16 @@ describe('AC-1: the Engineer opens their task with no customer', () => {
     expect(html).toContain('Parts and inputs');
   });
 
-  it('AC-9: shows Customer Name, Customer Short Name and Subject (project name) as labelled text, before and after a customer is set', async () => {
+  it('AC-9: shows the Customer (with its short name) and the Subject as labelled text, in the one compact card (AQP-453), before and after a customer is set', async () => {
     const without = await open(CODE);
-    for (const label of ['Customer Name', 'Customer Short Name', 'Subject (project name)']) expect(without, label).toContain(label);
+    for (const label of ['Customer', 'Subject', 'Task folder']) expect(without, label).toContain(label);
+    expect(without).toContain('Only a Lead or Admin can change the customer.');
     expect(without).toContain('Invented subject');
     estimate().customerId = CUSTOMER_RECIPE_ID;
     const html = await open(CODE);
     expect(html).toContain('Canary-Customer-Alpha');
     const shortName = defined(harness.masters.customers.find((customer) => customer.id === CUSTOMER_RECIPE_ID)).shortName;
-    expect(html).toContain(`>${shortName}<`);
+    expect(html).toContain(`(${shortName})`);
   });
 
   it('AC-10: there is no customer picker, no "Choose this first", no hint about changing it, no list to load and no control to change the customer, in any state', async () => {
@@ -272,5 +273,66 @@ describe('STORY-CR01.7E QLT-03, AC-6: the download marker in the Lead\'s header'
     expect(vi.mocked(logger.warn)).toHaveBeenCalledWith({ errorName: 'TypeError', errorCode: undefined }, 'The download marker could not be read.');
     expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain('invented-host');
     vi.restoreAllMocks();
+  });
+});
+
+describe('DEF-141 (DL-455): the Lead\'s review hands the part form its data as props', () => {
+  const props = async (code: string): Promise<Record<string, unknown>> => {
+    const element = (await EstimatePage({ params: Promise.resolve({ code }), searchParams: Promise.resolve({}) })) as { props: Record<string, unknown> };
+    return element.props;
+  };
+
+  it.each(['LEAD', 'ADMIN'] as const)('as %s the review gets a seed for the row it shows: the estimate, the part, and the four bodies the routes answer', async (role) => {
+    harness.signInAs(role);
+    const seed = (await props(CODE))['seed'] as Record<string, unknown> | undefined;
+    expect(seed).toBeDefined();
+    expect(Object.keys(defined(seed)).sort()).toEqual(['estimateId', 'form', 'materials', 'part', 'partId', 'treatments']);
+    expect(seed?.['estimateId']).toBe(estimate().id);
+    expect(seed?.['partId']).toBe(estimate().id);
+    expect(Object.keys(seed?.['form'] as object).sort()).toEqual(['lastSavedAt', 'sections']);
+  });
+
+  it('the Engineer\'s page reads none of it: no seed, and no read of the option lists for the form', async () => {
+    const materials = vi.spyOn(harness.mastersService, 'listMaterialOptions');
+    const treatments = vi.spyOn(harness.mastersService, 'listTreatmentOptions');
+    harness.signInAs('ENGINEER');
+    const own = await props(CODE);
+    expect(own['seed']).toBeUndefined();
+    expect(materials).not.toHaveBeenCalled();
+    expect(treatments).not.toHaveBeenCalled();
+    materials.mockRestore();
+    treatments.mockRestore();
+  });
+
+  it.each(['LEAD', 'ADMIN'] as const)('as %s the revision a save is sent with comes from the part answer the seed carries: no second read of the part (DEF-131 stage 2)', async (role) => {
+    harness.signInAs(role);
+    const node = vi.spyOn(harness.estimateService, 'getNode');
+    const combined = vi.spyOn(harness.estimateService, 'getPartForm');
+    const own = await props(CODE);
+    expect(own['selectedRevision']).toBe(defined(harness.estimateWorld.nodes[0]).revision);
+    expect(combined).toHaveBeenCalledTimes(1);
+    expect(node).not.toHaveBeenCalled();
+    node.mockRestore();
+    combined.mockRestore();
+  });
+
+  it('with no seed (a read failed) the revision is read on its own, and a fault there is not turned into a revision of 0', async () => {
+    harness.signInAs('LEAD');
+    const broken = vi.spyOn(harness.estimateService, 'getPartForm').mockRejectedValue(new Error('invented fault'));
+    const node = vi.spyOn(harness.estimateService, 'getNode');
+    expect((await props(CODE))['selectedRevision']).toBe(defined(harness.estimateWorld.nodes[0]).revision);
+    expect(node).toHaveBeenCalledTimes(1);
+    node.mockRejectedValue(new Error('invented database fault'));
+    await expect(props(CODE)).rejects.toThrow('invented database fault');
+    broken.mockRestore();
+    node.mockRestore();
+  });
+
+  it('a fault in a read gives the page no seed, so the form reads from the server as before, and the page still draws', async () => {
+    harness.signInAs('LEAD');
+    const broken = vi.spyOn(harness.estimateService, 'getPartForm').mockRejectedValue(new Error('invented fault'));
+    expect((await props(CODE))['seed']).toBeUndefined();
+    expect(await open(CODE)).toContain('id="review-calculate"');
+    broken.mockRestore();
   });
 });

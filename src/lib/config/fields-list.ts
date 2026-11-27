@@ -10,6 +10,25 @@ import type { ConfigFieldRow } from './fields-client';
 /** The kind as a word, and as the filter's option (UX spec SCR-17: Input, Auto, Output). */
 export const KIND_LABELS: Readonly<Record<FieldKind, string>> = { input: 'Input', auto: 'Auto', output: 'Output' };
 
+/**
+ * The section or stage of a field as the mock-up writes it (AQP-473, DEF-118): a section by its name ("Part Details"), a stage by its number and name ("3 Process Costs"). The server sends "Section 1: Part Details"
+ * and "Stage 3: Process Costs"; any other text is shown as it came.
+ */
+export function placeLabel(place: string | null): string | null {
+  if (place === null) return null;
+  const section = /^Section \d+: (.+)$/.exec(place);
+  if (section?.[1] !== undefined) return section[1];
+  const stage = /^Stage (\d+): (.+)$/.exec(place);
+  if (stage?.[1] !== undefined && stage[2] !== undefined) return `${stage[1]} ${stage[2]}`;
+  return place;
+}
+
+/** The note under the search of SCR-17: "Configuration version 9. 67 columns, A to BO." The version is left out until it is known. */
+export function configurationNote(version: number | null, columns: number, first: string, last: string): string {
+  const range = `${columns} columns, ${first} to ${last}.`;
+  return version === null ? range : `Configuration version ${version}. ${range}`;
+}
+
 /** "All fields" or one kind. */
 export type KindFilter = 'all' | FieldKind;
 

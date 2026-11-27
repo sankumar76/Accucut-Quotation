@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
@@ -82,6 +82,59 @@ async function rest(target: Page): Promise<void> {
 }
 
 /**
+ * DL-448: the set-up of a movement check on one row. The pointer rests off the tree, the row is scrolled to the middle of the viewport, and the row itself (its link and its own toolbar slot under it, not the rows nested below) must lie wholly in the clear band
+ * between the page's sticky bars (the measured `[data-sticky-bar]` rects: the bottom edge of the top bars to the top edge of the bottom bar), because a toolbar under the Calculate bar cannot be reached by a pointer, and a pointer
+ * that goes onto the bar leaves the row (run 45928977839: row 1.3.1 at scrollY 378). The assertion is read at once; nothing waits.
+ */
+async function placeInClearBand(target: Page, slNo: string): Promise<void> {
+  await rest(target);
+  const slot = await slotOf(target, slNo).elementHandle();
+  const reading = await row(target, slNo).evaluate((link, own) => {
+    link.scrollIntoView({ block: 'center', behavior: 'instant' });
+    const box = { top: link.getBoundingClientRect().top, bottom: (own ?? link).getBoundingClientRect().bottom };
+    const bars = [...document.querySelectorAll('[data-sticky-bar]')].map((bar) => ({ place: bar.getAttribute('data-sticky-bar'), left: bar.getBoundingClientRect().left, right: bar.getBoundingClientRect().right, top: bar.getBoundingClientRect().top, bottom: bar.getBoundingClientRect().bottom, position: getComputedStyle(bar).position }));
+    // Only a bar that lies over the row's own columns bounds the band (the section strip sits over the form's column, not the tree's).
+    const across = bars.filter((bar) => bar.left < link.getBoundingClientRect().right && bar.right > link.getBoundingClientRect().left);
+    const bandTop = Math.max(0, ...across.filter((bar) => bar.place === 'top').map((bar) => bar.bottom));
+    const bandBottom = Math.min(window.innerHeight, ...across.filter((bar) => bar.place === 'bottom').map((bar) => bar.top));
+    return { itemTop: box.top, itemBottom: box.bottom, bandTop, bandBottom, scrollY: window.scrollY, bars };
+  }, slot);
+  expect(reading.itemTop >= reading.bandTop && reading.itemBottom <= reading.bandBottom, `row ${slNo} lies in the clear band between the sticky bars: ${JSON.stringify(reading)}`).toBe(true);
+}
+
+/**
+ * DEF-129 proof, the TS-9, TS-10, TS-16 case (DL-445): a diagnostic and nothing else. That case failed attempt 1 on two master pushes, once with interception lines and once with a bare "Test timeout of 30000ms exceeded". It writes,
+ * on EVERY attempt, one line a step to the job log, `[TS-9 timing] <width> attempt <n> | <step>: <ms> ms (<total> ms)`, each the moment its step ends, and a "still inside" line at 25 s, so the next failure shows where the 30 s went.
+ * Steps are the toolbar checks, each axe scan of the tree or the dialog where the page is, the scroll to the top, and each whole-page scan. It waits for nothing and changes no wait, budget or assertion.
+ */
+interface Laps {
+  done(step: string): void;
+  end(): void;
+}
+let laps: Laps | undefined;
+function startLaps(testInfo: TestInfo): Laps {
+  const startedAt = Date.now();
+  let stepStart = startedAt;
+  let last = 'the start';
+  const say = (text: string): void => {
+    process.stdout.write(`[TS-9 timing] ${testInfo.project.name} attempt ${String(testInfo.retry + 1)} | ${text}\n`);
+  };
+  const watchdog = setTimeout(() => say(`still inside "after ${last}" at ${String(Date.now() - startedAt)} ms`), 25_000);
+  return {
+    done(step) {
+      const now = Date.now();
+      say(`${step}: ${String(now - stepStart)} ms (${String(now - startedAt)} ms)`);
+      stepStart = now;
+      last = step;
+    },
+    end() {
+      clearTimeout(watchdog);
+      say(`end: ${String(Date.now() - startedAt)} ms`);
+    },
+  };
+}
+
+/**
  * Axe on one region of the page, with the page where the interaction left it (TS-9, TS-10, TS-16: the toolbar's buttons must pass the target-size rule at the normal scroll position, not only after a scroll to the top). The
  * rules are the suite's (`AXE_TAGS`), violations only, and the failure names the nodes and the neighbours they were compared with, as `expectNoAxeViolations` does. The whole page is scanned too, from the top, as everywhere.
  */
@@ -93,13 +146,28 @@ async function expectRegionAccessible(target: Page, selector: string): Promise<v
     neighbours: violation.nodes.flatMap((node) => node.any.flatMap((check) => (check.relatedNodes ?? []).map((related) => related.target.join(' ')))).slice(0, 5),
   }));
   expect(summary, `axe on ${selector}`).toEqual([]);
+  laps?.done(`axe on ${selector}`);
 }
 
 /** Both scans of a state: the region where the page is, then the whole page from the top. */
 async function expectStateAccessible(target: Page, selector: string): Promise<void> {
   await expectRegionAccessible(target, selector);
   await target.evaluate(() => window.scrollTo(0, 0));
+  laps?.done('scroll to the top');
   await expectNoAxeViolations(target);
+  laps?.done('axe on the whole page');
+}
+
+/**
+ * A press on a row. In the phone drawer it also opens the row: the drawer closes and the form shows (AQP-490, DEF-133; UX ruling 2026-11-26 item 3 point 7), so the drawer is opened again to reach the row's toolbar; the row
+ * is still the open one. Anywhere else a press only chooses the row, and the tree stays on screen.
+ */
+async function tap(target: Page, slNo: string): Promise<void> {
+  await row(target, slNo).click();
+  if (isPhone(target)) {
+    await expect(tree(target)).toBeHidden();
+    await showTree(target);
+  }
 }
 
 /** The rows of the tree after the first case, in reading order. */
@@ -162,9 +230,11 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     await expect(nameOf(page, '1.3').locator('span')).toHaveCount(0);
 
     // Adding a row: the status says what was added and how to name it, and the focus is on the new row's link.
-    await row(page, '1.1').click();
+    await tap(page, '1.1');
     await rowButton(page, 'Add under', '1.1').click();
     await page.getByRole('menuitem', { name: 'Part', exact: true }).click();
+    // AQP-490: using the toolbar and its menu in the phone drawer does not close the drawer; only a press on a row's link does.
+    await expect(tree(page)).toBeVisible();
     await expect(page.getByText('Added 1.1.1 Part. Type a Description to name it.')).toHaveCount(1);
     await expect(row(page, '1.1.1')).toBeFocused();
     await expect(nameOf(page, '1.1.1')).toHaveText('Part, no description yet');
@@ -213,6 +283,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
 
       // TS-6: a toolbar that is not in view has no hit area: what lies under where its buttons would be is the slot or the list item, never a button; and a press on the empty slot sends nothing.
       for (const slNo of ROWS) {
+        await placeInClearBand(page, slNo);
         const slot = await slotOf(page, slNo).boundingBox();
         expect(slot, `the slot of ${slNo}`).not.toBeNull();
         const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x ?? 0, y ?? 0)?.closest('button, a')?.tagName ?? '', [(slot?.x ?? 0) + 20, (slot?.y ?? 0) + (slot?.height ?? 0) / 2] as const);
@@ -221,11 +292,25 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
 
       // TS-1: hover each row, then each of its buttons: no row moves, by a single pixel, and the tree is as tall as it was.
       for (const slNo of ROWS) {
+        await placeInClearBand(page, slNo);
         const centre = await centreOf(page, slNo);
         await page.mouse.move(centre.x, centre.y);
         expect(await layoutOf(page), `pointer over ${slNo}`).toEqual(idle);
         for (const button of await toolbarOf(page, slNo).getByRole('button').all()) {
-          await button.hover();
+          // The pointer goes to the button as a person's does (DL-447): a move to the centre of the button's box, read at once. `hover()` waits for the button to be the element under its centre and, with a toolbar that is
+          // not in view, retries for the whole 30 s without moving the pointer (run 45925520372); here a toolbar that is not in view is a failure that says where. Both checks are plain and immediate: no wait, no retry.
+          const box = defined(await button.boundingBox());
+          const where = `row ${slNo}, button box ${JSON.stringify(box)}, viewport ${JSON.stringify(page.viewportSize())}`;
+          expect(box.height, `the toolbar button is in view: ${where}`).toBeGreaterThan(1);
+          const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+          await page.mouse.move(point.x, point.y);
+          // The element on top at the point, named, so a failure says what covered the button (diagnostic only: the assertion is the same).
+          const { onButton, top } = await button.evaluate((element, at) => {
+            const found = document.elementFromPoint(at.x, at.y);
+            const covering = found?.closest('[data-sticky-bar], [role], [data-row-toolbar], [data-part-row]');
+            return { onButton: element.contains(found), top: found === null ? 'nothing' : `${found.tagName.toLowerCase()} inside ${covering?.tagName.toLowerCase() ?? 'no group'} ${covering?.getAttributeNames().filter((name) => name.startsWith('data-') || name === 'role').join(' ') ?? ''}` };
+          }, point);
+          expect(onButton, `the pointer is on the button: ${where}, point ${JSON.stringify(point)}, on top there: ${top}`).toBe(true);
           expect(await layoutOf(page), `pointer over a button of ${slNo}`).toEqual(idle);
         }
         await rest(page);
@@ -304,7 +389,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
       expect(shifts.reduce((sum, value) => sum + value, 0), 'the sum of the layout shifts').toBe(0);
     } else {
       // TS-8: a finger. Only the selected row has a toolbar in view; tapping another row moves it there; no other row has one, and its buttons are 44 px.
-      await row(page, '1.2').click();
+      await tap(page, '1.2');
       await expect(row(page, '1.2')).toHaveAttribute('aria-current', 'true');
       for (const slNo of ROWS) {
         const height = (await toolbarOf(page, slNo).boundingBox())?.height ?? 0;
@@ -312,11 +397,22 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
         else expect(height, `the toolbar of ${slNo}`).toBeLessThanOrEqual(1);
       }
       for (const button of await toolbarOf(page, '1.2').getByRole('button').all()) {
+        // Two readings (DL-458). The painted box is read right after the drawer slid in again (a transform), and a box can come out a rounding short of its layout size: master push 864ecb0f read 43.99999237060547, which is
+        // 44 minus 2^-17. So the box is compared with 44 less one layout unit (1/64 px). The declared size, which no transform touches, is read from the computed style and must be 44 px or more: a flex row that shrank a
+        // button would show there, and that is a product defect, not a rounding.
+        const label = (await button.getAttribute('aria-label')) ?? 'a button';
         const box = await button.boundingBox();
-        expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-        expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+        const where = `row 1.2, button "${label}", box ${JSON.stringify(box)}`;
+        expect(box?.width ?? 0, `${where}: the box is 44 px wide, to within one layout unit`).toBeGreaterThanOrEqual(44 - 1 / 64);
+        expect(box?.height ?? 0, `${where}: the box is 44 px high, to within one layout unit`).toBeGreaterThanOrEqual(44 - 1 / 64);
+        const declared = await button.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return { width: Number.parseFloat(style.width), height: Number.parseFloat(style.height) };
+        });
+        expect(declared.width, `${where}: the computed width is 44 px or more`).toBeGreaterThanOrEqual(44);
+        expect(declared.height, `${where}: the computed height is 44 px or more`).toBeGreaterThanOrEqual(44);
       }
-      await row(page, '1.3').click();
+      await tap(page, '1.3');
       await expect(row(page, '1.3')).toHaveAttribute('aria-current', 'true');
       expect((await toolbarOf(page, '1.3').boundingBox())?.height ?? 0).toBeGreaterThan(40);
       expect((await toolbarOf(page, '1.2').boundingBox())?.height ?? 0).toBeLessThanOrEqual(1);
@@ -324,17 +420,44 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     }
   });
 
-  test('TS-9, TS-10, TS-16: axe at the normal scroll position with a toolbar in view, with the "+" menu open and with the delete dialog open; every button is 24 px or more and none overlaps another', async () => {
+  test('TS-9, TS-10, TS-16: axe at the normal scroll position with a toolbar in view, with the "+" menu open and with the delete dialog open; every button is 24 px or more and none overlaps another', async ({}, testInfo) => {
+    laps = startLaps(testInfo);
     await showTree(page);
+    laps.done('the tree is shown');
     const mouse = await hasMouse(page);
     // The row whose toolbar is in view: hovered with a mouse, selected with a finger. No scroll to the top: the page is where the cases before it left it.
-    const open = async (): Promise<void> => {
+    // `placed`: for a mouse, first set the row up as in the movement cases (DL-448, `placeInClearBand`): the pointer off the tree, the row scrolled to the middle of the viewport and asserted to lie between the sticky bars. The
+    // first call keeps the page where it is; the later two follow a scroll to the top, which leaves the row's toolbar below the bottom of the viewport (local run: button box y 779 in a 768 px viewport, nothing there to press).
+    const open = async (placed = false): Promise<void> => {
+      if (mouse && placed) await placeInClearBand(page, '1.1');
       const centre = await centreOf(page, '1.1');
       if (mouse) await page.mouse.move(centre.x, centre.y);
-      else await row(page, '1.1').click();
+      else await tap(page, '1.1');
       await expect(toolbarOf(page, '1.1')).toBeVisible();
     };
+    // A press on a toolbar BUTTON (DL-441: this case presses buttons, the movement cases do not). The row is hovered and its toolbar waited for (a condition, not a time); then, with a mouse, the pointer is moved onto the button
+    // and pressed where the button is, through the row's own slot, so the row stays hovered. Playwright's own `hover()` and `click()` wait for the button to be the element under its centre and only then move the pointer: with a
+    // toolbar that went out of view under a pointer that did not move (the page scrolled, or the page was rebuilt by the development server) they retry for the whole 30 s and never move it. Runs 45924853824 and 45925520372.
+    const press = async (button: Locator): Promise<void> => {
+      if (!mouse) {
+        await button.click();
+        return;
+      }
+      await expect.poll(async () => (await button.boundingBox())?.height ?? 0, 'the button of a toolbar in view').toBeGreaterThan(1);
+      const box = defined(await button.boundingBox());
+      const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      await page.mouse.move(point.x, point.y);
+      // The press is made only where the button is on top (as the hit check of Playwright's own click does), and the failure says what was there instead.
+      const { onButton, top } = await button.evaluate((element, at) => {
+        const found = document.elementFromPoint(at.x, at.y);
+        return { onButton: element.contains(found), top: found === null ? 'nothing' : `${found.tagName.toLowerCase()} ${found.getAttributeNames().filter((name) => name.startsWith('data-') || name === 'role' || name === 'aria-label').join(' ')}` };
+      }, point);
+      expect(onButton, `the pointer is on the button: box ${JSON.stringify(box)}, viewport ${JSON.stringify(page.viewportSize())}, on top there: ${top}`).toBe(true);
+      await page.mouse.down();
+      await page.mouse.up();
+    };
     await open();
+    laps.done('the first hover and the toolbar in view');
     const boxes = [];
     for (const button of await toolbarOf(page, '1.1').getByRole('button').all()) {
       const box = await button.boundingBox();
@@ -349,24 +472,69 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
         expect(apart, 'two toolbar buttons overlap').toBe(true);
       }
     }
+    laps.done('the size and overlap checks of the buttons');
     // The toolbar in view: the tree where the page is, then the whole page from the top. (A scan of the whole page where an interaction leaves it also meets the page's own header links half behind the sticky bar, which is
     // the scroll and not the tree: the same reading as in `estimate-treatments.spec.ts`.)
     await expectStateAccessible(page, 'nav[aria-label="Parts tree"]');
 
-    // The "+" menu of the row opens in line under it.
-    await rowButton(page, 'Add under', '1.1').click();
+    // The "+" menu of the row opens in line under it. The page was scrolled to the top by the scan above, out from under a pointer that did not move, so the hover is made again right before the button is pressed (DL-445):
+    // a press on a toolbar BUTTON needs the row to be hovered when it lands. The movement cases do no such thing.
+    await open(true);
+    laps.done('the second hover');
+    await press(rowButton(page, 'Add under', '1.1'));
     await expect(page.getByRole('menu')).toBeVisible();
+    laps.done('the "+" menu opens');
     await expectStateAccessible(page, 'nav[aria-label="Parts tree"]');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('menu')).toHaveCount(0);
+    laps.done('the menu closes');
 
     // The delete dialog of the row. Keep it closes it, and nothing is deleted.
-    await open();
-    await rowButton(page, 'Delete', '1.1').click();
+    await open(true);
+    laps.done('the third hover');
+    await press(rowButton(page, 'Delete', '1.1'));
     await expect(page.getByRole('alertdialog')).toBeVisible();
+    laps.done('the delete dialog opens');
     await expectStateAccessible(page, '[role="alertdialog"]');
     await page.getByRole('button', { name: 'Keep it' }).click();
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect(row(page, '1.1')).toBeVisible();
+    laps.done('the dialog closes');
+  });
+
+  test.afterEach(() => {
+    laps?.end();
+    laps = undefined;
+  });
+
+  test('DEF-133: a press on a row in the phone drawer closes the drawer and shows that row\'s form, the focus is on the form\'s title, and the drawer opens again on the same row with its toolbar; elsewhere the panel stays', async () => {
+    await showTree(page);
+    const formFocus = page.locator('form[data-part-form] :focus');
+    if (isPhone(page)) {
+      await row(page, '1.2').click();
+      // The drawer closes and the form of that row is what is on screen.
+      await expect(tree(page)).toBeHidden();
+      const title = page.locator('form[data-part-form] #part-form-title');
+      await expect(title).toContainText('1.2');
+      // The focus goes to the form's title, not into a field: no keyboard comes up for a finger that has not chosen to type.
+      await expect(title).toBeFocused();
+      await expect(page.locator('form[data-part-form] :is(input, textarea, select):focus')).toHaveCount(0);
+      // The drawer opens again on the same row, which is still the open one and has its toolbar (the touch rule of the no-shift ruling: the selected row only).
+      await showTree(page);
+      await expect(row(page, '1.2')).toHaveAttribute('aria-current', 'true');
+      expect((await toolbarOf(page, '1.2').boundingBox())?.height ?? 0).toBeGreaterThan(40);
+      // A press on a button of the toolbar does not close the drawer: only a press on a row does.
+      await rowButton(page, 'Delete', '1.2').click();
+      await expect(page.getByRole('alertdialog')).toBeVisible();
+      await page.getByRole('button', { name: 'Keep it' }).click();
+      await expect(page.getByRole('alertdialog')).toHaveCount(0);
+      await expect(tree(page)).toBeVisible();
+    } else {
+      // The panel is beside or above the form: a press only chooses the row, the tree stays on screen and the focus does not go into the form.
+      await row(page, '1.2').click();
+      await expect(row(page, '1.2')).toHaveAttribute('aria-current', 'true');
+      await expect(tree(page)).toBeVisible();
+      await expect(formFocus).toHaveCount(0);
+    }
   });
 });

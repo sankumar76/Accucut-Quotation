@@ -231,13 +231,17 @@ test.describe('the parts tree on SCR-06, one check each', () => {
       if (request.method() !== 'GET') writes.push(`${request.method()} ${request.url()}`);
     });
     // By touch (360 and 768) it is tapped; with a mouse (1366) it is clicked and then given Space, Enter, the arrows, Alt+Down and a typed letter. Each must leave the value, raise no change event and open no list.
-    const selects = form.locator('select:not([disabled])');
-    const selectCount = await selects.count();
-    expect(selectCount, 'drop-downs in the read-only inputs').toBeGreaterThan(0);
+    // QA's guard (AQP-491): a drop-down with one option has nothing to change to, so the "no change" checks below would test nothing for it: only drop-downs with two options or more are exercised, and there must be one.
+    const all = form.locator('select:not([disabled])');
+    const listed: number[] = [];
+    for (let index = 0; index < (await all.count()); index += 1) if ((await all.nth(index).locator('option').count()) >= 2) listed.push(index);
+    expect(listed.length, 'drop-downs with two options or more in the read-only inputs').toBeGreaterThan(0);
     await page.evaluate(() => document.addEventListener('change', () => document.documentElement.setAttribute('data-select-changed', ''), true));
+    // The `:open` check below proves nothing in a browser that does not know the selector (it would pass silently), so the browser is asked first.
+    expect(await page.evaluate(() => CSS.supports('selector(:open)')), 'the browser knows :open').toBe(true);
     const touch = (page.viewportSize()?.width ?? 0) < 1024;
-    for (let index = 0; index < selectCount; index += 1) {
-      const select = selects.nth(index);
+    for (const index of listed) {
+      const select = all.nth(index);
       const kept = await select.inputValue();
       if (touch) {
         await select.tap();
@@ -247,6 +251,8 @@ test.describe('the parts tree on SCR-06, one check each', () => {
       }
       await expect(select).toHaveValue(kept);
       await expect(select).toHaveAttribute('aria-readonly', 'true');
+      // AQP-491 (DEF-138): it is drawn as the read-only boxes beside it are, dashed, so it does not look editable.
+      await expect(select).toHaveCSS('border-top-style', 'dashed');
       expect(await select.evaluate((element) => { try { return element.matches(':open'); } catch { return false; } }), 'the list is not open').toBe(false);
     }
     await expect(page.locator('html')).not.toHaveAttribute('data-select-changed', '');
