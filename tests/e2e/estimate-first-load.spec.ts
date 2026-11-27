@@ -1,11 +1,12 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
 
 import { ensureCanaryCustomers, ensureCanaryMaterials, useFreshAddress } from './support/auth';
 import { waitUntilHydrated, widthOf } from './support/design-system';
-import { ScriptGate, SLOW_OPEN_WAIT_MILLISECONDS, SLOW_REQUEST_MILLISECONDS } from './support/lazy-load';
-import { isPhone, openForm, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
+import { ScriptGate, SLOW_OPEN_WAIT_MILLISECONDS } from './support/lazy-load';
+import { DEVELOPMENT_URL } from './support/servers';
+import { isPhone, openForm, partForm, showTree, signInAsNewEngineer, tree, waitForForm } from './support/part-form';
 
 /**
  * STORY-05.13 (AQP-339, ADR-016 E1): what `/estimates/[code]` fetches after the first load, at 360x800, 768x1024 and 1366x768 on the development server. The phone's tree drawer is fetched
@@ -22,7 +23,6 @@ test.beforeEach(async ({ context }) => {
 });
 
 const DRAWER_FAILURE = 'The parts tree did not open. Check your connection and try again.';
-const FORM_FAILURE_TITLE = 'We could not load the form';
 const TREE_BUTTON = /^Parts tree/;
 const DRAWER_BUTTON_SELECTOR = 'button[data-early-intent="parts-tree"]';
 
@@ -38,37 +38,8 @@ async function openFormOnAPhone(page: Page, gate: ScriptGate, testInfo: Paramete
 }
 
 test.describe('AC-4: the part form fetches its fields', () => {
-  // Since CR-01 item 6 (AQP-390) there is no "choose the customer first" step: the part form is on the page from the first paint, so it asks for its fields at once. The failed and the slow
-  // paths are reached through the one request that decides them, the form's definition, which is answered here the way a failing and a slow network would answer it.
-  test('AC-4: when the fields cannot be fetched the notice offers "Try again", and pressing it brings the fields', async ({ page }, testInfo) => {
-    await ensureCanaryCustomers();
-    await ensureCanaryMaterials();
-    const owner = await signInAsNewEngineer(page, testInfo);
-    const refuse = (route: Route) => route.abort('failed');
-    await page.route('**/api/v1/estimates/*/form', refuse);
-    await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
-    await expect(page.getByText(FORM_FAILURE_TITLE)).toBeVisible();
-    await expect(partForm(page)).toHaveCount(0);
-
-    await page.unroute('**/api/v1/estimates/*/form', refuse);
-    await page.getByRole('button', { name: 'Try again' }).click();
-    await waitForForm(page);
-    await expect(page.getByText(FORM_FAILURE_TITLE)).toHaveCount(0);
-  });
-
-  test('AC-4: while the fields are on their way the skeleton shows as a status, then the fields take its place', async ({ page }, testInfo) => {
-    await ensureCanaryCustomers();
-    await ensureCanaryMaterials();
-    const owner = await signInAsNewEngineer(page, testInfo);
-    await page.route('**/api/v1/estimates/*/form', async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, SLOW_REQUEST_MILLISECONDS));
-      await route.continue();
-    });
-    await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
-    await expect(page.getByRole('status', { name: 'Loading the form' })).toBeVisible();
-    await expect(partForm(page)).toBeVisible({ timeout: SLOW_OPEN_WAIT_MILLISECONDS });
-    await expect(page.getByRole('status', { name: 'Loading the form' })).toHaveCount(0);
-  });
+  // The failed and the slow states of the form's definition (`/form`) were two cases here. The Engineer's page now hands the form its data as props (DEF-085, DL-469), so the route is not read and the browser
+  // cannot be made to fail or wait on it; the two cases are `tests/unit/part-form-load-states.test.ts`, with the real `PartForm` and the real `useFormDefinition` and only the network stubbed (DL-470 (1)).
 
   // DEF-059 (AQP-393): the status of the part's stored values on their way (`part-fields.tsx`) is the one on screen when the part's read (`GET .../nodes/{id}`) is held. Its box is attached
   // before it is judged, so a width of 0 (a row item with no grow, whose children are empty blocks) is read from the report and not guessed from "hidden".
@@ -76,6 +47,10 @@ test.describe('AC-4: the part form fetches its fields', () => {
     await ensureCanaryCustomers();
     await ensureCanaryMaterials();
     const owner = await signInAsNewEngineer(page, testInfo);
+    // The first row's values come as props (DEF-085, DL-469), so the page reads no part when it loads. The part's own read is the one made when another row is chosen: the estimate has a second row, added with the
+    // request the "+" sends (no person made), and the first row is the one the page shows.
+    const added = await page.request.post(`/api/v1/estimates/${owner.id}/nodes`, { headers: { origin: DEVELOPMENT_URL }, data: { parentId: null, nodeKind: 'MAIN_ASSEMBLY' } });
+    expect(added.status()).toBe(201);
     let release: () => void = () => undefined;
     const held = new Promise<void>((resolve) => {
       release = resolve;
@@ -95,6 +70,9 @@ test.describe('AC-4: the part form fetches its fields', () => {
     );
     try {
       await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
+      await waitForForm(page);
+      await showTree(page);
+      await tree(page).locator('a[data-part-id]').nth(1).click();
       // The read starts only once the part's fields are mounted, so the status that is on screen from here is the part's own and not the form definition's.
       await readReached;
       const status = page.getByRole('status', { name: 'Loading the form' });
