@@ -82,17 +82,9 @@ export function quantityFor(user: number, round: number): string {
   return String(1 + ((user + round) % 24));
 }
 
-const LESS_THAN = 0x3c;
-const EQUALS = 0x3d;
-
-/**
- * An incompressible picture of 199 KB that the portal's content check accepts every time. The check refuses a file that holds the opening of a page, a script or an SVG anywhere in it (`<script`, `<svg`,
- * `<html`...), and random filler can hold one by chance (about 1 picture in 2,500). Every `<` is written as `=`, which keeps the filler random and the length and the first and last bytes as they were.
- */
+/** An incompressible picture of 199 KB that the portal's content check accepts every time (`incompressiblePicture` holds no script marker: issue 821). */
 export function acceptedPicture(index: number): Uint8Array<ArrayBuffer> {
-  const bytes = new Uint8Array(incompressiblePicture(index));
-  for (let at = 0; at < bytes.length; at += 1) if (bytes[at] === LESS_THAN) bytes[at] = EQUALS;
-  return bytes;
+  return new Uint8Array(incompressiblePicture(index));
 }
 
 /** Runs `work` over the items with at most `limit` at once, in order of start, and fails with the first error. */

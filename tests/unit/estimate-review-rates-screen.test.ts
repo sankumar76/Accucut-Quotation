@@ -165,18 +165,18 @@ describe('AC-3, AC-4: an approved estimate, and the states without a current fig
 describe('AC-2: the approval dialog is offered the same counts, in one line', () => {
   it('the offer carries the line of the UX spec for SCR-08, made from the counts', async () => {
     const costs = await costsOf({ mastersNow: ONE_OF_EACH });
-    const offer = approveOffer('PREPARED', costs);
+    const offer = approveOffer('PREPARED', costs, null);
     expect(offer?.ratesLine).toBe('2 rates and 1 material price changed since this was calculated. Approving is not blocked. Close this window and Recalculate first if you want them used.');
     expect(offer?.ratesLine).toBe(approveRatesLine(ONE_OF_EACH_COUNTS));
   });
 
   it('there is no line when nothing changed, and the offer is the same otherwise', async () => {
-    const offer = approveOffer('PREPARED', await costsOf());
+    const offer = approveOffer('PREPARED', await costsOf(), null);
     expect(offer).not.toBeNull();
     expect(offer?.ratesLine).toBeNull();
   });
 
   it('there is no offer at all for a Draft, so no dialog and no line', async () => {
-    expect(approveOffer('DRAFT', await costsOf({ status: 'DRAFT', mastersNow: ONE_OF_EACH }))).toBeNull();
+    expect(approveOffer('DRAFT', await costsOf({ status: 'DRAFT', mastersNow: ONE_OF_EACH }), null)).toBeNull();
   });
 });

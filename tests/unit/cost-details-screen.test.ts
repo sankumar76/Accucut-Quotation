@@ -201,9 +201,10 @@ describe('AC-9 (without a browser): formulas are text, `details` and `summary` a
     expect(html).toContain('<summary');
   });
 
-  it('the stages sit in a column below 1280 px and beside the row box from 1280 px, and the lines wrap at any width', async () => {
+  it('the box and the stages are one column at every width, the box above the stages (AQP-491, DEF-136 part 2a; ruling scr07-layout, L7-3: the stages are not beside the box), and the lines wrap at any width', async () => {
     const html = render(await viewOf());
-    expect(html).toContain('xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]');
+    expect(html).not.toContain('xl:grid-cols-');
+    expect(html.indexOf('This row, on screen and in the Excel row')).toBeLessThan(html.indexOf('data-stage="1"'));
     expect(html).toContain('[overflow-wrap:anywhere]');
   });
 
