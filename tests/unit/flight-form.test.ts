@@ -9,7 +9,7 @@ import { hookSource, rewriteFlightText, type FormBody } from '../e2e/support/fli
  * DEF-085 (DL-469, DL-470 (2) (iii)): the helper that adds a card to the form body that the Engineer's page carries in its flight data, for `tests/e2e/estimate-form-choice.spec.ts`. **It must be loud**: it throws
  * unless it found and rewrote exactly one body, so a change in Next's payload turns the E2E cases red and never leaves them green for nothing. Two halves are tested: the rewriting of the joined flight text
  * (`rewriteFlightText`), and the hook that runs in the page (`hookSource`: held until the document is loaded, then handed to Next's client in order), run here in a `vm` context that behaves as the page does. The sample
- * text is made by React's own flight serialiser, the one Next uses (`tests/support/flight-sample.cjs`, run under `--conditions=react-server`), so no captured file is needed. Invented names only.
+ * text is made by React's own flight serialiser, the one Next uses (`tests/support/flight-sample.mjs`, run under `--conditions=react-server`), so no captured file is needed. Invented names only.
  */
 
 const SECTION = { id: 's1', number: 1, name: 'A "quoted" <b>name</b> & more', shortName: 'Part', columnRange: 'A to C', fields: [{ id: 'f1', letter: 'A', label: 'Field a' }] };
@@ -18,7 +18,7 @@ const ADDED = { id: 's9', number: 9, name: 'Invented Finishing', shortName: 'Fin
 
 /** The flight text React's serialiser makes for a model. */
 function flightOf(model: unknown): string {
-  return execFileSync(process.execPath, ['--conditions=react-server', 'tests/support/flight-sample.cjs', JSON.stringify(model)], { encoding: 'utf8' });
+  return execFileSync(process.execPath, ['--conditions=react-server', 'tests/support/flight-sample.mjs', JSON.stringify(model)], { encoding: 'utf8' });
 }
 
 const addCard = (form: FormBody): FormBody => ({ ...form, sections: [...form.sections, ADDED] });
@@ -70,7 +70,7 @@ function pageOf(readyState: 'loading' | 'complete' = 'loading') {
       const read = [...flight()] as unknown[][];
       flight().length = 0;
       const later: unknown[][] = [];
-      flight().push = (item: unknown[]) => void later.push(item);
+      (flight() as { push: unknown }).push = (item: unknown[]) => void later.push(item);
       return { read, later };
     },
     flag: (): unknown => vm.runInContext('self.__flightFormRewrite', context),
