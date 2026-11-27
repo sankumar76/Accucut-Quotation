@@ -233,6 +233,8 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     await tap(page, '1.1');
     await rowButton(page, 'Add under', '1.1').click();
     await page.getByRole('menuitem', { name: 'Part', exact: true }).click();
+    // AQP-490: using the toolbar and its menu in the phone drawer does not close the drawer; only a press on a row's link does.
+    await expect(tree(page)).toBeVisible();
     await expect(page.getByText('Added 1.1.1 Part. Type a Description to name it.')).toHaveCount(1);
     await expect(row(page, '1.1.1')).toBeFocused();
     await expect(nameOf(page, '1.1.1')).toHaveText('Part, no description yet');

@@ -30,13 +30,19 @@ export function focusFieldWhenPresent(partId: string, fieldId: string): void {
   });
 }
 
+/** Where the focus is when the person has already moved on from a tap on a row: in the drawer opened again, in a menu or in a dialog. */
+const MOVED_ON_SELECTOR = '[role="menu"], [role="dialog"], [role="alertdialog"]';
+
 /**
  * A tap on a row in the phone drawer opens its form (AQP-490, DEF-133; UX ruling 2026-11-26 item 3 point 7: "tapping the row closes the drawer and shows the form"): the form's title, not a field, takes the focus once that part's
  * form is on the page. A field would put a finger's keyboard on the screen before the person has chosen to type; the title (`tabindex="-1"`) tells a screen reader which part it is and leaves Tab to go to the first field. Looked for
- * inside the form of this part (`data-part-id`), as `focusFieldWhenPresent` does, and it gives up quietly after about two seconds.
+ * inside the form of this part (`data-part-id`), as `focusFieldWhenPresent` does, and it gives up quietly after about two seconds. It also gives up at once when the focus is already in a menu or a dialog (the
+ * person opened the drawer again and the "+" menu of a row before the form came): taking the focus then would close their menu under the click (run 45945851576, `estimate-tree-names.spec.ts` NAME-1, phone).
  */
 export function focusFormTitleWhenPresent(partId: string): void {
   lookUntilFound(() => {
+    const layer = document.activeElement?.closest(MOVED_ON_SELECTOR);
+    if (layer !== null && layer !== undefined) return true;
     const title = document.querySelector<HTMLElement>(`[${PART_FORM_ATTRIBUTE}][data-part-id="${CSS.escape(partId)}"] #${PART_FORM_TITLE_ID}`);
     if (title === null) return false;
     title.focus();

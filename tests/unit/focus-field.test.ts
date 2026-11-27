@@ -127,6 +127,33 @@ describe('focusFormTitleWhenPresent (AQP-490, DEF-133)', () => {
     expect(queries.every((query) => query === TITLE_SELECTOR)).toBe(true);
   });
 
+  it('does not take the focus from a menu or a dialog the person has opened since (the drawer opened again, the "+" menu of a row): it stops looking at once', () => {
+    const focused: string[] = [];
+    present = control(focused, 'title');
+    vi.stubGlobal('document', {
+      activeElement: { closest: () => ({}) },
+      querySelector: (selector: string) => {
+        queries.push(selector);
+        return selector === TITLE_SELECTOR ? present : null;
+      },
+    });
+    focusFormTitleWhenPresent(PART_ID);
+    vi.advanceTimersByTime(RETRY_MILLISECONDS * MAX_ATTEMPTS * 2);
+    expect(focused).toEqual([]);
+    expect(queries).toEqual([]);
+  });
+
+  it('still takes the focus when it is on the page or on something that is not in a menu or a dialog', () => {
+    const focused: string[] = [];
+    present = control(focused, 'title');
+    vi.stubGlobal('document', {
+      activeElement: { closest: () => null },
+      querySelector: (selector: string) => (selector === TITLE_SELECTOR ? present : null),
+    });
+    focusFormTitleWhenPresent(PART_ID);
+    expect(focused).toEqual(['title']);
+  });
+
   it('waits for the form, as the field helpers do, then focuses the title once, and gives up quietly after about two seconds', () => {
     const focused: string[] = [];
     focusFormTitleWhenPresent(PART_ID);
