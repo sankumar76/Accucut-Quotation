@@ -78,3 +78,24 @@ describe('AQP-452: the row of SCR-07', () => {
     expect(t).toContain('Figures are shown to 2 decimals. Totals add the unrounded values and round once, so adding the shown figures by hand can differ by a few hundredths.');
   });
 });
+
+describe('AQP-496 (DEF-139, RO-18): the "View inputs" link of SCR-07', () => {
+  it("is in the row header, in every state, and goes to the Lead's inputs view of this row on the estimate page", async () => {
+    for (const options of [{}, { calculated: false }, { inputsRevision: COST_CALCULATION_REVISION + 1 }]) {
+      const html = render(await viewOf(options));
+      const link = html.match(/<a[^>]*href="(\/estimates\/[^"]*)"[^>]*>View inputs<\/a>/);
+      expect(link, 'a link named View inputs').not.toBeNull();
+      expect(link?.[1]).toBe(`/estimates/${CODE}?row=1#row-inputs`);
+      // It sits with the row's heading (after the eyebrow, before the first stage or message), not in the page head.
+      expect(html.indexOf('Cost details for one row')).toBeLessThan(html.indexOf('>View inputs<'));
+      expect(html.indexOf('>View inputs<')).toBeGreaterThan(html.indexOf('Back to the estimate'));
+    }
+  });
+
+  it('writes the row as the address says (the Sl. No of the view, encoded) and names the row for a screen reader', async () => {
+    const view = await viewOf();
+    const html = render({ ...view, row: { ...view.row, slNo: '1.2' } });
+    expect(html).toContain('href="/estimates/' + CODE + '?row=1.2#row-inputs"');
+    expect(html).toMatch(/<a[^>]*aria-label="View inputs of 1\.2[^"]*"[^>]*>View inputs<\/a>/);
+  });
+});

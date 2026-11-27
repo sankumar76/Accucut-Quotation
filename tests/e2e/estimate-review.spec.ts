@@ -152,6 +152,28 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await length.blur();
     await expect(length).toHaveValue(before);
     await expect(length).toHaveAttribute('aria-readonly', 'true');
+
+    // AQP-496 (DEF-138, DL-446): a read-only drop-down neither opens nor changes. By touch (360 and 768) it is tapped; with a mouse (1366) it is clicked and then given Space, Enter, the arrows, Alt+Down and a typed
+    // letter. Each must leave the value, raise no change event and open no list (`:open`, where the browser has it), and send nothing.
+    const selects = form.locator('select:not([disabled])');
+    const selectCount = await selects.count();
+    expect(selectCount, 'drop-downs in the read-only inputs').toBeGreaterThan(0);
+    await page.evaluate(() => document.addEventListener('change', () => document.documentElement.setAttribute('data-select-changed', ''), true));
+    const touch = (page.viewportSize()?.width ?? 0) < 1024;
+    for (let index = 0; index < selectCount; index += 1) {
+      const select = selects.nth(index);
+      const kept = await select.inputValue();
+      if (touch) {
+        await select.tap();
+      } else {
+        await select.click();
+        for (const key of [' ', 'Enter', 'ArrowDown', 'ArrowUp', 'Alt+ArrowDown', 'a']) await page.keyboard.press(key);
+      }
+      await expect(select).toHaveValue(kept);
+      await expect(select).toHaveAttribute('aria-readonly', 'true');
+      expect(await select.evaluate((element) => { try { return element.matches(':open'); } catch { return false; } }), 'the list is not open').toBe(false);
+    }
+    await expect(page.locator('html')).not.toHaveAttribute('data-select-changed', '');
     expect(writes).toEqual([]);
   });
 
