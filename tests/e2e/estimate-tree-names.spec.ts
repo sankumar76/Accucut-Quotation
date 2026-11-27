@@ -365,7 +365,9 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     // the scroll and not the tree: the same reading as in `estimate-treatments.spec.ts`.)
     await expectStateAccessible(page, 'nav[aria-label="Parts tree"]');
 
-    // The "+" menu of the row opens in line under it.
+    // The "+" menu of the row opens in line under it. The page was scrolled to the top by the scan above, out from under a pointer that did not move, so the hover is made again right before the button is pressed (DL-445):
+    // a press on a toolbar BUTTON needs the row to be hovered when it lands. The movement cases do no such thing.
+    await open();
     await rowButton(page, 'Add under', '1.1').click();
     await expect(page.getByRole('menu')).toBeVisible();
     await expectStateAccessible(page, 'nav[aria-label="Parts tree"]');
@@ -389,7 +391,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
       await row(page, '1.2').click();
       // The drawer closes and the form of that row is what is on screen.
       await expect(tree(page)).toBeHidden();
-      const title = page.locator('form[data-part-form] h3');
+      const title = page.locator('form[data-part-form] #part-form-title');
       await expect(title).toContainText('1.2');
       // The focus goes to the form's title, not into a field: no keyboard comes up for a finger that has not chosen to type.
       await expect(title).toBeFocused();

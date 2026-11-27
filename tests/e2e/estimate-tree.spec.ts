@@ -818,6 +818,11 @@ test.describe('AQP-405: the row actions', () => {
       expect(await toolbarHeightOf(page, '1'), 'row 1 shows its toolbar by the keyboard focus').toBeGreaterThan(1);
     };
     const settled = async (): Promise<void> => {
+      // The press opened row 1.1: in the phone drawer that shuts the drawer (AQP-490, DEF-133), which is opened again to read the tree.
+      if (isPhone(page)) {
+        await expect(tree(page)).toBeHidden();
+        await showTree(page);
+      }
       await expect(part(page, '1.1')).toHaveAttribute('aria-current', 'true');
       await expect(part(page, '1.2')).not.toHaveAttribute('aria-current', 'true');
       await expect.poll(() => toolbarHeightOf(page, '1'), 'row 1 settles once the press is over').toBeLessThanOrEqual(1);
