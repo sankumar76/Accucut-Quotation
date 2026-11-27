@@ -159,9 +159,13 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     const selectCount = await selects.count();
     expect(selectCount, 'drop-downs in the read-only inputs').toBeGreaterThan(0);
     await page.evaluate(() => document.addEventListener('change', () => document.documentElement.setAttribute('data-select-changed', ''), true));
+    // The `:open` check below proves nothing in a browser that does not know the selector (it would pass silently), so the browser is asked first.
+    expect(await page.evaluate(() => CSS.supports('selector(:open)')), 'the browser knows :open').toBe(true);
     const touch = (page.viewportSize()?.width ?? 0) < 1024;
     for (let index = 0; index < selectCount; index += 1) {
       const select = selects.nth(index);
+      // QA's guard: a drop-down with one option has nothing to change to, so the "no change" checks below would test nothing.
+      expect(await select.locator('option').count(), `options of drop-down ${String(index + 1)}`).toBeGreaterThanOrEqual(2);
       const kept = await select.inputValue();
       if (touch) {
         await select.tap();
@@ -171,6 +175,8 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
       }
       await expect(select).toHaveValue(kept);
       await expect(select).toHaveAttribute('aria-readonly', 'true');
+      // AQP-491 (DEF-138): it is drawn as the read-only boxes beside it are, dashed, so it does not look editable.
+      await expect(select).toHaveCSS('border-top-style', 'dashed');
       expect(await select.evaluate((element) => { try { return element.matches(':open'); } catch { return false; } }), 'the list is not open').toBe(false);
     }
     await expect(page.locator('html')).not.toHaveAttribute('data-select-changed', '');
@@ -201,6 +207,13 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(tiles(page)).toContainText(`₹ ${total}`);
     await expect(buildPanel(page)).toContainText('Worked example: if one lid costs 1, one pipe costs 1 and the frame row holds nothing, the total is 24 + 6 + 0 = 30.');
     await expect(buildPanel(page)).toContainText('Figures are shown to 2 decimals. Totals add the unrounded values and round once');
+    // AQP-491 (DEF-134, DEF-135): the example and the rounding sentence stand above the table, and a Part cell names the kind before the name (a row with no name shows its kind once).
+    const exampleBox = defined(await buildPanel(page).getByText(/^Worked example:/).boundingBox());
+    const roundingBox = defined(await buildPanel(page).getByText(/^Figures are shown to 2 decimals/).boundingBox());
+    const tableBox = defined(await table.boundingBox());
+    expect(exampleBox.y + exampleBox.height).toBeLessThanOrEqual(tableBox.y + 1);
+    expect(roundingBox.y + roundingBox.height).toBeLessThanOrEqual(tableBox.y + 1);
+    for (const cell of await table.getByRole('row').nth(1).getByRole('cell').nth(1).allInnerTexts()) expect(cell).toMatch(/^(Main Assembly|Sub-Assembly|Part|Sub-part|Fastener)(: \S.*)?$/);
     await expect(buildPanel(page)).toContainText("The Engineer types the count for the whole order on every row (QTY per Assy, column H). Each row's cost (column BG) already includes its own count, so the total is the BG of every row added together. Nothing is multiplied by the rows above.");
     await expectColumns(page);
   });

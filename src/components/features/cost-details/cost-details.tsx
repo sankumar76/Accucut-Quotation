@@ -158,7 +158,7 @@ function Stages({ view, calculatedAt }: { readonly view: NodeCostsView; readonly
 export function CostDetails({ view, code, calculatedAt, tree }: CostDetailsProps) {
   const { state } = view;
   const body = (
-    <div className="flex min-w-0 flex-col gap-s-4">
+    <div data-cost-body="" className="flex min-w-0 flex-col gap-s-4">
       <RowHeader view={view} code={code} />
       {state === 'none' ? (
         <Notice tone="info" role="status" title={NOT_CALCULATED_TITLE}>
@@ -177,7 +177,8 @@ export function CostDetails({ view, code, calculatedAt, tree }: CostDetailsProps
         </Notice>
       ) : null}
       {state === 'current' && view.details !== null ? (
-        <div className="flex flex-col gap-s-3 xl:grid xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] xl:items-start">
+        // One column at every width, the box above the six stages (AQP-491, DEF-136; UX ruling `scr07-layout-2026-11-28.md`, L7-3): beside the tree they were squeezed to about 360 px.
+        <div className="flex flex-col gap-s-3">
           <RowBox view={view} />
           <Stages view={view} calculatedAt={calculatedAt} />
           <PhoneStages />
