@@ -6,6 +6,7 @@ import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-client';
+import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
 import type { PartItem } from '@/lib/estimates/tree-client';
 import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
 import { isSectionComplete, sectionProgress, sectionWeight, shownSections, sumProgress, textOf } from '@/lib/estimates/form-values';
@@ -43,6 +44,7 @@ import { SectionStrip } from './section-strip';
 import { TREATMENT_MISSING_MESSAGE } from './surface-texts';
 import { SurfaceTreatments } from './surface-treatments';
 import type { Loaded } from './use-form-definition';
+import { TreatmentSeedContext } from './use-treatment-options';
 import { usePartValues, type PartTarget, type SavedPart } from './use-part-form';
 
 export interface PartFieldsProps {
@@ -68,6 +70,8 @@ export interface PartFieldsProps {
   readonly gate?: SaveGate | undefined;
   /** The Lead's and the Admin's read-only view of the same form (AQP-488, DEF-131 Stage 1): see `PartReview`. Absent for the Engineer, whose form is unchanged. */
   readonly review?: PartReviewState | undefined;
+  /** What the page handed over for the form to start with (the Lead's review, DEF-141); absent for the Engineer, whose form reads it from the server. */
+  readonly seed?: PartFormSeed | undefined;
 }
 
 const TITLE_ID = PART_FORM_TITLE_ID;
@@ -120,7 +124,7 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
  * its number of fields, one to a row on a phone; the form is held to one card's least width, so a reserved region beside it takes a column with no redesign, UD-4), and every field from the server's definition. It is used under a key of the part's ID.
  * Each value is the person's until the field is left, and then the part's values are saved on their own (`usePartValues`).
  */
-export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing = NONE_MISSING, gate, review }: PartFieldsProps) {
+export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing = NONE_MISSING, gate, review, seed }: PartFieldsProps) {
   const allFields = form.sections.flatMap((section) => section.fields);
   const [ownGate] = useState(createSaveGate);
   const values = usePartValues({
@@ -134,6 +138,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
     onServerIgnored: onServerIgnored ?? noop,
     onWrote,
     gate: gate ?? ownGate,
+    seed,
   });
   const title = useRef<HTMLHeadingElement>(null);
   // The Engineer's form draws its own title; the review's is drawn on the server above the form, and this form is labelled by it.
@@ -182,7 +187,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
   // A field Calculate found blank is still missing while it shows no value: typing into it takes its words away at once, and a card has none left when all its fields have one.
   const missingNeeded = (field: FormField): boolean => missing.has(field.id) && textOf(field, values.texts).trim() === '';
   const hasMissing = (section: { readonly fields: ReadonlyArray<FormField> }): boolean => section.fields.some(missingNeeded);
-  return (
+  const drawn = (
     <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, titleElement())} className="is-compact flex min-w-0 flex-1 flex-col gap-s-4">
       <div className="flex flex-col gap-s-1">
         {review === undefined ? <PartHead partId={part.id} slNo={part.slNo} nodes={nodes} titleId={TITLE_ID} titleRef={title} /> : null}
@@ -279,4 +284,6 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
       </p>
     </form>
   );
+  // The treatments the page handed over reach the control that needs them, deep in the form, through this context (DEF-141).
+  return <TreatmentSeedContext value={seed?.treatments}>{drawn}</TreatmentSeedContext>;
 }

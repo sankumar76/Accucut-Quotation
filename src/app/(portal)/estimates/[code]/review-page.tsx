@@ -6,8 +6,11 @@ import { formatIst } from '@/lib/time';
 import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getDownloadMarkerService, getEstimateReviewService } from '@/server/composition';
+import { selectedRow } from '@/components/features/estimate-review/selected-row';
+import { getDownloadMarkerService, getEstimateReviewService, getEstimateService, getMastersService } from '@/server/composition';
 import type { EstimateViewer } from '@/server/services/estimate-service';
+
+import { readFormBodies, readPartBody, seedOf } from './part-form-seed';
 
 /**
  * SCR-06 for a Lead or an Admin (STORY-06.02): reads the figures of the estimate through the estimate review service, which lets a figure out only while its state is `current`, and draws the
@@ -53,7 +56,11 @@ async function markerOf(viewer: EstimateViewer, estimateId: string): Promise<Dow
 }
 
 export async function renderReview({ viewer, estimateId, header, customer, quoted, ignored, engineerName, deadlinePassed, row }: ReviewPageArgs): Promise<ReactElement> {
-  const [costs, download] = await Promise.all([getEstimateReviewService().getCosts(viewer, estimateId), markerOf(viewer, estimateId)]);
+  // The form's definition and the two option lists do not depend on the row, so they are read beside the figures; the part's values are read for the row the page shows (`part-form-seed.ts`, DEF-141).
+  const services = { estimates: getEstimateService(), masters: getMastersService() };
+  const [costs, download, bodies] = await Promise.all([getEstimateReviewService().getCosts(viewer, estimateId), markerOf(viewer, estimateId), readFormBodies(services, viewer, estimateId)]);
+  const selected = selectedRow(costs.nodes, row);
+  const seed = selected === null ? undefined : seedOf(estimateId, selected.id, bodies, bodies === null ? null : await readPartBody(services, viewer, estimateId, selected.id));
   return (
     <EstimateReview
       header={header}
@@ -68,6 +75,7 @@ export async function renderReview({ viewer, estimateId, header, customer, quote
       engineerName={engineerName}
       deadlinePassed={deadlinePassed}
       row={row}
+      seed={seed}
     />
   );
 }

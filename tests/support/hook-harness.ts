@@ -51,6 +51,13 @@ export const reactHooks = {
     });
     slot.deps = deps;
   },
+  /** A context is its current value, set by the test (there is no tree to provide it): the value a component under a provider would read. */
+  createContext<T>(initial: T): { value: T } {
+    return { value: initial };
+  },
+  useContext<T>(context: { value: T }): T {
+    return context.value;
+  },
   useCallback<T>(callback: T): T {
     return callback;
   },
