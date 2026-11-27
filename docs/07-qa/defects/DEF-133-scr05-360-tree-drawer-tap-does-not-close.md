@@ -43,3 +43,7 @@ The row is selected (the form follows) but **the drawer stays open**; the person
 
 ## Records
 Jira Bug AQP-490 and GitHub issue #808, created 2026-11-27 and cross-linked. Related: DEF-101 (AQP-458, #751), DEF-129 (AQP-486), the 26 Nov parts-tree ruling, the ux-expert's pass 1 (`hands-on-recheck-1-2026-11-27.md`, N-1); test plan 0.3.97.
+
+## Update 2026-11-27: the ux-expert's pass 2 on #812's head (qa-engineer; test plan 0.3.102)
+`docs/03-ux/rulings/hands-on-recheck-2-2026-11-28.md`, records-u 775ed4fc; #812 at `0a6e7d30` (master plus DEF-133 only; not merged when checked), 360 px, scripted. **Conforms on its head:** a tap on a row closes the drawer and shows that row (button `Parts tree 1.1 Base frame`, form title `1.1 · Base frame`, focus on the form title); the selected row's toolbar is reachable on reopening; adding from the drawer keeps it open (8 rows to 9; status `Added 1.1.4 Sub-part. Type a Description to name it.`, which also shows DEF-090's add announcement); Enter on a row's link still opens the form. N-1 of pass 1 fixed on this head. **DEF-133 stays OPEN until #812 merges; QA verifies and closes it on the merged build** (the push's run and the ux-expert's or QA's re-check of the merged `part-fields.tsx`, which #800 also changes).
+
