@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
+import { CARD_GRID, FORM_ROOT, HEAD_LINES, STATUS_LINE } from '@/components/shared/form-layout';
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-client';
 import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
 import type { PartItem } from '@/lib/estimates/tree-client';
@@ -17,7 +17,6 @@ import { formatIst } from '@/lib/time';
 
 import {
   FAILED_BODY,
-  FORM_LOADING,
   FORM_LOCKED,
   MISSING_CHOICE_MESSAGE,
   MISSING_NUMBER_MESSAGE,
@@ -35,7 +34,8 @@ import { focusCalculate } from './calculate-button';
 import { controlIdFor, NEXT_FIELD, PART_FORM_TITLE_ID } from './field-ids';
 import { FieldRenderer } from './field-renderer';
 import { PartHead } from './part-head';
-import { PartProgress, PartProgressSkeleton } from './part-progress';
+import { PartFormGhost } from './part-form-ghost';
+import { PartProgress } from './part-progress';
 import { PictureSlot } from './picture-slot';
 import { reviewField, type PartReviewState } from './review-look';
 import { CONFLICT_BODY, CONFLICT_KEEP_MINE, CONFLICT_TITLE, CONFLICT_USE_NEWER, saveStatusText } from './save-texts';
@@ -170,14 +170,8 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
     );
   }
   if (values.stored.status === 'loading') {
-    return (
-      <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
-        <PartProgressSkeleton />
-        <Skeleton className="h-(--control-h)" />
-        <Skeleton className="h-(--control-h)" />
-        <Skeleton className="h-(--control-h)" />
-      </div>
-    );
+    // The second wait (the part's values are being read): the same ghost the page drew for the first one, from the definition this form holds, and silent because the first has said it (DEF-145, PF-1, PF-9.2).
+    return <PartFormGhost form={form} head={review === undefined ? 'engineer' : 'lead'} notice={review !== undefined ? review.notice : editable ? undefined : FORM_LOCKED} editable={editable} silent />;
   }
 
   const problem = values.problem;
@@ -192,13 +186,13 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
   const missingNeeded = (field: FormField): boolean => missing.has(field.id) && textOf(field, values.texts).trim() === '';
   const hasMissing = (section: { readonly fields: ReadonlyArray<FormField> }): boolean => section.fields.some(missingNeeded);
   const drawn = (
-    <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, titleElement())} className="is-compact flex min-w-0 flex-1 flex-col gap-s-4">
-      <div className="flex flex-col gap-s-1">
+    <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, titleElement())} className={FORM_ROOT}>
+      <div className={HEAD_LINES}>
         {review === undefined ? <PartHead partId={part.id} slNo={part.slNo} nodes={nodes} titleId={TITLE_ID} titleRef={title} /> : null}
         <PartProgress slNo={part.slNo} counts={sumProgress(progress.map(({ counts }) => counts))} />
         {/* The one status line of saving (STORY-05.10 AC-4, AC-5): when something was last saved (every save that stored something moves it, `onWrote`), that the form saves on its own, and, once, that the automatic
             save could not. A polite live region that is on the page from the first paint, so it speaks only when its words change, which is when a save stored something or failed, never on a silent tick. */}
-        <p role="status" data-last-saved="" className="text-label text-ink-3">
+        <p role="status" data-last-saved="" className={STATUS_LINE}>
           {saveStatusText(lastSavedAt === null ? NOT_SAVED_YET : lastSavedText(formatIst(new Date(lastSavedAt))), editable, values.autosaveFailedAt)}
         </p>
       </div>
@@ -233,7 +227,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
         </Notice>
       ) : null}
       <SectionStrip items={progress.map(({ section, counts }) => ({ section, complete: isSectionComplete(counts), missing: hasMissing(section) }))} />
-      <div data-part-grid="" className="flex flex-wrap gap-s-3">
+      <div data-part-grid="" className={CARD_GRID}>
         {progress.map(({ section, counts }) => (
           <SectionCard key={section.id} section={section} progress={counts.total === 0 ? null : counts} missing={hasMissing(section)} weight={sectionWeight(section)}>
             {/* The surface treatments of a section (07) are one multi-select, drawn first in the card: a chosen one is 1 and one that is not is 0, and each is saved on its own (STORY-05.06). */}

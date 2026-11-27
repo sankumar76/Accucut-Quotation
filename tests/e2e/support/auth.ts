@@ -315,6 +315,21 @@ export async function makeCanaryEstimateCalculable(ownerId: string, materialId: 
 }
 
 /**
+ * Gives every part of an estimate made **through the API** (a task assigned to the set-up Engineer: no person is made) every input Calculate needs, as `makeCanaryEstimateCalculable` does for the canary part (DEF-145). Repeatable.
+ * Throwaway database only (guarded above).
+ */
+export async function makeEstimateCalculable(estimateId: string, materialId: string): Promise<void> {
+  const client = await connectToTestDatabase();
+  try {
+    const { rows } = await client.query<{ snapshot: unknown }>('SELECT snapshot FROM config_versions ORDER BY number DESC LIMIT 1');
+    const snapshot = registryShape.parse(rows[0]?.snapshot) as unknown as ConfigDocument;
+    await client.query('UPDATE estimate_nodes SET inputs = $2::jsonb WHERE estimate_id = $1::uuid', [estimateId, JSON.stringify(completePartInputsFor(snapshot, materialId))]);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
  * Types a count into QTY per Assy of the one part of the canary estimate of a person made by `createDisposableUser('scan', ...)` (STORY-05.12: a 0 there earns the first press the warning). The field
  * is found by its key in the newest registry version, as `fillCanaryPart` finds the registry; nothing else of the part changes. Repeatable. Throwaway database only (guarded above).
  */

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,13 @@ export interface PartFormProps {
   readonly review?: PartReview | undefined;
   /** The form's data as the page handed it over (the Lead's review, DEF-141): the definition, the materials, the part's values and the treatments, as the routes send them. The form then reads nothing from the server to start. Absent for the Engineer. */
   readonly seed?: PartFormSeed | undefined;
+  /**
+   * The loading ghost, **drawn on the server** and handed in as an element, as `cards` and `notice` are, so none of its code is in the first load (DEF-145, PF-6): the form without its values, in the form's own cards and rows (`PartFormGhost`).
+   * It is what the form area shows from the first paint until the form replaces it, in the same place. Absent where the page could not draw one (its read of the definition failed): the three bars then stand in.
+   */
+  readonly ghost?: ReactNode;
+  /** The Engineer's tree has not been read yet and has not failed (PF-7): there is no part to show because there is no tree, not because none was chosen, so the ghost stands in and "Choose a part" is not said. */
+  readonly treeUnread?: boolean | undefined;
 }
 
 /**
@@ -54,7 +61,7 @@ export interface PartFormProps {
  * nothing typed into one can land in another. Skeleton cards while it loads, a notice with "Try again" when it cannot be read. No rate, cost or formula is requested, held or drawn: the
  * server's form has none, and the materials are IDs and names.
  */
-export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, onNamed, onServerIgnored, missing, gate, onShown, review, seed }: PartFormProps) {
+export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, onNamed, onServerIgnored, missing, gate, onShown, review, seed, ghost, treeUnread = false }: PartFormProps) {
   const definition = useFormDefinition(estimateId, seed);
   // A row was chosen after the page was drawn (the review's view): the form's title takes the focus, the choice is said once and the tree folds. The first paint does none of it.
   const [seen, setSeen] = useState(part?.id);
@@ -70,7 +77,7 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
     if (shown) onShown?.();
   }, [shown, onShown]);
 
-  if (part === null) return <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_NO_PART}</p>;
+  if (part === null) return treeUnread && ghost !== undefined ? ghost : <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_NO_PART}</p>;
   if (definition.form.status === 'failed') {
     return (
       <Notice tone="danger" title={FORM_LOAD_FAILED_TITLE}>
@@ -93,6 +100,7 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
     );
   }
   if (definition.form.status === 'loading' || Fields === null) {
+    if (ghost !== undefined) return ghost;
     return (
       <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
         <Skeleton className="h-(--control-h)" />

@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 
 import { Icon } from '@/components/shared/icon';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CARD_HEADER, CARD_SHARE, CARD_TITLE, COUNT_TEXT, FIELDS, NUMBER_TILE, RANGE_CHIP } from '@/components/shared/form-layout';
 import { cn } from '@/lib/cn';
 import type { FormSection } from '@/lib/estimates/form-client';
 import type { SectionProgress } from '@/lib/estimates/form-values';
@@ -20,21 +21,8 @@ export interface SectionCardProps {
   readonly children: ReactNode;
 }
 
-/** A card's share of its row follows its weight (`--n`), and a card never overflows the row (`min-w-0`, in `Card`); below 768 px it takes the whole row. */
-const CARD_SHARE = 'flex-[var(--n)_1_calc(var(--n)_*_var(--compact-weight-unit))] max-md:flex-[1_1_100%]';
-
-/** The fields of a card: 12 px padding and gaps, an auto-fill grid with a least column, a multi-line box, the treatments and the picture across the row (the picture two columns, the whole row on a phone). */
-const FIELDS =
-  'grid grid-cols-[repeat(auto-fill,minmax(var(--compact-column-min),1fr))] gap-s-3 p-s-3 md:p-s-3 [&>:has([data-slot=textarea])]:col-span-full [&>[data-treatments]]:col-span-full [&>:has([data-picture-zone])]:col-span-full min-[480px]:[&>:has([data-picture-zone])]:col-span-2';
-
 /** The weight as a custom property of the card's style, which the share of its row is worked out from. */
 type CardShare = CSSProperties & Record<'--n', number>;
-
-/**
- * The number tile of a card (DEF-098; SCR-05 mock-up `.section-no`): 32 px, the dark navigation ink, green once every field of the card has a value and red while Calculate found one of them blank. The tile's
- * colour is a second cue: the count beside the tag and the words of a missing field say the same in text.
- */
-const NUMBER_TILE = 'inline-flex size-s-6 shrink-0 items-center justify-center rounded-md font-mono text-label font-medium text-on-fill';
 
 /** The id of a card's heading: the section strip jumps to it and the card is labelled by it. */
 export const sectionTitleId = (sectionId: string): string => `part-section-${sectionId}`;
@@ -52,20 +40,20 @@ export function SectionCard({ section, progress, missing = false, weight, childr
   const done = progress !== null && progress.total > 0 && progress.complete === progress.total;
   return (
     <Card role="region" aria-labelledby={titleId} style={share} className={cn(CARD_SHARE, missing && 'border-danger-line')}>
-      <CardHeader className="px-s-3 py-s-2 md:px-s-3">
+      <CardHeader className={CARD_HEADER}>
         {/* The heading holds the tile, so the region's name stays "01 Part Details": the number, then the name. */}
-        <CardTitle id={titleId} as="h3" tabIndex={-1} className="flex min-w-0 flex-1 items-center gap-s-2">
+        <CardTitle id={titleId} as="h3" tabIndex={-1} className={CARD_TITLE}>
           <span data-section-no="" className={cn(NUMBER_TILE, missing ? 'bg-danger' : done ? 'bg-success' : 'bg-nav')}>
             {String(section.number).padStart(2, '0')}
           </span>{' '}
           <span className="min-w-0">{section.name}</span>
         </CardTitle>
-        <span className="rounded-sm bg-surface-2 px-s-1 font-mono text-label text-ink-2">
+        <span className={RANGE_CHIP}>
           <span className="sr-only">{columnRangeLabel(section.columnRange)}</span>
           <span aria-hidden="true">{section.columnRange}</span>
         </span>
         {progress === null ? null : (
-          <p data-section-count="" className="text-label text-ink-2 tabular-nums">
+          <p data-section-count="" className={COUNT_TEXT}>
             {progress.complete} of {progress.total}
             <span className="sr-only"> complete</span>
           </p>

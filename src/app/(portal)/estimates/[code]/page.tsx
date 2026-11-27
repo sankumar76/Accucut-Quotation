@@ -10,6 +10,7 @@ import { getEstimateService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
 import { pageMetadata } from '@/lib/page-metadata';
 
+
 /** No task code and no customer name in the tab title (architecture section 8, FR-089). */
 export const metadata = pageMetadata(ESTIMATE_META_TITLE, ESTIMATE_META_DESCRIPTION);
 
@@ -57,7 +58,8 @@ export default async function EstimatePage({ params, searchParams }: PageProps) 
   const ignored = workspace.ignored === null ? null : { at: workspace.ignored.at.toISOString(), byName: workspace.ignored.byName, remarks: workspace.ignored.remarks };
   // An allow-list by name, closed by `assertNever`: a fourth role added one day gets no branch here until someone decides (it fails to compile) and never the review's figures (NFR-002).
   switch (user.role) {
-    case 'ENGINEER':
+    case 'ENGINEER': {
+      // The Engineer's first wait keeps the placeholder it had: the form's ghost would need a read of the form's definition here, which this page does not make and which DEF-145 must not add (DL-471). Its second wait, while the part's values are read, is the ghost, drawn in the lazy chunk from the client's own read of the definition (`PartFields`); the first wait takes it from the page too once one read gives it.
       // The Engineer's notice of an ignored task is a server component with no script, handed in as an element: drawn at first paint, outside the client form (UX 12944 section 4).
       return (
         <EstimateWorkspace
@@ -69,6 +71,7 @@ export default async function EstimatePage({ params, searchParams }: PageProps) 
           cards={<TaskCards view={header} />}
         />
       );
+    }
     case 'LEAD':
     case 'ADMIN': {
       // SCR-06 is Restricted: it is loaded here, on the Lead's and the Admin's branch only, and never imported by this file (NFR-002).

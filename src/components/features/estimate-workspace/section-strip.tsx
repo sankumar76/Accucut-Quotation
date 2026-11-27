@@ -1,6 +1,8 @@
 import { Check, TriangleAlert } from 'lucide-react';
 
 import { Icon } from '@/components/shared/icon';
+import { cn } from '@/lib/cn';
+import { STRIP_BOX, STRIP_ITEM, STRIP_LINK, STRIP_LIST, STRIP_STICKY } from '@/components/shared/form-layout';
 import type { FormSection } from '@/lib/estimates/form-client';
 
 import { SECTION_COMPLETE_TEXT, TREE_MISSING_INPUTS, SECTION_STRIP_LABEL, sectionLinkText } from './estimate-texts';
@@ -38,16 +40,16 @@ export function SectionStrip({ items }: SectionStripProps) {
       aria-label={SECTION_STRIP_LABEL}
       data-sticky-bar="top"
       data-section-strip=""
-      className="sticky top-(--topbar-h) z-(--z-bar) min-w-0 rounded-md border border-border bg-surface px-s-2 shadow-card"
+      className={cn(STRIP_STICKY, STRIP_BOX)}
     >
       {/* `relative`, so the spoken-only words of a link ("All filled in", "Missing inputs", positioned absolutely) are clipped by this list's own scroll and do not reach the page: their containing block would otherwise be the sticky bar around it, which does not clip, and a link far along the strip pushed the page sideways. */}
-      <ul className="relative flex min-w-0 gap-s-1 overflow-x-auto py-s-1">
+      <ul className={STRIP_LIST}>
         {items.map(({ section, complete, missing = false }) => (
-          <li key={section.id} className="shrink-0">
+          <li key={section.id} className={STRIP_ITEM}>
             <a
               href={`#${sectionTitleId(section.id)}`}
               onClick={(event) => jumpTo(event, section.id)}
-              className="inline-flex min-h-(--control-h) items-center gap-s-1 rounded-md px-s-2 text-body whitespace-nowrap text-ink no-underline hover:bg-surface-2"
+              className={cn(STRIP_LINK, 'hover:bg-surface-2')}
             >
               {sectionLinkText(section.number, section.shortName)}
               {missing ? (
