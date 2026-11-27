@@ -118,3 +118,69 @@ Whether the 10 % band on (ii) is met is master's call on the numbers (DL-455 res
 - Open questions: none
 - Risks raised: none new (NFR-010 margin noted under PRF-827-02 for master's G8 note if the proof confirms it)
 - Recommended next agent: developer (lane 2): PRF-827-01 and the proof table; then master for the ruling on (ii); solution-architect for DL-455 (c)
+
+---
+
+# Round 2: delta review `90520f83..0793b7d5` (DL-457), security lens on the access check
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-performance (combined review, round 2; the security lens on the access check that DL-457 (b) asks for) |
+| Commits reviewed | `7de1f97f` (ARC-827-01 reworded, the `cost-details-page.test.ts` mock, the PRF-827-06 guard) and `0793b7d5` (`EstimateService.getPartForm`, `EstimateInputs.formOf` and `visibleInputsOf`, `readListBodies` and `readPartFormBodies`). The head did not move while I reviewed |
+| Date | 2026-11-27 |
+| GitHub review | [pullrequestreview-6085500480](https://github.com/sankumar76/Accucut-Quotation/pull/827#pullrequestreview-6085500480) (COMMENT) |
+| **Verdict (at `0793b7d5`)** | **APPROVE WITH COMMENTS.** Open after this round: **0 Blocker, 0 Critical, 0 Major, 3 Minor (PRF-827-03, -04, -09), 2 Info (PRF-827-06 (b), -08)**. Before merge: E2E shards 1 to 4 of run 45966127622 green (running when I wrote this), and the proof table filed in the PR body and read against DL-457's restated terms (the section still reads "Filled in below") |
+
+## Security lens: `getPartForm` against `getForm` plus `getNode` (NFR-001, NFR-002)
+
+Read: `estimate-service.ts:443-451`, `estimate-inputs.ts` (`formOf`, `visibleInputsOf`, `getForm`), and the code they replace (`openForRead`, `configurationFor`, `viewReaders`, `partIn`).
+
+| Case | `getForm` + `getNode` | `getPartForm` | Same? |
+|------|----------------------|---------------|-------|
+| owner Engineer | `openForRead` (`findEstimateAccess`, `mayOpen`) allows | the same `openForRead` | Yes |
+| another Engineer | `openForRead` throws `NotFoundError` before any other read | the same call, before the `Promise.all` | Yes |
+| Lead, Admin | `mayOpen` true for any estimate | the same | Yes |
+| unknown estimate | `findEstimateAccess` null: `NotFoundError` | the same | Yes |
+| unknown part | `getForm` answers, `getNode` throws `NotFoundError` (`partIn`) | throws `NotFoundError` (`partIn`): as strict as `getNode` | Yes (the page then has no seed) |
+| Draft, Prepared, Approved, Quoted, Ignored | no state check in either; the only use of state is `configurationFor` (a locked estimate keeps the registry it was approved with) | `viewReaders(id)` calls the same `configurationFor`; the form and the values are built from that one document | Yes |
+
+- **No refused state to lose.** Neither replaced method refuses on state, so lane 2's "refused state" has nothing to preserve beyond the frozen-registry choice, which is shared code.
+- **No field added.** `node` is `{...view, inputs, picture}` as in `getNode`; `form` is `formOf`, the same expression `getForm` used (`getForm` now returns through `formOf`: a refactor of an Engineer-reachable method with an identical result). The page still passes both through `formBody` and `nodeBody`, the routes' strict schemas. The NFR-002 trace from round 1 stands.
+- **No new surface.** The only caller of `getPartForm` is `part-form-seed.ts`, reached from the Lead and Admin branch alone. No route changed, so the role-matrix has nothing new; `tests/security` is in the green step below.
+- **Refusal before reads.** The three reads start after `openForRead` resolves, so a refused viewer causes no node or configuration read.
+- **Canonical id.** `getPartForm` passes the estimate's own `id` to `viewReaders`, `lastWrittenAt` and `pictureOf`; `getNode` passed the caller's string. Lookups are by uuid, so this is the same or safer.
+
+## Round-1 findings
+
+| ID | Status | Note |
+|----|--------|------|
+| PRF-827-01 | **Fixed** | the mock is in; Stage 6 passes (543 files, 11,750 tests) |
+| PRF-827-02 | **Closed by DL-457** | the combined read removes about 4 queries; master restated (ii') at `master`'s 147 and accepted the server-time remainder provisionally (DL-457 (C)). The NFR-010 reading on the reference machine stays with me (DL-455 (7) (b)) |
+| PRF-827-03 | **Open, Minor** | still one serial round after `getCosts` and one more listing of the parts. Reported: statements equal at 1 and 53 rows; 118 against 97 ms on 53 rows (about +21 %). DL-457 wants 200 rows; I read it when the table lands |
+| PRF-827-04 | **Open, Minor** | unchanged; a follow-up, not a merge condition |
+| PRF-827-05 | **Resolved** | peak beside `getCosts` about 9 statements (was about 11 against a pool of 10) |
+| PRF-827-06 | **Fixed in part** | (a) a case parses the real registry's form (over 30 fields, at least 5 rule types); (b) the "no reads after hydration" E2E assertion is not added: Info, as DL-457 (iii) is measured and the CI ratio decides |
+| PRF-827-07 | **Resolved** | Stage 11b `/estimates/[code]` **192,818 B** gzip against the 193,500 B ceiling (headroom 682 B); `ffd02f7d` read 192,557 B, so +261 B (my estimate was 150 to 250) |
+| PRF-827-08 | Info, unchanged | the seed is start-only |
+
+## New finding
+
+| ID | Severity | File:line | Rule / NFR / AC | Issue | Impact | Suggested fix |
+|----|----------|-----------|-----------------|-------|--------|---------------|
+| PRF-827-09 | Minor | `tests/unit/part-form-seed.test.ts:148` | NFR-001; DL-457 (b) | The equality cases do not cross every role with every state: the status loop runs for the Lead only (the owner Engineer and the Admin only in the default state); the Engineer's refusal is checked for another Engineer only. The frozen-registry branch is not reached: the fake's `findConfigurationBasis` (`tests/support/fake-estimates.ts:194`) returns a version id only when `currentCalculationId` is set, and the loop sets `status` alone | A difference by state would be hidden; I found none because the code is shared | Loop ENGINEER (owner), LEAD, ADMIN over the three statuses; add one Approved case with `currentCalculationId` and an older `configVersionId`, and assert `getPartForm` equals `getForm` and `getNode`. A unit test only |
+
+## CI at `0793b7d5` (run 45966127622)
+
+Stages 1 to 11b **passed**. Stage 6: 543 files, 11,750 tests. The unit, integration, security and acceptance step: 719 files, 17,631 tests (the role-matrix and strict-schema suites are in `tests/security`). Stage 11b JS budget: all 24 rows within limit; `/estimates/[code]` 192,818 B. E2E shards 1 to 4: in progress at the time of writing. I ran nothing locally.
+
+## The proof, to be read against DL-457 (3)
+
+(ii') statements per Prepared load at or below `master`'s 147, each added query listed by service and purpose, none per row; (iii) no read of `/form`, `/options/*` or `/nodes` after hydration, any state or row count; (iv') median TBT at or below `master`'s in the same pass; (v') 0 reads in flight at hydration and each action's delay at hydration no more than 7753cdff's plus 20 ms; server time (sequential median) within 20 % of `master`'s, or the remainder reported with its cause; the same at 1, 53 and 200 rows (PRF-827-03). Lane 2's pass 1, as relayed in DL-457, meets (iii) and (v'); the table in the PR body is what I will read.
+
+## Hand-off (round 2)
+- Status: COMPLETE
+- Artefacts written/updated: `docs/06-reviews/final-cr01/pr-827-combined.md` (round-2 section)
+- Jira / GitHub updates: PR #827 COMMENT review 6085500480 (2 inline comments); Jira AQP-498 comment
+- Open questions: none
+- Risks raised: none new
+- Recommended next agent: developer (lane 2) for the proof table and PRF-827-09; then master
