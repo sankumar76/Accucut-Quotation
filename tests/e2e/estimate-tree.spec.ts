@@ -123,6 +123,12 @@ async function reveal(page: Page, slNo: string): Promise<void> {
   await expect.poll(() => toolbarHeightOf(page, slNo), `the toolbar of ${slNo} is in view`).toBeGreaterThan(1);
 }
 
+/**
+ * Puts a row in the middle of the window, clear of the sticky Calculate bar at the foot and the top bar: a drag is measured from the handle's box and pressed with the mouse, and a handle that lies under a bar takes
+ * the press instead (AQP-453: the compact task card shortens the page, so on a 768 px window the handle of 1.2 sits under the bar).
+ */
+const centre = (page: Page, slNo: string): Promise<void> => part(page, slNo).evaluate((element) => element.scrollIntoView({ block: 'center' }));
+
 /** What holds a toolbar in view, read in one go for a failure message (AQP-448): the held toolbars, the focus ring, the hovered rows and the height of every toolbar. */
 const pressState = (page: Page): Promise<unknown> =>
   page.evaluate(() => ({
@@ -1047,6 +1053,7 @@ test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
     test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop; the phone has the touch drag below');
     await openTreeWithTwoSubParts(page, testInfo);
     await choose(page, '1.2');
+    await centre(page, '1.2');
     const moving = await idOf(page, '1.2');
     const handle = defined(await handleOf(page, '1.2').boundingBox());
     const above = defined(await part(page, '1.1').boundingBox());
@@ -1107,6 +1114,7 @@ test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
     test.skip(isPhone(page), 'the mouse drag is for the tablet and the desktop');
     await openTreeWithTwoSubParts(page, testInfo);
     await choose(page, '1.2');
+    await centre(page, '1.2');
     const moves = watchMoves(page);
     const handle = defined(await handleOf(page, '1.2').boundingBox());
     const above = defined(await part(page, '1.1').boundingBox());
@@ -1152,6 +1160,7 @@ test.describe('AQP-406: reorder by the move handle (CR-01 item 3D)', () => {
     test.skip(!isPhone(page), 'the touch drag is judged at phone width');
     await openTreeWithTwoSubParts(page, testInfo);
     await choose(page, '1.2');
+    await centre(page, '1.2');
     const moving = await idOf(page, '1.2');
     const handle = defined(await handleOf(page, '1.2').boundingBox());
     const above = defined(await part(page, '1.1').boundingBox());
