@@ -9,6 +9,7 @@ import { TREE_COLUMN_LAYOUT } from '@/components/shared/tree-column-panel';
 import { RowName } from '@/components/shared/row-name';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { TOUCH_LINK } from '@/components/shared/touch-link';
 import { cn } from '@/lib/cn';
 import { formatCount, formatFigure, formatRupees, NO_FIGURE } from '@/lib/money';
 import type { NodeCostsView } from '@/server/views/schemas/node-costs';
@@ -37,6 +38,8 @@ import {
   RULES_WORKING,
   STAGES_HEADING,
   TASK_QUEUE_LABEL,
+  VIEW_INPUTS,
+  viewInputsOf,
 } from './cost-details-texts';
 import { CostTree, type CostTreeNode } from './cost-tree';
 import { PhoneStages } from './phone-stages';
@@ -73,16 +76,28 @@ function EstimateLink({ code, label, variant }: { readonly code: string; readonl
 }
 
 /** The row's heading (the mock-up, AQP-452): the eyebrow "Cost details for one row" over "<Sl. No> · <name>", in every state. */
-function RowHeader({ view }: { readonly view: NodeCostsView }) {
+function RowHeader({ view, code }: { readonly view: NodeCostsView; readonly code: string }) {
   const { row } = view;
   return (
-    <div className="flex flex-col gap-s-1">
-      <span className="text-label font-semibold tracking-wide text-ink-2 uppercase">{ROW_EYEBROW}</span>
-      <h2 className={cn('text-sub font-semibold text-ink', BREAK_LONG_NAMES)}>
-        <span className="font-mono">{row.slNo}</span>
-        {' · '}
-        <RowName label={row.name} kindLabel={row.kindLabel} />
-      </h2>
+    <div className="flex flex-wrap items-start justify-between gap-x-s-4 gap-y-s-1">
+      <div className="flex min-w-0 flex-col gap-s-1">
+        <span className="text-label font-semibold tracking-wide text-ink-2 uppercase">{ROW_EYEBROW}</span>
+        <h2 className={cn('text-sub font-semibold text-ink', BREAK_LONG_NAMES)}>
+          <span className="font-mono">{row.slNo}</span>
+          {' · '}
+          <RowName label={row.name} kindLabel={row.kindLabel} />
+        </h2>
+      </div>
+      {/* RO-18: to the Lead's view of this row's inputs on the estimate page (`?row=<Sl. No>#row-inputs`, the same address the parts tree rows use). */}
+      <Link
+        href={`/estimates/${encodeURIComponent(code)}?row=${encodeURIComponent(row.slNo)}#row-inputs`}
+        prefetch={false}
+        scroll={false}
+        aria-label={viewInputsOf(row.slNo)}
+        className={cn(TOUCH_LINK, 'text-body font-semibold text-primary-ink underline underline-offset-2')}
+      >
+        {VIEW_INPUTS}
+      </Link>
     </div>
   );
 }
@@ -144,7 +159,7 @@ export function CostDetails({ view, code, calculatedAt, tree }: CostDetailsProps
   const { state } = view;
   const body = (
     <div className="flex min-w-0 flex-col gap-s-4">
-      <RowHeader view={view} />
+      <RowHeader view={view} code={code} />
       {state === 'none' ? (
         <Notice tone="info" role="status" title={NOT_CALCULATED_TITLE}>
           <span className="flex flex-col items-start gap-s-2">
