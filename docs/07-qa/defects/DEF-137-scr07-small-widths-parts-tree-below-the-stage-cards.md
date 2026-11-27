@@ -35,3 +35,13 @@ At 360 and 768 the tree panel is above the stage cards; the existing assertions 
 
 ## Records
 Jira Bug AQP-494 and GitHub issue #815, created 2026-11-27 and cross-linked. Related: DEF-113, DEF-136, AQP-1; the ux-expert's pass 2 (`docs/03-ux/rulings/hands-on-recheck-2-2026-11-28.md`, records-u 775ed4fc); test plan 0.3.102.
+
+## The ux-expert's ruling mapped (qa-engineer, 2026-11-27; test plan 0.3.106)
+Ruling: `docs/03-ux/rulings/scr07-layout-2026-11-28.md` (records-u 3d84ddba; ux-expert, checks L7-1 to L7-8); part 1. **The design wins: below 1024 px the Parts tree is a foldable `details` panel placed BEFORE the `COST DETAILS FOR ONE ROW` heading (after the page head), at 360 and 768 px alike, CLOSED by default, with the summary `Parts tree` and the open row after it (`Parts tree · 1.1.1 Corner gusset`).** Lane 3's earlier QLT-789-04 order ('stages first below 1024 px') is **withdrawn**. Pressing a row (a link, as on SCR-06) opens that row's cost details; the summary is the control (no script), the rows are links in tree order, the open row has `aria-current="true"`, the summary line is at least 44 px on touch. The mock-up's tablet two-column layout and the phone drawer are not reproduced below 1024 px (the foldable panel replaces them, as on SCR-06). From 1024 px the tree is the left column (DEF-136). Effort: under one hour. In #820 (lane 3).
+**Checks mapped (QA reads them in the PR's and the merged push's runs; the developer writes them):**
+| ID | What QA reads | Where |
+|----|---------------|-------|
+| L7-1 | At 360 and 768 the panel is before the `COST DETAILS FOR ONE ROW` heading in the page and in the tab order, closed by default, summary `Parts tree · <Sl. No> <name>` | an E2E case at 360 and 768 (DOM order, `details` not `open`, the summary text) |
+| L7-2 | Opening lists the rows; pressing one opens that row's cost details; the open row has `aria-current="true"`; no horizontal scroll | the same case |
+| L7-8 | axe at 360, 768, 1366: no serious or critical finding; the cost-confidentiality scan green (no figure for an Engineer) | the existing axe and scan stages |
+**Proof (restated):** L7-1 and L7-2 pass at attempt 1 at 360 and 768; the existing `cost-details` assertions kept (a changed order must change the assertions that named the old order, with the reason in the PR; none weakened); first load stated against 193,500 B; the ux-expert's hands-on check repeated. Not a movement or toolbar case: DEF-129's rules do not apply.
