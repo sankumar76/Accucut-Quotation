@@ -6,7 +6,7 @@
 | Severity | **Sev-4 (master, DL-458 (D)); not a G8 blocker; due by the end of Wed 2 Dec 2026 (before the freeze), because each such flake breaks RISK-031's count** |
 | Priority | P4 (Jira Low; labels `sev-4`, `test`) |
 | Type | **Test** (a test precision fault) |
-| Status | **Open, 2026-11-27 (qa-engineer, DL-458).** Fix: lane 1, a small test-only PR, merged on a fully green run at 0 behind. |
+| Status | **VERIFIED and CLOSED 2026-11-27 (qa-engineer): TS-8 at attempt 1 on two `master` pushes (`f9695aa7`, `9eb8409b`), the computed-size check present and never under 44 px; Jira AQP-500 Done, GitHub #828 closed.** Earlier status: **Open, 2026-11-27 (qa-engineer, DL-458).** Fix: lane 1, a small test-only PR, merged on a fully green run at 0 behind. |
 | Jira / GitHub | [AQP-500](https://sankumar76.atlassian.net/browse/AQP-500) / [#828](https://github.com/sankumar76/Accucut-Quotation/issues/828) (labels bug, sev-4, ai-delivery; Jira also aiid-DEF-143, agent-qa-engineer, test); linked 'relates to' AQP-490; RISK-031 named in the body. Searched first: JQL on `aiid-DEF-143` and the width: nothing earlier. |
 | Found by / date | qa-engineer, 2026-11-27, on `master` push `864ecb0f` (test plan 0.3.130); ruled by master in DL-458 (records-u 8cac8b0e) |
 | Build / commit | `master` `864ecb0f` (CI 45967524633), `Stage 12: E2E (shard 1 of 4)`, [mobile], draw 0.99 |
@@ -35,3 +35,6 @@ Jira Bug AQP-500 and GitHub issue #828, created 2026-11-27 and cross-linked. DL-
 
 ## On master: `f9695aa7` (#829), the fix; push 1 of 2 (qa-engineer, 2026-11-27; test plan 0.3.136)
 `master` push `f9695aa7` (#829, AQP-500: DEF-143's fix, TS-8's 44 px check allows one layout unit and reads the computed size; CI **45975851824**, created 09:41:49Z, `success`; Windows package **45975851963** `success`): **`estimate-tree-names.spec.ts:267` passed attempt 1 at all three widths ([desktop] 10.6 s, [tablet] 787 ms, [mobile] 1.8 s); the computed-size check never read under 44 px (the DL-458 (4) product-only clause is not triggered).** The push is green but not clean for other reasons (a wave and the DEF-085 family). **Verification step: TS-8 at attempt 1 on two `master` pushes with the check present: push 1 of 2 met; QA closes DEF-143 on the second.**
+
+## VERIFIED and CLOSED (qa-engineer, 2026-11-27; test plan 0.3.137)
+The fix (#829, `f9695aa7`) is on `master`; `estimate-tree-names.spec.ts:267` passed attempt 1 at all three widths on `f9695aa7` ([desktop] 10.6 s, [tablet] 787 ms, [mobile] 1.8 s) and on `9eb8409b` ([desktop] 6.1 s, [tablet] 1.4 s, [mobile] 2.8 s): two `master` pushes with the computed-size check present, never under 44 px; the DL-458 (4) product-only clause was not triggered. **Jira AQP-500: Done. GitHub #828: closed (completed).** QA keeps reading the check's message on every `master` push and PR run of record (a computed size under 44 px is a Sev-3 Product defect against NFR-017, to master the same day).
