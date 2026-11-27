@@ -105,19 +105,22 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
       expect((await new AxeBuilder({ page }).include('[data-part-ghost]').analyze()).violations, 'axe on the ghost').toEqual([]);
       expect(await page.locator('[data-part-ghost]').innerText()).not.toMatch(/[$€₹]/);
       // What the rates-changed notice's link does on Enter: a jump to the Recalculate button, made while the placeholder is still on the page.
-      await page.evaluate(() => {
-        window.location.hash = '#review-calculate';
-      });
+      // The button the action row has for this state: Calculate on a Draft, Approve and lock on a Prepared estimate whose figures are current (Recalculate is offered only once they are cleared or the rates changed).
+      const target = (await page.locator('#review-calculate').count()) > 0 ? '#review-calculate' : '#review-approve';
+      await page.evaluate((id) => {
+        window.location.hash = id;
+      }, target);
       chunk.release();
       await formIsDrawn(page);
 
       const after = await documentTop(actions);
       expect(Math.abs(after - before), `#review-actions moved from ${String(before)} to ${String(after)} px at the swap`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
+      await expect(page.locator(target)).toBeInViewport();
       // The form asks for its picture control as soon as it is drawn: the person meets that arrival straight after the swap, so the fully loaded page is held to the same bar (QLT-833-13).
       await pictureControlHere(page);
       const loaded = await documentTop(actions);
       expect(Math.abs(loaded - before), `#review-actions moved from ${String(before)} to ${String(loaded)} px once the picture control had arrived`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
-      await expect(page.locator('#review-calculate')).toBeInViewport();
+      await expect(page.locator(target)).toBeInViewport();
       // PF-14a, PF-14b: the same number of cards, each in the place and at the width the form gives it, in the same rows.
       const formCards = await cardBoxes(page, '[data-part-grid]');
       expect(formCards.length, "the form draws the ghost's cards").toBe(ghostCards.length);
