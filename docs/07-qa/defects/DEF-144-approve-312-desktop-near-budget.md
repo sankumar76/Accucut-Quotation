@@ -6,7 +6,7 @@
 | Severity | **Sev-3 (DL-449 (3)(c)); not a G8 blocker on its own (section 9 (3))** |
 | Priority | P3 (Jira Medium; labels `sev-3`, `test`, `near-budget`) |
 | Type | **Test** (a spec case that runs too close to its 30 s budget), **with the same product question as DEF-140** |
-| Status | **Open, 2026-11-27 (qa-engineer, DL-449 (3)(c)).** Fix authorised in advance (DL-449 (3)(c)): a test-only split on DL-430's terms, merged by the end of Wed 2 Dec 2026. **QA proposes it is HELD until DEF-141's step 1 (#827) is on `master` and the case is re-read on two `master` pushes (as DL-455 (4) did for DEF-140); master rules.** |
+| Status | **Open, 2026-11-27 (qa-engineer, DL-449 (3)(c)); the HOLD is ADOPTED by master (DL-459), on DEF-140's terms.** The test-only DL-430 split (authorised in advance) waits until DEF-141's step 1 (#827) is on `master`; QA then re-reads `approve.spec.ts` 'locks the estimate' (`:312`) at every width on the next two `master` pushes: **all readings under 25 s at a normal draw: DEF-144 closes as caused by DEF-141, with no split; any reading of 25 s or more: the split goes ahead, or DEF-144 goes to G8 open.** Until then `:312` stays on the near-budget watch and in R19's named cases. |
 | Jira / GitHub | [AQP-501](https://sankumar76.atlassian.net/browse/AQP-501) / [#830](https://github.com/sankumar76/Accucut-Quotation/issues/830) (labels bug, sev-3, ai-delivery; Jira also aiid-DEF-144, agent-qa-engineer, test, near-budget); linked 'relates to' AQP-478, AQP-497 and AQP-498; RISK-031 in the body. Searched first: JQL on `aiid-DEF-144`: nothing earlier. |
 | Found by / date | qa-engineer, 2026-11-27, counting on the logs of `master` pushes and runs of record since #800 (DL-449 (3)(b)) |
 | Build / commit | the logs of #800's run of record 45922705204, `2e11c44d`, `1b30b17f`, `73143e7e`, `ffd02f7d`, `e0153858`, `c83e57b0`, `a51103e0`, `864ecb0f`, `d35ad821`, `3c561ce1`, #812's run 45945851576, #824's run 45950934549 |
@@ -53,3 +53,6 @@ A test-only split on DL-430's terms: **every assertion kept, in the original ord
 
 ## Records
 Jira Bug AQP-501 and GitHub issue #830, created 2026-11-27 and cross-linked (Jira linked to AQP-478, AQP-497 and AQP-498); test plan 0.3.132.
+
+## DL-459 applied (qa-engineer, 2026-11-27; test plan 0.3.133; records-u 37bf60a3 and b817391e)
+**The HOLD is adopted on DEF-140's terms.** After #827 is on `master`, QA reads `approve.spec.ts` 'locks the estimate' ([desktop], [tablet] and [mobile]) on the next two `master` pushes: all nine attempt-1 readings under 25 s at a normal draw (1.10 or less, DL-449 (3)(c); QA notes that most clean pushes read 1.13 to 1.25 on the shard that carries a project, so a reading at such a draw is reported with its draw and master reads it) closes DEF-144 as caused by DEF-141 with no split; any reading of 25 s or more splits it, or sends DEF-144 to G8 open. **Until then `:312` stays on the near-budget watch and in R19's named cases (R19 stays as written: shard 3, the named cases, until DEF-141's step 1; DL-455 (6)).**
