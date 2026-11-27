@@ -5,6 +5,8 @@ import { ALLOWED_CHILDREN, NODE_KINDS, nodeKindLabel, type NodeKind, type Parent
 import { subtreeFingerprint } from '@/lib/estimate/subtree-fingerprint';
 import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, MOVE_ACROSS_PARENTS_CODE, NODE_KIND_NOT_ALLOWED_CODE, type EstimateViewer } from '@/server/services/estimate-service';
 
+import { withAuditContext } from '../support/customer-change';
+import { createAuditSink } from '../support/fake-audit-sink';
 import { inputsDependencies } from '../support/estimate-inputs-deps';
 import { createFakeEstimateWorld, type FakeEstimate, type FakeNode } from '../support/fake-estimates';
 
@@ -42,7 +44,7 @@ const estimate = (overrides: Partial<FakeEstimate> = {}): FakeEstimate => ({
 
 function setUp(initial: ReadonlyArray<FakeEstimate> = [estimate()], nodes: ReadonlyArray<FakeNode> = []) {
   const world = createFakeEstimateWorld(() => [], initial, nodes);
-  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies() });
+  const service = withAuditContext(createEstimateService({ audit: createAuditSink().service, estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies() }));
   const revision = (): number => world.estimates.find((candidate) => candidate.id === ESTIMATE)?.inputsRevision ?? -1;
   return { world, service, revision };
 }

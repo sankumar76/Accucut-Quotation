@@ -2,13 +2,12 @@ import type { ReactElement, ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AddNodeMenu } from '@/components/features/estimate-workspace/add-node-menu';
-import { AddNodeMenuPanel } from '@/components/features/estimate-workspace/add-node-menu-panel';
 import { RowActions } from '@/components/features/estimate-workspace/row-actions';
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { parentIdsHoldingPart, type NodeKind } from '@/lib/estimate/node-kinds';
 import type { PartItem } from '@/lib/estimates/tree-client';
 
-import { renderHook } from '../support/hook-harness';
+import { renderPanel, type MenuPanelProps } from '../support/menu-panel';
 
 // The components are called as functions and the elements they return are read, as in `add-node-menu-unavailable.test.ts`: no DOM is needed to pin what the menu says and what a choice sends.
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), ...(await import('../support/hook-harness')).reactHooks }));
@@ -47,13 +46,18 @@ const MAIN_ASSEMBLY_MENU: ReadonlyArray<NodeKind> = ['SUB_ASSEMBLY', 'PART', 'FA
 
 function menu(nodeKinds: ReadonlyArray<NodeKind>, extra: Props = {}) {
   const onChoose = vi.fn();
-  const tree = renderHook(AddNodeMenuPanel, { label: 'Add under 1.1 Frame', nodeKinds, onChoose, keyboard: false, ...extra } as Parameters<typeof AddNodeMenuPanel>[0]).render();
+  const tree = renderPanel({ label: 'Add under 1.1 Frame', nodeKinds, onChoose, keyboard: false, ...extra } as MenuPanelProps).render();
   const items = elementsIn(tree).filter((element) => element.type === DropdownMenuItem);
   const header = elementsIn(tree).find((element) => 'data-menu-header' in element.props);
   return { items, header, onChoose };
 }
 
-const names = (items: ReadonlyArray<ReactElement<Props>>): unknown[] => items.map((item) => item.props['aria-label']);
+/**
+ * The name of an item as a screen reader says it: the words of its name span. The item has no `aria-label` (axe `label-content-name-mismatch`, WCAG 2.5.3: a name that is not the visible text is a violation), and its hint
+ * is `aria-hidden`, so the hint is not part of the name; it is the item's description (`aria-describedby`, which may point at hidden text).
+ */
+const nameOf = (item: ReactElement<Props> | undefined): string => textOf(elementsIn(item?.props['children'] as ReactNode).find((element) => 'data-item-name' in element.props)?.props['children'] as ReactNode);
+const names = (items: ReadonlyArray<ReactElement<Props>>): unknown[] => items.map((item) => nameOf(item));
 
 describe('AQP-449: the Part item of the "+" menu names what the person will get', () => {
   it.each([
@@ -61,7 +65,7 @@ describe('AQP-449: the Part item of the "+" menu names what the person will get'
     ['a Main Assembly', MAIN_ASSEMBLY_MENU],
   ])('reads "Part" under %s that holds no Part, with the hint for the first part', (_row, kinds) => {
     const { items } = menu(kinds, { holdsPart: false });
-    const item = items.find((candidate) => candidate.props['aria-label'] === 'Part');
+    const item = items.find((candidate) => nameOf(candidate) === 'Part');
     expect(textOf(item?.props['children'] as ReactNode)).toBe('PartThe first part under this row. A second one is called "Sub-part"');
     expect(names(items)).not.toContain('Sub-part');
   });
@@ -71,7 +75,7 @@ describe('AQP-449: the Part item of the "+" menu names what the person will get'
     ['a Main Assembly', MAIN_ASSEMBLY_MENU],
   ])('reads "Sub-part", in its name and its text, under %s that already holds a Part, with the hint that both are called so', (_row, kinds) => {
     const { items } = menu(kinds, { holdsPart: true });
-    const item = items.find((candidate) => candidate.props['aria-label'] === 'Sub-part');
+    const item = items.find((candidate) => nameOf(candidate) === 'Sub-part');
     expect(textOf(item?.props['children'] as ReactNode)).toBe('Sub-partA part is already here, so both are called "Sub-part"');
     expect(names(items)).not.toContain('Part');
   });
@@ -98,7 +102,10 @@ describe('AQP-449: the Part item of the "+" menu names what the person will get'
     for (const item of items) {
       const hintId = item.props['aria-describedby'];
       expect(typeof hintId).toBe('string');
-      expect(elementsIn(item.props['children'] as ReactNode).some((element) => element.props['id'] === hintId)).toBe(true);
+      const hint = elementsIn(item.props['children'] as ReactNode).find((element) => element.props['id'] === hintId);
+      expect(hint?.props['aria-hidden']).toBe(true);
+      // No `aria-label`: the name is the visible name span (WCAG 2.5.3, axe label-content-name-mismatch).
+      expect(item.props).not.toHaveProperty('aria-label');
     }
   });
 });
@@ -139,12 +146,12 @@ describe('AQP-449: the row hands the fact on to its menu', () => {
   const rest = { upTo: null, downTo: null, onMoveTo: vi.fn(), onAdd: vi.fn(), onDelete: vi.fn() };
 
   it.each([true, false])('passes holdsPart=%s to the menu', (holdsPart) => {
-    const found = elementsIn(RowActions({ part: row('MAIN_ASSEMBLY'), ...rest, holdsPart })).find((element) => element.type === AddNodeMenu);
+    const found = elementsIn(RowActions({ part: row('MAIN_ASSEMBLY'), kindLabel: 'Main Assembly', ...rest, holdsPart })).find((element) => element.type === AddNodeMenu);
     expect(found?.props['holdsPart']).toBe(holdsPart);
   });
 
   it('gives false when the row is given no fact', () => {
-    const found = elementsIn(RowActions({ part: row('SUB_ASSEMBLY'), ...rest })).find((element) => element.type === AddNodeMenu);
+    const found = elementsIn(RowActions({ part: row('SUB_ASSEMBLY'), kindLabel: 'Sub-Assembly', ...rest })).find((element) => element.type === AddNodeMenu);
     expect(found?.props['holdsPart']).toBe(false);
   });
 });

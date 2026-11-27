@@ -1,12 +1,12 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { useFreshAddress } from './support/auth';
-import { waitUntilHydrated } from './support/design-system';
+import { expectNoAxeViolations, waitUntilHydrated } from './support/design-system';
 import { isPhone, openForm, showTree, tree } from './support/part-form';
 
 /**
  * AQP-449 (DEF-092, option A; ux-expert ruling 2026-11-26, MENU-1 and MENU-3): the Part item of the "+" menu reads "Part" when the row holds no Part and "Sub-part" when it already holds one, and the row it adds
- * is named the same, at 360x800, 768x1024 and 1366x768. One small case, a person of its own with the one Main Assembly of the recipe (`tests/support/estimate-recipe.ts`) and two additions, so it runs in the
+ * is named the same, at 360x800, 768x1024 and 1366x768. The same case judges where the menu is (AQP-451, DEF-094): in line under its row, inside the tree and its drawer, not floating over the tree's head or the form. One small case, a person of its own with the one Main Assembly of the recipe (`tests/support/estimate-recipe.ts`) and two additions, so it runs in the
  * default time (DL-370 (5)); nothing waits on a clock. The words are the ruling's, written out here and not imported, so a changed sentence fails a test. The Sub-Assembly menu, the header, the hints and the 0, 1 and 2 Parts
  * rule are judged in `tests/unit/add-node-menu-sub-part.test.ts`, and the menus of the whole tree in `estimate-tree.spec.ts`. Every name is invented.
  */
@@ -35,6 +35,22 @@ async function openMenuOf(page: Page, slNo: string): Promise<void> {
 /** The name of the kind of a row as its icon says it (the spoken name and the tooltip of the glyph, the one mark of the kind in the row). */
 const kindOf = (page: Page, slNo: string): Locator => row(page, slNo).locator('[data-node-kind]');
 
+/**
+ * The open menu is in line under its row (UX spec section 0.9 row 3; the ux-expert's check C-05-02): inside the tree (so inside the drawer on a phone), a block in the flow (its positioning element is not `fixed`),
+ * below the row it belongs to and not wider than the tree, with no accessibility violation while it is open.
+ */
+async function expectInLineUnder(page: Page, slNo: string): Promise<void> {
+  const menu = tree(page).getByRole('menu');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('xpath=..')).toHaveCSS('position', 'static');
+  const [rowBox, menuBox, treeBox] = await Promise.all([row(page, slNo).boundingBox(), menu.boundingBox(), tree(page).boundingBox()]);
+  if (rowBox === null || menuBox === null || treeBox === null) throw new Error('a box is missing');
+  expect(menuBox.y).toBeGreaterThanOrEqual(rowBox.y + rowBox.height - 1);
+  expect(menuBox.x).toBeGreaterThanOrEqual(treeBox.x - 1);
+  expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(treeBox.x + treeBox.width + 1);
+  await expectNoAxeViolations(page);
+}
+
 async function openTheTree(page: Page, testInfo: Parameters<typeof openForm>[1]): Promise<void> {
   await openForm(page, testInfo);
   // The page's scripts are live, so a click is not lost (DEF-011): on a phone the Parts tree button, from 768 px the first part of the tree.
@@ -57,6 +73,7 @@ test.describe('AQP-449: the "+" menu names the Part item for what the person wil
     await expect(page.getByRole('menuitem').nth(1)).toContainText(PART_HINT);
     await expect(page.getByRole('menuitem').nth(2)).toHaveAccessibleName('Fastener');
     await expect(page.getByRole('menu')).toContainText(/^Add under 1 /);
+    await expectInLineUnder(page, '1');
     await expect(page.getByRole('menuitem', { name: 'Sub-part', exact: true })).toHaveCount(0);
     await page.getByRole('menuitem', { name: 'Part', exact: true }).click();
     await expect(row(page, '1.1')).toBeVisible();

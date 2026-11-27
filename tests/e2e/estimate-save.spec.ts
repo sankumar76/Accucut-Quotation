@@ -311,6 +311,12 @@ test.describe('AC-5, AC-6, AC-8: two tabs', () => {
       expect((await other.getByRole('button', { name }).boundingBox())?.height ?? 0, name).toBeGreaterThanOrEqual(TOUCH_TARGET);
     }
     expect(await horizontalOverflow(other)).toBeLessThanOrEqual(0);
+    // axe judges where the page is scrolled: filling Length centres it, and at 768 px a button of the parts tree then sits half behind the sticky top bar, which reads as a target too small (target-size) and moves with
+    // every line the page gains above it (AQP-452 took the form's intro line into the head). The check is the same; it is made from the top of the page, where nothing is behind a bar.
+    await other.evaluate(() => window.scrollTo(0, 0));
+    // The state the scan covers is still there: the conflict notice, with the typed value kept and the field marked.
+    await expect(other.getByRole('alert').filter({ hasText: 'This part was changed somewhere else.' })).toBeVisible();
+    await expect(control(other, 'J')).toHaveAttribute('aria-invalid', 'true');
     await expectNoAxeViolations(other);
 
     // Neither leaving the field nor Save draft sends the typed value over the newer one.

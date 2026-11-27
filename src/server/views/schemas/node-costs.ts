@@ -60,6 +60,8 @@ const rowSchema = z.strictObject({
   slNo: z.string().min(1),
   /** The part's name as typed (Description, else Part No.), or an empty text when neither was typed. */
   name: z.string(),
+  /** The name of the row's kind (Main Assembly, Sub-Assembly, Part, Sub-part or Fastener), drawn in place of the name while the row has none (AQP-446). A word, never a figure. */
+  kindLabel: z.string().min(1),
 });
 
 const detailsSchema = z.strictObject({

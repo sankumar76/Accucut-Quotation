@@ -5,6 +5,8 @@ import { MAX_PICTURE_BYTES } from '@/lib/images/picture-rules';
 import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, type EstimateViewer } from '@/server/services/estimate-service';
 import { sha256Of } from '@/server/services/image-service';
 
+import { withAuditContext } from '../support/customer-change';
+import { createAuditSink } from '../support/fake-audit-sink';
 import { completePartInputs, fieldIdOf } from '../support/complete-part';
 import { defined } from '../support/defined';
 import { inputsDependencies } from '../support/estimate-inputs-deps';
@@ -52,7 +54,7 @@ const admin: EstimateViewer = { id: '00000000-0000-4000-8000-0000000000c1', role
 
 function setUp(initial: ReadonlyArray<FakeEstimate> = [estimate()], nodes: ReadonlyArray<FakeNode> = [node(PART), node(SECOND_PART, { sortIndex: 1 })]) {
   const world = createFakeEstimateWorld(() => [], initial, nodes);
-  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies() });
+  const service = withAuditContext(createEstimateService({ audit: createAuditSink().service, estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies() }));
   const stored = (id = PART): FakeNode => defined(world.nodes.find((candidate) => candidate.id === id));
   const inputsRevision = (): number => defined(world.estimates.find((candidate) => candidate.id === ESTIMATE)).inputsRevision;
   const put = (bytes: Uint8Array, name = 'cabinet-photo.png', overrides: { viewer?: EstimateViewer; nodeId?: string; estimateId?: string } = {}) =>

@@ -152,8 +152,8 @@ export function TreePanel({ tree, editable, onOpen, missingIds, framed = true, h
           renderRow={(part, kindLabel) => (
             <TreeNode part={part} kindLabel={kindLabel} selected={part.id === selected?.id} missing={missingIds?.has(part.id) ?? false} onChoose={choose} takesFocus={tree.wantsFocus} />
           )}
-          {...(editable ? { renderToolbar: (part: PartItem, _kindLabel: string, place: SiblingPlace) => (
-                <RowActions part={part} onAdd={tree.addUnder} onDelete={tree.askDelete} {...stepsAt(place)} onMoveTo={tree.moveTo} busy={busy} describedBy={describedBy} showing={tree.deleteOpen && tree.deleting?.id === part.id} holdsPart={holdingPart.has(part.id)} />
+          {...(editable ? { renderToolbar: (part: PartItem, kindLabel: string, place: SiblingPlace) => (
+                <RowActions part={part} kindLabel={kindLabel} onAdd={tree.addUnder} onDelete={tree.askDelete} {...stepsAt(place)} onMoveTo={tree.moveTo} busy={busy} describedBy={describedBy} showing={tree.deleteOpen && tree.deleting?.id === part.id} holdsPart={holdingPart.has(part.id)} />
               ),
             } : {})}
         />

@@ -6,6 +6,8 @@ import { subtreeFingerprint } from '@/lib/estimate/subtree-fingerprint';
 import { descendantIds } from '@/lib/estimate/tree';
 import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, MAX_PARTS_PER_ESTIMATE, MOVE_ACROSS_PARENTS_CODE, TREE_FULL_CODE, type EstimateViewer } from '@/server/services/estimate-service';
 
+import { withAuditContext } from '../support/customer-change';
+import { createAuditSink } from '../support/fake-audit-sink';
 import { buildTree500 } from '../support/builders/tree500';
 import { completePartInputs, fieldIdOf } from '../support/complete-part';
 import { defined } from '../support/defined';
@@ -48,7 +50,7 @@ const admin: EstimateViewer = { id: '00000000-0000-4000-8000-0000000000c1', role
 
 function setUp(initial: ReadonlyArray<FakeEstimate> = [estimate()], nodes: ReadonlyArray<FakeNode> = []) {
   const world = createFakeEstimateWorld(() => [], initial, nodes);
-  const service = createEstimateService({ estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies() });
+  const service = withAuditContext(createEstimateService({ audit: createAuditSink().service, estimates: world.repository, nodes: world.nodeRepository, images: world.imageRepository, transactions: world.transactions, ...inputsDependencies() }));
   const revision = (): number => world.estimates.find((candidate) => candidate.id === ESTIMATE)?.inputsRevision ?? -1;
   return { world, service, revision };
 }
