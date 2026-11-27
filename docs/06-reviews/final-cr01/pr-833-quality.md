@@ -210,3 +210,50 @@ Lane 2 fixed every round-1 Blocker and Major. Each fix is at the cause: the Lead
 | QLT-833-21 | Major | (not a code line) `tests/e2e/estimate-warning.spec.ts` :90, :99, :117, :145, :156, :181 [desktop]; the Engineer's page changed by this PR (`page.tsx` Engineer branch: one more `getForm` read per render; the ghost in `PartForm`) | CI green (DL-436); RISK-031 wave rules (W1 (e)); DL-449 (3) (e) (a product cause ruled out first) | On da536811 attempt 1, the run of record, the six cases timed out on **both** tries in shard 4 [desktop] (28.8 min). The same spec failed in the desktop shard at ede67a90 (run 46016096221: :80, :90, :99, :156, :211, a 26.5 min shard). It passed at fdb966a4 (run 46031373092, 21.0 min) and on `master` f7b20eff. `masters-table-actions:409`, on a page this PR does not touch, also timed out in the same shard, which points to a slow runner. But W1 (e) excludes reading it as a wave, because this PR changes the Engineer's page those cases use. The re-run (attempt 2, all nine passed in 20.3 min) was started without authorisation and is **not** the run of record | If the cause is this PR (the added render read, or the ghost in the Calculate path), the Engineer's Calculate warning gets slower or stalls | **Open, for master's ruling** on whether attempt 2 counts and on a cause step. My suggestion for the cause step: compare the Engineer page's server render time and the `estimate-warning` attempt-1 durations on `master` and on this branch at the same draw; and read `:52` (`waitForResponse` of Calculate) against the extra `getForm` read in `engineerGhost`. Not cleared by me |
 | QLT-833-16 | Info | `surface-chips.tsx`; `part-form-ghost.tsx` (card count) | PF-3, PF-16.2; PF-4 | The Lead's ghost shows the chosen treatments as chips, which PF-16.2 rules. The card count's place holds invisible "n of m" words. In the Engineer's ghost these are "0 of" the total since 1d435f9b, the definition's own counts, which the strict scan allows by exact text. Sharing `TreatmentChips` between the form and the ghost is good practice | — | — |
 | QLT-833-17 | Info | `tests/e2e/estimate-review-row-return.spec.ts` | DL-470 (3); DL-422; DL-388 | A sound regression case for the stale seed (edit, leave, return, then a second save not refused 409). It passes at three widths (fdb966a4) and makes no person | — | — |
+
+---
+
+# Round 3 — delta `da536811...a60b6bbd`
+
+| Field | Value |
+|-------|-------|
+| Review round | 3: 78e199f6 (the Engineer's page loses its form read and ghost, DL-471 notes 5 and 6) and a60b6bbd (a comment-only fix: "#833" in a `page.tsx` comment read as a hex colour by the tokens guard, so 78e199f6's run 46045742726 is void) |
+| Commit reviewed | `a60b6bbd` |
+| CI judged | **run 46046676608, attempt 1: `success`**, every job; **0 behind `master`** (f7b20eff) |
+| Date | 2026-11-27 |
+| Reviewed against | DL-471 notes 5 and 6 (the ruling on QLT-833-21: no extra read on the Engineer's page; the ghost only in `PartFields`' second wait); DL-465 (3), notes 6 to 9; PF-15 |
+| GitHub review | [pullrequestreview-6092105806](https://github.com/sankumar76/Accucut-Quotation/pull/833#pullrequestreview-6092105806) (COMMENT, single-token); label now `review:quality-approved` |
+| **Verdict** | **APPROVE WITH COMMENTS.** No Blocker, Critical or Major is open |
+
+## Round 3 summary
+
+DL-471's fix is built as ruled. The Engineer's page makes no `getForm` or other new server read, passes no `ghost`, and does not import `engineer-ghost.tsx`. Its first wait keeps the placeholder it had on `master`. Its second wait (the part's values being read) is the ghost, from the client's own `/form` read. A unit test holds the page to no `getForm` call and no ghost, and the strict NFR-002 scan now runs on the `engineerGhost` builder directly, so it still guards the component #836 will wire in. On the run of record, attempt 1 is green everywhere: all nine `estimate-warning` cases pass at all three widths, which closes QLT-833-21, and every `partform-placeholder` case passes at 360, 768 and 1366 px.
+
+| Severity (open after round 3) | Count |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 0 |
+| Minor | 4 (QLT-833-09 part, -10, -15 part, -20; none a merge condition) |
+| Info | 6 (QLT-833-11, -12, -16, -17, -22, -23) |
+
+## Round 3 checks
+
+| # | Check | Evidence | Result |
+|---|-------|----------|--------|
+| 1 | The removal is complete (as narrowed: `engineer-ghost.tsx` and the `ghost`/`treeUnread` props stay defined, unused, for #836) | `git diff da536811 a60b6bbd`; `git grep engineerGhost\|engineer-ghost\|getForm` in `src/app/(portal)/estimates/[code]/` | **Met.** The Engineer branch of `page.tsx` has no `import('./engineer-ghost')`, no `getForm` and no `ghost=`. Its one service read is still `getWorkspace` (`page.tsx:41`). `engineerGhost` is referenced from no file under `src` except its own; only tests call it. Stages 1 to 11b (lint, the import rule, first-load guards) are `success` |
+| 2 | The first wait keeps master's placeholder | `part-form.tsx` (unchanged since round 1: with no `ghost`, the three bars with `aria-label="Loading the form"`) | **Met**, and `estimate-first-load.spec.ts`, untouched, passes |
+| 3 | The second-wait ghost holds PF-15's 24 px | `partform-placeholder.spec.ts:204`: holds `GET /estimates/{id}/nodes/{nodeId}` (the part's values), waits for `[data-part-ghost]` visible and the tree's read, then measures | **Met**: ≤ 24 px on the page end and on `[data-form-area]`, passing attempt 1 at [mobile], [tablet] and [desktop]. The hold is a route gate in the test body, released before the measurement, with `afterEach(unrouteAll)` behind it: deterministic, no wait added |
+| 4 | The unit tests | `estimate-page.test.ts` (new DL-471 case: `vi.spyOn(getForm)` not called, no `data-part-ghost`); the strict scan's `theGhostAndItsAllowedTexts` now renders `engineerGhost(...)`; `part-form-ghost.test.ts` asserts `page.tsx` names neither `engineerGhost` nor `getForm` | **Met**; Stages 1 to 11b `success` |
+| 5 | `estimate-warning` passes attempt 1 on a completed, fully green run at 0 behind | run 46046676608, attempt 1 | **Met.** All nine cases (:63, :80, :90, :99, :117, :145, :156, :181, :211) pass on the first try at [mobile] (shard 1), [tablet] (shard 2) and **[desktop] (shard 4, 15.1 min)**. The six that timed out at da536811 now pass. **QLT-833-21 closed** |
+| 6 | The DL-465 (8) widths | run 46046676608 | **Met.** Every `partform-placeholder` case passes attempt 1 at all three widths: `:86` Draft and Prepared, `:138` PF-17 Approved, `:167` Enter on a Prepared estimate and on an unlocked Draft, `:204` Engineer second wait, `:242` PF-14e. `estimate-review-row-return:29` passes at all three. Stage 11b `/estimates/[code]` **193,080 B** |
+
+## Round 3 findings
+
+| ID | Severity | File:line | Rule | Issue | Status / note |
+|----|----------|-----------|------|-------|---------------|
+| QLT-833-21 | Major | `estimate-warning.spec.ts` [desktop] | CI green; DL-471 | Time-outs on the Engineer's page at da536811 | **Closed.** DL-471 found the cause (#833's added `getForm` read plus the cold compile); a60b6bbd removes it; all nine cases pass attempt 1 at three widths on the run of record |
+| QLT-833-22 | Info | `src/app/(portal)/estimates/[code]/page.tsx:61-62`; `part-form.tsx:80` | DL-465 (3) (ii); PF-7, PF-15; DL-471 | With no ghost from the page, the Engineer's first wait is master's three bars, so the big change of height now comes when the bars give way to the second wait's ghost, not when the ghost gives way to the form. The page also says "Choose a part in the tree…" again while the tree is being read, which PF-7 had removed | **Not a regression against `master`.** The second wait is now within 24 px, so DL-465's "improved, not regressed" holds. Both are deferred to #836 by DL-471 (one combined read). The ux-expert's check of the built page should know the Engineer's first wait is not the ghost |
+| QLT-833-23 | Info | `tests/e2e/approve.spec.ts:312` [desktop] | flaky watch | Flaky on this run (passed on retry): a 30 s time-out waiting for "Approved Quote Price" to leave the page. The same case failed in shard 2 of 517d367a's cancelled run. It is on the Lead's page, which this PR changes, but it passed attempt 1 at fdb966a4 and da536811 | For QA's near-budget watch; not attributed to #833 by me |
+
+Round 2's open Minors stand: QLT-833-09 (1024 px; the Engineer's locked state in the E2E), QLT-833-10 (`makeEstimateCalculable` writes every node), QLT-833-15 (one `networkidle` left in PF-14e), QLT-833-20 (`PICTURE_ZONE_HEIGHT_UNHINTED` is a per-width table no picture spec pins). None blocks the merge. They can go to follow-ups or the hardening window.
