@@ -15,6 +15,8 @@ export const metadata = pageMetadata(ESTIMATE_META_TITLE, ESTIMATE_META_DESCRIPT
 
 interface PageProps {
   readonly params: Promise<{ readonly code: string }>;
+  /** `?row=<Sl. No>`: the row whose inputs the Lead's and the Admin's review shows (AQP-488). Only ever compared with the rows the server holds. */
+  readonly searchParams: Promise<{ readonly row?: string | ReadonlyArray<string> }>;
 }
 
 /**
@@ -26,7 +28,13 @@ interface PageProps {
  *
  * There is deliberately no `loading.tsx` beside this page: it would stream the response with status 200 before `forbidden()` and `notFound()` run (TD-06).
  */
-export default async function EstimatePage({ params }: PageProps) {
+/** The row named by `?row=`, as one text, or nothing (a repeated parameter or none). Read on the Lead's and the Admin's branch only. */
+async function rowOf(searchParams: PageProps['searchParams']): Promise<string | undefined> {
+  const { row } = await searchParams;
+  return typeof row === 'string' ? row : undefined;
+}
+
+export default async function EstimatePage({ params, searchParams }: PageProps) {
   const user = await authorizePage('/estimates/[code]');
   const { code } = await params;
   const workspace = await getEstimateService().getWorkspace({ id: user.id, role: user.role }, code);
@@ -74,6 +82,7 @@ export default async function EstimatePage({ params }: PageProps) {
         ignored,
         engineerName: workspace.engineerName,
         deadlinePassed: workspace.deadlineAt.getTime() < systemClock.now().getTime(),
+        row: await rowOf(searchParams),
       });
     }
     default:

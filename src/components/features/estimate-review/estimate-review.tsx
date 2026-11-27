@@ -5,6 +5,8 @@ import { QUOTED_NOTICE_ID } from '@/components/features/estimate-quote/mark-quot
 import { DownloadChip } from '@/components/shared/download-chip';
 import { Notice } from '@/components/shared/notice';
 import { warnedNodeIds } from '@/components/shared/quantity-tag';
+import { nodeKindLabel } from '@/lib/estimate/node-kinds';
+import { rowNameOf } from '@/lib/estimates/row-name';
 import { TREE_COLUMN_LAYOUT } from '@/components/shared/tree-column-panel';
 import { WarningNotice } from '@/components/shared/warning-notice';
 import type { RoleName } from '@/lib/auth/roles';
@@ -13,6 +15,8 @@ import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
+import { PartForm } from '../estimate-workspace/part-form';
+import { PartHead } from '../estimate-workspace/part-head';
 import type { WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
 import { BuildTable } from './build-table';
@@ -22,13 +26,17 @@ import { PriceRemovedNotice } from './price-removed-notice';
 import { RatesChangedNotice } from './rates-changed-notice';
 import { approveOffer, cancelOffer, ignoreOffer, quoteOffer, removeOffer, ReviewActions } from './review-actions';
 import { REVIEW_RESTORE_ID } from './review-ids';
+import { ReviewRowLine } from './review-row-line';
 import { ReviewHead } from './review-head';
 import { ReviewTree } from './review-tree';
+import { selectedRow } from './selected-row';
 import { UnlockedNotice } from './unlocked-notice';
 import {
   APPROVED_NOTICE_BODY,
   APPROVED_NOTICE_TITLE_PLAIN,
   approvedNoticeTitle,
+  inputsNotice,
+  showingInputs,
   CLEARED_NOTICE_BODY,
   CLEARED_NOTICE_TITLE,
   NOT_CALCULATED_NOTICE,
@@ -76,6 +84,8 @@ export interface EstimateReviewProps {
   readonly engineerName: string;
   /** The deadline has passed at the moment the page was drawn, for the Restore dialog's Overdue sentence. */
   readonly deadlinePassed: boolean;
+  /** The Sl. No of the row whose inputs are shown, from the address (`?row=`): absent or not in the tree, the first row (AQP-488, DEF-131 Stage 1). */
+  readonly row?: string | undefined;
 }
 
 /** The approved notice of SCR-06 (STORY-06.06 AC-5): the approver and the time, and what approval means. It holds focus when an approval has just worked (`tabIndex` -1). */
@@ -106,11 +116,15 @@ function QuotedNotice({ quoted, customerName }: { readonly quoted: EstimateRevie
 /** The status under the Ignored layer, which Restore gives back. A Quoted estimate cannot be ignored (the database refuses it), so Approved, which is closed too, stands for the impossible case and the page still draws. */
 const underlyingOf = (status: EstimateStatus): 'DRAFT' | 'PREPARED' | 'APPROVED' => (status === 'QUOTED' ? 'APPROVED' : status);
 
-export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole, download, quoted, ignored, engineerName, deadlinePassed }: EstimateReviewProps) {
+export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole, download, quoted, ignored, engineerName, deadlinePassed, row }: EstimateReviewProps) {
   const { state, letters, nodes, totals } = costs;
+  const selected = selectedRow(nodes, row);
+  // The rows as the part form's head knows them: where each sits, its number, its kind and its name, and **no figure** (the tree's rows reach the browser only so).
+  const partItems = nodes.map(({ id, parentId, slNo, nodeKind, name }) => ({ id, parentId, slNo, nodeKind, label: name, completeness: 'EMPTY' as const, revision: 0 }));
   const isIgnored = ignored !== null;
   // The rows of the calculation's quantity warning, which the costs view holds only while the figures are current (STORY-06.10 AC-3, AC-4).
   const warned = warnedNodeIds(state === 'current' ? costs.warning : null);
+  const rowLine = selected === null ? null : <ReviewRowLine code={header.code} node={selected} state={state} letters={letters} warned={warned.has(selected.id)} />;
   // BO from the approvals row, in every state of the figures (AC-9); its time in IST.
   const approval: ApprovedTileView | null =
     costs.approval === null
@@ -175,9 +189,28 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
       {/* From 1024 px the tree is a column of the SCR-05 tree's width beside "How the total is built" (AQP-465, DEF-108; ux-expert ruling 2026-11-28; the right-hand column holds the row detail of the design, which
           is waived, DL-306); below it the two are stacked. The tiles stay above both at full width. The gap is the page's own (`main`: s-4, s-5 from 768 px), so the rows keep the spacing they had when they were two items of
           the page: a different gap moved the page by a few pixels and with it the axe target-size reading of the header's Change customer button at 768 px. */}
+      {/* "How the total is built" is above the two columns at every width (UX ruling 2026-11-27 section 3.8; AQP-488): the tree and the row's inputs are the two columns below it. */}
+      {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
       <div data-review-columns="" className={TREE_COLUMN_LAYOUT}>
-        <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} />
-        {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
+        <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} selectedSlNo={selected === null ? null : selected.slNo} />
+        {selected === null ? null : (
+          // The Engineer's own form, read-only (the same `PartForm`); nothing handed to it holds a figure: the rows are mapped down to where each sits, its number, its kind and its name, and the row line is drawn here (AQP-488).
+          <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">
+            {/* The row's eyebrow, title and figure line are drawn here, on the server, so they are in the first paint whatever the form is doing; the form under them is labelled by the title (UX ruling 3.6, 3.7). */}
+            <PartHead partId={selected.id} slNo={selected.slNo} nodes={partItems} titleId="part-form-title" titleRef={null} />
+            {rowLine}
+            <PartForm
+              estimateId={estimateId}
+              part={{ id: selected.id, slNo: selected.slNo, revision: 0 }}
+              editable={false}
+              nodes={partItems}
+              review={{
+                notice: inputsNotice(header.status, isIgnored),
+                showing: showingInputs(selected.slNo, rowNameOf(selected.name, nodeKindLabel(selected, nodes))),
+              }}
+            />
+          </div>
+        )}
       </div>
       {/* The action bar is not drawn while the estimate is ignored: Restore RFQ, in the notice, is the one action left (CR-01 item 7D). */}
       {isIgnored ? null : (
