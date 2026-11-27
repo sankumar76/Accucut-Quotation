@@ -1,8 +1,11 @@
+import { readFileSync } from 'node:fs';
+
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FORM_LOADING, sectionLinkText } from '@/components/features/estimate-workspace/estimate-texts';
 import { SURFACE_HINT } from '@/components/features/estimate-workspace/surface-texts';
+import * as layout from '@/components/shared/form-layout';
 import { sectionProgress, shownSections } from '@/lib/estimates/form-shown';
 
 import { CUSTOMER_RECIPE_ID } from '../support/customer-canary';
@@ -217,34 +220,59 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
     for (const review of ['Total Unit Production Price', 'File cell', 'How the total is built', 'Approve and lock', 'Not calculated']) expect(html).not.toContain(review);
   });
 
-  describe('PF-6, NFR-002 (QLT-833-03): what the Engineer loading ghost may hold', () => {
+  describe('PF-6, NFR-002 (QLT-833-03, SEC-833-01 to -03): what the Engineer loading ghost may hold', () => {
     /**
-     * The Engineer's page used to be scanned whole for the words rate, price, cost and formula, and for every word of the review. The ghost is cut out of that scan (its hints are the Engineer's own input guidance, and one
-     * of them says "cost"), so it is held to something at least as strong: **every text of the ghost is, exactly, a text of the form definition this Engineer is sent by GET /form** (a card name and range, a strip item, a hint)
-     * or one of the ghost's two fixed lines; **every attribute is on a short list** (class, a card's weight, the busy and inert state, the loading line's name, the ghost's own markers); and what is left of the ghost
-     * once those are taken out holds no word of the scan and no figure (a digit, a decimal, a currency sign).
+     * The Engineer page used to be scanned whole for the words rate, price, cost and formula, and for every word of the review. The ghost is cut out of that scan (its hints are the Engineer's own input guidance, and one of
+     * them says "cost"), so it is held to something at least as strong. The scan is the security reviewer's (SEC-833-01 to -03, report pr-833-combined.md), element by element and with no search-and-delete on the markup:
+     * (1) every text node is, exactly, a text of the form definition this Engineer is sent by GET /form or one of the ghost's fixed lines; (2) no comment, script, style, processing instruction or CDATA; (3) every attribute
+     * is exactly one of a short list, with its exact value, and a class only of tokens that the ghost's own code defines; (4) no attribute in single quotes or with none.
      */
     const decode = (text: string): string => text.replaceAll('&amp;', '&').replaceAll('&#x27;', "'").replaceAll('&quot;', '"').replaceAll('&lt;', '<').replaceAll('&gt;', '>');
-    const SCAN_WORDS = /\b(rates?|prices?|costs?|formulas?)\b/i;
-    const FIGURE = /[$€₹]|\d[\d,]*[.,]\d|\d{3,}/;
 
-    /** What is wrong with a ghost, in words: texts and attributes that are not the definition's, and any word or figure in what is left. */
-    function ghostViolations(ghost: string, allowedTexts: ReadonlyArray<string>): string[] {
+    function strictViolations(ghost: string, allowedTexts: ReadonlyArray<string>, classTokens: ReadonlySet<string>): string[] {
       const problems: string[] = [];
       const allowed = new Set(allowedTexts);
-      const texts = [...ghost.matchAll(/>([^<>]+)</g)].map((match) => decode(match[1] ?? '').trim()).filter((text) => text !== '');
-      for (const text of texts) if (!allowed.has(text)) problems.push(`text: ${text}`);
-      const attributes = [...ghost.matchAll(/ ([a-zA-Z][\w:-]*)="([^"]*)"/g)];
-      for (const [, name = '', value = ''] of attributes) {
-        const known = name === 'class' || name === 'inert' || name === 'aria-hidden' || name === 'aria-busy' || name.startsWith('data-ghost') || name === 'data-part-ghost' || (name === 'role' && value === 'status') || (name === 'aria-label' && value === FORM_LOADING) || (name === 'style' && /^--n:\d+$/.test(value));
-        if (!known) problems.push(`attribute: ${name}="${value}"`);
+      for (const match of ghost.matchAll(/>([^<>]+)</g)) {
+        const text = decode(match[1] ?? '').trim();
+        if (text !== '' && !allowed.has(text)) problems.push(`text: ${text}`);
       }
-      // What is left once the definition's own texts and the styling are taken out: no word of the scan, no figure.
-      let rest = ghost.replace(/ (class|style)="[^"]*"/g, '');
-      for (const text of [...allowed].sort((first, second) => second.length - first.length)) rest = rest.replaceAll(text, '').replaceAll(text.replaceAll('&', '&amp;').replaceAll("'", '&#x27;').replaceAll('"', '&quot;'), '');
-      if (SCAN_WORDS.test(rest)) problems.push(`word of the scan in: ${rest.match(SCAN_WORDS)?.[0] ?? ''}`);
-      if (FIGURE.test(rest.replace(/<[^>]*>/g, ' ')) || FIGURE.test(rest)) problems.push('a figure');
+      if (/<!--|<script|<style|<\?|<!\[CDATA/i.test(ghost)) problems.push('comment, script or style');
+      const exact: Record<string, (value: string) => boolean> = {
+        inert: (value) => value === '',
+        'aria-hidden': (value) => value === 'true',
+        role: (value) => value === 'status',
+        'aria-label': (value) => value === FORM_LOADING,
+        'data-part-ghost': (value) => value === '',
+        'data-ghost-wide': (value) => value === '',
+        'data-ghost-picture': (value) => value === '',
+        'data-ghost-grid': (value) => value === '',
+        style: (value) => /^--n:\d+$/.test(value),
+        class: (value) => value.split(/\s+/).filter((token) => token !== '').every((token) => classTokens.has(token)),
+      };
+      for (const match of ghost.matchAll(/ ([a-zA-Z][\w:-]*)=(?:"([^"]*)"|'([^']*)')/g)) {
+        const name = match[1] ?? '';
+        const value = match[2] ?? match[3] ?? '';
+        if (match[3] !== undefined || exact[name] === undefined || !exact[name](decode(value))) problems.push(`attribute: ${name}="${value}"`);
+      }
+      if (/ [a-zA-Z][\w:-]*=[^"'\s>]/.test(ghost)) problems.push('unquoted attribute');
       return problems;
+    }
+
+    /** The class tokens the ghost's code defines: the strings of the shared layout module and every string of the ghost and of the three components it draws with (Card, Skeleton, and the notice's), read from the code. */
+    const codeOf = (path: string): string =>
+      readFileSync(path, 'utf8')
+        .replaceAll('\r\n', '\n')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+    function classTokensOfTheCode(): ReadonlySet<string> {
+      const tokens = new Set<string>();
+      for (const value of Object.values(layout)) if (typeof value === 'string') for (const token of value.split(/\s+/)) tokens.add(token);
+      for (const path of ['src/components/features/estimate-workspace/part-form-ghost.tsx', 'src/components/features/estimate-workspace/surface-chips.tsx', 'src/components/ui/skeleton.tsx', 'src/components/ui/card.tsx']) {
+        for (const literal of codeOf(path).matchAll(/(["'])((?:(?!\1)[^\n\\])*)\1/g)) {
+          for (const token of (literal[2] ?? '').split(/\s+/)) if (/^[a-z0-9][a-z0-9:[\]()_./&>=*,%#!~+-]*$/.test(token)) tokens.add(token);
+        }
+      }
+      return tokens;
     }
 
     async function theGhostAndItsAllowedTexts(): Promise<{ readonly ghost: string; readonly allowed: ReadonlyArray<string> }> {
@@ -255,7 +283,7 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
       expect(ghost, 'the page draws the ghost').not.toBe('');
       const form = await harness.estimateService.getForm({ id: harness.idOf.ENGINEER, role: 'ENGINEER' }, estimate().id);
       const allowed = [
-        'Loading the form',
+        FORM_LOADING,
         SURFACE_HINT,
         // Each card's count, in its invisible words (the block is as wide as the words the form will show): the counts of the definition's defaults, from the form's own rule.
         ...shownSections(form.sections, {}).flatMap((section) => {
@@ -267,32 +295,62 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
       return { ghost, allowed };
     }
 
-    it('the real ghost holds only the form definition texts, attributes of the short list, and no figure', async () => {
+    it('the real ghost passes: only the form definition texts, attributes of the short list with their exact values, classes of the code, no comment or script', async () => {
       const { ghost, allowed } = await theGhostAndItsAllowedTexts();
-      expect(ghostViolations(ghost, allowed)).toEqual([]);
+      expect(strictViolations(ghost, allowed, classTokensOfTheCode())).toEqual([]);
       expect(allowed.length, 'the definition has texts to compare with').toBeGreaterThan(8);
     });
 
-    /** The reviewer's three mutants (QLT-833-03) and every case the old whole-page scan caught: each must fail the new scan. */
-    const MUTANTS: ReadonlyArray<{ readonly name: string; readonly change: (ghost: string) => string }> = [
-      { name: 'a text "Machining rate 450.00 per hour"', change: (ghost) => ghost.replace('<div inert', '<span>Machining rate 450.00 per hour</span><div inert') },
-      { name: 'a text "16889808.07"', change: (ghost) => ghost.replace('<div inert', '<span>16889808.07</span><div inert') },
-      { name: 'an attribute title="Machining rate 450 per hour"', change: (ghost) => ghost.replace('<div inert', '<div title="Machining rate 450 per hour" inert') },
-      { name: 'a text holding a section number, "1 rate"', change: (ghost) => ghost.replace('<div inert', '<span>1 rate</span><div inert') },
-      { name: 'a word of the old scan, "cost"', change: (ghost) => ghost.replace('<div inert', '<span>cost</span><div inert') },
-      { name: 'a word of the old scan in an attribute (aria-description="formula")', change: (ghost) => ghost.replace('<div inert', '<div aria-description="formula" inert') },
-      { name: 'a word of the old scan, "price", in a data attribute', change: (ghost) => ghost.replace('<div inert', '<div data-price="12" inert') },
-      { name: 'a word of the review, "Total Unit Production Price"', change: (ghost) => ghost.replace('<div inert', '<span>Total Unit Production Price</span><div inert') },
-      { name: 'a word of the review, "File cell"', change: (ghost) => ghost.replace('<div inert', '<span>File cell</span><div inert') },
-      { name: 'a currency sign in a text', change: (ghost) => ghost.replace('<div inert', '<span>₹ 5</span><div inert') },
-      { name: 'a hint with a word added to it', change: (ghost) => ghost.replace('Enter 0 if there is none.', 'Enter 0 if there is none. rate') },
+    it('no word of the old scan is a class token of the code (a class value is checked by token)', () => {
+      const tokens = classTokensOfTheCode();
+      for (const word of ['rate', 'rates', 'price', 'prices', 'cost', 'costs', 'formula', 'formulas', 'Machining', '450', '45', '$', '€', '₹']) expect(tokens.has(word), word).toBe(false);
+    });
+
+    /** The reviewer's 23 values (SEC-833-01 to -03) put in each of 11 places, and the lane's 11 mutants: every one must fail the scan. */
+    const VALUES: ReadonlyArray<string> = [
+      'Machining rate 450.00 per hour', '16889808.07', 'rate', 'cost', 'formula', 'price', 'Total Unit Production Price', '450', '45', '1,234', '₹', '$', '€', '£', 'Rs 5', '=E5*F5', '=SUM(E5:E9)/G3', 'Qty*Rate',
+      '４５０.００', '٤٥٠', '＄5', 'ra&#8203;te', 'ｒａｔｅ 450',
     ];
-    for (const mutant of MUTANTS) {
+    const PLACES: ReadonlyArray<{ readonly name: string; readonly put: (ghost: string, value: string) => string }> = [
+      { name: 'a text node', put: (ghost, value) => ghost.replace('<div inert', () => `<span>${value}</span><div inert`) },
+      { name: 'a class value', put: (ghost, value) => ghost.replace(' class="', () => ` class="${value} `) },
+      { name: 'a data-ghost value', put: (ghost, value) => ghost.replace('data-ghost-grid=""', () => `data-ghost-grid="${value}"`) },
+      { name: 'an aria-busy value', put: (ghost, value) => ghost.replace('<div inert', () => `<div aria-busy="${value}" inert`) },
+      { name: 'an aria-hidden value', put: (ghost, value) => ghost.replace('aria-hidden="true"', () => `aria-hidden="${value}"`) },
+      { name: 'an inert value', put: (ghost, value) => ghost.replace('<div inert=""', () => `<div inert="${value}"`) },
+      { name: 'a style value', put: (ghost, value) => ghost.replace('style="--n:', () => `style="${value};--n:`) },
+      { name: 'an unlisted attribute (title)', put: (ghost, value) => ghost.replace('<div inert', () => `<div title="${value}" inert`) },
+      { name: 'a single-quoted attribute', put: (ghost, value) => ghost.replace('<div inert', () => `<div data-x='${value}' inert`) },
+      { name: 'an HTML comment', put: (ghost, value) => ghost.replace('<div inert', () => `<!--${value}--><div inert`) },
+      { name: 'a script block', put: (ghost, value) => ghost.replace('<div inert', () => `<script>${value}</script><div inert`) },
+    ];
+    for (const place of PLACES) {
+      it(`fails when ${place.name} holds any of the ${String(VALUES.length)} values`, async () => {
+        const { ghost, allowed } = await theGhostAndItsAllowedTexts();
+        const tokens = classTokensOfTheCode();
+        const survivors = VALUES.filter((value) => {
+          const changed = place.put(ghost, value);
+          return changed === ghost || strictViolations(changed, allowed, tokens).length === 0;
+        });
+        expect(survivors, `values that passed in ${place.name}`).toEqual([]);
+      });
+    }
+
+    /** The lane's own mutants, and the cases of the old whole-page scan. */
+    const OTHER: ReadonlyArray<{ readonly name: string; readonly change: (ghost: string) => string }> = [
+      { name: 'a hint with a word added to it', change: (ghost) => ghost.replace('Enter 0 if there is none.', 'Enter 0 if there is none. rate') },
+      { name: 'a text holding a section number, "1 rate"', change: (ghost) => ghost.replace('<div inert', '<span>1 rate</span><div inert') },
+      { name: 'a word of the old scan in an attribute (aria-description="formula")', change: (ghost) => ghost.replace('<div inert', '<div aria-description="formula" inert') },
+      { name: 'a data attribute (data-price="12")', change: (ghost) => ghost.replace('<div inert', '<div data-price="12" inert') },
+      { name: 'a word of the review, "File cell"', change: (ghost) => ghost.replace('<div inert', '<span>File cell</span><div inert') },
+      { name: 'a text split across three elements', change: (ghost) => ghost.replace('<div inert', '<span>Mach</span><span>ining rate</span><span> 450.00</span><div inert') },
+    ];
+    for (const mutant of OTHER) {
       it(`fails when the ghost holds ${mutant.name}`, async () => {
         const { ghost, allowed } = await theGhostAndItsAllowedTexts();
         const changed = mutant.change(ghost);
         expect(changed, 'the mutant changed the ghost').not.toBe(ghost);
-        expect(ghostViolations(changed, allowed), mutant.name).not.toEqual([]);
+        expect(strictViolations(changed, allowed, classTokensOfTheCode()), mutant.name).not.toEqual([]);
       });
     }
   });
