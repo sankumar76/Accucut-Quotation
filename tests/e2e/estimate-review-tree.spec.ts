@@ -231,16 +231,19 @@ test.describe('the parts tree on SCR-06, one check each', () => {
       if (request.method() !== 'GET') writes.push(`${request.method()} ${request.url()}`);
     });
     // By touch (360 and 768) it is tapped; with a mouse (1366) it is clicked and then given Space, Enter, the arrows, Alt+Down and a typed letter. Each must leave the value, raise no change event and open no list.
-    // QA's guard (AQP-491): a drop-down with one option has nothing to change to, so the "no change" checks below would test nothing for it: only drop-downs with two options or more are exercised, and there must be one.
+    // QA's guard (AQP-491): a drop-down with one option has nothing to change to, so the "no change" checks would test nothing for it. Every drop-down gets every check (read-only, dashed, not open, no change event, nothing sent), and the guard is
+    // an assertion on the set: at least one has two options or more, so the checks test something (QLT-806-11).
     const all = form.locator('select:not([disabled])');
-    const listed: number[] = [];
-    for (let index = 0; index < (await all.count()); index += 1) if ((await all.nth(index).locator('option').count()) >= 2) listed.push(index);
-    expect(listed.length, 'drop-downs with two options or more in the read-only inputs').toBeGreaterThan(0);
+    const total = await all.count();
+    expect(total, 'drop-downs in the read-only inputs').toBeGreaterThan(0);
+    let withTwoOptions = 0;
+    for (let index = 0; index < total; index += 1) if ((await all.nth(index).locator('option').count()) >= 2) withTwoOptions += 1;
+    expect(withTwoOptions, 'drop-downs with two options or more in the read-only inputs').toBeGreaterThan(0);
     await page.evaluate(() => document.addEventListener('change', () => document.documentElement.setAttribute('data-select-changed', ''), true));
     // The `:open` check below proves nothing in a browser that does not know the selector (it would pass silently), so the browser is asked first.
     expect(await page.evaluate(() => CSS.supports('selector(:open)')), 'the browser knows :open').toBe(true);
     const touch = (page.viewportSize()?.width ?? 0) < 1024;
-    for (const index of listed) {
+    for (let index = 0; index < total; index += 1) {
       const select = all.nth(index);
       const kept = await select.inputValue();
       if (touch) {
