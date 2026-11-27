@@ -255,6 +255,78 @@ PR review [6083908499](https://github.com/sankumar76/Accucut-Quotation/pull/806#
 
 **Open after round 3:** Blocker 0, Critical 0, Major 0, Minor 2 (QLT-806-04, -05), Info 7 (QLT-806-07 to -10; SEC-806-01 to -03). **Verdict at `a5cb4f10`: APPROVE WITH COMMENTS.**
 
+## Round 4 (delta review of `a5cb4f10..b6c40208`: the two merge resolutions, 2026-11-27) — APPROVE WITH COMMENTS; the two proof misses are for master's reading
+
+**Scope.**
+- `dd9abb30` merges master `635e7f7a` (#827, DEF-141's server props, with the review page's part-form seed). `b6c40208` merges master `7aa23c44` (#813, SCR-05's task card).
+- No separate commit: the round-4 code is the resolution of `dd9abb30`. `b6c40208` has no conflict in #806's files.
+- The branch is **0 behind**. The tree differs from master in 24 files: round 3's 23 plus `tests/unit/estimate-page.test.ts`.
+- Reviewed with `git show --cc dd9abb30` and `git show --cc b6c40208`, the full merged files, the PR body's DEF-141 step-2 proof, and DL-452 (3), DL-457 (3) and DL-461 (records-u).
+
+**Checks run.**
+- 16 test files at `b6c40208` in a temporary scratchpad worktree, since removed, and not modified when removed: **790 passed**. They cover `estimate-page`, `review-page-revision`, `use-part-values`, `review-form-notice`, `review-edit-wiring`, `review-save-gate`, `review-inputs-block`, `review-look-part-fields`, the architecture and screen tests, `overlay-imports`, `source-conventions`, the security tests, and every file naming `part-form-seed`, `getPartForm` or `PartFormSeed`.
+- **Mutation:** with `revisionOfSeed` made to return `undefined`, both "no second read" cases of `estimate-page.test.ts` (Lead and Admin) **fail**.
+- **CI run 45994834413 at `b6c40208`: fully green.**
+  - Stages 1 to 11 and 1 to 11b succeed; 551 unit files and 11,848 tests pass.
+  - The four E2E shards pass 585, 596, 586 and 584 cases, with **0 failed and 0 flaky**. TS-9 also passed this time.
+  - **Stage 11b: `/estimates/[code]` 193,012 B**: at or under the 193,500 B ceiling (PRD v0.65), 488 B to spare, and **+197 B** against master `7aa23c44` (192,815 B, run 45991786275).
+  - The run before, 45991786275 at `dd9abb30`, was also fully green.
+
+**(a) The merge resolutions: correct.**
+- **`usePartValues`** takes both sides: #806's `onLocked` and #827's `seed`. A seed for this estimate and part starts the form `ready`, with its values and no read. `part-fields.tsx` passes `seed` beside #806's `onLocked` and `onWrote` wrapper.
+- **`estimate-review.tsx`** takes both props (`selectedRevision`, `seed`). `formProps` now carries `seed`, so the editable form, through `LazyReviewForm` to `ReviewForm` to `PartForm`, also starts from it.
+- **`review-page.tsx`** keeps #827's parallel reads (`getCosts`, the download marker, the two option lists) and its one `readPartFormBodies` for the row shown. #806's revision now comes from that answer.
+- **The E2E spec** carries master's stronger checks into the moved case; see (c).
+- **The security lens holds.**
+  - The seed is read on the server through master's `getPartForm` with the viewer's access check. It carries the form definition, the typed inputs and the option lists: no figure. The Engineer's page does not draw this review.
+  - Who may edit is unchanged: `canEditInputs` on the server (Draft and Prepared, Lead and Admin, never ignored), asked again by `assertEditable` on every write.
+  - No new endpoint, and no role check changed.
+
+**(b) The revision read: correct, with no second service call.**
+- `revisionOfSeed` reads `revision` from the part answer the seed carries (`review-page.tsx:89`). `revisionOf`, the separate `getNode`, runs only when there is no seed or the answer has no revision.
+- `revisionOf` still returns 0 only for `NotFoundError` and rethrows any other fault to the route's error boundary (QLT-806-06).
+- `estimate-page.test.ts` pins it, for Lead and Admin: `getPartForm` once, `getNode` never, and `selectedRevision` equal to the part's revision. With no seed (`getPartForm` failing), `getNode` is called once, and a fault there is rethrown, not turned into 0.
+- Using the one answer also removes the window in which two separate reads of the part could disagree.
+
+**(c) The read-only drop-down case: master's stronger checks are carried, with one narrowing (QLT-806-11, Minor).**
+- Carried: `CSS.supports('selector(:open)')` asked first, the value kept, `aria-readonly`, the dashed border (`border-top-style: dashed`), `:open` false, no `change` event, and nothing sent. The writes collector stays the stricter one (every non-GET request).
+- **Narrowed:** master asserts that **every** enabled drop-down has two or more options (`toBeGreaterThanOrEqual(2)` inside the loop), so a one-option drop-down fails the test. The moved case **skips** drop-downs with fewer than two options and requires only that one with two or more exists (`estimate-review-tree.spec.ts:122`). A skipped drop-down then gets no `:open`, `aria-readonly` or dashed-border check, although opening its list would still break the read-only promise. Only the "no change" check is meaningless for a one-option list.
+- *Fix:* run the read-only checks (`aria-readonly`, the dashed border, `:open`, the value kept) on **every** enabled drop-down, and apply the two-option requirement to the set, not as a filter. Or keep master's assertion and give the fixture's lists two options each. No new case, no person.
+
+**Performance read of the DEF-141 step-2 proof** (the PR body, against DL-457 (3) as completed by DL-461 (B); local production builds of master `635e7f7a` and `dd9abb30`, two interleaved passes, medians).
+
+| Term | Figure | Read |
+|------|--------|------|
+| (ii') statements per render and per load, at or below master's | Identical at every state and size (Prepared 105 / 120; Draft 78 / 108; Approved 81 / 96; 53 and 201 rows 102 / 117) | **Met**. The round-1 revision read (a second `getNode`) is gone |
+| Round trips beyond those named | none | **Met** |
+| (iii) form-data reads after hydration | 0 at every state and size | **Met** |
+| (v') reads in flight at hydration | 0 in every trial | **Met** |
+| Server time of `GET /estimates/[code]` | Prepared 108 → 83 ms, Draft 81 → 109 (one pass at 143), Approved 68 → 63, 53 rows 125 → 104, 201 rows 204 → 217 | **No signal.** With identical statements the server does the same work; the mixed signs are the laptop's spread |
+| (v') action delay at hydration minus idle, at most master + 20 ms | Recalculate +65 against master's +37 (**+28**); Approve +60 against +34 (**+26**) | **Not met, by 6 to 8 ms.** Per pass: Recalculate +37 and +19, Approve +33 and +19, so one pass is inside the band in each. Master's own Approve baseline moves from 14 to 54 ms between passes. At 1 s after hydration both actions equal idle |
+| (iv') TBT median, at or below master's | 742 ms against 636 (**+106 ms, +17 %**); TTI +248 ms; 4 runs each, one at 1,337 ms in #806's | **Not met** |
+
+**What the misses are.**
+- Both are the same, small, real cost: **main-thread work in the hydration window**, not data loading.
+- On an editable page `LazyReviewForm` asks for its chunk as soon as it mounts (`useLazyComponent(loadForm, true)`, `lazy-review-form.tsx:22`). It then evaluates and mounts `ReviewForm` with `Autosave` and `LeaveGuard` while hydration is finishing.
+- Under Lighthouse's 4× CPU the +106 ms of TBT is about 25 to 30 ms of real CPU time.
+- Nothing is queued on the server, and nothing is read: the DEF-141 fault (browser reads after hydration, and actions queued behind them) is **absent**.
+- It is the cost of FR-116's edit island itself, as DL-461 (B) found the Approve residue on #827 to be. One difference matters for master's reading: on #827, (iv') TBT was **below** master's, and DL-461 judged the residue by that. Here TBT is **above** master's.
+- Under DL-457 (3) (iv'), "any gap left … is judged only by NFR-009 on the reference machine (DL-455 (7) (b))".
+
+**My read for master.**
+- No code fault, and no merge blocker from this review.
+- The two misses can be accepted **provisionally as FR-116's cost**, graded by NFR-009 on the reference machine in the final review, as DL-461 (C) did for #827's server time.
+- If master wants the cost lower before G8, the cheapest lever is when the chunk is asked for. Start the import at idle (`requestIdleCallback`), or on the first pointer or focus inside `#row-inputs`, and keep the seeded read-only `PartForm` on screen until then, so the values show at once and editing arrives a moment later. That is the kind of deferral DL-461 (B) put after G8 for #827, because it adds a path in which the form is briefly not editable. The same reasoning applies here, so I would log it as the same follow-up, not as a condition.
+
+**New in round 4**
+
+| ID | Severity | File:line | Note |
+|----|----------|-----------|------|
+| QLT-806-11 | Minor | `tests/e2e/estimate-review-tree.spec.ts:122` | The two-option guard became a filter: one-option drop-downs are skipped, so they get no `:open`, `aria-readonly` or dashed-border check. Fix as in (c). Hardening window, or this PR if quick |
+| PRF-806-01 | Info (for master) | `src/components/features/estimate-workspace/lazy-review-form.tsx:22` | (v') +26 / +28 ms over the band and (iv') TBT +17 %: the edit island's hydration work, with 0 reads and identical statements. For master's reading under DL-457 (3) and DL-461; my recommendation is above |
+
+**Open after round 4:** Blocker 0, Critical 0, Major 0, Minor 3 (QLT-806-04, -05, -11), Info 8 (QLT-806-07 to -10; SEC-806-01 to -03; PRF-806-01). **Verdict at `b6c40208`: APPROVE WITH COMMENTS.** The run of record is fully green with Stage 11b at 193,012 B. The proof's two misses go to master.
+
 ## Hand-off
 - Status: COMPLETE
 - GitHub: PR review [6082714446](https://github.com/sankumar76/Accucut-Quotation/pull/806#pullrequestreview-6082714446) (COMMENT, 5 inline comments, at `a701377e`); label `review:quality-changes-requested`
@@ -262,3 +334,4 @@ PR review [6083908499](https://github.com/sankumar76/Accucut-Quotation/pull/806#
 - Recommended next agent: developer (QLT-806-03, then -06), then a short re-review of the new diff, then orchestrator: merge on a fully green run of record.
 - **Round 2 (`fabe1d09`):** APPROVE WITH COMMENTS (Blocker 0, Critical 0, Major 0, Minor 2, Info 6). QLT-806-03 and -06 are fixed and mutation-checked. Condition: the run of record 45929518610 fully green, with Stage 11b at or under 193,500 B.
 - **Round 3 (`a5cb4f10`):** APPROVE WITH COMMENTS (Blocker 0, Critical 0, Major 0, Minor 2, Info 7). Stage 11b is 192,758 B. Run 45943506004 is red only on TS-9 (desktop), a master defect. Before merge: merge in #819, a `--cc` check of `estimate-review.tsx` and the architecture test, and the run of record at 0 behind.
+- **Round 4 (`b6c40208`):** APPROVE WITH COMMENTS (Blocker 0, Critical 0, Major 0, Minor 3, Info 8). Run 45994834413 is fully green; Stage 11b is 193,012 B (+197 B). The (v') +26 / +28 ms and TBT +17 % misses are the edit island's hydration work, for master's reading (PRF-806-01).
