@@ -5,7 +5,6 @@ import { defined } from '../support/defined';
 import { deleteGuardOf } from '../../src/lib/estimates/tree-moves';
 
 import { E2E_ENGINEER, E2E_PASSWORD, ensureCanaryCustomers, signInWithoutThePage, useFreshAddress } from './support/auth';
-import { control } from './support/part-form';
 import { addMainAssemblyButton, readTreeThrough, reviewButton, reviewRow } from './support/review-tree';
 import { DEVELOPMENT_URL } from './support/servers';
 
@@ -99,7 +98,8 @@ test.describe('the parts tree on SCR-06, one check each', () => {
     const removed = await page.request.delete(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes/${open.id}?revision=${String(open.revision)}&parts=${String(guard.parts)}&subtree=${guard.subtree}`, { headers: HEADERS });
     expect(removed.status()).toBe(200);
 
-    const field = control(page, 'J');
+    // The first box of the form (a new Part shows its description first; which other boxes it shows depends on the material).
+    const field = page.locator('#row-inputs form[data-part-form]').getByRole('textbox').first();
     await expect(field).toBeEnabled();
     await expect(field).not.toHaveAttribute('aria-readonly', 'true');
     await field.fill('9');
