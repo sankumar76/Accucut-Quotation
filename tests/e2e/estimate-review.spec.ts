@@ -264,7 +264,8 @@ test.describe('AC-6: not calculated', () => {
     expect(await ignoreThroughTheApi(page, owner.id, 'Not taken forward, an invented reason.')).toBe(200);
     await length.blur();
     await expect(inputs).toContainText('Read-only while this RFQ is ignored. Restore it to change an input.');
-    await expect(length).toHaveValue('12.5');
+    // The box shows the value as the form shows a value that was left (two decimals).
+    await expect(length).toHaveValue('12.50');
     await expect(length).toHaveAttribute('aria-readonly', 'true');
   });
 });
