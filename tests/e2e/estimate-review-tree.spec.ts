@@ -4,6 +4,7 @@ import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
 
 import { E2E_ENGINEER, E2E_PASSWORD, ensureCanaryCustomers, signInWithoutThePage, useFreshAddress } from './support/auth';
+import { ignoreThroughTheApi } from './support/ignored';
 import { control, fieldIdOf } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 
@@ -100,5 +101,40 @@ test.describe('the Lead\'s inputs on SCR-06, one check each', () => {
     await expect(page.getByText('This part was changed somewhere else.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Keep what I typed' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Use the newer values' })).toBeVisible();
+  });
+
+  // AQP-496 (DEF-138, DL-446; master's check of the read-only drop-downs, which was a step of the Lead's AC-1 case while that block was read-only: for a Lead it is editable now, so it runs on a block that still is read-only, an ignored estimate).
+  test('AQP-496: in a read-only block a drop-down neither opens nor changes, by touch, mouse or keys, and nothing is sent', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedTaskWithAPart(page, testInfo);
+    expect(await ignoreThroughTheApi(page, estimateId, 'Not taken forward, an invented reason.')).toBe(200);
+    const response = await page.goto(`/estimates/${code}?row=1.1`);
+    expect(response?.status()).toBe(200);
+    const form = page.locator('#row-inputs form[data-part-form]');
+    await expect(form).toBeVisible();
+    const writes: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() !== 'GET') writes.push(`${request.method()} ${request.url()}`);
+    });
+    // By touch (360 and 768) it is tapped; with a mouse (1366) it is clicked and then given Space, Enter, the arrows, Alt+Down and a typed letter. Each must leave the value, raise no change event and open no list.
+    const selects = form.locator('select:not([disabled])');
+    const selectCount = await selects.count();
+    expect(selectCount, 'drop-downs in the read-only inputs').toBeGreaterThan(0);
+    await page.evaluate(() => document.addEventListener('change', () => document.documentElement.setAttribute('data-select-changed', ''), true));
+    const touch = (page.viewportSize()?.width ?? 0) < 1024;
+    for (let index = 0; index < selectCount; index += 1) {
+      const select = selects.nth(index);
+      const kept = await select.inputValue();
+      if (touch) {
+        await select.tap();
+      } else {
+        await select.click();
+        for (const key of [' ', 'Enter', 'ArrowDown', 'ArrowUp', 'Alt+ArrowDown', 'a']) await page.keyboard.press(key);
+      }
+      await expect(select).toHaveValue(kept);
+      await expect(select).toHaveAttribute('aria-readonly', 'true');
+      expect(await select.evaluate((element) => { try { return element.matches(':open'); } catch { return false; } }), 'the list is not open').toBe(false);
+    }
+    await expect(page.locator('html')).not.toHaveAttribute('data-select-changed', '');
+    expect(writes).toEqual([]);
   });
 });
