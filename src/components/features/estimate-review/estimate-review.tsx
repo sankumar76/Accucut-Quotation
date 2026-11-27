@@ -18,6 +18,7 @@ import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
 import { PartHead } from '../estimate-workspace/part-head';
+import { ghostOf } from '../estimate-workspace/part-form-ghost';
 import { LazyReviewForm } from '../estimate-workspace/lazy-review-form';
 import { PartForm } from '../estimate-workspace/part-form';
 import type { WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
@@ -143,6 +144,8 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           part: { id: selected.id, slNo: selected.slNo, revision: selectedRevision ?? 0 },
           editable,
           seed,
+          // The loading ghost, drawn here on the server from the definition and the part the seed holds (DEF-145, PF-6): the form without its values, in its own cards, so the form replaces it in the same place. None when the seed did not attach.
+          ghost: seed === undefined ? undefined : ghostOf({ form: seed.form, part: seed.part, notice: inputsNotice(header.status, isIgnored, state), head: 'lead' }),
           nodes: partItems,
           review: { notice: inputsNotice(header.status, isIgnored, state), showing: showingInputs(selected.slNo, rowNameOf(selected.name, nodeKindLabel(selected, nodes)), editable), figuresCurrent: state === 'current' },
         };

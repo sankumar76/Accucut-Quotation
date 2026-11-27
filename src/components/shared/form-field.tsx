@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import { Label } from '@/components/ui/label';
 
+import { FIELD_BOX, HINT_TEXT } from './form-layout';
 import { Icon } from './icon';
 
 /** What the control must receive so the label, hint and error are tied to it for assistive technology. */
@@ -41,7 +42,7 @@ export function FormField({ id, label, tag, tagFirst = false, hint, labelHidden 
     .join(' ');
 
   return (
-    <div className="flex min-w-0 flex-col gap-s-2">
+    <div className={FIELD_BOX}>
       <Label htmlFor={id} className={labelHidden ? 'sr-only' : undefined}>
         {tagFirst ? tag : null}
         {tagFirst && tag !== undefined ? ' ' : null}
@@ -54,7 +55,7 @@ export function FormField({ id, label, tag, tagFirst = false, hint, labelHidden 
         'aria-invalid': error === undefined ? undefined : true,
       })}
       {hint === undefined ? null : (
-        <p id={hintId} className="text-label text-ink-3">
+        <p id={hintId} className={HINT_TEXT}>
           {hint}
         </p>
       )}

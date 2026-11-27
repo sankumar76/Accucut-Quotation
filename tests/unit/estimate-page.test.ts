@@ -32,6 +32,25 @@ const { default: EstimatePage } = await import('@/app/(portal)/estimates/[code]/
 
 const CODE = canaryTaskCodeFor(harness.targetId);
 const estimate = () => defined(harness.estimateWorld.estimates[0]);
+/**
+ * The page's markup without the form's loading ghost (DEF-145, PF-6), which the page now draws on the server: **the form's own words** (the cards' names, their column ranges, the strip and the hints of the fields), drawn
+ * inert and as grey blocks. The checks below are about the page, so the ghost is cut out of it; what the ghost may hold is held separately (the last test of this file). The ghost is cut by counting its `div`s.
+ */
+function splitGhost(html: string): { readonly ghost: string; readonly rest: string } {
+  const start = html.indexOf('<div role="status" aria-busy="true" data-part-ghost=""');
+  if (start < 0) return { ghost: '', rest: html };
+  let depth = 0;
+  for (const tag of html.slice(start).matchAll(/<(\/?)div\b[^>]*>/g)) {
+    depth += tag[1] === '/' ? -1 : 1;
+    if (depth === 0) {
+      const end = start + (tag.index ?? 0) + tag[0].length;
+      return { ghost: html.slice(start, end), rest: html.slice(0, start) + html.slice(end) };
+    }
+  }
+  return { ghost: '', rest: html };
+}
+const withoutGhost = (html: string): string => splitGhost(html).rest;
+
 const open = async (code: string): Promise<string> => renderToStaticMarkup(await EstimatePage({ params: Promise.resolve({ code }), searchParams: Promise.resolve({}) }));
 
 beforeAll(holdSessionClock);
@@ -70,7 +89,7 @@ describe('AC-1: the Engineer opens their task with no customer', () => {
     expect(html).toContain('No customer is set for this estimate. A Lead or an Admin can set one.');
     expect(html).not.toContain('Choose the customer to start.');
     expect(html).not.toContain('The form opens as soon as you pick one.');
-    expect(html).not.toMatch(/inert=""/);
+    expect(withoutGhost(html)).not.toMatch(/inert=""/);
     expect(html).toContain('Parts and inputs');
   });
 
@@ -104,7 +123,7 @@ describe('AC-1: the Engineer opens their task with no customer', () => {
     estimate().customerId = CUSTOMER_RECIPE_ID;
     const html = await open(CODE);
     expect(html).not.toContain('Choose the customer to start.');
-    expect(html).not.toMatch(/inert=""/);
+    expect(withoutGhost(html)).not.toMatch(/inert=""/);
     expect(html).toContain('Canary-Customer-Alpha');
   });
 
@@ -189,8 +208,26 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
     harness.signInAs('ENGINEER');
     estimate().customerId = CUSTOMER_RECIPE_ID;
     const html = await open(CODE);
-    expect(html).not.toMatch(/\b(rates?|prices?|costs?|formulas?)\b/i);
+    expect(withoutGhost(html)).not.toMatch(/\b(rates?|prices?|costs?|formulas?)\b/i);
     for (const review of ['Total Unit Production Price', 'File cell', 'How the total is built', 'Approve and lock', 'Not calculated']) expect(html).not.toContain(review);
+  });
+
+  it('PF-6, NFR-002: the Engineer\'s loading ghost holds only words of the form definition this Engineer is sent by GET /form (a card\'s name and range, a strip item, a hint) and the one hidden loading line, and no figure', async () => {
+    harness.signInAs('ENGINEER');
+    estimate().customerId = CUSTOMER_RECIPE_ID;
+    const html = await open(CODE);
+    const { ghost } = splitGhost(html);
+    expect(ghost, 'the page draws the ghost').not.toBe('');
+    const form = await harness.estimateService.getForm({ id: harness.idOf.ENGINEER, role: 'ENGINEER' }, estimate().id);
+    const allowed = new Set<string>(['Loading the form']);
+    for (const section of form.sections) {
+      for (const word of [section.name, section.columnRange, section.shortName, `${String(section.number)}`]) allowed.add(word);
+      for (const field of section.fields) if (field.hint !== null) allowed.add(field.hint);
+    }
+    const texts = [...ghost.matchAll(/>([^<>]+)</g)].map((match) => (match[1] ?? '').replaceAll('&amp;', '&').replaceAll('&#x27;', "'").replaceAll('&quot;', '"').trim()).filter((text) => text !== '');
+    const stray = texts.filter((text) => ![...allowed].some((word) => text.includes(word) || word.includes(text)));
+    expect(stray, 'words in the ghost that are not the form definition\'s').toEqual([]);
+    expect(ghost).not.toMatch(/[$€₹]/);
   });
 
   it('the Engineer\'s page is the same whether or not a calculation exists (STORY-06.02 AC-5)', async () => {

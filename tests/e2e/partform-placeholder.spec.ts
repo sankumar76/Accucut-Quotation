@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 import { FORM_LOADING } from '../../src/components/features/estimate-workspace/estimate-texts';
@@ -72,14 +73,35 @@ async function mainBottom(page: Page): Promise<number> {
   return page.locator('main').first().evaluate((element) => element.getBoundingClientRect().bottom + window.scrollY);
 }
 
+/** PF-1, PF-9: the ghost is the one busy status region of the form area, drawn in the first paint. */
 async function placeholderIsShown(page: Page): Promise<void> {
-  await expect(page.getByRole('status', { name: FORM_LOADING })).toBeVisible();
+  await expect(page.locator('[data-part-ghost]')).toBeVisible();
+  await expect(page.locator('[data-part-ghost]').first()).toContainText(FORM_LOADING);
 }
 
+/** PF-14c: the form is drawn and no ghost is left in the page. */
 async function formIsDrawn(page: Page): Promise<void> {
   await expect(page.locator('form[data-part-form]')).toBeVisible();
-  await expect(page.getByRole('status', { name: FORM_LOADING })).toHaveCount(0);
+  await expect(page.locator('[data-part-ghost]')).toHaveCount(0);
 }
+
+interface Box {
+  readonly top: number;
+  readonly width: number;
+}
+
+/** The cards in the area, in order, with their document top and width: the ghost's (`[data-ghost-grid]`) before the swap, the form's (`[data-part-grid]`) after it (PF-14a, PF-14b). */
+async function cardBoxes(page: Page, grid: string): Promise<ReadonlyArray<Box>> {
+  return page.locator(`${grid} > [data-slot="card"]`).evaluateAll((cards) =>
+    cards.map((card) => {
+      const rect = card.getBoundingClientRect();
+      return { top: rect.top + window.scrollY, width: rect.width };
+    }),
+  );
+}
+
+/** The distinct rows of cards (cards whose tops are within 2 px share a row): PF-14b, the same cards in the same rows. */
+const rowsOf = (boxes: ReadonlyArray<Box>): number => boxes.reduce<number[]>((rows, box) => (rows.some((top) => Math.abs(top - box.top) <= 2) ? rows : [...rows, box.top]), []).length;
 
 test.describe('DEF-145: the form replaces its placeholder and nothing under it moves', () => {
   for (const prepared of [false, true]) {
@@ -94,6 +116,13 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
       const actions = page.locator('#review-actions');
       await expect(actions).toBeVisible();
       const before = await documentTop(actions);
+      const ghostCards = await cardBoxes(page, '[data-ghost-grid]');
+      expect(ghostCards.length, "the ghost draws the form's cards").toBeGreaterThan(0);
+      // PF-14d: the drawn blocks are inert and hidden from assistive technology, and the ghost has no accessibility violation of its own. PF-14g: it holds no figure (NFR-002).
+      await expect(page.locator('[data-part-ghost] > div')).toHaveAttribute('inert', '');
+      await expect(page.locator('[data-part-ghost] > div')).toHaveAttribute('aria-hidden', 'true');
+      expect((await new AxeBuilder({ page }).include('[data-part-ghost]').analyze()).violations, 'axe on the ghost').toEqual([]);
+      expect(await page.locator('[data-part-ghost]').innerText()).not.toMatch(/[$€₹]/);
       // What the rates-changed notice's link does on Enter: a jump to the Recalculate button, made while the placeholder is still on the page.
       await page.evaluate(() => {
         window.location.hash = '#review-calculate';
@@ -104,6 +133,15 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
       const after = await documentTop(actions);
       expect(Math.abs(after - before), `#review-actions moved from ${String(before)} to ${String(after)} px`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
       await expect(page.locator('#review-calculate')).toBeInViewport();
+      // PF-14a, PF-14b: the same number of cards, each in the place and at the width the form gives it, in the same rows.
+      const formCards = await cardBoxes(page, '[data-part-grid]');
+      expect(formCards.length, "the form draws the ghost's cards").toBe(ghostCards.length);
+      expect(rowsOf(formCards), 'the cards fall into the same rows').toBe(rowsOf(ghostCards));
+      formCards.forEach((card, index) => {
+        const drawn = defined(ghostCards[index]);
+        expect(Math.abs(card.width - drawn.width), `card ${String(index + 1)} width`).toBeLessThanOrEqual(1);
+        expect(Math.abs(card.top - drawn.top), `card ${String(index + 1)} top`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
+      });
     });
   }
 
@@ -116,9 +154,27 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
 
     const before = await mainBottom(page);
+    const areaBefore = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
     chunk.release();
     await formIsDrawn(page);
     const after = await mainBottom(page);
     expect(Math.abs(after - before), `the end of the page moved from ${String(before)} to ${String(after)} px`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
+    // PF-14f, PF-15: a new part's ghost is the form's shape, so the form area changes by at most 24 px (one wrapped status line plus the 8 px).
+    const areaAfter = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
+    expect(Math.abs(areaAfter - areaBefore), `the form area changed from ${String(areaBefore)} to ${String(areaAfter)} px`).toBeLessThanOrEqual(24);
+  });
+
+  test("PF-14e: with reduced motion the ghost's grey blocks do not move", async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const chunk = await holdFieldsChunk(page);
+    await page.goto(`/estimates/${code}`);
+    await placeholderIsShown(page);
+    await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
+    const names = await page.locator('[data-part-ghost] [data-slot="skeleton"]').evaluateAll((blocks) => blocks.map((block) => getComputedStyle(block).animationName));
+    expect(names.length).toBeGreaterThan(0);
+    expect(new Set(names)).toEqual(new Set(['none']));
+    chunk.release();
+    await formIsDrawn(page);
   });
 });

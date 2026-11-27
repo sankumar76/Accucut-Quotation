@@ -1,9 +1,11 @@
 import { readChoiceInput } from '../estimate/choice-value';
 import { readFlagInput, readTreatmentInput } from '../estimate/treatment-value';
 import { textTooLongMessage, validateNumberInput, validateTextInput, type InputCheck } from '../estimate/validation';
-import { isShownByRule } from '../fields/visible-when';
 
-import type { FormField, FormRule, FormSection } from './form-client';
+import type { FormField, FormRule } from './form-client';
+import { textOf, type Texts } from './form-shown';
+
+export { fieldVisibility, MIN_SECTION_WEIGHT, sectionWeight, shownSections, textOf } from './form-shown';
 
 /**
  * What the part form does with one typed value before it asks the server (STORY-05.03 AC-4): read it by its field's rule, so a wrong number is refused on the screen with the
@@ -46,56 +48,8 @@ export function lengthProblem(rule: FormRule, typed: string): string | undefined
   return rule.type === 'text' && typed.trim().length > rule.maxLength ? textTooLongMessage(rule.maxLength) : undefined;
 }
 
-type TextedField = Pick<FormField, 'id' | 'defaultValue'>;
-type Texts = Readonly<Record<string, string>>;
-
-/**
- * The text a field shows (STORY-05.04 AC-3): what the person typed or the server holds, or, while nothing is held, the field's default (Fasteners shows "None"; nothing is stored until it is
- * changed, so a part left alone is still `EMPTY`). A blank typed over the default is a blank, so a person can clear the box while they type.
- */
-export const textOf = (field: TextedField, texts: Texts): string => texts[field.id] ?? field.defaultValue ?? '';
-
-type VisibleField = Pick<FormField, 'id' | 'defaultValue' | 'visibleWhen'>;
-
-/**
- * Whether each field shows for what is typed (STORY-05.05 AC-1, AC-2; SPEC section 14.4): the registry's own rule, which the server sends with the field (`visibleWhen`) and `isShownByRule` reads.
- * The value a rule watches is the text that field shows, so Fasteners at its default "None", or a blank typed over it, hides Fasteners Qty and Cost, and any other word shows them. What was typed
- * into a hidden field stays in `texts`: it is the person's until they leave the form, and shows again when the field does (AC-2). This decides only what the screen draws; the server decides what
- * is stored (a hidden number is 0, `estimate-inputs.ts`).
- */
-export function fieldVisibility(fields: ReadonlyArray<VisibleField>, texts: Texts): (field: VisibleField) => boolean {
-  const byId = new Map(fields.map((field) => [field.id, field]));
-  const valueOf = (fieldId: string): string | undefined => {
-    const watched = byId.get(fieldId);
-    return watched === undefined ? texts[fieldId] : textOf(watched, texts);
-  };
-  return (field) => isShownByRule(field.visibleWhen, valueOf);
-}
-
-/** The sections as the form draws them for what is typed: each card without its hidden fields (so "n of m" and the missing marks leave them out too). */
-export function shownSections(sections: ReadonlyArray<FormSection>, texts: Texts): FormSection[] {
-  const shown = fieldVisibility(
-    sections.flatMap((section) => section.fields),
-    texts,
-  );
-  return sections.map((section) => ({ ...section, fields: section.fields.filter(shown) }));
-}
-
 /** The fields that watch this one: the fields that showing or hiding it changes. */
 export const watchersOf = <T extends Pick<FormField, 'visibleWhen'>>(fields: ReadonlyArray<T>, fieldId: string): T[] => fields.filter((field) => field.visibleWhen?.fieldId === fieldId);
-
-/** The least weight of a card in the row of cards: a card with one field is as wide as one with two, so it is never squeezed to a sliver. */
-export const MIN_SECTION_WEIGHT = 2;
-
-/**
- * How much of the row a card takes (CR-01 item 1, UX spec section 0.9; AQP-388 AC-2): its number of fields, so a card with more fields is wider than one with fewer. The cards sit side by side in
- * wrapping rows and each one's share follows this number (`--n` in `globals.css`). The surface treatments are drawn together as one multi-select, so the flags of a card count once; the picture counts as a field.
- */
-export function sectionWeight(section: { readonly fields: ReadonlyArray<Pick<FormField, 'rule'>> }): number {
-  const flags = section.fields.some((field) => field.rule.type === 'flag') ? 1 : 0;
-  const drawn = section.fields.filter((field) => field.rule.type !== 'flag').length + flags;
-  return Math.max(MIN_SECTION_WEIGHT, drawn);
-}
 
 /** How many of a section's fields are filled: `complete` of `total` (UX spec SCR-05 "Layout rules": "n of m" on every card). */
 export interface SectionProgress {

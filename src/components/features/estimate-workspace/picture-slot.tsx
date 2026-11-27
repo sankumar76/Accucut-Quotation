@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ComponentType } from 'react';
 
+import { PICTURE_ZONE_HEIGHT } from '@/components/shared/form-layout';
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,7 +25,7 @@ function PictureSkeleton() {
   return (
     <div className="flex min-w-0 flex-col gap-s-2">
       <Skeleton className="h-s-5 w-1/2" />
-      <Skeleton data-picture-zone="" className="h-[146px] md:h-[130px] lg:h-[114px]" />
+      <Skeleton data-picture-zone="" className={PICTURE_ZONE_HEIGHT} />
       <Skeleton className="h-s-4 w-2/3" />
     </div>
   );

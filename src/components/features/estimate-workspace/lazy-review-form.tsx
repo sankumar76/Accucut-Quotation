@@ -31,6 +31,8 @@ export function LazyReviewForm(props: ReviewFormProps) {
       </Notice>
     );
   }
+  // The page drew the form's ghost on the server (DEF-145, PF-1): the same one the form shows once its code is here, so the swap from this wait to the form is one step.
+  if (props.ghost !== undefined) return props.ghost;
   return (
     <div role="status" aria-label="Loading the form" className="flex min-w-0 flex-1 flex-col gap-s-3">
       <Skeleton className="h-(--control-h)" />
