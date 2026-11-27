@@ -201,22 +201,36 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     });
   }
 
-  test("the Engineer's workspace: the page under the form moves no more than 24 px (PF-15) when the form replaces its placeholder", async ({ page }, testInfo) => {
+  test("the Engineer's workspace, while the part's values are read (the second wait): the page under the form moves no more than 24 px (PF-15) when the form replaces its ghost", async ({ page }, testInfo) => {
+    // The Engineer's first wait keeps the placeholder it had (the page makes no read of the form's definition, DL-471); the ghost is the second wait, drawn from the client's own read of the definition while the part's values are on their way.
     const { code } = await assignedEstimate(page, testInfo, false);
     await signInAs(page, E2E_ENGINEER);
-    const chunk = await holdFieldsChunk(page);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let held = 0;
+    await page.route(/\/api\/v1\/estimates\/[^/]+\/nodes\/[^/]+$/, async (route) => {
+      if (route.request().method() !== 'GET') {
+        await route.continue();
+        return;
+      }
+      held += 1;
+      await gate;
+      await route.continue();
+    });
     // The tree is read after the page is up; on a phone it is in a drawer that is not drawn, so its arrival is the answer of its read, not a row on the screen.
     const treeRead = page.waitForResponse((response) => response.request().method() === 'GET' && /\/api\/v1\/estimates\/[^/]+\/tree$/.test(new URL(response.url()).pathname));
     await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
-    await placeholderIsShown(page);
-    await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
+    await expect.poll(() => held, { message: "the part's values read is being held" }).toBeGreaterThan(0);
+    await expect(page.locator('[data-part-ghost]')).toBeVisible();
 
     // The tree's own arrival (its skeleton rows become its rows) moves the page too and is not what is measured here (PF-14f): the tree is read first, then the form's swap is.
     await treeRead;
     await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     const before = await mainBottom(page);
     const areaBefore = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
-    chunk.release();
+    release();
     await formIsDrawn(page);
     const after = await mainBottom(page);
     expect(Math.abs(after - before), `the end of the page moved from ${String(before)} to ${String(after)} px`).toBeLessThanOrEqual(ENGINEER_MOVE_AT_MOST_PX);

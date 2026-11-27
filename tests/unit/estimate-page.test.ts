@@ -4,6 +4,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { engineerGhost } from '@/app/(portal)/estimates/[code]/engineer-ghost';
 import { FORM_LOADING, FORM_LOCKED, sectionLinkText } from '@/components/features/estimate-workspace/estimate-texts';
 import { SURFACE_HINT } from '@/components/features/estimate-workspace/surface-texts';
 import * as layout from '@/components/shared/form-layout';
@@ -218,6 +219,15 @@ describe('AC-5: who may open it', () => {
 });
 
 describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () => {
+  it('DL-471: the Engineer page makes no read of the form definition and draws no form ghost (its first wait keeps the placeholder it had)', async () => {
+    harness.signInAs('ENGINEER');
+    const read = vi.spyOn(harness.estimateService, 'getForm');
+    const html = await open(CODE);
+    expect(read).not.toHaveBeenCalled();
+    expect(html).not.toContain('data-part-ghost');
+    read.mockRestore();
+  });
+
   it('as ENGINEER the page names none of a rate, a price, a cost or a formula, and none of the words of the review', async () => {
     harness.signInAs('ENGINEER');
     estimate().customerId = CUSTOMER_RECIPE_ID;
@@ -302,10 +312,12 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
     async function theGhostAndItsAllowedTexts(): Promise<{ readonly ghost: string; readonly allowed: ReadonlyArray<string> }> {
       harness.signInAs('ENGINEER');
       estimate().customerId = CUSTOMER_RECIPE_ID;
-      const html = await open(CODE);
-      const { ghost } = splitGhost(html);
-      expect(ghost, 'the page draws the ghost').not.toBe('');
-      const form = await harness.estimateService.getForm({ id: harness.idOf.ENGINEER, role: 'ENGINEER' }, estimate().id);
+      // The Engineer's page draws no ghost of its own (DL-471: it makes no read of the form's definition); the ghost is built here by its builder from the Engineer's own definition, as the page's combined read will build it.
+      const viewer = { id: harness.idOf.ENGINEER, role: 'ENGINEER' } as const;
+      const element = await engineerGhost(harness.estimateService, viewer, estimate().id, { status: estimate().status, ignored: false });
+      const ghost = renderToStaticMarkup(defined(element) as never);
+      expect(ghost, 'the builder draws the ghost').not.toBe('');
+      const form = await harness.estimateService.getForm(viewer, estimate().id);
       const allowed = [
         FORM_LOADING,
         SURFACE_HINT,

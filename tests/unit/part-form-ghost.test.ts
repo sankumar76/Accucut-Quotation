@@ -220,7 +220,9 @@ describe('the ghost\'s place in the code (PF-4, PF-6)', () => {
     const engineer = code('src/app/(portal)/estimates/[code]/engineer-ghost.tsx');
     expect(engineer).toContain('formBody(');
     expect(engineer).toContain('getForm(');
-    expect(code('src/app/(portal)/estimates/[code]/page.tsx')).toContain('engineerGhost(');
+    // DL-471: the Engineer's page makes no read of the form's definition and draws no ghost; `engineer-ghost.tsx` is the builder the page's combined read will use.
+    expect(code('src/app/(portal)/estimates/[code]/page.tsx')).not.toContain('engineerGhost');
+    expect(code('src/app/(portal)/estimates/[code]/page.tsx')).not.toContain('getForm');
   });
 
   it('PF-6, DL-455 (3)(a): the Engineer\'s form is not seeded', () => {
