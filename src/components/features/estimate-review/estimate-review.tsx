@@ -219,7 +219,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           code={header.code}
           state={state}
           status={header.status}
-          approve={approveOffer(header.status, costs)}
+          approve={approveOffer(header.status, costs, customer?.name ?? null)}
           cancel={cancelOffer(viewerRole, costs.approval)}
           remove={removeOffer(viewerRole, costs.approval)}
           quote={quoteOffer(viewerRole, header.status, isIgnored, customer?.name ?? null, download)}

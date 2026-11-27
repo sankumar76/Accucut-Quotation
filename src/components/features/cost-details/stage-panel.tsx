@@ -45,7 +45,7 @@ export function StagePanel({ stage, unitPriceLetter }: StagePanelProps) {
   return (
     <details open data-stage={stage.number} className="group/stage overflow-hidden rounded-lg border border-border bg-surface">
       <summary className="flex min-h-13 cursor-pointer list-none items-center gap-s-3 bg-surface-2 px-s-3 py-s-2 text-body font-semibold text-ink [&::-webkit-details-marker]:hidden">
-        <span aria-hidden="true" data-stage-number="" className="inline-flex size-8 flex-none items-center justify-center rounded-md bg-nav font-mono text-label font-medium text-on-fill">
+        <span aria-hidden="true" data-stage-number="" className="inline-flex size-[28px] flex-none items-center justify-center rounded-md bg-nav font-mono text-label font-medium text-on-fill">
           {stage.number}
         </span>
         <span className="min-w-0 flex-1">{`${stage.number} · ${stage.name}`}</span>
