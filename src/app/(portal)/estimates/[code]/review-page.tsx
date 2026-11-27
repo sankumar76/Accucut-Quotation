@@ -6,7 +6,9 @@ import { formatIst } from '@/lib/time';
 import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getDownloadMarkerService, getEstimateReviewService } from '@/server/composition';
+import { selectedRow } from '@/components/features/estimate-review/selected-row';
+import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
+import { getDownloadMarkerService, getEstimateReviewService, getEstimateService } from '@/server/composition';
 import type { EstimateViewer } from '@/server/services/estimate-service';
 
 /**
@@ -52,8 +54,22 @@ async function markerOf(viewer: EstimateViewer, estimateId: string): Promise<Dow
   }
 }
 
+/**
+ * The revision of the part whose inputs the block shows, for a Lead or an Admin who may correct them (DEF-131 stage 2): a save is sent with the revision the person saw, and the review's rows carry no revision. One read of
+ * that part, only while the estimate is editable; a part that is gone (deleted meanwhile) or a read that fails gives 0, and the first save then meets the server's own 409 and the form's conflict notice.
+ */
+async function revisionOf(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<number> {
+  try {
+    return (await getEstimateService().getNode(viewer, estimateId, nodeId)).revision;
+  } catch {
+    return 0;
+  }
+}
+
 export async function renderReview({ viewer, estimateId, header, customer, quoted, ignored, engineerName, deadlinePassed, row }: ReviewPageArgs): Promise<ReactElement> {
   const [costs, download] = await Promise.all([getEstimateReviewService().getCosts(viewer, estimateId), markerOf(viewer, estimateId)]);
+  const selected = selectedRow(costs.nodes, row);
+  const selectedRevision = selected !== null && canEditInputs({ status: header.status, ignored: ignored !== null }, viewer.role) ? await revisionOf(viewer, estimateId, selected.id) : undefined;
   return (
     <EstimateReview
       header={header}
@@ -68,6 +84,7 @@ export async function renderReview({ viewer, estimateId, header, customer, quote
       engineerName={engineerName}
       deadlinePassed={deadlinePassed}
       row={row}
+      selectedRevision={selectedRevision}
     />
   );
 }
