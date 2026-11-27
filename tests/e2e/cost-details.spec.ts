@@ -308,7 +308,7 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     await expect(viewInputs).toHaveText('View inputs');
     await expect(viewInputs).toHaveAttribute('href', `/estimates/${code}?row=1#row-inputs`);
     await viewInputs.click();
-    await expect(page).toHaveURL(new RegExp(`/estimates/${code}\?row=1#row-inputs$`));
+    await expect(page).toHaveURL(new RegExp(`/estimates/${code}\\?row=1#row-inputs$`));
     await expect(page.locator('#row-inputs')).toBeVisible();
     await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
   });
