@@ -20,7 +20,7 @@ import { Notice } from '@/components/shared/notice';
 import { blockedSummary } from '@/lib/estimate/calculate-words';
 
 import type { CalculateSummaryProps } from '../estimate-workspace/calculate-summary';
-import { LazyReviewForm } from '../estimate-workspace/lazy-review-form';
+import { ReviewForm } from '../estimate-workspace/review-form';
 import { TreePanel } from '../estimate-workspace/tree-panel';
 import { useLazyComponent } from '../estimate-workspace/use-lazy-component';
 import { usePartsTree } from '../estimate-workspace/use-parts-tree';
@@ -171,7 +171,7 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
           )}
           <PartHead partId={shown.id} slNo={shown.slNo} nodes={items} titleId="part-form-title" titleRef={null} />
           {rowLine}
-          <LazyReviewForm
+          <ReviewForm
             estimateId={estimateId}
             part={{ id: shown.id, slNo: shown.slNo, revision: shown.revision }}
             editable

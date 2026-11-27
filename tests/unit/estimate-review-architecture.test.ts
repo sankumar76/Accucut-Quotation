@@ -130,8 +130,6 @@ describe('AC-5: no review code reaches the Engineer', () => {
   const TREE_EDITOR = `${TREE_EDITOR_FOLDER}review-tree-editor.tsx`;
   // ... and it is fetched after the page is up by a thin client shell, the one file of the folder the review imports: a bare import() behind a type-only import, so none of the island is in the scripts the page names.
   const TREE_SHELL = `${TREE_EDITOR_FOLDER}review-edit-shell.tsx`;
-  // ... fetched after the page is up by a thin client shell, which the review draws (the autosave, the leave guard and its dialog stay out of the first load, `overlay-imports.test.ts`).
-  const LAZY_REVIEW_FORM = 'src/components/features/estimate-workspace/lazy-review-form.tsx';
   // SCR-06's head draws Copy path with `FolderPath` (`copyOnly`, AQP-452), the shared client button the queue and SCR-05 already carry: it is in the route's chunks already and holds no figure.
   const FOLDER_PATH_BUTTON = 'src/components/shared/folder-path.tsx';
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
@@ -159,7 +157,6 @@ describe('AC-5: no review code reaches the Engineer', () => {
     clientFiles.delete(REVIEW_FORM);
     clientFiles.delete(TREE_EDITOR);
     clientFiles.delete(TREE_SHELL);
-    clientFiles.delete(LAZY_REVIEW_FORM);
     clientFiles.delete(FOLDER_PATH_BUTTON);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
@@ -391,22 +388,10 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
   });
 
-  it('DEF-131 stage 2: the shell of the editable form reads the form by a bare dynamic import(), imports it for its type only, and is imported by the tree island alone', () => {
-    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
-    const shell = strip(ALL.find((file) => file.path === LAZY_REVIEW_FORM)?.text ?? '');
-    expect(shell.length).toBeGreaterThan(200);
-    expect(shell).toMatch(/import\('\.\/review-form'\)/);
-    expect(shell).toMatch(/^import type \{ ReviewFormProps \} from '\.\/review-form';/m);
-    expect(shell).not.toMatch(/^import (?!type).*from '\.\/review-form'/m);
-    const importers = ALL.filter((file) => file.path !== LAZY_REVIEW_FORM && /lazy-review-form/.test(file.text)).map((file) => file.path);
-    // The shell is drawn by the tree island, which holds the form for an editable estimate (DEF-131 stage 2T).
-    expect(importers).toEqual([TREE_EDITOR]);
-  });
-
   it('AQP-488 ADR-016 (QLT-800-01): the part form the review draws, and the files it reads its look from, import no figure, schema, service, repository or review code', () => {
     const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
     const folder = 'src/components/features/estimate-workspace/';
-    for (const path of [INPUTS_FORM, REVIEW_FORM, LAZY_REVIEW_FORM, `${folder}part-fields.tsx`, `${folder}review-look.ts`, `${folder}review-look-texts.ts`]) {
+    for (const path of [INPUTS_FORM, REVIEW_FORM, `${folder}part-fields.tsx`, `${folder}review-look.ts`, `${folder}review-look-texts.ts`]) {
       const code = strip(ALL.find((file) => file.path === path)?.text ?? '');
       expect(code.length, path).toBeGreaterThan(20);
       expect(code, path).not.toMatch(/schemas\/|estimate-review\/|@\/server\/|calculation-|row-outputs|product-totals|figure-state|costs/);
@@ -426,9 +411,10 @@ describe('AC-5: no review code reaches the Engineer', () => {
       expect(code, file.path).not.toMatch(/calculation-|row-outputs|product-totals|figure-state|estimate-review-service|\bfetch\(/);
     }
     const island = strip(ALL.find((file) => file.path === TREE_EDITOR)?.text ?? '');
-    // The editable form (autosave, leave guard and its dialog) comes through the shell that fetches it after the page is up, and is never a plain import of the first load (`overlay-imports.test.ts`).
-    expect(island).toMatch(/from '\.\.\/estimate-workspace\/lazy-review-form'/);
-    expect(island).not.toMatch(/estimate-workspace\/review-form'/);
+    // The editable form (autosave, leave guard and its dialog) is a plain import of the island, which is itself fetched after the page is up: none of it is in a script the page names (`overlay-imports.test.ts`) and no
+    // second fetch waits behind the island's. Nothing but the island imports it.
+    expect(island).toMatch(/^import \{ ReviewForm \} from '\.\.\/estimate-workspace\/review-form';/m);
+    expect(ALL.filter((file) => file.path !== TREE_EDITOR && /from '[^']*\/review-form'/.test(file.text)).map((file) => file.path)).toEqual([]);
   });
 
   it('DEF-131 stage 2T: the shell fetches the island by a bare dynamic import(), imports it for its type only, and is imported by the review alone (the island is in no script the page names)', () => {

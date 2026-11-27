@@ -5,7 +5,8 @@ import { defined } from '../support/defined';
 import { deleteGuardOf } from '../../src/lib/estimates/tree-moves';
 
 import { E2E_ENGINEER, E2E_PASSWORD, ensureCanaryCustomers, signInWithoutThePage, useFreshAddress } from './support/auth';
-import { addMainAssemblyButton, readTreeThrough, reviewButton, reviewRow } from './support/review-tree';
+import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
+import { addMainAssemblyButton, openTreePanel, readTreeThrough, reviewButton, reviewRow } from './support/review-tree';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
@@ -123,5 +124,48 @@ test.describe('the parts tree on SCR-06, one check each', () => {
     } finally {
       await window.close();
     }
+  });
+
+  test('ED-34: the "+" menu opens in line and is not clipped by the column, with no sideways scroll', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 0);
+    await openedByTheLead(page, code);
+
+    await openTreePanel(page);
+    await reviewRow(page, '1').click();
+    await openTreePanel(page);
+    await reviewButton(page, 'Add under', '1').click();
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    const box = defined(await menu.boundingBox());
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual((page.viewportSize()?.width ?? 0) + 1);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+
+  test('ED-37: axe finds nothing serious with the "+" menu open', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 0);
+    await openedByTheLead(page, code);
+
+    await openTreePanel(page);
+    await reviewRow(page, '1').click();
+    await openTreePanel(page);
+    await reviewButton(page, 'Add under', '1').click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await expectNoAxeViolations(page);
+  });
+
+  test('ED-37: axe finds nothing serious with the delete dialog open', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 1);
+    await openedByTheLead(page, code);
+
+    await openTreePanel(page);
+    await reviewRow(page, '1').click();
+    await openTreePanel(page);
+    await reviewButton(page, 'Delete', '1').click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await expectNoAxeViolations(page);
   });
 });
