@@ -4,7 +4,7 @@ import { EstimateReview } from '@/components/features/estimate-review/estimate-r
 import type { WorkspaceHeaderView } from '@/components/features/estimate-workspace/workspace-header';
 import { formatIst } from '@/lib/time';
 import type { DownloadChipData } from '@/lib/export/download-marker-view';
-import { isAppError } from '@/lib/errors';
+import { isAppError, NotFoundError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { selectedRow } from '@/components/features/estimate-review/selected-row';
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
@@ -56,13 +56,15 @@ async function markerOf(viewer: EstimateViewer, estimateId: string): Promise<Dow
 
 /**
  * The revision of the part whose inputs the block shows, for a Lead or an Admin who may correct them (DEF-131 stage 2): a save is sent with the revision the person saw, and the review's rows carry no revision. One read of
- * that part, only while the estimate is editable; a part that is gone (deleted meanwhile) or a read that fails gives 0, and the first save then meets the server's own 409 and the form's conflict notice.
+ * that part, only while the estimate is editable. A part that is gone (deleted meanwhile) gives 0, and the first save then meets the server's own answer and the form's notice. **Any other fault is a fault** (QLT-806-06):
+ * it is not swallowed into a 0, which would show a database error to the Lead as a conflict of their own save; it goes on, and the page shows its load-error wording (the route's error boundary).
  */
-async function revisionOf(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<number> {
+export async function revisionOf(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<number> {
   try {
     return (await getEstimateService().getNode(viewer, estimateId, nodeId)).revision;
-  } catch {
-    return 0;
+  } catch (error) {
+    if (error instanceof NotFoundError) return 0;
+    throw error;
   }
 }
 

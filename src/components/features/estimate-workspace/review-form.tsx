@@ -16,6 +16,9 @@ import { REVIEW_IGNORED_NOTICE, SAVED_CLEARED_LINE } from './review-look-texts';
 /** What the server hands the review's form: the form's props with the review look it drew (no function, no figure). */
 export type ReviewFormProps = Omit<PartFormProps, 'review'> & { readonly review: PartReview };
 
+/** The words of the block's one notice: the page's own while the estimate can be corrected, and the server's reason once a save was refused because it can no longer be (ED-12). */
+export const reviewNotice = (refused: 'locked' | 'ignored' | null, own: string): string => (refused === 'ignored' ? REVIEW_IGNORED_NOTICE : refused === 'locked' ? FORM_LOCKED : own);
+
 /** The page is drawn again at most this often after saves and renames, so a run of them is one read of the review (architecture note lead-admin-input-edit-2026-11-27, 6a A-7). */
 const REFRESH_QUIET_MS = 300;
 
@@ -70,7 +73,7 @@ export function ReviewForm({ review, editable, ...props }: ReviewFormProps) {
     [refresh],
   );
 
-  const notice = refused === 'ignored' ? REVIEW_IGNORED_NOTICE : refused === 'locked' ? FORM_LOCKED : review.notice;
+  const notice = reviewNotice(refused, review.notice);
   return (
     <>
       {canEdit ? <Autosave gate={reviewSaveGate} enabled calculating={false} /> : null}
