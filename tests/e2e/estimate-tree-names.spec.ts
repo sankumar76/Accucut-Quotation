@@ -82,6 +82,27 @@ async function rest(target: Page): Promise<void> {
 }
 
 /**
+ * DL-448: the set-up of a movement check on one row. The pointer rests off the tree, the row is scrolled to the middle of the viewport, and the row itself (its link and its own toolbar slot under it, not the rows nested below) must lie wholly in the clear band
+ * between the page's sticky bars (the measured `[data-sticky-bar]` rects: the bottom edge of the top bars to the top edge of the bottom bar), because a toolbar under the Calculate bar cannot be reached by a pointer, and a pointer
+ * that goes onto the bar leaves the row (run 45928977839: row 1.3.1 at scrollY 378). The assertion is read at once; nothing waits.
+ */
+async function placeInClearBand(target: Page, slNo: string): Promise<void> {
+  await rest(target);
+  const slot = await slotOf(target, slNo).elementHandle();
+  const reading = await row(target, slNo).evaluate((link, own) => {
+    link.scrollIntoView({ block: 'center', behavior: 'instant' });
+    const box = { top: link.getBoundingClientRect().top, bottom: (own ?? link).getBoundingClientRect().bottom };
+    const bars = [...document.querySelectorAll('[data-sticky-bar]')].map((bar) => ({ place: bar.getAttribute('data-sticky-bar'), left: bar.getBoundingClientRect().left, right: bar.getBoundingClientRect().right, top: bar.getBoundingClientRect().top, bottom: bar.getBoundingClientRect().bottom, position: getComputedStyle(bar).position }));
+    // Only a bar that lies over the row's own columns bounds the band (the section strip sits over the form's column, not the tree's).
+    const across = bars.filter((bar) => bar.left < link.getBoundingClientRect().right && bar.right > link.getBoundingClientRect().left);
+    const bandTop = Math.max(0, ...across.filter((bar) => bar.place === 'top').map((bar) => bar.bottom));
+    const bandBottom = Math.min(window.innerHeight, ...across.filter((bar) => bar.place === 'bottom').map((bar) => bar.top));
+    return { itemTop: box.top, itemBottom: box.bottom, bandTop, bandBottom, scrollY: window.scrollY, bars };
+  }, slot);
+  expect(reading.itemTop >= reading.bandTop && reading.itemBottom <= reading.bandBottom, `row ${slNo} lies in the clear band between the sticky bars: ${JSON.stringify(reading)}`).toBe(true);
+}
+
+/**
  * DEF-129 proof, the TS-9, TS-10, TS-16 case (DL-445): a diagnostic and nothing else. That case failed attempt 1 on two master pushes, once with interception lines and once with a bare "Test timeout of 30000ms exceeded". It writes,
  * on EVERY attempt, one line a step to the job log, `[TS-9 timing] <width> attempt <n> | <step>: <ms> ms (<total> ms)`, each the moment its step ends, and a "still inside" line at 25 s, so the next failure shows where the 30 s went.
  * Steps are the toolbar checks, each axe scan of the tree or the dialog where the page is, the scroll to the top, and each whole-page scan. It waits for nothing and changes no wait, budget or assertion.
@@ -260,6 +281,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
 
       // TS-6: a toolbar that is not in view has no hit area: what lies under where its buttons would be is the slot or the list item, never a button; and a press on the empty slot sends nothing.
       for (const slNo of ROWS) {
+        await placeInClearBand(page, slNo);
         const slot = await slotOf(page, slNo).boundingBox();
         expect(slot, `the slot of ${slNo}`).not.toBeNull();
         const hit = await page.evaluate(([x, y]) => document.elementFromPoint(x ?? 0, y ?? 0)?.closest('button, a')?.tagName ?? '', [(slot?.x ?? 0) + 20, (slot?.y ?? 0) + (slot?.height ?? 0) / 2] as const);
@@ -268,6 +290,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
 
       // TS-1: hover each row, then each of its buttons: no row moves, by a single pixel, and the tree is as tall as it was.
       for (const slNo of ROWS) {
+        await placeInClearBand(page, slNo);
         const centre = await centreOf(page, slNo);
         await page.mouse.move(centre.x, centre.y);
         expect(await layoutOf(page), `pointer over ${slNo}`).toEqual(idle);
