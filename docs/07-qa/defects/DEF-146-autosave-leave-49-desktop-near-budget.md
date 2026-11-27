@@ -61,4 +61,4 @@ Read: CI 46007880263 (`master` push, run_attempt 1, `success`), the shard 3 log 
 
 All nine passed on attempt 1 (no retry marker). DL-430's terms: every case under 25 s at a draw of 1.10 or less on attempt 1 at all three widths (met, worst 6.0 s); every assertion kept in its order and no timeout, wait, force, retry or budget set or changed (QA read `gh pr diff 835`: one file, comments and the split only); person ledger +0 (test-only). The old case read 14 to 30 s on [desktop] (five readings of 25 s or more, all before #806). Nothing in this defect needed a product change.
 
-Jira AQP-503 moved to Done and GitHub #834 closed (not planned: none; completed) on this proof. Windows package 46007880261 on the same push: still in progress when this was written (the install steps; the result follows in 0.3.146) (not part of DEF-146's proof).
+Jira AQP-503 moved to Done and GitHub #834 closed (not planned: none; completed) on this proof. Windows package 46007880261 on the same push: `success`, run_attempt 1 (job `Stage 13: Windows package`, no step other than `success` or `skipped`; read to the end, result added in 0.3.147) (not part of DEF-146's proof).
