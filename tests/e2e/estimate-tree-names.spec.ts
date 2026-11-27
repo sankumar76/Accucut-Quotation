@@ -413,7 +413,10 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     laps.done('the tree is shown');
     const mouse = await hasMouse(page);
     // The row whose toolbar is in view: hovered with a mouse, selected with a finger. No scroll to the top: the page is where the cases before it left it.
-    const open = async (): Promise<void> => {
+    // `placed`: for a mouse, first set the row up as in the movement cases (DL-448, `placeInClearBand`): the pointer off the tree, the row scrolled to the middle of the viewport and asserted to lie between the sticky bars. The
+    // first call keeps the page where it is; the later two follow a scroll to the top, which leaves the row's toolbar below the bottom of the viewport (local run: button box y 779 in a 768 px viewport, nothing there to press).
+    const open = async (placed = false): Promise<void> => {
+      if (mouse && placed) await placeInClearBand(page, '1.1');
       const centre = await centreOf(page, '1.1');
       if (mouse) await page.mouse.move(centre.x, centre.y);
       else await tap(page, '1.1');
@@ -429,7 +432,14 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
       }
       await expect.poll(async () => (await button.boundingBox())?.height ?? 0, 'the button of a toolbar in view').toBeGreaterThan(1);
       const box = defined(await button.boundingBox());
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      await page.mouse.move(point.x, point.y);
+      // The press is made only where the button is on top (as the hit check of Playwright's own click does), and the failure says what was there instead.
+      const { onButton, top } = await button.evaluate((element, at) => {
+        const found = document.elementFromPoint(at.x, at.y);
+        return { onButton: element.contains(found), top: found === null ? 'nothing' : `${found.tagName.toLowerCase()} ${found.getAttributeNames().filter((name) => name.startsWith('data-') || name === 'role' || name === 'aria-label').join(' ')}` };
+      }, point);
+      expect(onButton, `the pointer is on the button: box ${JSON.stringify(box)}, viewport ${JSON.stringify(page.viewportSize())}, on top there: ${top}`).toBe(true);
       await page.mouse.down();
       await page.mouse.up();
     };
@@ -456,7 +466,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
 
     // The "+" menu of the row opens in line under it. The page was scrolled to the top by the scan above, out from under a pointer that did not move, so the hover is made again right before the button is pressed (DL-445):
     // a press on a toolbar BUTTON needs the row to be hovered when it lands. The movement cases do no such thing.
-    await open();
+    await open(true);
     laps.done('the second hover');
     await press(rowButton(page, 'Add under', '1.1'));
     await expect(page.getByRole('menu')).toBeVisible();
@@ -467,7 +477,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     laps.done('the menu closes');
 
     // The delete dialog of the row. Keep it closes it, and nothing is deleted.
-    await open();
+    await open(true);
     laps.done('the third hover');
     await press(rowButton(page, 'Delete', '1.1'));
     await expect(page.getByRole('alertdialog')).toBeVisible();
