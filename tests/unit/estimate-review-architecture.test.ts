@@ -196,8 +196,8 @@ describe('AC-5: no review code reaches the Engineer', () => {
 
   it('STORY-06.06 ADR-016: the Approve button and its dialog are the only client files of their folder, are imported by the review alone, import no figure, schema, service or repository, and the dialog is fetched on the first press', () => {
     const folder = ALL.filter((file) => file.path.startsWith(APPROVE_FOLDER));
-    expect(folder.map((file) => file.path).sort()).toEqual([APPROVE_BUTTON, `${APPROVE_FOLDER}approve-dialog.tsx`, `${APPROVE_FOLDER}approve-ids.ts`, `${APPROVE_FOLDER}approve-texts.ts`]);
-    for (const name of ['approve-ids.ts', 'approve-texts.ts']) expect(folder.find((file) => file.path.endsWith(name))?.text ?? '').not.toMatch(/use client/);
+    expect(folder.map((file) => file.path).sort()).toEqual([APPROVE_BUTTON, `${APPROVE_FOLDER}approve-dialog.tsx`, `${APPROVE_FOLDER}approve-ids.ts`, `${APPROVE_FOLDER}approve-summary.tsx`, `${APPROVE_FOLDER}approve-texts.ts`]);
+    for (const name of ['approve-ids.ts', 'approve-summary.tsx', 'approve-texts.ts']) expect(folder.find((file) => file.path.endsWith(name))?.text ?? '').not.toMatch(/use client/);
     const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
     const button = strip(folder.find((file) => file.path === APPROVE_BUTTON)?.text ?? '');
     const dialog = strip(folder.find((file) => file.path.endsWith('approve-dialog.tsx'))?.text ?? '');
@@ -208,7 +208,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     // The dialog is a bare dynamic `import()` behind a type-only import, so the page's first load does not carry it; the words and the request code belong to the dialog.
     expect(button).toMatch(/import\('\.\/approve-dialog'\)/);
     expect(button).toMatch(/^import type \{ ApproveDialogProps \} from '\.\/approve-dialog';/m);
-    expect(button).not.toMatch(/^import (?!type).*approve-(dialog|texts)/m);
+    expect(button).not.toMatch(/^import (?!type).*approve-(dialog|texts|summary)/m);
     expect(button).not.toMatch(/approve-client/);
     expect(dialog).toMatch(/@\/lib\/estimates\/approve-client/);
     const importers = ALL.filter((file) => !file.path.startsWith(APPROVE_FOLDER) && /estimate-approve\//.test(file.text)).map((file) => file.path);
