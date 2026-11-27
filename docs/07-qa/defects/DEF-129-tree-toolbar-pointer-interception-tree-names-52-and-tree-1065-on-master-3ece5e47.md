@@ -10,7 +10,7 @@
 | Jira / GitHub | [AQP-486](https://sankumar76.atlassian.net/browse/AQP-486) / [#793](https://github.com/sankumar76/Accucut-Quotation/issues/793) (labels bug, sev-3, ai-delivery, final-review; Jira also aiid-DEF-129, agent-qa-engineer). Relates to AQP-448, AQP-446, AQP-447, AQP-426, DEF-085, AQP-1. Searched first: JQL on `aiid-DEF-129`, 'DEF-129' and 'pointer interception': nothing. |
 | Found by / date | CI (a `master` push); read by qa-engineer, 2026-11-26; classified by master (DL-426) |
 | Build / commit | `master` `3ece5e47` (#788, AQP-456 / DEF-099: the delete-dialog and empty-Draft words; it does not touch the tree). The toolbar is `bffde135` (#741); the names are `3cb43a1e` (#756). |
-| Environment | GitHub-hosted runner, `Stage 12: E2E (shard 4 of 4)`, job 139910812062, Playwright Chromium, project `desktop`, production build, 4 workers. CI run 45820387977 (`push`, created 12:31:07Z). Shard 4 draw **1.03** over 387 tests against 31015cce (quartiles 0.93 to 1.15): a normal draw. |
+| Environment | GitHub-hosted runner, `Stage 12: E2E (shard 4 of 4)`, job 139910812062, Playwright Chromium, project `desktop`, the development server (`next dev`, Turbopack, port 3100; `playwright.config.ts` webServer, lines 104 to 107; corrected 2026-11-27 under DL-454: this file first said "production build"), 4 workers. CI run 45820387977 (`push`, created 12:31:07Z). Shard 4 draw **1.03** over 387 tests against 31015cce (quartiles 0.93 to 1.15): a normal draw. |
 
 ## Steps to Reproduce
 Not on demand; no local run (CLAUDE.md section 9 (5)).

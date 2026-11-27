@@ -3,10 +3,10 @@
 | Field | Value |
 |-------|-------|
 | Story / AC | CI tooling (the E2E web server is `next dev` on Next 16.4.5 with Turbopack); RISK-031 (E2E under load); seen on #824 (DEF-140's split) |
-| Severity | **Sev-3 proposed by QA; master grades** |
+| Severity | **Sev-3, graded by master (DL-454 (A), 2026-11-27), Environment, product excluded, not a G8 blocker** |
 | Priority | P3 (Jira Medium; labels `sev-3`, `environment`, `ci`) |
 | Type | **Environment** (an upstream tooling panic; not shown to be product) |
-| Status | **Open (new), 2026-11-27 (qa-engineer).** No owner yet; master assigns. |
+| Status | **Open, graded Sev-3 Environment (DL-454).** The E2E server is `next dev`; the product ships `next build` and `next start`, so the panic cannot reach a customer. R20 (PR re-run allowance) in force. |
 | Jira / GitHub | [AQP-499](https://sankumar76.atlassian.net/browse/AQP-499) / [#826](https://github.com/sankumar76/Accucut-Quotation/issues/826) (labels bug, sev-3, ai-delivery; Jira also aiid-DEF-142, agent-qa-engineer, environment, ci). Searched first: JQL on `aiid-DEF-142` and the panic text, and a GitHub search: nothing earlier. |
 | Found by / date | qa-engineer, 2026-11-27, from #824's PR run log, after the orchestrator's question about 'destination stream errored' |
 | Build / commit | #824 head `ad241979` (based on `ffd02f7d`; test-only change to `approve-override.spec.ts`), CI 45950934549 |
@@ -31,3 +31,10 @@ A PR run goes red with hundreds of failures for a reason that has nothing to do 
 
 ## Records
 Jira Bug AQP-499 and GitHub issue #826, created 2026-11-27 and cross-linked; test plan 0.3.119. Related: RISK-031, DEF-140 and #824 (held, DL-451), DEF-085 (the shard-4 flaky family seen in the same run).
+
+## DL-454 applied (qa-engineer, 2026-11-27; test plan 0.3.120; records-u 7fbbd731)
+**(1) Grade: Sev-3, Environment, product excluded, not a G8 blocker.** The E2E server is `next dev`; the product ships `next build` and `next start`, so the panic cannot reach a customer.
+**(2) R20 adopted, standing until G8; PR runs only, once per head, on the failed shard jobs only.** It applies only when ALL hold: **(a)** the run is 0 behind and `Stages 1 to 11b` succeeded; **(b)** the red shard's log has a turbo-tasks panic line, then `fatal runtime error`; **(c)** every failure after the panic is `ERR_CONNECTION_RESET` or `ECONNREFUSED`, with no failure before it apart from a test in flight that failed on the same error; **(d)** every other shard is green, or flaky with a passing retry. **R20 never applies to** a `master` push, a red re-run, a second re-run on a head, or a run that also needs another R-rule. **Each use goes on DEF-142, RISK-031's re-run list, the test plan and the daily update** (run ID, head, the panic line, the shard, the other shards' state). **In the final regression one re-run on this signature is allowed and named at G8.** **R20 uses so far: none** (#824's run 45950934549, where it was first seen, had shard 4 red on `estimate-tree-names.spec.ts:327` and the DEF-085 family as well, so R20 (d) would not have held for it as it stood).
+**(3) If the panic hits a `master` push:** it is not re-run; the next squash's push becomes the run of record; RISK-031's close-out count resets to 0 but trigger (a) does not fire; for DEF-129 the push counts neither way if the panic stopped the shard before the DEF-129 cases ran, and counts if they passed before the panic.
+**(4) On a second occurrence anywhere, or a first on a `master` push, QA tells the orchestrator the same day;** the solution-architect reads it and master asks the delivery lead about tooling.
+**QA's count of the panic line:** 1 occurrence in 27 logs read before #812's squash (#824's PR run, shard 1); the master push `e0153858` (#812) is read for it next.
