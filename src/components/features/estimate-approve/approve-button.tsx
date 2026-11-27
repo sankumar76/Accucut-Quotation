@@ -34,10 +34,16 @@ export interface ApproveButtonProps {
   /** What the failure line says when the dialog's code did not come. */
   readonly failedLine: string;
   readonly estimateId: string;
+  /** The task's code, in the dialog's heading. */
+  readonly code: string;
   /** The calculation the page shows (the server approves only while it is the current one). */
   readonly calculationId: string;
   /** The calculated total (BL), the field's starting value. */
   readonly calculatedTotal: string;
+  /** The Excel letter of the calculated total (BL), for the dialog's row. */
+  readonly totalLetter: string;
+  /** The estimate's customer for the dialog's row; `null` when it has none. */
+  readonly customerName: string | null;
   /** The Excel letter of BO, drawn beside the field's label. */
   readonly approvedLetter: string;
   /** The rows of the calculation's quantity warning, for the dialog's one line (STORY-06.10 AC-5); empty when there is none. */
@@ -48,7 +54,7 @@ export interface ApproveButtonProps {
   readonly describedBy?: string;
 }
 
-export function ApproveButton({ id, label, failedLine, estimateId, calculationId, calculatedTotal, approvedLetter, warningRows, ratesLine, describedBy }: ApproveButtonProps) {
+export function ApproveButton({ id, label, failedLine, estimateId, code, calculationId, calculatedTotal, totalLetter, customerName, approvedLetter, warningRows, ratesLine, describedBy }: ApproveButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [, startRefresh] = useTransition();
@@ -86,8 +92,11 @@ export function ApproveButton({ id, label, failedLine, estimateId, calculationId
           open={open}
           onOpenChange={setOpen}
           estimateId={estimateId}
+          code={code}
           calculationId={calculationId}
           calculatedTotal={calculatedTotal}
+          totalLetter={totalLetter}
+          customerName={customerName}
           approvedLetter={approvedLetter}
           warningRows={warningRows}
           ratesLine={ratesLine}

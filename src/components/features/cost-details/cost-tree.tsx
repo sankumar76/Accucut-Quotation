@@ -2,11 +2,11 @@ import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { NodeKindIcon } from '@/components/shared/node-kind-icon';
 import { PartsTreeList } from '@/components/shared/parts-tree-list';
 import { RowName } from '@/components/shared/row-name';
-import { TOUCH_LINK } from '@/components/shared/touch-link';
 import { TREE_COLUMN_PANEL, TREE_COLUMN_SUMMARY } from '@/components/shared/tree-column-panel';
 import { TREE_ROW_NUMBER } from '@/components/shared/tree-row-number';
 import { cn } from '@/lib/cn';
-import type { NodeKind } from '@/lib/estimate/node-kinds';
+import { nodeKindLabel, type NodeKind } from '@/lib/estimate/node-kinds';
+import { rowNameOf } from '@/lib/estimates/row-name';
 
 import { COST_TREE_TITLE } from './cost-details-texts';
 
@@ -37,12 +37,12 @@ function TreeRow({ node, kindLabel, code, openSlNo }: { readonly node: CostTreeN
     <a
       href={costDetailsHref(code, node.slNo)}
       {...(open ? { 'aria-current': 'page' as const } : {})}
-      className={cn(TOUCH_LINK, 'w-full gap-s-2 rounded-md py-s-1 pr-s-2 pl-s-1 text-body text-ink no-underline hover:bg-surface-2 aria-[current=page]:bg-primary-soft aria-[current=page]:font-semibold')}
+      className={cn('flex min-h-(--control-h) w-full items-center gap-s-2 rounded-md py-s-1 pr-s-2 pl-s-1 text-body text-ink no-underline hover:bg-surface fine-wide:min-h-0 aria-[current=page]:bg-surface aria-[current=page]:font-semibold aria-[current=page]:shadow-[inset_4px_0_0_var(--primary)]')}
     >
       <NodeKindIcon kind={node.nodeKind} label={kindLabel} />
       <span data-sl-no="" className={TREE_ROW_NUMBER}>
         {node.slNo}
-      </span>
+      </span>{' '}
       <span className={cn('min-w-0 flex-1', BREAK_LONG_NAMES)}>
         <RowName label={node.label} kindLabel={kindLabel} />
       </span>
@@ -59,10 +59,16 @@ export interface CostTreeProps {
 }
 
 export function CostTree({ code, nodes, openSlNo }: CostTreeProps) {
+  const open = nodes.find((node) => node.slNo === openSlNo);
+  const openName = open === undefined ? '' : `${open.slNo} ${rowNameOf(open.label, nodeKindLabel(open, nodes))}`;
   return (
-    // Below 1024 px the stages come first and the tree follows them: the design is silent on the phone's order, and a Lead there should not scroll past every row to reach the stages (QLT-789-04).
-    <details open data-cost-tree="" className={cn(TREE_COLUMN_PANEL, 'max-[1023px]:order-last')}>
-      <summary className={TREE_COLUMN_SUMMARY}>{COST_TREE_TITLE}</summary>
+    // Below 1024 px the panel is before the row heading and closed: the Lead came to read one row, whose name is in the summary (AQP-491, DEF-137; UX ruling `scr07-layout-2026-11-28.md`, which withdraws the
+    // "stages first" of QLT-789-04). From 1024 px it is the column and shows its content whatever the attribute says (`::details-content`, `TREE_COLUMN_PANEL`).
+    <details data-cost-tree="" className={TREE_COLUMN_PANEL}>
+      <summary className={TREE_COLUMN_SUMMARY}>
+        {COST_TREE_TITLE}{' '}
+        {openName === '' ? null : <span className="ml-s-2 min-w-0 font-normal text-ink-2 min-[1024px]:hidden">{`· ${openName}`}</span>}
+      </summary>
       <div className="px-s-4 pb-s-4">
         <PartsTreeList label={COST_TREE_TITLE} nodes={nodes} renderRow={(node, kindLabel) => <TreeRow node={node} kindLabel={kindLabel} code={code} openSlNo={openSlNo} />} />
       </div>

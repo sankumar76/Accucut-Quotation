@@ -122,7 +122,6 @@ export function SignInForm({ returnTo, resetByEmail = false }: SignInFormProps) 
                   autoComplete="username"
                   inputMode="email"
                   required
-                  placeholder="name@company.com"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   onBlur={() => setEmailError(email === '' ? null : emailProblem(email))}

@@ -5,6 +5,16 @@
  */
 
 export const DIALOG_TITLE = 'Approve and lock';
+/** The heading of the dialog names the estimate it is about (AQP-478, DEF-121); the button keeps `DIALOG_TITLE`. */
+export const dialogTitle = (code: string): string => `${DIALOG_TITLE} ${code}`;
+/** The lead-in under the heading (the mock-up SCR-08; it describes the dialog for a screen reader). */
+export const LEAD_IN = 'Set the Approved Quote Price. After you approve, inputs become read-only and the task moves to Closed.';
+/** The two rows under it: the total the price starts as (its Excel letter comes from the configuration version, never typed) and the estimate's customer. */
+export const calculatedTotalLabel = (letter: string): string => `Calculated total (${letter})`;
+export const CUSTOMER_LABEL = 'Customer';
+export const NO_CUSTOMER = 'Not set';
+/** The hint under the price field. */
+export const PRICE_HINT = 'Starts as the calculated total. Edit it to set a different price.';
 /** The label of the field; the Excel letter of BO is drawn beside it from the configuration version (UX-26), never typed. */
 export const PRICE_LABEL = 'Approved Quote Price';
 export const RUPEE_SIGN = '₹';

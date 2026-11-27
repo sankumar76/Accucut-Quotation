@@ -21,6 +21,8 @@ export const configFieldSchema = z.strictObject({
   formula: z.string().min(1).nullable(),
   systemRole: z.enum(SYSTEM_ROLES).nullable(),
   note: z.string().min(1).nullable(),
+  /** Where an auto field gets its value ("From tree position"), or null (AQP-473, DEF-118). */
+  lookup: z.string().min(1).nullable(),
   canEditFormula: z.boolean(),
   /** The lock tag "System" and no Delete (STORY-08.04 AC-5): a System field, or a field the code finds by key and cannot do without. */
   isProtected: z.boolean(),
