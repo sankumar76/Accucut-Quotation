@@ -136,7 +136,7 @@ describe('AC-1, AC-2, AC-3, AC-8: GET /estimates/{id}/form', () => {
   it('AC-2, AC-3, AC-4: carries the rupee add-on and the hint of the cost-typed inputs, the default and hint of Fasteners, and the hint of Remarks', async () => {
     const body = formResponseSchema.parse(await (await form()).json());
     const field = (letter: string) => defined(body.sections.flatMap((section) => section.fields).find((candidate) => candidate.letter === letter));
-    for (const letter of ['U', 'AP', 'AU', 'BM']) expect(field(letter), letter).toMatchObject({ unit: '₹', hint: 'Enter 0 if there is none.' });
+    for (const letter of ['U', 'AP', 'AU', 'BM']) expect(field(letter), letter).toMatchObject({ unit: letter === 'U' ? '₹ / pc' : '₹', hint: 'Enter 0 if there is none.' });
     expect(field('S')).toMatchObject({ defaultValue: 'None', hint: 'Type "None" if the part has no fasteners.', rule: { type: 'text', maxLength: 200, multiline: false } });
     expect(field('AJ')).toMatchObject({ hint: 'Write "None" if there is nothing to add.', rule: { type: 'text', maxLength: 1000, multiline: true } });
     expect(field('B').defaultValue).toBeNull();
