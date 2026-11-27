@@ -4,35 +4,44 @@ import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { ColumnTag } from '@/components/shared/column-tag';
 import { COMPACT_BOX_PADDING } from '@/components/shared/compact-padding';
 import { Notice } from '@/components/shared/notice';
-import { PageHeader } from '@/components/shared/page-header';
+import { PageHead } from '@/components/shared/page-head';
+import { TREE_COLUMN_LAYOUT } from '@/components/shared/tree-column-panel';
+import { RowName } from '@/components/shared/row-name';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { TOUCH_LINK } from '@/components/shared/touch-link';
 import { cn } from '@/lib/cn';
-import { formatCount, formatRupees, NO_FIGURE } from '@/lib/money';
+import { formatCount, formatFigure, formatRupees, NO_FIGURE } from '@/lib/money';
 import type { NodeCostsView } from '@/server/views/schemas/node-costs';
 
 import {
   BACK_TO_ESTIMATE,
-  BOX_NAME,
+  BOX_ROUNDING,
+  BOX_TAG,
+  boxCurrencies,
+  boxFigureNote,
   CLEARED_BODY,
   CLEARED_TITLE,
   CONFIGURATION_LINE,
+  COST_DETAILS_CRUMB,
+  COST_DETAILS_DESCRIPTION,
   COST_DETAILS_TITLE,
-  COUNT_HINT,
-  COUNT_UNIT,
   GO_TO_ESTIMATE_TO_CALCULATE,
   GO_TO_ESTIMATE_TO_RECALCULATE,
   NOT_APPLICABLE_NOTE,
   NOT_CALCULATED_BODY,
   NOT_CALCULATED_TITLE,
-  PART_NAME_FALLBACK,
-  ROW_LABEL,
+  ROW_EYEBROW,
   RULES_READ_ONLY,
   RULES_ROUNDING,
   RULES_TITLE,
   RULES_WORKING,
   STAGES_HEADING,
+  TASK_QUEUE_LABEL,
+  VIEW_INPUTS,
+  viewInputsOf,
 } from './cost-details-texts';
+import { CostTree, type CostTreeNode } from './cost-tree';
 import { PhoneStages } from './phone-stages';
 import { StagePanel } from './stage-panel';
 
@@ -52,6 +61,8 @@ export interface CostDetailsProps {
   readonly code: string;
   /** The time of the calculation written in IST (`formatIst`), or `null` while there is no calculation. */
   readonly calculatedAt: string | null;
+  /** Every row of the estimate (names and kinds, no figure) for the parts tree column. Left out, no column is drawn (AQP-452). */
+  readonly tree?: ReadonlyArray<CostTreeNode> | undefined;
 }
 
 function EstimateLink({ code, label, variant }: { readonly code: string; readonly label: string; readonly variant: 'secondary' | 'ghost' }) {
@@ -64,16 +75,30 @@ function EstimateLink({ code, label, variant }: { readonly code: string; readonl
   );
 }
 
-function RowHeader({ view }: { readonly view: NodeCostsView }) {
+/** The row's heading (the mock-up, AQP-452): the eyebrow "Cost details for one row" over "<Sl. No> · <name>", in every state. */
+function RowHeader({ view, code }: { readonly view: NodeCostsView; readonly code: string }) {
   const { row } = view;
   return (
-    <Card>
-      <CardContent className={cn('flex flex-wrap items-baseline gap-x-s-3 gap-y-s-1', COMPACT_BOX_PADDING)}>
-        <span className="text-label font-semibold text-ink-2">{ROW_LABEL}</span>
-        <span className="text-body font-semibold text-ink tabular-nums">{row.slNo}</span>
-        <span className={cn('min-w-0 flex-1 text-body text-ink', BREAK_LONG_NAMES)}>{row.name === '' ? PART_NAME_FALLBACK : row.name}</span>
-      </CardContent>
-    </Card>
+    <div className="flex flex-wrap items-start justify-between gap-x-s-4 gap-y-s-1">
+      <div className="flex min-w-0 flex-col gap-s-1">
+        <span className="text-label font-semibold tracking-wide text-ink-2 uppercase">{ROW_EYEBROW}</span>
+        <h2 className={cn('text-sub font-semibold text-ink', BREAK_LONG_NAMES)}>
+          <span className="font-mono">{row.slNo}</span>
+          {' · '}
+          <RowName label={row.name} kindLabel={row.kindLabel} />
+        </h2>
+      </div>
+      {/* RO-18: to the Lead's view of this row's inputs on the estimate page (`?row=<Sl. No>#row-inputs`, the same address the parts tree rows use). */}
+      <Link
+        href={`/estimates/${encodeURIComponent(code)}?row=${encodeURIComponent(row.slNo)}#row-inputs`}
+        prefetch={false}
+        scroll={false}
+        aria-label={viewInputsOf(row.slNo)}
+        className={cn(TOUCH_LINK, 'text-body font-semibold text-primary-ink underline underline-offset-2')}
+      >
+        {VIEW_INPUTS}
+      </Link>
+    </div>
   );
 }
 
@@ -81,19 +106,24 @@ function RowHeader({ view }: { readonly view: NodeCostsView }) {
 function RowBox({ view }: { readonly view: NodeCostsView }) {
   const { details } = view;
   if (details === null) return null;
-  const price = details.stages.flatMap((stage) => stage.lines).find((line) => line.letter === details.letters.unitPrice);
+  const lines = details.stages.flatMap((stage) => stage.lines);
+  const price = lines.find((line) => line.letter === details.letters.unitPrice);
+  // The row's own dollar and euro figures (BJ and BK): the lines whose unit is "$" and "€".
+  const usd = lines.find((line) => line.unit === '$');
+  const eur = lines.find((line) => line.unit === '€');
   return (
     <Card className="min-w-0">
       <CardContent className={cn('flex flex-col gap-s-2', COMPACT_BOX_PADDING)}>
         <p className="flex flex-wrap items-center gap-s-2 text-label font-semibold text-ink-2">
-          <span>{BOX_NAME}</span>
+          <span>{BOX_TAG}</span>
           <ColumnTag letter={details.letters.unitPrice} kind="output" />
         </p>
         <p className="text-heading font-semibold tracking-tight text-ink [overflow-wrap:anywhere] tabular-nums">{formatRupees(price?.value ?? null)}</p>
-        <p className="flex flex-wrap items-center gap-s-2 text-label text-ink-2 tabular-nums">
-          <span>{`${details.count === null ? NO_FIGURE : `${formatCount(details.count)} ${COUNT_UNIT}`} ${COUNT_HINT}`}</span>
-          <ColumnTag letter={details.letters.count} kind="input" />
-        </p>
+        <p className="text-label text-ink-2">{boxFigureNote(details.letters.unitPrice, details.count === null ? NO_FIGURE : formatCount(details.count))}</p>
+        {usd === undefined || eur === undefined ? null : (
+          <p className="text-label text-ink-2 tabular-nums">{boxCurrencies(formatFigure(usd.value), formatFigure(eur.value), usd.letter, eur.letter)}</p>
+        )}
+        <p className="text-label text-ink-2">{BOX_ROUNDING}</p>
       </CardContent>
     </Card>
   );
@@ -125,12 +155,11 @@ function Stages({ view, calculatedAt }: { readonly view: NodeCostsView; readonly
   );
 }
 
-export function CostDetails({ view, code, calculatedAt }: CostDetailsProps) {
+export function CostDetails({ view, code, calculatedAt, tree }: CostDetailsProps) {
   const { state } = view;
-  return (
-    <div className="is-compact contents">
-      <PageHeader title={COST_DETAILS_TITLE} actions={<EstimateLink code={code} label={BACK_TO_ESTIMATE} variant="secondary" />} />
-      <RowHeader view={view} />
+  const body = (
+    <div className="flex min-w-0 flex-col gap-s-4">
+      <RowHeader view={view} code={code} />
       {state === 'none' ? (
         <Notice tone="info" role="status" title={NOT_CALCULATED_TITLE}>
           <span className="flex flex-col items-start gap-s-2">
@@ -154,6 +183,24 @@ export function CostDetails({ view, code, calculatedAt }: CostDetailsProps) {
           <PhoneStages />
         </div>
       ) : null}
+    </div>
+  );
+  return (
+    <div className="is-compact contents">
+      <PageHead
+        crumbs={[{ label: TASK_QUEUE_LABEL, href: '/queue' }, { label: code, href: `/estimates/${encodeURIComponent(code)}` }, { label: COST_DETAILS_CRUMB(view.row.slNo) }]}
+        title={COST_DETAILS_TITLE}
+        description={COST_DETAILS_DESCRIPTION}
+        actions={<EstimateLink code={code} label={BACK_TO_ESTIMATE} variant="secondary" />}
+      />
+      {tree === undefined ? (
+        body
+      ) : (
+        <div className={TREE_COLUMN_LAYOUT}>
+          <CostTree code={code} nodes={tree} openSlNo={view.row.slNo} />
+          {body}
+        </div>
+      )}
     </div>
   );
 }

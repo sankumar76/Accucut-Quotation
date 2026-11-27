@@ -146,12 +146,12 @@ describe('AQP-449: the row hands the fact on to its menu', () => {
   const rest = { upTo: null, downTo: null, onMoveTo: vi.fn(), onAdd: vi.fn(), onDelete: vi.fn() };
 
   it.each([true, false])('passes holdsPart=%s to the menu', (holdsPart) => {
-    const found = elementsIn(RowActions({ part: row('MAIN_ASSEMBLY'), ...rest, holdsPart })).find((element) => element.type === AddNodeMenu);
+    const found = elementsIn(RowActions({ part: row('MAIN_ASSEMBLY'), kindLabel: 'Main Assembly', ...rest, holdsPart })).find((element) => element.type === AddNodeMenu);
     expect(found?.props['holdsPart']).toBe(holdsPart);
   });
 
   it('gives false when the row is given no fact', () => {
-    const found = elementsIn(RowActions({ part: row('SUB_ASSEMBLY'), ...rest })).find((element) => element.type === AddNodeMenu);
+    const found = elementsIn(RowActions({ part: row('SUB_ASSEMBLY'), kindLabel: 'Sub-Assembly', ...rest })).find((element) => element.type === AddNodeMenu);
     expect(found?.props['holdsPart']).toBe(false);
   });
 });

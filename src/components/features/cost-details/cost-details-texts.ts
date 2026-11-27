@@ -9,10 +9,27 @@ import type { NodeCostsLine } from '@/server/views/schemas/node-costs';
 
 export const COST_DETAILS_TITLE = 'Cost details';
 export const COST_DETAILS_META_TITLE = 'Cost details';
+/** The head of the page (the mock-up, AQP-452): the last step of the breadcrumb is "Cost details <Sl. No>", and the sentence under the title. */
+export const COST_DETAILS_CRUMB = (slNo: string): string => `Cost details ${slNo}`;
+export const COST_DETAILS_DESCRIPTION = 'Every calculated value for this row, in six stages, each with its formula. Lead and Admin only.';
+export const TASK_QUEUE_LABEL = 'Task queue';
+/** The eyebrow over the row's heading. */
+export const ROW_EYEBROW = 'Cost details for one row';
+/** The title of the parts tree column, as SCR-06's. */
+export const COST_TREE_TITLE = 'Parts tree';
+/** The tag of the one box of the row, and the sentences in it (the mock-up; the same words as SCR-06's "How the total is built"). The letters are the version's, never typed. */
+export const BOX_TAG = 'This row, on screen and in the Excel row';
+export const COUNT_FIELD_NAME = 'QTY per Assy';
+export const boxFigureNote = (priceLetter: string, count: string): string =>
+  `Unit Production Price (${priceLetter}) for this row. Its count for the whole order, ${COUNT_FIELD_NAME} ${count}, is already included. The estimate total adds every row's ${priceLetter}; nothing is multiplied by the rows above.`;
+export const boxCurrencies = (usd: string, eur: string, usdLetter: string, eurLetter: string): string => `In US dollars $ ${usd}, in euros € ${eur} (${usdLetter} and ${eurLetter} of this row).`;
+export const BOX_ROUNDING = 'Figures are shown to 2 decimals. Totals add the unrounded values and round once, so adding the shown figures by hand can differ by a few hundredths.';
 export const BACK_TO_ESTIMATE = 'Back to the estimate';
+/** The link in the row's header to the Lead's and the Admin's view of this row's inputs (AQP-496, DEF-139, RO-18); its name for a screen reader begins with the visible words and says the row. */
+export const VIEW_INPUTS = 'View inputs';
+export const viewInputsOf = (slNo: string): string => `${VIEW_INPUTS} of ${slNo}`;
 export const STAGES_HEADING = 'The six stages';
 export const ROW_LABEL = 'Part';
-export const PART_NAME_FALLBACK = 'Part';
 export const COUNT_UNIT = 'nos';
 export const COUNT_HINT = 'for the whole order, already included in the price';
 export const BOX_NAME = 'Unit Production Price';

@@ -106,7 +106,7 @@ test.describe('AC-4: five flows by keyboard alone', () => {
     await pressUntilFocused(page, 'Tab', task, `the task ${code}`);
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(new RegExp(`/estimates/${code}$`));
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
   });
 
   test('(2) an Engineer goes through the form with Enter, presses Calculate, goes back on the quantity warning, fixes the count and calculates', async ({ page }, testInfo) => {
@@ -156,7 +156,7 @@ test.describe('AC-4: five flows by keyboard alone', () => {
     await calculateWithoutThePage(page, owner);
     await signInAsLead(page, testInfo);
     await page.goto(`/estimates/${code}`);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
     const approve = page.locator('#review-approve');
     await expect(approve).toBeEnabled();
     await waitUntilHydrated(page, '#review-approve');

@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { SaveGate } from '@/lib/estimates/save-gate';
+import type { PartItem } from '@/lib/estimates/tree-client';
 
 import { FAILED_BODY, FORM_LOAD_FAILED_TITLE, FORM_LOADING, FORM_NO_PART, TRY_AGAIN } from './estimate-texts';
 import type { PartFieldsProps } from './part-fields';
+import type { PartReview } from './review-look';
 import { partFormShown } from './tree-controls-ready';
 import { useFormDefinition } from './use-form-definition';
 import { useLazyComponent } from './use-lazy-component';
@@ -23,18 +25,24 @@ export interface PartFormProps {
   readonly part: PartTarget | null;
   /** False once the estimate may no longer be changed by this person (the server refuses a save regardless). */
   readonly editable: boolean;
-  /** A save went through: the tree takes the part's new revision and how complete it is. */
-  readonly onSaved: (saved: SavedPart) => void;
+  /** The tree as it is now: the form's head names the row and where it sits. */
+  readonly nodes: ReadonlyArray<PartItem> | null;
+  /** A save went through: the tree takes the part's new revision and how complete it is. Left out by the Lead's read-only view, which saves nothing (AQP-488), and which a server component draws: it hands over only what can be sent. */
+  readonly onSaved?: ((saved: SavedPart) => void) | undefined;
   /** The server says the part is not as the person saw it: the tree is read again. */
-  readonly onChanged: () => void;
+  readonly onChanged?: (() => void) | undefined;
+  /** Description or Part No. was left with a new text: the tree's row takes the name (AQP-447). */
+  readonly onNamed?: ((id: string, label: string) => void) | undefined;
   /** A save was refused because the estimate was ignored (CR-01 item 7D): the page shows its alert. */
-  readonly onServerIgnored: () => void;
+  readonly onServerIgnored?: (() => void) | undefined;
   /** The IDs of this part's fields that Calculate found blank (STORY-05.09). */
-  readonly missing: ReadonlySet<string>;
+  readonly missing?: ReadonlySet<string> | undefined;
   /** What Calculate waits for: the saves in flight and the fields that show a value that is not saved (STORY-05.09). */
-  readonly gate: SaveGate;
+  readonly gate?: SaveGate | undefined;
   /** Called once the form has something to show for the part (its fields, or the notice that they could not be read): the workspace then lets the tree-width controls load, so their code never competes with the form's (AQP-426, DEF-085). */
   readonly onShown?: () => void;
+  /** The Lead's and the Admin's read-only view (AQP-488, DEF-131 Stage 1), with `editable` false: the same form with the review look. Absent for the Engineer. */
+  readonly review?: PartReview | undefined;
 }
 
 /**
@@ -43,8 +51,15 @@ export interface PartFormProps {
  * nothing typed into one can land in another. Skeleton cards while it loads, a notice with "Try again" when it cannot be read. No rate, cost or formula is requested, held or drawn: the
  * server's form has none, and the materials are IDs and names.
  */
-export function PartForm({ estimateId, part, editable, onSaved, onChanged, onServerIgnored, missing, gate, onShown }: PartFormProps) {
+export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, onNamed, onServerIgnored, missing, gate, onShown, review }: PartFormProps) {
   const definition = useFormDefinition(estimateId);
+  // A row was chosen after the page was drawn (the review's view): the form's title takes the focus, the choice is said once and the tree folds. The first paint does none of it.
+  const [seen, setSeen] = useState(part?.id);
+  const [chosen, setChosen] = useState(false);
+  if (seen !== part?.id) {
+    setSeen(part?.id);
+    setChosen(true);
+  }
   const fields = useLazyComponent<PartFieldsProps>(loadFields, true);
   const Fields = fields.Component;
   const shown = partFormShown({ hasPart: part !== null, definition: definition.form.status, fieldsCodeFailed: fields.failed, fieldsCodeHere: Fields !== null });
@@ -90,16 +105,19 @@ export function PartForm({ estimateId, part, editable, onSaved, onChanged, onSer
       estimateId={estimateId}
       part={part}
       editable={editable}
+      nodes={nodes}
       form={definition.form.value}
       materials={definition.materials}
       lastSavedAt={definition.lastSavedAt}
       onSaved={onSaved}
       onChanged={onChanged}
+      onNamed={onNamed}
       onServerIgnored={onServerIgnored}
       onWrote={definition.wrote}
       onReadMaterialsAgain={definition.readAgain}
       missing={missing}
       gate={gate}
+      review={review === undefined ? undefined : { ...review, chosen }}
     />
   );
 }

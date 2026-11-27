@@ -33,7 +33,7 @@ describe('AC-1: a current calculation gives the six stages of the row asked for,
     const world = createCostWorld();
     const costs = await world.service.getNodeCosts(viewer, COST_ESTIMATE_ID, COST_FIRST_NODE_ID);
     expect(costs.state).toBe('current');
-    expect(costs.row).toEqual({ nodeId: COST_FIRST_NODE_ID, slNo: '1', name: 'Invented Bracket' });
+    expect(costs.row).toEqual({ nodeId: COST_FIRST_NODE_ID, slNo: '1', name: 'Invented Bracket', kindLabel: 'Main Assembly' });
     expect(costs.details).toMatchObject({
       calculatedAt: COST_CALCULATED_AT.toISOString(),
       // The version the calculation was made with (9), not the one in force now (10).
@@ -55,7 +55,7 @@ describe('AC-1: a current calculation gives the six stages of the row asked for,
   it('reads only the row asked for: the second part is its own row, named by its Part No., and the first part\'s working is not read for it', async () => {
     const world = createCostWorld();
     const costs = await world.service.getNodeCosts(LEAD, COST_ESTIMATE_ID, COST_SECOND_NODE_ID);
-    expect(costs.row).toEqual({ nodeId: COST_SECOND_NODE_ID, slNo: '2', name: 'INV-0002' });
+    expect(costs.row).toEqual({ nodeId: COST_SECOND_NODE_ID, slNo: '2', name: 'INV-0002', kindLabel: 'Main Assembly' });
     expect(world.reads.working.calls).toEqual([[expect.any(String), COST_SECOND_NODE_ID]]);
   });
 
@@ -120,7 +120,7 @@ describe('AC-7 (FR-100): figures only while current; nothing calculated is even 
   it('NONE: no calculation is linked. The answer is the row and the state, the working is never read, and the name comes from the version in force now', async () => {
     const world = createCostWorld({ calculated: false });
     const costs = await world.service.getNodeCosts(LEAD, COST_ESTIMATE_ID, COST_FIRST_NODE_ID);
-    expect(costs).toEqual({ state: 'none', row: { nodeId: COST_FIRST_NODE_ID, slNo: '1', name: 'Invented Bracket' }, details: null });
+    expect(costs).toEqual({ state: 'none', row: { nodeId: COST_FIRST_NODE_ID, slNo: '1', name: 'Invented Bracket', kindLabel: 'Main Assembly' }, details: null });
     expect(world.reads.working.calls).toEqual([]);
     expect(world.reads.currentVersion.calls).toHaveLength(1);
     expect(world.reads.versionById.calls).toEqual([]);
@@ -129,7 +129,7 @@ describe('AC-7 (FR-100): figures only while current; nothing calculated is even 
   it('OUT OF DATE: an input changed since. The working of the record is not read and not in the answer in any form, and the row header stays', async () => {
     const world = createCostWorld({ inputsRevision: COST_CALCULATION_REVISION + 1 });
     const costs = await world.service.getNodeCosts(LEAD, COST_ESTIMATE_ID, COST_FIRST_NODE_ID);
-    expect(costs).toEqual({ state: 'out-of-date', row: { nodeId: COST_FIRST_NODE_ID, slNo: '1', name: 'Invented Bracket' }, details: null });
+    expect(costs).toEqual({ state: 'out-of-date', row: { nodeId: COST_FIRST_NODE_ID, slNo: '1', name: 'Invented Bracket', kindLabel: 'Main Assembly' }, details: null });
     expect(world.reads.working.calls).toEqual([]);
     const text = JSON.stringify(costs);
     for (const leaked of ['451.39', '15.99', 'Material-Scrap-Rate', 'Cutting-Rate', '0.3140', 'stages', 'formula']) expect(text, leaked).not.toContain(leaked);

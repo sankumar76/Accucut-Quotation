@@ -9,6 +9,7 @@ import { createTransactionRunner } from '@/server/repositories/transaction';
 import { createEstimateService, ESTIMATE_NOT_EDITABLE_CODE, type EstimateService, type EstimateViewer } from '@/server/services/estimate-service';
 import { sha256Of } from '@/server/services/image-service';
 
+import { auditFor, withAuditContext } from '../../support/customer-change';
 import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
@@ -41,7 +42,8 @@ const nodeRepository = (): ReturnType<typeof createEstimateNodeRepository> => cr
 const imageRepository = (): ReturnType<typeof createImageRepository> => createImageRepository(db.prisma);
 
 const buildService = (estimates = estimateRepository()): EstimateService =>
-  createEstimateService({
+  withAuditContext(createEstimateService({
+    audit: auditFor(db),
     estimates,
     nodes: nodeRepository(),
     images: imageRepository(),
@@ -49,7 +51,7 @@ const buildService = (estimates = estimateRepository()): EstimateService =>
     materials: createMasterRepository(db.prisma),
     currentConfiguration: () => Promise.resolve(seedConfig),
     configurationById: () => Promise.resolve(seedConfig),
-  });
+  }));
 
 beforeAll(async () => {
   db = await openAuthDatabase();
