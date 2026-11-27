@@ -35,6 +35,8 @@ async function choose(page: Page, slNo: string): Promise<void> {
   if (isPhone(page)) {
     await expect(tree(page)).toBeHidden();
     await showTree(page);
+    // The drawer slides in: the row is read where it is once it has stopped, so a box taken by the case that follows is the box a press meets (the touch drag read a box mid-slide on a first run).
+    await settledBox(part(page, slNo));
   }
 }
 const action = (page: Page, name: string): Locator => page.getByRole('button', { name, exact: true });
@@ -830,7 +832,10 @@ test.describe('AQP-405: the row actions', () => {
       await choose(page, '1.2');
       await expect(part(page, '1.2')).toHaveAttribute('aria-current', 'true');
     };
-    for (const [focus, holdMs] of [['link', 0], ['link', 150], ['handle', 0], ['menu', 0]] as const) {
+    // In the phone drawer a press on a row shuts the drawer (AQP-490, DEF-133), so the press has no toolbar left to land on, and the keyboard starts on a toolbar button (the handle, the open menu) do not describe a phone. The two
+    // starts that do (the link, with a quick press and with a held one) are kept there: each pass costs the drawer two openings, and the case has the default 30 s. Every start runs for a mouse and a tablet, as before.
+    const starts = [['link', 0], ['link', 150], ['handle', 0], ['menu', 0]] as const;
+    for (const [focus, holdMs] of isPhone(page) ? starts.slice(0, 2) : starts) {
       await keyboardOnRow1(focus);
       await pressWithoutShift(page, '1.1', holdMs, focus === 'menu' ? await yAboveMenu(page, '1.1') : undefined);
       await settled();

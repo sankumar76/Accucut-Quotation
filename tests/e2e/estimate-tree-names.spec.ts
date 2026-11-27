@@ -408,6 +408,9 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     // a press on a toolbar BUTTON needs the row to be hovered when it lands. The movement cases do no such thing.
     await open();
     laps.done('the second hover');
+    // The pointer is put on the button itself (Playwright scrolls it into view first, if it needs to, and then moves the pointer onto it through the row's own slot, which keeps the row hovered), so the click that follows
+    // needs no scroll under a still pointer. Run 45924853824: with only the hover of the row, the click found the row's grid and not the button under its pointer, on both attempts.
+    await rowButton(page, 'Add under', '1.1').hover();
     await rowButton(page, 'Add under', '1.1').click();
     await expect(page.getByRole('menu')).toBeVisible();
     laps.done('the "+" menu opens');
@@ -419,6 +422,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     // The delete dialog of the row. Keep it closes it, and nothing is deleted.
     await open();
     laps.done('the third hover');
+    await rowButton(page, 'Delete', '1.1').hover();
     await rowButton(page, 'Delete', '1.1').click();
     await expect(page.getByRole('alertdialog')).toBeVisible();
     laps.done('the delete dialog opens');
