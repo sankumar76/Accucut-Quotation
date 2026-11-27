@@ -38,3 +38,6 @@ Jira Bug AQP-499 and GitHub issue #826, created 2026-11-27 and cross-linked; tes
 **(3) If the panic hits a `master` push:** it is not re-run; the next squash's push becomes the run of record; RISK-031's close-out count resets to 0 but trigger (a) does not fire; for DEF-129 the push counts neither way if the panic stopped the shard before the DEF-129 cases ran, and counts if they passed before the panic.
 **(4) On a second occurrence anywhere, or a first on a `master` push, QA tells the orchestrator the same day;** the solution-architect reads it and master asks the delivery lead about tooling.
 **QA's count of the panic line:** 1 occurrence in 27 logs read before #812's squash (#824's PR run, shard 1); the master push `e0153858` (#812) is read for it next.
+
+## `e0153858` (#812): no panic (qa-engineer, 2026-11-27; test plan 0.3.121)
+0 `transient_ref_count`, 0 `fatal runtime error` and 0 `ERR_CONNECTION_RESET` lines on the `master` push `e0153858` (CI 45955676822). Panic count: **1 occurrence in 28 logs read** (#824's PR run, shard 1). R20 uses: none.
