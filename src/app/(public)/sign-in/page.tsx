@@ -39,7 +39,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
       <header className="border-b border-border bg-surface p-s-4 md:px-s-5">
         <BrandLockup />
       </header>
-      <main id="main" tabIndex={-1} className="mx-auto flex w-full max-w-120 flex-1 flex-col gap-s-5 px-s-4 py-s-5 outline-none md:py-s-7">
+      <main id="main" tabIndex={-1} className="mx-auto flex w-full max-w-[calc(var(--column-w)+var(--s-4)*2)] flex-1 flex-col gap-s-5 px-s-4 py-s-5 outline-none md:py-s-7">
         <div className="flex flex-col gap-s-2">
           <h1 tabIndex={-1} className="text-heading font-semibold tracking-tight text-ink">
             Sign in

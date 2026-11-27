@@ -31,6 +31,7 @@ const ERROR_TITLE = 'E-mail or password is not correct.';
 const ERROR_BODY = 'Check both and try again.';
 const LOCKED_MESSAGE = 'Too many attempts. Try again in 15 minutes, or ask the Admin to reset your password.';
 const PAGE_GUTTER = 16;
+const COLUMN_WIDTH = 480;
 const SESSION_COOKIE = '__Secure-next-auth.session-token';
 
 /** The notice of the form. Next.js has a live region of its own with the same role, so the role alone is ambiguous. */
@@ -73,7 +74,16 @@ test.describe('SCR-01 at this width (AC-8)', () => {
       const viewport = page.viewportSize();
       // Full width means the card fills the screen except the 16 px page gutter on each side (UX spec: below 480 px).
       expect((card?.width ?? 0) + 2 * PAGE_GUTTER).toBeGreaterThanOrEqual((viewport?.width ?? 0) - 1);
+    } else {
+      // AQP-459 (DEF-102; UX spec SCR-01): from 480 px up the card is a centred column of about 480 px, and does not span the page.
+      const card = await page.locator('[data-slot="card"]').boundingBox();
+      const viewport = page.viewportSize();
+      expect(card?.width ?? 0).toBeLessThanOrEqual(COLUMN_WIDTH + 1);
+      expect(card?.width ?? 0).toBeGreaterThanOrEqual(COLUMN_WIDTH - 1);
+      expect(Math.abs((card?.x ?? 0) + (card?.width ?? 0) / 2 - (viewport?.width ?? 0) / 2)).toBeLessThanOrEqual(1);
     }
+    // No placeholder in the E-mail field (the label names it).
+    await expect(page.getByLabel('E-mail')).not.toHaveAttribute('placeholder', /.+/);
   });
 
   test('AC-8: the fields name the browser\'s helpers (username, current-password), and paste is never blocked', async ({ page }) => {
