@@ -397,9 +397,20 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
         else expect(height, `the toolbar of ${slNo}`).toBeLessThanOrEqual(1);
       }
       for (const button of await toolbarOf(page, '1.2').getByRole('button').all()) {
+        // Two readings (DL-458). The painted box is read right after the drawer slid in again (a transform), and a box can come out a rounding short of its layout size: master push 864ecb0f read 43.99999237060547, which is
+        // 44 minus 2^-17. So the box is compared with 44 less one layout unit (1/64 px). The declared size, which no transform touches, is read from the computed style and must be 44 px or more: a flex row that shrank a
+        // button would show there, and that is a product defect, not a rounding.
+        const label = (await button.getAttribute('aria-label')) ?? 'a button';
         const box = await button.boundingBox();
-        expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-        expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+        const where = `row 1.2, button "${label}", box ${JSON.stringify(box)}`;
+        expect(box?.width ?? 0, `${where}: the box is 44 px wide, to within one layout unit`).toBeGreaterThanOrEqual(44 - 1 / 64);
+        expect(box?.height ?? 0, `${where}: the box is 44 px high, to within one layout unit`).toBeGreaterThanOrEqual(44 - 1 / 64);
+        const declared = await button.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return { width: Number.parseFloat(style.width), height: Number.parseFloat(style.height) };
+        });
+        expect(declared.width, `${where}: the computed width is 44 px or more`).toBeGreaterThanOrEqual(44);
+        expect(declared.height, `${where}: the computed height is 44 px or more`).toBeGreaterThanOrEqual(44);
       }
       await tap(page, '1.3');
       await expect(row(page, '1.3')).toHaveAttribute('aria-current', 'true');
