@@ -8,8 +8,12 @@ import { isAppError, NotFoundError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { selectedRow } from '@/components/features/estimate-review/selected-row';
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
-import { getDownloadMarkerService, getEstimateReviewService, getEstimateService } from '@/server/composition';
+import { getDownloadMarkerService, getEstimateReviewService, getEstimateService, getMastersService } from '@/server/composition';
 import type { EstimateViewer } from '@/server/services/estimate-service';
+
+import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
+
+import { readListBodies, readPartFormBodies, seedOf } from './part-form-seed';
 
 /**
  * SCR-06 for a Lead or an Admin (STORY-06.02): reads the figures of the estimate through the estimate review service, which lets a figure out only while its state is `current`, and draws the
@@ -68,10 +72,21 @@ export async function revisionOf(viewer: EstimateViewer, estimateId: string, nod
   }
 }
 
+/** The revision in the part's answer that the seed carries (`GET .../nodes/{id}` has `revision`), or `undefined` when there is no seed or the answer has none. */
+function revisionOfSeed(seed: PartFormSeed | undefined): number | undefined {
+  const part: unknown = seed?.part;
+  if (typeof part !== 'object' || part === null || !('revision' in part)) return undefined;
+  return typeof part.revision === 'number' ? part.revision : undefined;
+}
+
 export async function renderReview({ viewer, estimateId, header, customer, quoted, ignored, engineerName, deadlinePassed, row }: ReviewPageArgs): Promise<ReactElement> {
-  const [costs, download] = await Promise.all([getEstimateReviewService().getCosts(viewer, estimateId), markerOf(viewer, estimateId)]);
+  // The two option lists do not depend on the row, so they are read beside the figures; the form's definition and the part's values are read for the row the page shows, in one call (`part-form-seed.ts`, DEF-141).
+  const services = { estimates: getEstimateService(), masters: getMastersService() };
+  const [costs, download, lists] = await Promise.all([getEstimateReviewService().getCosts(viewer, estimateId), markerOf(viewer, estimateId), readListBodies(services)]);
   const selected = selectedRow(costs.nodes, row);
-  const selectedRevision = selected !== null && canEditInputs({ status: header.status, ignored: ignored !== null }, viewer.role) ? await revisionOf(viewer, estimateId, selected.id) : undefined;
+  const seed = selected === null ? undefined : seedOf(estimateId, selected.id, lists, lists === null ? null : await readPartFormBodies(services, viewer, estimateId, selected.id));
+  // The revision a save is sent with is the one in the part's own answer, which the page has just read for the seed: no second service call. Only when there is no seed (a read failed) is it read on its own (`revisionOf`).
+  const selectedRevision = selected !== null && canEditInputs({ status: header.status, ignored: ignored !== null }, viewer.role) ? (revisionOfSeed(seed) ?? (await revisionOf(viewer, estimateId, selected.id))) : undefined;
   return (
     <EstimateReview
       header={header}
@@ -86,6 +101,7 @@ export async function renderReview({ viewer, estimateId, header, customer, quote
       engineerName={engineerName}
       deadlinePassed={deadlinePassed}
       row={row}
+      seed={seed}
       selectedRevision={selectedRevision}
     />
   );

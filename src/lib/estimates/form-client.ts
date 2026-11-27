@@ -182,6 +182,9 @@ function toMaterials(body: unknown): ReadonlyArray<MaterialChoice> | null {
   return options.every((option) => option !== null) ? options : null;
 }
 
+/** The readers of the four answers, for a page that hands the same answers to the form as props (`part-form-seed.ts`). */
+export { toForm as parseForm, toPartInputs as parsePartInputs, toMaterials as parseMaterials };
+
 const base = (estimateId: string): string => `/api/v1/estimates/${encodeURIComponent(estimateId)}`;
 
 /** `GET /api/v1/estimates/{id}/form`: the sections and fields of the part form, and when a part was last written. */

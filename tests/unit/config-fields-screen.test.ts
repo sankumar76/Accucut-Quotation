@@ -25,6 +25,7 @@ const row = (overrides: Partial<ConfigFieldRow> = {}): ConfigFieldRow => ({
   formula: 'ZB * Invented-Rate-per-Unit',
   systemRole: null,
   note: null,
+  lookup: null,
   canEditFormula: true,
   isProtected: false,
   ...overrides,
@@ -58,7 +59,8 @@ describe('AC-1: the columns of the table', () => {
 
   it('shows each row with its letter, name, place, kind word and formula', () => {
     const html = render(ROWS);
-    expect(html).toContain('Section 1: Invented Section');
+    // AQP-473 (ux-expert, 2026-11-26): a section is shown by its name, a stage by its number and name.
+    expect(html).toContain('>Invented Section<');
     expect(html).toContain('ZA * Invented-Rate-per-Unit');
     expect(html).toContain('Excel column </span>ZC');
     for (const kind of ['Input', 'Auto', 'Output']) expect(html).toContain(`>${kind}<`);
@@ -98,19 +100,20 @@ describe('STORY-08.04 AC-1 and AC-5: "Delete" on every row that is not protected
   it('gives the Admin the action on every row that is not protected, a table row and a card each, and none on a protected one', () => {
     const html = adminRows();
     // ZA and ZC are not protected; ZB (a system role) and ZD (the total) are.
-    expect(html.match(/>Delete</g)).toHaveLength(2 * 2);
-    expect(html).toContain('Delete<span class="sr-only"> ZA Invented Input</span>');
-    expect(html).toContain('Delete<span class="sr-only"> ZC Invented Cost</span>');
-    expect(html).not.toContain('Delete<span class="sr-only"> ZB Invented Auto</span>');
-    expect(html).not.toContain('Delete<span class="sr-only"> ZD Invented Total</span>');
+    // AQP-473: Delete is an icon button now; its name is its aria-label, which is the words it always had.
+    expect(html.match(/aria-label="Delete /g)).toHaveLength(2 * 2);
+    expect(html).toContain('aria-label="Delete ZA Invented Input"');
+    expect(html).toContain('aria-label="Delete ZC Invented Cost"');
+    expect(html).not.toContain('aria-label="Delete ZB Invented Auto"');
+    expect(html).not.toContain('aria-label="Delete ZD Invented Total"');
   });
 
   it('tags a field protected only by its key "System" as well, and draws no Delete on it (the lock tag is on every protected field, not only the six with a role)', () => {
     const keyed = row({ id: '00000000-0000-4000-8000-00000000f020', letter: 'ZE', label: 'Invented Keyed Field', systemRole: null, isProtected: true });
     const html = adminRows([keyed]);
     expect(html.match(/>System</g)).toHaveLength(2);
-    expect(html).not.toContain('>Delete<');
-    expect(html).toContain('Insert after');
+    expect(html).not.toContain('aria-label="Delete ');
+    expect(html).toContain('aria-label="Insert after ');
   });
 
   it('marks each Delete for the opener that returns focus to it: data-action, and the row\'s data-item-id', () => {
@@ -125,8 +128,8 @@ describe('STORY-08.04 AC-1 and AC-5: "Delete" on every row that is not protected
   });
 
   it('draws no Delete for a Lead (the table has no actions) and none when no handler is given', () => {
-    expect(render(ROWS)).not.toContain('>Delete<');
-    expect(renderToStaticMarkup(createElement(FieldsList, { rows: ROWS, canEdit: true }))).not.toContain('>Delete<');
+    expect(render(ROWS)).not.toContain('aria-label="Delete ');
+    expect(renderToStaticMarkup(createElement(FieldsList, { rows: ROWS, canEdit: true }))).not.toContain('aria-label="Delete ');
   });
 });
 
@@ -148,13 +151,13 @@ describe('STORY-08.03 AC-1: "Insert after" on every row, for the Admin only', ()
 
   it('gives the Admin the action on every row, a table row and a card each, even on a System field and on a column with no formula', () => {
     const html = adminRows();
-    expect(html.match(/>Insert after</g)).toHaveLength(ROWS.length * 2);
+    expect(html.match(/aria-label="Insert after /g)).toHaveLength(ROWS.length * 2);
     for (const row of ROWS) expect(html).toContain(`href="/config/fields/new?after=${row.id}"`);
   });
 
   it('names the column the action follows for a screen reader ("Insert after ZC Invented Cost")', () => {
     const html = adminRows();
-    expect(html).toContain('Insert after<span class="sr-only"> ZC Invented Cost</span>');
+    expect(html).toContain('aria-label="Insert after ZC Invented Cost"');
   });
 
   it('is a link drawn as a button, so it opens the wizard with that column pre-chosen', () => {

@@ -142,30 +142,31 @@ const FIELD_DRAFTS: ReadonlyArray<FieldDraft> = [
   { letter: 'F', key: 'material-considered', label: 'Material Considered', kind: 'auto', dataType: 'auto_lookup', section: 2, formOrder: 8, engineerVisible: true },
   { letter: 'G', key: 'treatment-color', label: 'Treatment / Color', kind: 'input', dataType: 'select_other', section: 1, formOrder: 5, mandatory: true, hint: notApplicableHint('treatment or colour') },
   // QTY per Assy is the count for the whole order, typed on every row (D-12, D-34).
-  { letter: 'H', key: 'qty-per-assy', label: 'QTY per Assy', kind: 'input', dataType: 'number', section: 1, formOrder: 6, mandatory: true, systemRole: 'quantity', hint: 'The count of this part for the whole order' },
+  { letter: 'H', key: 'qty-per-assy', label: 'QTY per Assy', kind: 'input', dataType: 'number', section: 1, formOrder: 6, mandatory: true, unit: 'nos', systemRole: 'quantity', hint: 'The count of this part for the whole order' },
   // I carries a price: never visible to an Engineer.
   { letter: 'I', key: 'material-rate-per-kg', label: 'Material Rate / Kg', kind: 'auto', dataType: 'auto_lookup', section: 2, formOrder: 9, engineerVisible: false },
-  numberInputDraft('J', 'length', 'Length', 2, 10),
-  numberInputDraft('K', 'width', 'Width', 2, 11),
-  numberInputDraft('L', 'thickness', 'Thickness', 2, 12),
+  // The units of the number inputs (AQP-482, DEF-125; the delivery lead's accepted list, DL-420): J, K and L are in millimetres (the area and blank-weight formulas only work so), counts are "nos", drilling, tapping and CSK are holes.
+  numberInputDraft('J', 'length', 'Length', 2, 10, { unit: 'mm' }),
+  numberInputDraft('K', 'width', 'Width', 2, 11, { unit: 'mm' }),
+  numberInputDraft('L', 'thickness', 'Thickness', 2, 12, { unit: 'mm' }),
   outputDraft('M', 'blank-weight', 'Blank Weight', { number: STAGE_WEIGHTS }, '(L * K * J * Material-Specific-Gravity) / 1000000', { displayUnit: 'kg', numFmt: NUMBER_FORMAT.number }),
   numberInputDraft('N', 'part-weight', 'Part Weight', 2, 13, { unit: 'kg' }),
   // Differs from SPEC 1.0 (`M - N`): zero for the hidden "Not applicable" material (SPEC 7.4, architecture 4.9).
   outputDraft('O', 'scrap-weight', 'Scrap Weight', { number: STAGE_WEIGHTS }, 'IF(Material-Specific-Gravity > 0, M - N, 0)', { displayUnit: 'kg', numFmt: NUMBER_FORMAT.number }),
   // 03 Cutting Process
   numberInputDraft('P', 'cutting-time', 'Cutting Time', 3, 14, { unit: 'sec' }),
-  numberInputDraft('Q', 'cutting-length', 'Cutting Length', 3, 15),
+  numberInputDraft('Q', 'cutting-length', 'Cutting Length', 3, 15, { unit: 'mm' }),
   // 04 Bending
-  numberInputDraft('R', 'bend-count', 'No. of Bend', 4, 16),
+  numberInputDraft('R', 'bend-count', 'No. of Bend', 4, 16, { unit: 'nos' }),
   // 05 Fasteners: T and U show only while S is not "None" and not blank; otherwise they are hidden and 0.
   { letter: FASTENERS_LETTER, key: 'fasteners', label: 'Fasteners', kind: 'input', dataType: 'text', section: 5, formOrder: 17, mandatory: true, defaultValue: FASTENERS_NONE },
-  numberInputDraft('T', 'fasteners-qty', 'Fasteners Qty', 5, 18, { hiddenWhen: { letter: FASTENERS_LETTER, values: [FASTENERS_NONE, ''] } }),
-  numberInputDraft('U', 'fasteners-cost', 'Fasteners Cost', 5, 19, { hiddenWhen: { letter: FASTENERS_LETTER, values: [FASTENERS_NONE, ''] } }),
+  numberInputDraft('T', 'fasteners-qty', 'Fasteners Qty', 5, 18, { unit: 'nos', hiddenWhen: { letter: FASTENERS_LETTER, values: [FASTENERS_NONE, ''] } }),
+  numberInputDraft('U', 'fasteners-cost', 'Fasteners Cost', 5, 19, { unit: '₹ / pc', hiddenWhen: { letter: FASTENERS_LETTER, values: [FASTENERS_NONE, ''] } }),
   // 06 Welding
-  numberInputDraft('V', 'weld', 'Weld', 6, 20),
-  numberInputDraft('W', 'drilling', 'Drilling', 6, 21),
-  numberInputDraft('X', 'tapping', 'Tapping', 6, 22),
-  numberInputDraft('Y', 'csk', 'CSK', 6, 23),
+  numberInputDraft('V', 'weld', 'Weld', 6, 20, { unit: 'nos' }),
+  numberInputDraft('W', 'drilling', 'Drilling', 6, 21, { unit: 'holes' }),
+  numberInputDraft('X', 'tapping', 'Tapping', 6, 22, { unit: 'holes' }),
+  numberInputDraft('Y', 'csk', 'CSK', 6, 23, { unit: 'holes' }),
   // 07 Surface Treatment
   flagInputDraft('Z', 'hot-dip-galvanizing', 'Hot Dip Galvanizing', 24),
   flagInputDraft('AA', 'primer', 'Primer', 25),
@@ -185,12 +186,12 @@ const FIELD_DRAFTS: ReadonlyArray<FieldDraft> = [
   outputDraft('AM', 'bending-cost', 'Bending Cost', { number: STAGE_PROCESS, group: 'Bending' }, 'R * Bending-Rate-per-stroke'),
   outputDraft('AN', 'drilling-tapping-cost', 'Drilling / Tapping Cost', { number: STAGE_PROCESS, group: 'Welding' }, '(W + X + Y) * Drilling-Tapping-Rate'),
   outputDraft('AO', 'welding-cost', 'Welding Cost', { number: STAGE_PROCESS, group: 'Welding' }, 'N * Welding-rate-per-kg * V'),
-  numberInputDraft('AP', 'machining-cost', 'Machining Cost', 8, 32, { stage: { number: STAGE_PROCESS, group: 'Entered directly' } }),
+  numberInputDraft('AP', 'machining-cost', 'Machining Cost', 8, 32, { unit: '₹', stage: { number: STAGE_PROCESS, group: 'Entered directly' } }),
   treatmentCostDraft('AQ', 'hot-dip-galvanizing-cost', 'Hot Dip Galvanizing Cost', 'Z', '(N * Dip-Galvanizing-Cost-per-kg) * Z'),
   treatmentCostDraft('AR', 'primer-cost', 'Primer Cost', 'AA', '(AI * Primer-rate-per-sqft) * AA'),
   treatmentCostDraft('AS', 'shot-blasting-cost', 'Shot Blasting Cost', 'AB', '(N * Shot-Blasting-rate-per-kg) * AB'),
   treatmentCostDraft('AT', 'polishing-cost', 'Polishing Cost', 'AC', 'AC * ((AH / 2) * Polishing-rate-per-sqin)'),
-  numberInputDraft('AU', 'plating-cost', 'Plating Cost', 8, 33, { stage: { number: STAGE_PROCESS, group: 'Entered directly' } }),
+  numberInputDraft('AU', 'plating-cost', 'Plating Cost', 8, 33, { unit: '₹', stage: { number: STAGE_PROCESS, group: 'Entered directly' } }),
   treatmentCostDraft('AV', 'powder-coating-cost', 'Powder Coating Cost', 'AE', 'AE * (AI * Powder-rate-per-sqft)'),
   treatmentCostDraft('AW', 'foam-cost', 'Foam Cost', 'AF', 'AF * AI * Foam Cost'),
   treatmentCostDraft('AX', 'soft-anodize-cost', 'Soft Anodize Cost', 'AG', 'AG * (AH * Soft-Anodize-rate-per-sqin)'),
@@ -211,7 +212,7 @@ const FIELD_DRAFTS: ReadonlyArray<FieldDraft> = [
   outputDraft('BK', 'unit-price-eur', 'Unit Production Price (EUR)', { number: STAGE_PRICING }, 'BG / BI', { displayUnit: '€' }),
   // Product-level: one value per estimate, shown in row 2 (SPEC section 7.4).
   outputDraft('BL', 'total-price', 'Total Unit Production Price (INR)', { number: STAGE_PRICING }, 'SUM(BG)', { systemRole: 'total', scope: 'product' }),
-  numberInputDraft('BM', 'tool-cost', 'Tool Cost', 8, 34, { systemRole: 'tool-cost' }),
+  numberInputDraft('BM', 'tool-cost', 'Tool Cost', 8, 34, { unit: '₹', systemRole: 'tool-cost' }),
   outputDraft('BN', 'price-per-tool-cost', 'Total Unit Production Price (INR) / Tool Cost (INR)', { number: STAGE_PRICING }, 'BL / SUM(BM)', { scope: 'product', numFmt: NUMBER_FORMAT.number }),
   // Entered at approval, so it has no formula.
   outputDraft('BO', 'approved-price', 'Approved Quote Price', { number: STAGE_PRICING }, undefined, { systemRole: 'approved-price', scope: 'product' }),

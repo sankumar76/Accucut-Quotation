@@ -8,10 +8,17 @@ export const FORMULA_EDITOR_TITLE = 'Edit formula';
 export const FORMULA_EDITOR_META_DESCRIPTION = 'Change how one field of the quotation is calculated, check it and try it on a sample row.';
 
 export const FORMULA_EDITOR_HEADING = (letter: string, label: string): string => `Edit formula: ${letter} ${label}`;
-export const FORMULA_EDITOR_DESCRIPTION = 'Check it as you type, try it on a sample row, and save it with your password. A saved formula is used by every new calculation.';
+/** The intro under the heading (the mock-up, AQP-479): what may be typed. It replaces the hint that was under the box, which said the same. */
+export const FORMULA_EDITOR_DESCRIPTION = 'Type letters, rate names, numbers, + - * / and brackets. SUM, MIN, MAX, ROUND and IF are available. SUM(column) adds a column over every row of the estimate.';
+export const BREADCRUMB_LABEL = 'Breadcrumb';
+export const BREADCRUMB_PARENT = 'Fields and formulas';
+export const CARD_TITLE = 'Formula';
+export const OUTPUT_TAG = 'Output';
+/** The read-only line under the check: the formula as typed, as the cost details will show it (the mock-up). Nothing is stored; "No formula" is for a screen reader while there is nothing to show. */
+export const SHOWS_IN_COST_DETAILS = 'Shows in the cost details as';
+export const NOTHING_TO_SHOW = 'No formula';
 
-export const FORMULA_LABEL = 'Formula';
-export const FORMULA_HINT = 'Use column letters, rate names, and SUM(column), MIN, MAX, ROUND and IF. SUM(column) adds a column over every row of the estimate.';
+export const FORMULA_LABEL = 'Formula for';
 export const SUGGESTIONS_LABEL = 'Suggestions';
 export const SUGGESTION_KIND_LABELS = { field: 'field', rate: 'rate', value: 'value', function: 'function' } as const;
 

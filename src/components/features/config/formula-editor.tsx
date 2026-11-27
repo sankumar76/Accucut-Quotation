@@ -7,24 +7,31 @@ import { ColumnTag } from '@/components/shared/column-tag';
 import { Notice } from '@/components/shared/notice';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/cn';
 import { listSampleRows } from '@/lib/config/formula-editor-client';
 import type { ConfigFieldRow } from '@/lib/config/fields-client';
 import { listProcessItems } from '@/lib/masters/process-items-client';
 
 import {
   BACK_LABEL,
+  BREADCRUMB_LABEL,
+  BREADCRUMB_PARENT,
   CANCEL_LABEL,
+  CARD_TITLE,
   CHECK_FAILED_LINE,
   CHECK_FAILED_TITLE,
   CHECKING_LINE,
   FORMULA_EDITOR_DESCRIPTION,
   FORMULA_EDITOR_HEADING,
-  FORMULA_HINT,
   FORMULA_LABEL,
+  NOTHING_TO_SHOW,
+  OUTPUT_TAG,
   SAVE_HINT_UNCHANGED,
   SAVE_LABEL,
+  SHOWS_IN_COST_DETAILS,
   STALE_ACTION,
 } from './formula-editor-texts';
 import { FormulaPasswordDialog } from './formula-password-dialog';
@@ -52,7 +59,6 @@ export interface FormulaEditorProps {
 }
 
 const CHECK_REGION_ID = 'formula-check';
-const HINT_ID = 'formula-hint';
 const FORMULA_ID = 'formula-text';
 
 /** The sample rows of the latest calculated estimate, read once when the editor opens. */
@@ -88,6 +94,42 @@ function useRateNames(): ReadonlyArray<string> {
     };
   }, []);
   return names;
+}
+
+/** The breadcrumb of the page (the mock-up): back to the list, and the field being edited as the current page. */
+function Breadcrumb({ letter, label }: { readonly letter: string; readonly label: string }) {
+  return (
+    <nav aria-label={BREADCRUMB_LABEL} className="flex flex-wrap items-center gap-s-2 text-body">
+      <Link href="/config/fields" className="text-primary-ink underline-offset-2 hover:underline">
+        {BREADCRUMB_PARENT}
+      </Link>
+      <span aria-hidden="true" className="text-ink-3">
+        /
+      </span>
+      <span aria-current="page" className="font-semibold text-ink [overflow-wrap:anywhere]">
+        {letter} {label}
+      </span>
+    </nav>
+  );
+}
+
+/** "Shows in the cost details as <formula>": the formula as typed, read only, in the mono face; a faint dash while the formula is empty or does not check (nothing is stored and nothing is checked here). */
+function ShowsIn({ text, shown }: { readonly text: string; readonly shown: boolean }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-s-4 gap-y-s-1 text-body">
+      <span className="text-ink-2">{SHOWS_IN_COST_DETAILS}</span>
+      {shown ? (
+        <code className={cn('font-mono text-ink [overflow-wrap:anywhere]')}>{text}</code>
+      ) : (
+        <>
+          <span aria-hidden="true" className="text-ink-3">
+            —
+          </span>
+          <span className="sr-only">{NOTHING_TO_SHOW}</span>
+        </>
+      )}
+    </div>
+  );
 }
 
 /** What the live region says: the check on its way, the server's sentence for a valid or an invalid formula, or that no answer came. */
@@ -151,6 +193,7 @@ export function FormulaEditor({ field, fields, version }: FormulaEditorProps) {
 
   return (
     <>
+      <Breadcrumb letter={field.letter} label={field.label} />
       <PageHeader title={FORMULA_EDITOR_HEADING(field.letter, field.label)} description={FORMULA_EDITOR_DESCRIPTION} />
       {save.notice === null ? null : (
         <Notice tone={save.notice.tone} role="status" {...(save.notice.title === undefined ? {} : { title: save.notice.title })}>
@@ -171,6 +214,10 @@ export function FormulaEditor({ field, fields, version }: FormulaEditorProps) {
       )}
       <div className="grid gap-s-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Card>
+          <CardHeader className="flex items-center justify-between gap-s-3">
+            <CardTitle>{CARD_TITLE}</CardTitle>
+            <Badge tone="info">{OUTPUT_TAG}</Badge>
+          </CardHeader>
           <CardContent className="flex flex-col gap-s-4">
             <div className="flex flex-col gap-s-2">
               <Label htmlFor={FORMULA_ID} className="flex flex-wrap items-center gap-s-2">
@@ -183,17 +230,15 @@ export function FormulaEditor({ field, fields, version }: FormulaEditorProps) {
                 onChange={setText}
                 source={source}
                 invalid={check.kind === 'invalid'}
-                describedBy={`${CHECK_REGION_ID} ${HINT_ID}`}
+                describedBy={CHECK_REGION_ID}
                 inputRef={textarea}
               />
-              <p id={HINT_ID} className="text-label text-ink-3">
-                {FORMULA_HINT}
-              </p>
               {lastValid?.note == null ? null : <p className="max-w-prose text-label text-ink-2">{lastValid.note}</p>}
             </div>
             <div id={CHECK_REGION_ID} aria-live="polite" aria-atomic="true">
               <CheckNotice check={check} />
             </div>
+            <ShowsIn text={text} shown={text.trim() !== '' && check.kind !== 'invalid'} />
             <div className="flex flex-wrap items-center justify-between gap-s-3 border-t border-border pt-s-4">
               <Button asChild variant="secondary">
                 <Link href="/config/fields">{CANCEL_LABEL}</Link>

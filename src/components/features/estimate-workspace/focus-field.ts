@@ -1,4 +1,4 @@
-import { controlIdFor, NEXT_FIELD, PART_FORM_ATTRIBUTE } from './field-ids';
+import { controlIdFor, NEXT_FIELD, PART_FORM_ATTRIBUTE, PART_FORM_TITLE_ID } from './field-ids';
 
 export const RETRY_MILLISECONDS = 50;
 /** About two seconds: long enough for a part's form to be read from the server after it is chosen, short enough that a form that never comes is let go. */
@@ -26,6 +26,29 @@ export function focusFieldWhenPresent(partId: string, fieldId: string): void {
     const control = form?.querySelector<HTMLElement>(`#${CSS.escape(controlIdFor(fieldId))}`) ?? null;
     if (control === null || control.matches(':disabled')) return false;
     control.focus();
+    return true;
+  });
+}
+
+/**
+ * Where the focus is when the person has already moved on from a tap on a row: in the drawer opened again, in a menu or in a dialog that is OPEN (`data-state="open"`). The drawer that the tap is closing is still a dialog
+ * for a moment, with `data-state="closed"`, and the focus may still be in it: that is not moving on, and the title takes the focus.
+ */
+const MOVED_ON_SELECTOR = '[role="menu"][data-state="open"], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]';
+
+/**
+ * A tap on a row in the phone drawer opens its form (AQP-490, DEF-133; UX ruling 2026-11-26 item 3 point 7: "tapping the row closes the drawer and shows the form"): the form's title, not a field, takes the focus once that part's
+ * form is on the page. A field would put a finger's keyboard on the screen before the person has chosen to type; the title (`tabindex="-1"`) tells a screen reader which part it is and leaves Tab to go to the first field. Looked for
+ * inside the form of this part (`data-part-id`), as `focusFieldWhenPresent` does, and it gives up quietly after about two seconds. It also gives up at once when the focus is already in a menu or a dialog (the
+ * person opened the drawer again and the "+" menu of a row before the form came): taking the focus then would close their menu under the click (run 45945851576, `estimate-tree-names.spec.ts` NAME-1, phone).
+ */
+export function focusFormTitleWhenPresent(partId: string): void {
+  lookUntilFound(() => {
+    const layer = document.activeElement?.closest(MOVED_ON_SELECTOR);
+    if (layer !== null && layer !== undefined) return true;
+    const title = document.querySelector<HTMLElement>(`[${PART_FORM_ATTRIBUTE}][data-part-id="${CSS.escape(partId)}"] #${PART_FORM_TITLE_ID}`);
+    if (title === null) return false;
+    title.focus();
     return true;
   });
 }

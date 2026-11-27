@@ -30,13 +30,14 @@ async function html(tree: ReadonlyArray<CostTreeNode> | undefined): Promise<stri
 }
 
 describe('AQP-452: the parts tree column of SCR-07', () => {
-  it('is a panel headed "Parts tree" that is open, in a column of the tree\'s width from 1024 px, sticky with a scroll of its own', async () => {
+  it('is a panel headed "Parts tree", closed until opened below 1024 px, in a column of the tree\'s width from 1024 px, sticky with a scroll of its own', async () => {
     const page = await html(NODES);
     const tag = /<details[^>]*data-cost-tree[^>]*>/.exec(page)?.[0] ?? '';
-    expect(tag).toMatch(/ open(=""| |>)/);
+    // AQP-491 (DEF-137; ruling scr07-layout, L7-1): the Lead came to read one row, so the panel is closed; from 1024 px the content shows whatever the attribute says (`::details-content`).
+    expect(tag).not.toMatch(/ open(=""| |>)/);
     expect(tag).toContain('min-[1024px]:sticky');
     expect(tag).toContain('min-[1024px]:overflow-y-auto');
-    expect(page).toMatch(/<summary[^>]*>Parts tree<\/summary>/);
+    expect(page).toMatch(/<summary[^>]*>Parts tree[^<]*(<span[^>]*>[^<]*<\/span>)?<\/summary>/);
     expect(page).toContain('min-[1024px]:grid-cols-[var(--tree-w)_minmax(0,1fr)]');
   });
 
@@ -65,5 +66,36 @@ describe('AQP-452: the parts tree column of SCR-07', () => {
     const page = await html(undefined);
     expect(page).not.toContain('data-cost-tree');
     expect(page).not.toContain('Parts tree');
+  });
+});
+
+describe('AQP-491: the tree below 1024 px and at 1366 px (DEF-137, DEF-136; ruling scr07-layout, L7-1, L7-4, L7-6)', () => {
+  it('comes before the row heading in the page, so it is first in the reading and tab order below 1024 px, and has no class that moves it to the end', async () => {
+    const page = await html(NODES);
+    expect(page.indexOf('data-cost-tree')).toBeGreaterThan(-1);
+    expect(page.indexOf('data-cost-tree')).toBeLessThan(page.indexOf('Cost details for one row'));
+    expect(page).not.toContain('order-last');
+  });
+
+  it('says the open row in its summary below 1024 px: "Parts tree · 1 Invented Bracket"', async () => {
+    const page = await html(NODES);
+    const summary = /<summary[^>]*>([\s\S]*?)<\/summary>/.exec(page.slice(page.indexOf('data-cost-tree')))?.[1] ?? '';
+    expect(summary.replace(/<[^>]+>/g, '')).toBe('Parts tree · 1 Invented Bracket');
+    expect(summary).toContain('min-[1024px]:hidden');
+  });
+
+  it('puts a gap of 8 px between the number and the name of each row, and a space in the text, so they never run together', async () => {
+    const page = await html(NODES);
+    const row = /<a[^>]*href="\/estimates\/Q-2026-0320\/costs\/1\.1"[\s\S]*?<\/a>/.exec(page)?.[0] ?? '';
+    expect(row).toContain('gap-s-2');
+    expect(row).toMatch(/<a[^>]*class="[^"]*\bflex\b/);
+    expect(row.replace(/<[^>]+>/g, '|')).toMatch(/1\.1\|+ \|+Invented Frame/);
+  });
+
+  it('marks the open row with the fill and the 4 px bar of the review tree, and no pink chip', async () => {
+    const page = await html(NODES);
+    const row = /<a[^>]*aria-current="page"[^>]*>/.exec(page)?.[0] ?? '';
+    expect(row).toContain('shadow-[inset_4px_0_0_var(--primary)]');
+    expect(row).not.toContain('bg-primary-soft');
   });
 });

@@ -1,6 +1,6 @@
-import { inputEntriesOf } from '@/lib/estimate/part-view';
 import { getEstimateService } from '@/server/composition';
 import { withRoute } from '@/server/http/with-route';
+import { nodeBody } from '@/server/views/part-form-bodies';
 import { deleteNodeQuerySchema, moveNodeBodySchema, nodeDetailSchema, nodeParamsSchema, partsTreeSchema } from '@/server/views/schemas';
 
 /**
@@ -18,8 +18,7 @@ export const GET = withRoute({
   // The part is read through its own strict schema here as well as by `withRoute`: `inputs` is a list of field ID and text entries (STORY-05.03, review SQR-09), of fields
   // of the form only (the service projects them), so a value that nothing declared fails closed (a generic 500) instead of leaving, and the handler returns the schema's own type.
   handler: async ({ user, params }) => {
-    const { inputs, ...part } = await getEstimateService().getNode({ id: user.id, role: user.role }, params.id, params.nodeId);
-    return nodeDetailSchema.parse({ ...part, inputs: inputEntriesOf(inputs) });
+    return nodeBody(await getEstimateService().getNode({ id: user.id, role: user.role }, params.id, params.nodeId));
   },
 });
 

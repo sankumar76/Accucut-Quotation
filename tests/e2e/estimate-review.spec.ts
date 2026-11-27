@@ -182,6 +182,13 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(tiles(page)).toContainText(`₹ ${total}`);
     await expect(buildPanel(page)).toContainText('Worked example: if one lid costs 1, one pipe costs 1 and the frame row holds nothing, the total is 24 + 6 + 0 = 30.');
     await expect(buildPanel(page)).toContainText('Figures are shown to 2 decimals. Totals add the unrounded values and round once');
+    // AQP-491 (DEF-134, DEF-135): the example and the rounding sentence stand above the table, and a Part cell names the kind before the name (a row with no name shows its kind once).
+    const exampleBox = defined(await buildPanel(page).getByText(/^Worked example:/).boundingBox());
+    const roundingBox = defined(await buildPanel(page).getByText(/^Figures are shown to 2 decimals/).boundingBox());
+    const tableBox = defined(await table.boundingBox());
+    expect(exampleBox.y + exampleBox.height).toBeLessThanOrEqual(tableBox.y + 1);
+    expect(roundingBox.y + roundingBox.height).toBeLessThanOrEqual(tableBox.y + 1);
+    for (const cell of await table.getByRole('row').nth(1).getByRole('cell').nth(1).allInnerTexts()) expect(cell).toMatch(/^(Main Assembly|Sub-Assembly|Part|Sub-part|Fastener)(: \S.*)?$/);
     await expect(buildPanel(page)).toContainText("The Engineer types the count for the whole order on every row (QTY per Assy, column H). Each row's cost (column BG) already includes its own count, so the total is the BG of every row added together. Nothing is multiplied by the rows above.");
     await expectColumns(page);
   });

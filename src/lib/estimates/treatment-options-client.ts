@@ -25,6 +25,8 @@ function toOptions(body: unknown): ReadonlyArray<TreatmentOption> | null {
   return options.every((option) => option !== null) ? options : null;
 }
 
+export { toOptions as parseTreatmentOptions };
+
 /**
  * The options in the order the list shows them: the Admin's treatments as the server sends them, then "Not applicable", then "Other" last (AC-3), whatever order the server sends. The two entries the
  * system keeps are found by their fixed IDs (`system-entries.ts`), never by their names.

@@ -1,5 +1,6 @@
 import { getMastersService } from '@/server/composition';
 import { withRoute } from '@/server/http/with-route';
+import { materialOptionsBody } from '@/server/views/part-form-bodies';
 import { materialOptionsResponseSchema } from '@/server/views/schemas/options';
 
 /**
@@ -12,5 +13,5 @@ export const GET = withRoute({
   route: '/api/v1/options/materials',
   method: 'GET',
   output: materialOptionsResponseSchema,
-  handler: async () => ({ options: await getMastersService().listMaterialOptions() }),
+  handler: async () => materialOptionsBody(await getMastersService().listMaterialOptions()),
 });

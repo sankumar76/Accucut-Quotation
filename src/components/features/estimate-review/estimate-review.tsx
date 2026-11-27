@@ -12,6 +12,7 @@ import { WarningNotice } from '@/components/shared/warning-notice';
 import type { RoleName } from '@/lib/auth/roles';
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
 import { isLocked, type EstimateStatus } from '@/lib/estimate/state-machine';
+import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
 import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
@@ -90,6 +91,8 @@ export interface EstimateReviewProps {
   readonly row?: string | undefined;
   /** The revision of the selected part as the server reads it now, for a save that a Lead or an Admin makes (DEF-131 stage 2): the form sends it with each change. Absent while the block is read-only. */
   readonly selectedRevision?: number | undefined;
+  /** The part form's data for the row shown, read by the server page and handed over as props (DEF-141): the form then reads nothing from the server to start. Absent when a read failed: the form reads it itself. */
+  readonly seed?: PartFormSeed | undefined;
 }
 
 /** The approved notice of SCR-06 (STORY-06.06 AC-5): the approver and the time, and what approval means. It holds focus when an approval has just worked (`tabIndex` -1). */
@@ -120,7 +123,7 @@ function QuotedNotice({ quoted, customerName }: { readonly quoted: EstimateRevie
 /** The status under the Ignored layer, which Restore gives back. A Quoted estimate cannot be ignored (the database refuses it), so Approved, which is closed too, stands for the impossible case and the page still draws. */
 const underlyingOf = (status: EstimateStatus): 'DRAFT' | 'PREPARED' | 'APPROVED' => (status === 'QUOTED' ? 'APPROVED' : status);
 
-export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole, download, quoted, ignored, engineerName, deadlinePassed, row, selectedRevision }: EstimateReviewProps) {
+export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole, download, quoted, ignored, engineerName, deadlinePassed, row, selectedRevision, seed }: EstimateReviewProps) {
   const { state, letters, nodes, totals } = costs;
   const selected = selectedRow(nodes, row);
   // The rows as the part form's head knows them: where each sits, its number, its kind and its name, and **no figure** (the tree's rows reach the browser only so).
@@ -139,6 +142,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           estimateId,
           part: { id: selected.id, slNo: selected.slNo, revision: selectedRevision ?? 0 },
           editable,
+          seed,
           nodes: partItems,
           review: { notice: inputsNotice(header.status, isIgnored, state), showing: showingInputs(selected.slNo, rowNameOf(selected.name, nodeKindLabel(selected, nodes)), editable), figuresCurrent: state === 'current' },
         };
@@ -228,7 +232,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
           code={header.code}
           state={state}
           status={header.status}
-          approve={approveOffer(header.status, costs)}
+          approve={approveOffer(header.status, costs, customer?.name ?? null)}
           cancel={cancelOffer(viewerRole, costs.approval)}
           remove={removeOffer(viewerRole, costs.approval)}
           quote={quoteOffer(viewerRole, header.status, isIgnored, customer?.name ?? null, download)}
