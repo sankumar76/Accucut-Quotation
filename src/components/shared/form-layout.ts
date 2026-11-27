@@ -53,6 +53,20 @@ export const PICTURE_ZONE_HEIGHT = 'h-[146px] md:h-[130px] lg:h-[114px]';
 export const PICTURE_ZONE_HEIGHT_UNHINTED = 'h-[146px] md:h-[114px]';
 
 /**
+ * The same unhinted box when the part **holds a picture** (PF-19): the editable control then has no prompt line, only the file's name, its size, Replace and Remove, so its box is 132 px high below 768 px and 116 px from
+ * 768 px (read from the control at 360, 768, 1024 and 1366 px on the Lead's review with a one-line file name; a long name wraps and is taller). The ghost and the placeholder of the picture take it from here.
+ */
+export const PICTURE_ZONE_HEIGHT_HELD = 'h-[132px] md:h-[116px]';
+
+/**
+ * The least height the read-only form's picture box takes while the page is one a Lead or an Admin can correct (PF-19, DL-465): the read-only box is the thumbnail alone (74 px), the island's editable box is
+ * `PICTURE_ZONE_HEIGHT_UNHINTED` (`_HELD` when a picture is held), and the swap must not move the page. Set on the block that holds the form (`#row-inputs`), so no prop reaches the form's code and nothing is added to the first load.
+ * Written out here because Tailwind reads class names as written; `form-layout.test.ts` derives each from the height above, so they cannot drift.
+ */
+export const PICTURE_ZONE_RESERVE = '[&_[data-picture-zone]]:min-h-[146px] md:[&_[data-picture-zone]]:min-h-[114px]';
+export const PICTURE_ZONE_RESERVE_HELD = '[&_[data-picture-zone]]:min-h-[132px] md:[&_[data-picture-zone]]:min-h-[116px]';
+
+/**
  * The picture's box when the page cannot change it (Approved, Quoted, Ignored; PF-17): the control then draws only the thumbnail, 48 px, in a box with 12 px of padding and a 1 px border on each side, at every width. Written from
  * the tokens that build it, not as a number (`--s-7` is the thumbnail, `--s-3` the padding).
  */

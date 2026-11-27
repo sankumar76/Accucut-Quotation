@@ -14,13 +14,15 @@ import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
 import { treeActionsOffered } from '@/lib/estimates/tree-actions';
 import { isLocked, type EstimateStatus } from '@/lib/estimate/state-machine';
 import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
+import { cn } from '@/lib/cn';
+import { PICTURE_ZONE_RESERVE, PICTURE_ZONE_RESERVE_HELD } from '@/components/shared/form-layout';
 import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
 import { ReviewEditShell } from '../estimate-review-edit/review-edit-shell';
 import { PartHead } from '../estimate-workspace/part-head';
-import { ghostOf } from '../estimate-workspace/part-form-ghost';
+import { ghostOf, pictureHeldOf } from '../estimate-workspace/part-form-ghost';
 import { PartForm } from '../estimate-workspace/part-form';
 import type { WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
@@ -150,7 +152,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
       <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} selectedSlNo={selected === null ? null : selected.slNo} edit={editTree} />
       {selected === null ? null : (
         // The Engineer's own form, read-only (never editable here: the editable form is the island's), in the same place as the island's.
-        <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">
+        <div id="row-inputs" className={cn('min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]', editTree && (pictureHeldOf(seed?.part) ? PICTURE_ZONE_RESERVE_HELD : PICTURE_ZONE_RESERVE))}>
           {/* The row's eyebrow, title and figure line are drawn here, on the server, so they are in the first paint whatever the form is doing; the form under them is labelled by the title (UX ruling 3.6, 3.7). */}
           <PartHead partId={selected.id} slNo={selected.slNo} nodes={partItems} titleId="part-form-title" titleRef={null} />
           {rowLine}

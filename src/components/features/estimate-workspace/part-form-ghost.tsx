@@ -12,6 +12,7 @@ import {
   HEAD_LINES,
   HINT_TEXT,
   PICTURE_ZONE_HEIGHT,
+  PICTURE_ZONE_HEIGHT_HELD,
   PICTURE_ZONE_HEIGHT_READONLY,
   PICTURE_ZONE_HEIGHT_UNHINTED,
   PROGRESS_BAR_WIDTH,
@@ -60,6 +61,8 @@ export interface PartFormGhostProps {
   readonly silent?: boolean;
   /** The page can change the part (`canEditInputs`): the picture's box is the editable control's, or, when it cannot, the thumbnail's alone (PF-17). */
   readonly editable?: boolean;
+  /** The part holds a picture (PF-19): its editable control's box is a little different from the empty one's, and the ghost's follows (the Lead's look, which has no hint). */
+  readonly held?: boolean;
 }
 
 type CardShare = CSSProperties & Record<'--n', number>;
@@ -73,10 +76,10 @@ const Grey = ({ className, children }: { readonly className: string; readonly ch
 );
 
 /** The control a field will have, as a grey block of the control's own height (PF-3); the picture, a multi-line box and the surface treatments are the ones that take the whole row or more. */
-function ghostControl(field: FormField, texts: Readonly<Record<string, string>>, editable: boolean): { readonly control: ReactNode; readonly marker: 'wide' | 'picture' | null } {
+function ghostControl(field: FormField, texts: Readonly<Record<string, string>>, editable: boolean, held: boolean): { readonly control: ReactNode; readonly marker: 'wide' | 'picture' | null } {
   switch (field.rule.type) {
     case 'picture':
-      return { control: <Grey className={!editable ? PICTURE_ZONE_HEIGHT_READONLY : field.hint === null ? PICTURE_ZONE_HEIGHT_UNHINTED : PICTURE_ZONE_HEIGHT} />, marker: 'picture' };
+      return { control: <Grey className={!editable ? PICTURE_ZONE_HEIGHT_READONLY : field.hint !== null ? PICTURE_ZONE_HEIGHT : held ? PICTURE_ZONE_HEIGHT_HELD : PICTURE_ZONE_HEIGHT_UNHINTED} />, marker: 'picture' };
     case 'treatment': {
       // The "Other" box under the list shows only when "Other" is the part's choice (`TreatmentSelect`).
       const chosen = decodeTreatment(texts[field.id] ?? '');
@@ -89,10 +92,10 @@ function ghostControl(field: FormField, texts: Readonly<Record<string, string>>,
   }
 }
 
-function GhostField({ field: own, review, texts, editable }: { readonly field: FormField; readonly review: boolean; readonly texts: Readonly<Record<string, string>>; readonly editable: boolean }) {
+function GhostField({ field: own, review, texts, editable, held }: { readonly field: FormField; readonly review: boolean; readonly texts: Readonly<Record<string, string>>; readonly editable: boolean; readonly held: boolean }) {
   // The review's form shows a field as `reviewField` says (no hint but the quantity's, `review-look.ts`), so its ghost does: the same lines, the same height.
   const field = review ? reviewField(own) : own;
-  const { control, marker } = ghostControl(field, texts, editable);
+  const { control, marker } = ghostControl(field, texts, editable, held);
   return (
     <div {...(marker === 'wide' ? { 'data-ghost-wide': '' } : marker === 'picture' ? { 'data-ghost-picture': '' } : {})} className={FIELD_BOX}>
       <Grey className="h-s-5 w-1/2" />
@@ -117,7 +120,7 @@ function GhostTreatments({ flags, review, texts }: { readonly flags: ReadonlyArr
   );
 }
 
-function GhostCard({ section, review, texts, editable, head }: { readonly section: FormSection; readonly review: boolean; readonly texts: Readonly<Record<string, string>>; readonly editable: boolean; readonly head: 'lead' | 'engineer' }) {
+function GhostCard({ section, review, texts, editable, held, head }: { readonly section: FormSection; readonly review: boolean; readonly texts: Readonly<Record<string, string>>; readonly editable: boolean; readonly held: boolean; readonly head: 'lead' | 'engineer' }) {
   const share: CardShare = { '--n': sectionWeight(section) };
   const flags = section.fields.filter((field) => field.rule.type === 'flag');
   const counts = sectionProgress(section, texts, {});
@@ -140,13 +143,13 @@ function GhostCard({ section, review, texts, editable, head }: { readonly sectio
       </CardHeader>
       <CardContent {...NO_SLOT} className={FIELDS}>
         {flags.length > 0 ? <GhostTreatments flags={flags} review={review} texts={texts} /> : null}
-        {section.fields.map((field) => (field.rule.type === 'flag' ? null : <GhostField key={field.id} field={field} review={review} texts={texts} editable={editable} />))}
+        {section.fields.map((field) => (field.rule.type === 'flag' ? null : <GhostField key={field.id} field={field} review={review} texts={texts} editable={editable} held={held} />))}
       </CardContent>
     </Card>
   );
 }
 
-export function PartFormGhost({ form, texts = {}, notice, head, silent = false, editable = true }: PartFormGhostProps) {
+export function PartFormGhost({ form, texts = {}, notice, head, silent = false, editable = true, held = false }: PartFormGhostProps) {
   // Every card the form draws, with the fields it shows for what is typed (the form draws a card whose fields are all hidden too): the same list `PartFields` walks.
   const sections = shownSections(form.sections, texts);
   return (
@@ -178,7 +181,7 @@ export function PartFormGhost({ form, texts = {}, notice, head, silent = false, 
         </div>
         <div data-ghost-grid="" className={CARD_GRID}>
           {sections.map((section) => (
-            <GhostCard key={section.id} section={section} review={head === 'lead'} texts={texts} editable={editable} head={head} />
+            <GhostCard key={section.id} section={section} review={head === 'lead'} texts={texts} editable={editable} held={held} head={head} />
           ))}
         </div>
       </div>
@@ -194,5 +197,15 @@ export function ghostOf({ form, part, notice, head, editable }: { readonly form:
   const view = parseForm(form);
   if (view === null) return undefined;
   const saved = part === undefined ? null : parsePartInputs(part);
-  return <PartFormGhost form={view} texts={saved === null ? undefined : saved.inputs} notice={notice} head={head} editable={editable} />;
+  return <PartFormGhost form={view} texts={saved === null ? undefined : saved.inputs} notice={notice} head={head} editable={editable} held={pictureHeldIn(saved)} />;
+}
+
+/** The part's read holds a picture (`picture` is the server's answer, null or absent when there is none; PF-19). */
+function pictureHeldIn(saved: { readonly picture: unknown } | null): boolean {
+  return saved !== null && saved.picture !== null && saved.picture !== undefined;
+}
+
+/** The same for the part body the page holds (the seed's part): the page reserves the picture box of the form's first paint by it. */
+export function pictureHeldOf(part: unknown): boolean {
+  return part !== undefined && pictureHeldIn(parsePartInputs(part));
 }
