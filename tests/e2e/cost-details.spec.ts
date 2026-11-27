@@ -252,6 +252,9 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
       await expect(summary.locator('[data-stage-number]')).toHaveText(String(number));
       const [badge, chevron, card] = await Promise.all([summary.locator('[data-stage-number]').boundingBox(), summary.locator('svg').boundingBox(), stage(page, number).boundingBox()]);
       if (badge === null || chevron === null || card === null) throw new Error('a box is missing');
+      // AQP-491 (DEF-114 reopened): the tile is the mock-up's 28 px square with the digit whole, not a sliver.
+      expect(Math.abs(badge.width - 28)).toBeLessThanOrEqual(1);
+      expect(Math.abs(badge.height - 28)).toBeLessThanOrEqual(1);
       expect(badge.x).toBeLessThan(chevron.x);
       expect(chevron.x + chevron.width).toBeLessThanOrEqual(card.x + card.width);
       // Tailwind 4 turns it with the `rotate` property, not `transform`.

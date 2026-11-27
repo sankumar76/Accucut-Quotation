@@ -39,6 +39,13 @@ describe('AQP-475: the stage is a numbered collapsible card', () => {
     expect(summary.indexOf('<svg')).toBeGreaterThan(summary.indexOf('15.99'));
   });
 
+  it('gives the number tile a size the stylesheet has: 28 px as in the mock-up, never `size-8`, which the replaced spacing scale does not generate (AQP-491, DEF-114 reopened)', async () => {
+    const card = stageOf(await page(), 2);
+    const tile = card.match(/<span[^>]*data-stage-number[^>]*>/)?.[0] ?? '';
+    expect(tile).toContain('size-[28px]');
+    expect(tile).not.toMatch(/(^|[s"])size-8([s"]|$)/);
+  });
+
   it('shows no "Stage total:" words on screen, only the figure at the right, and keeps the words for a screen reader', async () => {
     const card = stageOf(await page(), 2);
     const summary = card.slice(card.indexOf('<summary'), card.indexOf('</summary>'));
