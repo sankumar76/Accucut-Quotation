@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { readFormBodies, readPartBody, seedOf, type SeedServices } from '@/app/(portal)/estimates/[code]/part-form-seed';
+import { readListBodies, readPartFormBodies, seedOf, type SeedServices } from '@/app/(portal)/estimates/[code]/part-form-seed';
 import { parseForm, parseMaterials, parsePartInputs } from '@/lib/estimates/form-client';
 import { parseTreatmentOptions } from '@/lib/estimates/treatment-options-client';
 import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody } from '@/server/views/part-form-bodies';
@@ -68,31 +68,31 @@ describe('the seed is the routes\' own answers (DL-455 2 (a))', () => {
     ]);
     for (const response of [formResponse, nodeResponse, materialsResponse, treatmentsResponse]) expect(response.status).toBe(200);
 
-    const bodies = defined(await readFormBodies(services(), viewer, id));
-    const part = await readPartBody(services(), viewer, id, id);
-    expect(JSON.parse(JSON.stringify(bodies.form))).toEqual(await formResponse.json());
-    expect(JSON.parse(JSON.stringify(part))).toEqual(await nodeResponse.json());
-    expect(JSON.parse(JSON.stringify(bodies.materials))).toEqual(await materialsResponse.json());
-    expect(JSON.parse(JSON.stringify(bodies.treatments))).toEqual(await treatmentsResponse.json());
+    const lists = defined(await readListBodies(services()));
+    const row = defined(await readPartFormBodies(services(), viewer, id, id));
+    expect(JSON.parse(JSON.stringify(row.form))).toEqual(await formResponse.json());
+    expect(JSON.parse(JSON.stringify(row.part))).toEqual(await nodeResponse.json());
+    expect(JSON.parse(JSON.stringify(lists.materials))).toEqual(await materialsResponse.json());
+    expect(JSON.parse(JSON.stringify(lists.treatments))).toEqual(await treatmentsResponse.json());
   });
 
   it('the form reads each body with its own reader, and a body the readers refuse is not a seed', async () => {
     const id = estimate().id;
     const viewer = { id: harness.idOf.LEAD, role: 'LEAD' as const };
-    const bodies = defined(await readFormBodies(services(), viewer, id));
-    const part = await readPartBody(services(), viewer, id, id);
-    expect(parseForm(bodies.form)).not.toBeNull();
-    expect(parseMaterials(bodies.materials)).not.toBeNull();
-    expect(parseTreatmentOptions(bodies.treatments)).not.toBeNull();
-    expect(parsePartInputs(part)).toMatchObject({ id });
+    const lists = defined(await readListBodies(services()));
+    const row = defined(await readPartFormBodies(services(), viewer, id, id));
+    expect(parseForm(row.form)).not.toBeNull();
+    expect(parseMaterials(lists.materials)).not.toBeNull();
+    expect(parseTreatmentOptions(lists.treatments)).not.toBeNull();
+    expect(parsePartInputs(row.part)).toMatchObject({ id });
     expect(parseForm({ sections: 'x', lastSavedAt: null })).toBeNull();
   });
 
   it('the reader accepts every field of the real registry (PRF-827-06): a body it refused would make the form read from the server again, and the four reads would come back unseen', async () => {
     const viewer = { id: harness.idOf.LEAD, role: 'LEAD' as const };
-    const bodies = defined(await readFormBodies(services(), viewer, estimate().id));
-    const sent = (bodies.form as { sections: ReadonlyArray<{ fields: ReadonlyArray<{ rule: { type: string } }> }> }).sections.flatMap((section) => section.fields);
-    const read = defined(parseForm(bodies.form)).sections.flatMap((section) => section.fields);
+    const row = defined(await readPartFormBodies(services(), viewer, estimate().id, estimate().id));
+    const sent = (row.form as { sections: ReadonlyArray<{ fields: ReadonlyArray<{ rule: { type: string } }> }> }).sections.flatMap((section) => section.fields);
+    const read = defined(parseForm(row.form)).sections.flatMap((section) => section.fields);
     expect(read).toHaveLength(sent.length);
     expect(sent.length).toBeGreaterThan(30);
     expect(new Set(read.map((field) => field.rule.type))).toEqual(new Set(sent.map((field) => field.rule.type)));
@@ -112,13 +112,14 @@ describe('what the page does when a read fails', () => {
   it('gives no seed (the form reads from the server) and logs the kind of the fault only', async () => {
     const viewer = { id: harness.idOf.LEAD, role: 'LEAD' as const };
     const id = estimate().id;
-    const broken: SeedServices = { estimates: { ...services().estimates, getForm: () => Promise.reject(new TypeError('connection refused to invented-host')) }, masters: services().masters };
-    expect(await readFormBodies(broken, viewer, id)).toBeNull();
-    const failing: SeedServices = { ...services(), estimates: { ...services().estimates, getNode: () => Promise.reject(new Error('invented fault')) } };
-    expect(await readPartBody(failing, viewer, id, id)).toBeNull();
-    const bodies = defined(await readFormBodies(services(), viewer, id));
-    expect(seedOf(id, id, bodies, null)).toBeUndefined();
-    expect(seedOf(id, id, null, { id })).toBeUndefined();
+    const broken: SeedServices = { estimates: { getPartForm: () => Promise.reject(new TypeError('connection refused to invented-host')) }, masters: services().masters };
+    expect(await readPartFormBodies(broken, viewer, id, id)).toBeNull();
+    const noLists: SeedServices = { ...services(), masters: { ...services().masters, listTreatmentOptions: () => Promise.reject(new Error('invented fault')) } };
+    expect(await readListBodies(noLists)).toBeNull();
+    const lists = defined(await readListBodies(services()));
+    const row = defined(await readPartFormBodies(services(), viewer, id, id));
+    expect(seedOf(id, id, lists, null)).toBeUndefined();
+    expect(seedOf(id, id, null, row)).toBeUndefined();
     const logged = await import('@/lib/logger');
     expect(JSON.stringify(vi.mocked(logged.logger.warn).mock.calls)).not.toContain('invented-host');
   });
@@ -126,9 +127,58 @@ describe('what the page does when a read fails', () => {
   it('a seed names the estimate, the part and the four bodies, and nothing else', async () => {
     const viewer = { id: harness.idOf.LEAD, role: 'LEAD' as const };
     const id = estimate().id;
-    const bodies = defined(await readFormBodies(services(), viewer, id));
-    const part = await readPartBody(services(), viewer, id, id);
-    const seed = defined(seedOf(id, id, bodies, part));
+    const lists = defined(await readListBodies(services()));
+    const row = defined(await readPartFormBodies(services(), viewer, id, id));
+    const seed = defined(seedOf(id, id, lists, row));
     expect(Object.keys(seed).sort()).toEqual(['estimateId', 'form', 'materials', 'part', 'partId', 'treatments']);
+  });
+});
+
+describe('getPartForm is getForm and getNode in one read (the combined read of DEF-141, DL-457)', () => {
+  const asJson = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+
+  it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('answers exactly what getForm and getNode answer, as %s', async (role) => {
+    const id = estimate().id;
+    const viewer = { id: harness.idOf[role], role };
+    const [form, node, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getPartForm(viewer, id, id)]);
+    expect(asJson(both.form)).toEqual(asJson(form));
+    expect(asJson(both.node)).toEqual(asJson(node));
+  });
+
+  it('answers the same in every state of the estimate, and with a value typed into the part', async () => {
+    const id = estimate().id;
+    const viewer = { id: harness.idOf.LEAD, role: 'LEAD' as const };
+    const sections = (await harness.estimateService.getForm(viewer, id)).sections;
+    const typedField = defined(sections.flatMap((section) => section.fields).find((field) => field.rule.type === 'number'));
+    defined(harness.estimateWorld.nodes[0]).inputs = { [typedField.id]: '3' };
+    for (const status of ['DRAFT', 'PREPARED', 'APPROVED'] as const) {
+      estimate().status = status;
+      const [form, node, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getPartForm(viewer, id, id)]);
+      expect(asJson(both.form)).toEqual(asJson(form));
+      expect(asJson(both.node)).toEqual(asJson(node));
+    }
+  });
+
+  it('refuses as they refuse (NFR-001): another Engineer, an unknown estimate and an unknown part are the same not-found, with the same words', async () => {
+    const id = estimate().id;
+    const unknown = '00000000-0000-4000-8000-00000000dead';
+    const stranger = { id: harness.idOf.LEAD, role: 'ENGINEER' as const };
+    const lead = { id: harness.idOf.LEAD, role: 'LEAD' as const };
+    for (const [viewer, estimateId, nodeId] of [
+      [stranger, id, id],
+      [lead, unknown, unknown],
+      [lead, id, unknown],
+    ] as const) {
+      const direct = await harness.estimateService.getNode(viewer, estimateId, nodeId).then(() => null, (error: unknown) => error);
+      const combined = await harness.estimateService.getPartForm(viewer, estimateId, nodeId).then(() => null, (error: unknown) => error);
+      expect(direct).not.toBeNull();
+      expect(combined).not.toBeNull();
+      expect((combined as Error).constructor).toBe((direct as Error).constructor);
+      expect((combined as Error).message).toBe((direct as Error).message);
+    }
+    // getForm refuses the stranger and the unknown estimate the same way, so the combined read gives away nothing that the two did not.
+    const formRefusal = await harness.estimateService.getForm(stranger, id).then(() => null, (error: unknown) => error);
+    const combinedRefusal = await harness.estimateService.getPartForm(stranger, id, id).then(() => null, (error: unknown) => error);
+    expect((combinedRefusal as Error).constructor).toBe((formRefusal as Error).constructor);
   });
 });

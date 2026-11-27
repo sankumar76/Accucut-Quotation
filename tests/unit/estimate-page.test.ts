@@ -305,7 +305,7 @@ describe('DEF-141 (DL-455): the Lead\'s review hands the part form its data as p
 
   it('a fault in a read gives the page no seed, so the form reads from the server as before, and the page still draws', async () => {
     harness.signInAs('LEAD');
-    const broken = vi.spyOn(harness.estimateService, 'getForm').mockRejectedValue(new Error('invented fault'));
+    const broken = vi.spyOn(harness.estimateService, 'getPartForm').mockRejectedValue(new Error('invented fault'));
     expect((await props(CODE))['seed']).toBeUndefined();
     expect(await open(CODE)).toContain('id="review-calculate"');
     broken.mockRestore();

@@ -16,43 +16,53 @@ import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody } from '@
  */
 
 export interface SeedServices {
-  readonly estimates: Pick<EstimateService, 'getForm' | 'getNode'>;
+  readonly estimates: Pick<EstimateService, 'getPartForm'>;
   readonly masters: Pick<MastersService, 'listMaterialOptions' | 'listTreatmentOptions'>;
 }
 
-/** The three answers that do not depend on the row: the form's definition and the two lists. `null` when any could not be read. */
-export interface FormBodies {
-  readonly form: unknown;
+/** The two answers that do not depend on the row: the two option lists. */
+export interface ListBodies {
   readonly materials: unknown;
   readonly treatments: unknown;
+}
+
+/** The two answers of the row: the form's definition and the part. */
+export interface PartFormBodies {
+  readonly form: unknown;
+  readonly part: unknown;
 }
 
 function logFault(what: string, error: unknown): void {
   logger.warn({ errorName: error instanceof Error ? error.name : 'unknown', errorCode: isAppError(error) ? error.code : undefined }, `The ${what} could not be read for the part form; the form reads it itself.`);
 }
 
-export async function readFormBodies(services: SeedServices, viewer: EstimateViewer, estimateId: string): Promise<FormBodies | null> {
+/** The two option lists, read beside the figures. `null` when either could not be read. */
+export async function readListBodies(services: SeedServices): Promise<ListBodies | null> {
   try {
-    const [form, materials, treatments] = await Promise.all([services.estimates.getForm(viewer, estimateId), services.masters.listMaterialOptions(), services.masters.listTreatmentOptions()]);
-    return { form: formBody(form), materials: materialOptionsBody(materials), treatments: treatmentOptionsBody(treatments) };
+    const [materials, treatments] = await Promise.all([services.masters.listMaterialOptions(), services.masters.listTreatmentOptions()]);
+    return { materials: materialOptionsBody(materials), treatments: treatmentOptionsBody(treatments) };
   } catch (error) {
-    logFault('form definition and option lists', error);
+    logFault('option lists', error);
     return null;
   }
 }
 
-/** The part's body, as `GET /estimates/{id}/nodes/{nodeId}` answers. `null` when it could not be read. */
-export async function readPartBody(services: SeedServices, viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<unknown> {
+/**
+ * The form's definition and the part's values for the row, from **one** service call (`getPartForm`: exactly what `getForm` and `getNode` answer for this viewer, with one access check, one read of the configuration and
+ * one listing of the parts instead of two of each). `null` when it could not be read.
+ */
+export async function readPartFormBodies(services: SeedServices, viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<PartFormBodies | null> {
   try {
-    return nodeBody(await services.estimates.getNode(viewer, estimateId, nodeId));
+    const { form, node } = await services.estimates.getPartForm(viewer, estimateId, nodeId);
+    return { form: formBody(form), part: nodeBody(node) };
   } catch (error) {
-    logFault('part', error);
+    logFault('form definition and part', error);
     return null;
   }
 }
 
 /** The seed for the row the review shows, or `undefined` (the form reads from the server) when any answer is missing. */
-export function seedOf(estimateId: string, partId: string, bodies: FormBodies | null, part: unknown): PartFormSeed | undefined {
-  if (bodies === null || part === null || part === undefined) return undefined;
-  return { estimateId, partId, form: bodies.form, part, materials: bodies.materials, treatments: bodies.treatments };
+export function seedOf(estimateId: string, partId: string, lists: ListBodies | null, row: PartFormBodies | null): PartFormSeed | undefined {
+  if (lists === null || row === null) return undefined;
+  return { estimateId, partId, form: row.form, part: row.part, materials: lists.materials, treatments: lists.treatments };
 }
