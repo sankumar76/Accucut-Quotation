@@ -91,10 +91,16 @@ test.describe('AC-9, AC-10, AC-11: SCR-05, the Engineer sees the customer and th
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
     await expect(page.getByRole('main')).toContainText('Every field is needed to Calculate. Enter 0 where a part needs nothing. Numbers allow up to 2 decimals.');
     await expect(page.getByRole('main').getByText(/^Due /)).toBeVisible();
-    const identity = page.getByRole('main').locator('dl').first();
-    await expect(identity.locator('dt', { hasText: 'Customer Name' }).locator('xpath=following-sibling::dd[1]')).toContainText(ALPHA);
-    await expect(identity.locator('dt', { hasText: 'Customer Short Name' }).locator('xpath=following-sibling::dd[1]')).toHaveText(ALPHA_SHORT_NAME);
-    await expect(identity.locator('dt', { hasText: 'Subject (project name)' }).locator('xpath=following-sibling::dd[1]')).toHaveText('Canary subject');
+    // AQP-453 (DEF-096; the mock-up): one compact card of three rows. The second row has the customer with its short name, the subject, and the line that says only a Lead or Admin can change it.
+    await expect(page.locator('[data-task-row]').first()).toContainText('Task folder');
+    const identity = page.locator('[data-task-row="customer"]');
+    await expect(identity).toContainText('Customer');
+    await expect(identity).toContainText(ALPHA);
+    await expect(identity).toContainText(`(${ALPHA_SHORT_NAME})`);
+    await expect(identity).toContainText('Subject');
+    await expect(identity).toContainText('Canary subject');
+    await expect(identity).toContainText('Only a Lead or Admin can change the customer.');
+    await expect(page.locator('[data-slot="card"]').filter({ has: page.locator('[data-task-row]') })).toHaveCount(1);
 
     // The old step is gone: no field, no notice, no control to change it (no button, no select) near the title.
     await expect(page.locator('#estimate-customer')).toHaveCount(0);
@@ -114,7 +120,7 @@ test.describe('AC-9, AC-10, AC-11: SCR-05, the Engineer sees the customer and th
 
   test('AC-11: an estimate made before this change has no customer: the header says so in one neutral sentence, the form still opens, and nothing is invented', async ({ page }, testInfo) => {
     await openOwnWorkspace(page, testInfo, false);
-    await expect(page.getByRole('main').locator('dd', { hasText: NO_CUSTOMER })).toBeVisible();
+    await expect(page.locator('[data-task-row="customer"]', { hasText: NO_CUSTOMER })).toBeVisible();
     await expect(page.getByRole('group', { name: 'Parts and inputs' })).not.toHaveAttribute('inert', '');
     await expect(page.getByRole('button', { name: /Change customer|Set customer/ })).toHaveCount(0);
   });

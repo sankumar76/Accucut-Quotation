@@ -61,7 +61,7 @@ describe('AC-1: the Engineer opens their task with no customer', () => {
     expect(html).toContain('\\\\invented-server\\invented-share\\RFQ-canary');
     expect(html).toContain('href="file:////invented-server/invented-share/RFQ-canary"');
     expect(html).toContain('Copy path');
-    expect(html).toContain('Notes from Invented Lead: ');
+    expect(html).toContain('Notes from Invented Lead');
     expect(html).toContain('Invented notes.');
   });
 
@@ -74,15 +74,16 @@ describe('AC-1: the Engineer opens their task with no customer', () => {
     expect(html).toContain('Parts and inputs');
   });
 
-  it('AC-9: shows Customer Name, Customer Short Name and Subject (project name) as labelled text, before and after a customer is set', async () => {
+  it('AC-9: shows the Customer (with its short name) and the Subject as labelled text, in the one compact card (AQP-453), before and after a customer is set', async () => {
     const without = await open(CODE);
-    for (const label of ['Customer Name', 'Customer Short Name', 'Subject (project name)']) expect(without, label).toContain(label);
+    for (const label of ['Customer', 'Subject', 'Task folder']) expect(without, label).toContain(label);
+    expect(without).toContain('Only a Lead or Admin can change the customer.');
     expect(without).toContain('Invented subject');
     estimate().customerId = CUSTOMER_RECIPE_ID;
     const html = await open(CODE);
     expect(html).toContain('Canary-Customer-Alpha');
     const shortName = defined(harness.masters.customers.find((customer) => customer.id === CUSTOMER_RECIPE_ID)).shortName;
-    expect(html).toContain(`>${shortName}<`);
+    expect(html).toContain(`(${shortName})`);
   });
 
   it('AC-10: there is no customer picker, no "Choose this first", no hint about changing it, no list to load and no control to change the customer, in any state', async () => {
