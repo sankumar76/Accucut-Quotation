@@ -3,7 +3,7 @@
  * category groups the events of one subject of the registry (`src/server/services/audit-events.ts`), for example "User change"
  * holds the five user events. The registry gives every event one of these; the screen offers them in this order.
  *
- * "Task change" (FR-040) joined with STORY-04.07 and "Configuration change" (FR-079) with the formula editor (STORY-08.02). The file is plain data, so the browser can import it (NFR-009).
+ * "Input change" (DEF-131, FR-116) holds a Lead's and an Admin's changes of a part's inputs, its picture and the tree. "Task change" (FR-040) joined with STORY-04.07 and "Configuration change" (FR-079) with the formula editor (STORY-08.02). The file is plain data, so the browser can import it (NFR-009).
  */
 
 export const AUDIT_CATEGORIES = [
@@ -17,6 +17,7 @@ export const AUDIT_CATEGORIES = [
   { id: 'user_change', label: 'User change' },
   { id: 'task_change', label: 'Task change' },
   { id: 'config_change', label: 'Configuration change' },
+  { id: 'input_change', label: 'Input change' },
 ] as const;
 
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];

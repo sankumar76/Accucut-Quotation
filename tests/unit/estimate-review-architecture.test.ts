@@ -118,6 +118,9 @@ describe('AC-5: no review code reaches the Engineer', () => {
   const REMOVE_BUTTON = `${REMOVE_FOLDER}remove-button.tsx`;
   const CUSTOMER_FOLDER = 'src/components/features/estimate-customer/';
   const CUSTOMER_BUTTON = `${CUSTOMER_FOLDER}change-customer-button.tsx`;
+  // The Lead's view of one row's inputs (AQP-488, DEF-131 Stage 1) is the Engineer's own `PartForm`, drawn by the review: only what a server can send goes in: ids and texts, no function and no figure (its rows are mapped
+  // down to where each sits, its number, its kind and its name; the row's title and figure line are server markup above it).
+  const INPUTS_FORM = 'src/components/features/estimate-workspace/part-form.tsx';
   // SCR-06's head draws Copy path with `FolderPath` (`copyOnly`, AQP-452), the shared client button the queue and SCR-05 already carry: it is in the route's chunks already and holds no figure.
   const FOLDER_PATH_BUTTON = 'src/components/shared/folder-path.tsx';
   const PAGE = 'src/app/(portal)/estimates/[code]/page.tsx';
@@ -141,6 +144,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     clientFiles.delete(RESTORE_BUTTON);
     clientFiles.delete(REMOVE_BUTTON);
     clientFiles.delete(CUSTOMER_BUTTON);
+    clientFiles.delete(INPUTS_FORM);
     clientFiles.delete(FOLDER_PATH_BUTTON);
     const importsOf = (text: string): string[] => [...text.matchAll(/from '(@\/[^']+|\.{1,2}\/[^']+)'/g)].map((match) => match[1] ?? '');
     const resolve = (from: string, specifier: string): string[] => {
@@ -180,8 +184,8 @@ describe('AC-5: no review code reaches the Engineer', () => {
 
   it('STORY-06.06 ADR-016: the Approve button and its dialog are the only client files of their folder, are imported by the review alone, import no figure, schema, service or repository, and the dialog is fetched on the first press', () => {
     const folder = ALL.filter((file) => file.path.startsWith(APPROVE_FOLDER));
-    expect(folder.map((file) => file.path).sort()).toEqual([APPROVE_BUTTON, `${APPROVE_FOLDER}approve-dialog.tsx`, `${APPROVE_FOLDER}approve-ids.ts`, `${APPROVE_FOLDER}approve-texts.ts`]);
-    for (const name of ['approve-ids.ts', 'approve-texts.ts']) expect(folder.find((file) => file.path.endsWith(name))?.text ?? '').not.toMatch(/use client/);
+    expect(folder.map((file) => file.path).sort()).toEqual([APPROVE_BUTTON, `${APPROVE_FOLDER}approve-dialog.tsx`, `${APPROVE_FOLDER}approve-ids.ts`, `${APPROVE_FOLDER}approve-summary.tsx`, `${APPROVE_FOLDER}approve-texts.ts`]);
+    for (const name of ['approve-ids.ts', 'approve-summary.tsx', 'approve-texts.ts']) expect(folder.find((file) => file.path.endsWith(name))?.text ?? '').not.toMatch(/use client/);
     const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
     const button = strip(folder.find((file) => file.path === APPROVE_BUTTON)?.text ?? '');
     const dialog = strip(folder.find((file) => file.path.endsWith('approve-dialog.tsx'))?.text ?? '');
@@ -192,7 +196,7 @@ describe('AC-5: no review code reaches the Engineer', () => {
     // The dialog is a bare dynamic `import()` behind a type-only import, so the page's first load does not carry it; the words and the request code belong to the dialog.
     expect(button).toMatch(/import\('\.\/approve-dialog'\)/);
     expect(button).toMatch(/^import type \{ ApproveDialogProps \} from '\.\/approve-dialog';/m);
-    expect(button).not.toMatch(/^import (?!type).*approve-(dialog|texts)/m);
+    expect(button).not.toMatch(/^import (?!type).*approve-(dialog|texts|summary)/m);
     expect(button).not.toMatch(/approve-client/);
     expect(dialog).toMatch(/@\/lib\/estimates\/approve-client/);
     const importers = ALL.filter((file) => !file.path.startsWith(APPROVE_FOLDER) && /estimate-approve\//.test(file.text)).map((file) => file.path);
@@ -370,6 +374,16 @@ describe('AC-5: no review code reaches the Engineer', () => {
     expect(dialog).toMatch(/@\/lib\/estimates\/estimates-client/);
     const importers = ALL.filter((file) => !file.path.startsWith(CUSTOMER_FOLDER) && /estimate-customer\//.test(file.text)).map((file) => file.path);
     expect(importers).toEqual(['src/components/features/estimate-review/estimate-review.tsx']);
+  });
+
+  it('AQP-488 ADR-016 (QLT-800-01): the part form the review draws, and the files it reads its look from, import no figure, schema, service, repository or review code', () => {
+    const strip = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const folder = 'src/components/features/estimate-workspace/';
+    for (const path of [INPUTS_FORM, `${folder}part-fields.tsx`, `${folder}review-look.ts`, `${folder}review-look-texts.ts`]) {
+      const code = strip(ALL.find((file) => file.path === path)?.text ?? '');
+      expect(code.length, path).toBeGreaterThan(20);
+      expect(code, path).not.toMatch(/schemas\/|estimate-review\/|@\/server\/|calculation-|row-outputs|product-totals|figure-state|costs/);
+    }
   });
 
   it('AQP-452 ADR-016: the Copy path button SCR-06 shares with the queue and SCR-05 imports no figure, schema, service or repository, and fetches nothing', () => {

@@ -30,7 +30,7 @@ export const PUT = withRoute({
   params: nodeParamsSchema,
   body: moveNodeBodySchema,
   output: partsTreeSchema,
-  handler: async ({ user, params, body }) => ({ nodes: [...(await getEstimateService().moveNode({ id: user.id, role: user.role }, params.id, { nodeId: params.nodeId, ...body }))] }),
+  handler: async ({ user, requestId, params, body }) => ({ nodes: [...(await getEstimateService().moveNode({ id: user.id, role: user.role }, params.id, { nodeId: params.nodeId, ...body }, { actorId: user.id, actorLabel: user.name, requestId }))] }),
 });
 
 /**
@@ -44,5 +44,5 @@ export const DELETE = withRoute({
   params: nodeParamsSchema,
   query: deleteNodeQuerySchema,
   output: partsTreeSchema,
-  handler: async ({ user, params, query }) => ({ nodes: [...(await getEstimateService().deleteNode({ id: user.id, role: user.role }, params.id, { nodeId: params.nodeId, ...query }))] }),
+  handler: async ({ user, requestId, params, query }) => ({ nodes: [...(await getEstimateService().deleteNode({ id: user.id, role: user.role }, params.id, { nodeId: params.nodeId, ...query }, { actorId: user.id, actorLabel: user.name, requestId }))] }),
 });

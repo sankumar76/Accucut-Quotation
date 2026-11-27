@@ -12,6 +12,7 @@ import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import { EARLY_INTENT_ATTRIBUTE } from '@/lib/ui/early-intent';
 
 import { TREE_HIDE } from './estimate-texts';
+import { focusFormTitleWhenPresent } from './focus-field';
 import type { PartsTreeDrawerProps } from './parts-tree-drawer';
 import { TreeButtonLabel } from './tree-button-label';
 import { TreePanel } from './tree-panel';
@@ -55,13 +56,13 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds, resize, 
   const [panelOpen, setPanelOpen] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerButton = useRef<HTMLButtonElement>(null);
-  // Enter on a part in the drawer closes it, and the focus then goes to the form, not back to the "Parts tree" button.
-  const focusFormOnClose = useRef(false);
+  // Enter or a tap on a part in the drawer closes it, and the focus then goes to the form, not back to the "Parts tree" button: to its first field after Enter, to the form's title after a tap (no keyboard for a finger).
+  const focusFormOnClose = useRef<{ readonly id: string; readonly byKeyboard: boolean } | null>(null);
   const first = useFirstOpen<PartsTreeDrawerProps>({ id: 'parts-tree', load: loadDrawer, onOpen: () => setDrawerOpen(true) });
-  const open = (id: string): void => {
+  const open = (id: string, byKeyboard: boolean): void => {
     tree.select(id);
     if (viewport === 'phone') {
-      focusFormOnClose.current = true;
+      focusFormOnClose.current = { id, byKeyboard };
       setDrawerOpen(false);
     } else {
       onOpenPart();
@@ -71,7 +72,7 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds, resize, 
   // The button's place is held from the first paint at 1024 px and wider (the server draws the desktop shape): a box, then the button in it once the form has shown (DL-391 (1)).
   const headAction = viewport === 'desktop' ? <LazyTreeWidthMenu resize={resize} announce={tree.announce} ready={resizable && controlsReady} /> : undefined;
   const panel = <TreePanel tree={tree} editable={editable} onOpen={open} {...(missingIds === undefined ? {} : { missingIds })} {...(headAction === undefined ? {} : { headAction })} />;
-  const drawerPanel = <TreePanel tree={tree} editable={editable} onOpen={open} framed={false} {...(missingIds === undefined ? {} : { missingIds })} />;
+  const drawerPanel = <TreePanel tree={tree} editable={editable} onOpen={open} opensOnPress framed={false} {...(missingIds === undefined ? {} : { missingIds })} />;
   const { selected } = tree;
   const label = <TreeButtonLabel slNo={selected?.slNo ?? null} name={selected?.label ?? ''} kindLabel={selected === null ? '' : nodeKindLabel(selected, tree.nodes ?? [])} />;
 
@@ -102,9 +103,11 @@ export function PartsTreeArea({ tree, editable, onOpenPart, missingIds, resize, 
             onCloseAutoFocus={(event) => {
               // Radix has no trigger to return focus to, so the button gets it back here, unless a part was chosen: then the form takes it.
               event.preventDefault();
-              if (focusFormOnClose.current) {
-                focusFormOnClose.current = false;
-                onOpenPart();
+              const opened = focusFormOnClose.current;
+              if (opened !== null) {
+                focusFormOnClose.current = null;
+                if (opened.byKeyboard) onOpenPart();
+                else focusFormTitleWhenPresent(opened.id);
               } else {
                 drawerButton.current?.focus();
               }

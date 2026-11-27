@@ -13,8 +13,8 @@ export const POST = withRoute({
   params: estimateIdParamsSchema,
   body: addNodeBodySchema,
   output: addedNodeSchema,
-  handler: async ({ user, params, body }) => {
-    const added = await getEstimateService().addPart({ id: user.id, role: user.role }, params.id, body);
+  handler: async ({ user, requestId, params, body }) => {
+    const added = await getEstimateService().addPart({ id: user.id, role: user.role }, params.id, body, { actorId: user.id, actorLabel: user.name, requestId });
     return { nodeId: added.nodeId, nodes: [...added.nodes] };
   },
 });

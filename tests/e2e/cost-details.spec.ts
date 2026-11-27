@@ -49,10 +49,8 @@ test.beforeAll(async ({ browser }, testInfo) => {
 });
 
 const PHONE_MAX = 767;
-const DESKTOP_MIN = 1280;
 const STAGE_TITLES = ['1 · Weights & Areas', '2 · Material Cost', '3 · Process Costs', '4 · Sub Total', '5 · Rejection, Overheads & Logistics', '6 · Pricing'];
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
-const isWide = (page: Page): boolean => (page.viewportSize()?.width ?? 0) >= DESKTOP_MIN;
 const stage = (page: Page, number: number) => page.locator(`details[data-stage="${number}"]`);
 
 /**
@@ -220,6 +218,17 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     await expect(page.getByRole('main').getByText('This row, on screen and in the Excel row')).toBeVisible();
     // The parts tree column: a link for each row to its own cost details, the open row marked, names and kinds and no figure; from 1024 px it is a column of the tree's width.
     const tree = page.getByRole('navigation', { name: 'Parts tree' });
+    if ((page.viewportSize()?.width ?? 0) < 1024) {
+      // Below 1024 px (AQP-491, DEF-137; ruling scr07-layout L7-1, L7-2): the panel is before the row heading, closed, and says the open row in its summary; opening it lists the rows.
+      const panel = page.locator('[data-cost-tree]');
+      const [treeTop, headingTop] = await Promise.all([panel.boundingBox(), page.getByText('Cost details for one row').boundingBox()]);
+      expect(treeTop?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(headingTop?.y ?? 0);
+      await expect(panel).not.toHaveAttribute('open', '');
+      await expect(panel.locator('summary')).toHaveText(/^Parts tree · \d+(\.\d+)* /);
+      await panel.locator('summary').click();
+      await expect(panel).toHaveAttribute('open', '');
+      expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    }
     await expect(tree.getByRole('link').first()).toHaveAttribute('aria-current', 'page');
     await expect(tree.locator('[aria-current="page"]')).toHaveCount(1);
     // No figure of any row: the text of the tree without its Sl. No. cells holds no number with decimals (a Sl. No. such as 1.10 is taken out first).
@@ -233,11 +242,22 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     if ((page.viewportSize()?.width ?? 0) >= 1024) {
       const box = await page.locator('[data-cost-tree]').boundingBox();
       expect(Math.round(box?.width ?? 0)).toBe(Number.parseInt(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--tree-w')), 10));
-    } else {
-      // Below 1024 px the stages come first and the tree follows them (QLT-789-04; the design is silent on the phone's order).
-      const stagesTop = (await page.locator('details[data-stage]').first().boundingBox())?.y ?? Number.POSITIVE_INFINITY;
-      const treeTop = (await page.locator('[data-cost-tree]').boundingBox())?.y ?? 0;
-      expect(stagesTop).toBeLessThan(treeTop);
+      // AQP-491 (DEF-136, ruling scr07-layout L7-3, L7-4): two columns, the tree 320 px and the right column 710 px (+-2), the box above the first stage and as wide as the stage cards, no stage card under 600 px; the
+      // number and the name of a row have a visible gap.
+      expect(Math.round(box?.width ?? 0)).toBe(320);
+      const [column, boxCard, firstStage, lastStage] = await Promise.all([
+        page.locator('[data-cost-body]').boundingBox(),
+        page.locator('[data-slot="card"]').filter({ hasText: 'Unit Production Price' }).first().boundingBox(),
+        stage(page, 1).boundingBox(),
+        stage(page, 6).boundingBox(),
+      ]);
+      if (column === null || boxCard === null || firstStage === null || lastStage === null) throw new Error('a box is missing');
+      if ((page.viewportSize()?.width ?? 0) === 1366) expect(Math.abs(column.width - 710)).toBeLessThanOrEqual(2);
+      expect(boxCard.y + boxCard.height).toBeLessThanOrEqual(firstStage.y + 1);
+      expect(Math.abs(boxCard.width - firstStage.width)).toBeLessThanOrEqual(2);
+      expect(Math.min(firstStage.width, lastStage.width)).toBeGreaterThanOrEqual(600);
+      const gaps = await tree.getByRole('link').evaluateAll((links) => links.map((link) => (link.querySelector('[data-sl-no]')?.nextElementSibling?.getBoundingClientRect().left ?? 0) - (link.querySelector('[data-sl-no]')?.getBoundingClientRect().right ?? 0)));
+      for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(6);
     }
 
     await expect(page.locator('details[data-stage]')).toHaveCount(6);
@@ -252,6 +272,9 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
       await expect(summary.locator('[data-stage-number]')).toHaveText(String(number));
       const [badge, chevron, card] = await Promise.all([summary.locator('[data-stage-number]').boundingBox(), summary.locator('svg').boundingBox(), stage(page, number).boundingBox()]);
       if (badge === null || chevron === null || card === null) throw new Error('a box is missing');
+      // AQP-491 (DEF-114 reopened): the tile is the mock-up's 28 px square with the digit whole, not a sliver.
+      expect(Math.abs(badge.width - 28)).toBeLessThanOrEqual(1);
+      expect(Math.abs(badge.height - 28)).toBeLessThanOrEqual(1);
       expect(badge.x).toBeLessThan(chevron.x);
       expect(chevron.x + chevron.width).toBeLessThanOrEqual(card.x + card.width);
       // Tailwind 4 turns it with the `rotate` property, not `transform`.
@@ -303,6 +326,14 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     await expect(page).toHaveURL(new RegExp(`/estimates/${code}/costs/1$`));
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cost details');
     await expect(page.locator('details[data-stage]')).toHaveCount(6);
+    // AQP-496 (DEF-139, RO-18): the row's header has the way back to this row's inputs, in the Lead's view of the estimate page.
+    const viewInputs = page.getByRole('link', { name: 'View inputs of 1', exact: false });
+    await expect(viewInputs).toHaveText('View inputs');
+    await expect(viewInputs).toHaveAttribute('href', `/estimates/${code}?row=1#row-inputs`);
+    await viewInputs.click();
+    await expect(page).toHaveURL(new RegExp(`/estimates/${code}\\?row=1#row-inputs$`));
+    await expect(page.locator('#row-inputs')).toBeVisible();
+    await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
   });
 
   test('a part that is not in the estimate, and an address that is no Sl. No, are "not found"', async ({ page }, testInfo) => {
@@ -410,6 +441,12 @@ test.describe('AC-9: layout and accessibility', () => {
     await calculateAsEngineer(page, owner, code);
     await signInAsLead(page, testInfo);
     await openCostDetails(page, code);
+    // AQP-496 (RO-18): the link is in the row header at every width, and on a touch layout it is a control tall enough to press (NFR-017).
+    const viewInputs = page.getByRole('link', { name: /^View inputs of 1/ });
+    await expect(viewInputs).toBeVisible();
+    if (!(await page.evaluate(() => window.matchMedia('(min-width: 1024px) and (pointer: fine)').matches))) {
+      expect((await viewInputs.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
 
     // The script of the phone's accordion runs after load; the assertions wait for it.
     if (isPhone(page)) {
@@ -419,15 +456,14 @@ test.describe('AC-9: layout and accessibility', () => {
       for (const number of [1, 2, 3, 4, 5, 6]) await expect(stage(page, number)).toHaveAttribute('open', '');
     }
 
-    // Layout: the box of the row and the stages are one column below 1280 px and sit side by side from 1280 px.
+    // Layout: the box of the row and the stages are one column at every width, the box above the stages (AQP-491, DEF-136 ruling: they no longer sit side by side from 1280 px; the case keeps its name).
     const box = page.locator('[data-slot="card"]').filter({ hasText: 'Unit Production Price' }).first();
     const boxRect = await box.boundingBox();
     const stagesRect = await stage(page, 1).boundingBox();
     expect(boxRect).not.toBeNull();
     expect(stagesRect).not.toBeNull();
     if (boxRect !== null && stagesRect !== null) {
-      if (isWide(page)) expect(stagesRect.x).toBeGreaterThanOrEqual(boxRect.x + boxRect.width - 1);
-      else expect(stagesRect.y).toBeGreaterThanOrEqual(boxRect.y + boxRect.height - 1);
+      expect(stagesRect.y).toBeGreaterThanOrEqual(boxRect.y + boxRect.height - 1);
     }
 
     // The keyboard: a summary takes focus, Enter folds the panel and Enter opens it again.

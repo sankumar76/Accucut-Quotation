@@ -5,6 +5,8 @@ import { ConflictError } from '@/lib/errors';
 import type { EstimateStatus } from '@/server/repositories/task-repository';
 import { createEstimateService, type EstimateViewer } from '@/server/services/estimate-service';
 
+import { withAuditContext } from '../../support/customer-change';
+import { createAuditSink } from '../../support/fake-audit-sink';
 import { defined } from '../../support/defined';
 import { inputsDependencies } from '../../support/estimate-inputs-deps';
 import { createFakeEstimateWorld, type FakeEstimate } from '../../support/fake-estimates';
@@ -59,7 +61,8 @@ const estimate = (status: EstimateStatus, overrides: Partial<FakeEstimate> = {})
 function setUp(initial: FakeEstimate) {
   const world = createFakeEstimateWorld(() => [], [initial], [{ id: PART, estimateId: ESTIMATE, parentId: null, sortIndex: 0, revision: 1, inputs: { [DELETED_FIELD.id]: 'PN-4711' } }]);
   const asked: string[] = [];
-  const service = createEstimateService({
+  const service = withAuditContext(createEstimateService({
+    audit: createAuditSink().service,
     estimates: world.repository,
     nodes: world.nodeRepository,
     images: world.imageRepository,
@@ -71,7 +74,7 @@ function setUp(initial: FakeEstimate) {
       asked.push(id);
       return Promise.resolve(defined(DOCUMENTS[id], `no invented version ${id}`));
     },
-  });
+  }));
   return { world, service, asked };
 }
 

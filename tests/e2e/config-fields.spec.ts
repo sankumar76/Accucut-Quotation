@@ -56,7 +56,22 @@ test.describe('the Admin', () => {
     }
     await expect(rowOf(page, 'AL')).not.toContainText('System');
     await expect(rowOf(page, 'AL').getByRole('button', { name: /^Delete/ })).toBeVisible();
-    await expect(rowOf(page, 'F')).toContainText('No formula');
+    // AQP-473 (DEF-118; ux-expert, 2026-11-26): an auto field says where its value comes from, and any other auto field says "No formula".
+    await expect(rowOf(page, 'F')).toContainText('Material-Considered for E');
+    await expect(rowOf(page, 'A')).toContainText('From tree position');
+    await expect(rowOf(page, 'I')).toContainText('Material-Price-per-kg for E');
+
+    // The head of the page: the description of the mock-up, the Admin's two buttons and the note of the configuration, each as drawn.
+    const main = page.getByRole('main');
+    await expect(main).toContainText('The worksheet as a column list. Letters follow the column order and update when you insert or delete a field.');
+    await expect(main.getByRole('link', { name: 'Checkpoints', exact: true })).toHaveAttribute('href', '/config/checkpoints');
+    await expect(main.getByRole('link', { name: 'Insert field', exact: true })).toHaveAttribute('href', '/config/fields/new');
+    await expect(main.getByText(/^Configuration version \d+\. \d+ columns, A to [A-Z]+\.$/)).toBeVisible();
+    // The kind is a badge with its word; the section is its name only; the row actions are icon buttons that keep their names.
+    await expect(rowOf(page, 'B')).toContainText('Input');
+    if (isTabletOrWider(page) && (page.viewportSize()?.width ?? 0) >= 1024) await expect(rowOf(page, 'B')).toContainText('Part Details');
+    await expect(rowOf(page, 'B')).not.toContainText('Section 1:');
+    await expect(rowOf(page, 'AL').getByRole('link', { name: /^Insert after AL / })).toBeVisible();
 
     // BH and BI are outputs, not auto fields (UX-26).
     await expect(rowOf(page, 'BH')).toContainText('Output');

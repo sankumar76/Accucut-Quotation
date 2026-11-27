@@ -32,7 +32,7 @@ const { default: EstimatePage } = await import('@/app/(portal)/estimates/[code]/
 
 const CODE = canaryTaskCodeFor(harness.targetId);
 const estimate = () => defined(harness.estimateWorld.estimates[0]);
-const open = async (code: string): Promise<string> => renderToStaticMarkup(await EstimatePage({ params: Promise.resolve({ code }) }));
+const open = async (code: string): Promise<string> => renderToStaticMarkup(await EstimatePage({ params: Promise.resolve({ code }), searchParams: Promise.resolve({}) }));
 
 beforeAll(holdSessionClock);
 afterAll(releaseSessionClock);

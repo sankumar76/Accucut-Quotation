@@ -37,7 +37,9 @@ const WIRED_APPROVAL: ReadonlyArray<AuditEventName> = ['approval.approved', 'app
 const WIRED_CONFIG: ReadonlyArray<AuditEventName> = ['config.formula_changed', 'config.field_inserted', 'config.field_deleted', 'config.reverted'];
 /** CR-01 item 6: the customer of an estimate changed (registry order puts it before the reassign); STORY-04.07: a task given to another Engineer, a new deadline, or both. */
 const WIRED_TASK: ReadonlyArray<AuditEventName> = ['estimate.customer_changed', 'estimate.quoted', 'estimate.ignored', 'estimate.restored', 'task.reassigned'];
-const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CONFIG, ...WIRED_CALCULATION, ...WIRED_TASK];
+/** DEF-131 stage 2: a Lead's or an Admin's change of inputs (and the Part Model picture) and of the tree. Registry order puts them last. */
+const WIRED_INPUT: ReadonlyArray<AuditEventName> = ['estimate.inputs_changed', 'estimate.part_added', 'estimate.part_moved', 'estimate.part_deleted'];
+const WIRED: ReadonlyArray<AuditEventName> = [...WIRED_USER, ...WIRED_MASTER, ...WIRED_APPROVAL, ...WIRED_CONFIG, ...WIRED_CALCULATION, ...WIRED_TASK, ...WIRED_INPUT];
 /** With STORY-06.13 no event is declared and left unwired. */
 const RESERVED: ReadonlyArray<AuditEventName> = [];
 
@@ -100,6 +102,7 @@ describe('AC-3: every event has a subject and a category the filter offers', () 
       'User change',
       'Task change',
       'Configuration change',
+      'Input change',
     ]);
   });
 });

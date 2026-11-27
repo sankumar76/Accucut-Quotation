@@ -8,7 +8,7 @@ import { detectImageType, holdsScriptMarker } from '@/lib/images/signature';
 
 import vitestConfig from '../../vitest.config';
 import perfConfig from '../../vitest.perf.config';
-import { incompressiblePicture, PERF_PICTURE_BYTES } from '../support/builders/export-pictures';
+import { incompressiblePicture, PERF_PICTURE_BYTES, withoutMarkupOpenings } from '../support/builders/export-pictures';
 import { watchPeakMemory } from '../support/process-memory';
 
 /**
@@ -25,6 +25,25 @@ describe('incompressiblePicture (AC-1, AC-2: 199 KB pictures that pass the signa
     expect(bytes.byteLength).toBe(PERF_PICTURE_BYTES);
     expect(detectImageType(bytes)).toBe('image/png');
     expect(holdsScriptMarker(bytes)).toBe(false);
+  });
+
+  it('can never hold a script marker (issue 821): a filler made of the markers themselves is written without them, and the check then reads the picture as a PNG', () => {
+    const bytes = incompressiblePicture(0);
+    const marker = new TextEncoder().encode('<script><svg><html><?xml');
+    for (let at = 100; at + marker.length < bytes.length - 100; at += marker.length + 7) bytes.set(marker, at);
+    expect(holdsScriptMarker(bytes)).toBe(true);
+    withoutMarkupOpenings(bytes, 60, bytes.length - 80);
+    expect(holdsScriptMarker(bytes)).toBe(false);
+    expect(detectImageType(bytes)).toBe('image/png');
+    expect(bytes.includes(0x3c)).toBe(false);
+  });
+
+  it('has no `<` at all, over many pictures, and the header and the closing chunk are as they were', () => {
+    for (let index = 0; index < 40; index += 1) {
+      const bytes = incompressiblePicture(index, 20_000);
+      expect(bytes.subarray(60, bytes.length - 80).includes(0x3c), `picture ${index}`).toBe(false);
+      expect(detectImageType(bytes)).toBe('image/png');
+    }
   });
 
   it('does not compress: deflating it saves less than half a percent, where a padded picture would shrink to almost nothing', () => {

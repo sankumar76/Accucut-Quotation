@@ -15,9 +15,25 @@ export const PERF_PICTURE_BYTES = 199 * 1024;
 const KEEP_AT_START = 60;
 const KEEP_AT_END = 80;
 
-/** One picture of `size` bytes. The `index` only varies the dimensions the header names, so no two pictures are the same shape; the filler is different every time. */
+const LESS_THAN = 0x3c;
+const EQUALS = 0x3d;
+
+/**
+ * Writes every `<` of `bytes[from, to)` as `=`. The portal's content check refuses a file that holds the opening of a page, a script or an SVG anywhere in it (`<script`, `<svg`, `<html`...), and random
+ * filler holds one by chance (about 1 picture in 2,500: issue 821). Without a `<` there is no such opening, and the filler stays random (one byte value in 256 is taken over by another), so it does not compress.
+ */
+export function withoutMarkupOpenings(bytes: Uint8Array, from: number, to: number): void {
+  for (let at = from; at < to; at += 1) if (bytes[at] === LESS_THAN) bytes[at] = EQUALS;
+}
+
+/**
+ * One picture of `size` bytes. The `index` only varies the dimensions the header names, so no two pictures are the same shape; the filler is different every time, and it never holds a script marker, so the
+ * server's check accepts the picture every time.
+ */
 export function incompressiblePicture(index: number, size: number = PERF_PICTURE_BYTES): Uint8Array {
   const bytes = new Uint8Array(pngOfDimensions(800 + (index % 200), 600, size));
-  randomFillSync(bytes, KEEP_AT_START, bytes.length - KEEP_AT_START - KEEP_AT_END);
+  const end = bytes.length - KEEP_AT_END;
+  randomFillSync(bytes, KEEP_AT_START, end - KEEP_AT_START);
+  withoutMarkupOpenings(bytes, KEEP_AT_START, end);
   return bytes;
 }
