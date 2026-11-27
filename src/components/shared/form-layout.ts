@@ -52,6 +52,12 @@ export const PICTURE_ZONE_HEIGHT = 'h-[146px] md:h-[130px] lg:h-[114px]';
  */
 export const PICTURE_ZONE_HEIGHT_UNHINTED = 'h-[146px] md:h-[114px]';
 
+/**
+ * The picture's box when the page cannot change it (Approved, Quoted, Ignored; PF-17): the control then draws only the thumbnail, 48 px, in a box with 12 px of padding and a 1 px border on each side, at every width. Written from
+ * the tokens that build it, not as a number (`--s-7` is the thumbnail, `--s-3` the padding).
+ */
+export const PICTURE_ZONE_HEIGHT_READONLY = 'h-[calc(var(--s-7)+2*var(--s-3)+2px)]';
+
 /** A control's height: 44 px, 36 px from 1024 px with a fine pointer (`Input`, `NativeSelect`), and a multi-line box's least height (`Textarea`). `part-form-ghost.test.ts` reads those three components for the same strings. */
 export const CONTROL_HEIGHT = 'h-(--control-h) compact-fine:h-(--compact-field-h)';
 export const TEXTAREA_HEIGHT = 'min-h-(--textarea-min-h) compact:min-h-(--compact-textarea-min-h)';

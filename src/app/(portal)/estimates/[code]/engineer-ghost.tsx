@@ -18,7 +18,8 @@ import { formBody } from '@/server/views/part-form-bodies';
 export async function engineerGhost(estimates: Pick<EstimateService, 'getForm'>, viewer: EstimateViewer, estimateId: string, state: { readonly status: EstimateStatus; readonly ignored: boolean }): Promise<ReactNode> {
   try {
     const form = formBody(await estimates.getForm(viewer, estimateId));
-    return ghostOf({ form, notice: canEditInputs(state, 'ENGINEER') ? undefined : FORM_LOCKED, head: 'engineer' });
+    const editable = canEditInputs(state, 'ENGINEER');
+    return ghostOf({ form, notice: editable ? undefined : FORM_LOCKED, head: 'engineer', editable });
   } catch (error) {
     logger.warn({ errorName: error instanceof Error ? error.name : 'unknown', errorCode: isAppError(error) ? error.code : undefined }, 'The form could not be read for the Engineer\'s loading ghost; the page draws the bars instead.');
     return undefined;

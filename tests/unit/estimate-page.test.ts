@@ -303,10 +303,10 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
       const allowed = [
         FORM_LOADING,
         SURFACE_HINT,
-        // Each card's count, in its invisible words (the block is as wide as the words the form will show): the counts of the definition's defaults, from the form's own rule.
+        // Each card's count, in its invisible words (the block is as wide as the words the form will show): "0 of" the card's total on the Engineer's page (PF ruling), from the form's own rule.
         ...shownSections(form.sections, {}).flatMap((section) => {
           const counts = sectionProgress(section, {}, {});
-          return counts.total === 0 ? [] : [`${String(counts.complete)} of ${String(counts.total)}`];
+          return counts.total === 0 ? [] : [`0 of ${String(counts.total)}`];
         }),
         ...form.sections.flatMap((section) => [section.name, section.columnRange, sectionLinkText(section.number, section.shortName), ...section.fields.flatMap((field) => (field.hint === null ? [] : [field.hint]))]),
       ];

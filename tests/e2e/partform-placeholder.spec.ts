@@ -8,6 +8,7 @@ import { assignedEstimate } from './support/assigned-estimate';
 import { changePrivateMaterial, E2E_ENGINEER, insertPrivateMaterial } from './support/auth';
 import { signInAs } from './support/calculated-estimate';
 import { holdFieldsChunk } from './support/hold-fields-chunk';
+import { DEVELOPMENT_URL } from './support/servers';
 
 /**
  * DEF-145 (DL-465; Jira AQP-502): **the part form's placeholder holds the form's space.** The review of a Lead or an Admin and the Engineer's workspace draw the same `PartForm`; until its fields' code has
@@ -128,6 +129,32 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
       });
     });
   }
+
+  test("PF-17: the Lead's review of an Approved estimate (read-only, the picture box is the thumbnail alone): #review-actions moves no more than 8 px at the swap and once the picture control is here", async ({ page }, testInfo) => {
+    // Approved through the API by the set-up Lead (a price that differs is an override, which needs no reason): no person is made (DL-422).
+    const { code, estimateId } = await assignedEstimate(page, testInfo, true);
+    const headers = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
+    const costs = await page.request.get(`/api/v1/estimates/${estimateId}/costs`);
+    expect(costs.status(), "the Lead's read of the costs").toBe(200);
+    const { calculationId } = (await costs.json()) as { calculationId: string };
+    const approved = await page.request.post(`/api/v1/estimates/${estimateId}/approve`, { headers, data: { calculationId, price: '1.00' } });
+    expect(approved.status(), 'the approval').toBe(200);
+
+    const chunk = await holdFieldsChunk(page);
+    await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
+    await placeholderIsShown(page);
+    await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
+    const actions = page.locator('#review-actions');
+    await expect(actions).toBeVisible();
+    const before = await documentTop(actions);
+    chunk.release();
+    await formIsDrawn(page);
+    const after = await documentTop(actions);
+    expect(Math.abs(after - before), `#review-actions moved from ${String(before)} to ${String(after)} px at the swap`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
+    await pictureControlHere(page);
+    const loaded = await documentTop(actions);
+    expect(Math.abs(loaded - before), `#review-actions moved from ${String(before)} to ${String(loaded)} px once the picture control had arrived`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
+  });
 
   test("the rates-changed notice's own link, focused and pressed with Enter before the swap, ends with Recalculate on the screen (the keyboard path of DL-465 (3) (i))", async ({ page }, testInfo) => {
     // The state of rates-changed.spec.ts: calculated on a material of the test's own whose price changed after. No person is made (the set-up Lead and Engineer); the material is not a person.

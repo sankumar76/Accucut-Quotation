@@ -162,9 +162,28 @@ describe('PartFormGhost (DEF-145)', () => {
     expect(plain).not.toContain(layout.PICTURE_ZONE_HEIGHT);
   });
 
+  it('PF-17: a page that cannot change the part draws the picture box as the thumbnail alone, whatever the hint; one that can draws the prompt and the button\'s box', () => {
+    const withHint: FormView = { ...FORM, sections: FORM.sections.map((section) => ({ ...section, fields: section.fields.map((entry) => (entry.rule.type === 'picture' ? { ...entry, hint: 'PNG or JPG, up to 200 KB.' } : entry)) })) };
+    for (const form of [FORM, withHint]) {
+      const locked = renderToStaticMarkup(createElement(PartFormGhost, { form, head: 'lead', editable: false })).replaceAll('&amp;', '&');
+      expect(locked).toContain(layout.PICTURE_ZONE_HEIGHT_READONLY);
+      expect(locked).not.toContain(layout.PICTURE_ZONE_HEIGHT_UNHINTED);
+      expect(locked).not.toContain(layout.PICTURE_ZONE_HEIGHT);
+    }
+    expect(layout.PICTURE_ZONE_HEIGHT_READONLY).toBe('h-[calc(var(--s-7)+2*var(--s-3)+2px)]');
+  });
+
+  it('the count block: the Engineer ghost says 0 of the total, the Lead ghost the count of the part (invisible words, no id)', () => {
+    const counted: FormView = { ...FORM, sections: FORM.sections.map((section) => ({ ...section, fields: section.fields.map((entry) => ({ ...entry, required: true })) })) };
+    const engineer = renderToStaticMarkup(createElement(PartFormGhost, { form: counted, head: 'engineer' }));
+    expect(engineer).toContain('<span class="invisible">0 of ');
+    expect(renderToStaticMarkup(createElement(PartFormGhost, { form: counted, head: 'lead', texts: { a: 'x' } }))).toContain('<span class="invisible">1 of ');
+    expect(engineer).not.toMatch(/ id=/);
+  });
+
   it('ghostOf: draws from the form\'s own readers, and nothing for a body the form would refuse (the bars stand in)', () => {
-    expect(ghostOf({ form: { sections: 'x', lastSavedAt: null }, head: 'engineer' })).toBeUndefined();
-    expect(ghostOf({ form: FORM, head: 'engineer' })).toBeDefined();
+    expect(ghostOf({ form: { sections: 'x', lastSavedAt: null }, head: 'engineer', editable: true })).toBeUndefined();
+    expect(ghostOf({ form: FORM, head: 'engineer', editable: true })).toBeDefined();
   });
 });
 

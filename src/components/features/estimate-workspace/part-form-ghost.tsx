@@ -12,6 +12,7 @@ import {
   HEAD_LINES,
   HINT_TEXT,
   PICTURE_ZONE_HEIGHT,
+  PICTURE_ZONE_HEIGHT_READONLY,
   PICTURE_ZONE_HEIGHT_UNHINTED,
   PROGRESS_BAR_WIDTH,
   PROGRESS_ROW,
@@ -57,6 +58,8 @@ export interface PartFormGhostProps {
   readonly head: 'lead' | 'engineer';
   /** The second ghost for the same part (the fields' own wait): it says nothing, the first one has said it (PF-9.2). */
   readonly silent?: boolean;
+  /** The page can change the part (`canEditInputs`): the picture's box is the editable control's, or, when it cannot, the thumbnail's alone (PF-17). */
+  readonly editable?: boolean;
 }
 
 type CardShare = CSSProperties & Record<'--n', number>;
@@ -70,10 +73,10 @@ const Grey = ({ className, children }: { readonly className: string; readonly ch
 );
 
 /** The control a field will have, as a grey block of the control's own height (PF-3); the picture, a multi-line box and the surface treatments are the ones that take the whole row or more. */
-function ghostControl(field: FormField, texts: Readonly<Record<string, string>>): { readonly control: ReactNode; readonly marker: 'wide' | 'picture' | null } {
+function ghostControl(field: FormField, texts: Readonly<Record<string, string>>, editable: boolean): { readonly control: ReactNode; readonly marker: 'wide' | 'picture' | null } {
   switch (field.rule.type) {
     case 'picture':
-      return { control: <Grey className={field.hint === null ? PICTURE_ZONE_HEIGHT_UNHINTED : PICTURE_ZONE_HEIGHT} />, marker: 'picture' };
+      return { control: <Grey className={!editable ? PICTURE_ZONE_HEIGHT_READONLY : field.hint === null ? PICTURE_ZONE_HEIGHT_UNHINTED : PICTURE_ZONE_HEIGHT} />, marker: 'picture' };
     case 'treatment': {
       // The "Other" box under the list shows only when "Other" is the part's choice (`TreatmentSelect`).
       const chosen = decodeTreatment(texts[field.id] ?? '');
@@ -86,10 +89,10 @@ function ghostControl(field: FormField, texts: Readonly<Record<string, string>>)
   }
 }
 
-function GhostField({ field: own, review, texts }: { readonly field: FormField; readonly review: boolean; readonly texts: Readonly<Record<string, string>> }) {
+function GhostField({ field: own, review, texts, editable }: { readonly field: FormField; readonly review: boolean; readonly texts: Readonly<Record<string, string>>; readonly editable: boolean }) {
   // The review's form shows a field as `reviewField` says (no hint but the quantity's, `review-look.ts`), so its ghost does: the same lines, the same height.
   const field = review ? reviewField(own) : own;
-  const { control, marker } = ghostControl(field, texts);
+  const { control, marker } = ghostControl(field, texts, editable);
   return (
     <div {...(marker === 'wide' ? { 'data-ghost-wide': '' } : marker === 'picture' ? { 'data-ghost-picture': '' } : {})} className={FIELD_BOX}>
       <Grey className="h-s-5 w-1/2" />
@@ -114,7 +117,7 @@ function GhostTreatments({ flags, review, texts }: { readonly flags: ReadonlyArr
   );
 }
 
-function GhostCard({ section, review, texts }: { readonly section: FormSection; readonly review: boolean; readonly texts: Readonly<Record<string, string>> }) {
+function GhostCard({ section, review, texts, editable, head }: { readonly section: FormSection; readonly review: boolean; readonly texts: Readonly<Record<string, string>>; readonly editable: boolean; readonly head: 'lead' | 'engineer' }) {
   const share: CardShare = { '--n': sectionWeight(section) };
   const flags = section.fields.filter((field) => field.rule.type === 'flag');
   const counts = sectionProgress(section, texts, {});
@@ -130,20 +133,20 @@ function GhostCard({ section, review, texts }: { readonly section: FormSection; 
           // The card's count ("4 of 4"), as a grey block the width of its words: the header wraps by what it holds, so a block of the wrong width wraps it differently (360 px, DEF-145). The words are invisible and carry no value; the form shows the count, the ghost its place.
           <p className={COUNT_TEXT}>
             <Grey className="w-fit">
-              <span className="invisible">{`${String(counts.complete)} of ${String(counts.total)}`}</span>
+              <span className="invisible">{`${String(head === 'engineer' ? 0 : counts.complete)} of ${String(counts.total)}`}</span>
             </Grey>
           </p>
         )}
       </CardHeader>
       <CardContent {...NO_SLOT} className={FIELDS}>
         {flags.length > 0 ? <GhostTreatments flags={flags} review={review} texts={texts} /> : null}
-        {section.fields.map((field) => (field.rule.type === 'flag' ? null : <GhostField key={field.id} field={field} review={review} texts={texts} />))}
+        {section.fields.map((field) => (field.rule.type === 'flag' ? null : <GhostField key={field.id} field={field} review={review} texts={texts} editable={editable} />))}
       </CardContent>
     </Card>
   );
 }
 
-export function PartFormGhost({ form, texts = {}, notice, head, silent = false }: PartFormGhostProps) {
+export function PartFormGhost({ form, texts = {}, notice, head, silent = false, editable = true }: PartFormGhostProps) {
   // Every card the form draws, with the fields it shows for what is typed (the form draws a card whose fields are all hidden too): the same list `PartFields` walks.
   const sections = shownSections(form.sections, texts);
   return (
@@ -175,7 +178,7 @@ export function PartFormGhost({ form, texts = {}, notice, head, silent = false }
         </div>
         <div data-ghost-grid="" className={CARD_GRID}>
           {sections.map((section) => (
-            <GhostCard key={section.id} section={section} review={head === 'lead'} texts={texts} />
+            <GhostCard key={section.id} section={section} review={head === 'lead'} texts={texts} editable={editable} head={head} />
           ))}
         </div>
       </div>
@@ -187,9 +190,9 @@ export function PartFormGhost({ form, texts = {}, notice, head, silent = false }
  * The ghost for a page that holds the form's wire body (and, for the Lead, the part's): the same readers the form uses (`parseForm`, `parsePartInputs`), so a body the form would refuse draws no ghost and the three bars
  * stand in (DEF-145, PF-5.2: a field the definition hides for the part's saved values is not drawn; without a part's values, the defaults). A server-side helper: the page calls it, the shell never does.
  */
-export function ghostOf({ form, part, notice, head }: { readonly form: unknown; readonly part?: unknown; readonly notice?: string | undefined; readonly head: 'lead' | 'engineer' }): ReactNode {
+export function ghostOf({ form, part, notice, head, editable }: { readonly form: unknown; readonly part?: unknown; readonly notice?: string | undefined; readonly head: 'lead' | 'engineer'; readonly editable: boolean }): ReactNode {
   const view = parseForm(form);
   if (view === null) return undefined;
   const saved = part === undefined ? null : parsePartInputs(part);
-  return <PartFormGhost form={view} texts={saved === null ? undefined : saved.inputs} notice={notice} head={head} />;
+  return <PartFormGhost form={view} texts={saved === null ? undefined : saved.inputs} notice={notice} head={head} editable={editable} />;
 }

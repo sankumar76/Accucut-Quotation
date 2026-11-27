@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ComponentType } from 'react';
 
-import { PICTURE_ZONE_HEIGHT, PICTURE_ZONE_HEIGHT_UNHINTED } from '@/components/shared/form-layout';
+import { PICTURE_ZONE_HEIGHT, PICTURE_ZONE_HEIGHT_READONLY, PICTURE_ZONE_HEIGHT_UNHINTED } from '@/components/shared/form-layout';
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,12 +21,13 @@ type Loaded = { readonly Control: ComponentType<PartPictureProps> } | 'failed' |
  * apart as in the control. The box is 2 px of border, 24 px of padding and the text column, whose lines wrap with the width: the box is 146 px high below 768 px, 130 px from 768 px and 114 px from
  * 1024 px (read from the control at 360, 768 and 1366 px, `tests/e2e/estimate-picture.spec.ts`, which holds the two within 2 px at those widths). A width between those is as near as its row of text.
  */
-function PictureSkeleton({ hinted }: { readonly hinted: boolean }) {
-  // A field with no hint (the Lead's read-only view) has no hint line and a box 16 px lower from 768 px: the control's own sizes there (DEF-145, QLT-833-13).
+function PictureSkeleton({ hinted, editable }: { readonly hinted: boolean; readonly editable: boolean }) {
+  // The box follows what the control draws (DEF-145, PF-17, QLT-833-13): a page that cannot change it draws the thumbnail only, 74 px at every width; one that can draws the prompt and the button, 146 px below 768 px, 130 px from 768 px, 114 px from
+  // 1024 px, and, for a field with no hint (the Lead's review look), no hint line and a box 16 px lower from 768 px.
   return (
     <div className="flex min-w-0 flex-col gap-s-2">
       <Skeleton className="h-s-5 w-1/2" />
-      <Skeleton data-picture-zone="" className={hinted ? PICTURE_ZONE_HEIGHT : PICTURE_ZONE_HEIGHT_UNHINTED} />
+      <Skeleton data-picture-zone="" className={!editable ? PICTURE_ZONE_HEIGHT_READONLY : hinted ? PICTURE_ZONE_HEIGHT : PICTURE_ZONE_HEIGHT_UNHINTED} />
       {hinted ? <Skeleton className="h-s-4 w-2/3" /> : null}
     </div>
   );
@@ -56,7 +57,7 @@ export function PictureSlot(props: PartPictureProps) {
     };
   }, [attempt]);
 
-  if (loaded === null) return <PictureSkeleton hinted={props.field.hint !== null} />;
+  if (loaded === null) return <PictureSkeleton hinted={props.field.hint !== null} editable={props.editable} />;
   if (loaded === 'failed') {
     return (
       <Notice tone="danger" title={PICTURE_LOAD_FAILED_TITLE}>

@@ -171,7 +171,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
   }
   if (values.stored.status === 'loading') {
     // The second wait (the part's values are being read): the same ghost the page drew for the first one, from the definition this form holds, and silent because the first has said it (DEF-145, PF-1, PF-9.2).
-    return <PartFormGhost form={form} head={review === undefined ? 'engineer' : 'lead'} notice={review !== undefined ? review.notice : editable ? undefined : FORM_LOCKED} silent />;
+    return <PartFormGhost form={form} head={review === undefined ? 'engineer' : 'lead'} notice={review !== undefined ? review.notice : editable ? undefined : FORM_LOCKED} editable={editable} silent />;
   }
 
   const problem = values.problem;
