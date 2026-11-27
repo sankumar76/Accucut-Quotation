@@ -157,3 +157,33 @@ describe('DL-470 (1) (d): a page whose reads failed gives no seed, and then the 
     expect(network.materials).not.toHaveBeenCalled();
   });
 });
+
+describe('DEF-085: the seed\'s part values are for the first showing of that part only (the Engineer edits)', () => {
+  const OTHER = { id: '00000000-0000-4000-8000-0000000000e2', slNo: '2', revision: 1 };
+  const SEED: PartFormSeed = { estimateId: ESTIMATE, partId: PART.id, form: FORM_BODY, part: { id: PART.id }, materials: MATERIALS_BODY, treatments: { options: [] } };
+  const seedOfFields = (element: unknown): PartFormSeed | undefined => ofType(element, PartFields)[0]?.props?.['seed'] as PartFormSeed | undefined;
+
+  it('hands the fields the whole seed while the seeded part (or no part yet) is the one shown, and the seed without its part body once another part was shown, even when the first is chosen again', async () => {
+    const given: { -readonly [K in keyof PartFormProps]: PartFormProps[K] } = { ...props({ seed: SEED, part: null }) };
+    const view = rendered(given);
+    view.render();
+    await flush();
+    await flush();
+    // The tree has not answered: the form has no part; then the tree names the seeded part: the fields get the whole seed.
+    given.part = PART;
+    view.render();
+    await flush();
+    expect(seedOfFields(view.render())).toBe(SEED);
+    // Another part is chosen: its fields read their values from the server (the seed names the first part), and the first part's body is out of the seed from then on.
+    given.part = OTHER;
+    view.render();
+    expect(seedOfFields(view.render())?.part).toBeNull();
+    given.part = PART;
+    view.render();
+    const back = seedOfFields(view.render());
+    expect(back?.part, 'the first part, chosen again, is read from the server and not shown from the page\'s old snapshot').toBeNull();
+    expect(back?.partId).toBe(PART.id);
+    expect(back?.form).toBe(SEED.form);
+    expect(back?.materials).toBe(SEED.materials);
+  });
+});
