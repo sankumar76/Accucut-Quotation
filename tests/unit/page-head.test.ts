@@ -85,11 +85,11 @@ describe('the head of SCR-05 (DEF-095)', () => {
 
   it('draws the cards it is handed under the head, and keeps the customer and the folder cards as the page hands them (DEF-096 is another change)', () => {
     const withCards = renderToStaticMarkup(createElement(WorkspaceHeader, { view: VIEW, cards: createElement(TaskCards, { view: VIEW }) }));
-    expect(withCards).toContain('Customer Name');
+    expect(withCards).toContain('data-task-row="customer"');
     expect(withCards).toContain('Task folder');
-    expect(withCards.indexOf('Due 06 Nov')).toBeLessThan(withCards.indexOf('Customer Name'));
+    expect(withCards.indexOf('Due 06 Nov')).toBeLessThan(withCards.indexOf('data-task-row="customer"'));
     // The head alone draws no card: the cards are the server's element.
-    expect(html).not.toContain('Customer Name');
+    expect(html).not.toContain('data-task-row');
   });
 });
 
