@@ -32,3 +32,6 @@ On touch the toolbar buttons are `size="icon"` = `h-(--control-h) w-(--control-h
 
 ## Records
 Jira Bug AQP-500 and GitHub issue #828, created 2026-11-27 and cross-linked. DL-456, DL-458; test plan 0.3.131.
+
+## On master: `f9695aa7` (#829), the fix; push 1 of 2 (qa-engineer, 2026-11-27; test plan 0.3.136)
+`master` push `f9695aa7` (#829, AQP-500: DEF-143's fix, TS-8's 44 px check allows one layout unit and reads the computed size; CI **45975851824**, created 09:41:49Z, `success`; Windows package **45975851963** `success`): **`estimate-tree-names.spec.ts:267` passed attempt 1 at all three widths ([desktop] 10.6 s, [tablet] 787 ms, [mobile] 1.8 s); the computed-size check never read under 44 px (the DL-458 (4) product-only clause is not triggered).** The push is green but not clean for other reasons (a wave and the DEF-085 family). **Verification step: TS-8 at attempt 1 on two `master` pushes with the check present: push 1 of 2 met; QA closes DEF-143 on the second.**
