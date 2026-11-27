@@ -88,6 +88,17 @@ describe('the seed is the routes\' own answers (DL-455 2 (a))', () => {
     expect(parseForm({ sections: 'x', lastSavedAt: null })).toBeNull();
   });
 
+  it('the reader accepts every field of the real registry (PRF-827-06): a body it refused would make the form read from the server again, and the four reads would come back unseen', async () => {
+    const viewer = { id: harness.idOf.LEAD, role: 'LEAD' as const };
+    const bodies = defined(await readFormBodies(services(), viewer, estimate().id));
+    const sent = (bodies.form as { sections: ReadonlyArray<{ fields: ReadonlyArray<{ rule: { type: string } }> }> }).sections.flatMap((section) => section.fields);
+    const read = defined(parseForm(bodies.form)).sections.flatMap((section) => section.fields);
+    expect(read).toHaveLength(sent.length);
+    expect(sent.length).toBeGreaterThan(30);
+    expect(new Set(read.map((field) => field.rule.type))).toEqual(new Set(sent.map((field) => field.rule.type)));
+    expect(new Set(sent.map((field) => field.rule.type)).size).toBeGreaterThanOrEqual(5);
+  });
+
   it('carries no rate, cost or formula: the strict schemas refuse an added field in each of the four', () => {
     expect(() => formBody({ sections: [], lastSavedAt: null, rate: '1.00' } as never)).not.toThrow();
     expect(formBody({ sections: [], lastSavedAt: null, rate: '1.00' } as never)).toEqual({ sections: [], lastSavedAt: null });

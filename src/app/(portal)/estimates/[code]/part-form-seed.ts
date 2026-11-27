@@ -9,7 +9,7 @@ import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody } from '@
  * What the Lead's review page hands to the part form as props (DEF-141, DL-455): the four answers the form used to fetch from the browser after hydration, which cost four round trips on every Lead page, queued
  * ahead of the person's first press. They are read **from the same services, as the same viewer, and built by the same code as the routes they replace** (`part-form-bodies.ts`: the same strict schemas, so the same
  * shapes and no added field), so the role checks are the routes' own: an Admin and a Lead read any estimate, and the form definition, the materials and the treatments carry no rate, cost or formula (NFR-002).
- * **This file is Restricted with the review**: `page.tsx` loads it with the review for a Lead and an Admin only, and the Engineer's page imports none of it.
+ * **This file holds no Restricted data** (the four answers carry no rate, cost or formula); it lives beside `review-page.tsx`, which is its only importer, and `page.tsx` loads that for a Lead and an Admin only, so the Engineer's page never reads from it.
  *
  * A fault in any of the reads is not a fault of the page: the form then gets no seed and reads from the server, as it did before, and says so in its own notice if that fails too. The kind of the fault is logged,
  * never its cause or the estimate (no personal data).
