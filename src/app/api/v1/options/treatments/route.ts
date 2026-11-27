@@ -1,5 +1,6 @@
 import { getMastersService } from '@/server/composition';
 import { withRoute } from '@/server/http/with-route';
+import { treatmentOptionsBody } from '@/server/views/part-form-bodies';
 import { treatmentOptionsResponseSchema } from '@/server/views/schemas/options';
 
 /**
@@ -11,5 +12,5 @@ export const GET = withRoute({
   route: '/api/v1/options/treatments',
   method: 'GET',
   output: treatmentOptionsResponseSchema,
-  handler: async () => ({ options: await getMastersService().listTreatmentOptions() }),
+  handler: async () => treatmentOptionsBody(await getMastersService().listTreatmentOptions()),
 });
