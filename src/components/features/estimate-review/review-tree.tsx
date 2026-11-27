@@ -1,9 +1,15 @@
+import { Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import { Icon } from '@/components/shared/icon';
 import { PartsTreeList } from '@/components/shared/parts-tree-list';
 import { TREE_COLUMN_PANEL, TREE_COLUMN_SUMMARY } from '@/components/shared/tree-column-panel';
+import { TOOLBAR_RESERVE, TREE_FOOT } from '@/components/shared/tree-chrome';
 import { TreeLegend } from '@/components/shared/tree-legend';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/cn';
 import { nodeKindLabel } from '@/lib/estimate/node-kinds';
+import { ADD_MAIN_ASSEMBLY } from '@/lib/estimates/tree-actions';
 import { rowNameOf } from '@/lib/estimates/row-name';
 import type { CostsView } from '@/server/views/schemas/costs';
 
@@ -30,7 +36,7 @@ export interface ReviewTreeProps {
   readonly warned: ReadonlySet<string>;
   /** The Sl. No of the row whose inputs are shown beside the tree (`aria-current`), or null for an estimate with no rows. */
   readonly selectedSlNo?: string | null;
-  /** The estimate can be corrected: the panel carries the mark of the editing tree (`data-review-tree-edit`) while the island's code is on its way and takes this tree's place. */
+  /** The estimate can be corrected: the panel carries the mark of the editing tree (`data-review-tree-edit`) while the island's code is on its way and takes this tree's place, and the tree holds the room of what the island adds (below). */
   readonly edit?: boolean;
 }
 
@@ -67,8 +73,24 @@ export function ReviewTree({ code, state, letters, nodes, warned, selectedSlNo =
             label={TREE_TITLE}
             nodes={nodes}
             renderRow={(node, kindLabel) => <TreeRow node={node} kindLabel={kindLabel} state={state} code={code} warned={warned.has(node.id)} selected={node.slNo === selectedSlNo} />}
+            // The editing island adds a toolbar line under each row and the foot with "Add main assembly"; this first paint holds their room, with nothing a person can use (inert, hidden from the screen readers), so the island
+            // takes the tree's place without moving the page (DL-465, PRF-811-03).
+            {...(edit ? { renderToolbar: () => <div inert aria-hidden="true" data-review-tree-reserve="" className={TOOLBAR_RESERVE} /> } : {})}
           />
-          <TreeLegend />
+          {edit ? (
+            <div className={TREE_FOOT}>
+              {/* The room of the "Add main assembly" button, with its real classes and its words, and `invisible`: nothing to see, press or read, and nothing left on the page if the island never comes (PF-20). */}
+              <div inert aria-hidden="true" data-review-tree-reserve="" className="invisible">
+                <span className={cn(buttonVariants({ variant: 'ghost' }))}>
+                  <Icon icon={Plus} />
+                  {ADD_MAIN_ASSEMBLY}
+                </span>
+              </div>
+              <TreeLegend />
+            </div>
+          ) : (
+            <TreeLegend />
+          )}
         </>
       )}
     </ReviewTreeFrame>

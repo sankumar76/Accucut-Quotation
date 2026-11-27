@@ -28,11 +28,11 @@ describe('the island and the seed', () => {
     // The tree hook starts from the page's tree once and reads its seed at mount only (use-parts-tree.ts), so the same rule needs nothing there.
   });
 
-  it('DEF-145: the page draws the island\'s ghost on the server (for the page\'s own editable) and the island hands it to its form; the read-only form of the first paint has its own, as a form that cannot change the part', () => {
-    expect(REVIEW).toMatch(/const islandGhost = seed === undefined \? undefined : ghostOf\(\{[^}]*head: 'lead', editable \}\)/);
-    expect(REVIEW).toMatch(/const serverGhost = seed === undefined \? undefined : ghostOf\(\{[^}]*head: 'lead', editable: false \}\)/);
-    expect(REVIEW).toMatch(/<ReviewEditShell[\s\S]*?\bghost=\{islandGhost\}[\s\S]*?>/);
-    expect(REVIEW).toMatch(/<PartForm[\s\S]*?\bghost=\{serverGhost\}/);
+  it('DEF-145, DL-465: the page draws ONE ghost on the server, for the page\'s own editable; the first paint\'s form and the island\'s form both get it, so the swap moves nothing', () => {
+    expect(REVIEW).toMatch(/const ghost = seed === undefined \? undefined : ghostOf\(\{[^}]*head: 'lead', editable \}\)/);
+    expect(REVIEW.match(/ghostOf\(/g)).toHaveLength(1);
+    expect(REVIEW).toMatch(/<ReviewEditShell[\s\S]*?\bghost=\{ghost\}[\s\S]*?>/);
+    expect(REVIEW).toMatch(/<PartForm[\s\S]*?\bghost=\{ghost\}/);
     expect(ISLAND).toMatch(/<ReviewForm[\s\S]*?\bghost=\{ghost\}/);
   });
 
