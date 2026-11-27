@@ -117,6 +117,10 @@ export interface EstimateInputs {
   saveInputs(viewer: EstimateViewer, estimateId: string, request: SaveInputsRequest, audit?: AuditContext): Promise<SavedInputs>;
   /** Of what is stored in a part of this estimate, the values of fields of its form, in the registry the form is built from (`configurationFor`): what may be sent back. */
   visibleInputs(estimateId: string, inputs: Readonly<Record<string, unknown>>): Promise<Readonly<Record<string, string>>>;
+  /** The form as `getForm` builds it, from a configuration and a last-write time the caller already holds: no read (`getPartForm` reads them once for the form and the part). */
+  formOf(document: ConfigDocument, written: Date | null): EstimateForm;
+  /** The visible values as `visibleInputs` builds them, from a configuration the caller already holds: no read. */
+  visibleInputsOf(document: ConfigDocument, inputs: Readonly<Record<string, unknown>>): Readonly<Record<string, string>>;
 }
 
 /**
@@ -197,11 +201,13 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
     return { problems, changes };
   }
 
+  const formOf = (document: ConfigDocument, written: Date | null): EstimateForm => ({ sections: buildFormSections(document), lastSavedAt: written === null ? null : written.toISOString() });
+
   return {
     async getForm(viewer, estimateId) {
       const id = await openForRead(viewer, estimateId);
       const [document, written] = await Promise.all([configurationFor(id), nodes.lastWrittenAt(id)]);
-      return { sections: buildFormSections(document), lastSavedAt: written === null ? null : written.toISOString() };
+      return formOf(document, written);
     },
 
     async saveInputs(viewer, estimateId, request, audit) {
@@ -254,5 +260,9 @@ export function createEstimateInputs(dependencies: EstimateInputsDependencies): 
     async visibleInputs(estimateId, inputs) {
       return typedValues(await configurationFor(estimateId), inputs);
     },
+
+    formOf,
+
+    visibleInputsOf: typedValues,
   };
 }

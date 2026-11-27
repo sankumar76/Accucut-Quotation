@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
 import type { SaveGate } from '@/lib/estimates/save-gate';
 import type { PartItem } from '@/lib/estimates/tree-client';
 
@@ -43,6 +44,8 @@ export interface PartFormProps {
   readonly onShown?: () => void;
   /** The Lead's and the Admin's read-only view (AQP-488, DEF-131 Stage 1), with `editable` false: the same form with the review look. Absent for the Engineer. */
   readonly review?: PartReview | undefined;
+  /** The form's data as the page handed it over (the Lead's review, DEF-141): the definition, the materials, the part's values and the treatments, as the routes send them. The form then reads nothing from the server to start. Absent for the Engineer. */
+  readonly seed?: PartFormSeed | undefined;
 }
 
 /**
@@ -51,8 +54,8 @@ export interface PartFormProps {
  * nothing typed into one can land in another. Skeleton cards while it loads, a notice with "Try again" when it cannot be read. No rate, cost or formula is requested, held or drawn: the
  * server's form has none, and the materials are IDs and names.
  */
-export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, onNamed, onServerIgnored, missing, gate, onShown, review }: PartFormProps) {
-  const definition = useFormDefinition(estimateId);
+export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, onNamed, onServerIgnored, missing, gate, onShown, review, seed }: PartFormProps) {
+  const definition = useFormDefinition(estimateId, seed);
   // A row was chosen after the page was drawn (the review's view): the form's title takes the focus, the choice is said once and the tree folds. The first paint does none of it.
   const [seen, setSeen] = useState(part?.id);
   const [chosen, setChosen] = useState(false);
@@ -118,6 +121,7 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
       missing={missing}
       gate={gate}
       review={review === undefined ? undefined : { ...review, chosen }}
+      seed={seed}
     />
   );
 }

@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { Outcome } from '@/lib/api-client';
-import { loadPartInputs, PART_CHANGED_CODE, savePartInputs, type FormField, type PartInputs } from '@/lib/estimates/form-client';
+import { loadPartInputs, PART_CHANGED_CODE, parsePartInputs, savePartInputs, type FormField, type PartInputs } from '@/lib/estimates/form-client';
 import { fieldVisibility, readTyped, watchersOf } from '@/lib/estimates/form-values';
 import { planAfterNewerPart, type FieldConflict } from '@/lib/estimates/part-conflict';
+import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
 import type { FlushMode, SaveGate } from '@/lib/estimates/save-gate';
 import type { Completeness } from '@/lib/estimates/tree-client';
 import { PART_NAME_KEYS } from '@/lib/estimate/part-name-keys';
@@ -66,6 +67,8 @@ export interface UsePartValuesProps {
   readonly onWrote: (at: string) => void;
   /** Told about every save in flight and every field that shows a value that is not saved, so Calculate waits for the saves and does not go over such a field (STORY-05.09, review SQR-01). */
   readonly gate: SaveGate;
+  /** The part's values as the page handed them over (the Lead's review, DEF-141): the form starts with them and reads nothing. Absent for the Engineer. */
+  readonly seed?: PartFormSeed | undefined;
 }
 
 /**
@@ -84,23 +87,25 @@ export interface UsePartValuesProps {
  * of Save draft only in what it says. Nothing under a field and no alert, because the person may be typing in it: a value the rule refuses is left unsent and unsaved, the text shown is not rewritten, and a failure
  * is one polite status (`autosaveFailedAt`, `use-autosave-trail.ts`). A conflict pauses it until the person has chosen.
  */
-export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onNamed, onServerIgnored, onWrote, gate }: UsePartValuesProps) {
+export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onNamed, onServerIgnored, onWrote, gate, seed }: UsePartValuesProps) {
   const partId = part.id;
-  const [stored, setStored] = useState<Loaded<PartInputs>>(LOADING);
-  const [texts, setTexts] = useState<Readonly<Record<string, string>>>({});
+  // The part's values as a page handed them over (the Lead's review, DEF-141): the form starts with them and reads nothing; a read after that (a conflict, Try again) goes to the server as ever.
+  const [seeded] = useState(() => (seed !== undefined && seed.estimateId === estimateId && seed.partId === part.id ? parsePartInputs(seed.part) : null));
+  const [stored, setStored] = useState<Loaded<PartInputs>>(seeded === null ? LOADING : { status: 'ready', value: seeded });
+  const [texts, setTexts] = useState<Readonly<Record<string, string>>>(seeded === null ? {} : seeded.inputs);
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
   const [problem, setProblem] = useState<PartProblem | null>(null);
   const [announcement, setAnnouncement] = useState('');
   // The fields whose last save did not go through (not refused under the field, which has its own message): what is typed there is kept, but it is not stored, so the count leaves it out (STORY-05.11 AC-7).
   const [unstored, setUnstored] = useState<ReadonlySet<string>>(new Set());
   // The server's last word on the part: the polite "Part 1.1 is complete." is said only when a save makes it `COMPLETE`, not on every save (STORY-05.11 AC-8).
-  const completenessRef = useRef<Completeness>('EMPTY');
+  const completenessRef = useRef<Completeness>(seeded === null ? 'EMPTY' : seeded.completeness);
   const [attempt, setAttempt] = useState(0);
   const [autosaveFailedAt, trail] = useAutosaveTrail();
 
   // What a save reads when it runs, not when it was asked for: the text of every field, the values the server holds and the revision to send.
-  const textsRef = useRef<Readonly<Record<string, string>>>({});
-  const heldRef = useRef<Readonly<Record<string, string>>>({});
+  const textsRef = useRef<Readonly<Record<string, string>>>(seeded === null ? {} : seeded.inputs);
+  const heldRef = useRef<Readonly<Record<string, string>>>(seeded === null ? {} : seeded.inputs);
   const revisionRef = useRef<number>(part.revision);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   // How many leaves (`gate.flush('leave')`: the tab hidden, the page left) have saves in the queue that are not yet run: while there is one, the saves that go out ask the browser to finish them even if the page goes away
@@ -123,6 +128,15 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     live.current = true;
     conflictRef.current = new Set();
     let cancelled = false;
+    if (seeded !== null && attempt === 0) {
+      // Nothing to read: the values came with the page. The same two steps a read ends with, for a form that has nothing typed yet.
+      gate.forget(partId);
+      trail.reset();
+      return () => {
+        live.current = false;
+        gate.forget(partId);
+      };
+    }
     void loadPartInputs(estimateId, partId).then((outcome) => {
       if (cancelled) return;
       setStored(loadedFrom(outcome));
@@ -140,7 +154,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
       live.current = false;
       gate.forget(partId);
     };
-  }, [estimateId, partId, attempt, gate, trail]);
+  }, [estimateId, partId, attempt, gate, trail, seeded]);
 
   /** A field shows a value the server does not hold (or no longer does). A form that is no longer on the screen has nothing to show, so it is not marked. */
   const mark = (fieldId: string, unsaved: boolean): void => {

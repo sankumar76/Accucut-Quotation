@@ -17,7 +17,7 @@ import type { EstimateStatus } from '../repositories/task-repository';
 import type { Transaction, TransactionRunner } from '../repositories/transaction';
 
 import type { AuditContext, AuditService } from './audit-service';
-import { createEstimateInputs, type EstimateInputs, type EstimateInputsDependencies } from './estimate-inputs';
+import { createEstimateInputs, type EstimateForm, type EstimateInputs, type EstimateInputsDependencies } from './estimate-inputs';
 import { createImageService, type ImageService } from './image-service';
 import { createInputChangeAudit } from './input-change-audit';
 
@@ -195,6 +195,11 @@ export interface EstimateService {
   getTree(viewer: EstimateViewer, estimateId: string): Promise<PartsTree>;
   /** One part with what was typed into it (`GET /api/v1/estimates/{id}/nodes/{nodeId}`): 404 for an estimate or a part that is not there for this person. */
   getNode(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<PartDetail>;
+  /**
+   * The form and one part together, for a page that hands both to the part form as props (DEF-141): **exactly what `getForm` and `getNode` answer**, for the same viewer, with the same refusals (404 for an estimate or a part
+   * that is not there for this person), but with one access check, one read of the configuration and one listing of the parts instead of two of each.
+   */
+  getPartForm(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<{ readonly form: EstimateForm; readonly node: PartDetail }>;
   /** Adds a part with empty inputs (`POST /api/v1/estimates/{id}/nodes`). 404, 409 not editable by this person, 422 `TREE_FULL` at `MAX_PARTS_PER_ESTIMATE` parts. Answers with the new part's ID and the tree. */
   addPart(viewer: EstimateViewer, estimateId: string, request: AddPartRequest, audit?: AuditContext): Promise<AddedPart>;
   /** Moves a part (`PUT .../nodes/{nodeId}`, `POST .../tree/move`). 404, 409 (not editable by this person, or a stale revision, with the tree), 422 under `parentId`. Answers with the tree. */
@@ -433,6 +438,16 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
       if (view === undefined) throw new NotFoundError();
       // Of what is stored, only the values of fields of the form leave (ADR-008: the answer is built from an allow-list).
       return { ...view, inputs: await inputs.visibleInputs(estimateId, record.inputs), picture: await pictures.pictureOf(estimateId, record.imageId) };
+    },
+
+    async getPartForm(viewer, estimateId, nodeId) {
+      const id = await openForRead(viewer, estimateId);
+      const [records, readers, written] = await Promise.all([nodes.listNodes(id), viewReaders(id), nodes.lastWrittenAt(id)]);
+      const record = partIn(records, nodeId);
+      const view = viewsOf(records, readers).find((candidate) => candidate.id === record.id);
+      if (view === undefined) throw new NotFoundError();
+      const node = { ...view, inputs: inputs.visibleInputsOf(readers.document, record.inputs), picture: await pictures.pictureOf(id, record.imageId) };
+      return { form: inputs.formOf(readers.document, written), node };
     },
 
     async addPart(viewer, estimateId, request, audit) {
