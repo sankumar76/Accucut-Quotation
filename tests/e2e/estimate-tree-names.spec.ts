@@ -279,8 +279,13 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
           expect(box.height, `the toolbar button is in view: ${where}`).toBeGreaterThan(1);
           const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
           await page.mouse.move(point.x, point.y);
-          const onButton = await button.evaluate((element, at) => element.contains(document.elementFromPoint(at.x, at.y)), point);
-          expect(onButton, `the pointer is on the button: ${where}, point ${JSON.stringify(point)}`).toBe(true);
+          // The element on top at the point, named, so a failure says what covered the button (diagnostic only: the assertion is the same).
+          const { onButton, top } = await button.evaluate((element, at) => {
+            const found = document.elementFromPoint(at.x, at.y);
+            const covering = found?.closest('[data-sticky-bar], [role], [data-row-toolbar], [data-part-row]');
+            return { onButton: element.contains(found), top: found === null ? 'nothing' : `${found.tagName.toLowerCase()} inside ${covering?.tagName.toLowerCase() ?? 'no group'} ${covering?.getAttributeNames().filter((name) => name.startsWith('data-') || name === 'role').join(' ') ?? ''}` };
+          }, point);
+          expect(onButton, `the pointer is on the button: ${where}, point ${JSON.stringify(point)}, on top there: ${top}`).toBe(true);
           expect(await layoutOf(page), `pointer over a button of ${slNo}`).toEqual(idle);
         }
         await rest(page);
