@@ -7,7 +7,7 @@ import { cn } from '@/lib/cn';
 import type { FormSection } from '@/lib/estimates/form-client';
 import type { SectionProgress } from '@/lib/estimates/form-values';
 
-import { columnRangeLabel, progressText, TREE_MISSING_INPUTS, sectionRegionLabel } from './estimate-texts';
+import { columnRangeLabel, TREE_MISSING_INPUTS } from './estimate-texts';
 
 export interface SectionCardProps {
   readonly section: Pick<FormSection, 'id' | 'number' | 'name' | 'columnRange'>;
@@ -30,6 +30,12 @@ const FIELDS =
 /** The weight as a custom property of the card's style, which the share of its row is worked out from. */
 type CardShare = CSSProperties & Record<'--n', number>;
 
+/**
+ * The number tile of a card (DEF-098; SCR-05 mock-up `.section-no`): 32 px, the dark navigation ink, green once every field of the card has a value and red while Calculate found one of them blank. The tile's
+ * colour is a second cue: the count beside the tag and the words of a missing field say the same in text.
+ */
+const NUMBER_TILE = 'inline-flex size-s-6 shrink-0 items-center justify-center rounded-md font-mono text-label font-medium text-on-fill';
+
 /** The id of a card's heading: the section strip jumps to it and the card is labelled by it. */
 export const sectionTitleId = (sectionId: string): string => `part-section-${sectionId}`;
 
@@ -43,17 +49,27 @@ export const sectionTitleId = (sectionId: string): string => `part-section-${sec
 export function SectionCard({ section, progress, missing = false, weight, children }: SectionCardProps) {
   const titleId = sectionTitleId(section.id);
   const share: CardShare = { '--n': weight };
+  const done = progress !== null && progress.total > 0 && progress.complete === progress.total;
   return (
     <Card role="region" aria-labelledby={titleId} style={share} className={cn(CARD_SHARE, missing && 'border-danger-line')}>
-      <CardHeader className="justify-between px-s-3 py-s-2 md:px-s-3">
-        <CardTitle id={titleId} as="h3" tabIndex={-1}>
-          {sectionRegionLabel(section.number, section.name)}
+      <CardHeader className="px-s-3 py-s-2 md:px-s-3">
+        {/* The heading holds the tile, so the region's name stays "01 Part Details": the number, then the name. */}
+        <CardTitle id={titleId} as="h3" tabIndex={-1} className="flex min-w-0 flex-1 items-center gap-s-2">
+          <span data-section-no="" className={cn(NUMBER_TILE, missing ? 'bg-danger' : done ? 'bg-success' : 'bg-nav')}>
+            {String(section.number).padStart(2, '0')}
+          </span>{' '}
+          <span className="min-w-0">{section.name}</span>
         </CardTitle>
         <span className="rounded-sm bg-surface-2 px-s-1 font-mono text-label text-ink-2">
           <span className="sr-only">{columnRangeLabel(section.columnRange)}</span>
           <span aria-hidden="true">{section.columnRange}</span>
         </span>
-        {progress === null ? null : <p className="w-full text-label text-ink-2">{progressText(progress.complete, progress.total)}</p>}
+        {progress === null ? null : (
+          <p data-section-count="" className="text-label text-ink-2 tabular-nums">
+            {progress.complete} of {progress.total}
+            <span className="sr-only"> complete</span>
+          </p>
+        )}
         {missing ? (
           <p className="flex w-full items-center gap-s-1 text-label font-semibold text-danger">
             <Icon icon={TriangleAlert} size="hint" className="shrink-0" />

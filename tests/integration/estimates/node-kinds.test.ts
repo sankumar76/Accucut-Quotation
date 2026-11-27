@@ -9,6 +9,7 @@ import { createTransactionRunner } from '@/server/repositories/transaction';
 import { createEstimateService, MAX_PARTS_PER_ESTIMATE, MOVE_ACROSS_PARENTS_CODE, NODE_KIND_NOT_ALLOWED_CODE, TREE_FULL_CODE, type EstimateService, type EstimateViewer } from '@/server/services/estimate-service';
 import { partsTreeSchema } from '@/server/views/schemas';
 
+import { auditFor, withAuditContext } from '../../support/customer-change';
 import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { defined } from '../../support/defined';
@@ -34,13 +35,14 @@ const lead: EstimateViewer = { get id() { return leadId; }, role: 'LEAD' };
 
 beforeAll(async () => {
   db = await openAuthDatabase();
-  service = createEstimateService({
+  service = withAuditContext(createEstimateService({
+    audit: auditFor(db),
     estimates: createEstimateRepository(db.prisma),
     nodes: createEstimateNodeRepository(db.prisma),
     images: createImageRepository(db.prisma),
     transactions: createTransactionRunner(db.prisma),
     ...inputsDependencies(),
-  });
+  }));
   leadId = await insertPersonAsOwner(db, 'Kinds Lead', 'LEAD');
   arjunId = await insertPersonAsOwner(db, 'Kinds Arjun', 'ENGINEER');
 });

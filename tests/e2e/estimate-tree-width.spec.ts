@@ -494,7 +494,7 @@ test('AC-6, AC-11: a press at the centre of a row still chooses it at 240 and 40
   }
 });
 
-test('DEF-085, DL-391: the form comes first and the controls appear in place: before the handle and the menu have loaded (their code held) there is no separator and no Tree width button, the slot is an empty hidden box, the stored 400 px is applied, and when the code arrives nothing moves and a focus in the form stays', async () => {
+test('DEF-085, DL-391: the form comes first: before the handle and the menu have loaded (their code held) there is no separator and no Tree width button, the slot is an empty hidden box, the stored 400 px is applied', async () => {
   const testInfo = test.info();
   test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -510,6 +510,21 @@ test('DEF-085, DL-391: the form comes first and the controls appear in place: be
     await expect(slot(page)).toHaveCount(1);
     expect(await slot(page).evaluate((element) => ({ hidden: element.getAttribute('aria-hidden'), tabindex: element.getAttribute('tabindex'), text: element.textContent, width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height }))).toEqual({ hidden: 'true', tabindex: null, text: '', width: 32, height: 32 });
     expect(await columnWidth(page), 'the stored width is applied by the eager part, before the code of the controls').toBe(MAXIMUM);
+  } finally {
+    await controls.stop();
+  }
+});
+
+// The same case in two (DL-419 (B), AQP-444: it ran 31 s in a slow window of master push 6085f71e; each half does one load and its own checks, and none may need more than 25 s).
+test('DEF-085, DL-391: and when the code of the controls arrives they appear in place: nothing moves and a focus in the form stays', async () => {
+  const testInfo = test.info();
+  test.skip(testInfo.project.name !== 'desktop', DESKTOP_ONLY);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const controls = await holdControlsCode(page, 'hold');
+  try {
+    await store(page, storageKey(ownerId), '400');
+    await page.reload();
+    await waitForForm(page);
     const before = await boxes(page);
     // Without scrolling, so the boxes are compared where they stood.
     await control(page, 'J').evaluate((element) => element.focus({ preventScroll: true }));

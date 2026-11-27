@@ -50,10 +50,12 @@ const list = (role: RoleName, tasks: ReadonlyArray<QueueRowData>, asOf: string =
 const occurrences = (html: string, text: string): number => html.split(text).length - 1;
 
 describe('AC-1: three tabs with counts, and the sort note', () => {
-  it('has a tablist of Open, Closed, Overdue and Ignored, each with its count, and the first one selected', () => {
+  it('has a tablist of Open, Overdue, Closed and Ignored (FR-034), each with its count, and the first one selected', () => {
     const html = screen('LEAD', page([row()], { counts: { open: 5, closed: 1, overdue: 2, ignored: 3 } }));
     expect(html).toContain('role="tablist"');
     expect(occurrences(html, 'role="tab"')).toBe(4);
+    const order = ['>Open<', '>Overdue<', '>Closed<', '>Ignored<'].map((name) => html.indexOf(name.replace('<', '')));
+    expect(order.every((index) => index > 0) && order.every((index, place) => place === 0 || index > (order[place - 1] ?? 0))).toBe(true);
     expect(html).toMatch(/Ignored<span[^>]*>3<\/span>/);
     expect(html).toMatch(/aria-selected="true"[^>]*>Open<span[^>]*>5<\/span>/);
     expect(html).toMatch(/>Closed<span[^>]*>1<\/span>/);

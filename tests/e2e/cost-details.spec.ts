@@ -2,7 +2,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 import { createDisposableUser, E2E_PASSWORD, readEstimateState, saveCanaryQuantity, signInWithoutThePage, useFreshAddress, type E2eUser } from './support/auth';
 import { calculateAsEngineer, engineerWithEstimate, signInAsLead } from './support/calculated-estimate';
-import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
+import { expectNoAxeViolations, horizontalOverflow, tokenColour } from './support/design-system';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
@@ -50,7 +50,7 @@ test.beforeAll(async ({ browser }, testInfo) => {
 
 const PHONE_MAX = 767;
 const DESKTOP_MIN = 1280;
-const STAGE_TITLES = ['1. Weights & Areas', '2. Material Cost', '3. Process Costs', '4. Sub Total', '5. Rejection, Overheads & Logistics', '6. Pricing'];
+const STAGE_TITLES = ['1 · Weights & Areas', '2 · Material Cost', '3 · Process Costs', '4 · Sub Total', '5 · Rejection, Overheads & Logistics', '6 · Pricing'];
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 const isWide = (page: Page): boolean => (page.viewportSize()?.width ?? 0) >= DESKTOP_MIN;
 const stage = (page: Page, number: number) => page.locator(`details[data-stage="${number}"]`);
@@ -210,10 +210,58 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     await signInAsLead(page, testInfo);
     await openCostDetails(page, code);
 
+    // AQP-452 (DEF-113; UX spec SCR-07, the mock-up): the breadcrumb "Task queue / <code> / Cost details <Sl. No>", the description, the row's heading and its one box.
+    const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+    await expect(crumbs.getByRole('link', { name: 'Task queue' })).toHaveAttribute('href', '/queue');
+    await expect(crumbs.getByRole('link', { name: code })).toHaveAttribute('href', `/estimates/${code}`);
+    await expect(crumbs.locator('[aria-current="page"]')).toHaveText(/^Cost details \d/);
+    await expect(page.getByRole('main')).toContainText('Every calculated value for this row, in six stages, each with its formula. Lead and Admin only.');
+    await expect(page.getByRole('main')).toContainText('Cost details for one row');
+    await expect(page.getByRole('main').getByText('This row, on screen and in the Excel row')).toBeVisible();
+    // The parts tree column: a link for each row to its own cost details, the open row marked, names and kinds and no figure; from 1024 px it is a column of the tree's width.
+    const tree = page.getByRole('navigation', { name: 'Parts tree' });
+    await expect(tree.getByRole('link').first()).toHaveAttribute('aria-current', 'page');
+    await expect(tree.locator('[aria-current="page"]')).toHaveCount(1);
+    // No figure of any row: the text of the tree without its Sl. No. cells holds no number with decimals (a Sl. No. such as 1.10 is taken out first).
+    const treeText = await tree.evaluate((element) => {
+      const copy = element.cloneNode(true) as Element;
+      for (const cell of copy.querySelectorAll('[data-sl-no]')) cell.remove();
+      return copy.textContent ?? '';
+    });
+    expect(treeText).not.toMatch(/\d\.\d{2}/);
+    expect(treeText).not.toContain('₹');
+    if ((page.viewportSize()?.width ?? 0) >= 1024) {
+      const box = await page.locator('[data-cost-tree]').boundingBox();
+      expect(Math.round(box?.width ?? 0)).toBe(Number.parseInt(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--tree-w')), 10));
+    } else {
+      // Below 1024 px the stages come first and the tree follows them (QLT-789-04; the design is silent on the phone's order).
+      const stagesTop = (await page.locator('details[data-stage]').first().boundingBox())?.y ?? Number.POSITIVE_INFINITY;
+      const treeTop = (await page.locator('[data-cost-tree]').boundingBox())?.y ?? 0;
+      expect(stagesTop).toBeLessThan(treeTop);
+    }
+
     await expect(page.locator('details[data-stage]')).toHaveCount(6);
     for (const [index, title] of STAGE_TITLES.entries()) await expect(stage(page, index + 1).locator('summary')).toContainText(title);
     await expect(stage(page, 3).locator('summary')).toContainText(/Stage total: [\d,]+\.\d{2}/);
     await openAllStages(page);
+
+    // AQP-475 (DEF-114; UX spec SCR-07, the mock-up's .stage): each stage is a numbered card, with its badge, its heading, its total at the right of the heading and a chevron that turns when it is open; the lines
+    // are rows of the card; the sub-headings are capitals; the line of the price stays dark.
+    for (const number of [1, 2, 3, 4, 5, 6]) {
+      const summary = stage(page, number).locator('summary');
+      await expect(summary.locator('[data-stage-number]')).toHaveText(String(number));
+      const [badge, chevron, card] = await Promise.all([summary.locator('[data-stage-number]').boundingBox(), summary.locator('svg').boundingBox(), stage(page, number).boundingBox()]);
+      if (badge === null || chevron === null || card === null) throw new Error('a box is missing');
+      expect(badge.x).toBeLessThan(chevron.x);
+      expect(chevron.x + chevron.width).toBeLessThanOrEqual(card.x + card.width);
+      // Tailwind 4 turns it with the `rotate` property, not `transform`.
+      await expect(summary.locator('svg')).toHaveCSS('rotate', '180deg');
+    }
+    const [title, figure] = await Promise.all([stage(page, 3).locator('summary > span').nth(1).boundingBox(), stage(page, 3).locator('summary span.tabular-nums').boundingBox()]);
+    if (title === null || figure === null) throw new Error('a box is missing');
+    expect(figure.x).toBeGreaterThanOrEqual(title.x + title.width - 1);
+    await expect(stage(page, 3).locator('h3').first()).toHaveCSS('text-transform', 'uppercase');
+    await expect(stage(page, 6).locator('li').filter({ hasText: /^Excel column BG/ })).toHaveCSS('background-color', await tokenColour(page, '--nav'));
 
     const material = stage(page, 2);
     await expect(material).toContainText('Excel column AK');
@@ -221,7 +269,7 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     await expect(material.getByText(/^AK = \(.+ × .+\) - \(.+ × .+\) = [\d,]+\.\d{2}$/)).toBeVisible();
     await expect(stage(page, 1).getByText('O = IF(Material-Specific-Gravity > 0, M - N, 0)', { exact: true })).toBeVisible();
     await expect(stage(page, 6).getByText(/^BG = .+ = [\d,]+\.\d{2}$/)).toBeVisible();
-    await expect(page.getByText('Unit Production Price', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('This row, on screen and in the Excel row').first()).toBeVisible();
   });
 
   test('AC-2: a sentence says what the working prints and states the rounding rule', async ({ page }, testInfo) => {
@@ -255,6 +303,14 @@ test.describe('AC-1, AC-2: a calculated estimate, as a Lead', () => {
     await expect(page).toHaveURL(new RegExp(`/estimates/${code}/costs/1$`));
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cost details');
     await expect(page.locator('details[data-stage]')).toHaveCount(6);
+    // AQP-496 (DEF-139, RO-18): the row's header has the way back to this row's inputs, in the Lead's view of the estimate page.
+    const viewInputs = page.getByRole('link', { name: 'View inputs of 1', exact: false });
+    await expect(viewInputs).toHaveText('View inputs');
+    await expect(viewInputs).toHaveAttribute('href', `/estimates/${code}?row=1#row-inputs`);
+    await viewInputs.click();
+    await expect(page).toHaveURL(new RegExp(`/estimates/${code}\\?row=1#row-inputs$`));
+    await expect(page.locator('#row-inputs')).toBeVisible();
+    await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
   });
 
   test('a part that is not in the estimate, and an address that is no Sl. No, are "not found"', async ({ page }, testInfo) => {
@@ -309,7 +365,7 @@ test.describe('AC-7: the states with nothing current', () => {
       return { status: response.status, body: await response.text() };
     }, owner.id);
     expect(answer.status).toBe(200);
-    expect(JSON.parse(answer.body)).toEqual({ state: 'out-of-date', row: { nodeId: owner.id, slNo: '1', name: expect.any(String) }, details: null });
+    expect(JSON.parse(answer.body)).toEqual({ state: 'out-of-date', row: { nodeId: owner.id, slNo: '1', name: expect.any(String), kindLabel: expect.any(String) }, details: null });
     expect(answer.body).not.toMatch(/Material-Scrap-Rate|stages|formula|working/);
   });
 });
@@ -362,6 +418,12 @@ test.describe('AC-9: layout and accessibility', () => {
     await calculateAsEngineer(page, owner, code);
     await signInAsLead(page, testInfo);
     await openCostDetails(page, code);
+    // AQP-496 (RO-18): the link is in the row header at every width, and on a touch layout it is a control tall enough to press (NFR-017).
+    const viewInputs = page.getByRole('link', { name: /^View inputs of 1/ });
+    await expect(viewInputs).toBeVisible();
+    if (!(await page.evaluate(() => window.matchMedia('(min-width: 1024px) and (pointer: fine)').matches))) {
+      expect((await viewInputs.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
 
     // The script of the phone's accordion runs after load; the assertions wait for it.
     if (isPhone(page)) {

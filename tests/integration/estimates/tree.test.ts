@@ -10,6 +10,7 @@ import { createEstimateRepository } from '@/server/repositories/estimate-reposit
 import { createTransactionRunner } from '@/server/repositories/transaction';
 import { createEstimateService, type EstimateService, type EstimateViewer } from '@/server/services/estimate-service';
 
+import { auditFor, withAuditContext } from '../../support/customer-change';
 import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { buildTree500 } from '../../support/builders/tree500';
@@ -40,13 +41,14 @@ const nodeRepository = (): ReturnType<typeof createEstimateNodeRepository> => cr
 
 beforeAll(async () => {
   db = await openAuthDatabase();
-  service = createEstimateService({
+  service = withAuditContext(createEstimateService({
+    audit: auditFor(db),
     estimates: estimateRepository(),
     nodes: nodeRepository(),
     images: createImageRepository(db.prisma),
     transactions: createTransactionRunner(db.prisma),
     ...inputsDependencies(),
-  });
+  }));
   leadId = await insertPersonAsOwner(db, 'Tree Lead', 'LEAD');
   arjunId = await insertPersonAsOwner(db, 'Tree Arjun', 'ENGINEER');
   priyaId = await insertPersonAsOwner(db, 'Tree Priya', 'ENGINEER');

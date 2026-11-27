@@ -3,6 +3,7 @@ import { ConflictError, FieldValidationError, ForbiddenError, NotFoundError, Tre
 import { canEditInputs } from '../../lib/estimate/can-edit-inputs';
 import { isAllowedChild, NODE_KIND_NAMES, type NodeKind } from '../../lib/estimate/node-kinds';
 import { createCompletenessReader, type CompletenessReader } from '../../lib/estimate/part-completeness';
+import { partNameOf } from '../../lib/estimate/part-name';
 import type { PartView } from '../../lib/estimate/part-view';
 import { decideTransition, isLocked, stateOf, TRANSITION_REFUSALS, type EstimateEvent } from '../../lib/estimate/state-machine';
 import { subtreeFingerprint } from '../../lib/estimate/subtree-fingerprint';
@@ -18,6 +19,7 @@ import type { Transaction, TransactionRunner } from '../repositories/transaction
 import type { AuditContext, AuditService } from './audit-service';
 import { createEstimateInputs, type EstimateInputs, type EstimateInputsDependencies } from './estimate-inputs';
 import { createImageService, type ImageService } from './image-service';
+import { createInputChangeAudit } from './input-change-audit';
 
 /**
  * The estimate workspace (STORY-05.01; FR-042; architecture sections 4.1, 4.8 and 6, "Set customer"): opening a task's estimate and choosing the customer
@@ -194,11 +196,11 @@ export interface EstimateService {
   /** One part with what was typed into it (`GET /api/v1/estimates/{id}/nodes/{nodeId}`): 404 for an estimate or a part that is not there for this person. */
   getNode(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<PartDetail>;
   /** Adds a part with empty inputs (`POST /api/v1/estimates/{id}/nodes`). 404, 409 not editable by this person, 422 `TREE_FULL` at `MAX_PARTS_PER_ESTIMATE` parts. Answers with the new part's ID and the tree. */
-  addPart(viewer: EstimateViewer, estimateId: string, request: AddPartRequest): Promise<AddedPart>;
+  addPart(viewer: EstimateViewer, estimateId: string, request: AddPartRequest, audit?: AuditContext): Promise<AddedPart>;
   /** Moves a part (`PUT .../nodes/{nodeId}`, `POST .../tree/move`). 404, 409 (not editable by this person, or a stale revision, with the tree), 422 under `parentId`. Answers with the tree. */
-  moveNode(viewer: EstimateViewer, estimateId: string, request: MovePartRequest): Promise<PartsTree>;
+  moveNode(viewer: EstimateViewer, estimateId: string, request: MovePartRequest, audit?: AuditContext): Promise<PartsTree>;
   /** Deletes a part and its sub-parts (`DELETE .../nodes/{nodeId}`). 404, 409 (not editable by this person, a stale revision, or a count that is no longer right, with the tree). Answers with the tree. */
-  deleteNode(viewer: EstimateViewer, estimateId: string, request: DeletePartRequest): Promise<PartsTree>;
+  deleteNode(viewer: EstimateViewer, estimateId: string, request: DeletePartRequest, audit?: AuditContext): Promise<PartsTree>;
   /** The sections of the part form and the time of the last save (`GET /api/v1/estimates/{id}/form`, STORY-05.03): the same for every role, built from the registry, no cost. 404 for an estimate that is not this person's. */
   getForm: EstimateInputs['getForm'];
   /** Saves values into a part (`PATCH /api/v1/estimates/{id}/nodes/{nodeId}/inputs`, STORY-05.03). 404, 409 (not editable by this person, or a stale revision), 422 under each field at fault. A real change raises the part's revision and `inputs_revision`; the same value again raises neither. */
@@ -239,9 +241,18 @@ export interface EstimateDependencies {
 
 const mayOpen = (viewer: EstimateViewer, engineerId: string): boolean => viewer.role !== 'ENGINEER' || viewer.id.toLowerCase() === engineerId.toLowerCase();
 
-/** The parts in reading order, each with its Sl. No read from the layout and how complete it is by the rule of Calculate (`completenessOf`, built once for the answer: no query per part). */
-function viewsOf(records: ReadonlyArray<NodeRecord>, completenessOf: CompletenessReader): PartView[] {
-  return buildTree(records).map(({ node, slNo }) => ({ id: node.id, parentId: node.parentId, slNo, label: '', nodeKind: node.nodeKind, completeness: completenessOf(node.inputs), revision: node.revision }));
+/** What an answer is built with, once: how complete a part is, and its name. Both are read from the part's inputs with no query per part. */
+interface ViewReaders {
+  /** The registry this estimate's form is built from, read here with the rest so that no write reads it on a second connection while it holds the estimate's lock (the audit entry of a Lead's tree write names rows by it). */
+  readonly document: ConfigDocument;
+  readonly completenessOf: CompletenessReader;
+  /** The part's name: its Description, else its Part No., else an empty text (`partNameOf`, the reader SCR-06 and SCR-07 use). An input typed by the person, never a figure (AQP-446, DEF-089). */
+  readonly nameOf: (inputs: Readonly<Record<string, unknown>>) => string;
+}
+
+/** The parts in reading order, each with its Sl. No read from the layout, its name and how complete it is by the rule of Calculate (`readers`, built once for the answer: no query per part). */
+function viewsOf(records: ReadonlyArray<NodeRecord>, readers: ViewReaders): PartView[] {
+  return buildTree(records).map(({ node, slNo }) => ({ id: node.id, parentId: node.parentId, slNo, label: readers.nameOf(node.inputs), nodeKind: node.nodeKind, completeness: readers.completenessOf(node.inputs), revision: node.revision }));
 }
 
 /** The part with this ID in a list read from the estimate (never a part of another estimate), or a 404. An ID is compared in lower case, as the database writes it. */
@@ -324,24 +335,33 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
   }
 
   /** What every change to the tree ends with: the places of the siblings that shifted (they get no new revision), the input change, and the tree as it is now. */
-  async function finishChange(id: string, shifted: ReadonlyArray<PlacedNode>, completenessOf: CompletenessReader, tx: Transaction): Promise<PartsTree> {
+  async function finishChange(id: string, shifted: ReadonlyArray<PlacedNode>, readers: ViewReaders, tx: Transaction): Promise<PartsTree> {
     await nodes.placeNodes(
       id,
       shifted.map((place) => ({ ...place, bumpRevision: false })),
       tx,
     );
     await estimates.bumpInputsRevision(id, tx);
-    return viewsOf(await nodes.listNodes(id, tx), completenessOf);
+    return viewsOf(await nodes.listNodes(id, tx), readers);
   }
 
-  /** The completeness rule for the registry as it is now. Read before a transaction opens, as the form's save does, so it holds no connection and no lock while it is read (a version never changes). */
-  const completenessReader = async (): Promise<CompletenessReader> => createCompletenessReader(await currentConfiguration());
+  /**
+   * What an answer about the tree is built with. The completeness rule is for the registry as it is now; the name is read from the registry the estimate's own form is built from (`configurationFor`: an approved
+   * estimate keeps the fields it was approved with). Read before a transaction opens, as the form's save does, so it holds no connection and no lock while it is read (a version never changes).
+   */
+  const viewReaders = async (estimateId: string): Promise<ViewReaders> => {
+    const [current, document] = await Promise.all([currentConfiguration(), configurationFor(estimateId)]);
+    return { document, completenessOf: createCompletenessReader(current), nameOf: (typed) => partNameOf(document, typed) };
+  };
+
+  // The trail of a Lead's or an Admin's writes to inputs, pictures and the tree (DEF-131 stage 2): written in each write's own transaction, so the write fails when the entry cannot be written.
+  const traces = createInputChangeAudit({ audit, estimates, nodes, materials });
 
   // The part form shares the estimate's lock and its rules for who may open or change it, so they are handed over and not written twice.
-  const inputs = createEstimateInputs({ nodes, materials, currentConfiguration, configurationFor, transactions, openForRead, lockForChange, bumpInputsRevision: (estimateId, tx) => estimates.bumpInputsRevision(estimateId, tx) });
+  const inputs = createEstimateInputs({ nodes, materials, currentConfiguration, configurationFor, transactions, openForRead, lockForChange, bumpInputsRevision: (estimateId, tx) => estimates.bumpInputsRevision(estimateId, tx), traces });
 
   // The part pictures share the same lock and the same rules, handed over in the same way (STORY-05.07).
-  const pictures = createImageService({ nodes, images, transactions, currentConfiguration, lockForChange, bumpInputsRevision: (estimateId, tx) => estimates.bumpInputsRevision(estimateId, tx), mayOpen });
+  const pictures = createImageService({ nodes, images, transactions, currentConfiguration, lockForChange, bumpInputsRevision: (estimateId, tx) => estimates.bumpInputsRevision(estimateId, tx), mayOpen, traces });
 
   return {
     getForm: inputs.getForm,
@@ -403,20 +423,21 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
 
     async getTree(viewer, estimateId) {
       const id = await openForRead(viewer, estimateId);
-      return viewsOf(await nodes.listNodes(id), await completenessReader());
+      return viewsOf(await nodes.listNodes(id), await viewReaders(id));
     },
 
     async getNode(viewer, estimateId, nodeId) {
       const records = await nodes.listNodes(await openForRead(viewer, estimateId));
       const record = partIn(records, nodeId);
-      const view = viewsOf(records, await completenessReader()).find((candidate) => candidate.id === record.id);
+      const view = viewsOf(records, await viewReaders(estimateId)).find((candidate) => candidate.id === record.id);
       if (view === undefined) throw new NotFoundError();
       // Of what is stored, only the values of fields of the form leave (ADR-008: the answer is built from an allow-list).
       return { ...view, inputs: await inputs.visibleInputs(estimateId, record.inputs), picture: await pictures.pictureOf(estimateId, record.imageId) };
     },
 
-    async addPart(viewer, estimateId, request) {
-      const completenessOf = await completenessReader();
+    async addPart(viewer, estimateId, request, audit) {
+      const trace = traces.traceFor(viewer, audit);
+      const readers = await viewReaders(estimateId);
       return transactions.run(async (tx) => {
         const id = await lockForChange(viewer, estimateId, tx);
         const before = await nodes.listNodes(id, tx);
@@ -426,17 +447,20 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
         const created = await nodes.insertNode(id, parentId, request.nodeKind, index, tx);
         const after = insertNode(placedOf(before), { id: created.id, parentId, index });
         const shifted = changedPlacements([...placedOf(before), { id: created.id, parentId, sortIndex: index }], after);
-        return { nodeId: created.id, nodes: await finishChange(id, shifted, completenessOf, tx) };
+        const tree = await finishChange(id, shifted, readers, tx);
+        if (trace !== null) await trace.audit.recordMany(tx, await trace.partAdded(tx, { estimateId: id, document: readers.document, nodeId: created.id, after: await nodes.listNodes(id, tx) }));
+        return { nodeId: created.id, nodes: tree };
       });
     },
 
-    async moveNode(viewer, estimateId, request) {
-      const completenessOf = await completenessReader();
+    async moveNode(viewer, estimateId, request, audit) {
+      const trace = traces.traceFor(viewer, audit);
+      const readers = await viewReaders(estimateId);
       return transactions.run(async (tx) => {
         const id = await lockForChange(viewer, estimateId, tx);
         const before = await nodes.listNodes(id, tx);
         const part = partIn(before, request.nodeId);
-        if (part.revision !== request.revision) throw new TreeChangedError(viewsOf(before, completenessOf));
+        if (part.revision !== request.revision) throw new TreeChangedError(viewsOf(before, readers));
         // One refusal, one place (A-CR01-5, confirmed by the customer on 2026-11-23): a row is reordered only among rows with the same parent. This also keeps a row out of its own subtree and out of another estimate, because the
         // only parent allowed is the one it already has. If the customer ever asks for "other parents", this line goes and, instead, the parent must exist in this estimate, must not be the row
         // or one of its descendants (`canMove` in `lib/estimate/tree.ts` is that check, unused until then) and must allow the moving row's kind (`isAllowedChild`).
@@ -444,19 +468,22 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
         const placed = placedOf(before);
         const changed = changedPlacements(placed, moveNode(placed, part.id, part.parentId, request.index));
         // A part that is already where it was asked to go changes nothing: no write, no new revision, and the figures are not cleared for it.
-        if (!changed.some((place) => place.id === part.id)) return viewsOf(before, completenessOf);
+        if (!changed.some((place) => place.id === part.id)) return viewsOf(before, readers);
         await nodes.placeNodes(
           id,
           changed.map((place) => ({ ...place, bumpRevision: place.id === part.id })),
           tx,
         );
         await estimates.bumpInputsRevision(id, tx);
-        return viewsOf(await nodes.listNodes(id, tx), completenessOf);
+        const after = await nodes.listNodes(id, tx);
+        if (trace !== null) await trace.audit.recordMany(tx, await trace.partMoved(tx, { estimateId: id, document: readers.document, nodeId: part.id, before, after }));
+        return viewsOf(after, readers);
       });
     },
 
-    async deleteNode(viewer, estimateId, request) {
-      const completenessOf = await completenessReader();
+    async deleteNode(viewer, estimateId, request, audit) {
+      const trace = traces.traceFor(viewer, audit);
+      const readers = await viewReaders(estimateId);
       return transactions.run(async (tx) => {
         const id = await lockForChange(viewer, estimateId, tx);
         const before = await nodes.listNodes(id, tx);
@@ -465,11 +492,12 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
         // What the person confirmed must be what would go: the part as they saw it, the same number of parts, and the same parts in the same state. A part added below,
         // moved in or out, replaced by another or typed into since then changes the fingerprint, so it is not deleted unseen (SQR-01).
         const members = before.filter((record) => doomed.includes(record.id));
-        if (part.revision !== request.revision || doomed.length !== request.parts || subtreeFingerprint(members) !== request.subtree) throw new TreeChangedError(viewsOf(before, completenessOf));
+        if (part.revision !== request.revision || doomed.length !== request.parts || subtreeFingerprint(members) !== request.subtree) throw new TreeChangedError(viewsOf(before, readers));
         await nodes.deleteNodes(id, doomed, tx);
+        if (trace !== null) await trace.audit.recordMany(tx, await trace.partDeleted(tx, { estimateId: id, document: readers.document, nodeId: part.id, before, doomed }));
         const placed = placedOf(before);
         const remaining = placed.filter((place) => !doomed.includes(place.id));
-        return finishChange(id, changedPlacements(remaining, removeNodes(placed, doomed)), completenessOf, tx);
+        return finishChange(id, changedPlacements(remaining, removeNodes(placed, doomed)), readers, tx);
       });
     },
 

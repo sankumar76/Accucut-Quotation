@@ -52,6 +52,15 @@ describe('loadForm', () => {
     ]);
   });
 
+  it('AQP-447: reads the mark of a field that names the row, leaves it out of every other, and refuses a mark it does not know', async () => {
+    const text = { type: 'text', maxLength: 200, multiline: false };
+    const description = field({ id: OTHER_FIELD, letter: 'D', label: 'Description', nameKey: 'description', rule: text });
+    const outcome = await loadForm(ESTIMATE, () => Promise.resolve(json(200, { sections: [section([field(), description])], lastSavedAt: null })));
+    expect(outcome.status === 'ok' && outcome.value.sections[0]?.fields.map((entry) => entry.nameKey)).toEqual([undefined, 'description']);
+    const unknown = await loadForm(ESTIMATE, () => Promise.resolve(json(200, { sections: [section([field({ nameKey: 'anything' })])], lastSavedAt: null })));
+    expect(unknown.status).toBe('failed');
+  });
+
   it('reads every kind of rule', async () => {
     const rules = [
       { type: 'number', decimals: 2 },

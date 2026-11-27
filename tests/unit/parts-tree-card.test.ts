@@ -54,6 +54,7 @@ function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
     confirmDelete: () => Promise.resolve(),
     cancelDelete: noop,
     applySaved: noop,
+    applyLabel: noop,
     readAgain: noop,
   };
 }
@@ -83,7 +84,7 @@ describe('rulings 7b and 12: the arrow cell and the indent step', () => {
 });
 
 describe('ruling 9: the row toolbar is quiet at rest', () => {
-  const actions = renderToStaticMarkup(createElement(RowActions, { part: NODES[1] as PartItem, onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop }));
+  const actions = renderToStaticMarkup(createElement(RowActions, { part: NODES[1] as PartItem, kindLabel: 'Sub-Assembly', onAdd: noop, onDelete: noop, upTo: 0, downTo: 1, onMoveTo: noop }));
   const buttons = actions
     .split('<button')
     .slice(1)
@@ -249,8 +250,18 @@ describe('item 10: in the workspace the tree card sits beside the form card, not
     const open = html.lastIndexOf('<div', html.indexOf('data-form-area'));
     const card = html.slice(open, html.indexOf('>', open));
     for (const name of ['lg:flex-1', 'lg:border-0', 'lg:bg-transparent', 'lg:shadow-none']) expect(card, name).toContain(name);
-    expect(formCard).toMatch(/data-slot="card-header" class="[^"]*lg:px-0/);
+    // The card's own head is not drawn (DEF-097): the form's head is the mock-up's head. Its title is still there for the rows' links and the group's name.
+    expect(formCard).toMatch(/data-slot="card-header" class="[^"]*sr-only/);
     expect(formCard).toMatch(/data-slot="card-content" class="[^"]*lg:p-0/);
+  });
+
+  it('has no border, fill or padding on a phone either (AQP-458, DEF-101), so the section cards keep the width two 140 px columns need at 360 px', () => {
+    const open = html.lastIndexOf('<div', html.indexOf('data-form-area'));
+    const card = html.slice(open, html.indexOf('>', open));
+    for (const name of ['max-md:border-0', 'max-md:bg-transparent', 'max-md:shadow-none', 'max-md:rounded-none']) expect(card, name).toContain(name);
+    expect(formCard).toMatch(/data-slot="card-content" class="[^"]*max-md:p-0/);
+    // From 768 to 1023 px it is still a card: no unprefixed removal.
+    expect(card).not.toMatch(/(^|\s)(border-0|bg-transparent|shadow-none)(\s|")/);
   });
 
   it('has the head "Parts tree" before the form card and none inside it', () => {

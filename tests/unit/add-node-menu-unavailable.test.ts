@@ -2,12 +2,11 @@ import type { ReactElement, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AddNodeMenu } from '@/components/features/estimate-workspace/add-node-menu';
-import { AddNodeMenuPanel } from '@/components/features/estimate-workspace/add-node-menu-panel';
 import { AddNodeTrigger, UNAVAILABLE_LOOK } from '@/components/features/estimate-workspace/add-node-trigger';
 import { RowActions } from '@/components/features/estimate-workspace/row-actions';
 import type { PartItem } from '@/lib/estimates/tree-client';
 
-import { renderHook } from '../support/hook-harness';
+import { renderPanel, type MenuPanelProps } from '../support/menu-panel';
 
 // The hooks are the harness's (`tests/support/hook-harness.ts`), the rest of React is real, and the first-open loader is replaced by one the test drives. The components are called as functions and the elements
 // they return are read: no DOM is needed to pin what each control is given and what its handlers do.
@@ -92,7 +91,7 @@ describe('the trigger before the menu has loaded', () => {
 
 describe('the loaded menu', () => {
   const panel = (extra: Props = {}) =>
-    renderHook(AddNodeMenuPanel, { label: 'Add under 1 Hopper', nodeKinds: KINDS, onChoose: vi.fn(), keyboard: false, ...extra } as Parameters<typeof AddNodeMenuPanel>[0]);
+    renderPanel({ label: 'Add under 1 Hopper', nodeKinds: KINDS, onChoose: vi.fn(), keyboard: false, ...extra } as MenuPanelProps);
   const menuOf = (tree: ReactNode): ReactElement<Props> => {
     const found = elementsIn(tree)[0];
     if (found === undefined) throw new Error('no menu');
@@ -140,7 +139,7 @@ describe('the "+" and the "-" of a row', () => {
   it('puts the direct "+" and the "-" out of reach while a change is on its way: aria-disabled, the look, described by the line, and a press does nothing', () => {
     const onAdd = vi.fn();
     const onDelete = vi.fn();
-    const tree = RowActions({ part: part('PART'), onAdd, onDelete, ...PLACES, busy: true, describedBy: 'parts-tree-changing' });
+    const tree = RowActions({ part: part('PART'), kindLabel: 'Part', onAdd, onDelete, ...PLACES, busy: true, describedBy: 'parts-tree-changing' });
     const [add, remove] = buttons(tree);
     expect(add?.props).toMatchObject({ unavailable: true, 'aria-describedby': 'parts-tree-changing' });
     expect(add?.props['onClick']).toBeUndefined();
@@ -152,7 +151,7 @@ describe('the "+" and the "-" of a row', () => {
   });
 
   it('does not describe them by a line that is not on screen', () => {
-    const [add, remove] = buttons(RowActions({ part: part('PART'), onAdd: vi.fn(), onDelete: vi.fn(), ...PLACES, busy: true }));
+    const [add, remove] = buttons(RowActions({ part: part('PART'), kindLabel: 'Part', onAdd: vi.fn(), onDelete: vi.fn(), ...PLACES, busy: true }));
     expect(add?.props).not.toHaveProperty('aria-describedby');
     expect(remove?.props).not.toHaveProperty('aria-describedby');
   });
@@ -160,7 +159,7 @@ describe('the "+" and the "-" of a row', () => {
   it('leaves them as they were when nothing is on its way, and a press goes through', () => {
     const onAdd = vi.fn();
     const onDelete = vi.fn();
-    const [add, remove] = buttons(RowActions({ part: part('PART'), onAdd, onDelete, ...PLACES }));
+    const [add, remove] = buttons(RowActions({ part: part('PART'), kindLabel: 'Part', onAdd, onDelete, ...PLACES }));
     expect(add?.props['unavailable']).toBe(false);
     expect(remove?.props).not.toHaveProperty('aria-disabled');
     (add?.props['onClick'] as () => void)();
@@ -170,7 +169,7 @@ describe('the "+" and the "-" of a row', () => {
   });
 
   it('hands the state to the "+" menu of a Main Assembly row', () => {
-    const menu = elementsIn(RowActions({ part: part('MAIN_ASSEMBLY'), onAdd: vi.fn(), onDelete: vi.fn(), ...PLACES, busy: true, describedBy: 'parts-tree-changing' })).find((element) => element.type === AddNodeMenu);
+    const menu = elementsIn(RowActions({ part: part('MAIN_ASSEMBLY'), kindLabel: 'Main Assembly', onAdd: vi.fn(), onDelete: vi.fn(), ...PLACES, busy: true, describedBy: 'parts-tree-changing' })).find((element) => element.type === AddNodeMenu);
     expect(menu?.props).toMatchObject({ unavailable: true, describedBy: 'parts-tree-changing' });
   });
 });

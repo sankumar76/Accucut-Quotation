@@ -33,7 +33,7 @@ async function openReview(page: Page, testInfo: TestInfo, role: 'LEAD' | 'ADMIN'
   await signInAsLead(page, testInfo, role);
   const response = await page.goto(`/estimates/${code}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
   return { code, ownerId: owner.id };
 }
 

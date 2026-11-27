@@ -189,7 +189,7 @@ async function openedAsLeadTimed(timer: StepTimer, page: Page, testInfo: TestInf
   await timer.step('Lead sign-in', () => signInAs(page, lead));
   const response = await timer.step('Lead review page: goto', () => page.goto(`/estimates/${code}`), (answer) => statusOf(answer));
   expect(response?.status()).toBe(200);
-  await timer.step('Lead review page: heading is the code', () => expect(page.getByRole('heading', { level: 1 })).toHaveText(code));
+  await timer.step('Lead review page: heading is the code', () => expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`));
   await timer.step('Lead review page: Approve enabled', () => expect(approveButton(page)).toBeEnabled());
   await timer.step('Lead review page: Approve hydrated', () => waitUntilHydrated(page, '#review-approve'));
   return { owner, code };
@@ -202,7 +202,7 @@ async function openedAsLead(page: Page, testInfo: Parameters<typeof signInAsLead
   await signInAsLead(page, testInfo);
   const response = await page.goto(`/estimates/${code}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
   await expect(approveButton(page)).toBeEnabled();
   await waitUntilHydrated(page, '#review-approve');
   return { owner, code };

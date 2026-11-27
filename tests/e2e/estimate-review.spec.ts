@@ -3,8 +3,10 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 import { defined } from '../support/defined';
 
 import { createDisposableUser, E2E_ADMIN, useFreshAddress } from './support/auth';
+import { controlIdFor } from '../../src/components/features/estimate-workspace/field-ids';
 import { calculateWithoutThePage, engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
+import { DEVELOPMENT_URL } from './support/servers';
 import { expectLinkTarget, isTouchLayout } from './support/touch-link';
 
 /**
@@ -37,19 +39,53 @@ async function openAsLead(page: Page, testInfo: TestInfo, code: string, role: 'L
   await signInAs(page, person);
   const response = await page.goto(`/estimates/${code}`);
   expect(response?.status()).toBe(200);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
 }
 
 const tiles = (page: Page) => page.getByRole('region', { name: 'Totals' });
-const treePanel = (page: Page) => page.locator('details').filter({ has: page.locator('summary', { hasText: /^Parts tree$/ }) });
+const treePanel = (page: Page) => page.locator('details').filter({ has: page.locator('summary', { hasText: /^Parts tree/ }) });
 const buildPanel = (page: Page) => page.locator('details').filter({ has: page.locator('summary', { hasText: /^How the total is built/ }) });
 const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
+
+/**
+ * AQP-465 (DEF-108; ux-expert ruling 2026-11-28) and AQP-488 (DEF-131 Stage 1; ruling 2026-11-27 section 3.8): "How the total is built" is above the two columns at every width, under the tiles, which stay full width. The
+ * columns are the parts tree and the inputs of the open row: from 1024 px the tree is a column 320 px wide (the SCR-05 tree's width) at the left, sticky, with the inputs at its right, starting at the same height; below
+ * 1024 px the two are stacked, the tree first, and the tree folds. Judged from the boxes as drawn.
+ */
+async function expectColumns(page: Page): Promise<void> {
+  const inputs = page.locator('#row-inputs');
+  const [tilesBox, treeBox, buildBox, inputsBox] = await Promise.all([tiles(page).boundingBox(), treePanel(page).boundingBox(), buildPanel(page).boundingBox(), inputs.boundingBox()]);
+  if (tilesBox === null || treeBox === null || buildBox === null || inputsBox === null) throw new Error('a box is missing');
+  expect(buildBox.y).toBeGreaterThanOrEqual(tilesBox.y + tilesBox.height - 1);
+  expect(treeBox.y).toBeGreaterThanOrEqual(buildBox.y + buildBox.height - 1);
+  if ((page.viewportSize()?.width ?? 0) >= 1024) {
+    expect(Math.abs(treeBox.width - 320)).toBeLessThanOrEqual(1);
+    expect(inputsBox.x).toBeGreaterThanOrEqual(treeBox.x + treeBox.width - 1);
+    expect(Math.abs(inputsBox.y - treeBox.y)).toBeLessThanOrEqual(1);
+    await expect(treePanel(page)).toHaveCSS('position', 'sticky');
+  } else {
+    expect(inputsBox.y).toBeGreaterThanOrEqual(treeBox.y + treeBox.height - 1);
+    await expect(treePanel(page)).toHaveCSS('position', 'static');
+  }
+}
 
 test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
   test('AC-1: the tiles show BL in rupees, BN and BO, each with its letter tag and its file cell once', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
     await calculateWithoutThePage(page, owner);
     await openAsLead(page, testInfo, code);
+
+    // AQP-452 (DEF-110; UX spec SCR-06, the mock-up): a breadcrumb "Task queue / <code>", one meta line (title, subject, customer with Change customer, who entered it and who assigned it), the due pill, Copy path;
+    // the three-column customer card and the Task folder card are gone.
+    const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+    await expect(crumbs.getByRole('link', { name: 'Task queue' })).toHaveAttribute('href', '/queue');
+    await expect(crumbs.locator('[aria-current="page"]')).toHaveText(code);
+    const main = page.getByRole('main');
+    await expect(main).toContainText(/Subject: .* · .*Entered by .* · Assigned by /);
+    await expect(main.getByText(/^Due /)).toBeVisible();
+    await expect(main.getByRole('button', { name: 'Copy path' })).toBeVisible();
+    await expect(main.getByText('Task folder')).toHaveCount(0);
+    await expect(main.getByText('Customer Short Name')).toHaveCount(0);
 
     await expect(tiles(page)).toContainText('Total Unit Production Price');
     await expect(tiles(page)).toContainText('Price per Tool Cost');
@@ -72,6 +108,73 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(rows.first().locator('span').filter({ hasText: FIGURE }).last()).toBeVisible();
     await expect(treePanel(page)).toContainText("Each figure is that row's own BG. The count for the whole order (QTY per Assy) is shown beside it and is already included. The estimate total adds every row's BG.");
     await expect(page.getByText('Σ')).toHaveCount(0);
+
+    // AQP-488 (DEF-131 Stage 1; ruling 2026-11-27, RO-1, RO-6, RO-9, RO-10, RO-11, RO-14): each row's first line is a link to its inputs, the first row is open, and the block beside the tree is the Engineer's form read-only: a region
+    // named by its title, the Lead's notice, the row line with the row's own figure, no intro, no edit control, and nothing sent when a value is typed.
+    const open = treePanel(page).locator('a[aria-current="true"]');
+    await expect(open).toHaveCount(1);
+    await expect(open).toHaveAttribute('href', /\?row=1#row-inputs$/);
+    const inputs = page.locator('#row-inputs');
+    const form = inputs.locator('form[data-part-form]');
+    await expect(form).toBeVisible();
+    await expect(inputs.locator('#part-form-title')).toContainText('1');
+    await expect(form).toHaveAccessibleName(/^1/);
+    await expect(inputs).toContainText('Read-only. These are the values saved for this part.');
+    await expect(inputs.locator('[data-row-line]')).toContainText(/^This row: ₹ [\d,]+\.\d{2} \(B[A-Z]\) · \$ ([\d,]+\.\d{2}|—) · € ([\d,]+\.\d{2}|—) · count [\d,.]+ nos/);
+    await expect(inputs).not.toContainText('Every field is needed to Calculate');
+    await expect(inputs.getByRole('button')).toHaveCount(0);
+    const writes: string[] = [];
+    page.on('request', (request) => {
+      if (request.method() !== 'GET' && request.url().includes('/api/v1/')) writes.push(request.method());
+    });
+    // RO-3 (QLT-800-04): each value the part holds is the value shown, compared by field ID: the part is read as the Lead through the same route the form uses, and every box (a number, a text) shows what it holds. A number is
+    // shown as SCR-05 shows it after saving (two decimals), so numbers are compared as numbers.
+    const held = await page.evaluate(async (id) => {
+      const response = await fetch(`/api/v1/estimates/${id}/nodes/${id}`);
+      return { status: response.status, inputs: ((await response.json()) as { inputs: ReadonlyArray<{ fieldId: string; value: string }> }).inputs };
+    }, owner.id);
+    expect(held.status).toBe(200);
+    let compared = 0;
+    for (const { fieldId, value: stored } of held.inputs) {
+      const box = form.locator(`input#${controlIdFor(fieldId)}, textarea#${controlIdFor(fieldId)}`);
+      if ((await box.count()) === 0 || stored === '') continue;
+      const shown = await box.inputValue();
+      if (/^-?\d+(\.\d+)?$/.test(stored)) expect(Number(shown), `field ${fieldId}`).toBe(Number(stored));
+      else expect(shown, `field ${fieldId}`).toBe(stored);
+      compared += 1;
+    }
+    expect(compared, 'boxes compared with what the part holds').toBeGreaterThan(3);
+
+    const length = form.getByRole('textbox', { name: /Length/ }).first();
+    const before = await length.inputValue();
+    await length.focus();
+    await page.keyboard.type('9');
+    await length.blur();
+    await expect(length).toHaveValue(before);
+    await expect(length).toHaveAttribute('aria-readonly', 'true');
+
+    // AQP-496 (DEF-138, DL-446): a read-only drop-down neither opens nor changes. By touch (360 and 768) it is tapped; with a mouse (1366) it is clicked and then given Space, Enter, the arrows, Alt+Down and a typed
+    // letter. Each must leave the value, raise no change event and open no list (`:open`, where the browser has it), and send nothing.
+    const selects = form.locator('select:not([disabled])');
+    const selectCount = await selects.count();
+    expect(selectCount, 'drop-downs in the read-only inputs').toBeGreaterThan(0);
+    await page.evaluate(() => document.addEventListener('change', () => document.documentElement.setAttribute('data-select-changed', ''), true));
+    const touch = (page.viewportSize()?.width ?? 0) < 1024;
+    for (let index = 0; index < selectCount; index += 1) {
+      const select = selects.nth(index);
+      const kept = await select.inputValue();
+      if (touch) {
+        await select.tap();
+      } else {
+        await select.click();
+        for (const key of [' ', 'Enter', 'ArrowDown', 'ArrowUp', 'Alt+ArrowDown', 'a']) await page.keyboard.press(key);
+      }
+      await expect(select).toHaveValue(kept);
+      await expect(select).toHaveAttribute('aria-readonly', 'true');
+      expect(await select.evaluate((element) => { try { return element.matches(':open'); } catch { return false; } }), 'the list is not open').toBe(false);
+    }
+    await expect(page.locator('html')).not.toHaveAttribute('data-select-changed', '');
+    expect(writes).toEqual([]);
   });
 
   test('AC-3: "How the total is built" lists the row and ends with the total, which is the figure of the BL tile, under the example and the rounding sentence', async ({ page }, testInfo) => {
@@ -80,7 +183,15 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await openAsLead(page, testInfo, code);
 
     await expect(buildPanel(page)).not.toHaveAttribute('open', '');
-    await buildPanel(page).locator('summary').click();
+    // AQP-468 (DEF-112; ux-expert ruling 2026-11-28): the whole line is the control, with the heading, a chevron and the word "Show" while it is closed and "Hide" while it is open.
+    const toggle = buildPanel(page).locator('summary');
+    // `toHaveText` reads the text of the element, hidden words included: the heading comes first, and what is seen is judged by the two checks below.
+    await expect(toggle).toHaveText(/^How the total is built/);
+    await expect(toggle.getByText('Show', { exact: true })).toBeVisible();
+    await expect(toggle.getByText('Hide', { exact: true })).toBeHidden();
+    await toggle.click();
+    await expect(toggle.getByText('Hide', { exact: true })).toBeVisible();
+    await expect(toggle.getByText('Show', { exact: true })).toBeHidden();
     const table = page.getByRole('region', { name: 'How the total is built, scrollable' });
     await expect(table).toBeVisible();
     for (const heading of ['Sl. No', 'Part', 'QTY per Assy']) await expect(table.getByRole('columnheader', { name: new RegExp(heading, 'i') })).toBeVisible();
@@ -90,6 +201,8 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(tiles(page)).toContainText(`₹ ${total}`);
     await expect(buildPanel(page)).toContainText('Worked example: if one lid costs 1, one pipe costs 1 and the frame row holds nothing, the total is 24 + 6 + 0 = 30.');
     await expect(buildPanel(page)).toContainText('Figures are shown to 2 decimals. Totals add the unrounded values and round once');
+    await expect(buildPanel(page)).toContainText("The Engineer types the count for the whole order on every row (QTY per Assy, column H). Each row's cost (column BG) already includes its own count, so the total is the BG of every row added together. Nothing is multiplied by the rows above.");
+    await expectColumns(page);
   });
 
   test('AC-2: an Admin sees the same review', async ({ page }, testInfo) => {
@@ -97,12 +210,19 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await calculateWithoutThePage(page, owner);
     await openAsLead(page, testInfo, code, 'ADMIN');
     await expect(tiles(page)).toContainText('File cell BL2');
+    // The Admin sees the same inputs block, read-only (AQP-488).
+    await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
+    await expect(page.locator('#row-inputs')).toContainText('Read-only.');
   });
 });
 
 test.describe('AC-6: not calculated', () => {
   test('shows the notice as a status, "Not calculated", dashes, Calculate as the primary button, and Approve and Download off with their reasons', async ({ page }, testInfo) => {
-    const { code } = await engineerWithEstimate(testInfo);
+    const { owner, code } = await engineerWithEstimate(testInfo);
+    // A second row (AQP-488; not a person, so the ledger of persons stays as it was): the Engineer adds a main assembly with the request the "+" sends, before the Lead opens the page.
+    await signInAs(page, owner);
+    const added = await page.request.post(`/api/v1/estimates/${owner.id}/nodes`, { headers: { origin: DEVELOPMENT_URL }, data: { parentId: null, nodeKind: 'MAIN_ASSEMBLY' } });
+    expect(added.status(), 'the Engineer adds a second row').toBe(201);
     await openAsLead(page, testInfo, code);
 
     const notice = page.getByRole('status').filter({ hasText: 'The Engineer has not calculated this estimate yet.' });
@@ -124,6 +244,24 @@ test.describe('AC-6: not calculated', () => {
     }
     await expect(page.locator('#review-approve-reason')).toHaveText('Calculate first. Approving is available once the figures have been calculated.');
     await expect(page.locator('#review-download-reason')).toHaveText('Calculate or Recalculate first. There is no file until a calculation is current.');
+
+    // AQP-488 (DEF-131 Stage 1; ruling 2026-11-27, RO-2, RO-15, RO-16, RO-17): choosing the second row. The first is open to begin with; the link goes to ?row=2#row-inputs, `aria-current` moves, the focus is on the form's
+    // title, the choice is said once, below 1024 px the tree folds, and the page is as clean for axe as before. The state is "not calculated", so the row line has a dash and the count.
+    const inputs = page.locator('#row-inputs');
+    await expect(inputs.locator('form[data-part-form]')).toBeVisible();
+    await expect(treePanel(page).locator('a[aria-current="true"]')).toHaveAttribute('href', /\?row=1#row-inputs$/);
+    await expect(inputs.locator('[data-row-line]')).toContainText(/^This row: — · count /);
+    await expect(inputs.getByRole('status').filter({ hasText: 'Showing the inputs of' })).toHaveCount(0);
+    await treePanel(page).locator('a[href$="?row=2#row-inputs"]').click();
+    await expect(page).toHaveURL(/\?row=2#row-inputs$/);
+    await expect(treePanel(page).locator('a[aria-current="true"]')).toHaveAttribute('href', /\?row=2#row-inputs$/);
+    await expect(inputs.locator('#part-form-title')).toContainText('2');
+    await expect(page.locator('#part-form-title')).toBeFocused();
+    await expect(inputs.getByRole('status').filter({ hasText: /^Showing the inputs of 2 .* Read-only\.$/ })).toHaveCount(1);
+    if ((page.viewportSize()?.width ?? 0) < 1024) await expect(treePanel(page)).not.toHaveAttribute('open', '');
+    else await expect(treePanel(page)).toHaveAttribute('open', '');
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    await expectNoAxeViolations(page);
   });
 });
 
@@ -134,10 +272,20 @@ test.describe('AC-5 (NFR-002): an Engineer at the same address', () => {
 
     const own = await page.goto(`/estimates/${code}`);
     expect(own?.status()).toBe(200);
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText(code);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
     await expect(page.getByText('Total Unit Production Price')).toHaveCount(0);
     await expect(page.getByText('File cell')).toHaveCount(0);
     await expect(page.locator('#review-approve')).toHaveCount(0);
+    // AQP-488 (NFR-002): the Engineer gets no inputs block of the review, no row line and no row links, at the address with or without `?row=`.
+    for (const path of [`/estimates/${code}`, `/estimates/${code}?row=1`]) {
+      const response = await page.goto(path);
+      expect(response?.status()).toBe(200);
+      await expect(page.locator('#row-inputs')).toHaveCount(0);
+      await expect(page.getByText('This row:')).toHaveCount(0);
+      await expect(page.getByText('Read-only. These are the values')).toHaveCount(0);
+      await expect(page.locator('a[href*="row="]')).toHaveCount(0);
+      await expect(page.getByText(/This row: ₹/)).toHaveCount(0);
+    }
 
     const refused = await page.evaluate(async (id) => {
       const response = await fetch(`/api/v1/estimates/${id}/costs`);
@@ -192,13 +340,21 @@ test.describe('AC-9: layout and accessibility', () => {
 
     const rows = treePanel(page).locator('[data-part-row]');
     await expect(rows.first()).toBeVisible();
-    await treePanel(page).locator('summary').click();
-    await expect(rows.first()).toBeHidden();
-    await treePanel(page).locator('summary').click();
-    await expect(rows.first()).toBeVisible();
+    if ((page.viewportSize()?.width ?? 0) < 1024) {
+      // Below 1024 px the tree is the foldable panel it was (AQP-465: from 1024 px it is a column that stays, so its summary takes no press there).
+      await treePanel(page).locator('summary').click();
+      await expect(rows.first()).toBeHidden();
+      await treePanel(page).locator('summary').click();
+      await expect(rows.first()).toBeVisible();
+    } else {
+      await expect(treePanel(page).locator('summary')).toHaveCSS('pointer-events', 'none');
+      await expect(rows.first()).toBeVisible();
+    }
 
     await buildPanel(page).locator('summary').click();
     await expect(page.getByRole('region', { name: 'How the total is built, scrollable' })).toBeVisible();
+    // The block of the open row is on the page, its form read, when the scan runs (RO-15, RO-17).
+    await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
   });
@@ -229,6 +385,10 @@ test.describe('DEF-079: "View cost details" is a 44 px control on a touch layout
     await expect(link).toHaveCount(1);
     await expectLinkTarget(page, '"View cost details"', link);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+    // Reading the link scrolled it into view, and at 768 px that leaves another link of the page (the folder's) half behind the sticky top bar, which axe reads as a target too small (target-size): where it falls moves with the
+    // lines above it (AQP-488 moved the build panel above the tree). The scan is the whole page from its top, with no rule excluded; the link has been read above (the same pattern as estimate-save, AQP-452).
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(link).toHaveCount(1);
     await expectNoAxeViolations(page);
   });
 

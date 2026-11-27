@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { Outcome } from '@/lib/api-client';
-import type { NodeKind } from '@/lib/estimate/node-kinds';
+import { nodeKindLabel, type NodeKind } from '@/lib/estimate/node-kinds';
 import { addPart, deletePart, loadTree, movePart, treeFromRefusal, type PartItem, type TreeAnswer } from '@/lib/estimates/tree-client';
+import { addedAnnouncement, deletedAnnouncement, rowNameOf } from '@/lib/estimates/row-name';
 import { deleteGuardOf, partsRemoved, siblingsOf } from '@/lib/estimates/tree-moves';
 
 import { ESTIMATE_IGNORED_CODE } from '../estimate-ignore/ignore-codes';
-import { addedMessage, deletedMessage, renumberedMessage, TREE_CHANGING } from './estimate-texts';
+import { deletedMessage, renumberedMessage, TREE_CHANGING } from './estimate-texts';
 
 /**
  * How long a change to the tree (a move, an add or a delete) is waited for before the screen stops waiting, aborts the request and reads the tree again (AQP-343, DEF-040, DL-340). It is **longer than the
@@ -34,8 +35,12 @@ export type TreeProblem =
 export interface DeleteTarget {
   readonly id: string;
   readonly slNo: string;
+  /** The row's name as the dialog says it: its Description, else its Part No., else its kind's own name (AQP-446). */
+  readonly name: string;
   readonly revision: number;
   readonly parentId: string | null;
+  /** The rows under it, in reading order, each by its number and its name (the dialog lists them: DEF-099). */
+  readonly under: ReadonlyArray<{ readonly slNo: string; readonly name: string }>;
   /** The part and every sub-part. */
   readonly parts: number;
   /** The fingerprint of those parts with their revisions, as the dialog showed them. */
@@ -219,12 +224,13 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
 
   /** Adds a row of this kind last under the row `parentId` (null: the top level, "Add main assembly"). The new row is opened and takes the focus. The server decides whether the kind is allowed there (CR-01 item 3C). */
   function addUnder(parentId: string | null, nodeKind: NodeKind): void {
+    const before = nodes ?? [];
     void change(
       (signal) => addPart(estimateId, { parentId, nodeKind }, undefined, signal),
       (answer) => {
         focusAfterAdd.current = answer.nodeId;
         setSelectedId(answer.nodeId);
-        setAnnouncement(addedMessage(slNoOf(answer.nodes, answer.nodeId)));
+        setAnnouncement(addedAnnouncement(before, answer.nodes, answer.nodeId ?? ''));
       },
       // Exactly one row is new in the tree read again, and it is under the row it was added to.
       (fresh, before) => {
@@ -271,20 +277,21 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
     // While a change is on its way the "-" is not offered (`aria-disabled`); this is the guard behind it.
     if (row === undefined || nodes === null || inFlight.current) return;
     setProblem(null);
-    setDeleting({ id: row.id, slNo: row.slNo, revision: row.revision, parentId: row.parentId, ...deleteGuardOf(nodes, row.id), removedIds: partsRemoved(nodes, row.id).map((part) => part.id) });
+    setDeleting({ id: row.id, slNo: row.slNo, name: rowNameOf(row.label, nodeKindLabel(row, nodes)), under: partsRemoved(nodes, row.id).filter((part) => part.id !== row.id).map((part) => ({ slNo: part.slNo, name: rowNameOf(part.label, nodeKindLabel(part, nodes)) })), revision: row.revision, parentId: row.parentId, ...deleteGuardOf(nodes, row.id), removedIds: partsRemoved(nodes, row.id).map((part) => part.id) });
     setDeleteOpen(true);
   }
 
   async function confirmDelete(): Promise<void> {
     if (deleting === null) return;
     const { id, revision, parts, subtree, parentId, removedIds } = deleting;
+    const before = nodes ?? [];
     // The dialog closes whatever the server says: on a refusal the notice and the fresh tree are on the page, which is where the person has to look.
     await change(
       (signal) => deletePart(estimateId, { nodeId: id, revision, parts, subtree }, undefined, signal),
-      () => {
+      (answer) => {
         // The open row stays open unless it went with the deleted ones; then its parent is open (the first row, at the top).
         setSelectedId((current) => (current !== null && removedIds.includes(current) ? parentId : current));
-        setAnnouncement(deletedMessage(parts));
+        setAnnouncement(deletedAnnouncement(deletedMessage(parts), before, answer.nodes));
       },
       // The part is no longer in the tree read again.
       (fresh) => (fresh.some((node) => node.id === id) ? null : { nodes: fresh, nodeId: null }),
@@ -298,6 +305,11 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
    */
   function applySaved(saved: { readonly id: string; readonly revision: number; readonly completeness: PartItem['completeness'] }): void {
     setNodes((current) => (current === null ? current : current.map((node) => (node.id === saved.id ? { ...node, revision: saved.revision, completeness: saved.completeness } : node))));
+  }
+
+  /** The person left Description or Part No. with a new text: the row's name in the tree is this now, with no wait for the save (AQP-447, NAME-4). A reload shows what the server holds, which is the same. */
+  function applyLabel(id: string, label: string): void {
+    setNodes((current) => (current === null ? current : current.map((node) => (node.id === id ? { ...node, label } : node))));
   }
 
   const cancelDelete = (): void => setDeleteOpen(false);
@@ -327,6 +339,7 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
     confirmDelete,
     cancelDelete,
     applySaved,
+    applyLabel,
     readAgain,
   };
 }

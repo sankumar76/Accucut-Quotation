@@ -14,10 +14,13 @@ export const DropdownMenu = DropdownMenuPrimitive.Root;
 /** The button that opens the menu. */
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 
-/** The menu panel, in a portal above the page, aligned to the trigger's right edge. */
-export function DropdownMenuContent({ className, sideOffset = MENU_OFFSET, align = 'end', ...props }: ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+/**
+ * The menu panel, in a portal above the page, aligned to the trigger's right edge. `container` puts the portal inside that element instead of on the page body (a menu that opens in line under its row,
+ * AQP-451); absent or null, it is the body.
+ */
+export function DropdownMenuContent({ className, sideOffset = MENU_OFFSET, align = 'end', container, ...props }: ComponentProps<typeof DropdownMenuPrimitive.Content> & { readonly container?: HTMLElement | null }) {
   return (
-    <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.Portal {...(container === undefined || container === null ? {} : { container })}>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
