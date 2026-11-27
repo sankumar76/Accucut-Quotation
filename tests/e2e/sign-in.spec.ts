@@ -90,7 +90,7 @@ test.describe('SCR-01 at this width (AC-8)', () => {
     }
   });
 
-  test('AC-8: show and hide is a toggle button: aria-pressed changes, so does its name, and so does the field', async ({ page }) => {
+  test('AC-8: show and hide is a toggle button: aria-pressed changes, so does its name, and so does the field', async ({ page }, testInfo) => {
     await openSignIn(page);
     const password = page.getByLabel('Password', { exact: true });
     const toggle = page.getByRole('button', { name: 'Show password' });
@@ -101,6 +101,30 @@ test.describe('SCR-01 at this width (AC-8)', () => {
     await expect(shown).toHaveAttribute('aria-pressed', 'true');
     await expect(password).toHaveAttribute('type', 'text');
     await shown.click();
+    await expect(page.getByRole('button', { name: 'Show password' })).toHaveAttribute('aria-pressed', 'false');
+
+    // The button is inside the field, at its right edge (the ux-expert, 2026-11-26; AQP-459 follow-up), and a submit hides the password again (DL-419 (E)).
+    const [field, button] = await Promise.all([password.boundingBox(), page.getByRole('button', { name: 'Show password' }).boundingBox()]);
+    if (field === null || button === null) throw new Error('a box is missing');
+    expect(button.x).toBeGreaterThanOrEqual(field.x);
+    expect(button.x + button.width).toBeLessThanOrEqual(field.x + field.width + 1);
+    expect(button.y).toBeGreaterThanOrEqual(field.y - 1);
+    expect(button.y + button.height).toBeLessThanOrEqual(field.y + field.height + 1);
+    await page.getByLabel('E-mail').fill(unknownEmail(testInfo));
+    await password.fill('an-invented-wrong-password');
+    await page.getByRole('button', { name: 'Show password' }).click();
+    await expect(password).toHaveAttribute('type', 'text');
+    // A page that is left (and may be frozen into the back/forward cache) holds a hidden password: the reset is committed in the same task as the event, before anything else can run (SEC-787-01).
+    const typeAfterPagehide = await page.evaluate(() => {
+      window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      return document.querySelector('#password')?.getAttribute('type');
+    });
+    expect(typeAfterPagehide).toBe('password');
+    await page.getByRole('button', { name: 'Show password' }).click();
+    await expect(password).toHaveAttribute('type', 'text');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(noticeOf(page)).toContainText(ERROR_TITLE);
+    await expect(password).toHaveAttribute('type', 'password');
     await expect(page.getByRole('button', { name: 'Show password' })).toHaveAttribute('aria-pressed', 'false');
   });
 
