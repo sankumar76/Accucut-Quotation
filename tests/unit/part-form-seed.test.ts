@@ -5,7 +5,12 @@ import { parseForm, parseMaterials, parsePartInputs } from '@/lib/estimates/form
 import { parseTreatmentOptions } from '@/lib/estimates/treatment-options-client';
 import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody } from '@/server/views/part-form-bodies';
 
+import { createEstimateService } from '@/server/services/estimate-service';
+
 import { defined } from '../support/defined';
+import { inputsDependencies } from '../support/estimate-inputs-deps';
+import { createAuditSink } from '../support/fake-audit-sink';
+import { cloneSeedConfig, seedFieldAt } from '../support/seed-config';
 import { harness, holdSessionClock, releaseSessionClock } from '../support/session-harness';
 
 /**
@@ -52,6 +57,9 @@ afterEach(() => {
   held.status = 'DRAFT';
   held.inputsRevision = 0;
   held.engineerId = harness.idOf.ENGINEER;
+  held.currentCalculationId = null;
+  held.configVersionId = null;
+  held.ignoredAt = null;
   harness.estimateWorld.nodes.splice(0, harness.estimateWorld.nodes.length, { id: held.id, estimateId: held.id, parentId: null, sortIndex: 0, revision: 1, inputs: {} });
 });
 
@@ -157,6 +165,52 @@ describe('getPartForm is getForm and getNode in one read (the combined read of D
       expect(asJson(both.form)).toEqual(asJson(form));
       expect(asJson(both.node)).toEqual(asJson(node));
     }
+  });
+
+  it('answers the same for every role in every state, ignored or not (PRF-827-09): the whole grid', async () => {
+    const id = estimate().id;
+    const sections = (await harness.estimateService.getForm({ id: harness.idOf.LEAD, role: 'LEAD' }, id)).sections;
+    const typedField = defined(sections.flatMap((section) => section.fields).find((field) => field.rule.type === 'number'));
+    defined(harness.estimateWorld.nodes[0]).inputs = { [typedField.id]: '3' };
+    for (const role of ['ENGINEER', 'LEAD', 'ADMIN'] as const) {
+      for (const status of ['DRAFT', 'PREPARED', 'APPROVED', 'QUOTED'] as const) {
+        for (const ignored of [false, true]) {
+          estimate().status = status;
+          estimate().ignoredAt = ignored ? new Date('2026-11-27T10:00:00.000Z') : null;
+          const viewer = { id: harness.idOf[role], role };
+          const [form, node, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getPartForm(viewer, id, id)]);
+          expect(asJson(both.form), `${role} ${status} ignored=${String(ignored)}`).toEqual(asJson(form));
+          expect(asJson(both.node), `${role} ${status} ignored=${String(ignored)}`).toEqual(asJson(node));
+        }
+      }
+    }
+  });
+
+  it('reads the registry the approved figure was made with, as getForm and getNode do (the frozen-registry branch, PRF-827-09)', async () => {
+    const id = estimate().id;
+    const current = cloneSeedConfig();
+    const length = seedFieldAt('J').id;
+    const frozen = { ...current, fields: current.fields.map((field) => (field.id === length ? { ...field, label: 'Frozen invented label' } : field)) };
+    // The estimate is approved and its calculation names a version of the registry: that version, not the newest, is what every read of the form and of the part uses.
+    const service = createEstimateService({
+      estimates: harness.estimateWorld.repository,
+      audit: createAuditSink().service,
+      nodes: harness.estimateWorld.nodeRepository,
+      images: harness.estimateWorld.imageRepository,
+      transactions: harness.estimateWorld.transactions,
+      ...inputsDependencies(),
+      configurationById: () => Promise.resolve(frozen),
+    });
+    const lead = { id: harness.idOf.LEAD, role: 'LEAD' as const };
+    estimate().status = 'APPROVED';
+    estimate().currentCalculationId = '00000000-0000-4000-8000-0000000000c1';
+    estimate().configVersionId = '00000000-0000-4000-8000-0000000000c2';
+    const [form, node, both] = await Promise.all([service.getForm(lead, id), service.getNode(lead, id, id), service.getPartForm(lead, id, id)]);
+    expect(asJson(both.form)).toEqual(asJson(form));
+    expect(asJson(both.node)).toEqual(asJson(node));
+    const labelsOf = (view: typeof form): string[] => view.sections.flatMap((section) => section.fields).map((field) => field.label);
+    expect(labelsOf(both.form)).toContain('Frozen invented label');
+    expect(labelsOf(await harness.estimateService.getForm(lead, id))).not.toContain('Frozen invented label');
   });
 
   it('refuses as they refuse (NFR-001): another Engineer, an unknown estimate and an unknown part are the same not-found, with the same words', async () => {
