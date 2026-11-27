@@ -6,7 +6,7 @@
 | Severity | **Sev-4 Low, proposed by QA (the ux-expert's word: Minor); master grades.** |
 | Priority | P4 (Jira Low; labels `sev-4`, `final-review`, `conformance`) |
 | Type | **Product** (conformance) |
-| Status | **Open (new), 2026-11-27.** Owner lane: to be set by master or the orchestrator. |
+| Status | **Open (new), 2026-11-27.** **Graded by master 2026-11-27 (DL-446, records-u 1cb3fcbc): Sev-4.** Goes into lane 3's polish PR if cheap; otherwise one G8 line for the delivery lead's explicit acceptance, with the fix in the first update. Owner lane: lane 3 for the polish PR, else the G8 acceptance line. |
 | Jira / GitHub | [AQP-494](https://sankumar76.atlassian.net/browse/AQP-494) / [#815](https://github.com/sankumar76/Accucut-Quotation/issues/815) (labels bug, sev-4, ai-delivery, final-review; Jira also aiid-DEF-137, agent-qa-engineer). Relates to DEF-113, DEF-136, AQP-1. Searched first: JQL on `aiid-DEF-137` and a GitHub search for the same words: nothing earlier. |
 | Found by / date | The ux-expert's hands-on re-check pass 2 (N-5) (`docs/03-ux/rulings/hands-on-recheck-2-2026-11-28.md`, records-u 775ed4fc); logged by qa-engineer, 2026-11-27 |
 | Build / commit | Production build of `master` `d5e352f9`, a throwaway database with invented estimates, scripted Playwright at 360 and 768 px (the ux-expert's pass; QA did not run it) |

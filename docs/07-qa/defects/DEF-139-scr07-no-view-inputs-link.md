@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Medium, proposed by QA (the ux-expert's word: Major, the named control is missing); master grades.** |
 | Priority | P3 (Jira Medium; labels `sev-3`, `final-review`, `demo-2026-11-30`) |
 | Type | **Product** (a named part of DEF-131 Row V is missing) |
-| Status | **Open (new), 2026-11-27.** Owner lane: to be set by master or the orchestrator. |
+| Status | **Open (new), 2026-11-27.** **Graded by master 2026-11-27 (DL-446, records-u 1cb3fcbc): Sev-3 confirmed; DEF-131 Row V stays open until it is fixed; lane 3.**  |
 | Jira / GitHub | [AQP-496](https://sankumar76.atlassian.net/browse/AQP-496) / [#817](https://github.com/sankumar76/Accucut-Quotation/issues/817) (labels bug, sev-3, ai-delivery, final-review; Jira also aiid-DEF-139, agent-qa-engineer). Relates to DEF-131 (Row V), #800, DEF-113, AQP-1. Searched first: JQL on `aiid-DEF-139` and a GitHub search for the same words: nothing earlier. |
 | Found by / date | The ux-expert's hands-on re-check pass 2 (N-7) (`docs/03-ux/rulings/hands-on-recheck-2-2026-11-28.md`, records-u 775ed4fc); logged by qa-engineer, 2026-11-27 |
 | Build / commit | Source search of master `d5e352f9` and the pull-request head of #800 (`6aa4dfbd`): `git grep` of `src` and `tests` (a source search, not a browser look; QA did not run it) |
