@@ -6,7 +6,7 @@
 | Severity | **Sev-3 (DL-267's Bug line); not a G8 blocker on its own** |
 | Priority | P3 (Jira Medium; labels `sev-3`, `test`, `near-budget`) |
 | Type | **Test** (a spec case that runs too close to its 30 s budget) |
-| Status | **Open, 2026-11-27 (qa-engineer).** QA asks master to authorise a test-only DL-430 split (as for `approve.spec.ts:312`, DL-449 (3)(c)) and to say whether a product cause holds it (this is the Engineer's form, not a Lead page). |
+| Status | **Open, 2026-11-27. DL-466: the DL-430 split is AUTHORISED for lane 3 (no step at #806: QA's step check below); merge on a fully green run at 0 behind by the end of Wed 2 Dec, else G8 open, named.** |
 | Jira / GitHub | [AQP-503](https://sankumar76.atlassian.net/browse/AQP-503) / [#834](https://github.com/sankumar76/Accucut-Quotation/issues/834) (labels bug, sev-3, ai-delivery; Jira also aiid-DEF-146, agent-qa-engineer, test, near-budget). Searched first: JQL on `aiid-DEF-146` and 'autosave-leave': no earlier Bug for this case. |
 | Found by / date | qa-engineer, 2026-11-27, counting the logs since #800 (the case went on the near-budget watch with `d35ad821`, test plan 0.3.127) |
 | Build / commit | `master` `60ca5a08` (CI 45998716995), shard 3, [desktop]; the logs listed below |
@@ -33,3 +33,18 @@ A test-only split on DL-430's terms: every assertion kept, in the original order
 
 ## Records
 Jira Bug AQP-503 and GitHub issue #834, created 2026-11-27 and cross-linked; test plan 0.3.142.
+
+## DL-466 step check: is there a step at #806 (`60ca5a08`)? (qa-engineer, 2026-11-27; read only, existing logs; test plan 0.3.143)
+**Why:** #806 changed `use-part-form.ts` (+13) and `part-fields.tsx` (+9), the shared form state and autosave that this case exercises, and the failing push is its own squash; a product cause must be ruled out before the split (DL-449 (3)(e), DL-466 (3)).
+**(1) The five readings of 25 s or more ([desktop], attempt 1), with date and commit (all UTC, 27 Nov 2026):** **28.6 s** #800's run of record (CI 45922705204, head `6aa4dfbd`, created 01:27Z, a PR run); **25.0 s** `1b30b17f` (#818, 04:17Z); **26.8 s** #812's run (CI 45945851576, head `dae95c35`, 05:26Z, a PR run); **25.4 s** `864ecb0f` (SCR-17, 08:40Z); **30.0 s** `f9695aa7` (#829, 09:41Z). **All five PREDATE #806 (`60ca5a08`, 12:26Z)**; three are on pushes that carry none of #806's code.
+**(2) Attempt-1 durations at every width on the last five `master` pushes before `60ca5a08`, against `60ca5a08`, with the draw of the shard that carries the project (duration / draw in brackets):**
+| Push | [desktop] s (shard 3 draw) | [tablet] s (shard 2) | [mobile] s (shard 1) |
+|---|---|---|---|
+| `3c561ce1` | 23.1 (1.23) [18.8] | 17.6 (1.25) [14.1] | 17.8 (0.92) [19.3] |
+| `f9695aa7` | 30.0 (1.56) [19.2] | 14.4 (1.01) [14.3] | 13.6 (0.71) [19.2] |
+| `9eb8409b` | 23.5 (1.37) [17.2] | 25.2 (1.54) [16.4] | 21.5 (1.03) [20.9] |
+| `635e7f7a` | 24.6 (1.43) [17.2] | 19.4 (1.32) [14.7] | 13.3 (0.71) [18.7] |
+| `7aa23c44` | 18.9 (1.12) [16.9] | 15.2 (1.08) [14.1] | 19.6 (0.92) [21.3] |
+| **`60ca5a08` (#806)** | **30.3 time-out, retry 24.1** (1.50) [20.2; retry 16.1] | 23.6 (1.59) [14.8] | 16.7 (0.83) [20.1] |
+**Later pushes: none yet (no `master` push since `60ca5a08`).**
+**(3) Reading: NO STEP AT #806.** Normalised by the draw, [tablet] (14.1 to 16.4 before; 14.8 after) and [mobile] (18.7 to 21.3 before; 20.1 after) are level; [desktop] ran 16.9 to 19.2 before and 20.2 at `60ca5a08`'s attempt 1 (a one-sample rise of about 5 % over the highest earlier figure, `f9695aa7`'s 19.2, which also sits before #806), and its retry ran 16.1, level with the earlier pushes. The readings of 25 s or more all predate #806 and rise with the draw. **QA's caveats:** one attempt-1 sample on [desktop]; the timed-out wait was a part field being enabled (the form's first render in `next dev`, the same family as the DEF-085 misses in shard 4 at 1.00 of the same run); QA read no profile of #806's `use-part-form.ts` change, so lane 2's read of that file for added work before the field is enabled is still a prudent follow-up, but the durations do not call for it. **Per DL-466 (3) 'no step at #806': the split is authorised for lane 3, on DL-430's terms (every assertion kept in order on one page, each case under 25 s at a normal draw on attempt 1 at all three widths, +0 person ledger, no wait/force/retry/budget/time-out change, the PR body maps each assertion), merged on a fully green run at 0 behind by the end of Wed 2 Dec; if not merged by the freeze, DEF-146 goes to G8 open and is named.** QA re-reads the case after #806's neighbours land and reports a step if one appears.
