@@ -38,3 +38,6 @@ A **test-only split** on DL-430's terms: **every assertion kept, in the original
 
 ## Records
 Jira Bug AQP-497 and GitHub issue #823, created 2026-11-27 and cross-linked (Jira linked to AQP-478). DL-449 (3), DL-450; test plan 0.3.114; `approve.spec.ts:312` stays on the watch (1 of 3 passing readings), no split.
+
+## DL-455 applied (qa-engineer, 2026-11-27; test plan 0.3.123)
+**The cause is product (DEF-141), so under DL-451 (4) #824 (the split) stays HELD until the DEF-141 fix (step 1: server props) is on `master`. QA then re-reads `approve-override.spec.ts:314` on the next two `master` pushes: if it reads under 25 s at a normal draw on both, DEF-140 closes as caused by DEF-141 and #824 closes unmerged; if it still reads 25 s or more at a normal draw, #824 merges when green.** DEF-140 stays open Sev-3 Test, due by the end of Wed 2 Dec as before. Latest readings before the fix: `:314` [desktop] 22.2 s (`ffd02f7d`, shard 3 at 1.13) and 17.7 s (`e0153858`, shard 3 at 1.03; [mobile] 23.0 s).
