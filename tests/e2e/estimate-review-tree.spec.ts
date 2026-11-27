@@ -197,19 +197,19 @@ test.describe('the parts tree on SCR-06, one check each', () => {
     const { code, estimateId } = await assignedTask(page, testInfo);
     await withParts(page, estimateId, 1);
     await openedByTheLead(page, code, '1.1');
-    const field = control(page, 'D');
+    const field = control(page, 'H');
     await expect(field).toBeEnabled();
     await expect(field).not.toHaveAttribute('aria-readonly', 'true');
 
     const engineer = await openEngineerWindow(browser, E2E_ENGINEER);
     try {
       const part = defined((await readTreeThrough(engineer.api, estimateId)).find((row) => row.slNo === '1.1'));
-      const written = await engineer.api.patch(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes/${part.id}/inputs`, { headers: HEADERS, data: { revision: part.revision, values: { [fieldIdOf('J')]: '77' } } });
+      const written = await engineer.api.patch(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes/${part.id}/inputs`, { headers: HEADERS, data: { revision: part.revision, values: { [fieldIdOf('H')]: '5' } } });
       expect(written.status(), 'the Engineer saves the part').toBe(200);
     } finally {
       await engineer.close();
     }
-    await field.fill('Invented bracket');
+    await field.fill('3');
     await field.blur();
     await expect(page.getByText('This part was changed somewhere else.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Keep what I typed' })).toBeVisible();
