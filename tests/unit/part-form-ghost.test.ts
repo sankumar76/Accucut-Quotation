@@ -77,7 +77,7 @@ const drawn = (props: Partial<Parameters<typeof PartFormGhost>[0]> = {}): string
 describe('PartFormGhost (DEF-145)', () => {
   it('PF-1, PF-2, PF-5: draws one card for every section, the strip with one item for each, and each field the form shows for the values given', () => {
     const html = drawn();
-    expect(html.match(/data-slot="card"/g)).toHaveLength(2);
+    expect(html.match(/style="--n:/g)).toHaveLength(2); // one card for each section, each with its weight
     expect(html).toContain('Part Details');
     expect(html).toContain('Material and Dimensions');
     expect(html).toContain('A–D');
@@ -100,7 +100,7 @@ describe('PartFormGhost (DEF-145)', () => {
     expect(html).toContain('Read-only while approved.');
     expect(html).toContain('A hint that is real words');
     expect(html).not.toContain('Label of a');
-    expect(html).toContain('data-slot="skeleton"');
+    expect(html).toContain('skeleton-shimmer');
   });
 
   it('PF-2: the Lead ghost draws a field as the review look shows it (no hint but the quantity one), so its height is the form height; the Engineer ghost keeps the hints', () => {
@@ -129,6 +129,8 @@ describe('PartFormGhost (DEF-145)', () => {
     for (const forbidden of [' id=', ' name=', ' for=', ' href=', 'tabindex', '<h1', '<h2', '<h3', '<h4', '<form', '<nav', '<label', '<input', '<select', '<textarea', ' data-part-form=', ' data-part-grid=', ' data-section-strip=', ' data-part-eyebrow=', ' data-picture-zone=', ' data-treatments=', 'data-slot="textarea"', 'data-slot="input"', 'role="region"']) {
       expect(html, forbidden).not.toContain(forbidden);
     }
+    // PF-9.4 (QLT-833-08): no `data-slot` of the form's own components; the one real notice the ghost may hold is the shared `Notice`, whose parts are named for the alert.
+    expect([...html.matchAll(/ data-slot="([^"]+)"/g)].map((slot) => slot[1]).filter((slot) => !(slot ?? '').startsWith('alert'))).toEqual([]);
     for (const marker of ['data-part-ghost', 'data-ghost-grid']) expect(html).toContain(marker);
   });
 

@@ -1,15 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { FORM_LOADING } from '../../src/components/features/estimate-workspace/estimate-texts';
-import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
-import { MATERIAL_CANARIES } from '../support/material-master-canary';
 
-import { E2E_ENGINEER, E2E_LEAD, ensureCanaryCustomers, ensureCanaryMaterials, makeEstimateCalculable } from './support/auth';
+import { assignedEstimate } from './support/assigned-estimate';
+import { changePrivateMaterial, E2E_ENGINEER, insertPrivateMaterial } from './support/auth';
 import { signInAs } from './support/calculated-estimate';
 import { holdFieldsChunk } from './support/hold-fields-chunk';
-import { DEVELOPMENT_URL } from './support/servers';
 
 /**
  * DEF-145 (DL-465; Jira AQP-502): **the part form's placeholder holds the form's space.** The review of a Lead or an Admin and the Engineer's workspace draw the same `PartForm`; until its fields' code has
@@ -26,42 +24,6 @@ import { DEVELOPMENT_URL } from './support/servers';
  */
 
 const MOVE_AT_MOST_PX = 8;
-const HEADERS = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
-const FUTURE = '2099-12-31T10:00';
-
-interface Made {
-  readonly code: string;
-  readonly estimateId: string;
-}
-
-/** A task of the set-up Engineer, made by the signed-in set-up Lead through the API, with a Main Assembly and a Part under it; Prepared when asked (the Engineer's inputs stored, Calculate pressed). */
-async function assignedEstimate(page: Page, testInfo: TestInfo, prepared: boolean): Promise<Made> {
-  await ensureCanaryCustomers();
-  await ensureCanaryMaterials();
-  await signInAs(page, E2E_LEAD);
-  const context = (await (await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/assign-context`)).json()) as { engineers: ReadonlyArray<{ id: string; name: string }> };
-  const engineer = defined(context.engineers.find((candidate) => candidate.name === E2E_ENGINEER.name));
-  const created = await page.request.post(`${DEVELOPMENT_URL}/api/v1/tasks`, {
-    headers: HEADERS,
-    data: { engineerId: engineer.id, customerId: defined(CUSTOMER_CANARIES[0]).id, folderPath: `\\\\e2e-server\\e2e-share\\RFQ-${testInfo.project.name}-${testInfo.workerIndex}-${Date.now()}`, deadline: FUTURE, title: 'Invented placeholder case', subject: 'Invented subject' },
-  });
-  expect(created.status()).toBe(201);
-  const task = (await created.json()) as { code: string; estimate: { id: string } };
-  const estimateId = task.estimate.id;
-  const main = await page.request.post(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes`, { headers: HEADERS, data: { parentId: null, nodeKind: 'MAIN_ASSEMBLY' } });
-  expect(main.status()).toBe(201);
-  const mainId = defined(((await main.json()) as { nodeId: string | null }).nodeId);
-  const part = await page.request.post(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes`, { headers: HEADERS, data: { parentId: mainId, nodeKind: 'PART' } });
-  expect(part.status()).toBe(201);
-  if (prepared) {
-    await makeEstimateCalculable(estimateId, defined(MATERIAL_CANARIES[0]).id);
-    await signInAs(page, E2E_ENGINEER);
-    const calculated = await page.request.post(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/calculate`, { headers: HEADERS });
-    expect(calculated.status(), 'the Engineer\'s Calculate').toBe(200);
-    await signInAs(page, E2E_LEAD);
-  }
-  return { code: task.code, estimateId };
-}
 
 /** The top of the element in the document (not the screen), so a scroll does not count as a move. */
 async function documentTop(locator: Locator): Promise<number> {
@@ -83,6 +45,8 @@ async function placeholderIsShown(page: Page): Promise<void> {
 async function formIsDrawn(page: Page): Promise<void> {
   await expect(page.locator('form[data-part-form]')).toBeVisible();
   await expect(page.locator('[data-part-ghost]')).toHaveCount(0);
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+  await expect(page.getByRole('status', { name: FORM_LOADING })).toHaveCount(0);
 }
 
 interface Box {
@@ -92,7 +56,7 @@ interface Box {
 
 /** The cards in the area, in order, with their document top and width: the ghost's (`[data-ghost-grid]`) before the swap, the form's (`[data-part-grid]`) after it (PF-14a, PF-14b). */
 async function cardBoxes(page: Page, grid: string): Promise<ReadonlyArray<Box>> {
-  return page.locator(`${grid} > [data-slot="card"]`).evaluateAll((cards) =>
+  return page.locator(`${grid} > div`).evaluateAll((cards) =>
     cards.map((card) => {
       const rect = card.getBoundingClientRect();
       return { top: rect.top + window.scrollY, width: rect.width };
@@ -104,6 +68,11 @@ async function cardBoxes(page: Page, grid: string): Promise<ReadonlyArray<Box>> 
 const rowsOf = (boxes: ReadonlyArray<Box>): number => boxes.reduce<number[]>((rows, box) => (rows.some((top) => Math.abs(top - box.top) <= 2) ? rows : [...rows, box.top]), []).length;
 
 test.describe('DEF-145: the form replaces its placeholder and nothing under it moves', () => {
+  // The route that holds the fields chunk answers every script of the page; a script still on its way when the test ends is not what is tested (QLT-833-04).
+  test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+  });
+
   for (const prepared of [false, true]) {
     const state = prepared ? 'Prepared' : 'Draft';
     test(`the Lead's review, ${state}: #review-actions moves no more than ${String(MOVE_AT_MOST_PX)} px when the form is drawn, and a jump to #review-calculate made before the swap still ends on the screen`, async ({ page }, testInfo) => {
@@ -145,6 +114,28 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     });
   }
 
+  test("the rates-changed notice's own link, focused and pressed with Enter before the swap, ends with Recalculate on the screen (the keyboard path of DL-465 (3) (i))", async ({ page }, testInfo) => {
+    // The state of rates-changed.spec.ts: calculated on a material of the test's own whose price changed after. No person is made (the set-up Lead and Engineer); the material is not a person.
+    const materialId = await insertPrivateMaterial({ pricePerKg: '137.37', specificGravity: '7.37', scrapRate: '27.37' });
+    const { code } = await assignedEstimate(page, testInfo, true, materialId);
+    await changePrivateMaterial(materialId, { pricePerKg: '9137.73', specificGravity: '7.37', scrapRate: '27.37' });
+    const chunk = await holdFieldsChunk(page);
+    await page.goto(`/estimates/${code}`);
+    await placeholderIsShown(page);
+    await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
+
+    const notice = page.getByRole('status').filter({ hasText: 'Rates changed since this was calculated.' });
+    await expect(notice).toBeVisible();
+    const link = notice.getByRole('link', { name: 'Recalculate' });
+    await link.focus();
+    await expect(link).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/#review-calculate$/);
+    chunk.release();
+    await formIsDrawn(page);
+    await expect(page.locator('#review-calculate')).toBeInViewport();
+  });
+
   test("the Engineer's workspace: the page under the form moves no more than the same 8 px when the form replaces its placeholder", async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, false);
     await signInAs(page, E2E_ENGINEER);
@@ -173,7 +164,7 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     await page.goto(`/estimates/${code}`);
     await placeholderIsShown(page);
     await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
-    const names = await page.locator('[data-part-ghost] [data-slot="skeleton"]').evaluateAll((blocks) => blocks.map((block) => getComputedStyle(block).animationName));
+    const names = await page.locator('[data-part-ghost] .skeleton-shimmer').evaluateAll((blocks) => blocks.map((block) => getComputedStyle(block).animationName));
     expect(names.length).toBeGreaterThan(0);
     expect(new Set(names)).toEqual(new Set(['none']));
     chunk.release();

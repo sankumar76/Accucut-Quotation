@@ -26,10 +26,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { parseForm, parsePartInputs, type FormField, type FormSection, type FormView } from '@/lib/estimates/form-client';
+import { decodeTreatment, isOtherTreatment } from '@/lib/estimate/treatment-value';
 import { sectionWeight, shownSections } from '@/lib/estimates/form-shown';
 
 import { FORM_LOADING, sectionLinkText } from './estimate-texts';
 import { reviewField } from './review-look';
+import { TreatmentChips } from './surface-chips';
+import { SURFACE_HINT } from './surface-texts';
 
 /**
  * The part form's loading ghost (DEF-145; `rulings/partform-placeholder-shape-2026-11-28.md`, PF-1 to PF-15): **the form itself without its values**, drawn from the form's own definition with the form's own class
@@ -56,57 +59,71 @@ export interface PartFormGhostProps {
 
 type CardShare = CSSProperties & Record<'--n', number>;
 
+/** The ghost carries none of the form's own markers (PF-9.4): the shared `Card` and `Skeleton` set `data-slot`, and a prop of `undefined` after it leaves the attribute out. */
+const NO_SLOT = { 'data-slot': undefined } as const;
+const Grey = ({ className }: { readonly className: string }) => <Skeleton {...NO_SLOT} className={className} />;
+
 /** The control a field will have, as a grey block of the control's own height (PF-3); the picture, a multi-line box and the surface treatments are the ones that take the whole row or more. */
-function ghostControl(field: FormField): { readonly control: ReactNode; readonly marker: 'wide' | 'picture' | null } {
+function ghostControl(field: FormField, texts: Readonly<Record<string, string>>): { readonly control: ReactNode; readonly marker: 'wide' | 'picture' | null } {
   switch (field.rule.type) {
     case 'picture':
-      return { control: <Skeleton className={PICTURE_ZONE_HEIGHT} />, marker: 'picture' };
+      return { control: <Grey className={PICTURE_ZONE_HEIGHT} />, marker: 'picture' };
+    case 'treatment': {
+      // The "Other" box under the list shows only when "Other" is the part's choice (`TreatmentSelect`).
+      const chosen = decodeTreatment(texts[field.id] ?? '');
+      return { control: chosen !== null && isOtherTreatment(chosen.id) ? <><Grey className={CONTROL_HEIGHT} /><Grey className={CONTROL_HEIGHT} /></> : <Grey className={CONTROL_HEIGHT} />, marker: null };
+    }
     case 'text':
-      return field.rule.multiline ? { control: <Skeleton className={TEXTAREA_HEIGHT} />, marker: 'wide' } : { control: <Skeleton className={CONTROL_HEIGHT} />, marker: null };
+      return field.rule.multiline ? { control: <Grey className={TEXTAREA_HEIGHT} />, marker: 'wide' } : { control: <Grey className={CONTROL_HEIGHT} />, marker: null };
     default:
-      return { control: <Skeleton className={CONTROL_HEIGHT} />, marker: null };
+      return { control: <Grey className={CONTROL_HEIGHT} />, marker: null };
   }
 }
 
-function GhostField({ field: own, review }: { readonly field: FormField; readonly review: boolean }) {
+function GhostField({ field: own, review, texts }: { readonly field: FormField; readonly review: boolean; readonly texts: Readonly<Record<string, string>> }) {
   // The review's form shows a field as `reviewField` says (no hint but the quantity's, `review-look.ts`), so its ghost does: the same lines, the same height.
   const field = review ? reviewField(own) : own;
-  const { control, marker } = ghostControl(field);
+  const { control, marker } = ghostControl(field, texts);
   return (
     <div {...(marker === 'wide' ? { 'data-ghost-wide': '' } : marker === 'picture' ? { 'data-ghost-picture': '' } : {})} className={FIELD_BOX}>
-      <Skeleton className="h-s-5 w-1/2" />
+      <Grey className="h-s-5 w-1/2" />
       {control}
-      {field.hint === null ? null : <p className={HINT_TEXT}>{field.hint}</p>}
+      {field.hint !== null ? <p className={HINT_TEXT}>{field.hint}</p> : marker === 'picture' ? <Grey className="h-s-4 w-2/3" /> : null}
     </div>
   );
 }
 
-/** The surface treatments of a card are one multi-select, not one box per flag (the real card draws one field), so the ghost draws one field for all the flags of a section. */
-function GhostTreatments() {
+/**
+ * The surface treatments of a card are one field, not one box per flag. The Lead's form shows the chosen ones as chips (or "None selected"): the same component draws them here. The Engineer's form shows a
+ * list button, with the hint under it, whose words are the form's own.
+ */
+function GhostTreatments({ flags, review, texts }: { readonly flags: ReadonlyArray<FormField>; readonly review: boolean; readonly texts: Readonly<Record<string, string>> }) {
+  if (review) return <TreatmentChips fields={flags} texts={texts} marker={{ 'data-ghost-wide': '' }} />;
   return (
     <div data-ghost-wide="" className={FIELD_BOX}>
-      <Skeleton className="h-s-5 w-1/2" />
-      <Skeleton className={CONTROL_HEIGHT} />
+      <Grey className="h-s-5 w-1/2" />
+      <Grey className={CONTROL_HEIGHT} />
+      <p className={HINT_TEXT}>{SURFACE_HINT}</p>
     </div>
   );
 }
 
-function GhostCard({ section, review }: { readonly section: FormSection; readonly review: boolean }) {
+function GhostCard({ section, review, texts }: { readonly section: FormSection; readonly review: boolean; readonly texts: Readonly<Record<string, string>> }) {
   const share: CardShare = { '--n': sectionWeight(section) };
-  const flags = section.fields.some((field) => field.rule.type === 'flag');
+  const flags = section.fields.filter((field) => field.rule.type === 'flag');
   return (
-    <Card style={share} className={CARD_SHARE}>
-      <CardHeader className={CARD_HEADER}>
-        <CardTitle as="div" className={CARD_TITLE}>
-          <Skeleton className="size-s-6 shrink-0 rounded-md" />
+    <Card {...NO_SLOT} style={share} className={CARD_SHARE}>
+      <CardHeader {...NO_SLOT} className={CARD_HEADER}>
+        <CardTitle {...NO_SLOT} as="div" className={CARD_TITLE}>
+          <Grey className="size-s-6 shrink-0 rounded-md" />
           <span className="min-w-0">{section.name}</span>
         </CardTitle>
         <span className={RANGE_CHIP}>{section.columnRange}</span>
-        <Skeleton className="h-s-4 w-10" />
+        <Grey className="h-s-4 w-10" />
       </CardHeader>
-      <CardContent className={FIELDS}>
-        {flags ? <GhostTreatments /> : null}
-        {section.fields.map((field) => (field.rule.type === 'flag' ? null : <GhostField key={field.id} field={field} review={review} />))}
+      <CardContent {...NO_SLOT} className={FIELDS}>
+        {flags.length > 0 ? <GhostTreatments flags={flags} review={review} texts={texts} /> : null}
+        {section.fields.map((field) => (field.rule.type === 'flag' ? null : <GhostField key={field.id} field={field} review={review} texts={texts} />))}
       </CardContent>
     </Card>
   );
@@ -116,21 +133,21 @@ export function PartFormGhost({ form, texts = {}, notice, head, silent = false }
   // Every card the form draws, with the fields it shows for what is typed (the form draws a card whose fields are all hidden too): the same list `PartFields` walks.
   const sections = shownSections(form.sections, texts);
   return (
-    <div {...(silent ? { 'aria-busy': true } : { role: 'status', 'aria-busy': true })} data-part-ghost="" className="flex min-w-0 flex-1 flex-col">
+    <div {...(silent ? { 'aria-busy': true } : { role: 'status', 'aria-busy': true, 'aria-label': FORM_LOADING })} data-part-ghost="" className="flex min-w-0 flex-1 flex-col">
       {silent ? null : <span className="sr-only">{FORM_LOADING}</span>}
       <div inert aria-hidden="true" className={FORM_ROOT}>
         <div className={HEAD_LINES}>
           {head === 'engineer' ? (
             <>
-              <Skeleton className="h-s-4 w-1/4" />
-              <Skeleton className="h-s-6 w-1/2" />
+              <Grey className="h-s-4 w-1/4" />
+              <Grey className="h-s-6 w-1/2" />
             </>
           ) : null}
           <div className={PROGRESS_ROW}>
-            <Skeleton className={cn('h-s-2', PROGRESS_BAR_WIDTH)} />
-            <Skeleton className="h-s-4 w-24" />
+            <Grey className={cn('h-s-2', PROGRESS_BAR_WIDTH)} />
+            <Grey className="h-s-4 w-24" />
           </div>
-          <Skeleton className="h-s-4 w-1/3" />
+          <Grey className="h-s-4 w-1/3" />
         </div>
         {notice === undefined ? null : <Notice tone="info">{notice}</Notice>}
         <div className={STRIP_BOX}>
@@ -144,7 +161,7 @@ export function PartFormGhost({ form, texts = {}, notice, head, silent = false }
         </div>
         <div data-ghost-grid="" className={CARD_GRID}>
           {sections.map((section) => (
-            <GhostCard key={section.id} section={section} review={head === 'lead'} />
+            <GhostCard key={section.id} section={section} review={head === 'lead'} texts={texts} />
           ))}
         </div>
       </div>
