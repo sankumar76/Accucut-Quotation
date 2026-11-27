@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
@@ -82,6 +82,38 @@ async function rest(target: Page): Promise<void> {
 }
 
 /**
+ * DEF-129 proof, the TS-9, TS-10, TS-16 case (DL-445): a diagnostic and nothing else. That case failed attempt 1 on two master pushes, once with interception lines and once with a bare "Test timeout of 30000ms exceeded". It writes,
+ * on EVERY attempt, one line a step to the job log, `[TS-9 timing] <width> attempt <n> | <step>: <ms> ms (<total> ms)`, each the moment its step ends, and a "still inside" line at 25 s, so the next failure shows where the 30 s went.
+ * Steps are the toolbar checks, each axe scan of the tree or the dialog where the page is, the scroll to the top, and each whole-page scan. It waits for nothing and changes no wait, budget or assertion.
+ */
+interface Laps {
+  done(step: string): void;
+  end(): void;
+}
+let laps: Laps | undefined;
+function startLaps(testInfo: TestInfo): Laps {
+  const startedAt = Date.now();
+  let stepStart = startedAt;
+  let last = 'the start';
+  const say = (text: string): void => {
+    process.stdout.write(`[TS-9 timing] ${testInfo.project.name} attempt ${String(testInfo.retry + 1)} | ${text}\n`);
+  };
+  const watchdog = setTimeout(() => say(`still inside "after ${last}" at ${String(Date.now() - startedAt)} ms`), 25_000);
+  return {
+    done(step) {
+      const now = Date.now();
+      say(`${step}: ${String(now - stepStart)} ms (${String(now - startedAt)} ms)`);
+      stepStart = now;
+      last = step;
+    },
+    end() {
+      clearTimeout(watchdog);
+      say(`end: ${String(Date.now() - startedAt)} ms`);
+    },
+  };
+}
+
+/**
  * Axe on one region of the page, with the page where the interaction left it (TS-9, TS-10, TS-16: the toolbar's buttons must pass the target-size rule at the normal scroll position, not only after a scroll to the top). The
  * rules are the suite's (`AXE_TAGS`), violations only, and the failure names the nodes and the neighbours they were compared with, as `expectNoAxeViolations` does. The whole page is scanned too, from the top, as everywhere.
  */
@@ -93,13 +125,16 @@ async function expectRegionAccessible(target: Page, selector: string): Promise<v
     neighbours: violation.nodes.flatMap((node) => node.any.flatMap((check) => (check.relatedNodes ?? []).map((related) => related.target.join(' ')))).slice(0, 5),
   }));
   expect(summary, `axe on ${selector}`).toEqual([]);
+  laps?.done(`axe on ${selector}`);
 }
 
 /** Both scans of a state: the region where the page is, then the whole page from the top. */
 async function expectStateAccessible(target: Page, selector: string): Promise<void> {
   await expectRegionAccessible(target, selector);
   await target.evaluate(() => window.scrollTo(0, 0));
+  laps?.done('scroll to the top');
   await expectNoAxeViolations(target);
+  laps?.done('axe on the whole page');
 }
 
 /**
@@ -336,8 +371,10 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     }
   });
 
-  test('TS-9, TS-10, TS-16: axe at the normal scroll position with a toolbar in view, with the "+" menu open and with the delete dialog open; every button is 24 px or more and none overlaps another', async () => {
+  test('TS-9, TS-10, TS-16: axe at the normal scroll position with a toolbar in view, with the "+" menu open and with the delete dialog open; every button is 24 px or more and none overlaps another', async ({}, testInfo) => {
+    laps = startLaps(testInfo);
     await showTree(page);
+    laps.done('the tree is shown');
     const mouse = await hasMouse(page);
     // The row whose toolbar is in view: hovered with a mouse, selected with a finger. No scroll to the top: the page is where the cases before it left it.
     const open = async (): Promise<void> => {
@@ -347,6 +384,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
       await expect(toolbarOf(page, '1.1')).toBeVisible();
     };
     await open();
+    laps.done('the first hover and the toolbar in view');
     const boxes = [];
     for (const button of await toolbarOf(page, '1.1').getByRole('button').all()) {
       const box = await button.boundingBox();
@@ -361,6 +399,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
         expect(apart, 'two toolbar buttons overlap').toBe(true);
       }
     }
+    laps.done('the size and overlap checks of the buttons');
     // The toolbar in view: the tree where the page is, then the whole page from the top. (A scan of the whole page where an interaction leaves it also meets the page's own header links half behind the sticky bar, which is
     // the scroll and not the tree: the same reading as in `estimate-treatments.spec.ts`.)
     await expectStateAccessible(page, 'nav[aria-label="Parts tree"]');
@@ -368,20 +407,31 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     // The "+" menu of the row opens in line under it. The page was scrolled to the top by the scan above, out from under a pointer that did not move, so the hover is made again right before the button is pressed (DL-445):
     // a press on a toolbar BUTTON needs the row to be hovered when it lands. The movement cases do no such thing.
     await open();
+    laps.done('the second hover');
     await rowButton(page, 'Add under', '1.1').click();
     await expect(page.getByRole('menu')).toBeVisible();
+    laps.done('the "+" menu opens');
     await expectStateAccessible(page, 'nav[aria-label="Parts tree"]');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('menu')).toHaveCount(0);
+    laps.done('the menu closes');
 
     // The delete dialog of the row. Keep it closes it, and nothing is deleted.
     await open();
+    laps.done('the third hover');
     await rowButton(page, 'Delete', '1.1').click();
     await expect(page.getByRole('alertdialog')).toBeVisible();
+    laps.done('the delete dialog opens');
     await expectStateAccessible(page, '[role="alertdialog"]');
     await page.getByRole('button', { name: 'Keep it' }).click();
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect(row(page, '1.1')).toBeVisible();
+    laps.done('the dialog closes');
+  });
+
+  test.afterEach(() => {
+    laps?.end();
+    laps = undefined;
   });
 
   test('DEF-133: a press on a row in the phone drawer closes the drawer and shows that row\'s form, the focus is on the form\'s title, and the drawer opens again on the same row with its toolbar; elsewhere the panel stays', async () => {
