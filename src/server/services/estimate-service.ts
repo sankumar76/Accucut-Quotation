@@ -200,6 +200,12 @@ export interface EstimateService {
    * that is not there for this person), but with one access check, one read of the configuration and one listing of the parts instead of two of each.
    */
   getPartForm(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<{ readonly form: EstimateForm; readonly node: PartDetail }>;
+  /**
+   * The same pair for **the first row of the parts tree** (`getTree`'s first answer), for the Engineer's page, which hands the part form its data as props (DEF-085, DL-469): the form shows the first row until another is
+   * chosen, so the page needs no row to ask for. **Exactly what `getForm` and `getNode(first row)` answer**, for the same viewer, with the same refusals (404 for an estimate that is not this person's), with one access
+   * check, one read of the configuration and one listing of the parts. `null` when the estimate has no rows.
+   */
+  getFirstPartForm(viewer: EstimateViewer, estimateId: string): Promise<{ readonly form: EstimateForm; readonly node: PartDetail } | null>;
   /** Adds a part with empty inputs (`POST /api/v1/estimates/{id}/nodes`). 404, 409 not editable by this person, 422 `TREE_FULL` at `MAX_PARTS_PER_ESTIMATE` parts. Answers with the new part's ID and the tree. */
   addPart(viewer: EstimateViewer, estimateId: string, request: AddPartRequest, audit?: AuditContext): Promise<AddedPart>;
   /** Moves a part (`PUT .../nodes/{nodeId}`, `POST .../tree/move`). 404, 409 (not editable by this person, or a stale revision, with the tree), 422 under `parentId`. Answers with the tree. */
@@ -446,6 +452,17 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
       const record = partIn(records, nodeId);
       const view = viewsOf(records, readers).find((candidate) => candidate.id === record.id);
       if (view === undefined) throw new NotFoundError();
+      const node = { ...view, inputs: inputs.visibleInputsOf(readers.document, record.inputs), picture: await pictures.pictureOf(id, record.imageId) };
+      return { form: inputs.formOf(readers.document, written), node };
+    },
+
+    async getFirstPartForm(viewer, estimateId) {
+      const id = await openForRead(viewer, estimateId);
+      const [records, readers, written] = await Promise.all([nodes.listNodes(id), viewReaders(id), nodes.lastWrittenAt(id)]);
+      // The first row of the tree as `getTree` answers it (`viewsOf` is the tree's own order), and the record that row is: the part is then read exactly as `getPartForm` reads it.
+      const view = viewsOf(records, readers)[0];
+      if (view === undefined) return null;
+      const record = partIn(records, view.id);
       const node = { ...view, inputs: inputs.visibleInputsOf(readers.document, record.inputs), picture: await pictures.pictureOf(id, record.imageId) };
       return { form: inputs.formOf(readers.document, written), node };
     },

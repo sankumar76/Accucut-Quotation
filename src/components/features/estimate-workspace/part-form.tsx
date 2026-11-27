@@ -15,6 +15,7 @@ import type { PartReview } from './review-look';
 import { partFormShown } from './tree-controls-ready';
 import { useFormDefinition } from './use-form-definition';
 import { useLazyComponent } from './use-lazy-component';
+import { useSeedOfFirstPart } from './use-seed-of-first-part';
 import type { PartTarget, SavedPart } from './use-part-form';
 
 /** The fields' code: a bare `import()` behind a type-only import above, so none of it is in the first load (NFR-009, ADR-016 E1). Asked for as soon as the form is on the page, in step with the two reads that gate it. */
@@ -44,7 +45,7 @@ export interface PartFormProps {
   readonly onShown?: () => void;
   /** The Lead's and the Admin's read-only view (AQP-488, DEF-131 Stage 1), with `editable` false: the same form with the review look. Absent for the Engineer. */
   readonly review?: PartReview | undefined;
-  /** The form's data as the page handed it over (the Lead's review, DEF-141): the definition, the materials, the part's values and the treatments, as the routes send them. The form then reads nothing from the server to start. Absent for the Engineer. */
+  /** The form's data as the page handed it over (the Lead's review, DEF-141): the definition, the materials, the part's values and the treatments, as the routes send them. The form then reads nothing from the server to start (the Engineer's page too, DEF-085). Absent when the page's reads failed. */
   readonly seed?: PartFormSeed | undefined;
 }
 
@@ -56,6 +57,8 @@ export interface PartFormProps {
  */
 export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, onNamed, onServerIgnored, missing, gate, onShown, review, seed }: PartFormProps) {
   const definition = useFormDefinition(estimateId, seed);
+  // The part's values in the seed are for the first showing of that part only (the Engineer edits): once another part has been shown, the first is read from the server again (DEF-085).
+  const partSeed = useSeedOfFirstPart(seed, part === null ? null : part.id);
   // A row was chosen after the page was drawn (the review's view): the form's title takes the focus, the choice is said once and the tree folds. The first paint does none of it.
   const [seen, setSeen] = useState(part?.id);
   const [chosen, setChosen] = useState(false);
@@ -121,7 +124,7 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
       missing={missing}
       gate={gate}
       review={review === undefined ? undefined : { ...review, chosen }}
-      seed={seed}
+      seed={partSeed}
     />
   );
 }

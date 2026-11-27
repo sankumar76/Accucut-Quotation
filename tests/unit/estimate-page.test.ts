@@ -292,16 +292,49 @@ describe('DEF-141 (DL-455): the Lead\'s review hands the part form its data as p
     expect(Object.keys(seed?.['form'] as object).sort()).toEqual(['lastSavedAt', 'sections']);
   });
 
-  it('the Engineer\'s page reads none of it: no seed, and no read of the option lists for the form', async () => {
+  // DEF-085 (DL-469) replaces the old rule "the Engineer's page reads none of it": the Engineer's form is seeded too, from the same services as the same viewer, with the same four bodies.
+  it('the Engineer\'s page hands its form the same four bodies, for the first row of the tree: the estimate, the part, and nothing else', async () => {
+    harness.signInAs('ENGINEER');
+    const seed = (await props(CODE))['seed'] as Record<string, unknown> | undefined;
+    expect(seed).toBeDefined();
+    expect(Object.keys(defined(seed)).sort()).toEqual(['estimateId', 'form', 'materials', 'part', 'partId', 'treatments']);
+    expect(seed?.['estimateId']).toBe(estimate().id);
+    expect(seed?.['partId']).toBe(estimate().id);
+    expect(Object.keys(seed?.['form'] as object).sort()).toEqual(['lastSavedAt', 'sections']);
+  });
+
+  it('the Engineer\'s page reads once: one combined read of the first row, and each option list once, never the two separate reads of the routes', async () => {
     const materials = vi.spyOn(harness.mastersService, 'listMaterialOptions');
     const treatments = vi.spyOn(harness.mastersService, 'listTreatmentOptions');
+    const first = vi.spyOn(harness.estimateService, 'getFirstPartForm');
+    const form = vi.spyOn(harness.estimateService, 'getForm');
+    const node = vi.spyOn(harness.estimateService, 'getNode');
     harness.signInAs('ENGINEER');
-    const own = await props(CODE);
-    expect(own['seed']).toBeUndefined();
-    expect(materials).not.toHaveBeenCalled();
-    expect(treatments).not.toHaveBeenCalled();
-    materials.mockRestore();
-    treatments.mockRestore();
+    await props(CODE);
+    expect(materials).toHaveBeenCalledTimes(1);
+    expect(treatments).toHaveBeenCalledTimes(1);
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(form).not.toHaveBeenCalled();
+    expect(node).not.toHaveBeenCalled();
+    for (const spy of [materials, treatments, first, form, node]) spy.mockRestore();
+  });
+
+  it('the Engineer\'s seed names no more than the Lead\'s: the same four bodies as the Lead is handed for the same row', async () => {
+    harness.signInAs('ENGINEER');
+    const own = defined((await props(CODE))['seed'] as Record<string, unknown> | undefined);
+    harness.signInAs('LEAD');
+    const lead = defined((await props(CODE))['seed'] as Record<string, unknown> | undefined);
+    expect(JSON.parse(JSON.stringify(own))).toEqual(JSON.parse(JSON.stringify(lead)));
+  });
+
+  it('an Engineer\'s estimate with no rows, or a fault in a read, gives no seed (the form reads from the server) and the page still draws', async () => {
+    harness.signInAs('ENGINEER');
+    const broken = vi.spyOn(harness.estimateService, 'getFirstPartForm').mockRejectedValue(new Error('invented fault'));
+    expect((await props(CODE))['seed']).toBeUndefined();
+    expect(await open(CODE)).toContain('data-form-area');
+    broken.mockResolvedValue(null);
+    expect((await props(CODE))['seed']).toBeUndefined();
+    broken.mockRestore();
   });
 
   it.each(['LEAD', 'ADMIN'] as const)('as %s the revision a save is sent with comes from the part answer the seed carries: no second read of the part (DEF-131 stage 2)', async (role) => {

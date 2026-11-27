@@ -32,6 +32,20 @@ export const tree = (page: Page): Locator => page.getByRole('navigation', { name
 export const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1_000) <= PHONE_MAX;
 export const isPatchOfInputs = (url: string, method: string): boolean => method === 'PATCH' && /\/api\/v1\/estimates\/[^/]+\/nodes\/[^/]+\/inputs$/.test(new URL(url).pathname);
 
+/**
+ * From now on, the paths of the reads of the form's data that the page makes from the browser: the form's definition, a part's values, the materials and the treatments. The page hands them over as props
+ * (DEF-085, DL-469: the Engineer's form is seeded as the Lead's is, DEF-141), so the form is on the screen with none of them read. The list is read after the form has shown.
+ */
+export function watchFormDataReads(page: Page): string[] {
+  const reads: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() !== 'GET') return;
+    const { pathname } = new URL(request.url());
+    if (/\/api\/v1\/estimates\/[^/]+\/(form|nodes\/[^/]+)$|\/api\/v1\/options\/(materials|treatments)$/.test(pathname)) reads.push(pathname);
+  });
+  return reads;
+}
+
 /** Does the body of this save carry a value for the field? A save is `{ revision, values: { [fieldId]: value } }`; anything else is not a save of that field. */
 function carriesField(request: Request, fieldId: string): boolean {
   let body: unknown;

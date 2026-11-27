@@ -9,7 +9,7 @@ import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody } from '@
  * What the Lead's review page hands to the part form as props (DEF-141, DL-455): the four answers the form used to fetch from the browser after hydration, which cost four round trips on every Lead page, queued
  * ahead of the person's first press. They are read **from the same services, as the same viewer, and built by the same code as the routes they replace** (`part-form-bodies.ts`: the same strict schemas, so the same
  * shapes and no added field), so the role checks are the routes' own: an Admin and a Lead read any estimate, and the form definition, the materials and the treatments carry no rate, cost or formula (NFR-002).
- * **This file holds no Restricted data** (the four answers carry no rate, cost or formula); it lives beside `review-page.tsx`, which is its only importer, and `page.tsx` loads that for a Lead and an Admin only, so the Engineer's page never reads from it.
+ * **This file holds no Restricted data** (the four answers carry no rate, cost or formula); it lives beside the page, which is its only importer, for the Lead's review (`review-page.tsx`) and for the Engineer's workspace (DEF-085, DL-469: the same four answers, as the same viewer, for the first row of the tree).
  *
  * A fault in any of the reads is not a fault of the page: the form then gets no seed and reads from the server, as it did before, and says so in its own notice if that fails too. The kind of the fault is logged,
  * never its cause or the estimate (no personal data).
@@ -18,6 +18,11 @@ import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody } from '@
 export interface SeedServices {
   readonly estimates: Pick<EstimateService, 'getPartForm'>;
   readonly masters: Pick<MastersService, 'listMaterialOptions' | 'listTreatmentOptions'>;
+}
+
+/** What the Engineer's page needs: the one combined read of the first row of the tree (DEF-085, DL-469). */
+export interface FirstRowServices {
+  readonly estimates: Pick<EstimateService, 'getFirstPartForm'>;
 }
 
 /** The two answers that do not depend on the row: the two option lists. */
@@ -57,6 +62,26 @@ export async function readPartFormBodies(services: SeedServices, viewer: Estimat
     return { form: formBody(form), part: nodeBody(node) };
   } catch (error) {
     logFault('form definition and part', error);
+    return null;
+  }
+}
+
+/** The first row's two answers with the row they are for: the part the Engineer's form shows until another is chosen. */
+export interface FirstRowBodies extends PartFormBodies {
+  readonly partId: string;
+}
+
+/**
+ * The form's definition and the first row's values for the Engineer's page (DEF-085, DL-469), from **one** service call (`getFirstPartForm`: exactly what `getForm` and `getNode` of the tree's first row answer, as the same
+ * viewer, with the same refusals). Built by the same body builders as the routes. `null` when the estimate has no rows or the read failed (the form then reads from the server, as it did).
+ */
+export async function readFirstPartFormBodies(services: FirstRowServices, viewer: EstimateViewer, estimateId: string): Promise<FirstRowBodies | null> {
+  try {
+    const first = await services.estimates.getFirstPartForm(viewer, estimateId);
+    if (first === null) return null;
+    return { partId: first.node.id, form: formBody(first.form), part: nodeBody(first.node) };
+  } catch (error) {
+    logFault('form definition and first part', error);
     return null;
   }
 }

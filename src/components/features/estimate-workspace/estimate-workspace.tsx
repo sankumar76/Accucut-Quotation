@@ -8,6 +8,7 @@ import { blockedSummary, CALCULATE_MESSAGE } from '@/lib/estimate/calculate-word
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
 import { isLocked, type EstimateStatus } from '@/lib/estimate/state-machine';
 import { askToLeave } from '@/lib/estimates/leave-registry';
+import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
 import type { AutosaveProps } from './autosave';
@@ -83,9 +84,11 @@ export interface EstimateWorkspaceProps {
   readonly notice?: ReactNode;
   /** SCR-05's customer and folder cards, **server-rendered** (`TaskCards`) and handed in as an element for the same reason: their code is not in the client bundle (NFR-009; the ceiling of PRD 0.58). */
   readonly cards?: ReactNode;
+  /** The part form's data as the page handed it over (DEF-085, DL-469): the definition, the materials, the first row's values and the treatments, as the routes send them, so the form reads none of them from the server to start. Type only: no code. */
+  readonly seed?: PartFormSeed | undefined;
 }
 
-export function EstimateWorkspace({ header, estimateId, userId, ignored = false, notice, cards }: EstimateWorkspaceProps) {
+export function EstimateWorkspace({ header, estimateId, userId, ignored = false, notice, cards, seed }: EstimateWorkspaceProps) {
   // The status is the server's: it starts as the page was rendered and becomes PREPARED when Calculate says it did.
   const [status, setStatus] = useState<EstimateStatus>(header.status);
   // A save, an auto-save or a Calculate was refused 409 because the estimate was ignored while the Engineer worked (CR-01 item 7D): the page turns read-only on the spot, stops its timer and says so in one alert.
@@ -189,7 +192,7 @@ export function EstimateWorkspace({ header, estimateId, userId, ignored = false,
             <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>
           </CardHeader>
           <CardContent className={FORM_CARD_BODY}>
-            <PartForm estimateId={estimateId} part={selected} editable={editable} nodes={tree.nodes} onSaved={saved} onChanged={tree.readAgain} onNamed={tree.applyLabel} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} onShown={reportFormShown} />
+            <PartForm estimateId={estimateId} part={selected} editable={editable} nodes={tree.nodes} onSaved={saved} onChanged={tree.readAgain} onNamed={tree.applyLabel} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} onShown={reportFormShown} seed={seed} />
           </CardContent>
         </Card>
         <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />

@@ -8,7 +8,7 @@ import { canaryTaskCodeFor } from '../support/estimate-recipe';
 
 import { ensureCanaryCustomers, ensureCanaryMaterials, makeCanaryEstimateCalculable, useFreshAddress } from './support/auth';
 import { horizontalOverflow, TOUCH_TARGET } from './support/design-system';
-import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, leastFieldHeight, NUMBER_RULE, nextSave, openForm, partForm, showTree, signInAsNewEngineer, tree, waitForForm } from './support/part-form';
+import { ALPHA_MATERIAL, control, expectFormAccessible, isPatchOfInputs, isPhone, leastFieldHeight, NUMBER_RULE, nextSave, openForm, partForm, showTree, signInAsNewEngineer, tree, waitForForm, watchFormDataReads } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
@@ -62,7 +62,10 @@ async function storedValues(page: Page, id: string): Promise<Record<string, unkn
 
 test.describe('AC-1, AC-6: the sections, their headers, the strip and the placeholders', () => {
   test('AC-1: cards 01 to 08 with number, name, column range tag and "n of m" complete; an Excel letter on every field of the new cards, read first', async ({ page }, testInfo) => {
+    const formDataReads = watchFormDataReads(page);
     await openForm(page, testInfo);
+    // DEF-085 (DL-469): the form is on the screen and the page has read none of its data from the browser: it came as props.
+    expect(formDataReads).toEqual([]);
     for (const section of SECTIONS) {
       const card = region(page, section.region);
       await expect(card, section.region).toBeVisible();
