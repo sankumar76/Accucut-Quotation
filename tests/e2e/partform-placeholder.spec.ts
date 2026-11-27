@@ -88,7 +88,9 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
       const before = await documentTop(actions);
       const ghostCards = await cardBoxes(page, '[data-ghost-grid]');
       expect(ghostCards.length, "the ghost draws the form's cards").toBeGreaterThan(0);
-      // QLT-833-05: the review's figures stay visible while the ghost is up (the tiles hide them under any `aria-busy=true` on the page, and the ghost has none).
+      // PF-14h: no `[aria-busy=true]` anywhere in the review while the ghost shows (it is there only while Recalculate runs), and the Totals are visible.
+      await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+      // PF-14h, QLT-833-05: the review's figures stay visible while the ghost is up (the tiles hide them under any `aria-busy=true` on the page, and the ghost has none).
       if (prepared) await expect(page.getByRole('region', { name: 'Totals' }).getByText(/^₹ [\d,]+\.\d{2}$/).first()).toBeVisible();
       // PF-14d: the drawn blocks are inert and hidden from assistive technology, and the ghost has no accessibility violation of its own. PF-14g: it holds no figure (NFR-002).
       await expect(page.locator('[data-part-ghost] > div')).toHaveAttribute('inert', '');
