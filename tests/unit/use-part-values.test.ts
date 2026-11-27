@@ -592,3 +592,57 @@ describe('AQP-408: Fasteners and its watchers within one save round trip', () =>
     });
   });
 });
+
+describe('QLT-806-03, ED-12: a save refused because the estimate was approved, or taken out of the editable states, meanwhile (409 ESTIMATE_APPROVED_IS_LOCKED, ESTIMATE_NOT_EDITABLE)', () => {
+  // The props of the hook as the page keeps them: `editable` turns false once the page has been told (`ReviewForm`: `canEdit = editable && refused === null`), which is the way the form stops sending.
+  const hookWith = async (onLocked: () => void) => {
+    partServer.reset({ a: '1.00', b: '1.00' });
+    const gate = createSaveGate();
+    const props: { -readonly [K in keyof UsePartValuesProps]: UsePartValuesProps[K] } = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields: [A, B, C], onSaved: NOTHING, onChanged: NOTHING, onNamed: NOTHING, onServerIgnored: NOTHING, onLocked, onWrote: NOTHING, gate };
+    const hook = renderHook(usePartValues, props);
+    hook.render();
+    await flushMicrotasks();
+    return { gate, hook, props };
+  };
+
+  it.each(['ESTIMATE_APPROVED_IS_LOCKED', 'ESTIMATE_NOT_EDITABLE'])('%s tells the page once, keeps the typed value on screen, stores nothing, marks nothing unsaved, sends no second save, and shows no problem of its own', async (code) => {
+    const locked = vi.fn();
+    const { gate, hook, props } = await hookWith(locked);
+    const form = hook.render();
+    form.setText('a', '2');
+    partServer.lockNextSave(code);
+    form.commit(A);
+    await gate.settle();
+    expect(locked).toHaveBeenCalledTimes(1);
+    const after = hook.render();
+    // The typed text stays visible (the box shows it as the form shows a value after it is left), no problem or error is added, and nothing stays marked as unsaved: the way on is the page's own notice, not a prompt.
+    expect(after.texts['a']).toBe('2.00');
+    expect(after.problem).toBeNull();
+    expect(after.errors['a']).toBeUndefined();
+    expect(gate.isDirty()).toBe(false);
+    expect(partServer.inputs).toEqual({ a: '1.00', b: '1.00' });
+    // No further save: the page turned the block read-only (`editable` false), so leaving a field and Save draft send nothing more.
+    props.editable = false;
+    const readOnly = hook.render();
+    readOnly.commit(A);
+    readOnly.commit(B);
+    gate.flush();
+    await gate.settle();
+    expect(partServer.sent).toHaveLength(1);
+  });
+
+  it('without the page\'s callback (the Engineer\'s form) the same refusal is an ordinary refused save: marked unsaved, nothing told to the page', async () => {
+    partServer.reset({ a: '1.00' });
+    const gate = createSaveGate();
+    const props: UsePartValuesProps = { estimateId: 'e', part: { id: PART_ID, slNo: '1', revision: 1 }, editable: true, fields: [A, B, C], onSaved: NOTHING, onChanged: NOTHING, onNamed: NOTHING, onServerIgnored: NOTHING, onWrote: NOTHING, gate };
+    const hook = renderHook(usePartValues, props);
+    hook.render();
+    await flushMicrotasks();
+    const form = hook.render();
+    form.setText('a', '2');
+    partServer.lockNextSave('ESTIMATE_APPROVED_IS_LOCKED');
+    form.commit(A);
+    await gate.settle();
+    expect(gate.isDirty()).toBe(true);
+  });
+});

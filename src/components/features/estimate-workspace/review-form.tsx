@@ -16,6 +16,9 @@ import { REVIEW_IGNORED_NOTICE, SAVED_CLEARED_LINE } from './review-look-texts';
 /** What the server hands the review's form: the form's props with the review look it drew (no function, no figure). */
 export type ReviewFormProps = Omit<PartFormProps, 'review'> & { readonly review: PartReview };
 
+/** The words of the block's one notice: the page's own while the estimate can be corrected, and the server's reason once a save was refused because it can no longer be (ED-12). */
+export const reviewNotice = (refused: 'locked' | 'ignored' | null, own: string): string => (refused === 'ignored' ? REVIEW_IGNORED_NOTICE : refused === 'locked' ? FORM_LOCKED : own);
+
 /** The page is drawn again at most this often after saves and renames, so a run of them is one read of the review (architecture note lead-admin-input-edit-2026-11-27, 6a A-7). */
 const REFRESH_QUIET_MS = 300;
 
@@ -62,15 +65,11 @@ export function ReviewForm({ review, editable, ...props }: ReviewFormProps) {
     setAnnouncement(SAVED_CLEARED_LINE);
     refresh();
   }, [review.figuresCurrent, refresh]);
-  const refuse = useCallback(
-    (kind: 'locked' | 'ignored'): void => {
-      setRefused(kind);
-      refresh();
-    },
-    [refresh],
-  );
+  // The block turns read-only in the server's words and what was typed stays on screen (ED-12). The page is **not** drawn again here: it would swap this form for the plain read-only one and the typed text, which
+  // was never stored, would go with it. The rest of the page shows the new state the next time it is read.
+  const refuse = useCallback((kind: 'locked' | 'ignored'): void => setRefused(kind), []);
 
-  const notice = refused === 'ignored' ? REVIEW_IGNORED_NOTICE : refused === 'locked' ? FORM_LOCKED : review.notice;
+  const notice = reviewNotice(refused, review.notice);
   return (
     <>
       {canEdit ? <Autosave gate={reviewSaveGate} enabled calculating={false} /> : null}
