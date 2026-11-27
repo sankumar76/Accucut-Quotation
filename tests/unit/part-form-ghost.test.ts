@@ -257,22 +257,22 @@ describe('engineerGhostFrom (PF-6, PF-7, PF-15, DEF-085)', () => {
   const wire = { sections: FORM.sections.map((section) => ({ ...section, fields: section.fields.map((entry) => ({ ...entry, visibleWhen: entry.visibleWhen })) })), lastSavedAt: null };
 
   it('draws the ghost from the bodies it is given, with the locked notice when the Engineer cannot edit and none when they can', () => {
-    const editable = renderToStaticMarkup(defined(engineerGhostFrom({ form: wire, part: undefined }, { status: 'DRAFT', ignored: false })));
+    const editable = renderToStaticMarkup(defined(engineerGhostFrom({ form: wire }, { status: 'DRAFT', ignored: false })));
     expect(editable).toContain('data-part-ghost');
     expect(editable).not.toContain(FORM_LOCKED);
-    const locked = renderToStaticMarkup(defined(engineerGhostFrom({ form: wire, part: undefined }, { status: 'APPROVED', ignored: false })));
+    const locked = renderToStaticMarkup(defined(engineerGhostFrom({ form: wire }, { status: 'APPROVED', ignored: false })));
     expect(locked).toContain(FORM_LOCKED);
-    const ignored = renderToStaticMarkup(defined(engineerGhostFrom({ form: wire, part: undefined }, { status: 'DRAFT', ignored: true })));
+    const ignored = renderToStaticMarkup(defined(engineerGhostFrom({ form: wire }, { status: 'DRAFT', ignored: true })));
     expect(ignored).toContain(FORM_LOCKED);
   });
 
   it('draws no ghost (the three bars stand in) when the page holds no bodies (a read failed, or the estimate has no rows), and for a body the reader refuses', () => {
     expect(engineerGhostFrom(null, { status: 'DRAFT', ignored: false })).toBeUndefined();
-    expect(engineerGhostFrom({ form: { sections: 'x', lastSavedAt: null }, part: undefined }, { status: 'DRAFT', ignored: false })).toBeUndefined();
+    expect(engineerGhostFrom({ form: { sections: 'x', lastSavedAt: null } }, { status: 'DRAFT', ignored: false })).toBeUndefined();
   });
 
   it('PF-7: handed to the form with the tree unread, it is what the form area shows, and "Choose a part" is not', () => {
-    const ghost = engineerGhostFrom({ form: wire, part: undefined }, { status: 'DRAFT', ignored: false });
+    const ghost = engineerGhostFrom({ form: wire }, { status: 'DRAFT', ignored: false });
     const unread = renderToStaticMarkup(createElement(PartForm, { estimateId: 'e', part: null, editable: true, nodes: null, ghost, treeUnread: true }));
     expect(unread).toContain('data-part-ghost');
     expect(unread).not.toContain('Choose a part');

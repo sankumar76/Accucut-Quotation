@@ -342,6 +342,17 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
       expect(allowed.length, 'the definition has texts to compare with').toBeGreaterThan(8);
     });
 
+    it('DEF-085: the Engineer\'s first-wait ghost is a new part\'s shape and shows no value the Engineer saved and no count made from one: a typed value changes nothing in it', async () => {
+      const { ghost: empty } = await theGhostAndItsAllowedTexts();
+      const form = await harness.estimateService.getForm({ id: harness.idOf.ENGINEER, role: 'ENGINEER' }, estimate().id);
+      const typedField = defined(form.sections.flatMap((section) => section.fields).find((field) => field.rule.type === 'number'));
+      defined(harness.estimateWorld.nodes[0]).inputs = { [typedField.id]: '4242.42' };
+      const { ghost: withValue } = await theGhostAndItsAllowedTexts();
+      expect(withValue).toBe(empty);
+      expect(withValue).not.toContain('4242');
+      expect(withValue).toMatch(/0 of \d+/);
+    });
+
     it('SEC-833-10: the Engineer\'s second wait, drawn by the real PartFields while the part\'s values are on their way, passes the same scan, so what PartFields hands to the ghost is pinned as drawn', async () => {
       const { allowed } = await theGhostAndItsAllowedTexts();
       const viewer = { id: harness.idOf.ENGINEER, role: 'ENGINEER' } as const;
