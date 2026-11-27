@@ -250,3 +250,5 @@ Yes, as **time-slicing, not postponement**, and only once the cause is shown.
 - Open questions: none
 - Risks raised: none new; the approve-at-hydration miss and the server-time miss are for master's ruling (DL-457 (C) and DL-457 (A) reasoning)
 - Recommended next agent: master (rule the two misses); then the orchestrator for the merge once `511e3070` is green with Stage 11b at or under 193,500 B
+
+**Addendum (round 3): Stage 11b at `511e3070`, the master merge, read:** run completed, Stages 1 to 11b **success** (unit 11,795 tests; unit, integration, security and acceptance 17,676 tests); `/estimates/[code]` **192,815 B** gzip, under the 193,500 B ceiling (headroom 685 B). Master's #786 added no first-load bytes to this route.
