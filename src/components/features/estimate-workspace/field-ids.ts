@@ -3,6 +3,9 @@
  * by these names without importing the form's fields: putting these in `field-renderer.tsx` or `part-fields.tsx` would bring both back into the first load (NFR-009, ADR-016 E1).
  */
 
+/** The id of the part form's title (an `h3` that can take the focus): where the focus goes when a tap on a row in the phone drawer closes the drawer (AQP-490, DEF-133). */
+export const PART_FORM_TITLE_ID = 'part-form-title';
+
 /** Marks the part form's `<form>`; `data-part-id` on it names the part. */
 export const PART_FORM_ATTRIBUTE = 'data-part-form';
 

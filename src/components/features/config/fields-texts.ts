@@ -5,7 +5,16 @@
  */
 
 export const FIELDS_TITLE = 'Fields and formulas';
-export const FIELDS_DESCRIPTION = 'Every field of the worksheet in column order, with the formula that calculates it.';
+/** The sentence under the title (the mock-ups, AQP-473): the Admin's, who inserts and deletes, and the Lead's, who only reads. */
+export const FIELDS_DESCRIPTION = 'The worksheet as a column list. Letters follow the column order and update when you insert or delete a field.';
+export const FIELDS_DESCRIPTION_LEAD = 'The worksheet as a column list. You can read every formula; only the Admin can change them.';
+/** The Admin's two buttons in the head of the page (the mock-up): the checkpoints page, and the wizard that inserts a field (at the end when no column is chosen). */
+export const CHECKPOINTS_BUTTON = 'Checkpoints';
+export const INSERT_FIELD_BUTTON = 'Insert field';
+export const CHECKPOINTS_PATH = '/config/checkpoints';
+export const INSERT_FIELD_PATH = '/config/fields/new';
+/** The hidden heading of the column of row actions. */
+export const ACTIONS_HEAD = 'Actions';
 export const FIELDS_META_DESCRIPTION = 'The fields of the quotation worksheet and the formulas that calculate them.';
 
 /** The Lead's banner (AC-4): a bold first sentence and the reason the formulas are shown. */

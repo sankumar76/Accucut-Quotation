@@ -31,7 +31,7 @@ import {
   TRY_AGAIN,
 } from './estimate-texts';
 import { focusCalculate } from './calculate-button';
-import { controlIdFor, NEXT_FIELD } from './field-ids';
+import { controlIdFor, NEXT_FIELD, PART_FORM_TITLE_ID } from './field-ids';
 import { FieldRenderer } from './field-renderer';
 import { PartHead } from './part-head';
 import { PartProgress, PartProgressSkeleton } from './part-progress';
@@ -70,7 +70,7 @@ export interface PartFieldsProps {
   readonly review?: PartReviewState | undefined;
 }
 
-const TITLE_ID = 'part-form-title';
+const TITLE_ID = PART_FORM_TITLE_ID;
 
 // What the Lead's read-only view leaves out (AQP-488): it saves nothing, so nothing is told when a save goes through, the tree is not read again, no part is missing, and the form has no Calculate to wait for it.
 // They are in this file, not in the first load: the page that draws the view hands the form only what the server can send.

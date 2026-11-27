@@ -200,6 +200,11 @@ test.describe('the change (AC-2, AC-3)', () => {
     await toggle.click();
     await expect(newPassword(page)).toHaveAttribute('type', 'text');
     await expect(page.getByRole('button', { name: 'Hide password' })).toHaveAttribute('aria-pressed', 'true');
+    // Inside the field, at its right edge (AQP-459 follow-up; the ux-expert, 2026-11-26).
+    const [field, button] = await Promise.all([newPassword(page).boundingBox(), page.getByRole('button', { name: 'Hide password' }).boundingBox()]);
+    if (field === null || button === null) throw new Error('a box is missing');
+    expect(button.x).toBeGreaterThanOrEqual(field.x);
+    expect(button.x + button.width).toBeLessThanOrEqual(field.x + field.width + 1);
     await page.getByRole('button', { name: 'Hide password' }).click();
     await expect(newPassword(page)).toHaveAttribute('type', 'password');
 
