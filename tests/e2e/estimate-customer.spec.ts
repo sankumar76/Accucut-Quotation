@@ -139,7 +139,7 @@ test.describe('AC-9, AC-10, AC-11: SCR-05, the Engineer sees the customer and th
     expect(answers[1]).toEqual(answers[0]);
     expect(answers[2]).toEqual(answers[0]);
     await page.reload();
-    await expect(page.getByRole('main').locator('dd', { hasText: ALPHA })).toBeVisible();
+    await expect(page.locator('[data-task-row="customer"]', { hasText: ALPHA })).toBeVisible();
   });
 
   test('AC-5: another Engineer gets the same "not found" page as for a code that does not exist, with HTTP 404', async ({ page }, testInfo) => {
