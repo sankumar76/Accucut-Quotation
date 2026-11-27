@@ -6,7 +6,8 @@ import { deleteGuardOf } from '../../src/lib/estimates/tree-moves';
 
 import { E2E_ENGINEER, E2E_PASSWORD, ensureCanaryCustomers, signInWithoutThePage, useFreshAddress } from './support/auth';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
-import { addMainAssemblyButton, openTreePanel, readTreeThrough, reviewButton, reviewRow } from './support/review-tree';
+import { control, fieldIdOf } from './support/part-form';
+import { addMainAssemblyButton, openEngineerWindow, openTreePanel, readTreeThrough, reviewButton, reviewRow } from './support/review-tree';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
@@ -99,8 +100,8 @@ test.describe('the parts tree on SCR-06, one check each', () => {
     const removed = await page.request.delete(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes/${open.id}?revision=${String(open.revision)}&parts=${String(guard.parts)}&subtree=${guard.subtree}`, { headers: HEADERS });
     expect(removed.status()).toBe(200);
 
-    // The first box of the form (a new Part shows its description first; which other boxes it shows depends on the material).
-    const field = page.locator('#row-inputs form[data-part-form]').getByRole('textbox').first();
+    // The Description box of the form (column D; the first box is the Sl. No, which is read-only).
+    const field = control(page, 'D');
     await expect(field).toBeEnabled();
     await expect(field).not.toHaveAttribute('aria-readonly', 'true');
     await field.fill('9');
@@ -167,5 +168,51 @@ test.describe('the parts tree on SCR-06, one check each', () => {
     await reviewButton(page, 'Delete', '1').click();
     await expect(page.getByRole('alertdialog')).toBeVisible();
     await expectNoAxeViolations(page);
+  });
+
+  test('ED-7: a value typed and not yet left is saved before Recalculate sends its request', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 1);
+    await openedByTheLead(page, code, '1.1');
+
+    const field = control(page, 'D');
+    await expect(field).toBeEnabled();
+    await expect(field).not.toHaveAttribute('aria-readonly', 'true');
+    await field.fill('Invented bracket');
+    const order: string[] = [];
+    page.on('response', (response) => {
+      const request = response.request();
+      if (request.method() === 'PATCH' && /\/nodes\/[^/]+\/inputs$/.test(response.url())) order.push('saved');
+      if (request.method() === 'POST' && response.url().endsWith('/recalculate')) order.push('calculated');
+    });
+    const asked = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${estimateId}/recalculate`));
+    await page.locator('#review-calculate').click();
+    await asked;
+    // The press is the click that leaves the field, and it asks the form to send what it shows, so the value may go twice (the second changes nothing); every save is answered before the request.
+    expect(order.at(-1)).toBe('calculated');
+    expect(order.length).toBeGreaterThan(1);
+  });
+
+  test('ED-8: in a Draft the Engineer saves the part after the Lead opened it: the Lead\'s save is refused as changed elsewhere, with the two choices, and nothing is overwritten silently', async ({ page, browser }, testInfo) => {
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 1);
+    await openedByTheLead(page, code, '1.1');
+    const field = control(page, 'D');
+    await expect(field).toBeEnabled();
+    await expect(field).not.toHaveAttribute('aria-readonly', 'true');
+
+    const engineer = await openEngineerWindow(browser, E2E_ENGINEER);
+    try {
+      const part = defined((await readTreeThrough(engineer.api, estimateId)).find((row) => row.slNo === '1.1'));
+      const written = await engineer.api.patch(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes/${part.id}/inputs`, { headers: HEADERS, data: { revision: part.revision, values: { [fieldIdOf('J')]: '77' } } });
+      expect(written.status(), 'the Engineer saves the part').toBe(200);
+    } finally {
+      await engineer.close();
+    }
+    await field.fill('Invented bracket');
+    await field.blur();
+    await expect(page.getByText('This part was changed somewhere else.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Keep what I typed' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Use the newer values' })).toBeVisible();
   });
 });

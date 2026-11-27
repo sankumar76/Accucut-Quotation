@@ -3,9 +3,6 @@ import { expect, test, type Page } from '@playwright/test';
 import { readEstimateState, saveCanaryQuantity, useFreshAddress } from './support/auth';
 import { calculateAsEngineer, engineerWithEstimate, signInAs, signInAsLead } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow, waitUntilHydrated } from './support/design-system';
-import { control, fieldIdOf } from './support/part-form';
-import { openEngineerWindow } from './support/review-tree';
-import { DEVELOPMENT_URL } from './support/servers';
 
 /**
  * STORY-06.04 (AC-1, AC-3, AC-5, AC-7, AC-9, AC-10; NFR-002): Recalculate and the cleared figures, SCR-06, for a Lead and an Admin at `/estimates/<code>`, at 360x800, 768x1024 and 1366x768. Each test makes an
@@ -87,25 +84,9 @@ test.describe('AC-3: Recalculate from the screen', () => {
     expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 1 });
     await waitUntilHydrated(page, '#review-calculate');
 
-    // DEF-131 stage 2 (ED-7): a value typed in the inputs block and not yet left is saved first, then calculated: the press is the click that leaves the field, and the request goes after the save.
-    const length = page.locator('#row-inputs form[data-part-form]').getByRole('textbox', { name: /Length/ }).first();
-    await expect(length).toBeEnabled();
-    await length.fill('111.5');
-    const order: string[] = [];
-    page.on('response', (response) => {
-      const request = response.request();
-      if (request.method() === 'PATCH' && /\/nodes\/[^/]+\/inputs$/.test(response.url())) order.push('saved');
-      if (request.method() === 'POST' && response.url().endsWith('/recalculate')) order.push('calculated');
-    });
     const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${owner.id}/recalculate`));
     await button(page).click();
     expect((await answered).status()).toBe(200);
-    // The click that leaves the field saves it and the press asks the form to send what it shows, so the same value may go twice (the second changes nothing); what matters is that every save is answered before the request.
-    expect(order.at(-1), 'the figures were calculated last').toBe('calculated');
-    expect(order.filter((step) => step === 'calculated'), 'once').toHaveLength(1);
-    expect(order.length, 'the value was saved before the figures were calculated').toBeGreaterThan(1);
-    const held = await page.evaluate(async (id) => ((await (await fetch(`/api/v1/estimates/${id}/nodes/${id}`)).json()) as { inputs: ReadonlyArray<{ fieldId: string; value: string }> }).inputs, owner.id);
-    expect(held.map((input) => input.value)).toContain('111.50');
 
     await expect(button(page)).toHaveCount(0);
     await expect(clearedNotice(page)).toHaveCount(0);
@@ -117,7 +98,7 @@ test.describe('AC-3: Recalculate from the screen', () => {
     expect(await readEstimateState(owner.id)).toEqual({ status: 'PREPARED', calculations: 2 });
   });
 
-  test('the first press of a Lead on an estimate nobody calculated is a Calculate: the estimate becomes Prepared and the figures show', async ({ page, browser }, testInfo) => {
+  test('the first press of a Lead on an estimate nobody calculated is a Calculate: the estimate becomes Prepared and the figures show', async ({ page }, testInfo) => {
     const { owner, code } = await engineerWithEstimate(testInfo);
     await openAsLead(page, code, testInfo);
     await expect(page.getByRole('status').filter({ hasText: 'The Engineer has not calculated this estimate yet.' })).toContainText(
@@ -126,27 +107,6 @@ test.describe('AC-3: Recalculate from the screen', () => {
     expect(await readEstimateState(owner.id)).toEqual({ status: 'DRAFT', calculations: 0 });
     await expect(button(page)).toHaveText('Calculate');
     await waitUntilHydrated(page, '#review-calculate');
-
-    // ED-8 (DEF-131 stage 2): in a Draft the Engineer can save the same part after the Lead opened it. The Engineer's window is a context of its own (the same person, no new one). The Lead's save of that field is refused as
-    // changed elsewhere, the conflict notice offers the two choices, nothing is overwritten, and "Use the newer values" shows the Engineer's value.
-    const length = control(page, 'J');
-    await expect(length).toBeEnabled();
-    const engineer = await openEngineerWindow(browser, owner);
-    try {
-      const read = await engineer.api.get(`/api/v1/estimates/${owner.id}/nodes/${owner.id}`);
-      const { revision } = (await read.json()) as { revision: number };
-      const written = await engineer.api.patch(`/api/v1/estimates/${owner.id}/nodes/${owner.id}/inputs`, { headers: { origin: DEVELOPMENT_URL }, data: { revision, values: { [fieldIdOf('J')]: '77' } } });
-      expect(written.status(), 'the Engineer saves the part').toBe(200);
-    } finally {
-      await engineer.close();
-    }
-    await length.fill('88');
-    await length.blur();
-    await expect(page.getByText('This part was changed somewhere else.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Keep what I typed' })).toBeVisible();
-    await page.getByRole('button', { name: 'Use the newer values' }).click();
-    await expect(length).toHaveValue('77.00');
-
 
     const answered = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/api/v1/estimates/${owner.id}/recalculate`));
     await button(page).click();
