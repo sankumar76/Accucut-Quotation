@@ -161,30 +161,45 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     expect(Math.abs(loaded - before), `#review-actions moved from ${String(before)} to ${String(loaded)} px once the picture control had arrived`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
   });
 
-  test("the rates-changed notice's own link, focused and pressed with Enter before the swap, ends with Recalculate on the screen (the keyboard path of DL-465 (3) (i))", async ({ page }, testInfo) => {
-    // The state of rates-changed.spec.ts: calculated on a material of the test's own whose price changed after. No person is made (the set-up Lead and Engineer); the material is not a person.
-    const materialId = await insertPrivateMaterial({ pricePerKg: '137.37', specificGravity: '7.37', scrapRate: '27.37' });
-    const { code } = await assignedEstimate(page, testInfo, true, materialId);
-    await changePrivateMaterial(materialId, { pricePerKg: '9137.73', specificGravity: '7.37', scrapRate: '27.37' });
-    const chunk = await holdFieldsChunk(page);
-    await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
-    await placeholderIsShown(page);
-    await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
+  // The notice appears in every state that has a current calculation and is not Approved: a Prepared estimate, and a Draft that was unlocked (STORY-06.11 AC-10, rates-changed.spec.ts). The keyboard path runs in both (DL-465 note 7).
+  for (const unlocked of [false, true]) {
+    const state = unlocked ? 'an unlocked Draft' : 'a Prepared estimate';
+    test(`the rates-changed notice's own link, focused and pressed with Enter before the swap, on ${state}, ends with Recalculate on the screen (the keyboard path of DL-465 (3) (i))`, async ({ page }, testInfo) => {
+      // The state of rates-changed.spec.ts: calculated on a material of the test's own whose price changed after. No person is made (the set-up Lead and Engineer); the material is not a person.
+      const materialId = await insertPrivateMaterial({ pricePerKg: '137.37', specificGravity: '7.37', scrapRate: '27.37' });
+      const { code, estimateId } = await assignedEstimate(page, testInfo, true, materialId);
+      await changePrivateMaterial(materialId, { pricePerKg: '9137.73', specificGravity: '7.37', scrapRate: '27.37' });
+      if (unlocked) {
+        // As rates-changed.spec.ts:319: the Lead approves and unlocks through the API; the figures stay current and the rates are still changed.
+        const headers = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
+        const costs = await page.request.get(`/api/v1/estimates/${estimateId}/costs`);
+        expect(costs.status(), "the Lead's read of the costs").toBe(200);
+        const { calculationId } = (await costs.json()) as { calculationId: string };
+        const approved = await page.request.post(`/api/v1/estimates/${estimateId}/approve`, { headers, data: { calculationId, price: '48271.37' } });
+        expect(approved.status(), 'the approval').toBe(200);
+        const unlock = await page.request.post(`/api/v1/estimates/${estimateId}/unlock`, { headers, data: { reason: 'The customer asked for a new fixture.' } });
+        expect(unlock.status(), 'the unlock').toBe(200);
+      }
+      const chunk = await holdFieldsChunk(page);
+      await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
+      await placeholderIsShown(page);
+      await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
 
-    const notice = page.getByRole('status').filter({ hasText: 'Rates changed since this was calculated.' });
-    await expect(notice).toBeVisible();
-    const link = notice.getByRole('link', { name: 'Recalculate' });
-    await link.focus();
-    await expect(link).toBeFocused();
-    await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/#review-calculate$/);
-    chunk.release();
-    await formIsDrawn(page);
-    await expect(page.locator('#review-calculate')).toBeInViewport();
-    // And once the picture control has arrived as well (QLT-833-13).
-    await pictureControlHere(page);
-    await expect(page.locator('#review-calculate')).toBeInViewport();
-  });
+      const notice = page.getByRole('status').filter({ hasText: 'Rates changed since this was calculated.' });
+      await expect(notice).toBeVisible();
+      const link = notice.getByRole('link', { name: 'Recalculate' });
+      await link.focus();
+      await expect(link).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(/#review-calculate$/);
+      chunk.release();
+      await formIsDrawn(page);
+      await expect(page.locator('#review-calculate')).toBeInViewport();
+      // And once the picture control has arrived as well (QLT-833-13).
+      await pictureControlHere(page);
+      await expect(page.locator('#review-calculate')).toBeInViewport();
+    });
+  }
 
   test("the Engineer's workspace: the page under the form moves no more than 24 px (PF-15) when the form replaces its placeholder", async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, false);
