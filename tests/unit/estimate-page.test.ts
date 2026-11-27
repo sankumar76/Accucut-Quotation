@@ -271,6 +271,12 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
         if (match[3] !== undefined || exact[name] === undefined || !exact[name](decode(value))) problems.push(`attribute: ${name}="${value}"`);
       }
       if (/ [a-zA-Z][\w:-]*=[^"'\s>]/.test(ghost)) problems.push('unquoted attribute');
+      // SEC-833-07, the skeleton: every tag is an element of the ghost's own list, in the one form React writes (one space between attributes, a value in double quotes, no bare attribute, no spaces around "=", no newline,
+      // tab or slash inside a tag), and every "<" begins a tag. A DOCTYPE, an element of another name and a bare "rate" fail here.
+      for (const tag of ghost.matchAll(/<[^>]*>/g)) {
+        if (!/^<\/?(?:div|span|p|ul|li)(?: [a-zA-Z][\w:-]*="[^"]*")*>$/.test(tag[0])) problems.push(`tag: ${tag[0]}`);
+      }
+      if (ghost.replace(/<[^>]*>/g, '').includes('<')) problems.push('a "<" that is no tag');
       return problems;
     }
 
@@ -319,9 +325,10 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
       expect(allowed.length, 'the definition has texts to compare with').toBeGreaterThan(8);
     });
 
-    it('no word of the old scan is a class token of the code (a class value is checked by token)', () => {
-      const tokens = classTokensOfTheCode();
-      for (const word of ['rate', 'rates', 'price', 'prices', 'cost', 'costs', 'formula', 'formulas', 'Machining', '450', '45', '$', '€', '₹']) expect(tokens.has(word), word).toBe(false);
+    it('no word of the old scan is a class token of the code, with or without the notice\'s files (a class value is checked by token)', () => {
+      for (const tokens of [classTokensOfTheCode(), classTokensOfTheCode(true)]) {
+        for (const word of ['rate', 'rates', 'price', 'prices', 'cost', 'costs', 'formula', 'formulas', 'Machining', '450', '45', '$', '€', '₹']) expect(tokens.has(word), word).toBe(false);
+      }
     });
 
     /** The icon of an info notice, exactly as the icon component draws it, and the alert's data-slots: what a notice in a ghost may add. */
@@ -415,6 +422,29 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
           return changed === ghost || strictViolations(changed, allowed, tokens).length === 0;
         });
         expect(survivors, `values that passed in ${place.name}`).toEqual([]);
+      });
+    }
+
+    /** SEC-833-07: forms React never writes, which the old whole-page scan would have caught by their words. */
+    const FORMS: ReadonlyArray<{ readonly name: string; readonly change: (ghost: string) => string }> = [
+      { name: 'an attribute after a newline', change: (ghost) => ghost.replace('<div inert', () => '<div\ninert title="rate"') },
+      { name: 'an attribute after a tab', change: (ghost) => ghost.replace('<div inert', () => '<div\tinert title="rate"') },
+      { name: 'an attribute after a slash', change: (ghost) => ghost.replace('<div inert', () => '<div/title="rate" inert') },
+      { name: 'spaces around "="', change: (ghost) => ghost.replace('<div inert=""', () => '<div inert = "" title = "rate"') },
+      { name: 'a bare attribute "rate"', change: (ghost) => ghost.replace('<div inert', () => '<div rate inert') },
+      { name: 'an element <x-rate>', change: (ghost) => ghost.replace('<div inert', () => '<x-rate></x-rate><div inert') },
+      { name: 'a <!DOCTYPE> with a rate', change: (ghost) => ghost.replace('<div inert', () => '<!DOCTYPE rate 450><div inert') },
+      { name: 'an upper-case element name', change: (ghost) => ghost.replace('<div inert', () => '<DIV rate="1"></DIV><div inert') },
+      { name: 'two spaces between attributes', change: (ghost) => ghost.replace('<div inert=""', () => '<div  inert=""') },
+      { name: 'a "<" that is no tag', change: (ghost) => ghost.replace('<div inert', () => 'rate < 450 <div inert') },
+      { name: 'an attribute name made of odd characters', change: (ghost) => ghost.replace('<div inert', () => '<div ra$te="1" inert') },
+    ];
+    for (const form of FORMS) {
+      it(`fails when the ghost holds ${form.name}`, async () => {
+        const { ghost, allowed } = await theGhostAndItsAllowedTexts();
+        const changed = form.change(ghost);
+        expect(changed, 'the mutant changed the ghost').not.toBe(ghost);
+        expect(strictViolations(changed, allowed, classTokensOfTheCode()), form.name).not.toEqual([]);
       });
     }
 
