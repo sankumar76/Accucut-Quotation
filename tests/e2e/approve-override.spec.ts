@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Browser, type BrowserContext, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { z } from 'zod';
 
 import { createDisposableUser, readApproval, readEstimateState, useFreshAddress, useFreshAddress as setFreshAddress } from './support/auth';
@@ -310,24 +310,57 @@ test.describe('AC-5: a price equal to the calculated total is not an override', 
   });
 });
 
-test.describe('AC-6, AC-8: the price itself', () => {
-  test('text is refused with the spec\'s sentence and no reason field; a price of 0 is accepted as an override', async ({ page }, testInfo) => {
-    const { owner } = await openedAsLead(page, testInfo);
-    const shown = await totalAsShown(page);
+/**
+ * "The price itself" (Test Bug of DL-450 (B); DL-430, DL-449 (3)(c)): the old case was one test, made an Engineer and a Lead, calculated, loaded the review and then did two things, refused text and approved 0. It is
+ * now **two cases on one page** in one serial group, split at its costly step: the page is made and loaded once, in `beforeAll`, with the same sign-in, address (`useFreshAddress`), viewport and touch setting as
+ * the project gives every case. Case A runs the steps up to and including the refusal of text; case B first asserts that the page is as A left it (the dialog open, `abc` in the price, no reason field, nothing
+ * approved) and then runs the rest of the old case, in its order. A failure of A skips B and a retry runs the whole group from `beforeAll`, so the retry and coverage semantics are the old case's. Every assertion
+ * of the old case is kept, in its order; the persons are the same two (an Engineer and a Lead, +0). No timeout is set, raised or lowered anywhere here.
+ */
+test.describe('AC-6, AC-8: the price itself: one page, refused and then approved', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  let context: BrowserContext;
+  let page: Page;
+  let ownerId = '';
+  let shown = '';
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    const { baseURL, viewport, hasTouch } = testInfo.project.use;
+    context = await browser.newContext({ storageState: { cookies: [], origins: [] }, ...(baseURL === undefined ? {} : { baseURL }), ...(viewport === undefined ? {} : { viewport }), ...(hasTouch === undefined ? {} : { hasTouch }) });
+    await setFreshAddress(context);
+    page = await context.newPage();
+    ownerId = (await openedAsLead(page, testInfo)).owner.id;
+  });
+
+  test.afterAll(async () => {
+    await context.close();
+  });
+
+  test('text is refused with the spec\'s sentence and no reason field', async () => {
+    shown = await totalAsShown(page);
     await openDialog(page);
     await priceField(page).fill('abc');
     await submitOf(page).click();
     await expect(dialogOf(page).getByText(PRICE_MESSAGE)).toBeVisible();
     await expect(reasonField(page)).toHaveCount(0);
-    expect(await readApproval(owner.id)).toBeNull();
+    expect(await readApproval(ownerId)).toBeNull();
+  });
+
+  test('a price of 0 is accepted as an override', async () => {
+    // The state A left, which the old case went on from: the dialog open with the refused text in the price, no reason field, and nothing approved.
+    await expect(dialogOf(page)).toBeVisible();
+    await expect(priceField(page)).toHaveValue('abc');
+    await expect(reasonField(page)).toHaveCount(0);
+    expect(await readApproval(ownerId)).toBeNull();
 
     await priceField(page).fill('0');
     await expect(dialogOf(page)).toContainText(`This price is ${shown} lower than the calculated total.`);
-    const response = await approveAndWait(page, owner.id);
+    const response = await approveAndWait(page, ownerId);
     expect(response.status()).toBe(200);
     await expect(dialogOf(page)).toHaveCount(0);
     await expect(tiles(page)).toContainText('₹ 0.00');
     await expect(tiles(page)).toContainText(`${shown} lower than the calculated total (${shown}).`);
-    expect(await readApproval(owner.id)).toMatchObject({ approvedPrice: '0.00', isOverride: true, overrideReason: null });
+    expect(await readApproval(ownerId)).toMatchObject({ approvedPrice: '0.00', isOverride: true, overrideReason: null });
   });
 });
