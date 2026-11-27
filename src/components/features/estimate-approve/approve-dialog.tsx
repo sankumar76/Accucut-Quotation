@@ -16,11 +16,15 @@ import { RATES_CHANGED_TITLE } from '@/lib/estimate/rates-changed-copy';
 import { approveEstimate, canReadFigures } from '@/lib/estimates/approve-client';
 import { formatRupees } from '@/lib/money';
 
+import { ApproveSummary } from './approve-summary';
 import {
   APPROVE_UNCONFIRMED,
   CANCEL_LABEL,
   DIALOG_TITLE,
+  dialogTitle,
+  LEAD_IN_ID,
   OUT_OF_DATE_ALERT,
+  PRICE_HINT,
   PRICE_INFO,
   PRICE_LABEL,
   priceChangedNote,
@@ -53,10 +57,16 @@ export interface ApproveDialogProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly estimateId: string;
+  /** The task's code, in the heading. */
+  readonly code: string;
   /** The calculation the page showed: the server approves only while it is still the current one. */
   readonly calculationId: string;
   /** The calculated total (BL) the field starts as. */
   readonly calculatedTotal: string;
+  /** The Excel letter of the calculated total (BL), for the summary row. */
+  readonly totalLetter: string;
+  /** The estimate's customer for the summary row; `null` when it has none. */
+  readonly customerName: string | null;
   /** The Excel letter of BO, from the configuration version the figures belong to. */
   readonly approvedLetter: string;
   /** The rows of the calculation's quantity warning (STORY-06.10 AC-5): one info line names them when there are any. It never stops the approval and has no box to tick. */
@@ -208,8 +218,9 @@ function ApproveForm({ props, approval }: { readonly props: ApproveDialogProps; 
   return (
     <form noValidate onSubmit={(event) => void approval.submit(event)} className="flex flex-col gap-s-4">
       <DialogHeader>
-        <DialogTitle>{DIALOG_TITLE}</DialogTitle>
+        <DialogTitle>{dialogTitle(props.code)}</DialogTitle>
       </DialogHeader>
+      <ApproveSummary totalLetter={props.totalLetter} calculatedTotal={props.calculatedTotal} customerName={props.customerName} />
       <Alerts phase={phase} />
       {props.warningRows.length === 0 ? null : <Notice tone="info">{approveWarningLine(props.warningRows)}</Notice>}
       {props.ratesLine === null ? null : (
@@ -218,7 +229,7 @@ function ApproveForm({ props, approval }: { readonly props: ApproveDialogProps; 
         </Notice>
       )}
       {difference === null ? <Notice tone="info">{PRICE_INFO}</Notice> : <Notice tone="warn">{priceChangedNote(difference.direction, formatRupees(difference.amount))}</Notice>}
-      <FormField id="approve-price" label={PRICE_LABEL} tag={<ColumnTag letter={props.approvedLetter} kind="output" />} {...(priceError === null ? {} : { error: priceError })}>
+      <FormField id="approve-price" label={PRICE_LABEL} hint={PRICE_HINT} tag={<ColumnTag letter={props.approvedLetter} kind="output" />} {...(priceError === null ? {} : { error: priceError })}>
         {(control) => (
           <UnitInput
             {...control}
@@ -265,7 +276,7 @@ export function ApproveDialog(props: ApproveDialogProps) {
   return (
     // Escape, the close control and a press outside do nothing while a request is under way (the approval cannot be recalled).
     <Dialog open={props.open} onOpenChange={(next) => (next || !inFlightRef.current ? props.onOpenChange(next) : undefined)}>
-      <DialogContent aria-describedby={undefined} onCloseAutoFocus={props.onCloseAutoFocus}>
+      <DialogContent aria-describedby={LEAD_IN_ID} onCloseAutoFocus={props.onCloseAutoFocus}>
         <ApproveFormHost {...props} inFlightRef={inFlightRef} />
       </DialogContent>
     </Dialog>
