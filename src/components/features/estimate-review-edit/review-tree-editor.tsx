@@ -35,7 +35,7 @@ import { inputsNotice, removedElsewhereLine, showingInputs, TREE_CALCULATING, TR
  * island that holds the selected row** and draws the review's tree with the Engineer's tree actions (the move handle, the "+", the "-" and "Add main assembly": `TreePanel` with the review's row and legends, no
  * second copy of any of them) and, beside it, the row's inputs block. Approved, Quoted and ignored estimates keep the read-only server tree (`ReviewTree`); the page chooses between the two by `treeActionsOffered`.
  *
- * **The tree is the server's, read by `usePartsTree`** (`GET /tree` once the island is up; every change is one request and the tree on screen is what the server answered). **The figures are the page's**, handed in as
+ * **The tree is the server's, held by `usePartsTree`**: it starts from the tree the page read and handed over in the seed (the body `GET /tree` answers, built by the same `treeBody`; DEF-141), so there is no read of it when the island comes up, and it is read again only when a change, a conflict or Try again asks; every change is one request and the tree on screen is what the server answered. **The figures are the page's**, handed in as
  * the rows of the costs view and joined to the tree's rows by ID (`joinRows`): the hook never holds a figure, and a row added a moment ago shows a dash until the page is drawn again. Choosing a row is a state
  * change and a `?row=` written with \`history.replaceState\`, not a navigation, so a reload and a shared link still open the same row.
  *
