@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { RowName } from '@/components/shared/row-name';
 import { cn } from '@/lib/cn';
 import { nodeKindLabel } from '@/lib/estimate/node-kinds';
+import { hasRowName } from '@/lib/estimates/row-name';
 import { formatCount, formatFigure, NO_FIGURE } from '@/lib/money';
 import type { CostsView } from '@/server/views/schemas/costs';
 
@@ -28,7 +29,8 @@ import {
 
 /**
  * "How the total is built" (STORY-06.02 AC-3; UX spec SCR-06 "Content"; D-12, UX-02): one line for each row (Sl. No, part, its count for the whole order, its own BG) ending with the total, the
- * sum of the BG column, which is the BL tile's figure (CE-1: 0, 6 and 24 give 30). The worked example and the rounding sentence stand under the table. It is a `details` panel, closed until
+ * sum of the BG column, which is the BL tile's figure (CE-1: 0, 6 and 24 give 30). The worked example and the rounding sentence stand between the explanation and the table, as in the mock-up (AQP-491,
+ * DEF-134); the Part column names the kind before the name, `Main Assembly: Control cabinet`, and a row with no name shows its kind once (DEF-135). It is a `details` panel, closed until
  * opened (AQP-468, DEF-112: the whole summary line is the control, with a chevron and the words "Show" while it is closed and "Hide" while it is open, by CSS alone), and it is drawn only while the figures are `current`: in the other states there is nothing to add up (UX spec SCR-06 "Total cleared"). The total is the figure the calculation stored,
  * not a sum made here, so the screen can never show a total that the record does not hold. No script.
  */
@@ -54,6 +56,8 @@ export function BuildTable({ letters, nodes, totalPrice, warned }: BuildTablePro
       </summary>
       <div className="flex flex-col gap-s-3 px-s-4 pb-s-4">
         <p className="text-label text-ink-2">{buildExplanation(COUNT_FIELD_NAME, letters.count, letters.unitPrice)}</p>
+        <p className="text-label text-ink-2">{BUILD_EXAMPLE}</p>
+        <p className="text-label text-ink-2">{ROUNDING_SENTENCE}</p>
         <Table regionLabel={BUILD_REGION_LABEL} caption={BUILD_CAPTION}>
           <TableHeader>
             <TableRow>
@@ -75,6 +79,7 @@ export function BuildTable({ letters, nodes, totalPrice, warned }: BuildTablePro
               <TableRow key={node.id}>
                 <TableCell className="tabular-nums">{node.slNo}</TableCell>
                 <TableCell className={cn('min-w-0', BREAK_LONG_NAMES)}>
+                  {hasRowName(node.name) ? `${nodeKindLabel(node, nodes)}: ` : null}
                   <RowName label={node.name} kindLabel={nodeKindLabel(node, nodes)} />
                   {warned.has(node.id) ? (
                     <>
@@ -95,8 +100,6 @@ export function BuildTable({ letters, nodes, totalPrice, warned }: BuildTablePro
             </TableRow>
           </TableBody>
         </Table>
-        <p className="text-label text-ink-2">{BUILD_EXAMPLE}</p>
-        <p className="text-label text-ink-2">{ROUNDING_SENTENCE}</p>
       </div>
     </details>
   );

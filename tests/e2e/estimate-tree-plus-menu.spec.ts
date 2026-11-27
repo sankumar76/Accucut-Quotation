@@ -28,6 +28,11 @@ const row = (page: Page, slNo: string): Locator =>
 /** The "+" of a row that opens a menu: its name starts with "Add under" and the row's number. In view on the open row, so the row is chosen first, as a person does. */
 async function openMenuOf(page: Page, slNo: string): Promise<void> {
   await row(page, slNo).click();
+  // A press on a row in the phone drawer opens it and shuts the drawer (AQP-490, DEF-133): the drawer is opened again, and the row, still the open one, shows its toolbar.
+  if (isPhone(page)) {
+    await expect(tree(page)).toBeHidden();
+    await showTree(page);
+  }
   await tree(page).getByRole('button', { name: new RegExp(`^Add under ${slNo.replaceAll('.', '\\.')} `) }).click();
   await expect(page.getByRole('menu')).toBeVisible();
 }

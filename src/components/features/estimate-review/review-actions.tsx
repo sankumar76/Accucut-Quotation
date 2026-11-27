@@ -66,6 +66,10 @@ const CANCEL_REASON_ID = 'review-cancel-reason';
 export interface ApproveOffer {
   readonly calculationId: string;
   readonly calculatedTotal: string;
+  /** The Excel letter of the calculated total (BL), for the dialog's row "Calculated total (BL)". */
+  readonly totalLetter: string;
+  /** The estimate's customer, for the dialog's row "Customer"; `null` for an estimate made before it had one. */
+  readonly customerName: string | null;
   readonly approvedLetter: string;
   /** The rows of the calculation's quantity warning, for the one line of the approval dialog (STORY-06.10 AC-5); empty when it has none. Approving is not stopped either way. */
   readonly warningRows: ReadonlyArray<{ readonly slNo: string; readonly label: string }>;
@@ -142,12 +146,18 @@ const Reason = ({ id, text }: ReasonProps) => (
  * Whether Approve and lock is on, and with what: a PREPARED estimate whose figures are `current`, with the calculation they come from and its total. This is the button's own convenience and mirrors the
  * server's guard (`assertApprovable`), which stays the authority: a button that is on for an estimate the server would refuse only earns the refusal's sentence.
  */
-export function approveOffer(status: EstimateStatus, costs: Pick<CostsView, 'state' | 'calculationId' | 'totals' | 'letters' | 'warning' | 'ratesChanged'>): ApproveOffer | null {
+export function approveOffer(
+  status: EstimateStatus,
+  costs: Pick<CostsView, 'state' | 'calculationId' | 'totals' | 'letters' | 'warning' | 'ratesChanged'>,
+  customerName: string | null,
+): ApproveOffer | null {
   const total = costs.totals?.totalPrice ?? null;
   if (status !== 'PREPARED' || costs.state !== 'current' || costs.calculationId === null || total === null) return null;
   return {
     calculationId: costs.calculationId,
     calculatedTotal: total,
+    totalLetter: costs.letters.totalPrice,
+    customerName,
     approvedLetter: costs.letters.approvedPrice,
     warningRows: costs.warning?.rows ?? [],
     ratesLine: costs.ratesChanged === null ? null : approveRatesLine(costs.ratesChanged),
@@ -192,7 +202,7 @@ function approveReason(state: CostsView['state'], status: EstimateStatus): strin
   return APPROVE_CLEARED_REASON;
 }
 
-function ApproveControl({ estimateId, state, status, approve }: Pick<ReviewActionsProps, 'estimateId' | 'state' | 'status' | 'approve'>) {
+function ApproveControl({ estimateId, code, state, status, approve }: Pick<ReviewActionsProps, 'estimateId' | 'code' | 'state' | 'status' | 'approve'>) {
   if (approve !== null) {
     return (
       <ApproveButton
@@ -200,8 +210,11 @@ function ApproveControl({ estimateId, state, status, approve }: Pick<ReviewActio
         label={APPROVE_LABEL}
         failedLine={APPROVE_FIRST_OPEN_FAILED}
         estimateId={estimateId}
+        code={code}
         calculationId={approve.calculationId}
         calculatedTotal={approve.calculatedTotal}
+        totalLetter={approve.totalLetter}
+        customerName={approve.customerName}
         approvedLetter={approve.approvedLetter}
         warningRows={approve.warningRows}
         ratesLine={approve.ratesLine}
@@ -264,7 +277,7 @@ export function ReviewActions({ estimateId, code, state, status, calculated, app
           {isLocked(status) ? (
             <UnlockButton id={REVIEW_UNLOCK_ID} label={UNLOCK_LABEL} failedLine={UNLOCK_FIRST_OPEN_FAILED} estimateId={estimateId} code={code} />
           ) : (
-            <ApproveControl estimateId={estimateId} state={state} status={status} approve={approve} />
+            <ApproveControl estimateId={estimateId} code={code} state={state} status={status} approve={approve} />
           )}
         </div>
         {quote === null ? null : (
