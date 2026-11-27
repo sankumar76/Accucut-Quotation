@@ -17,7 +17,7 @@ const CODE = 'Q-2026-0042';
 
 describe('the tabs and the query string', () => {
   it('knows the four tabs and nothing else, Ignored last (AQP-401 AC-3)', () => {
-    expect(QUEUE_TABS).toEqual(['open', 'closed', 'overdue', 'ignored']);
+    expect(QUEUE_TABS).toEqual(['open', 'overdue', 'closed', 'ignored']);
     expect(['open', 'closed', 'overdue', 'ignored'].every(isQueueTab)).toBe(true);
     expect(['Open', 'all', '', 'overdue '].some(isQueueTab)).toBe(false);
   });

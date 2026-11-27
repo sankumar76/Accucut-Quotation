@@ -47,13 +47,13 @@ const screen = (role: RoleName, data: QueuePageData): string => renderToStaticMa
 const list = (role: RoleName, tasks: ReadonlyArray<QueueRowData>): string => renderToStaticMarkup(createElement(QueueList, { role, tasks, asOf: AS_OF }));
 const occurrences = (html: string, text: string): number => html.split(text).length - 1;
 
-describe('check 1: the tablist is Open, Closed, Overdue, Ignored, for both roles', () => {
+describe('check 1: the tablist is Open, Overdue, Closed, Ignored (FR-034), for both roles', () => {
   it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('%s: four tabs in that order, each with its count, the Ignored tab last', (role) => {
-    expect(QUEUE_TABS).toEqual(['open', 'closed', 'overdue', 'ignored']);
+    expect(QUEUE_TABS).toEqual(['open', 'overdue', 'closed', 'ignored']);
     const html = screen(role, page([row()], { counts: { open: 2, closed: 1, overdue: 1, ignored: 7 } }));
     // The text of each tab with its markup and its count taken off (the Overdue tab has an icon first).
     const names = [...html.matchAll(/<button[^>]*role="tab"[^>]*>(.*?)<\/button>/g)].map((match) => (match[1] ?? '').replace(/<[^>]*>/g, '').replace(/\d+$/, ''));
-    expect(names).toEqual(['Open', 'Closed', 'Overdue', 'Ignored']);
+    expect(names).toEqual(['Open', 'Overdue', 'Closed', 'Ignored']);
     expect(html).toMatch(/aria-selected="true"[^>]*>Ignored<span[^>]*>7<\/span>/);
   });
 

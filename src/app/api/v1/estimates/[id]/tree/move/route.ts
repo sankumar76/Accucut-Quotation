@@ -14,5 +14,5 @@ export const POST = withRoute({
   params: estimateIdParamsSchema,
   body: moveTreeBodySchema,
   output: partsTreeSchema,
-  handler: async ({ user, params, body }) => ({ nodes: [...(await getEstimateService().moveNode({ id: user.id, role: user.role }, params.id, body))] }),
+  handler: async ({ user, requestId, params, body }) => ({ nodes: [...(await getEstimateService().moveNode({ id: user.id, role: user.role }, params.id, body, { actorId: user.id, actorLabel: user.name, requestId }))] }),
 });

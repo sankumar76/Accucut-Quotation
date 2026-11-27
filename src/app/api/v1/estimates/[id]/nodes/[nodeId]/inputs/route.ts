@@ -18,8 +18,8 @@ export const PATCH = withRoute({
   params: nodeParamsSchema,
   body: saveInputsBodySchema,
   output: savedInputsSchema,
-  handler: async ({ user, params, body }) => {
-    const saved = await getEstimateService().saveInputs({ id: user.id, role: user.role }, params.id, { nodeId: params.nodeId, ...body });
+  handler: async ({ user, requestId, params, body }) => {
+    const saved = await getEstimateService().saveInputs({ id: user.id, role: user.role }, params.id, { nodeId: params.nodeId, ...body }, { actorId: user.id, actorLabel: user.name, requestId });
     return { id: saved.id, revision: saved.revision, completeness: saved.completeness, inputs: inputEntriesOf(saved.inputs) };
   },
 });

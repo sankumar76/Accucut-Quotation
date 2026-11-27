@@ -32,11 +32,10 @@ export const FORM_AREA_TITLE = 'Parts and inputs';
  * The part form (STORY-05.03; UX spec SCR-05 "Content and microcopy", "States"). The labels, letters, hints and ranges of the fields come from the server, from the registry, and are
  * not written here; these are the words around them. None of them names a rate, a price or a formula (UX-24).
  */
-export const partFormTitle = (slNo: string): string => `Part ${slNo}`;
 export const FORM_INTRO = 'Every field is needed to Calculate. Enter 0 where a part needs nothing. Numbers allow up to 2 decimals.';
 export const FORM_LOADING = 'Loading the form';
 export const FORM_LOAD_FAILED_TITLE = 'We could not load the form';
-export const FORM_NO_PART = 'Choose a part in the tree to fill in its form, or add the first one with "New item".';
+export const FORM_NO_PART = 'Choose a part in the tree to fill in its form, or add the first one with "Add main assembly".';
 export const FORM_LOCKED = 'This estimate can no longer be changed.';
 export const lastSavedText = (when: string): string => `Last saved ${when}`;
 export const NOT_SAVED_YET = 'Nothing saved yet';
@@ -47,7 +46,6 @@ export const PART_LOAD_FAILED_TITLE = 'We could not load this part';
 export const MATERIAL_PLACEHOLDER = 'Choose a material';
 export const MATERIAL_LOADING = 'Loading materials';
 export const MATERIAL_LOAD_FAILED_TITLE = 'We could not load the materials';
-export const sectionRegionLabel = (number: number, name: string): string => `${String(number).padStart(2, '0')} ${name}`;
 export const columnRangeLabel = (range: string): string => `Excel columns ${range}`;
 
 /**
@@ -56,7 +54,6 @@ export const columnRangeLabel = (range: string): string => `Excel columns ${rang
 export const SECTION_STRIP_LABEL = 'Sections of the form';
 export const sectionLinkText = (number: number, shortName: string): string => `${String(number).padStart(2, '0')} ${shortName}`;
 export const SECTION_COMPLETE_TEXT = 'All filled in';
-export const progressText = (complete: number, total: number): string => `${complete} of ${total} complete`;
 
 /**
  * The completion line of the open part and the words around it (STORY-05.11; UX spec SCR-05 "Content": "24 of 25 inputs complete"). The wording is the wireframe's and is the ux-expert's to rule at the end review
@@ -77,7 +74,6 @@ export const TREE_LOADING = 'Loading the parts';
 export const TREE_LOAD_FAILED_TITLE = 'We could not load the parts';
 export const TREE_MOVE_UP = 'Move up';
 export const TREE_MOVE_DOWN = 'Move down';
-export const TREE_PART_NAME = 'Part';
 export const TREE_NO_INPUTS = 'No inputs yet';
 export const TREE_SOME_INPUTS = 'Some inputs entered';
 export const TREE_ALL_INPUTS = 'All inputs entered';
@@ -88,11 +84,9 @@ export const TREE_FAILED_TITLE = 'The change was not made';
 export const TREE_CHANGING = 'Updating the parts. This takes a moment.';
 /** The ID of the visible line above: the buttons that are `aria-disabled` while it shows point at it (`aria-describedby`). */
 export const TREE_CHANGING_ID = 'parts-tree-changing';
-export const treeButtonLabel = (slNo: string | null): string => (slNo === null ? TREE_TITLE : `${TREE_TITLE}, part ${slNo}`);
 /** The count on the right of the tree's head (DEF-081 ruling item 10; SCR-05 "12 rows"): every row, open or closed. */
 export const treeRowsLabel = (rows: number): string => (rows === 1 ? '1 row' : `${rows} rows`);
 
-export const addedMessage = (slNo: string): string => `Part ${slNo} added`;
 export const renumberedMessage = (slNo: string): string => `Part renumbered to ${slNo}`;
 export const deletedMessage = (parts: number): string => (parts === 1 ? 'Row deleted' : `${parts} rows deleted`);
 

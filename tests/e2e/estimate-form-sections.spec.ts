@@ -69,6 +69,9 @@ test.describe('AC-1, AC-6: the sections, their headers, the strip and the placeh
       await expect(card).toContainText(section.range);
       if (section.count === null) await expect(card).not.toContainText(/\d+ of \d+ complete/);
       else await expect(card).toContainText(section.count);
+      // DEF-098: the number is a tile of its own, and the count beside the range tag reads "0 of 4" (the word "complete" is for a screen reader).
+      await expect(card.locator('[data-section-no]')).toHaveText(section.number);
+      if (section.count !== null) await expect(card.locator('[data-section-count]')).toHaveText(section.count);
     }
     for (const [letter, name] of [
       ['P', 'Cutting Time'],
@@ -426,6 +429,11 @@ test.describe('STORY-05.11 AC-1, AC-4, AC-7, AC-8: the completion line, the tree
     await expect(progressLine(page)).toContainText('1 of 21 inputs complete');
     const bar = partForm(page).getByRole('progressbar', { name: 'Inputs complete for part 1' });
     await expect(bar).toBeVisible();
+    // DEF-097: the head is the eyebrow (what the row is and where it sits), the number and name, and a short dark bar of 160 px with its words beside it, not a full-width red bar.
+    await expect(partForm(page).locator('[data-part-eyebrow]')).toHaveText('Main Assembly · level 1');
+    await expect(partForm(page).getByRole('heading', { level: 3 }).first()).toHaveText('1 · Main Assembly, no description yet');
+    expect((await bar.boundingBox())?.width).toBeCloseTo(160, 0);
+    await expect(bar.locator('[data-slot="progress-indicator"]')).toHaveCSS('background-color', 'rgb(23, 24, 28)');
     await expect(bar).toHaveAttribute('aria-valuenow', '1');
     await expect(bar).toHaveAttribute('aria-valuemax', '21');
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);

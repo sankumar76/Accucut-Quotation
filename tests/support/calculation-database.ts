@@ -1,3 +1,4 @@
+import { withAuditContext } from './customer-change';
 import { randomUUID } from 'node:crypto';
 
 import type { NodeKind } from '../../src/lib/estimate/node-kinds';
@@ -98,7 +99,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
   const configurations = createConfigRepository(db.prisma);
   const estimates = createEstimateRepository(db.prisma);
   const nodes = createEstimateNodeRepository(db.prisma);
-  const estimateService = createEstimateService({
+  const estimateService = withAuditContext(createEstimateService({
     estimates,
     audit: db.audit,
     nodes,
@@ -107,7 +108,7 @@ export async function openCalculationDatabase(): Promise<CalculationDatabase> {
     materials: db.masterRepository,
     currentConfiguration: () => Promise.resolve(seedConfig),
     configurationById: () => Promise.resolve(seedConfig),
-  });
+  }));
   const approvals = createApprovalRepository(db.prisma);
   const approvalService = createApprovalService({
     estimates,

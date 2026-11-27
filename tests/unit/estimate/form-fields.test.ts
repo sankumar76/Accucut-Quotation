@@ -207,6 +207,26 @@ describe('AC-2, AC-3, AC-4 (STORY-05.04): the units, hints and the default that 
     expect(byLetter('AJ')?.hint).toBe('Write "None" if there is nothing to add.');
   });
 
+  it('AQP-447 (DEF-090): Description (D) has the hint "Names this row in the parts tree." and, with Part No. (B), is marked as a field that names the row; no other field is', () => {
+    expect(byLetter('D')).toMatchObject({ hint: 'Names this row in the parts tree.', nameKey: 'description' });
+    expect(byLetter('B')).toMatchObject({ hint: null, nameKey: 'part-no' });
+    const marked = sections.flatMap((section) => section.fields).filter((field) => field.nameKey !== undefined);
+    expect(marked.map((field) => field.letter)).toEqual(['B', 'D']);
+    // The mark is absent, not null, on every other field, so the strict answer schema leaves it out.
+    expect(Object.keys(byLetter('T') ?? {})).not.toContain('nameKey');
+  });
+
+  it('AQP-447: the hint is found by the field key, so a renamed Description keeps it', () => {
+    const renamed = cloneSeedConfig();
+    const description = renamed.fields.find((field) => field.key === 'description');
+    if (description === undefined) throw new Error('The seed has no Description.');
+    description.label = 'Invented words';
+    const found = buildFormSections(renamed)
+      .flatMap((section) => section.fields)
+      .find((field) => field.label === 'Invented words');
+    expect(found).toMatchObject({ hint: 'Names this row in the parts tree.', nameKey: 'description' });
+  });
+
   it('every other field has no default: a blank stays a blank (only S, and the eight treatment flags at 0, have one in the registry)', () => {
     const withDefault = sections.flatMap((section) => section.fields).filter((field) => field.defaultValue !== null);
     expect(withDefault.map((field) => field.letter)).toEqual(['S', 'Z', 'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG']);
@@ -276,7 +296,8 @@ describe('AC-3, AC-8: nothing that carries a rate, a cost or a formula', () => {
     const text = JSON.stringify(sections);
     expect(Object.keys(sections[0] ?? {}).sort()).toEqual(['columnRange', 'fields', 'id', 'name', 'number', 'shortName']);
     for (const field of offered) {
-      expect(Object.keys(field).sort()).toEqual(['defaultValue', 'editable', 'hint', 'id', 'kind', 'label', 'letter', 'required', 'rule', 'unit', 'visibleWhen']);
+      // `nameKey` is on Description and Part No. only (AQP-447, tested above).
+      expect(Object.keys(field).filter((key) => key !== 'nameKey').sort()).toEqual(['defaultValue', 'editable', 'hint', 'id', 'kind', 'label', 'letter', 'required', 'rule', 'unit', 'visibleWhen']);
     }
     // The word "cost" is in the four labels of inputs an Engineer types (FR-008), and nowhere else; no formula, no price, no rate.
     expect(withoutTypedCostLabels(text)).not.toMatch(/\{\{|formula|price|cost|rate/i);

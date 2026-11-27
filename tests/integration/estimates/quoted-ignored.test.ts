@@ -10,7 +10,7 @@ import { createEstimateService, type EstimateService } from '@/server/services/e
 
 import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
-import { auditFor, changeContext } from '../../support/customer-change';
+import { auditFor, changeContext, withAuditContext } from '../../support/customer-change';
 import { defined } from '../../support/defined';
 import { inputsDependencies } from '../../support/estimate-inputs-deps';
 
@@ -40,7 +40,7 @@ beforeAll(async () => {
   db = await openAuthDatabase();
   estimates = createEstimateRepository(db.prisma);
   runner = createTransactionRunner(db.prisma);
-  service = createEstimateService({ estimates, audit: auditFor(db), nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions: runner, ...inputsDependencies() });
+  service = withAuditContext(createEstimateService({ estimates, audit: auditFor(db), nodes: createEstimateNodeRepository(db.prisma), images: createImageRepository(db.prisma), transactions: runner, ...inputsDependencies() }));
   leadId = await insertPersonAsOwner(db, 'Quoted Lead', 'LEAD');
   adminId = await insertPersonAsOwner(db, 'Quoted Admin', 'ADMIN');
   arjunId = await insertPersonAsOwner(db, 'Quoted Arjun', 'ENGINEER');
