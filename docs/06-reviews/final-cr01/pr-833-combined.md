@@ -222,3 +222,46 @@ Stages 1 to 11b **passed**: unit 552 files, 11,896 tests; unit, integration, sec
 - Open questions: none
 - Risks raised: none new
 - Recommended next agent: developer (lane 2) for SEC-833-07 (recommended, not a merge condition) and SEC-833-08; then master/orchestrator once the run is fully green
+
+---
+
+# Round 3: delta `1d435f9b..78e199f6` (option B, DL-471 notes 5 and 6), security lens
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-performance (combined review, round 3; GitHub [pullrequestreview-6091836306](https://github.com/sankumar76/Accucut-Quotation/pull/833#pullrequestreview-6091836306), a COMMENT) |
+| Commits reviewed | `f6b35c5a` (the skeleton check in the strict scan, as I proposed), three e2e commits, and `78e199f6` (the Engineer's page makes no read of the form definition and draws no first-wait ghost) |
+| **Verdict (at `78e199f6`)** | **APPROVE WITH COMMENTS.** 0 Blocker, 0 Critical, 0 Major, 0 Minor, 2 Info (SEC-833-10, -11). SEC-833-07 and -08 are resolved by `f6b35c5a` and `b359f21f`'s follow-up (the skeleton check; the token guard over both sets) |
+
+## (a) The scan guards the exact component and data drawn
+
+The PR's own `strictViolations` (with the skeleton check), class tokens and icon allowance, unchanged, with my 253-cell matrix and 14 forms React never writes, on five real ghosts, in my own worktree at `78e199f6` (removed afterwards, junction first). The two new ones are the **real `PartFields` second wait**, rendered with `usePartValues` stubbed to `loading` and the definition passed through `formBody`, `JSON` and the client's `parseForm`, editable and locked.
+
+| Ghost | Baseline | Cells | Survivors | Unwritten forms surviving |
+|-------|----------|-------|-----------|---------------------------|
+| Engineer, `engineerGhost` builder (20,800 chars) | none | 253 | 0 | 0 |
+| Lead, from the seed (20,327) | none | 253 | 0 | 0 |
+| Locked Engineer, builder (21,455) | none | 253 | 0 | 0 |
+| Engineer, real second wait (`PartFields`, silent; 20,755) | none | 253 | 0 | 0 |
+| Locked Engineer, real second wait (21,410) | none | 253 | 0 | 0 |
+
+The second wait's markup equals the builder's character for character except the one hidden `Loading the form` line (`silent`), editable and locked. The PR's 87 tests in `estimate-page.test.ts` and `part-form-ghost.test.ts` pass in my run, and nothing the old whole-page scan rejected passes.
+
+## (b) NFR-001 and NFR-002
+
+The ghost's data is now the client's own copy of the body of `GET /estimates/{id}/form` (the Engineer's `getForm` through `formBody`, the strict schema; the client keeps the keys `parseForm` names): the same body the form draws its fields from, so the ghost can show no more than the form will. The Engineer's page makes no server read of the definition and draws no ghost (a unit test spies `getForm`; `page.tsx` has neither `engineerGhost` nor `getForm`); against `master` its diff is a blank line, braces and a comment. No route, role check or import into the Engineer's page changes. The Lead's ghost is unchanged. This also removes SEC-833-06's extra read.
+
+## Info
+- **SEC-833-10:** the scan renders `engineerGhost`, which production no longer calls (the Engineer's caller of `PartFormGhost` is `part-fields.tsx`; `engineer-ghost.tsx` has no importer in `src` until #836). A change to what `part-fields.tsx` passes would not reach the scan. The harness I used (about 25 lines: stub `usePartValues`, render `PartFields` with the client-parsed form, `splitGhost`) can be one more scan case that pins the real call.
+- **SEC-833-11:** `engineer-ghost.tsx` is unimported in `src` until #836; a future unused-file check would flag it.
+
+## CI at `78e199f6` (run 46045742726)
+Running when I wrote this; not read. The delta removes an `import()` and a prop, so I expect no growth (`1d435f9b`: 193,080 B, limit 194,000 B).
+
+## Hand-off (round 3)
+- Status: COMPLETE
+- Artefacts written/updated: `docs/06-reviews/final-cr01/pr-833-combined.md` (round-3 section)
+- Jira / GitHub updates: PR #833 COMMENT review 6091836306
+- Open questions: none
+- Risks raised: none new
+- Recommended next agent: orchestrator or master, once run 46045742726 is fully green with Stage 11b at or under 194,000 B
