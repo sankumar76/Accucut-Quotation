@@ -184,3 +184,69 @@ Stages 1 to 11b **passed**. Stage 6: 543 files, 11,750 tests. The unit, integrat
 - Open questions: none
 - Risks raised: none new
 - Recommended next agent: developer (lane 2) for the proof table and PRF-827-09; then master
+
+---
+
+# Round 3: delta `0793b7d5..c469ccb6` (tests only), and the proof tables against DL-457
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-performance (combined review, round 3) |
+| Commits reviewed | `c469ccb6` (PRF-827-09 unit tests). The head then moved to `511e3070`, a merge of `master` into the branch: **no file the PR owns is changed by that merge** (checked file by file against `c469ccb6`); it brings master's #781, #782, #785, #786, #787 and #829 |
+| Date | 2026-11-27 |
+| GitHub review | [pullrequestreview-6086721964](https://github.com/sankumar76/Accucut-Quotation/pull/827#pullrequestreview-6086721964) (COMMENT) |
+| **Verdict (at `c469ccb6`)** | **APPROVE WITH COMMENTS.** Open: **0 Blocker, 0 Critical, 0 Major, 1 Minor (PRF-827-04, a follow-up), 2 Info (PRF-827-08, -10)**. PRF-827-09 and PRF-827-03 resolved. Two terms miss DL-457 as worded, (v') approve and server time; both are master's to rule (my read below) |
+
+## Delta `0793b7d5..c469ccb6`: PRF-827-09 resolved
+One file, `tests/unit/part-form-seed.test.ts`, +54 lines, nothing removed or weakened. A full grid (ENGINEER, LEAD, ADMIN x DRAFT, PREPARED, APPROVED, QUOTED x ignored or not) compares `getPartForm` with `getForm` and `getNode` as JSON, and a frozen-registry case builds a service whose `configurationById` returns an older registry for an Approved estimate with `currentCalculationId` and `configVersionId` set, and asserts all three show the frozen label while the harness's current service does not. `afterEach` now also resets `currentCalculationId`, `configVersionId` and `ignoredAt`. Both corners named in round 2 are closed.
+
+## CI
+- `c469ccb6` (run 45967904941): **fully green.** Stages 1 to 11b and E2E shards 1 to 4. Unit 544 files, 11,767 tests; unit, integration, security and acceptance 720 files, 17,648 tests. Stage 11b `/estimates/[code]` **192,818 B** (ceiling 193,500 B; unchanged, the delta is tests only).
+- `511e3070` (the master merge): running when I wrote this. **Stage 11b must be re-read on it**: master's #786 (the unit beside each number input) touches the part form's first load, and the headroom left by this PR is 682 B. Any growth there is master's content, not this PR's, but the ceiling is the PR's to meet. `mergeStateStatus` was BLOCKED (checks pending).
+
+## The proof tables against DL-457 (3)
+
+| Term | Result as filed | My read |
+|------|-----------------|---------|
+| (ii') statements per Prepared load at or below 147 | 120 (render 105 against 75: +10 queries; the same at 1, 53 and 201 rows) | **Met** (labels: PRF-827-10) |
+| (iii) no form-data read after hydration | 0 at Draft, Prepared, Approved, 53 and 201 rows, both passes (master 4) | **Met** |
+| (iv') median TBT at or below master's | 703 against 807 ms (7753cdff 375) | **Met on the median**; the runs overlap (fix 669 to 1087, master 600 to 1188), so "not worse", not "better" |
+| (v') 0 reads in flight; delay at hydration at most 7753cdff's + 20 ms | reads 0: met; Recalculate +36 against 43: met; **Approve +54 against 21: not met** (master +39) | below |
+| server time within 20 % of master's | Draft +38 %, **Prepared +29 %**, Approved +19 %, 53 rows +9 %, 201 rows +14 % | **Misses on Draft and Prepared** by 9 and 18 points; below |
+| rows | statements, reads and the action delay equal at 1, 53 and 201; HTML +13.6 KB at every size | **Met.** **PRF-827-03 resolved**: added server time +22 ms at 1 row, +28 ms at 201, so rows add about 6 ms at 201 (about 10 ms expected at 500) |
+| first load | 192,818 B | **Met** at `c469ccb6`; re-read at `511e3070` |
+
+### Server time
+The ten added queries cost about 2.5 ms each on that laptop: +22 ms at 1 row (98 against 76 ms), seen again as about +25 ms on FCP (236/228 against 208/212) and on hydration. LCP is not worse (463 to 579 against 490 to 610). The percentage is large because the page is fast; the absolute figure is a fixed cost and does not grow with rows (+9 % and +14 %). My pool arithmetic (`max: 10`, 2 to 2.5 ms a query, 35 queries a render against 25) gives a drain time for 25 at once of about 220 ms against about 160 ms, inside 500 (an estimate; the laptop's 25-at-once figures are CPU-bound and cannot grade NFR-010). **Recommendation: accept under DL-457 (C)**, and recover it with PRF-827-04's follow-up (memoise the form's sections per configuration version, and the two option-list reads, each now two queries).
+
+### Approve at hydration (+54 ms): performance read
+Lane 2's cause, the client's main thread mounting the form, is **plausible, fits the numbers, and is not shown** (no trace is filed). What fits: (1) no read in flight and no server queue; (2) at 1 s after hydration the approve equals idle (66/68); (3) TBT 703 against 375, about 330 ms of extra main-thread blocking in the same window; (4) on `master` the form mounts only after the four reads return (250 to 420 ms from navigation), later than the press, so master's +39 is server queue, not mount, and the fix, by removing the wait, puts the mount where an early press lands; (5) Recalculate is hardly hit (+13 over baseline) while approve is (+53): approve opens a dialog, whose React render queues behind the form's, whereas Recalculate's request is sent from the handler at once. A reading, not a measurement. The term is also partly mis-set in the way DL-457 (A) names: 7753cdff has no form, so no design that draws one meets "baseline + 20 ms" on approve unless the mount is kept off the press. In absolute terms the miss is 15 ms above master's own +39, it exists only for a press in the first few hundred ms, and the measure is noisy (+30 and +66 between the two passes; 6 trials at 53 and 201 rows).
+
+### Is a deferred mount reasonable?
+Yes, as **time-slicing, not postponement**, and only once the cause is shown.
+- **Confirm first:** one trace (a `PerformanceObserver` for `longtask` at hydration), or the approve delay with the form's mount held back.
+- **Best fix:** make the mount interruptible, so a press is handled between slices. In `PartForm`, render the lazily loaded fields through `useDeferredValue`, or set the loaded component in a `startTransition`. Gate it on `seed !== undefined`, so the Engineer's form is untouched, and do not edit the shared `useLazyComponent` (the Engineer's workspace, the formula editor and the wizard use it). It would also cut TBT (long tasks are what TBT counts), NFR-009's weakest number.
+- **Not recommended:** an idle-callback or timer deferral: it moves a roughly 300 ms task, still one block. DL-455 rejected deferring the fetch because it moves the delay; deferring the mount of data already held is different in kind (no server work queues behind it), but the same objection applies if the task stays one long block.
+- **Cost and timing:** 2 to 4 lines plus the proof's re-run (about 2 h by lane 2's note) against the Wed 2 Dec cut-off. The risk is a test that acts on a field the instant it exists, which auto-waiting locators absorb; run the Lead-page specs.
+- **My recommendation: do not hold #827 for it.** Rule the approve term as DL-457 (A) rules the baseline (no form), accept +54 ms, and make the time-sliced mount the first item of step 2: #811's island adds more main-thread work to the same window.
+
+## New, small
+- **PRF-827-10 (Info):** the ten queries are listed but do not match my reading of the code: `listMaterialOptions` and `listTreatmentOptions` are each two parallel reads with no transaction (`masters-service.ts:271`, `treatment-service.ts:173`); the table's "one transaction each" row, the access check inside `getPartForm` (`findEstimateAccess`) and the picture read are not named. The total of 10 is measured, so (ii') stands; DL-457 asks for every query by service and purpose, so correct the labels from the query log.
+- PRF-827-04 (Minor) is accepted as a follow-up in the PR notes. The RSC bytes of a refresh were not filed; the 13.6 KB of seed in the HTML (against my 15 to 40 KB estimate) suggests a refresh adds about the same.
+
+## Findings status after round 3
+| ID | Status |
+|----|--------|
+| PRF-827-01, -02, -03, -05, -07, -09 | Fixed, closed or resolved |
+| PRF-827-04 | Open, Minor: follow-up (not a merge condition) |
+| PRF-827-06 | Fixed in part: (b) the E2E "no reads after hydration" assertion is not added; Info |
+| PRF-827-08 | Info, unchanged |
+| PRF-827-10 | New, Info |
+
+## Hand-off (round 3)
+- Status: COMPLETE
+- Artefacts written/updated: `docs/06-reviews/final-cr01/pr-827-combined.md` (round-3 section)
+- Jira / GitHub updates: PR #827 COMMENT review 6086721964; Jira AQP-498 comment
+- Open questions: none
+- Risks raised: none new; the approve-at-hydration miss and the server-time miss are for master's ruling (DL-457 (C) and DL-457 (A) reasoning)
+- Recommended next agent: master (rule the two misses); then the orchestrator for the merge once `511e3070` is green with Stage 11b at or under 193,500 B
