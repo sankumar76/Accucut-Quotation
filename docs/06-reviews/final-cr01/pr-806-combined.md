@@ -181,9 +181,82 @@ n/a (round 1; QLT-806-01 and -02 were raised to the orchestrator at `a691e69e` b
 
 **Open after round 2:** Blocker 0, Critical 0, Major 0, Minor 2 (QLT-806-04, -05), Info 6 (QLT-806-07, -08, -09; SEC-806-01 to -03). **Verdict at `fabe1d09`: APPROVE WITH COMMENTS**, on the condition above.
 
+## Round 3 (delta review of `fabe1d09..a5cb4f10`, without master's `1b30b17f` content, 2026-11-27) — APPROVE WITH COMMENTS; the run of record is red only on a master defect
+
+**Scope.**
+- `53736200` changes two product lines (`review-form.tsx` `refuse()`, `recalculate-client.ts` `press()`) and the AC-2 Admin case.
+- `0e1a227d` merges master `1b30b17f` (#818). Its resolution moves #818's AQP-496 read-only drop-down loop into a new short case of `estimate-review-tree.spec.ts`.
+- `a5cb4f10` changes AC-6's expectation to `'12.50'`.
+- **The resolution kept master intact.** The merged tree differs from master in exactly the same 23 files as before (the 19 of round 1 plus the 4 test files of round 2), so #818's content is untouched.
+
+**Why the fabe1d09 run of record (45929518610) failed, and what this delta does about it.** Read from the run's Playwright report:
+
+| Case | Error at `fabe1d09` | Cause | At `a5cb4f10` (run 45943506004) |
+|------|---------------------|-------|------|
+| `estimate-review.spec.ts:189` (Admin), 3 widths | expected `Read-only.`, got the editable block | a stale expectation: under FR-116 and UD-1 an Admin edits a Prepared estimate as a Lead does (`canEditInputs`; ED-1's unit test covers Admin) | **passes at 3 widths** |
+| `estimate-review.spec.ts:201`/`:204` (AC-6, ED-12), 3 widths | `toHaveValue('12.5')` received `""` | `refuse()` called `router.refresh()`, and the server then drew the plain read-only form in place of `ReviewForm`, losing the typed text | after `53736200`: `"12.50"` against `'12.5'` (run 45940199415); after `a5cb4f10`: **passes at 3 widths** |
+| `lead-warning.spec.ts:249`, desktop | `waitForResponse` timed out on "Recalculate anyway" | `press()` flushed a clean gate | **passes at 3 widths** |
+| `estimate-tree-names.spec.ts:327` (TS-9), desktop | the hover toolbar's `Add under 1.1` is never visible and stable | see below: a master defect | **failed both attempts** |
+
+**The four points.**
+
+1. **`refuse()` without `router.refresh()` (ED-12): sound. Info: QLT-806-10.**
+   - The block turns read-only **in place**: `refused` set, so `canEdit` is false, `editable` is false, the fields are `aria-readonly`, and `Autosave` and `LeaveGuard` are unmounted. The typed text stays on screen as ED-12 requires.
+   - **Stale state:** until the next read, the head, status badge, tiles and action bar show the state from before the refusal. For example, Approve still offered on an estimate someone approved, or an ignored one without the Ignored notice. Every action from that stale state is refused by the server (Approve, Recalculate, Ignore, Cancel approval all re-check under the lock), so no write follows.
+   - **Audit:** a refused write writes no audit entry (one transaction).
+   - **NFR-002:** untouched; this is the Lead's and the Admin's page.
+   - **Data loss:** none. The typed text was never stored, and it is shown, not dropped.
+   - **True state:** any navigation, a row choice (a server render) or a reload shows it, and the server then draws the plain read-only form.
+   - **QLT-806-10 (Info):** the locked notice could say so, for example `This estimate can no longer be changed. Reload the page to see its current state.`, or the review could keep `LazyReviewForm` mounted for every Lead and Admin block, so that a refresh keeps the typed text. Optional; UX wording is the ux-expert's.
+2. **`press()` flushes only a dirty gate: safe.**
+   - `isDirty()` is true while a save is in flight or any field is marked unsaved, and `setText` marks a field **as soon as it is typed into** (`use-part-form.ts:202`; `save-gate.ts`: "a field is marked as soon as it is typed into").
+   - So the cases that need a flush are all dirty: a value typed and not left, a save on its way (the press's click blurs the field and queues its save before `press()` runs), and a value the rule refused.
+   - There is no debounce between typing and marking. A clean gate means the form shows what the server holds, so the flush was a no-op save, which is what stalled `lead-warning:249`.
+   - This matches master's own rule in `use-autosave.ts:51`, `:58`, `:67`.
+3. **AC-2 Admin case: correct, not weakened.** It now asserts the field is enabled, not `aria-readonly`, and that the block says no "Read-only". These are positive assertions of FR-116 and UD-1 (Admin equals Lead).
+4. **The moved AQP-496 loop: the same check, on a truly read-only block.**
+   - It is byte-for-byte #818's loop: tap by touch; click plus Space, Enter, the arrows, Alt+Down and `a` by mouse; the value kept, `aria-readonly`, no `:open`, no `change` event, nothing sent.
+   - Its `writes` collector is **stricter**: every non-GET request, where master's counted only `/api/v1/`.
+   - Master's loop has no `CSS.supports` or two-option guard, so there is none to carry.
+   - It runs on an **ignored** estimate, where `canEditInputs` is false, so the block is the plain read-only `PartForm`.
+   - Its task is made through `POST /api/v1/tasks` with the existing Lead, so **+0 persons** (DL-422). The file sorts before `users.spec.ts`, so nothing is added after it (DL-388).
+   - The loop is gone from `estimate-review.spec.ts`, where the Lead's block is now editable.
+
+**AC-6's `'12.50'` (`a5cb4f10`): correct, not weakened.**
+- The number box shows a value it was left with in two decimals. That is the form's existing on-leave formatting, and the new unit test pins the same (`'2'` is shown as `'2.00'` after the refused save).
+- It is the **typed** value: the part's stored Length is empty, which is what the fabe1d09 run showed (`""`) when the refresh replaced the form.
+- The assertion stays exact.
+
+**The Stage 6 unit failure at `0e1a227d` (`tests/unit/export-perf-support.test.ts:22`): chance, and unrelated to #806.**
+- `incompressiblePicture` (`tests/support/builders/export-pictures.ts`) fills about 199,000 bytes with `randomFillSync` on every run.
+- The server's check rejects a picture holding any of `<script`, `<svg`, `<html`, `<iframe`, `<!doctype`, `<?xml`, matched case-insensitively (`src/lib/images/signature.ts:48`, `:88`).
+- The shortest, `<svg`, gives (1/256) × (2/256)³ ≈ 1.9 × 10⁻⁹ per position, so about **3.7 × 10⁻⁴ per run** (roughly 1 in 2,700). The longer markers add almost nothing.
+- Neither file is in #806's diff, and the same test passed at `a5cb4f10` (542 files, 11,733 tests).
+- Lane 2's tech-debt #821 is the right place. A seeded buffer, or one regenerated until it holds no marker, removes it.
+
+**TS-9 (`estimate-tree-names.spec.ts:327`, desktop): a master defect, not #806.**
+- The case runs on the **Engineer's** SCR-05 (`signInAsNewEngineer`). Nothing in #806 reaches that page: the gate, `ReviewForm`, `cleared-refresh` and the Recalculate client are review-only, and the new `onWrote` wrapper in `part-fields.tsx` is called, never used as an effect dependency (`use-part-form.ts:337`, `:466`).
+- On master, the same case on desktop **failed** in run 45925520372 (`2e11c44d`, #800's squash) and was **flaky** in run 45922731756 (`7753cdff`). It passed in run 45939075231 (`1b30b17f`). Tablet and mobile pass throughout.
+- It hovers row 1.1 "where the cases before it left it", so it depends on scroll and timing.
+- On #806: failed once at `a691e69e` (cancelled run), failed at `fabe1d09`, flaky at `0e1a227d`, and **failed both attempts at `a5cb4f10`**, the only failure of run 45943506004.
+- **Recommendation:** record it as a master defect (QA), and let master or the delivery lead decide how the run of record treats it (a re-run, or a ruled exception as for DEF-053). It is not a #806 finding.
+
+**Run 45943506004 at `a5cb4f10`.**
+- Stages 1 to 11b **success**; Stage 11b: **`/estimates/[code]` 192,758 B**, at or under 193,500 B (`fabe1d09` measured 192,746 B).
+- E2E shards 1 to 3 green: `approve.spec.ts:312` on tablet was flaky and passed on retry.
+- Shard 4: only TS-9 on desktop.
+- `estimate-review.spec.ts:189` and `:204`, and `lead-warning.spec.ts:249`, **pass at all three widths**.
+
+**Condition before merge, new.** master has moved to `73143e7e` (#819, the approval dialog), which changes `estimate-review.tsx` and `estimate-review-architecture.test.ts`, both on #806's NFR-002 boundary. #806 is 1 behind. After lane 2 merges it in:
+- a short `git show --cc` check of those two files;
+- the run of record at 0 behind, green except for whatever master and the delivery lead rule for TS-9, with Stage 11b at or under 193,500 B.
+
+**Open after round 3:** Blocker 0, Critical 0, Major 0, Minor 2 (QLT-806-04, -05), Info 7 (QLT-806-07 to -10; SEC-806-01 to -03). **Verdict at `a5cb4f10`: APPROVE WITH COMMENTS.**
+
 ## Hand-off
 - Status: COMPLETE
 - GitHub: PR review [6082714446](https://github.com/sankumar76/Accucut-Quotation/pull/806#pullrequestreview-6082714446) (COMMENT, 5 inline comments, at `a701377e`); label `review:quality-changes-requested`
 - Verdict at `a701377e`: REQUEST CHANGES (Blocker 0, Critical 0, Major 1, Minor 3, Info 5); no §9 stop. Before merge: QLT-806-03 (a unit test) and a fully green run of record.
 - Recommended next agent: developer (QLT-806-03, then -06), then a short re-review of the new diff, then orchestrator: merge on a fully green run of record.
 - **Round 2 (`fabe1d09`):** APPROVE WITH COMMENTS (Blocker 0, Critical 0, Major 0, Minor 2, Info 6). QLT-806-03 and -06 are fixed and mutation-checked. Condition: the run of record 45929518610 fully green, with Stage 11b at or under 193,500 B.
+- **Round 3 (`a5cb4f10`):** APPROVE WITH COMMENTS (Blocker 0, Critical 0, Major 0, Minor 2, Info 7). Stage 11b is 192,758 B. Run 45943506004 is red only on TS-9 (desktop), a master defect. Before merge: merge in #819, a `--cc` check of `estimate-review.tsx` and the architecture test, and the run of record at 0 behind.
