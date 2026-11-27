@@ -55,9 +55,19 @@ DL-455 step 2 has #811's island reuse the server-drawn data and get `/tree` as p
 6. **Body builder module:** either rename `part-form-bodies.ts` to a general name, or add `tree-bodies.ts` beside it. The rule is one builder per route answer, not one file.
 7. **Per-row growth (DL-455 (7) (c)):** with the tree as props, the payload holds the rows twice (the tree body and `costs.nodes`), which is linear in the number of rows. There are no reads per row. #811's proof at 50 or more rows shows both.
 
+## 5a. Server-drawn placeholders (v1.2, DEF-145, ux ruling `partform-placeholder-shape-2026-11-28.md`)
+
+- **Budget.** CI stage 11b counts only first-load **JavaScript**: the script files each page names from `.next/static`, gzip level 9 (`scripts/check-js-budget.ts`). The document's HTML and the RSC payload are not counted. A ghost made only of markup costs nothing against stage 11b. It does add HTML, and it still counts toward NFR-009's LCP and TBT (Lighthouse), so it stays plain markup with no client component.
+- **Engineer's workspace (SCR-05).** The layering allows the Engineer's branch of `page.tsx` to read `getEstimateService().getForm(viewer, id)` and pass it through `formBody()`. It may then render a **server component** ghost from that body and hand it to `EstimateWorkspace`, and on to `PartForm`, as a `ReactNode` prop, the same way `cards` (`TaskCards`) is handed in today. This follows section 6: Server Components call services for first paint, through the same projection. The form body is the one no-cost schema (NFR-002). Terms:
+  - The ghost file has no `'use client'` and no hooks, and imports no Restricted module.
+  - A fault in the read gives no ghost, and the existing skeleton is shown.
+  - The ghost is only a placeholder. It holds no control and no state, and the client form replaces it.
+  - On the Engineer's page this adds one `getForm` read per render, while `useFormDefinition` still reads `/form` after hydration. That double read is accepted for the ghost alone. **Seeding the Engineer's form** with the same body would remove it, but it changes the Engineer's path, which DL-455 (3) (a) kept unchanged for DEF-141. So it is master's decision, and it is not part of DEF-145.
+
 ## 6. Change log
 
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | 2026-11-27 | First version, from the architecture review of PR #827 at 90520f83 |
 | 1.1 | 2026-11-27 | Re-read at 0793b7d5 (DL-457). Section 2 rule 2 gains "Combined reads": allowed in the service, from shared private steps, with a JSON equivalence test. Section 5 item 3: #811's tree comes from the same combined read (`{ form, node, tree }`), not a third access check. ARC-827-07 (Minor): `getNode` and `getPartForm` repeat the node assembly, so share a private `partDetailOf` |
+| 1.2 | 2026-11-28 | Section 5a: server-drawn placeholders (DEF-145). Stage 11b counts JavaScript only. The Engineer's page may hand `PartForm` a server-rendered ghost built from `getForm` through `formBody`, like `cards`. Seeding the Engineer's form is master's decision |
