@@ -164,6 +164,8 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     const touch = (page.viewportSize()?.width ?? 0) < 1024;
     for (let index = 0; index < selectCount; index += 1) {
       const select = selects.nth(index);
+      // QA's guard: a drop-down with one option has nothing to change to, so the "no change" checks below would test nothing.
+      expect(await select.locator('option').count(), `options of drop-down ${String(index + 1)}`).toBeGreaterThanOrEqual(2);
       const kept = await select.inputValue();
       if (touch) {
         await select.tap();
