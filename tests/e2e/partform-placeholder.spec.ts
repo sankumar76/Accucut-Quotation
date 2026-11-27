@@ -153,6 +153,8 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     await placeholderIsShown(page);
     await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
 
+    // The tree's own arrival (its skeleton rows become its rows) moves the page too and is not what is measured here (PF-14f): the tree is read first, then the form's swap is.
+    await expect(page.locator('#parts-tree li[data-part-row]').first()).toBeVisible();
     const before = await mainBottom(page);
     const areaBefore = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
     chunk.release();
@@ -176,5 +178,7 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     expect(new Set(names)).toEqual(new Set(['none']));
     chunk.release();
     await formIsDrawn(page);
+    // The routed scripts still on their way are answered before the test ends: a response the page no longer waits for is an error of the route, not of what is tested here.
+    await page.waitForLoadState('networkidle');
   });
 });

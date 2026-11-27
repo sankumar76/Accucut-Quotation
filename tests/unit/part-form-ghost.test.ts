@@ -96,11 +96,16 @@ describe('PartFormGhost (DEF-145)', () => {
   });
 
   it('PF-3: real words where they are known (the notice, the strip, the card names, the hints), grey blocks for data and controls; no value, no label text of a field', () => {
-    const html = drawn({ notice: 'Read-only while approved.' });
+    const html = drawn({ notice: 'Read-only while approved.', head: 'engineer' });
     expect(html).toContain('Read-only while approved.');
     expect(html).toContain('A hint that is real words');
     expect(html).not.toContain('Label of a');
     expect(html).toContain('data-slot="skeleton"');
+  });
+
+  it('PF-2: the Lead ghost draws a field as the review look shows it (no hint but the quantity one), so its height is the form height; the Engineer ghost keeps the hints', () => {
+    expect(drawn({ head: 'lead' })).not.toContain('A hint that is real words');
+    expect(drawn({ head: 'engineer' })).toContain('A hint that is real words');
   });
 
   it('PF-9.1: one busy status region with one hidden line, and the drawn blocks inert and hidden from assistive technology', () => {

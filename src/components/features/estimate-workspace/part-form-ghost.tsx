@@ -29,6 +29,7 @@ import { parseForm, parsePartInputs, type FormField, type FormSection, type Form
 import { sectionWeight, shownSections } from '@/lib/estimates/form-shown';
 
 import { FORM_LOADING, sectionLinkText } from './estimate-texts';
+import { reviewField } from './review-look';
 
 /**
  * The part form's loading ghost (DEF-145; `rulings/partform-placeholder-shape-2026-11-28.md`, PF-1 to PF-15): **the form itself without its values**, drawn from the form's own definition with the form's own class
@@ -67,7 +68,9 @@ function ghostControl(field: FormField): { readonly control: ReactNode; readonly
   }
 }
 
-function GhostField({ field }: { readonly field: FormField }) {
+function GhostField({ field: own, review }: { readonly field: FormField; readonly review: boolean }) {
+  // The review's form shows a field as `reviewField` says (no hint but the quantity's, `review-look.ts`), so its ghost does: the same lines, the same height.
+  const field = review ? reviewField(own) : own;
   const { control, marker } = ghostControl(field);
   return (
     <div {...(marker === 'wide' ? { 'data-ghost-wide': '' } : marker === 'picture' ? { 'data-ghost-picture': '' } : {})} className={FIELD_BOX}>
@@ -88,7 +91,7 @@ function GhostTreatments() {
   );
 }
 
-function GhostCard({ section }: { readonly section: FormSection }) {
+function GhostCard({ section, review }: { readonly section: FormSection; readonly review: boolean }) {
   const share: CardShare = { '--n': sectionWeight(section) };
   const flags = section.fields.some((field) => field.rule.type === 'flag');
   return (
@@ -103,7 +106,7 @@ function GhostCard({ section }: { readonly section: FormSection }) {
       </CardHeader>
       <CardContent className={FIELDS}>
         {flags ? <GhostTreatments /> : null}
-        {section.fields.map((field) => (field.rule.type === 'flag' ? null : <GhostField key={field.id} field={field} />))}
+        {section.fields.map((field) => (field.rule.type === 'flag' ? null : <GhostField key={field.id} field={field} review={review} />))}
       </CardContent>
     </Card>
   );
@@ -141,7 +144,7 @@ export function PartFormGhost({ form, texts = {}, notice, head, silent = false }
         </div>
         <div data-ghost-grid="" className={CARD_GRID}>
           {sections.map((section) => (
-            <GhostCard key={section.id} section={section} />
+            <GhostCard key={section.id} section={section} review={head === 'lead'} />
           ))}
         </div>
       </div>
