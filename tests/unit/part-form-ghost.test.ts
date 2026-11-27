@@ -111,7 +111,8 @@ describe('PartFormGhost (DEF-145)', () => {
   it('PF-9.1: one busy status region with one hidden line, and the drawn blocks inert and hidden from assistive technology', () => {
     const html = drawn();
     expect(html.match(/role="status"/g)).toHaveLength(1);
-    expect(html).toContain('aria-busy="true"');
+    // No `aria-busy`: the review's figure tiles are invisible while one is on the page (`figure-tiles.tsx`, group-has-[[aria-busy=true]]), which blanked the Totals under the ghost (QLT-833-05).
+    expect(html).not.toContain('aria-busy');
     expect(html).toContain(`<span class="sr-only">${FORM_LOADING}</span>`);
     expect(html).toMatch(/<div inert="" aria-hidden="true"/);
   });
@@ -122,7 +123,7 @@ describe('PartFormGhost (DEF-145)', () => {
     expect(first).toContain(`<span class="sr-only">${FORM_LOADING}</span>`);
     const second = drawn({ silent: true });
     expect(second).toContain('role="status"');
-    expect(second).toContain('aria-busy="true"');
+    expect(second).not.toContain('aria-busy');
     expect(second).toContain(`aria-label="${FORM_LOADING}"`);
     expect(second).not.toContain('sr-only">' + FORM_LOADING);
   });

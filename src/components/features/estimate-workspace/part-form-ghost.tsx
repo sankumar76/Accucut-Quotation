@@ -40,7 +40,7 @@ import { SURFACE_HINT } from './surface-texts';
  * items, each card's name and column range, each field's hint) and grey blocks where a person's data or a control will be (PF-3). **It shows no value, no count and no figure.**
  *
  * **No hooks, no `'use client'`, no client component** (PF-6): the same function is drawn on the server for the page and in the lazy chunk for the second wait (`PartFields`), and the shell imports it nowhere, so
- * Stage 11b's first-load JavaScript is untouched. **It is one busy region** (PF-9): the root is a `status` with `aria-busy` and one fixed visually hidden line; the drawn blocks are `inert` and hidden from
+ * Stage 11b's first-load JavaScript is untouched. **It is one busy region** (PF-9): the root is a `status` named "Loading the form", with no `aria-busy` (the review's figure tiles hide their figures while any `aria-busy=true` is on the page, `figure-tiles.tsx`, so an `aria-busy` here would blank the Totals until the form arrives: QLT-833-05), and one fixed visually hidden line; the drawn blocks are `inert` and hidden from
  * assistive technology, and carry no id, name, href, tabindex, heading or form marker, only the ghost's own (`data-part-ghost`, `data-ghost-wide`, `data-ghost-picture`, `data-ghost-grid`). A second ghost for the same
  * part (`silent`) says nothing. The grey blocks are `Skeleton`s, whose shimmer `prefers-reduced-motion` already switches off (PF-10). There is no delay and no fade (PF-8).
  */
@@ -133,7 +133,7 @@ export function PartFormGhost({ form, texts = {}, notice, head, silent = false }
   // Every card the form draws, with the fields it shows for what is typed (the form draws a card whose fields are all hidden too): the same list `PartFields` walks.
   const sections = shownSections(form.sections, texts);
   return (
-    <div role="status" aria-busy="true" aria-label={FORM_LOADING} data-part-ghost="" className="flex min-w-0 flex-1 flex-col">
+    <div role="status" aria-label={FORM_LOADING} data-part-ghost="" className="flex min-w-0 flex-1 flex-col">
       {silent ? null : <span className="sr-only">{FORM_LOADING}</span>}
       <div inert aria-hidden="true" className={FORM_ROOT}>
         <div className={HEAD_LINES}>

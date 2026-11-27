@@ -77,7 +77,8 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     const state = prepared ? 'Prepared' : 'Draft';
     test(`the Lead's review, ${state}: #review-actions moves no more than ${String(MOVE_AT_MOST_PX)} px when the form is drawn, and a jump to #review-calculate made before the swap still ends on the screen`, async ({ page }, testInfo) => {
       const { code } = await assignedEstimate(page, testInfo, prepared);
-      const chunk = await holdFieldsChunk(page);
+      // The picture control's chunk is held too: the form shows its own picture placeholder until it arrives, and the control then has another height for the Lead's read-only view (the form's own second shift).
+      const chunk = await holdFieldsChunk(page, { picture: true });
       await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
       await placeholderIsShown(page);
       await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
@@ -87,6 +88,8 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
       const before = await documentTop(actions);
       const ghostCards = await cardBoxes(page, '[data-ghost-grid]');
       expect(ghostCards.length, "the ghost draws the form's cards").toBeGreaterThan(0);
+      // QLT-833-05: the review's figures stay visible while the ghost is up (the tiles hide them under any `aria-busy=true` on the page, and the ghost has none).
+      if (prepared) await expect(page.getByRole('region', { name: 'Totals' }).getByText(/^₹ [\d,]+\.\d{2}$/).first()).toBeVisible();
       // PF-14d: the drawn blocks are inert and hidden from assistive technology, and the ghost has no accessibility violation of its own. PF-14g: it holds no figure (NFR-002).
       await expect(page.locator('[data-part-ghost] > div')).toHaveAttribute('inert', '');
       await expect(page.locator('[data-part-ghost] > div')).toHaveAttribute('aria-hidden', 'true');
@@ -111,6 +114,8 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
         expect(Math.abs(card.width - drawn.width), `card ${String(index + 1)} width`).toBeLessThanOrEqual(1);
         expect(Math.abs(card.top - drawn.top), `card ${String(index + 1)} top`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
       });
+      chunk.releasePicture();
+      await page.waitForLoadState('networkidle');
     });
   }
 
@@ -119,7 +124,7 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     const materialId = await insertPrivateMaterial({ pricePerKg: '137.37', specificGravity: '7.37', scrapRate: '27.37' });
     const { code } = await assignedEstimate(page, testInfo, true, materialId);
     await changePrivateMaterial(materialId, { pricePerKg: '9137.73', specificGravity: '7.37', scrapRate: '27.37' });
-    const chunk = await holdFieldsChunk(page);
+    const chunk = await holdFieldsChunk(page, { picture: true });
     await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
     await placeholderIsShown(page);
     await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
@@ -134,6 +139,8 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     chunk.release();
     await formIsDrawn(page);
     await expect(page.locator('#review-calculate')).toBeInViewport();
+    chunk.releasePicture();
+    await page.waitForLoadState('networkidle');
   });
 
   test("the Engineer's workspace: the page under the form moves no more than the same 8 px when the form replaces its placeholder", async ({ page }, testInfo) => {
