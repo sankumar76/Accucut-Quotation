@@ -125,7 +125,8 @@ describe('AC-1 (STORY-05.04): all eight sections, from the registry', () => {
   it('AC-1: every number of the new sections has the number rule (0 or more, 2 decimals), and the units of the registry are kept (P in sec)', () => {
     for (const letter of ['P', 'Q', 'R', 'T', 'U', 'V', 'W', 'X', 'Y', 'AP', 'AU', 'BM']) expect(byLetter(letter)?.rule, letter).toEqual({ type: 'number', decimals: 2 });
     expect(byLetter('P')?.unit).toBe('sec');
-    for (const letter of ['Q', 'R', 'T', 'V', 'W', 'X', 'Y']) expect(byLetter(letter)?.unit, letter).toBeNull();
+    // AQP-482 (DEF-125): these now have the units of the accepted list (below).
+    for (const letter of ['Q', 'R', 'T', 'V', 'W', 'X', 'Y']) expect(byLetter(letter)?.unit, letter).not.toBeNull();
   });
 
   it('AC-1, AC-4, A-1: Fasteners (S) is a text of 200 characters and Remarks (AJ) a multi-line text of 1,000', () => {
@@ -140,12 +141,57 @@ describe('AC-1 (STORY-05.04): all eight sections, from the registry', () => {
   });
 });
 
+/**
+ * AQP-482 (DEF-125; the delivery lead's accepted list of 2026-11-26, `docs/02-product/input-units-draft-2026-11-27.md`, DL-420): the unit beside each number input, the 17 fields in form order. Each is checked against
+ * its formula in the product-manager's file (S: the SPEC settles it; D: the formula only works in this unit; W: a count, the word is a choice; U: the delivery lead's word). Display only: no value, rule or export column.
+ */
+const ACCEPTED_UNITS: ReadonlyArray<readonly [letter: string, unit: string]> = [
+  ['H', 'nos'],
+  ['J', 'mm'],
+  ['K', 'mm'],
+  ['L', 'mm'],
+  ['N', 'kg'],
+  ['P', 'sec'],
+  ['Q', 'mm'],
+  ['R', 'nos'],
+  ['T', 'nos'],
+  ['U', '₹ / pc'],
+  ['V', 'nos'],
+  ['W', 'holes'],
+  ['X', 'holes'],
+  ['Y', 'holes'],
+  ['AP', '₹'],
+  ['AU', '₹'],
+  ['BM', '₹'],
+];
+// The fields that an install seeded before this change had no unit for (Part Weight and Cutting Time always had theirs in the registry).
+const UNIT_KEYS = ['qty-per-assy', 'length', 'width', 'thickness', 'cutting-length', 'bend-count', 'fasteners-qty', 'fasteners-cost', 'weld', 'drilling', 'tapping', 'csk', 'machining-cost', 'plating-cost', 'tool-cost'];
+
+describe('AQP-482: the unit beside each of the 17 number inputs', () => {
+  it.each(ACCEPTED_UNITS)('gives %s the unit %s, from the registry of a new install', (letter, unit) => {
+    expect(byLetter(letter)?.unit).toBe(unit);
+  });
+
+  it('gives no unit to the fields that are not numbers (the flags, Fasteners, Remarks, the picture)', () => {
+    for (const letter of ['S', 'Z', 'AA', 'AB', 'AC', 'AD', 'AE', 'AF', 'AG', 'AJ', 'C']) expect(byLetter(letter)?.unit ?? null, letter).toBeNull();
+  });
+
+  it('shows the same units on an install seeded before this change, whose stored version holds none of the new ones (stored versions are immutable, NFR-026): the form falls back on the field\'s key', () => {
+    const earlier = cloneSeedConfig();
+    for (const field of earlier.fields.filter((each) => UNIT_KEYS.includes(each.key) && each.kind === 'input')) field.unit = null;
+    const found = buildFormSections(earlier).flatMap((section) => section.fields);
+    for (const [letter, unit] of ACCEPTED_UNITS) expect(found.find((field) => field.letter === letter)?.unit, letter).toBe(unit);
+    // Nothing is left without a unit that has one in the list.
+    expect(found.filter((field) => field.rule.type === 'number' && field.unit === null).map((field) => field.letter)).toEqual([]);
+  });
+});
+
 describe('AC-2, AC-3, AC-4 (STORY-05.04): the units, hints and the default that the form adds', () => {
   const COST_HINT = 'Enter 0 if there is none.';
 
-  it('AC-2: the four cost-typed inputs (U, AP, AU, BM) have the rupee add-on and the hint "Enter 0 if there is none."', () => {
+  it('AC-2: the four cost-typed inputs (U, AP, AU, BM) have the rupee add-on (U per piece, AQP-482) and the hint "Enter 0 if there is none."', () => {
     for (const letter of ['U', 'AP', 'AU', 'BM']) {
-      expect(byLetter(letter)?.unit, letter).toBe('₹');
+      expect(byLetter(letter)?.unit, letter).toBe(letter === 'U' ? '₹ / pc' : '₹');
       expect(byLetter(letter)?.hint, letter).toBe(COST_HINT);
     }
     expect(COST_HINT).toBe('Enter 0 if there is none.');
@@ -154,7 +200,7 @@ describe('AC-2, AC-3, AC-4 (STORY-05.04): the units, hints and the default that 
   it('AC-3: Fasteners (S) has the default "None" and the hint "Type "None" if the part has no fasteners."; T and U are plain number inputs', () => {
     expect(byLetter('S')?.defaultValue).toBe('None');
     expect(byLetter('S')?.hint).toBe('Type "None" if the part has no fasteners.');
-    expect(byLetter('T')).toMatchObject({ hint: null, unit: null, rule: { type: 'number' } });
+    expect(byLetter('T')).toMatchObject({ hint: null, unit: 'nos', rule: { type: 'number' } });
   });
 
   it('AC-4: Remarks (AJ) has the hint "Write "None" if there is nothing to add."', () => {

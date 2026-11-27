@@ -29,6 +29,8 @@ const WRONG_LINE = 'That password is not correct. Try again.';
 const box = (page: Page): Locator => page.getByRole('combobox', { name: /^Formula/ });
 const saveButton = (page: Page): Locator => page.getByRole('button', { name: 'Save formula', exact: true });
 const liveRegion = (page: Page): Locator => page.locator('#formula-check');
+/** The read-only line "Shows in the cost details as <formula>" (AQP-479, DEF-122): its row, from the label. */
+const showsIn = (page: Page): Locator => page.getByText('Shows in the cost details as', { exact: true }).locator('xpath=..');
 
 /** The editor of Cutting Cost (AL), reached the way an Admin reaches it: from "Edit formula" beside the field on SCR-17. */
 /** The ID of a seed field, made from the seed's own rule (the same one the security tests' recipes use); the Playwright process cannot load the registry behind it. */
@@ -63,6 +65,14 @@ test.describe('the Admin', () => {
     await openEditor(page);
     await expect(page.getByRole('heading', { level: 1, name: 'Edit formula: AL Cutting Cost' })).toBeVisible();
     await expect(box(page)).toHaveValue(SAVED);
+    // AQP-479 (DEF-122; UX spec SCR-18, the mock-up): a breadcrumb, the intro, a card headed "Formula" with its Output tag, the label "Formula for AL" and the formula echoed as the cost details will show it.
+    const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+    await expect(crumbs.getByRole('link', { name: 'Fields and formulas' })).toHaveAttribute('href', '/config/fields');
+    await expect(crumbs.locator('[aria-current="page"]')).toHaveText('AL Cutting Cost');
+    await expect(page.getByRole('main')).toContainText('Type letters, rate names, numbers, + - * / and brackets. SUM, MIN, MAX, ROUND and IF are available.');
+    await expect(page.locator('[data-slot="card-header"]').filter({ hasText: 'Formula' })).toContainText('Output');
+    await expect(page.locator('label[for="formula-text"]')).toContainText('Formula for');
+    await expect(showsIn(page).locator('code')).toHaveText(SAVED);
     const region = liveRegion(page);
     await expect(region).toHaveAttribute('aria-live', 'polite');
     await expect(region).toContainText(VALID_LINE);
@@ -87,9 +97,12 @@ test.describe('the Admin', () => {
       await expect(box(page)).toHaveAttribute('aria-invalid', 'true');
       await expect(saveButton(page)).toBeDisabled();
     }
+    // While the formula does not check, the echo shows a faint dash and no formula.
+    await expect(showsIn(page).locator('code')).toHaveCount(0);
     await expectNoAxeViolations(page);
     await typeFormula(page, 'P * Cutting-Rate-per-Sec * 2');
     await expect(liveRegion(page)).toContainText('The formula is valid.');
+    await expect(showsIn(page).locator('code')).toHaveText('P * Cutting-Rate-per-Sec * 2');
     await expect(box(page)).not.toHaveAttribute('aria-invalid', 'true');
     await expect(saveButton(page)).toBeEnabled();
   });

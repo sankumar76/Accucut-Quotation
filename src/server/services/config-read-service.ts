@@ -1,9 +1,9 @@
 import { totalFormulaNote } from '../../lib/config/field-notes';
 import { isProtectedField } from '../../lib/fields/protected';
-import { fieldLetter, findSystemField, referenceContext } from '../../lib/fields/registry';
+import { fieldLetter, findFieldByKey, findSystemField, referenceContext } from '../../lib/fields/registry';
 import type { FieldDefinition, SectionDefinition, StageDefinition } from '../../lib/fields/field-schema';
 import type { ConfigDocument } from '../../lib/fields/schema';
-import type { FieldKind, SystemRole } from '../../lib/fields/types';
+import { MATERIAL_CONSIDERED_KEY, MATERIAL_IN_DRAWING_KEY, MATERIAL_RATE_KEY, type FieldKind, type SystemRole } from '../../lib/fields/types';
 import { toDisplayForm, type RateReference, type ReferenceContext } from '../../lib/formula';
 import type { ConfigRepository } from '../repositories/config-repository';
 import type { MasterRepository } from '../repositories/master-repository';
@@ -39,6 +39,8 @@ export interface ConfigFieldRow {
   readonly systemRole: SystemRole | null;
   /** One sentence that explains the formula (the estimate total, UX-09), or `null`. */
   readonly note: string | null;
+  /** For an auto field whose value is found rather than typed or worked out: the words that say where it comes from ("From tree position", "Material-Considered for E"), or `null` (AQP-473, DEF-118). The letter in them is derived here, never typed into a screen. */
+  readonly lookup: string | null;
   /** True for an output that has a formula: the one kind of field "Edit formula" is offered on (UX-08: not on A, F, I, BO). */
   readonly canEditFormula: boolean;
   /** True for a field the Admin may never delete (STORY-08.04 AC-5): a System field, or one the code finds by key and cannot do without. It has the lock tag "System" and no Delete. */
@@ -87,6 +89,17 @@ function placeOf(document: ConfigDocument, field: FieldDefinition): string | nul
   return null;
 }
 
+/** Where an auto field gets its value (the ux-expert's words, 2026-11-26, found by the field's key or role); `null` for every other field. The letter of the material in the drawing is the one found by its key. */
+function lookupOf(document: ConfigDocument, field: FieldDefinition): string | null {
+  if (field.kind !== 'auto') return null;
+  if (field.systemRole === 'sl-no') return 'From tree position';
+  const source = findFieldByKey(document, MATERIAL_IN_DRAWING_KEY);
+  if (source === undefined) return null;
+  if (field.key === MATERIAL_CONSIDERED_KEY) return `Material-Considered for ${fieldLetter(source)}`;
+  if (field.key === MATERIAL_RATE_KEY) return `Material-Price-per-kg for ${fieldLetter(source)}`;
+  return null;
+}
+
 function rowOf(document: ConfigDocument, field: FieldDefinition, context: ReferenceContext): ConfigFieldRow {
   const storedFormula = field.kind === 'output' ? field.formula : null;
   return {
@@ -98,6 +111,7 @@ function rowOf(document: ConfigDocument, field: FieldDefinition, context: Refere
     formula: storedFormula === null ? null : toDisplayForm(storedFormula, context),
     systemRole: field.systemRole,
     note: noteOf(document, field),
+    lookup: lookupOf(document, field),
     canEditFormula: storedFormula !== null,
     isProtected: isProtectedField(field),
   };
