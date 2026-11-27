@@ -158,12 +158,15 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     const { code } = await assignedEstimate(page, testInfo, false);
     await signInAs(page, E2E_ENGINEER);
     const chunk = await holdFieldsChunk(page);
+    // The tree is read after the page is up; on a phone it is in a drawer that is not drawn, so its arrival is the answer of its read, not a row on the screen.
+    const treeRead = page.waitForResponse((response) => response.request().method() === 'GET' && /\/api\/v1\/estimates\/[^/]+\/tree$/.test(new URL(response.url()).pathname));
     await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
     await placeholderIsShown(page);
     await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
 
     // The tree's own arrival (its skeleton rows become its rows) moves the page too and is not what is measured here (PF-14f): the tree is read first, then the form's swap is.
-    await expect(page.locator('#parts-tree li[data-part-row]').first()).toBeVisible();
+    await treeRead;
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     const before = await mainBottom(page);
     const areaBefore = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
     chunk.release();
