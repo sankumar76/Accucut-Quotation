@@ -78,7 +78,7 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     test(`the Lead's review, ${state}: #review-actions moves no more than ${String(MOVE_AT_MOST_PX)} px when the form is drawn, and a jump to #review-calculate made before the swap still ends on the screen`, async ({ page }, testInfo) => {
       const { code } = await assignedEstimate(page, testInfo, prepared);
       const chunk = await holdFieldsChunk(page);
-      await page.goto(`/estimates/${code}`);
+      await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
       await placeholderIsShown(page);
       await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
 
@@ -120,7 +120,7 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     const { code } = await assignedEstimate(page, testInfo, true, materialId);
     await changePrivateMaterial(materialId, { pricePerKg: '9137.73', specificGravity: '7.37', scrapRate: '27.37' });
     const chunk = await holdFieldsChunk(page);
-    await page.goto(`/estimates/${code}`);
+    await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
     await placeholderIsShown(page);
     await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
 
@@ -140,7 +140,7 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     const { code } = await assignedEstimate(page, testInfo, false);
     await signInAs(page, E2E_ENGINEER);
     const chunk = await holdFieldsChunk(page);
-    await page.goto(`/estimates/${code}`);
+    await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
     await placeholderIsShown(page);
     await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
 
@@ -161,7 +161,7 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     const { code } = await assignedEstimate(page, testInfo, false);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const chunk = await holdFieldsChunk(page);
-    await page.goto(`/estimates/${code}`);
+    await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
     await placeholderIsShown(page);
     await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
     const names = await page.locator('[data-part-ghost] .skeleton-shimmer').evaluateAll((blocks) => blocks.map((block) => getComputedStyle(block).animationName));

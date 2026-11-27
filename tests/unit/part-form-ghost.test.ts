@@ -116,11 +116,15 @@ describe('PartFormGhost (DEF-145)', () => {
     expect(html).toMatch(/<div inert="" aria-hidden="true"/);
   });
 
-  it('PF-9.2: a second ghost (the fields\' own wait) is silent: no status role, no words', () => {
-    const html = drawn({ silent: true });
-    expect(html).not.toContain('role="status"');
-    expect(html).not.toContain(FORM_LOADING);
-    expect(html).toContain('aria-busy="true"');
+  it('PF-9.2 (ux ruling, QLT-833-02): every ghost is a status named "Loading the form"; the first holds the one hidden line, a second one (the fields\' own wait) holds no words of its own', () => {
+    const first = drawn();
+    expect(first).toContain(`aria-label="${FORM_LOADING}"`);
+    expect(first).toContain(`<span class="sr-only">${FORM_LOADING}</span>`);
+    const second = drawn({ silent: true });
+    expect(second).toContain('role="status"');
+    expect(second).toContain('aria-busy="true"');
+    expect(second).toContain(`aria-label="${FORM_LOADING}"`);
+    expect(second).not.toContain('sr-only">' + FORM_LOADING);
   });
 
   it('PF-9.4: no id, name, for, href, tabindex, heading, form or landmark, and none of the form\'s own markers a test waits for', () => {

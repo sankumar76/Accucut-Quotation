@@ -133,14 +133,14 @@ export function PartFormGhost({ form, texts = {}, notice, head, silent = false }
   // Every card the form draws, with the fields it shows for what is typed (the form draws a card whose fields are all hidden too): the same list `PartFields` walks.
   const sections = shownSections(form.sections, texts);
   return (
-    <div {...(silent ? { 'aria-busy': true } : { role: 'status', 'aria-busy': true, 'aria-label': FORM_LOADING })} data-part-ghost="" className="flex min-w-0 flex-1 flex-col">
+    <div role="status" aria-busy="true" aria-label={FORM_LOADING} data-part-ghost="" className="flex min-w-0 flex-1 flex-col">
       {silent ? null : <span className="sr-only">{FORM_LOADING}</span>}
       <div inert aria-hidden="true" className={FORM_ROOT}>
         <div className={HEAD_LINES}>
           {head === 'engineer' ? (
             <>
               <Grey className="h-s-4 w-1/4" />
-              <Grey className="h-s-6 w-1/2" />
+              <Grey className="h-(--lh-sub) w-1/2" />
             </>
           ) : null}
           <div className={PROGRESS_ROW}>
