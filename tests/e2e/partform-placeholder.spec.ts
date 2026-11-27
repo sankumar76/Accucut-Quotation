@@ -106,7 +106,9 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
       expect(await page.locator('[data-part-ghost]').innerText()).not.toMatch(/[$€₹]/);
       // What the rates-changed notice's link does on Enter: a jump to the Recalculate button, made while the placeholder is still on the page.
       // The button the action row has for this state: Calculate on a Draft, Approve and lock on a Prepared estimate whose figures are current (Recalculate is offered only once they are cleared or the rates changed).
-      const target = (await page.locator('#review-calculate').count()) > 0 ? '#review-calculate' : '#review-approve';
+      // Chosen by the state, not found at run time: a Draft that lost its Calculate button must fail here, not jump to Approve (QLT-833-19).
+      const target = prepared ? '#review-approve' : '#review-calculate';
+      await expect(page.locator(target), `the action row has ${target}`).toHaveCount(1);
       await page.evaluate((id) => {
         window.location.hash = id;
       }, target);
