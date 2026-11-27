@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 import { Notice } from '@/components/shared/notice';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,8 @@ import type { FormField, FormView, MaterialChoice } from '@/lib/estimates/form-c
 import type { PartItem } from '@/lib/estimates/tree-client';
 import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
 import { isSectionComplete, sectionProgress, sectionWeight, shownSections, sumProgress, textOf } from '@/lib/estimates/form-values';
-import type { SaveGate } from '@/lib/estimates/save-gate';
+import { PERSISTENT_MENU_MIN_WIDTH } from '@/lib/design-tokens';
+import { createSaveGate, type SaveGate } from '@/lib/estimates/save-gate';
 import { FLAG_OFF, FLAG_ON } from '@/lib/estimate/treatment-value';
 import { formatIst } from '@/lib/time';
 
@@ -35,6 +36,7 @@ import { FieldRenderer } from './field-renderer';
 import { PartHead } from './part-head';
 import { PartProgress, PartProgressSkeleton } from './part-progress';
 import { PictureSlot } from './picture-slot';
+import { reviewField, type PartReviewState } from './review-look';
 import { CONFLICT_BODY, CONFLICT_KEEP_MINE, CONFLICT_TITLE, CONFLICT_USE_NEWER, saveStatusText } from './save-texts';
 import { SectionCard } from './section-card';
 import { SectionStrip } from './section-strip';
@@ -52,21 +54,29 @@ export interface PartFieldsProps {
   readonly form: FormView;
   readonly materials: Loaded<ReadonlyArray<MaterialChoice>>;
   readonly lastSavedAt: string | null;
-  readonly onSaved: (saved: SavedPart) => void;
-  readonly onChanged: () => void;
+  readonly onSaved?: ((saved: SavedPart) => void) | undefined;
+  readonly onChanged?: (() => void) | undefined;
   /** Description or Part No. was left with a new text: the tree's row takes the name (AQP-447). */
-  readonly onNamed: (id: string, label: string) => void;
+  readonly onNamed?: ((id: string, label: string) => void) | undefined;
   /** A save was refused because the estimate was ignored (CR-01 item 7D). */
-  readonly onServerIgnored: () => void;
+  readonly onServerIgnored?: (() => void) | undefined;
   readonly onWrote: (at: string) => void;
   readonly onReadMaterialsAgain: () => void;
   /** The IDs of this part's fields that Calculate found blank (STORY-05.09). Each shows the words of its blank under the field until it has a value. */
-  readonly missing: ReadonlySet<string>;
+  readonly missing?: ReadonlySet<string> | undefined;
   /** What Calculate waits for: the saves in flight and the fields that show a value that is not saved (STORY-05.09). */
-  readonly gate: SaveGate;
+  readonly gate?: SaveGate | undefined;
+  /** The Lead's and the Admin's read-only view of the same form (AQP-488, DEF-131 Stage 1): see `PartReview`. Absent for the Engineer, whose form is unchanged. */
+  readonly review?: PartReviewState | undefined;
 }
 
 const TITLE_ID = 'part-form-title';
+
+// What the Lead's read-only view leaves out (AQP-488): it saves nothing, so nothing is told when a save goes through, the tree is not read again, no part is missing, and the form has no Calculate to wait for it.
+// They are in this file, not in the first load: the page that draws the view hands the form only what the server can send.
+const noop = (): void => undefined;
+const NONE_MISSING: ReadonlySet<string> = new Set();
+const WIDE = `(min-width: ${PERSISTENT_MENU_MIN_WIDTH}px)`;
 
 /**
  * The words under a blank that Calculate found (UX spec SCR-05 "Fields"): a choice is chosen, a number says what to do when a part needs nothing, a text is entered. QTY per Assy is a number too,
@@ -110,10 +120,35 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
  * its number of fields, one to a row on a phone; the form is held to one card's least width, so a reserved region beside it takes a column with no redesign, UD-4), and every field from the server's definition. It is used under a key of the part's ID.
  * Each value is the person's until the field is left, and then the part's values are saved on their own (`usePartValues`).
  */
-export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing, gate }: PartFieldsProps) {
+export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing = NONE_MISSING, gate, review }: PartFieldsProps) {
   const allFields = form.sections.flatMap((section) => section.fields);
-  const values = usePartValues({ estimateId, part, editable, fields: allFields, onSaved, onChanged, onNamed, onServerIgnored, onWrote, gate });
+  const [ownGate] = useState(createSaveGate);
+  const values = usePartValues({
+    estimateId,
+    part,
+    editable,
+    fields: allFields,
+    onSaved: onSaved ?? noop,
+    onChanged: onChanged ?? noop,
+    onNamed: onNamed ?? noop,
+    onServerIgnored: onServerIgnored ?? noop,
+    onWrote,
+    gate: gate ?? ownGate,
+  });
   const title = useRef<HTMLHeadingElement>(null);
+  // The Engineer's form draws its own title; the review's is drawn on the server above the form, and this form is labelled by it.
+  const titleElement = (): HTMLElement | null => title.current ?? document.getElementById(TITLE_ID);
+  // A row was chosen on the review (RO-2): once the form shows, the title takes the focus. Not on the first paint of the page, and never from a form the Engineer uses.
+  const shown = values.stored.status === 'ready';
+  const chosen = review?.chosen === true;
+  useEffect(() => {
+    if (chosen && shown) titleElement()?.focus();
+  }, [chosen, shown]);
+  // Under 1024 px the parts tree folds after a row is chosen, so the inputs are in view and the tree's summary (which says the open row) is one press away.
+  useEffect(() => {
+    if (!chosen || window.matchMedia(WIDE).matches) return;
+    document.querySelector<HTMLDetailsElement>('[data-review-tree]')?.removeAttribute('open');
+  }, [chosen]);
 
   if (values.stored.status === 'failed') {
     return (
@@ -148,9 +183,9 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
   const missingNeeded = (field: FormField): boolean => missing.has(field.id) && textOf(field, values.texts).trim() === '';
   const hasMissing = (section: { readonly fields: ReadonlyArray<FormField> }): boolean => section.fields.some(missingNeeded);
   return (
-    <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, title.current)} className="is-compact flex min-w-0 flex-1 flex-col gap-s-4">
+    <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, titleElement())} className="is-compact flex min-w-0 flex-1 flex-col gap-s-4">
       <div className="flex flex-col gap-s-1">
-        <PartHead partId={part.id} slNo={part.slNo} nodes={nodes} titleId={TITLE_ID} titleRef={title} />
+        {review === undefined ? <PartHead partId={part.id} slNo={part.slNo} nodes={nodes} titleId={TITLE_ID} titleRef={title} /> : null}
         <PartProgress slNo={part.slNo} counts={sumProgress(progress.map(({ counts }) => counts))} />
         {/* The one status line of saving (STORY-05.10 AC-4, AC-5): when something was last saved (every save that stored something moves it, `onWrote`), that the form saves on its own, and, once, that the automatic
             save could not. A polite live region that is on the page from the first paint, so it speaks only when its words change, which is when a save stored something or failed, never on a silent tick. */}
@@ -158,7 +193,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
           {saveStatusText(lastSavedAt === null ? NOT_SAVED_YET : lastSavedText(formatIst(new Date(lastSavedAt))), editable, values.autosaveFailedAt)}
         </p>
       </div>
-      {editable ? null : <Notice tone="info">{FORM_LOCKED}</Notice>}
+      {editable ? null : <Notice tone="info">{review === undefined ? FORM_LOCKED : review.notice}</Notice>}
       {problem?.kind !== 'conflict' ? null : (
         // The part was changed somewhere else (STORY-05.08 AC-5, AC-6): what the person typed is kept under each marked field, and they choose. Nothing is sent until they do.
         <Notice tone="danger" title={CONFLICT_TITLE}>
@@ -198,6 +233,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
                 fields={section.fields.filter((field) => field.rule.type === 'flag')}
                 texts={values.texts}
                 editable={editable}
+                review={review !== undefined}
                 onToggle={(flag, chosen) => {
                   const text = chosen ? FLAG_ON : FLAG_OFF;
                   values.setText(flag.id, text);
@@ -210,20 +246,21 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
                 // The picture (Part Model, STORY-05.07) is its own control, fetched when the form opens; it is changed by its own routes and is no typed value.
                 <PictureSlot
                   key={field.id}
-                  field={field}
+                  field={review === undefined ? field : reviewField(field)}
                   estimateId={estimateId}
                   partId={part.id}
                   picture={picture}
                   editable={editable}
                   inTurn={values.inTurn}
                   onChanged={values.pictureSaved}
-                  onConflict={onChanged}
-                  onServerIgnored={onServerIgnored}
+                  onConflict={onChanged ?? noop}
+                  onServerIgnored={onServerIgnored ?? noop}
                 />
               ) : (
                 <FieldRenderer
                   key={field.id}
-                  field={field}
+                  field={review === undefined ? field : reviewField(field)}
+                  review={review !== undefined}
                   missing={missingNeeded(field) ? missingMessageOf(field) : undefined}
                   text={field.rule.type === 'derived' ? derivedText(field, part, values.texts, materials) : textOf(field, values.texts)}
                   error={values.errors[field.id]}
@@ -238,7 +275,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
         ))}
       </div>
       <p role="status" className="sr-only">
-        {values.announcement}
+        {review?.chosen === true ? review.showing : values.announcement}
       </p>
     </form>
   );

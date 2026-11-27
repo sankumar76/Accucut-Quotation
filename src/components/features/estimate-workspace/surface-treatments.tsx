@@ -13,7 +13,7 @@ import type { FormField } from '@/lib/estimates/form-client';
 import { textOf } from '@/lib/estimates/form-values';
 import { isFlagOn } from '@/lib/estimate/treatment-value';
 
-import { SURFACE_HINT, SURFACE_LABEL, surfaceSelectedText } from './surface-texts';
+import { SURFACE_HINT, SURFACE_LABEL, SURFACE_NONE_SELECTED, surfaceSelectedText } from './surface-texts';
 
 export interface SurfaceTreatmentsProps {
   /** The control's `id`: the trigger's, unique on the page. */
@@ -26,6 +26,8 @@ export interface SurfaceTreatmentsProps {
   readonly editable: boolean;
   /** One flag was chosen or left: it is saved on its own, as `1` or `0`. */
   readonly onToggle: (field: FormField, chosen: boolean) => void;
+  /** The Lead's and the Admin's read-only view (AQP-488, DEF-131; UX ruling `lead-admin-edit-inputs-2026-11-27.md` 3.4): the chosen ones as chips, always visible, no pop-over, no checkbox and no hint. */
+  readonly review?: boolean;
 }
 
 /** Arrow keys move between the choices of the list (AC-2); Space chooses or leaves one (the checkbox's own key) and Escape closes the list (the popover's own). */
@@ -43,11 +45,32 @@ function moveBetweenChoices(event: KeyboardEvent<HTMLElement>): void {
  * chosen as text ("2 selected: Primer, Foam"). A chosen treatment is stored as 1 and one that is not as 0; choosing none is valid. The registry's flags are the list, so a treatment the registry adds
  * appears with no change here.
  */
-export function SurfaceTreatments({ id, fields, texts, editable, onToggle }: SurfaceTreatmentsProps) {
+export function SurfaceTreatments({ id, fields, texts, editable, onToggle, review = false }: SurfaceTreatmentsProps) {
   const labelId = `${id}-label`;
   const valueId = `${id}-value`;
   const hintId = `${id}-hint`;
   const chosen = fields.filter((field) => isFlagOn(textOf(field, texts)));
+
+  if (review) {
+    return (
+      <div data-treatments="" className="flex min-w-0 flex-col gap-s-2">
+        <span id={labelId} className="text-label font-semibold text-ink-2">
+          {SURFACE_LABEL}
+        </span>
+        {chosen.length === 0 ? (
+          <p className="text-body text-ink-2 italic">{SURFACE_NONE_SELECTED}</p>
+        ) : (
+          <ul aria-labelledby={labelId} className="flex flex-wrap gap-s-2">
+            {chosen.map((field) => (
+              <li key={field.id} className="inline-flex items-center gap-s-1 rounded-md border border-border bg-surface-2 px-s-2 py-s-1 text-label text-ink">
+                {field.label} <ColumnTag letter={field.letter} kind="input" /> = 1
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div data-treatments="" className="flex min-w-0 flex-col gap-s-2">

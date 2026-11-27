@@ -9,6 +9,7 @@ import { createMasterRepository } from '@/server/repositories/master-repository'
 import { createTransactionRunner } from '@/server/repositories/transaction';
 import { createEstimateService, type EstimateService, type EstimateViewer } from '@/server/services/estimate-service';
 
+import { auditFor, withAuditContext } from '../../support/customer-change';
 import { insertPersonAsOwner } from '../../support/audit-database';
 import { openAuthDatabase, type AuthDatabase } from '../../support/auth-database';
 import { TREE500_NODE_COUNT } from '../../support/builders/tree500';
@@ -35,7 +36,8 @@ let taskCounter = 0;
 
 beforeAll(async () => {
   db = await openAuthDatabase();
-  service = createEstimateService({
+  service = withAuditContext(createEstimateService({
+    audit: auditFor(db),
     estimates: createEstimateRepository(db.prisma),
     nodes: createEstimateNodeRepository(db.prisma),
     images: createImageRepository(db.prisma),
@@ -43,7 +45,7 @@ beforeAll(async () => {
     materials: createMasterRepository(db.prisma),
     currentConfiguration: () => Promise.resolve(seedConfig),
     configurationById: () => Promise.resolve(seedConfig),
-  });
+  }));
   leadId = await insertPersonAsOwner(db, 'Completeness Lead', 'LEAD');
   arjunId = await insertPersonAsOwner(db, 'Completeness Arjun', 'ENGINEER');
 });

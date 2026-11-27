@@ -42,7 +42,7 @@ const CALCULATION_ID = '00000000-0000-4000-8000-0000000ca1cb';
 const estimate = () => defined(harness.estimateWorld.estimates[0]);
 const part = () => defined(harness.estimateWorld.nodes[0]);
 const openCosts = async (code: string, slNo: string): Promise<string> => renderToStaticMarkup(await CostDetailsPage({ params: Promise.resolve({ code, slNo }) }));
-const openEstimate = async (code: string): Promise<string> => renderToStaticMarkup(await EstimatePage({ params: Promise.resolve({ code }) }));
+const openEstimate = async (code: string): Promise<string> => renderToStaticMarkup(await EstimatePage({ params: Promise.resolve({ code }), searchParams: Promise.resolve({}) }));
 
 /** A calculation of the harness estimate's one part holding the stored row of the invented oracle row, linked to the estimate at its revision of the moment. */
 function plantCalculation(): void {

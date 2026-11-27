@@ -175,3 +175,25 @@ export const PRICE_REMOVED_AUDIT_KEEPS = 'The audit log keeps it.';
 export const PRICE_REMOVED_APPROVE_AGAIN = 'Approve again, after a Recalculate, to set a price.';
 export const DOWNLOAD_NOT_CALCULATED_REASON ='Calculate or Recalculate first. There is no file until a calculation is current.';
 export const calculatedLine = (at: string, configurationNumber: number): string => `Calculated ${at} · configuration version ${configurationNumber}`;
+
+/**
+ * The block of one row's inputs under the tiles (AQP-488, DEF-131 Stage 1; UX ruling `lead-admin-edit-inputs-2026-11-27.md` 3.5). The words of its one notice by the estimate's status, the Ignored layer first (it wins
+ * over the status everywhere on this page), and the row line (3.3). Stage 2 replaces the first two and extends the last three (4.2).
+ */
+export const INPUTS_NOTICE_DRAFT = 'Read-only. These are the values saved for this part. The Engineer may still be changing them: reload the page to see the latest.';
+export const INPUTS_NOTICE_PREPARED = 'Read-only. These are the values saved for this part.';
+export const INPUTS_NOTICE_APPROVED = 'Read-only while approved. These are the values the price was approved with.';
+export const INPUTS_NOTICE_QUOTED = 'Read-only while quoted. These are the values the price was approved with.';
+export const INPUTS_NOTICE_IGNORED = 'Read-only while this RFQ is ignored.';
+export const inputsNotice = (status: EstimateStatus, ignored: boolean): string => {
+  if (ignored) return INPUTS_NOTICE_IGNORED;
+  if (status === 'DRAFT') return INPUTS_NOTICE_DRAFT;
+  if (status === 'PREPARED') return INPUTS_NOTICE_PREPARED;
+  return status === 'QUOTED' ? INPUTS_NOTICE_QUOTED : INPUTS_NOTICE_APPROVED;
+};
+/** Said once, politely, after a row is chosen (RO-2). */
+export const showingInputs = (slNo: string, name: string): string => `Showing the inputs of ${slNo} ${name}. Read-only.`;
+/** The row line under the form's title (3.3): the row's own figure and its count, the only Lead-only output beside the inputs. */
+export const ROW_LINE_PREFIX = 'This row:';
+export const rowLineFigures = (price: string, priceLetter: string, usd: string, eur: string): string => `${price} (${priceLetter}) · $ ${usd} · € ${eur}`;
+export const rowLineCount = (count: string): string => `count ${count} ${COUNT_UNIT}`;

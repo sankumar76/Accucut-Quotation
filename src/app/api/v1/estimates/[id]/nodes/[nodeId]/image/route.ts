@@ -21,10 +21,10 @@ export const PUT = withRoute({
   params: nodeParamsSchema,
   upload: { maxBodyBytes: MAX_UPLOAD_BODY_BYTES },
   output: partPictureSchema,
-  handler: async ({ user, params, upload }) => {
+  handler: async ({ user, requestId, params, upload }) => {
     // `withRoute` reads the file for a route that declares `upload`, so it is always there; the check is for the compiler and for a route copied without it.
     if (upload === undefined) throw new Error('The upload was not read.');
-    return await getEstimateService().putPicture({ id: user.id, role: user.role }, params.id, params.nodeId, upload);
+    return await getEstimateService().putPicture({ id: user.id, role: user.role }, params.id, params.nodeId, upload, { actorId: user.id, actorLabel: user.name, requestId });
   },
 });
 
@@ -34,5 +34,5 @@ export const DELETE = withRoute({
   method: 'DELETE',
   params: nodeParamsSchema,
   output: partPictureSchema,
-  handler: ({ user, params }) => getEstimateService().removePicture({ id: user.id, role: user.role }, params.id, params.nodeId),
+  handler: ({ user, requestId, params }) => getEstimateService().removePicture({ id: user.id, role: user.role }, params.id, params.nodeId, { actorId: user.id, actorLabel: user.name, requestId }),
 });
