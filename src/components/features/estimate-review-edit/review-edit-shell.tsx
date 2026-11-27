@@ -20,8 +20,8 @@ export function ReviewEditShell({ children, ...island }: ReviewTreeEditorProps &
   return (
     <>
       {failed ? (
-        <p role="alert" className="text-body text-danger-ink min-[1024px]:col-span-2">
-          We could not load the editing tools. Reload the page to try again.
+        <p role="alert" className="text-body text-danger-ink">
+          Editing tools did not load. Reload the page.
         </p>
       ) : null}
       {children}
