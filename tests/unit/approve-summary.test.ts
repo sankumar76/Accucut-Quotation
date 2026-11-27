@@ -38,15 +38,11 @@ describe('AQP-478: the words of SCR-08', () => {
 describe('AQP-478: the summary of the dialog', () => {
   const render = (customerName: string | null): string => renderToStaticMarkup(createElement(ApproveSummary, { totalLetter: 'BL', calculatedTotal: '12951.53', customerName }));
 
-  it('is the lead-in sentence, then two rows: the calculated total in rupees and the customer', () => {
+  it("is two rows: the calculated total in rupees and the customer (the lead-in is the dialog's own description)", () => {
     const html = render('Brightwater Controls');
     const words = text(html);
-    expect(words).toBe(`${LEAD_IN} Calculated total (BL) ₹ 12,951.53 Customer Brightwater Controls`);
+    expect(words).toBe('Calculated total (BL) ₹ 12,951.53 Customer Brightwater Controls');
     expect(html).toMatch(/<dl[^>]*>[\s\S]*<dt[^>]*>Calculated total \(BL\)<\/dt>[\s\S]*<dd[^>]*>₹ 12,951.53<\/dd>[\s\S]*<dt[^>]*>Customer<\/dt>[\s\S]*<dd[^>]*>Brightwater Controls<\/dd>/);
-  });
-
-  it('gives the lead-in the id the dialog is described by', () => {
-    expect(render('Brightwater Controls')).toMatch(/<p[^>]*id="approve-lead-in"[^>]*>Set the Approved Quote Price\./);
   });
 
   it('says "Not set" for an estimate made before it had a customer, and never leaves the row empty', () => {

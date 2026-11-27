@@ -9,7 +9,6 @@ export const DIALOG_TITLE = 'Approve and lock';
 export const dialogTitle = (code: string): string => `${DIALOG_TITLE} ${code}`;
 /** The lead-in under the heading (the mock-up SCR-08; it describes the dialog for a screen reader). */
 export const LEAD_IN = 'Set the Approved Quote Price. After you approve, inputs become read-only and the task moves to Closed.';
-export const LEAD_IN_ID = 'approve-lead-in';
 /** The two rows under it: the total the price starts as (its Excel letter comes from the configuration version, never typed) and the estimate's customer. */
 export const calculatedTotalLabel = (letter: string): string => `Calculated total (${letter})`;
 export const CUSTOMER_LABEL = 'Customer';

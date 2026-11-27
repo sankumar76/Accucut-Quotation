@@ -230,10 +230,10 @@ test.describe('AC-1: the dialog', () => {
     // AQP-478 (DEF-121, SCR-08): the heading names the estimate, the lead-in describes the dialog, the two rows say the calculated total and the customer, and the hint sits under the price.
     await expect(dialog.getByRole('heading', { name: `Approve and lock ${code}`, exact: true })).toBeVisible();
     await expect(dialog).toHaveAccessibleDescription('Set the Approved Quote Price. After you approve, inputs become read-only and the task moves to Closed.');
-    await expect(dialog.locator('dt', { hasText: /^Calculated total (B[A-Z])$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText(/^₹ [d,]+.d{2}$/);
+    await expect(dialog.locator('dt', { hasText: /^Calculated total \(B[A-Z]\)$/ }).locator('xpath=following-sibling::dd[1]')).toHaveText(/^₹ [\d,]+\.\d{2}$/);
     await expect(dialog.locator('dt', { hasText: /^Customer$/ }).locator('xpath=following-sibling::dd[1]')).not.toBeEmpty();
     await expect(dialog).toContainText('Starts as the calculated total. Edit it to set a different price.');
-    await expect(priceField(page)).toHaveAccessibleDescription(/Starts as the calculated total. Edit it to set a different price./);
+    await expect(priceField(page)).toHaveAccessibleDescription(/Starts as the calculated total\. Edit it to set a different price\./);
     await expect(priceField(page)).toHaveValue(total);
     await expect(priceField(page)).toBeFocused();
     await expect(dialog).toContainText('Approved Quote Price');
