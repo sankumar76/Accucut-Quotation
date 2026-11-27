@@ -147,9 +147,19 @@ describe('PartFormGhost (DEF-145)', () => {
 
   it('PF-4: draws with the form\'s own class strings from the shared module', () => {
     const html = drawn().replaceAll('&amp;', '&').replaceAll('&gt;', '>').replaceAll('&quot;', '"');
-    for (const classes of [layout.CARD_SHARE, layout.FIELDS, layout.CARD_GRID, layout.STRIP_LIST, layout.FIELD_BOX, layout.FORM_ROOT, layout.CONTROL_HEIGHT, layout.TEXTAREA_HEIGHT, layout.PICTURE_ZONE_HEIGHT]) {
+    for (const classes of [layout.CARD_SHARE, layout.FIELDS, layout.CARD_GRID, layout.STRIP_LIST, layout.FIELD_BOX, layout.FORM_ROOT, layout.CONTROL_HEIGHT, layout.TEXTAREA_HEIGHT, layout.PICTURE_ZONE_HEIGHT_UNHINTED]) {
       expect(html, classes).toContain(classes);
     }
+  });
+
+  it('QLT-833-13: a picture field with no hint (the review look) has no hint line and the unhinted box; with a hint, the hint and the usual box', () => {
+    const withHint: FormView = { ...FORM, sections: FORM.sections.map((section) => ({ ...section, fields: section.fields.map((entry) => (entry.rule.type === 'picture' ? { ...entry, hint: 'PNG or JPG, up to 200 KB.' } : entry)) })) };
+    const hinted = renderToStaticMarkup(createElement(PartFormGhost, { form: withHint, head: 'engineer' })).replaceAll('&amp;', '&');
+    expect(hinted).toContain(layout.PICTURE_ZONE_HEIGHT);
+    expect(hinted).toContain('PNG or JPG, up to 200 KB.');
+    const plain = drawn({ head: 'lead' }).replaceAll('&amp;', '&');
+    expect(plain).toContain(layout.PICTURE_ZONE_HEIGHT_UNHINTED);
+    expect(plain).not.toContain(layout.PICTURE_ZONE_HEIGHT);
   });
 
   it('ghostOf: draws from the form\'s own readers, and nothing for a body the form would refuse (the bars stand in)', () => {

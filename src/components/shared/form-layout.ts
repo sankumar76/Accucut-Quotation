@@ -46,6 +46,12 @@ export const CARD_GRID = 'flex flex-wrap gap-s-3';
 /** The picture's block while it loads (AQP-395; held within 2 px of the control by `estimate-picture.spec.ts`): the height at below 768, at 768 and from 1024 px. */
 export const PICTURE_ZONE_HEIGHT = 'h-[146px] md:h-[130px] lg:h-[114px]';
 
+/**
+ * The same block for a picture field with no hint: the Lead's read-only view drops every hint (`reviewField`), and its control has no hint line below the box and a box 16 px lower from 768 px (read from the control at
+ * 360, 768 and 1366 px on the Lead's review: 146, 114, 114; DEF-145, QLT-833-13). The placeholder of the picture and the ghost's picture block take it from here, so neither moves the page when the control arrives.
+ */
+export const PICTURE_ZONE_HEIGHT_UNHINTED = 'h-[146px] md:h-[114px]';
+
 /** A control's height: 44 px, 36 px from 1024 px with a fine pointer (`Input`, `NativeSelect`), and a multi-line box's least height (`Textarea`). `part-form-ghost.test.ts` reads those three components for the same strings. */
 export const CONTROL_HEIGHT = 'h-(--control-h) compact-fine:h-(--compact-field-h)';
 export const TEXTAREA_HEIGHT = 'min-h-(--textarea-min-h) compact:min-h-(--compact-textarea-min-h)';

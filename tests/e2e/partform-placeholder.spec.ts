@@ -24,6 +24,8 @@ import { holdFieldsChunk } from './support/hold-fields-chunk';
  */
 
 const MOVE_AT_MOST_PX = 8;
+/** The Engineer's own bar (PF-15): the ghost of a part not yet known is a new part's shape, so it may differ by one wrapped status line plus the 8 px. */
+const ENGINEER_MOVE_AT_MOST_PX = 24;
 
 /** The top of the element in the document (not the screen), so a scroll does not count as a move. */
 async function documentTop(locator: Locator): Promise<number> {
@@ -47,6 +49,11 @@ async function formIsDrawn(page: Page): Promise<void> {
   await expect(page.locator('[data-part-ghost]')).toHaveCount(0);
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   await expect(page.getByRole('status', { name: FORM_LOADING })).toHaveCount(0);
+}
+
+/** The form's own picture control has replaced its placeholder: the form is as tall as it will be. */
+async function pictureControlHere(page: Page): Promise<void> {
+  await expect(page.locator('form[data-part-form] [data-picture-zone]:not(.skeleton-shimmer)')).toBeVisible();
 }
 
 interface Box {
@@ -77,8 +84,7 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     const state = prepared ? 'Prepared' : 'Draft';
     test(`the Lead's review, ${state}: #review-actions moves no more than ${String(MOVE_AT_MOST_PX)} px when the form is drawn, and a jump to #review-calculate made before the swap still ends on the screen`, async ({ page }, testInfo) => {
       const { code } = await assignedEstimate(page, testInfo, prepared);
-      // The picture control's chunk is held too: the form shows its own picture placeholder until it arrives, and the control then has another height for the Lead's read-only view (the form's own second shift).
-      const chunk = await holdFieldsChunk(page, { picture: true });
+      const chunk = await holdFieldsChunk(page);
       await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
       await placeholderIsShown(page);
       await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
@@ -105,7 +111,11 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
       await formIsDrawn(page);
 
       const after = await documentTop(actions);
-      expect(Math.abs(after - before), `#review-actions moved from ${String(before)} to ${String(after)} px`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
+      expect(Math.abs(after - before), `#review-actions moved from ${String(before)} to ${String(after)} px at the swap`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
+      // The form asks for its picture control as soon as it is drawn: the person meets that arrival straight after the swap, so the fully loaded page is held to the same bar (QLT-833-13).
+      await pictureControlHere(page);
+      const loaded = await documentTop(actions);
+      expect(Math.abs(loaded - before), `#review-actions moved from ${String(before)} to ${String(loaded)} px once the picture control had arrived`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
       await expect(page.locator('#review-calculate')).toBeInViewport();
       // PF-14a, PF-14b: the same number of cards, each in the place and at the width the form gives it, in the same rows.
       const formCards = await cardBoxes(page, '[data-part-grid]');
@@ -116,8 +126,6 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
         expect(Math.abs(card.width - drawn.width), `card ${String(index + 1)} width`).toBeLessThanOrEqual(1);
         expect(Math.abs(card.top - drawn.top), `card ${String(index + 1)} top`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
       });
-      chunk.releasePicture();
-      await page.waitForLoadState('networkidle');
     });
   }
 
@@ -126,7 +134,7 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     const materialId = await insertPrivateMaterial({ pricePerKg: '137.37', specificGravity: '7.37', scrapRate: '27.37' });
     const { code } = await assignedEstimate(page, testInfo, true, materialId);
     await changePrivateMaterial(materialId, { pricePerKg: '9137.73', specificGravity: '7.37', scrapRate: '27.37' });
-    const chunk = await holdFieldsChunk(page, { picture: true });
+    const chunk = await holdFieldsChunk(page);
     await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
     await placeholderIsShown(page);
     await expect.poll(() => chunk.held(), { message: 'the fields chunk is being held' }).toBeGreaterThan(0);
@@ -141,11 +149,12 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     chunk.release();
     await formIsDrawn(page);
     await expect(page.locator('#review-calculate')).toBeInViewport();
-    chunk.releasePicture();
-    await page.waitForLoadState('networkidle');
+    // And once the picture control has arrived as well (QLT-833-13).
+    await pictureControlHere(page);
+    await expect(page.locator('#review-calculate')).toBeInViewport();
   });
 
-  test("the Engineer's workspace: the page under the form moves no more than the same 8 px when the form replaces its placeholder", async ({ page }, testInfo) => {
+  test("the Engineer's workspace: the page under the form moves no more than 24 px (PF-15) when the form replaces its placeholder", async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, false);
     await signInAs(page, E2E_ENGINEER);
     const chunk = await holdFieldsChunk(page);
@@ -160,7 +169,7 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     chunk.release();
     await formIsDrawn(page);
     const after = await mainBottom(page);
-    expect(Math.abs(after - before), `the end of the page moved from ${String(before)} to ${String(after)} px`).toBeLessThanOrEqual(MOVE_AT_MOST_PX);
+    expect(Math.abs(after - before), `the end of the page moved from ${String(before)} to ${String(after)} px`).toBeLessThanOrEqual(ENGINEER_MOVE_AT_MOST_PX);
     // PF-14f, PF-15: a new part's ghost is the form's shape, so the form area changes by at most 24 px (one wrapped status line plus the 8 px).
     const areaAfter = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
     expect(Math.abs(areaAfter - areaBefore), `the form area changed from ${String(areaBefore)} to ${String(areaAfter)} px`).toBeLessThanOrEqual(24);

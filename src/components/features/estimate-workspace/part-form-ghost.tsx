@@ -12,6 +12,7 @@ import {
   HEAD_LINES,
   HINT_TEXT,
   PICTURE_ZONE_HEIGHT,
+  PICTURE_ZONE_HEIGHT_UNHINTED,
   PROGRESS_BAR_WIDTH,
   PROGRESS_ROW,
   RANGE_CHIP,
@@ -67,7 +68,7 @@ const Grey = ({ className }: { readonly className: string }) => <Skeleton {...NO
 function ghostControl(field: FormField, texts: Readonly<Record<string, string>>): { readonly control: ReactNode; readonly marker: 'wide' | 'picture' | null } {
   switch (field.rule.type) {
     case 'picture':
-      return { control: <Grey className={PICTURE_ZONE_HEIGHT} />, marker: 'picture' };
+      return { control: <Grey className={field.hint === null ? PICTURE_ZONE_HEIGHT_UNHINTED : PICTURE_ZONE_HEIGHT} />, marker: 'picture' };
     case 'treatment': {
       // The "Other" box under the list shows only when "Other" is the part's choice (`TreatmentSelect`).
       const chosen = decodeTreatment(texts[field.id] ?? '');
@@ -88,7 +89,7 @@ function GhostField({ field: own, review, texts }: { readonly field: FormField; 
     <div {...(marker === 'wide' ? { 'data-ghost-wide': '' } : marker === 'picture' ? { 'data-ghost-picture': '' } : {})} className={FIELD_BOX}>
       <Grey className="h-s-5 w-1/2" />
       {control}
-      {field.hint !== null ? <p className={HINT_TEXT}>{field.hint}</p> : marker === 'picture' ? <Grey className="h-s-4 w-2/3" /> : null}
+      {field.hint === null ? null : <p className={HINT_TEXT}>{field.hint}</p>}
     </div>
   );
 }
