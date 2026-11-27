@@ -27,6 +27,8 @@ export interface TreatmentSelectProps {
   readonly readOnly: boolean;
   /** Whether Enter moves on from the controls (the field's mark). */
   readonly marked: boolean;
+  /** The words of the empty choice, when they are not the usual ones (the review look says "Not entered", AQP-488). */
+  readonly placeholder?: string | undefined;
   readonly onChange: (text: string) => void;
   /** The person made a choice, or left the box of "Other" (then with no text). */
   readonly onCommit: (override?: string) => void;
@@ -38,7 +40,7 @@ export interface TreatmentSelectProps {
  * ignores the text sent). "Other" is saved when the box is left, so the box is not told it is empty the moment it appears. A part that holds a treatment that is no longer in the list shows its
  * own words as the current value, with "(no longer listed)", and keeps them until another is chosen.
  */
-export function TreatmentSelect({ control, name, maxLength, text, readOnly, marked, onChange, onCommit }: TreatmentSelectProps) {
+export function TreatmentSelect({ control, name, maxLength, text, readOnly, marked, placeholder, onChange, onCommit }: TreatmentSelectProps) {
   const { options, readAgain } = useTreatmentOptions();
   const otherBox = useRef<HTMLInputElement>(null);
   // "Other" was just chosen: once the render that shows its box is on the page, the box takes the focus (once).
@@ -85,7 +87,7 @@ export function TreatmentSelect({ control, name, maxLength, text, readOnly, mark
         value={chosen?.id ?? ''}
         onChange={choose}
       >
-        <option value="">{options.status === 'loading' && chosen === null ? TREATMENT_LOADING : TREATMENT_PLACEHOLDER}</option>
+        <option value="">{options.status === 'loading' && chosen === null ? TREATMENT_LOADING : (placeholder ?? TREATMENT_PLACEHOLDER)}</option>
         {stored === null ? null : <option value={stored.id}>{options.status === 'ready' ? treatmentNoLongerListed(stored.text) : stored.text}</option>}
         {listed.map((option) => (
           <option key={option.id} value={option.id}>

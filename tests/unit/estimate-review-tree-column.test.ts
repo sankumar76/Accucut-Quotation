@@ -68,8 +68,10 @@ describe('AQP-465: the parts tree is a column beside "How the total is built" fr
     expect(tag).toContain('gap-s-4 md:gap-s-5');
     expect(tag).toContain('min-[1024px]:items-start');
     expect(html.indexOf('aria-label="Totals"')).toBeLessThan(html.indexOf('data-review-columns'));
+    // AQP-488 (UX ruling 2026-11-27 section 3.8): "How the total is built" is above the two columns, and the columns are the tree and the inputs of the open row.
+    expect(html.indexOf('How the total is built')).toBeLessThan(html.indexOf('data-review-columns'));
     expect(html.indexOf('data-review-columns')).toBeLessThan(html.indexOf('data-review-tree'));
-    expect(html.indexOf('data-review-tree')).toBeLessThan(html.indexOf('How the total is built'));
+    expect(html.indexOf('data-review-tree')).toBeLessThan(html.indexOf('id="row-inputs"'));
   });
 
   it('makes the tree sticky below the top bar with a scroll of its own from 1024 px, and not a panel that folds away', async () => {
