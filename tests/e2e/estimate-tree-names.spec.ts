@@ -272,7 +272,15 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
         await page.mouse.move(centre.x, centre.y);
         expect(await layoutOf(page), `pointer over ${slNo}`).toEqual(idle);
         for (const button of await toolbarOf(page, slNo).getByRole('button').all()) {
-          await button.hover();
+          // The pointer goes to the button as a person's does (DL-447): a move to the centre of the button's box, read at once. `hover()` waits for the button to be the element under its centre and, with a toolbar that is
+          // not in view, retries for the whole 30 s without moving the pointer (run 45925520372); here a toolbar that is not in view is a failure that says where. Both checks are plain and immediate: no wait, no retry.
+          const box = defined(await button.boundingBox());
+          const where = `row ${slNo}, button box ${JSON.stringify(box)}, viewport ${JSON.stringify(page.viewportSize())}`;
+          expect(box.height, `the toolbar button is in view: ${where}`).toBeGreaterThan(1);
+          const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+          await page.mouse.move(point.x, point.y);
+          const onButton = await button.evaluate((element, at) => element.contains(document.elementFromPoint(at.x, at.y)), point);
+          expect(onButton, `the pointer is on the button: ${where}, point ${JSON.stringify(point)}`).toBe(true);
           expect(await layoutOf(page), `pointer over a button of ${slNo}`).toEqual(idle);
         }
         await rest(page);
@@ -383,6 +391,20 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
       else await tap(page, '1.1');
       await expect(toolbarOf(page, '1.1')).toBeVisible();
     };
+    // A press on a toolbar BUTTON (DL-441: this case presses buttons, the movement cases do not). The row is hovered and its toolbar waited for (a condition, not a time); then, with a mouse, the pointer is moved onto the button
+    // and pressed where the button is, through the row's own slot, so the row stays hovered. Playwright's own `hover()` and `click()` wait for the button to be the element under its centre and only then move the pointer: with a
+    // toolbar that went out of view under a pointer that did not move (the page scrolled, or the page was rebuilt by the development server) they retry for the whole 30 s and never move it. Runs 45924853824 and 45925520372.
+    const press = async (button: Locator): Promise<void> => {
+      if (!mouse) {
+        await button.click();
+        return;
+      }
+      await expect.poll(async () => (await button.boundingBox())?.height ?? 0, 'the button of a toolbar in view').toBeGreaterThan(1);
+      const box = defined(await button.boundingBox());
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.up();
+    };
     await open();
     laps.done('the first hover and the toolbar in view');
     const boxes = [];
@@ -408,10 +430,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     // a press on a toolbar BUTTON needs the row to be hovered when it lands. The movement cases do no such thing.
     await open();
     laps.done('the second hover');
-    // The pointer is put on the button itself (Playwright scrolls it into view first, if it needs to, and then moves the pointer onto it through the row's own slot, which keeps the row hovered), so the click that follows
-    // needs no scroll under a still pointer. Run 45924853824: with only the hover of the row, the click found the row's grid and not the button under its pointer, on both attempts.
-    await rowButton(page, 'Add under', '1.1').hover();
-    await rowButton(page, 'Add under', '1.1').click();
+    await press(rowButton(page, 'Add under', '1.1'));
     await expect(page.getByRole('menu')).toBeVisible();
     laps.done('the "+" menu opens');
     await expectStateAccessible(page, 'nav[aria-label="Parts tree"]');
@@ -422,8 +441,7 @@ test.describe('the parts tree: names, kinds and a toolbar that moves nothing', (
     // The delete dialog of the row. Keep it closes it, and nothing is deleted.
     await open();
     laps.done('the third hover');
-    await rowButton(page, 'Delete', '1.1').hover();
-    await rowButton(page, 'Delete', '1.1').click();
+    await press(rowButton(page, 'Delete', '1.1'));
     await expect(page.getByRole('alertdialog')).toBeVisible();
     laps.done('the delete dialog opens');
     await expectStateAccessible(page, '[role="alertdialog"]');
