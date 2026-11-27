@@ -6,6 +6,8 @@ import { createDisposableUser, E2E_ADMIN, useFreshAddress } from './support/auth
 import { controlIdFor } from '../../src/components/features/estimate-workspace/field-ids';
 import { calculateWithoutThePage, engineerWithEstimate, signInAs } from './support/calculated-estimate';
 import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
+import { ignoreThroughTheApi } from './support/ignored';
+import { control } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 import { expectLinkTarget, isTouchLayout } from './support/touch-link';
 
@@ -109,8 +111,8 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(treePanel(page)).toContainText("Each figure is that row's own BG. The count for the whole order (QTY per Assy) is shown beside it and is already included. The estimate total adds every row's BG.");
     await expect(page.getByText('Σ')).toHaveCount(0);
 
-    // AQP-488 (DEF-131 Stage 1; ruling 2026-11-27, RO-1, RO-6, RO-9, RO-10, RO-11, RO-14): each row's first line is a link to its inputs, the first row is open, and the block beside the tree is the Engineer's form read-only: a region
-    // named by its title, the Lead's notice, the row line with the row's own figure, no intro, no edit control, and nothing sent when a value is typed.
+    // AQP-488 (DEF-131; ruling 2026-11-27, RO-1, RO-9, RO-10, RO-11, RO-14, ED-1 to ED-3): each row's first line is a link to its inputs, the first row is open, and the block beside the tree is the Engineer's form, which a Lead can correct
+    // while the estimate is Prepared: a region named by its title, the notice of 4.2, the row line with the row's own figure, no intro and no Save draft or Calculate, and a value typed and left is saved and clears every figure.
     const open = treePanel(page).locator('a[aria-current="true"]');
     await expect(open).toHaveCount(1);
     await expect(open).toHaveAttribute('href', /\?row=1#row-inputs$/);
@@ -119,14 +121,11 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await expect(form).toBeVisible();
     await expect(inputs.locator('#part-form-title')).toContainText('1');
     await expect(form).toHaveAccessibleName(/^1/);
-    await expect(inputs).toContainText('Read-only. These are the values saved for this part.');
+    await expect(inputs).toContainText('You can correct inputs. Any change clears every calculated figure; press Recalculate to see them again.');
     await expect(inputs.locator('[data-row-line]')).toContainText(/^This row: ₹ [\d,]+\.\d{2} \(B[A-Z]\) · \$ ([\d,]+\.\d{2}|—) · € ([\d,]+\.\d{2}|—) · count [\d,.]+ nos/);
     await expect(inputs).not.toContainText('Every field is needed to Calculate');
-    await expect(inputs.getByRole('button')).toHaveCount(0);
-    const writes: string[] = [];
-    page.on('request', (request) => {
-      if (request.method() !== 'GET' && request.url().includes('/api/v1/')) writes.push(request.method());
-    });
+    // The Engineer's Save draft and Calculate are not on this form: the page's own Recalculate is the one way to calculate.
+    await expect(inputs.getByRole('button', { name: /^(Save draft|Calculate)$/ })).toHaveCount(0);
     // RO-3 (QLT-800-04): each value the part holds is the value shown, compared by field ID: the part is read as the Lead through the same route the form uses, and every box (a number, a text) shows what it holds. A number is
     // shown as SCR-05 shows it after saving (two decimals), so numbers are compared as numbers.
     const held = await page.evaluate(async (id) => {
@@ -145,42 +144,18 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     }
     expect(compared, 'boxes compared with what the part holds').toBeGreaterThan(3);
 
+    // ED-2, ED-3: a value typed and left is saved (a PATCH, 200), the figures are cleared once and the page is drawn again with focus where it was: the tiles read Cleared, and the one polite line says so.
     const length = form.getByRole('textbox', { name: /Length/ }).first();
-    const before = await length.inputValue();
-    await length.focus();
-    await page.keyboard.type('9');
+    await expect(length).toBeEnabled();
+    await expect(length).not.toHaveAttribute('aria-readonly', 'true');
+    const saved = page.waitForResponse((response) => response.request().method() === 'PATCH' && /\/nodes\/[^/]+\/inputs$/.test(response.url()));
+    await length.fill('123.45');
     await length.blur();
-    await expect(length).toHaveValue(before);
-    await expect(length).toHaveAttribute('aria-readonly', 'true');
-
-    // AQP-496 (DEF-138, DL-446): a read-only drop-down neither opens nor changes. By touch (360 and 768) it is tapped; with a mouse (1366) it is clicked and then given Space, Enter, the arrows, Alt+Down and a typed
-    // letter. Each must leave the value, raise no change event and open no list (`:open`, where the browser has it), and send nothing.
-    const selects = form.locator('select:not([disabled])');
-    const selectCount = await selects.count();
-    expect(selectCount, 'drop-downs in the read-only inputs').toBeGreaterThan(0);
-    await page.evaluate(() => document.addEventListener('change', () => document.documentElement.setAttribute('data-select-changed', ''), true));
-    // The `:open` check below proves nothing in a browser that does not know the selector (it would pass silently), so the browser is asked first.
-    expect(await page.evaluate(() => CSS.supports('selector(:open)')), 'the browser knows :open').toBe(true);
-    const touch = (page.viewportSize()?.width ?? 0) < 1024;
-    for (let index = 0; index < selectCount; index += 1) {
-      const select = selects.nth(index);
-      // QA's guard: a drop-down with one option has nothing to change to, so the "no change" checks below would test nothing.
-      expect(await select.locator('option').count(), `options of drop-down ${String(index + 1)}`).toBeGreaterThanOrEqual(2);
-      const kept = await select.inputValue();
-      if (touch) {
-        await select.tap();
-      } else {
-        await select.click();
-        for (const key of [' ', 'Enter', 'ArrowDown', 'ArrowUp', 'Alt+ArrowDown', 'a']) await page.keyboard.press(key);
-      }
-      await expect(select).toHaveValue(kept);
-      await expect(select).toHaveAttribute('aria-readonly', 'true');
-      // AQP-491 (DEF-138): it is drawn as the read-only boxes beside it are, dashed, so it does not look editable.
-      await expect(select).toHaveCSS('border-top-style', 'dashed');
-      expect(await select.evaluate((element) => { try { return element.matches(':open'); } catch { return false; } }), 'the list is not open').toBe(false);
-    }
-    await expect(page.locator('html')).not.toHaveAttribute('data-select-changed', '');
-    expect(writes).toEqual([]);
+    expect((await saved).status()).toBe(200);
+    await expect(length).toHaveValue('123.45');
+    await expect(tiles(page).getByText('Cleared', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Saved. Every calculated figure is cleared. Press Recalculate to see them again.' })).toHaveCount(1);
+    await expect(inputs).toContainText('You can correct inputs. Every calculated figure is already cleared; press Recalculate when you have finished.');
   });
 
   test('AC-3: "How the total is built" lists the row and ends with the total, which is the figure of the BL tile, under the example and the rounding sentence', async ({ page }, testInfo) => {
@@ -223,9 +198,12 @@ test.describe('AC-1, AC-2, AC-3: a calculated estimate, as a Lead', () => {
     await calculateWithoutThePage(page, owner);
     await openAsLead(page, testInfo, code, 'ADMIN');
     await expect(tiles(page)).toContainText('File cell BL2');
-    // The Admin sees the same inputs block, read-only (AQP-488).
+    // The Admin sees the same inputs block as the Lead and may correct it while the estimate is Prepared (FR-116; ux ruling lead-admin-edit-inputs, UD-1 brought back): the field takes input and the block does not say "Read-only".
     await expect(page.locator('#row-inputs form[data-part-form]')).toBeVisible();
-    await expect(page.locator('#row-inputs')).toContainText('Read-only.');
+    const field = control(page, 'J');
+    await expect(field).toBeEnabled();
+    await expect(field).not.toHaveAttribute('aria-readonly', 'true');
+    await expect(page.locator('#row-inputs')).not.toContainText('Read-only');
   });
 });
 
@@ -270,11 +248,32 @@ test.describe('AC-6: not calculated', () => {
     await expect(treePanel(page).locator('a[aria-current="true"]')).toHaveAttribute('href', /\?row=2#row-inputs$/);
     await expect(inputs.locator('#part-form-title')).toContainText('2');
     await expect(page.locator('#part-form-title')).toBeFocused();
-    await expect(inputs.getByRole('status').filter({ hasText: /^Showing the inputs of 2 .* Read-only\.$/ })).toHaveCount(1);
+    await expect(inputs.getByRole('status').filter({ hasText: /^Showing the inputs of 2 [^.]*\.$/ })).toHaveCount(1);
+    // A Draft can be corrected by a Lead, so the line does not say "Read-only" (DEF-131 stage 2).
+    await expect(inputs.getByRole('status').filter({ hasText: 'Read-only' })).toHaveCount(0);
     if ((page.viewportSize()?.width ?? 0) < 1024) await expect(treePanel(page)).not.toHaveAttribute('open', '');
     else await expect(treePanel(page)).toHaveAttribute('open', '');
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
     await expectNoAxeViolations(page);
+
+    // ED-17 (DEF-131 stage 2): a value the rule refuses is told under its field in the Engineer's words (the icon, the text, `aria-invalid`, `aria-describedby`), what was typed stays, and axe still finds nothing.
+    const length = control(page, 'J');
+    await expect(length).toBeEnabled();
+    await length.fill('-5');
+    await length.blur();
+    await expect(length).toHaveAttribute('aria-invalid', 'true');
+    await expect(inputs.getByText('Enter 0 or more, with up to 2 decimals.')).toBeVisible();
+    await expect(length).toHaveValue('-5');
+    await expectNoAxeViolations(page);
+
+    // ED-12: the estimate is ignored in another window while this page is open. The next save is refused with the 409, the block turns read-only in the words of the Ignored layer, and what was typed stays on screen.
+    await length.fill('12.5');
+    expect(await ignoreThroughTheApi(page, owner.id, 'Not taken forward, an invented reason.')).toBe(200);
+    await length.blur();
+    await expect(inputs).toContainText('Read-only while this RFQ is ignored. Restore it to change an input.');
+    // The box shows the value as the form shows a value that was left (two decimals).
+    await expect(length).toHaveValue('12.50');
+    await expect(length).toHaveAttribute('aria-readonly', 'true');
   });
 });
 
@@ -295,7 +294,7 @@ test.describe('AC-5 (NFR-002): an Engineer at the same address', () => {
       expect(response?.status()).toBe(200);
       await expect(page.locator('#row-inputs')).toHaveCount(0);
       await expect(page.getByText('This row:')).toHaveCount(0);
-      await expect(page.getByText('Read-only. These are the values')).toHaveCount(0);
+      await expect(page.getByText('You can correct inputs.')).toHaveCount(0);
       await expect(page.locator('a[href*="row="]')).toHaveCount(0);
       await expect(page.getByText(/This row: ₹/)).toHaveCount(0);
     }

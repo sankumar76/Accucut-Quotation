@@ -11,6 +11,12 @@ export interface PartReview {
   readonly notice: string;
   /** What is said once, politely, after a row is chosen: "Showing the inputs of 1.4 Top cover. Read-only." (a text the server wrote). */
   readonly showing: string;
+  /** The figures are current as the page was drawn (DEF-131 stage 2): a save that changes an input then clears them, and the island asks the page to be drawn again, once. */
+  readonly figuresCurrent: boolean;
+  /** A save changed the part (DEF-131 stage 2): the island asks the page to be drawn again when that took the figures from current to cleared. Only the Lead's and the Admin's editable form gives one (`ReviewForm`, client code: the server hands none). */
+  readonly onWrote?: (() => void) | undefined;
+  /** A save was refused because the estimate was approved or taken out of the editable states elsewhere (ED-12): the form turns read-only. Given by `ReviewForm` alone. */
+  readonly onLocked?: (() => void) | undefined;
 }
 
 /** The review look as the fields see it: what the server handed in, and whether a row was chosen after the page was drawn (the first paint steals no focus and says nothing). */

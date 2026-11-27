@@ -26,6 +26,7 @@ const state = {
   failAfterHold: false,
   refuseNext: false,
   ignoredNext: false,
+  lockedNext: null as string | null,
   churn: false,
 };
 
@@ -44,6 +45,7 @@ export const partServer = {
     state.failAfterHold = false;
     state.refuseNext = false;
     state.ignoredNext = false;
+    state.lockedNext = null;
     state.churn = false;
   },
   /** The nth save since `reset` (1 is the first) waits until the returned function is called. */
@@ -67,6 +69,10 @@ export const partServer = {
   /** The next save is refused 409 `ESTIMATE_IGNORED`: a Lead or an Admin ignored the estimate while the person worked (CR-01 item 7D). Nothing is stored. */
   ignoreNextSave(): void {
     state.ignoredNext = true;
+  },
+  /** The next save is refused 409 with this code (`ESTIMATE_APPROVED_IS_LOCKED` or `ESTIMATE_NOT_EDITABLE`): the estimate was approved, or taken out of the editable states, while a Lead or an Admin typed (ED-12). Nothing is stored. */
+  lockNextSave(code: string): void {
+    state.lockedNext = code;
   },
   /** While on, somebody else saves just before every save of this tab arrives, so every save is refused with 409. */
   churn(on: boolean): void {
@@ -108,6 +114,11 @@ export const partServer = {
     if (state.ignoredNext) {
       state.ignoredNext = false;
       return { status: 'refused', httpStatus: 409, code: 'ESTIMATE_IGNORED', title: 'This estimate is ignored. Restore it first.', fields: {}, body: {} };
+    }
+    if (state.lockedNext !== null) {
+      const code = state.lockedNext;
+      state.lockedNext = null;
+      return { status: 'refused', httpStatus: 409, code, title: 'This estimate can no longer be changed.', fields: {}, body: {} };
     }
     if (state.refuseNext) {
       state.refuseNext = false;

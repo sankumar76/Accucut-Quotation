@@ -177,22 +177,29 @@ export const DOWNLOAD_NOT_CALCULATED_REASON ='Calculate or Recalculate first. Th
 export const calculatedLine = (at: string, configurationNumber: number): string => `Calculated ${at} · configuration version ${configurationNumber}`;
 
 /**
- * The block of one row's inputs under the tiles (AQP-488, DEF-131 Stage 1; UX ruling `lead-admin-edit-inputs-2026-11-27.md` 3.5). The words of its one notice by the estimate's status, the Ignored layer first (it wins
- * over the status everywhere on this page), and the row line (3.3). Stage 2 replaces the first two and extends the last three (4.2).
+ * The block of one row's inputs under the tiles (AQP-488, DEF-131; UX ruling `lead-admin-edit-inputs-2026-11-27.md` 3.5 for the read-only words, 4.2 for the edit words). The words of its one notice by the estimate's
+ * status and the state of its figures, the Ignored layer first (it wins over the status everywhere on this page). A Draft or a Prepared estimate that is not ignored can be corrected by a Lead or an Admin
+ * (`canEditInputs`), so its notice says so; Approved, Quoted and ignored ones are read-only and say what to do to change an input.
  */
-export const INPUTS_NOTICE_DRAFT = 'Read-only. These are the values saved for this part. The Engineer may still be changing them: reload the page to see the latest.';
-export const INPUTS_NOTICE_PREPARED = 'Read-only. These are the values saved for this part.';
-export const INPUTS_NOTICE_APPROVED = 'Read-only while approved. These are the values the price was approved with.';
-export const INPUTS_NOTICE_QUOTED = 'Read-only while quoted. These are the values the price was approved with.';
-export const INPUTS_NOTICE_IGNORED = 'Read-only while this RFQ is ignored.';
-export const inputsNotice = (status: EstimateStatus, ignored: boolean): string => {
+export const INPUTS_NOTICE_EDIT = 'You can correct inputs.';
+export const INPUTS_NOTICE_EDIT_CURRENT = ' Any change clears every calculated figure; press Recalculate to see them again.';
+export const INPUTS_NOTICE_EDIT_CLEARED = ' Every calculated figure is already cleared; press Recalculate when you have finished.';
+/** A Draft may still be worked on by its Engineer. */
+export const INPUTS_NOTICE_EDIT_DRAFT = ' The Engineer can change this estimate too.';
+export const INPUTS_NOTICE_APPROVED = 'Read-only while approved. Unlock the estimate to change an input.';
+export const INPUTS_NOTICE_QUOTED = 'Read-only while quoted. Unlock the estimate to change an input.';
+export const INPUTS_NOTICE_IGNORED = 'Read-only while this RFQ is ignored. Restore it to change an input.';
+/** The state of the figures the notice depends on: the costs view's own (`current`, `out-of-date` for cleared, `none` for never calculated). */
+export type InputsFigures = 'current' | 'out-of-date' | 'none';
+export const inputsNotice = (status: EstimateStatus, ignored: boolean, figures: InputsFigures): string => {
   if (ignored) return INPUTS_NOTICE_IGNORED;
-  if (status === 'DRAFT') return INPUTS_NOTICE_DRAFT;
-  if (status === 'PREPARED') return INPUTS_NOTICE_PREPARED;
-  return status === 'QUOTED' ? INPUTS_NOTICE_QUOTED : INPUTS_NOTICE_APPROVED;
+  if (status === 'QUOTED') return INPUTS_NOTICE_QUOTED;
+  if (status === 'APPROVED') return INPUTS_NOTICE_APPROVED;
+  const state = figures === 'current' ? INPUTS_NOTICE_EDIT_CURRENT : figures === 'out-of-date' ? INPUTS_NOTICE_EDIT_CLEARED : '';
+  return `${INPUTS_NOTICE_EDIT}${state}${status === 'DRAFT' ? INPUTS_NOTICE_EDIT_DRAFT : ''}`;
 };
-/** Said once, politely, after a row is chosen (RO-2). */
-export const showingInputs = (slNo: string, name: string): string => `Showing the inputs of ${slNo} ${name}. Read-only.`;
+/** Said once, politely, after a row is chosen (RO-2); an editable block does not say "Read-only". */
+export const showingInputs = (slNo: string, name: string, editable = false): string => `Showing the inputs of ${slNo} ${name}.${editable ? '' : ' Read-only.'}`;
 /** The row line under the form's title (3.3): the row's own figure and its count, the only Lead-only output beside the inputs. */
 export const ROW_LINE_PREFIX = 'This row:';
 export const rowLineFigures = (price: string, priceLetter: string, usd: string, eur: string): string => `${price} (${priceLetter}) · $ ${usd} · € ${eur}`;

@@ -4,11 +4,14 @@ import { EstimateReview } from '@/components/features/estimate-review/estimate-r
 import type { WorkspaceHeaderView } from '@/components/features/estimate-workspace/workspace-header';
 import { formatIst } from '@/lib/time';
 import type { DownloadChipData } from '@/lib/export/download-marker-view';
-import { isAppError } from '@/lib/errors';
+import { isAppError, NotFoundError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { selectedRow } from '@/components/features/estimate-review/selected-row';
+import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
 import { getDownloadMarkerService, getEstimateReviewService, getEstimateService, getMastersService } from '@/server/composition';
 import type { EstimateViewer } from '@/server/services/estimate-service';
+
+import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
 
 import { readListBodies, readPartFormBodies, seedOf } from './part-form-seed';
 
@@ -55,12 +58,35 @@ async function markerOf(viewer: EstimateViewer, estimateId: string): Promise<Dow
   }
 }
 
+/**
+ * The revision of the part whose inputs the block shows, for a Lead or an Admin who may correct them (DEF-131 stage 2): a save is sent with the revision the person saw, and the review's rows carry no revision. One read of
+ * that part, only while the estimate is editable. A part that is gone (deleted meanwhile) gives 0, and the first save then meets the server's own answer and the form's notice. **Any other fault is a fault** (QLT-806-06):
+ * it is not swallowed into a 0, which would show a database error to the Lead as a conflict of their own save; it goes on, and the page shows its load-error wording (the route's error boundary).
+ */
+export async function revisionOf(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<number> {
+  try {
+    return (await getEstimateService().getNode(viewer, estimateId, nodeId)).revision;
+  } catch (error) {
+    if (error instanceof NotFoundError) return 0;
+    throw error;
+  }
+}
+
+/** The revision in the part's answer that the seed carries (`GET .../nodes/{id}` has `revision`), or `undefined` when there is no seed or the answer has none. */
+function revisionOfSeed(seed: PartFormSeed | undefined): number | undefined {
+  const part: unknown = seed?.part;
+  if (typeof part !== 'object' || part === null || !('revision' in part)) return undefined;
+  return typeof part.revision === 'number' ? part.revision : undefined;
+}
+
 export async function renderReview({ viewer, estimateId, header, customer, quoted, ignored, engineerName, deadlinePassed, row }: ReviewPageArgs): Promise<ReactElement> {
   // The two option lists do not depend on the row, so they are read beside the figures; the form's definition and the part's values are read for the row the page shows, in one call (`part-form-seed.ts`, DEF-141).
   const services = { estimates: getEstimateService(), masters: getMastersService() };
   const [costs, download, lists] = await Promise.all([getEstimateReviewService().getCosts(viewer, estimateId), markerOf(viewer, estimateId), readListBodies(services)]);
   const selected = selectedRow(costs.nodes, row);
   const seed = selected === null ? undefined : seedOf(estimateId, selected.id, lists, lists === null ? null : await readPartFormBodies(services, viewer, estimateId, selected.id));
+  // The revision a save is sent with is the one in the part's own answer, which the page has just read for the seed: no second service call. Only when there is no seed (a read failed) is it read on its own (`revisionOf`).
+  const selectedRevision = selected !== null && canEditInputs({ status: header.status, ignored: ignored !== null }, viewer.role) ? (revisionOfSeed(seed) ?? (await revisionOf(viewer, estimateId, selected.id))) : undefined;
   return (
     <EstimateReview
       header={header}
@@ -76,6 +102,7 @@ export async function renderReview({ viewer, estimateId, header, customer, quote
       deadlinePassed={deadlinePassed}
       row={row}
       seed={seed}
+      selectedRevision={selectedRevision}
     />
   );
 }

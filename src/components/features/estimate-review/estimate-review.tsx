@@ -10,14 +10,16 @@ import { rowNameOf } from '@/lib/estimates/row-name';
 import { TREE_COLUMN_LAYOUT } from '@/components/shared/tree-column-panel';
 import { WarningNotice } from '@/components/shared/warning-notice';
 import type { RoleName } from '@/lib/auth/roles';
+import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
 import { isLocked, type EstimateStatus } from '@/lib/estimate/state-machine';
 import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
 import type { DownloadChipData } from '@/lib/export/download-marker-view';
 import { formatIst } from '@/lib/time';
 import type { CostsView } from '@/server/views/schemas/costs';
 
-import { PartForm } from '../estimate-workspace/part-form';
 import { PartHead } from '../estimate-workspace/part-head';
+import { LazyReviewForm } from '../estimate-workspace/lazy-review-form';
+import { PartForm } from '../estimate-workspace/part-form';
 import type { WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
 import { BuildTable } from './build-table';
@@ -87,6 +89,8 @@ export interface EstimateReviewProps {
   readonly deadlinePassed: boolean;
   /** The Sl. No of the row whose inputs are shown, from the address (`?row=`): absent or not in the tree, the first row (AQP-488, DEF-131 Stage 1). */
   readonly row?: string | undefined;
+  /** The revision of the selected part as the server reads it now, for a save that a Lead or an Admin makes (DEF-131 stage 2): the form sends it with each change. Absent while the block is read-only. */
+  readonly selectedRevision?: number | undefined;
   /** The part form's data for the row shown, read by the server page and handed over as props (DEF-141): the form then reads nothing from the server to start. Absent when a read failed: the form reads it itself. */
   readonly seed?: PartFormSeed | undefined;
 }
@@ -119,15 +123,29 @@ function QuotedNotice({ quoted, customerName }: { readonly quoted: EstimateRevie
 /** The status under the Ignored layer, which Restore gives back. A Quoted estimate cannot be ignored (the database refuses it), so Approved, which is closed too, stands for the impossible case and the page still draws. */
 const underlyingOf = (status: EstimateStatus): 'DRAFT' | 'PREPARED' | 'APPROVED' => (status === 'QUOTED' ? 'APPROVED' : status);
 
-export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole, download, quoted, ignored, engineerName, deadlinePassed, row, seed }: EstimateReviewProps) {
+export function EstimateReview({ header, estimateId, customer, costs, calculatedAt, viewerRole, download, quoted, ignored, engineerName, deadlinePassed, row, selectedRevision, seed }: EstimateReviewProps) {
   const { state, letters, nodes, totals } = costs;
   const selected = selectedRow(nodes, row);
   // The rows as the part form's head knows them: where each sits, its number, its kind and its name, and **no figure** (the tree's rows reach the browser only so).
   const partItems = nodes.map(({ id, parentId, slNo, nodeKind, name }) => ({ id, parentId, slNo, nodeKind, label: name, completeness: 'EMPTY' as const, revision: 0 }));
   const isIgnored = ignored !== null;
+  // A Lead or an Admin corrects the inputs of a Draft or a Prepared estimate that is not ignored: the one rule the server asks again under the row lock (`canEditInputs`, DEF-131 stage 2), asked with the viewer's real role.
+  const editable = canEditInputs({ status: header.status, ignored: isIgnored }, viewerRole);
   // The rows of the calculation's quantity warning, which the costs view holds only while the figures are current (STORY-06.10 AC-3, AC-4).
   const warned = warnedNodeIds(state === 'current' ? costs.warning : null);
   const rowLine = selected === null ? null : <ReviewRowLine code={header.code} node={selected} state={state} letters={letters} warned={warned.has(selected.id)} />;
+  // The inputs block of the open row, for the plain form and for the shell of the editable one: only what a server can send (ids, texts and numbers, no function and no figure).
+  const formProps =
+    selected === null
+      ? null
+      : {
+          estimateId,
+          part: { id: selected.id, slNo: selected.slNo, revision: selectedRevision ?? 0 },
+          editable,
+          seed,
+          nodes: partItems,
+          review: { notice: inputsNotice(header.status, isIgnored, state), showing: showingInputs(selected.slNo, rowNameOf(selected.name, nodeKindLabel(selected, nodes)), editable), figuresCurrent: state === 'current' },
+        };
   // BO from the approvals row, in every state of the figures (AC-9); its time in IST.
   const approval: ApprovedTileView | null =
     costs.approval === null
@@ -196,23 +214,14 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
       <div data-review-columns="" className={TREE_COLUMN_LAYOUT}>
         <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} selectedSlNo={selected === null ? null : selected.slNo} />
-        {selected === null ? null : (
+        {selected === null || formProps === null ? null : (
           // The Engineer's own form, read-only (the same `PartForm`); nothing handed to it holds a figure: the rows are mapped down to where each sits, its number, its kind and its name, and the row line is drawn here (AQP-488).
           <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">
             {/* The row's eyebrow, title and figure line are drawn here, on the server, so they are in the first paint whatever the form is doing; the form under them is labelled by the title (UX ruling 3.6, 3.7). */}
             <PartHead partId={selected.id} slNo={selected.slNo} nodes={partItems} titleId="part-form-title" titleRef={null} />
             {rowLine}
-            <PartForm
-              estimateId={estimateId}
-              part={{ id: selected.id, slNo: selected.slNo, revision: 0 }}
-              editable={false}
-              seed={seed}
-              nodes={partItems}
-              review={{
-                notice: inputsNotice(header.status, isIgnored),
-                showing: showingInputs(selected.slNo, rowNameOf(selected.name, nodeKindLabel(selected, nodes))),
-              }}
-            />
+            {/* While the estimate can be corrected the editable form is fetched after the page is up (a shell, so the autosave and the leave guard are not in the first load); otherwise it is the plain read-only form. */}
+            {editable ? <LazyReviewForm {...formProps} /> : <PartForm {...formProps} />}
           </div>
         )}
       </div>
