@@ -6,7 +6,7 @@
 | Severity | **Sev-3 Medium** (master, DL-450 (B)); not a G8 blocker on its own (section 9 item 3) |
 | Priority | P3 (Jira Medium; labels `sev-3`, `test`, `near-budget`) |
 | Type | **Test** (a spec case that runs too close to its 30 s budget; no product fault shown; the DL-450 cause step may still find one) |
-| Status | **Open, 2026-11-27 (qa-engineer).** Fix **authorised now**: a test-only split on DL-430's terms (DL-449 (3)(c), DL-450 (3)); the orchestrator gives it to lane 3; merge by the end of **Wed 2 Dec 2026**, else the Bug goes to G8 open and is named in the recommendation. |
+| Status | **VERIFIED and CLOSED 2026-11-27 (qa-engineer, DL-460 as amended by DL-462 (D)): closed as caused by DEF-141, with no split: two qualifying pushes after #827, `635e7f7a` (21.8 s at shard 3's 1.43, no wave) and `7aa23c44` (17.7 s at 1.12), none against. Jira AQP-497 Done, GitHub #823 closed; #824 (the split) closes unmerged (the orchestrator).** Earlier status: **Open, 2026-11-27 (qa-engineer).** Fix **authorised now**: a test-only split on DL-430's terms (DL-449 (3)(c), DL-450 (3)); the orchestrator gives it to lane 3; merge by the end of **Wed 2 Dec 2026**, else the Bug goes to G8 open and is named in the recommendation. |
 | Jira / GitHub | [AQP-497](https://sankumar76.atlassian.net/browse/AQP-497) / [#823](https://github.com/sankumar76/Accucut-Quotation/issues/823) (labels bug, sev-3, ai-delivery; Jira also aiid-DEF-140, agent-qa-engineer, test, near-budget); linked 'relates to' AQP-478. Searched first: JQL on `aiid-DEF-140` and a GitHub search: nothing earlier. |
 | Found by / date | qa-engineer, 2026-11-27, from the run logs of the pushes and runs of record below; ruled by master in DL-450 |
 | Build / commit | `master` 1b30b17f and 73143e7e, #800's run of record 45922705204 (6aa4dfbd), #818's PR run 45926666383 (df95bf21), #812's run 45945851576 (dae95c35) |
@@ -47,3 +47,6 @@ Jira Bug AQP-497 and GitHub issue #823, created 2026-11-27 and cross-linked (Jir
 
 ## DL-460 re-read after #827: `635e7f7a` (qa-engineer, 2026-11-27; test plan 0.3.138)
 `approve-override.spec.ts:314` [desktop] read **21.8 s at shard 3's draw of 1.43** (no wave ruled: margin 0.12). Under 25 s, but the draw is above the 1.4 line, so it is not (a) (under 1.4); it is not (b) (25 s or more at 1.10 or less) or (c) as worded. **QA does not count it and asks master how to read it.** No qualifying push yet; no (b).
+
+## CLOSED as caused by DEF-141 (qa-engineer, 2026-11-27; test plan 0.3.139)
+**DL-462 (D) amended DL-460 (a): a reading under 25 s at ANY draw with NO wave ruled counts for closing; a reading inside a ruled wave stays inconclusive.** `approve-override.spec.ts:314` [desktop]: **push 1 `635e7f7a` 21.8 s at shard 3's 1.43 (margin 0.12, no wave): counts; push 2 `7aa23c44` 17.7 s at shard 3's 1.12 (no wave): counts; no reading under (b).** Two qualifying pushes: **DEF-140 closes as caused by DEF-141, with no split (DL-455 (4), DL-460); #824 closes unmerged.** Jira AQP-497: Done. GitHub #823: closed (completed).

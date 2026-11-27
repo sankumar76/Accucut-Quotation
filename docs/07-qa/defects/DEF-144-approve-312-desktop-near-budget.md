@@ -62,3 +62,6 @@ Jira Bug AQP-501 and GitHub issue #830, created 2026-11-27 and cross-linked (Jir
 
 ## DL-460 re-read after #827: `635e7f7a` (qa-engineer, 2026-11-27; test plan 0.3.138)
 `approve.spec.ts` 'locks the estimate' attempt 1: **[desktop] 25.8 s at shard 3's 1.43: (c) inconclusive (25 s or more at a draw above 1.10); [tablet] 19.3 s at shard 2's 1.32: (a); [mobile] 13.4 s at shard 1's 0.71: (a).** The push does not qualify (the [desktop] reading is (c)); no (b); no qualifying push yet.
+
+## DL-460 re-read, push 2 `7aa23c44` (qa-engineer, 2026-11-27; test plan 0.3.139)
+`approve.spec.ts` 'locks the estimate' attempt 1: **[desktop] 17.9 s at shard 3's 1.12, [tablet] 15.0 s at shard 2's 1.08, [mobile] 21.2 s at shard 1's 0.92: all under 25 s, no wave ruled: all (a); none (b): a QUALIFYING push (the first for DEF-144; `635e7f7a` had none, its [desktop] reading 25.8 s at 1.43 being (c)).** DEF-144 needs two qualifying pushes after #827; one more. If the end of Wed 2 Dec comes first with fewer than two and no (b): no split, the Bug stays open, the final regression reads the case, the G8 recommendation names it.
