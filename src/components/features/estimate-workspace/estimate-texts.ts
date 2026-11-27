@@ -6,21 +6,7 @@
 export const ESTIMATE_META_TITLE = 'Estimate';
 export const ESTIMATE_META_DESCRIPTION = 'Open an estimate and enter the inputs of its parts.';
 
-export const FOLDER_TITLE = 'Task folder';
 export const NOTES_FROM_PREFIX = 'Notes from';
-export const NO_LINK_NOTE = 'This path has no link. Select it and copy it yourself.';
-
-/**
- * The customer, its short name and the subject on the header (CR-01 item 6, AQP-390): read-only labelled text for every role. The customer is set when the task is assigned and changed only by a Lead or an Admin
- * on SCR-06, so there is no "choose the customer first" step on this page any more. The sentence for an estimate made before that, which has no customer, is one constant: a neutral line for the
- * Engineer (who cannot set one), for the ux-expert to confirm. The refusal of Calculate keeps its words until that ruling (AC-11).
- */
-export const IDENTITY_LABEL = 'Customer and subject';
-export const CUSTOMER_NAME_LABEL = 'Customer Name';
-export const CUSTOMER_SHORT_NAME_LABEL = 'Customer Short Name';
-/** What the short name shows for an estimate that has no customer: a value, so the label is never bare. */
-export const SHORT_NAME_NOT_SET = 'Not set';
-export const SUBJECT_LABEL = 'Subject (project name)';
 
 export const FAILED_BODY = 'Check your connection and try again. What you typed is kept.';
 export const TRY_AGAIN = 'Try again';
