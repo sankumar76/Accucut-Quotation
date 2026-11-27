@@ -18,8 +18,8 @@ export function CardHeader({ className, ...props }: ComponentProps<'div'>) {
 }
 
 export interface CardTitleProps extends ComponentProps<'h2'> {
-  /** The heading level to render; cards on a page sit under its single h1, so the default is h2. */
-  readonly as?: 'h2' | 'h3' | 'h4';
+  /** The heading level to render; cards on a page sit under its single h1, so the default is h2. A `div` is for a card that is not a heading's region: the part form's loading ghost, which has no heading element (DEF-145, PF-9.4). */
+  readonly as?: 'h2' | 'h3' | 'h4' | 'div';
 }
 
 export function CardTitle({ as: Heading = 'h2', className, ...props }: CardTitleProps) {

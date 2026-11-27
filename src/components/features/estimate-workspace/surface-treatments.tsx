@@ -13,7 +13,8 @@ import type { FormField } from '@/lib/estimates/form-client';
 import { textOf } from '@/lib/estimates/form-values';
 import { isFlagOn } from '@/lib/estimate/treatment-value';
 
-import { SURFACE_HINT, SURFACE_LABEL, SURFACE_NONE_SELECTED, surfaceSelectedText } from './surface-texts';
+import { TreatmentChips } from './surface-chips';
+import { SURFACE_HINT, SURFACE_LABEL, surfaceSelectedText } from './surface-texts';
 
 export interface SurfaceTreatmentsProps {
   /** The control's `id`: the trigger's, unique on the page. */
@@ -51,26 +52,7 @@ export function SurfaceTreatments({ id, fields, texts, editable, onToggle, revie
   const hintId = `${id}-hint`;
   const chosen = fields.filter((field) => isFlagOn(textOf(field, texts)));
 
-  if (review) {
-    return (
-      <div data-treatments="" className="flex min-w-0 flex-col gap-s-2">
-        <span id={labelId} className="text-label font-semibold text-ink-2">
-          {SURFACE_LABEL}
-        </span>
-        {chosen.length === 0 ? (
-          <p className="text-body text-ink-2 italic">{SURFACE_NONE_SELECTED}</p>
-        ) : (
-          <ul aria-labelledby={labelId} className="flex flex-wrap gap-s-2">
-            {chosen.map((field) => (
-              <li key={field.id} className="inline-flex items-center gap-s-1 rounded-md border border-border bg-surface-2 px-s-2 py-s-1 text-label text-ink">
-                {field.label} <ColumnTag letter={field.letter} kind="input" /> = 1
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    );
-  }
+  if (review) return <TreatmentChips fields={fields} texts={texts} marker={{ 'data-treatments': '' }} labelId={labelId} />;
 
   return (
     <div data-treatments="" className="flex min-w-0 flex-col gap-s-2">

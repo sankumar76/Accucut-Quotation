@@ -1,5 +1,6 @@
+import { PROGRESS_BAR_WIDTH, PROGRESS_ROW } from '@/components/shared/form-layout';
 import { Progress } from '@/components/ui/progress';
-import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/cn';
 import type { SectionProgress } from '@/lib/estimates/form-values';
 
 import { inputsProgressLabel, inputsProgressText } from './estimate-texts';
@@ -20,15 +21,10 @@ export function PartProgress({ slNo, counts }: PartProgressProps) {
   if (counts.total === 0) return null;
   const text = inputsProgressText(counts.complete, counts.total);
   return (
-    <div data-part-progress="" className="flex min-w-0 flex-wrap items-center gap-x-s-3 gap-y-s-1">
+    <div data-part-progress="" className={PROGRESS_ROW}>
       {/* A short black bar (160 px) with its words beside it, as in the SCR-05 mock-up (DEF-097): the fill is the dark navigation ink, not the red of the actions. */}
-      <Progress value={counts.complete} max={counts.total} aria-label={inputsProgressLabel(slNo)} getValueLabel={() => text} className="w-[10rem] shrink-0 [&_[data-slot=progress-indicator]]:bg-nav" />
+      <Progress value={counts.complete} max={counts.total} aria-label={inputsProgressLabel(slNo)} getValueLabel={() => text} className={cn(PROGRESS_BAR_WIDTH, '[&_[data-slot=progress-indicator]]:bg-nav')} />
       <p className="text-label text-ink-2">{text}</p>
     </div>
   );
-}
-
-/** The completion line while the form loads: a block of the line's height, as the cards show one (STORY-05.11 AC-7). */
-export function PartProgressSkeleton() {
-  return <Skeleton className="h-s-6" />;
 }

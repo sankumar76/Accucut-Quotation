@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from 'react';
 
 import { PartsTreeList } from '@/components/shared/parts-tree-list';
 import { TreeLegend } from '@/components/shared/tree-legend';
@@ -64,9 +64,11 @@ export interface ReviewTreeEditorProps {
   readonly selectedRevision: number;
   /** What the page read for the open row (DEF-141): the form's data and the parts tree. The island starts from it and reads none of it again: the form reuses the data the server drew it with, and the tree is not read until a change or a retry asks. */
   readonly seed?: PartFormSeed | undefined;
+  /** The form's loading ghost (DEF-145, PF-6), **drawn by the page on the server** and handed in as an element: the form of the first row shows it while its code and values arrive, in the place the form takes. Absent when the seed did not attach. */
+  readonly ghost?: ReactNode;
 }
 
-export function ReviewTreeEditor({ estimateId, code, status, state, letters, nodes, warned, selectedSlNo, selectedRevision, seed }: ReviewTreeEditorProps) {
+export function ReviewTreeEditor({ estimateId, code, status, state, letters, nodes, warned, selectedSlNo, selectedRevision, seed, ghost }: ReviewTreeEditorProps) {
   const router = useRouter();
   const [, startRefresh] = useTransition();
   const refresh = useCallback((): void => startRefresh(() => router.refresh()), [router]);
@@ -110,6 +112,11 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
   // The open row: the tree's once it is read, and until then the one that was chosen among the page's rows (the first paint draws those).
   const shown = tree.selected ?? items.find((item) => item.id === tree.selectedId) ?? items.find((item) => item.id === first?.id) ?? items[0] ?? null;
   const selectedId = shown?.id ?? null;
+  // The page's seed is the first row's data **as it was drawn**. Once another row is shown it is dropped for good: that row opened again is read from the server (what was saved, with its revision), never from the snapshot, which
+  // would show the values from before the edit and send the next save with a stale revision (DL-470 (3)). Worked out during the render, as the open row is below.
+  const [seedKept, setSeedKept] = useState(true);
+  if (seedKept && seed !== undefined && shown !== null && shown.id !== seed.partId) setSeedKept(false);
+  const formSeed = seedKept ? seed : undefined;
   // The row last chosen by a press on the tree: only then does the form take the focus and the tree fold under 1024 px (a row just added or the neighbour after a delete is not a choice, `PartReview.byPress`).
   const [pressedId, setPressedId] = useState<string | null>(null);
   const choose = (id: string): void => {
@@ -178,7 +185,8 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
             estimateId={estimateId}
             part={{ id: shown.id, slNo: shown.slNo, revision: shown.revision }}
             editable
-            seed={seed}
+            seed={formSeed}
+            ghost={ghost}
             nodes={items}
             missing={missingFields}
             onSaved={(saved) => {

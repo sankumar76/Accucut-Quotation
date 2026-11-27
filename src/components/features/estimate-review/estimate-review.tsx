@@ -20,6 +20,7 @@ import type { CostsView } from '@/server/views/schemas/costs';
 
 import { ReviewEditShell } from '../estimate-review-edit/review-edit-shell';
 import { PartHead } from '../estimate-workspace/part-head';
+import { ghostOf } from '../estimate-workspace/part-form-ghost';
 import { PartForm } from '../estimate-workspace/part-form';
 import type { WorkspaceHeaderView } from '../estimate-workspace/workspace-header';
 
@@ -138,6 +139,11 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
   // The rows of the calculation's quantity warning, which the costs view holds only while the figures are current (STORY-06.10 AC-3, AC-4).
   const warned = warnedNodeIds(state === 'current' ? costs.warning : null);
   const rowLine = selected === null ? null : <ReviewRowLine code={header.code} node={selected} state={state} letters={letters} warned={warned.has(selected.id)} />;
+  // The loading ghosts of the form (DEF-145, PF-6), drawn here on the server from the definition and the part the seed holds: the form without its values, in its own cards, so a form replaces it in the same place.
+  // The read-only form of the first paint (below) shows its own, as a form that cannot change the part; the editing island shows one for the page's real `editable` while its form's code and values arrive. None when the seed did not attach.
+  const notice = inputsNotice(header.status, isIgnored, state);
+  const serverGhost = seed === undefined ? undefined : ghostOf({ form: seed.form, part: seed.part, notice, head: 'lead', editable: false });
+  const islandGhost = seed === undefined ? undefined : ghostOf({ form: seed.form, part: seed.part, notice, head: 'lead', editable });
   // The two columns of the review as the server draws them: the parts tree (read-only, with the mark of an editable one) and the open row's inputs. For an editable estimate the island takes their place once it is up.
   const columns = (
     <>
@@ -153,6 +159,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
             part={{ id: selected.id, slNo: selected.slNo, revision: selectedRevision ?? 0 }}
             editable={false}
             seed={seed}
+            ghost={serverGhost}
             nodes={partItems}
             review={{
               notice: inputsNotice(header.status, isIgnored, state),
@@ -245,6 +252,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
             selectedSlNo={selected === null ? null : selected.slNo}
             selectedRevision={selectedRevision ?? 0}
             seed={seed}
+            ghost={islandGhost}
           >
             {columns}
           </ReviewEditShell>
