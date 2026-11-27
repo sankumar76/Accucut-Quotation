@@ -85,7 +85,7 @@ const props = (over: Partial<PartFieldsProps> = {}): PartFieldsProps => ({
   ...over,
 });
 
-const REVIEW = { notice: 'Read-only. These are the values saved for this part.', showing: 'Showing the inputs of 1.4 Top cover. Read-only.', chosen: false };
+const REVIEW = { notice: 'Read-only. These are the values saved for this part.', showing: 'Showing the inputs of 1.4 Top cover. Read-only.', figuresCurrent: false, chosen: false };
 const text = (html: string): string => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 const render = (over: Partial<PartFieldsProps> = {}): string => renderToStaticMarkup(createElement(PartFields, props(over)));
 

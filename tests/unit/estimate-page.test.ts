@@ -304,6 +304,30 @@ describe('DEF-141 (DL-455): the Lead\'s review hands the part form its data as p
     treatments.mockRestore();
   });
 
+  it.each(['LEAD', 'ADMIN'] as const)('as %s the revision a save is sent with comes from the part answer the seed carries: no second read of the part (DEF-131 stage 2)', async (role) => {
+    harness.signInAs(role);
+    const node = vi.spyOn(harness.estimateService, 'getNode');
+    const combined = vi.spyOn(harness.estimateService, 'getPartForm');
+    const own = await props(CODE);
+    expect(own['selectedRevision']).toBe(defined(harness.estimateWorld.nodes[0]).revision);
+    expect(combined).toHaveBeenCalledTimes(1);
+    expect(node).not.toHaveBeenCalled();
+    node.mockRestore();
+    combined.mockRestore();
+  });
+
+  it('with no seed (a read failed) the revision is read on its own, and a fault there is not turned into a revision of 0', async () => {
+    harness.signInAs('LEAD');
+    const broken = vi.spyOn(harness.estimateService, 'getPartForm').mockRejectedValue(new Error('invented fault'));
+    const node = vi.spyOn(harness.estimateService, 'getNode');
+    expect((await props(CODE))['selectedRevision']).toBe(defined(harness.estimateWorld.nodes[0]).revision);
+    expect(node).toHaveBeenCalledTimes(1);
+    node.mockRejectedValue(new Error('invented database fault'));
+    await expect(props(CODE)).rejects.toThrow('invented database fault');
+    broken.mockRestore();
+    node.mockRestore();
+  });
+
   it('a fault in a read gives the page no seed, so the form reads from the server as before, and the page still draws', async () => {
     harness.signInAs('LEAD');
     const broken = vi.spyOn(harness.estimateService, 'getPartForm').mockRejectedValue(new Error('invented fault'));

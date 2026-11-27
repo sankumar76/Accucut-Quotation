@@ -136,7 +136,11 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
     onChanged: onChanged ?? noop,
     onNamed: onNamed ?? noop,
     onServerIgnored: onServerIgnored ?? noop,
-    onWrote,
+    onLocked: review?.onLocked,
+    onWrote: (at) => {
+      onWrote(at);
+      review?.onWrote?.();
+    },
     gate: gate ?? ownGate,
     seed,
   });
@@ -198,7 +202,8 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
           {saveStatusText(lastSavedAt === null ? NOT_SAVED_YET : lastSavedText(formatIst(new Date(lastSavedAt))), editable, values.autosaveFailedAt)}
         </p>
       </div>
-      {editable ? null : <Notice tone="info">{review === undefined ? FORM_LOCKED : review.notice}</Notice>}
+      {/* The review's block always says where it stands (it is editable only while the estimate is a Draft or Prepared one, and its words say so); the Engineer's form speaks only when it is locked. */}
+      {review !== undefined ? <Notice tone="info">{review.notice}</Notice> : editable ? null : <Notice tone="info">{FORM_LOCKED}</Notice>}
       {problem?.kind !== 'conflict' ? null : (
         // The part was changed somewhere else (STORY-05.08 AC-5, AC-6): what the person typed is kept under each marked field, and they choose. Nothing is sent until they do.
         <Notice tone="danger" title={CONFLICT_TITLE}>

@@ -118,20 +118,19 @@ describe('RO-1, RO-2: the tree rows are links to the row\'s inputs', () => {
   });
 });
 
-describe('RO-9: the notice of the block', () => {
+describe('RO-9: the notice of the block (the words of stage 2, the edit tests are review-edit-wiring.test.ts)', () => {
   it.each([
-    ['DRAFT', false, 'Read-only. These are the values saved for this part. The Engineer may still be changing them: reload the page to see the latest.'],
-    ['PREPARED', false, 'Read-only. These are the values saved for this part.'],
-    ['APPROVED', false, 'Read-only while approved. These are the values the price was approved with.'],
-    ['QUOTED', false, 'Read-only while quoted. These are the values the price was approved with.'],
-    ['DRAFT', true, 'Read-only while this RFQ is ignored.'],
-    ['APPROVED', true, 'Read-only while this RFQ is ignored.'],
+    ['APPROVED', false, 'Read-only while approved. Unlock the estimate to change an input.'],
+    ['QUOTED', false, 'Read-only while quoted. Unlock the estimate to change an input.'],
+    ['DRAFT', true, 'Read-only while this RFQ is ignored. Restore it to change an input.'],
+    ['APPROVED', true, 'Read-only while this RFQ is ignored. Restore it to change an input.'],
   ] as const)('%s (ignored %s)', (status, ignored, words) => {
-    expect(inputsNotice(status, ignored)).toBe(words);
+    expect(inputsNotice(status, ignored, 'current')).toBe(words);
   });
 
-  it('says what a choice shows, for the status line', () => {
+  it('says what a choice shows, for the status line: read-only while it is, and without the word while it can be corrected', () => {
     expect(showingInputs('1.4', 'Top cover')).toBe('Showing the inputs of 1.4 Top cover. Read-only.');
+    expect(showingInputs('1.4', 'Top cover', true)).toBe('Showing the inputs of 1.4 Top cover.');
   });
 });
 
