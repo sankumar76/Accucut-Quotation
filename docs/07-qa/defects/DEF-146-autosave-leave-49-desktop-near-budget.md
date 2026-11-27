@@ -6,7 +6,7 @@
 | Severity | **Sev-3 (DL-267's Bug line); not a G8 blocker on its own** |
 | Priority | P3 (Jira Medium; labels `sev-3`, `test`, `near-budget`) |
 | Type | **Test** (a spec case that runs too close to its 30 s budget) |
-| Status | **Open, 2026-11-27. DL-466: the DL-430 split is AUTHORISED for lane 3 (no step at #806: QA's step check below); merge on a fully green run at 0 behind by the end of Wed 2 Dec, else G8 open, named.** |
+| Status | **VERIFIED and CLOSED 2026-11-27 (qa-engineer, on `f7b20eff`, the squash of #835): the split's three cases pass attempt 1 at all three widths at normal draws, worst 6.0 s against the 25 s line. Jira AQP-503 Done, GitHub #834 closed.** Earlier status: **Open, 2026-11-27. DL-466: the DL-430 split is AUTHORISED for lane 3 (no step at #806: QA's step check below); merge on a fully green run at 0 behind by the end of Wed 2 Dec, else G8 open, named.** |
 | Jira / GitHub | [AQP-503](https://sankumar76.atlassian.net/browse/AQP-503) / [#834](https://github.com/sankumar76/Accucut-Quotation/issues/834) (labels bug, sev-3, ai-delivery; Jira also aiid-DEF-146, agent-qa-engineer, test, near-budget). Searched first: JQL on `aiid-DEF-146` and 'autosave-leave': no earlier Bug for this case. |
 | Found by / date | qa-engineer, 2026-11-27, counting the logs since #800 (the case went on the near-budget watch with `d35ad821`, test plan 0.3.127) |
 | Build / commit | `master` `60ca5a08` (CI 45998716995), shard 3, [desktop]; the logs listed below |
@@ -27,9 +27,9 @@ A test-only split on DL-430's terms: every assertion kept, in the original order
 ## Fix & Verification  _(developer / qa-engineer)_
 | Step | By | Date | Ref |
 |------|----|------|-----|
-| Master's ruling: authorise the split or hold | master | | |
-| Split PR | developer | | |
-| Verified | qa-engineer | | |
+| Master's ruling: authorise the split or hold | master | 2026-11-27 | DL-466 (authorised, no step at #806) |
+| Split PR | developer (lane 3) | 2026-11-27 | #835 squashed as `f7b20eff`; one file, `tests/e2e/estimate-autosave-leave.spec.ts`, +30 -8 |
+| Verified | qa-engineer | 2026-11-27 | CI 46007880263 on `f7b20eff`, see the section below |
 
 ## Records
 Jira Bug AQP-503 and GitHub issue #834, created 2026-11-27 and cross-linked; test plan 0.3.142.
@@ -48,3 +48,17 @@ Jira Bug AQP-503 and GitHub issue #834, created 2026-11-27 and cross-linked; tes
 | **`60ca5a08` (#806)** | **30.3 time-out, retry 24.1** (1.50) [20.2; retry 16.1] | 23.6 (1.59) [14.8] | 16.7 (0.83) [20.1] |
 **Later pushes: none yet (no `master` push since `60ca5a08`).**
 **(3) Reading: NO STEP AT #806.** Normalised by the draw, [tablet] (14.1 to 16.4 before; 14.8 after) and [mobile] (18.7 to 21.3 before; 20.1 after) are level; [desktop] ran 16.9 to 19.2 before and 20.2 at `60ca5a08`'s attempt 1 (a one-sample rise of about 5 % over the highest earlier figure, `f9695aa7`'s 19.2, which also sits before #806), and its retry ran 16.1, level with the earlier pushes. The readings of 25 s or more all predate #806 and rise with the draw. **QA's caveats:** one attempt-1 sample on [desktop]; the timed-out wait was a part field being enabled (the form's first render in `next dev`, the same family as the DEF-085 misses in shard 4 at 1.00 of the same run); QA read no profile of #806's `use-part-form.ts` change, so lane 2's read of that file for added work before the field is enabled is still a prudent follow-up, but the durations do not call for it. **Per DL-466 (3) 'no step at #806': the split is authorised for lane 3, on DL-430's terms (every assertion kept in order on one page, each case under 25 s at a normal draw on attempt 1 at all three widths, +0 person ledger, no wait/force/retry/budget/time-out change, the PR body maps each assertion), merged on a fully green run at 0 behind by the end of Wed 2 Dec; if not merged by the freeze, DEF-146 goes to G8 open and is named.** QA re-reads the case after #806's neighbours land and reports a step if one appears.
+
+
+## VERIFIED and CLOSED on `f7b20eff` (qa-engineer, 2026-11-27; test plan 0.3.145)
+Read: CI 46007880263 (`master` push, run_attempt 1, `success`), the shard 3 log (`[desktop]` and `[tablet]`) and the shard 1 and 2 logs. Draw (matched per-test median against 31015cce): shard 1 0.76, shard 2 0.95, shard 3 1.07, shard 4 0.92: normal, no wave ruled.
+
+| Case | [desktop] | [tablet] | [mobile] |
+|------|-----------|----------|----------|
+| A `:70` (AC-7a, AC-7c: saved at once when the tab is hidden) | 6.0 s | 4.4 s | 4.4 s |
+| B `:87` (AC-7b: saved at once when the page is left) | 0.99 s | 0.84 s | 1.2 s |
+| C `:96` (after a reload the last value is there) | 5.9 s | 2.8 s | 4.0 s |
+
+All nine passed on attempt 1 (no retry marker). DL-430's terms: every case under 25 s at a draw of 1.10 or less on attempt 1 at all three widths (met, worst 6.0 s); every assertion kept in its order and no timeout, wait, force, retry or budget set or changed (QA read `gh pr diff 835`: one file, comments and the split only); person ledger +0 (test-only). The old case read 14 to 30 s on [desktop] (five readings of 25 s or more, all before #806). Nothing in this defect needed a product change.
+
+Jira AQP-503 moved to Done and GitHub #834 closed (not planned: none; completed) on this proof. Windows package 46007880261 on the same push: still in progress when this was written (the install steps; the result follows in 0.3.146) (not part of DEF-146's proof).
