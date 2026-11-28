@@ -110,6 +110,8 @@ function browser(variant: Variant) {
 
   // The addresses the page was loaded again at (`location.replace`, "Stay on this row"): the model draws nothing of it, the page that loads is a new one.
   const reloads: string[] = [];
+  // Every traversal the guard or the test asked for: a repair or a step off is a `go(-1)`.
+  const stepsMade: number[] = [];
   const location = {
     get href() {
       return entries[index] ?? PAGE;
@@ -203,6 +205,7 @@ function browser(variant: Variant) {
     },
     back: () => void history.go(-1),
     go: (delta: number) => {
+      stepsMade.push(delta);
       if (queuedNow) traversals.push(delta);
       else traverse(delta);
     },
@@ -278,6 +281,8 @@ function browser(variant: Variant) {
   return {
     entries,
     reloads,
+    /** The traversals asked for so far (`history.go`). */
+    stepsMade: () => [...stepsMade],
     history,
     env,
     router,
@@ -934,8 +939,9 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
       expect(s.stuck(), `${String(late)} ms: the notice is shown`).toBe(true);
       for (let key = 0; key < 5; key += 1) expect(s.type(), `${String(late)} ms: no key is accepted`).toBe(false);
       expect(s.form.typed).toBe(false);
-      // Nothing was armed on the row that is about to be replaced (the reviewer's probe: a key accepted at 5.001 s armed the guard, and the late write then landed on its entry).
+      // Nothing was armed on the row that is about to be replaced (the reviewer's probe: a key accepted at 5.001 s armed the guard, and the late write then landed on its entry), and no repair step was made.
       expect(s.index()).toBe(1);
+      expect(s.stepsMade(), `${String(late)} ms: no step off, no repair`).toEqual([]);
       expect(s.violations).toEqual([]);
       s.flush();
       expect(s.stuck()).toBe(false);
