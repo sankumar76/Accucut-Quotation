@@ -51,8 +51,8 @@ export interface PartPictureProps {
   readonly editable: boolean;
   /** Runs a change in turn with the part's saves of values, so no save is sent with a revision this change has just moved (`usePartValues.inTurn`). */
   readonly inTurn: <T>(job: () => Promise<T>) => Promise<T>;
-  /** A change went through: the part's new revision and how complete it is, for the tree and the form to keep in step. */
-  readonly onChanged: (answer: PartPictureAnswer) => void;
+  /** A change went through: the part's new revision and how complete it is, for the tree and the form to keep in step. `changed` is whether this request changed the picture: the server answers the same picture again with the part's current revision and no write. */
+  readonly onChanged: (answer: PartPictureAnswer, changed: boolean) => void;
   /** The server says the part is not as the person saw it: the tree is read again. */
   readonly onConflict: () => void;
   /** The server says the estimate was ignored while the person worked (409 `ESTIMATE_IGNORED`): the page turns read-only and says so in its one alert. */
@@ -123,6 +123,7 @@ function PictureControl({ field, estimateId, partId, held: initial, editable, in
   async function change(kind: Exclude<Busy, null>, run: () => Promise<PartPictureAnswer | string>, said: (answer: PartPictureAnswer) => string): Promise<void> {
     if (working.current) return;
     working.current = true;
+    const before = picture?.id ?? null;
     setBusy(kind);
     setProblem(null);
     // A file that cannot be read (taken away after it was chosen) is a failure like a lost connection, and never leaves the control stuck.
@@ -137,7 +138,7 @@ function PictureControl({ field, estimateId, partId, held: initial, editable, in
     }
     setPicture(result.picture);
     setAnnouncement(said(result));
-    onChanged(result);
+    onChanged(result, (result.picture?.id ?? null) !== before);
   }
 
   /** The words for a refusal or a failure: the server's own for a refusal of the picture, and the sentence for a part that changed under the person. */
