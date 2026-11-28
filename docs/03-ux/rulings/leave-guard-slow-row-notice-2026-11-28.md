@@ -99,3 +99,15 @@ Add under SCR-05's States (and by reference SCR-06/07) a row "Row slow to open":
 ## Check when the head lands
 
 At the pushed head, at 360, 768 and 1366 px: the line text is as in R1; the region is before the form and the form alone has `aria-busy`; at 5 s the notice and the button show, are not live regions, and focus has not moved; the button is 44 px; the notice goes when the hold ends; no notice over an editable form.
+
+## Check of head f8c090b6 (code read, 2026-11-28; CI run 46139544706 still running, visual check at 360, 768 and 1366 px still owed)
+
+| Item | Result |
+|---|---|
+| R1 line text | Done. `INPUT_HELD_LINE` is `Opening the row. You can type again in a moment.`; the 5 s text (`INPUT_STUCK_LINE`) is `This row is taking a while to open. Use Stay on this row to load it again.`, as ruled. The `p[data-input-held-line]` is `role="status"`, `sr-only`, always in the DOM; `heldLine` is empty, the line, or the stuck line |
+| R2 region before the form, no `aria-busy`, form keeps it | Done in the DOM (`part-fields.tsx:312-327`, `data-input-held-region`, then `{drawn}`) |
+| Notice `tone="warn"`, no live role; button secondary, default size, `mt-s-2` | Done (the `p` and the `Button` are the children) |
+| R3 lifetime and focus | Done: `tooLong` is `held && tooLong`, so the notice goes with the hold. No focus call anywhere in the path; `stayOnThisRow` calls `ask` and `location.replace` only |
+| `loading` on the reload path | Not built. It was "only if built" (I said a second press does nothing; a second `ask` finds the gate clean and calls `location.replace` again, which is harmless). Accepted, not required |
+| **R4 (new, Major, layout) the region is a flex item beside the form in the Engineer's workspace** | `estimate-workspace.tsx:68` `FORM_CARD_BODY = 'flex …'` is a **row**, and the form is `flex-1`. The new `div` is a sibling flex item, so when the notice appears it takes a column to the **left** of the form and squeezes it (empty, it is 0 wide, so nothing shows until 5 s). On the Lead's page the parent is a block, so it stacks as ruled. Fix: `PartForm` returns one wrapper `div` with `min-w-0 flex-1 flex flex-col` holding the region then the form (no `gap` on it, so the empty region adds no space); the Notice carries `mb-s-4` (the form's own 16 px gap). Read from the classes, not seen: the first CI screenshot or a measured box settles it |
+| **R5 (new, Minor, look)** the Button stretches the full width of the notice | `AlertDescription` is `flex flex-col`, so a bare Button is stretched. The conflict notice avoids it with `div.mt-s-2.flex.flex-wrap.gap-s-2`. Do the same (or `self-start`), so the button is its own width, 44 px high |
