@@ -740,7 +740,8 @@ async function u5aCase(page: Page, testInfo: TestInfo, prepared: boolean, full: 
   const held = await holdRowRead(page, '1');
   await chooseRow(page, '1');
   await held.reached;
-  await keysThroughTheHold(page, 6500);
+  // The Draft twin holds a key every 500 ms for about 6.5 s; the Prepared variant (the real shape of the hold) holds the stream only as long as it takes for the notice to be there at 5 s (QLT-845-31).
+  await keysThroughTheHold(page, full ? 6500 : 5500);
   await expectTheNotice(page, formWidth);
   held.release();
   await expect(page).toHaveURL(/row=1#row-inputs$/);
