@@ -95,8 +95,7 @@ export interface UsePartValuesProps {
 export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onNamed, onServerIgnored, onLocked, onWrote, gate, seed }: UsePartValuesProps) {
   const partId = part.id;
   // The part's values as a page handed them over (the Lead's review, DEF-141): the form starts with them and reads nothing; a read after that (a conflict, Try again) goes to the server as ever.
-  // The seed's values are the form's start only when they are the values of the revision a save will carry (`part.revision`, the tree's): a part that moved on between the two reads is read from the server instead, so a save never
-  // sends a newer revision with older values and a stale one is refused 409 as ever (QLT-836-01). A form that cannot save (a locked estimate) sends no revision and keeps its seed whatever the row says.
+  // The seed's values start the form only when the seed's revision is the row's (`part.revision`) at mount; otherwise the part is read from the server (QLT-836-01). A form that cannot save keeps its seed whatever the row says.
   const [seeded] = useState(() => {
     const given = seed !== undefined && seed.estimateId === estimateId && seed.partId === part.id ? parsePartInputs(seed.part) : null;
     return given !== null && (!editable || given.revision === part.revision) ? given : null;

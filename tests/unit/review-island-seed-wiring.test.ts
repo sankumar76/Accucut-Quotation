@@ -39,6 +39,14 @@ describe('the island and the seed', () => {
     expect(ISLAND).toMatch(/if \(rowParam !== seenRow\) \{[\s\S]*?choose\(named\.id\)/);
   });
 
+  it('SEC-836-03: no mounted form goes from locked to editable (Unlock, Restore): the page swaps element types, so the form mounts again with the new page\'s own seed, and the island\'s form is editable from its mount', () => {
+    // The locked page's columns are a bare fragment and the editable page's are a ReviewEditShell: a different type in the same place, so React unmounts one and mounts the other (the seed guard reads `editable` at mount only).
+    expect(REVIEW).toMatch(/\{editTree \? \(\s*(?:\/\/[^\n]*\n\s*)*<ReviewEditShell[\s\S]*?<\/ReviewEditShell>\s*\) : \(\s*columns\s*\)\}/);
+    // The shell's first paint always draws the read-only form (editable={false}) and the island's form is editable by construction: neither takes the flag from state that can change while mounted.
+    expect(REVIEW).toMatch(/<PartForm[\s\S]*?editable=\{false\}/);
+    expect(ISLAND).toMatch(/<ReviewForm[\s\S]*?\n\s+editable\n/);
+  });
+
   it('DEF-145, DL-465: the page draws ONE ghost on the server, for the page\'s own editable; the first paint\'s form and the island\'s form both get it, so the swap moves nothing', () => {
     expect(REVIEW).toMatch(/const ghost = seed === undefined \? undefined : ghostOf\(\{[^}]*head: 'lead', editable \}\)/);
     expect(REVIEW.match(/ghostOf\(/g)).toHaveLength(1);
