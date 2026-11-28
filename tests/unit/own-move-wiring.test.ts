@@ -26,6 +26,13 @@ describe('QLT-841-02: the tree hands the open part its own move, through the wor
     expect(tag).toContain('onChanged={tree.readAgain}');
   });
 
+  it('QLT-811-06: the Lead\'s island gives its form the tree\'s ownMove too, so the Lead has the same fix as the Engineer', () => {
+    const island = readFileSync(`${ROOT}src/components/features/estimate-review-edit/review-tree-editor.tsx`, 'utf8').replaceAll('\r\n', '\n');
+    const tag = openingTag(island, 'ReviewForm');
+    expect(tag).toContain('ownMove={tree.ownMove}');
+    expect(tag).toContain('onChanged={tree.readAgain}');
+  });
+
   it('the form hands the fields the ownMove it was given', () => {
     const text = source('part-form.tsx');
     expect(text).toMatch(/export function PartForm\(\{[^}]*\bownMove\b[^}]*\}: PartFormProps\)/);

@@ -209,8 +209,8 @@ describe('the ghost\'s place in the code (PF-4, PF-6)', () => {
     expect(source('src/components/features/estimate-workspace/part-form-ghost.tsx')).not.toMatch(/^['"]use client['"]/m);
     expect(ghost).not.toMatch(/\buse[A-Z]\w*\(/);
     for (const clientCode of ['@/components/ui/label', '@/components/ui/progress', '@/components/ui/popover', 'radix-ui']) expect(ghost).not.toContain(clientCode);
-    for (const shell of ['part-form.tsx', 'lazy-review-form.tsx', 'estimate-workspace.tsx']) {
-      expect(code(`src/components/features/estimate-workspace/${shell}`), shell).not.toContain('part-form-ghost');
+    for (const shell of ['estimate-workspace/part-form.tsx', 'estimate-workspace/estimate-workspace.tsx', 'estimate-review-edit/review-edit-shell.tsx', 'estimate-review-edit/review-tree-editor.tsx']) {
+      expect(code(`src/components/features/${shell}`), shell).not.toContain('part-form-ghost');
     }
     expect(code('src/components/shared/form-layout.ts')).not.toMatch(/\bimport\b/);
   });

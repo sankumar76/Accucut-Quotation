@@ -27,16 +27,17 @@ interface Captured {
   readonly review: { readonly notice: string; readonly figuresCurrent?: boolean };
 }
 const captured: Captured[] = [];
-// The inputs block is drawn by the shell of the editable form while the estimate can be corrected, and by the plain read-only `PartForm` otherwise; each is captured at the boundary.
-vi.mock('@/components/features/estimate-workspace/lazy-review-form', () => ({
-  LazyReviewForm: (props: Captured) => {
+// The inputs block is drawn in one of two places (DEF-131 stage 2T): by the editing island, which the page chooses where the tree can be edited (and which loads the editable form after the page is up), and by the read-only
+// `PartForm` where it cannot. Each is captured at the boundary, with what it would hand the form: the island's props are the page's (status and figure state), from which it works out the same notice.
+vi.mock('@/components/features/estimate-workspace/part-form', () => ({
+  PartForm: (props: Captured) => {
     captured.push(props);
     return null;
   },
 }));
-vi.mock('@/components/features/estimate-workspace/part-form', () => ({
-  PartForm: (props: Captured) => {
-    captured.push(props);
+vi.mock('@/components/features/estimate-review-edit/review-edit-shell', () => ({
+  ReviewEditShell: (props: { readonly status: EstimateStatus; readonly state: 'current' | 'out-of-date' | 'none' }) => {
+    captured.push({ editable: true, review: { notice: inputsNotice(props.status, false, props.state), figuresCurrent: props.state === 'current' } });
     return null;
   },
 }));
@@ -110,14 +111,14 @@ describe('ED-3: the island is told whether the figures are current, and the noti
     ['PREPARED', 'none', 'You can correct inputs.'],
     ['DRAFT', 'none', 'You can correct inputs. The Engineer can change this estimate too.'],
     ['DRAFT', 'out-of-date', 'You can correct inputs. Every calculated figure is already cleared; press Recalculate when you have finished. The Engineer can change this estimate too.'],
-    ['APPROVED', 'current', 'Read-only while approved. Unlock the estimate to change an input.'],
-    ['QUOTED', 'current', 'Read-only while quoted. Unlock the estimate to change an input.'],
+    ['APPROVED', 'current', 'Read-only while approved. Unlock the estimate to change an input or the parts tree.'],
+    ['QUOTED', 'current', 'Read-only while quoted. Unlock the estimate to change an input or the parts tree.'],
   ] as const)('%s with figures %s', (status, figures, words) => {
     expect(inputsNotice(status, false, figures)).toBe(words);
   });
 
   it('the Ignored layer wins over the status and says how to get editing back', () => {
-    for (const status of STATUSES) expect(inputsNotice(status, true, 'current')).toBe('Read-only while this RFQ is ignored. Restore it to change an input.');
+    for (const status of STATUSES) expect(inputsNotice(status, true, 'current')).toBe('Read-only while this RFQ is ignored. Restore it to change an input or the parts tree.');
   });
 
   it('hands the page\'s own notice to the island', async () => {

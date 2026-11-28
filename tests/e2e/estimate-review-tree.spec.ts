@@ -1,18 +1,20 @@
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page, type TestInfo } from '@playwright/test';
 
 import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { defined } from '../support/defined';
+import { deleteGuardOf } from '../../src/lib/estimates/tree-moves';
 
 import { E2E_ENGINEER, E2E_PASSWORD, ensureCanaryCustomers, signInWithoutThePage, useFreshAddress } from './support/auth';
+import { expectNoAxeViolations, horizontalOverflow } from './support/design-system';
 import { ignoreThroughTheApi } from './support/ignored';
 import { control, fieldIdOf } from './support/part-form';
+import { addMainAssemblyButton, openEngineerWindow, openTreePanel, readTreeThrough, reviewButton, reviewRow } from './support/review-tree';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
- * DEF-131 stage 2 (inputs edit), ED-7 and ED-8 as short cases of their own (UX ruling `lead-admin-edit-inputs-2026-11-27.md` 4.3 item 1 and 4.4). They were steps of two cases of `estimate-cleared.spec.ts` that took 16 s
- * on #800 and passed 30 s with them, so those cases are master's again. **One check per case, no person made** (DL-422): the signed-in Lead of the set-up project and the E2E Engineer are used as they are, and each
- * case gets a task of its own through `POST /api/v1/tasks` (the estimate is empty and in Draft, with the customer chosen), which the Lead's own requests give a Main Assembly and a Part. The page is the Lead's, at three
- * widths on the development server. Every name and path is invented.
+ * DEF-131 stage 2T, the checks of the parts tree on SCR-06 that the long Lead cases could not hold in 30 s (UX ruling `lead-admin-edit-inputs-2026-11-27.md` 4.7 (d), 4.3 item 4; ED-22, ED-25, ED-27, ED-28). **One check per case, no
+ * person made** (DL-422): the signed-in Lead of the set-up project and the E2E Engineer are used as they are, and each case gets a task of its own through `POST /api/v1/tasks` (the estimate is empty and in Draft, with the
+ * customer chosen), which the Lead's requests then give the rows the case needs. The page is the Lead's, at three widths on the development server. Every name and path is invented.
  */
 
 const HEADERS = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
@@ -24,41 +26,160 @@ interface Made {
   readonly estimateId: string;
 }
 
-/** A task for the E2E Engineer made by the signed-in Lead through the API: an empty Draft estimate with the customer chosen, a Main Assembly (1) and a Part under it (1.1). */
-async function assignedTaskWithAPart(page: Page, testInfo: TestInfo): Promise<Made> {
+/** A task for the E2E Engineer made by the signed-in Lead through the API: an empty Draft estimate with the customer chosen. */
+async function assignedTask(page: Page, testInfo: TestInfo): Promise<Made> {
   await ensureCanaryCustomers();
   const context = (await (await page.request.get(`${DEVELOPMENT_URL}/api/v1/options/assign-context`)).json()) as { engineers: ReadonlyArray<{ id: string; name: string }> };
   const engineer = defined(context.engineers.find((candidate) => candidate.name === E2E_ENGINEER.name));
   const created = await page.request.post(`${DEVELOPMENT_URL}/api/v1/tasks`, {
     headers: HEADERS,
-    data: { engineerId: engineer.id, customerId: CUSTOMER.id, folderPath: `\\\\e2e-server\\e2e-share\\RFQ-${testInfo.project.name}-${testInfo.workerIndex}-${Date.now()}`, deadline: FUTURE, title: 'Invented inputs case', subject: 'Invented subject' },
+    data: { engineerId: engineer.id, customerId: CUSTOMER.id, folderPath: `\\\\e2e-server\\e2e-share\\RFQ-${testInfo.project.name}-${testInfo.workerIndex}-${Date.now()}`, deadline: FUTURE, title: 'Invented tree case', subject: 'Invented subject' },
   });
   expect(created.status()).toBe(201);
   const task = (await created.json()) as { code: string; estimate: { id: string } };
-  const estimateId = task.estimate.id;
-  const main = await page.request.post(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes`, { headers: HEADERS, data: { parentId: null, nodeKind: 'MAIN_ASSEMBLY' } });
-  expect(main.status()).toBe(201);
-  const mainId = defined(((await main.json()) as { nodeId: string | null }).nodeId);
-  const part = await page.request.post(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes`, { headers: HEADERS, data: { parentId: mainId, nodeKind: 'PART' } });
-  expect(part.status()).toBe(201);
-  return { code: task.code, estimateId };
+  return { code: task.code, estimateId: task.estimate.id };
 }
 
-/** The page of the Part (1.1) as the Lead opens it, with its form editable (the Lead may correct inputs of a Draft). */
-async function openedOnThePart(page: Page, code: string): Promise<void> {
-  const response = await page.goto(`/estimates/${code}?row=1.1`);
+/** Adds a row through the API as the Lead does with the "+" (the same request); returns the ID of the new row. */
+async function addRow(api: APIRequestContext, estimateId: string, parentId: string | null, nodeKind: 'MAIN_ASSEMBLY' | 'PART'): Promise<string> {
+  const added = await api.post(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes`, { headers: HEADERS, data: { parentId, nodeKind } });
+  expect(added.status()).toBe(201);
+  return defined(((await added.json()) as { nodeId: string | null }).nodeId);
+}
+
+/** A main assembly (1) with `parts` Parts under it (1.1, 1.2, ...). */
+async function withParts(page: Page, estimateId: string, parts: number): Promise<void> {
+  const main = await addRow(page.request, estimateId, null, 'MAIN_ASSEMBLY');
+  for (let index = 0; index < parts; index += 1) await addRow(page.request, estimateId, main, 'PART');
+}
+
+/** The page of the estimate as the Lead opens it, with the editing island up (its tree controls are the sign). */
+async function openedByTheLead(page: Page, code: string, row?: string): Promise<void> {
+  const response = await page.goto(`/estimates/${code}${row === undefined ? '' : `?row=${row}`}`);
   expect(response?.status()).toBe(200);
-  const field = control(page, 'H');
-  await expect(field).toBeEnabled();
-  await expect(field).not.toHaveAttribute('aria-readonly', 'true');
+  await expect(addMainAssemblyButton(page)).toBeVisible();
 }
 
-test.describe('the Lead\'s inputs on SCR-06, one check each', () => {
-  test('ED-7: a value typed and not yet left is saved before Recalculate sends its request', async ({ page }, testInfo) => {
-    const { code, estimateId } = await assignedTaskWithAPart(page, testInfo);
-    await openedOnThePart(page, code);
+test.describe('the parts tree on SCR-06, one check each', () => {
+  test('ED-22: a row is moved up with the handle\'s menu and the keyboard alone: it is renumbered, said, and its handle keeps the focus', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 2);
+    await openedByTheLead(page, code);
 
-    await control(page, 'H').fill('3');
+    await reviewButton(page, 'Move', '1.2').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('menuitem', { name: 'Move up', exact: true })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('status').filter({ hasText: /renumbered to 1\.1/ })).toHaveCount(1);
+    await expect(reviewButton(page, 'Move', '1.1')).toBeFocused();
+  });
+
+  test('ED-25: Calculate refused for a Part with blank inputs names the part in a summary, its link opens the row, and the blank field says what to do', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 1);
+    await openedByTheLead(page, code);
+
+    await page.locator('#review-calculate').click();
+    const summary = page.locator('[data-calculate-summary]');
+    await expect(summary).toContainText('missing inputs');
+    const toField = summary.getByRole('listitem').filter({ hasText: '1.1' }).getByRole('link').first();
+    await toField.focus();
+    await page.keyboard.press('Enter');
+    await expect(reviewRow(page, '1.1')).toHaveAttribute('aria-current', 'true');
+    await expect(page.getByText('Enter this value.').first()).toBeVisible();
+  });
+
+  test('ED-27: the row the Lead has open is deleted by another request: the next save answers 404, the block shows the first row and says so once', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 2);
+    await openedByTheLead(page, code, '1.2');
+    await expect(reviewRow(page, '1.2')).toHaveAttribute('aria-current', 'true');
+
+    const rows = await readTreeThrough(page.request, estimateId);
+    const open = defined(rows.find((row) => row.slNo === '1.2'));
+    const guard = deleteGuardOf(rows, open.id);
+    const removed = await page.request.delete(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes/${open.id}?revision=${String(open.revision)}&parts=${String(guard.parts)}&subtree=${guard.subtree}`, { headers: HEADERS });
+    expect(removed.status()).toBe(200);
+
+    // The Description box of the form (column D; the first box is the Sl. No, which is read-only).
+    const field = control(page, 'D');
+    await expect(field).toBeEnabled();
+    await expect(field).not.toHaveAttribute('aria-readonly', 'true');
+    await field.fill('9');
+    await field.blur();
+    await expect(page.getByRole('status').filter({ hasText: '1.2 was removed by someone else. Showing 1.' })).toHaveCount(1);
+    await expect(reviewRow(page, '1')).toHaveAttribute('aria-current', 'true');
+  });
+
+  test('ED-28: the Engineer reads the rows the Lead added, with no figure in them', async ({ page, browser }, testInfo) => {
+    const { estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 1);
+
+    const window = await browser.newContext({ baseURL: DEVELOPMENT_URL });
+    try {
+      await useFreshAddress(window);
+      const engineerPage = await window.newPage();
+      await signInWithoutThePage(engineerPage, E2E_ENGINEER.email, E2E_PASSWORD);
+      const rows = await readTreeThrough(engineerPage.request, estimateId);
+      expect(rows.map((row) => row.slNo)).toEqual(['1', '1.1']);
+      expect(JSON.stringify(rows)).not.toMatch(/figures|unitPrice|price/i);
+    } finally {
+      await window.close();
+    }
+  });
+
+  test('ED-34: the "+" menu opens in line and is not clipped by the column, with no sideways scroll', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 0);
+    await openedByTheLead(page, code);
+
+    await openTreePanel(page);
+    await reviewRow(page, '1').click();
+    await openTreePanel(page);
+    await reviewButton(page, 'Add under', '1').click();
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    const box = defined(await menu.boundingBox());
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual((page.viewportSize()?.width ?? 0) + 1);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
+  });
+
+  test('ED-37: axe finds nothing serious with the "+" menu open', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 0);
+    await openedByTheLead(page, code);
+
+    await openTreePanel(page);
+    await reviewRow(page, '1').click();
+    await openTreePanel(page);
+    await reviewButton(page, 'Add under', '1').click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await expectNoAxeViolations(page);
+  });
+
+  test('ED-37: axe finds nothing serious with the delete dialog open', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 1);
+    await openedByTheLead(page, code);
+
+    await openTreePanel(page);
+    await reviewRow(page, '1').click();
+    await openTreePanel(page);
+    await reviewButton(page, 'Delete', '1').click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await expectNoAxeViolations(page);
+  });
+
+  test('ED-7: a value typed and not yet left is saved before Recalculate sends its request', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 1);
+    await openedByTheLead(page, code, '1.1');
+
+    const field = control(page, 'D');
+    await expect(field).toBeEnabled();
+    await expect(field).not.toHaveAttribute('aria-readonly', 'true');
+    await field.fill('Invented bracket');
     const order: string[] = [];
     page.on('response', (response) => {
       const request = response.request();
@@ -71,31 +192,24 @@ test.describe('the Lead\'s inputs on SCR-06, one check each', () => {
     // The press is the click that leaves the field, and it asks the form to send what it shows, so the value may go twice (the second changes nothing); every save is answered before the request.
     expect(order.at(-1)).toBe('calculated');
     expect(order.length).toBeGreaterThan(1);
-    // What the part holds is what was typed: the route answers `inputs` as a list of { fieldId, value }.
-    const tree = (await (await page.request.get(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/tree`)).json()) as { nodes: ReadonlyArray<{ id: string; slNo: string }> };
-    const partId = defined(tree.nodes.find((row) => row.slNo === '1.1')).id;
-    const held = (await (await page.request.get(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes/${partId}`)).json()) as { inputs: ReadonlyArray<{ fieldId: string; value: string }> };
-    expect(held.inputs.some(({ fieldId, value }) => fieldId === fieldIdOf('H') && Number(value) === 3)).toBe(true);
   });
 
   test('ED-8: in a Draft the Engineer saves the part after the Lead opened it: the Lead\'s save is refused as changed elsewhere, with the two choices, and nothing is overwritten silently', async ({ page, browser }, testInfo) => {
-    const { code, estimateId } = await assignedTaskWithAPart(page, testInfo);
-    await openedOnThePart(page, code);
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 1);
+    await openedByTheLead(page, code, '1.1');
+    const field = control(page, 'H');
+    await expect(field).toBeEnabled();
+    await expect(field).not.toHaveAttribute('aria-readonly', 'true');
 
-    // The Engineer's own window (the same person as always, no new one): signs in through the two calls the sign-in page makes and saves QTY per Assy of the part.
-    const window = await browser.newContext({ baseURL: DEVELOPMENT_URL });
+    const engineer = await openEngineerWindow(browser, E2E_ENGINEER);
     try {
-      await useFreshAddress(window);
-      const engineerPage = await window.newPage();
-      await signInWithoutThePage(engineerPage, E2E_ENGINEER.email, E2E_PASSWORD);
-      const tree = (await (await engineerPage.request.get(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/tree`)).json()) as { nodes: ReadonlyArray<{ id: string; slNo: string; revision: number }> };
-      const part = defined(tree.nodes.find((row) => row.slNo === '1.1'));
-      const written = await engineerPage.request.patch(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes/${part.id}/inputs`, { headers: HEADERS, data: { revision: part.revision, values: { [fieldIdOf('H')]: '5' } } });
+      const part = defined((await readTreeThrough(engineer.api, estimateId)).find((row) => row.slNo === '1.1'));
+      const written = await engineer.api.patch(`${DEVELOPMENT_URL}/api/v1/estimates/${estimateId}/nodes/${part.id}/inputs`, { headers: HEADERS, data: { revision: part.revision, values: { [fieldIdOf('H')]: '5' } } });
       expect(written.status(), 'the Engineer saves the part').toBe(200);
     } finally {
-      await window.close();
+      await engineer.close();
     }
-    const field = control(page, 'H');
     await field.fill('3');
     await field.blur();
     await expect(page.getByText('This part was changed somewhere else.')).toBeVisible();
@@ -105,7 +219,8 @@ test.describe('the Lead\'s inputs on SCR-06, one check each', () => {
 
   // AQP-496 (DEF-138, DL-446; master's check of the read-only drop-downs, which was a step of the Lead's AC-1 case while that block was read-only: for a Lead it is editable now, so it runs on a block that still is read-only, an ignored estimate).
   test('AQP-496: in a read-only block a drop-down neither opens nor changes, by touch, mouse or keys, and nothing is sent', async ({ page }, testInfo) => {
-    const { code, estimateId } = await assignedTaskWithAPart(page, testInfo);
+    const { code, estimateId } = await assignedTask(page, testInfo);
+    await withParts(page, estimateId, 1);
     expect(await ignoreThroughTheApi(page, estimateId, 'Not taken forward, an invented reason.')).toBe(200);
     const response = await page.goto(`/estimates/${code}?row=1.1`);
     expect(response?.status()).toBe(200);
@@ -116,16 +231,19 @@ test.describe('the Lead\'s inputs on SCR-06, one check each', () => {
       if (request.method() !== 'GET') writes.push(`${request.method()} ${request.url()}`);
     });
     // By touch (360 and 768) it is tapped; with a mouse (1366) it is clicked and then given Space, Enter, the arrows, Alt+Down and a typed letter. Each must leave the value, raise no change event and open no list.
-    // QA's guard (AQP-491): a drop-down with one option has nothing to change to, so the "no change" checks below would test nothing for it: only drop-downs with two options or more are exercised, and there must be one.
+    // QA's guard (AQP-491): a drop-down with one option has nothing to change to, so the "no change" checks would test nothing for it. Every drop-down gets every check (read-only, dashed, not open, no change event, nothing sent), and the guard is
+    // an assertion on the set: at least one has two options or more, so the checks test something (QLT-806-11).
     const all = form.locator('select:not([disabled])');
-    const listed: number[] = [];
-    for (let index = 0; index < (await all.count()); index += 1) if ((await all.nth(index).locator('option').count()) >= 2) listed.push(index);
-    expect(listed.length, 'drop-downs with two options or more in the read-only inputs').toBeGreaterThan(0);
+    const total = await all.count();
+    expect(total, 'drop-downs in the read-only inputs').toBeGreaterThan(0);
+    let withTwoOptions = 0;
+    for (let index = 0; index < total; index += 1) if ((await all.nth(index).locator('option').count()) >= 2) withTwoOptions += 1;
+    expect(withTwoOptions, 'drop-downs with two options or more in the read-only inputs').toBeGreaterThan(0);
     await page.evaluate(() => document.addEventListener('change', () => document.documentElement.setAttribute('data-select-changed', ''), true));
     // The `:open` check below proves nothing in a browser that does not know the selector (it would pass silently), so the browser is asked first.
     expect(await page.evaluate(() => CSS.supports('selector(:open)')), 'the browser knows :open').toBe(true);
     const touch = (page.viewportSize()?.width ?? 0) < 1024;
-    for (const index of listed) {
+    for (let index = 0; index < total; index += 1) {
       const select = all.nth(index);
       const kept = await select.inputValue();
       if (touch) {

@@ -37,7 +37,9 @@ function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
   return {
     nodes,
     loadFailed: false,
+    fromSeed: false,
     selected: nodes?.[0] ?? null,
+    selectedId: null,
     busy: false,
     waiting: false,
     movedFocus: null,

@@ -8,6 +8,7 @@ import { isAppError, NotFoundError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { selectedRow } from '@/components/features/estimate-review/selected-row';
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
+import { treeActionsOffered } from '@/lib/estimates/tree-actions';
 import { getDownloadMarkerService, getEstimateReviewService, getEstimateService, getMastersService } from '@/server/composition';
 import type { EstimateViewer } from '@/server/services/estimate-service';
 
@@ -84,7 +85,7 @@ export async function renderReview({ viewer, estimateId, header, customer, quote
   const services = { estimates: getEstimateService(), masters: getMastersService() };
   const [costs, download, lists] = await Promise.all([getEstimateReviewService().getCosts(viewer, estimateId), markerOf(viewer, estimateId), readListBodies(services)]);
   const selected = selectedRow(costs.nodes, row);
-  const seed = selected === null ? undefined : seedOf(estimateId, selected.id, lists, lists === null ? null : await readPartFormBodies(services, viewer, estimateId, selected.id));
+  const seed = selected === null ? undefined : seedOf(estimateId, selected.id, lists, lists === null ? null : await readPartFormBodies(services, viewer, estimateId, selected.id), treeActionsOffered({ status: header.status, ignored: ignored !== null }, viewer.role));
   // The revision a save is sent with is the one in the part's own answer, which the page has just read for the seed: no second service call. Only when there is no seed (a read failed) is it read on its own (`revisionOf`).
   const selectedRevision = selected !== null && canEditInputs({ status: header.status, ignored: ignored !== null }, viewer.role) ? (revisionOfSeed(seed) ?? (await revisionOf(viewer, estimateId, selected.id))) : undefined;
   return (

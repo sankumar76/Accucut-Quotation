@@ -568,14 +568,24 @@ describe('DEF-141 (DL-455): the Lead\'s review hands the part form its data as p
     return element.props;
   };
 
-  it.each(['LEAD', 'ADMIN'] as const)('as %s the review gets a seed for the row it shows: the estimate, the part, and the four bodies the routes answer', async (role) => {
+  it.each(['LEAD', 'ADMIN'] as const)('as %s the review gets a seed for the row it shows: the estimate, the part, the four bodies the routes answer and, where the tree can be edited, the tree', async (role) => {
     harness.signInAs(role);
     const seed = (await props(CODE))['seed'] as Record<string, unknown> | undefined;
     expect(seed).toBeDefined();
-    expect(Object.keys(defined(seed)).sort()).toEqual(['estimateId', 'form', 'materials', 'part', 'partId', 'treatments']);
+    // A Draft can be edited by a Lead and an Admin, so the island is drawn and its tree comes with the seed: the same body `GET /tree` answers.
+    expect(Object.keys(defined(seed)).sort()).toEqual(['estimateId', 'form', 'materials', 'part', 'partId', 'treatments', 'tree']);
+    const viewer = { id: harness.idOf[role], role };
+    expect(JSON.parse(JSON.stringify(seed?.['tree']))).toEqual({ nodes: JSON.parse(JSON.stringify(await harness.estimateService.getTree(viewer, estimate().id))) });
     expect(seed?.['estimateId']).toBe(estimate().id);
     expect(seed?.['partId']).toBe(estimate().id);
     expect(Object.keys(seed?.['form'] as object).sort()).toEqual(['lastSavedAt', 'sections']);
+  });
+
+  it('where the tree cannot be edited (Approved) the seed carries no tree: the read-only tree is drawn from the costs', async () => {
+    harness.signInAs('LEAD');
+    estimate().status = 'APPROVED';
+    const seed = (await props(CODE))['seed'] as Record<string, unknown> | undefined;
+    expect(Object.keys(defined(seed)).sort()).toEqual(['estimateId', 'form', 'materials', 'part', 'partId', 'treatments']);
   });
 
   it('the Engineer\'s page reads none of it: no seed, and no read of the option lists for the form', async () => {

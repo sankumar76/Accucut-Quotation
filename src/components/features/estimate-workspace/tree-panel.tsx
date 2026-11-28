@@ -55,6 +55,13 @@ export interface TreePanelProps {
   readonly framed?: boolean;
   /** Something at the right end of the card head, after the row count: the "Tree width" button, from 1024 px (AQP-426). Not drawn in the unframed head of the drawer. */
   readonly headAction?: ReactNode;
+  /**
+   * The Lead's and the Admin's review (DEF-131 stage 2T; UX ruling `lead-admin-edit-inputs-2026-11-27.md` 4.7): the same tree, buttons, delete dialog and announcements, with the review's own row (the link, the count and the
+   * figures), its own legends in the foot and **no head** (the review's panel has its own title). Absent for the Engineer.
+   */
+  readonly review?: { readonly renderRow: (part: PartItem, kindLabel: string) => ReactNode; readonly legends: ReactNode };
+  /** The words that say why the buttons are not offered while a Recalculate runs, or null/absent when none does (the same `aria-disabled` look as while a change is on its way). */
+  readonly calculating?: string | null;
 }
 
 const TREE_ID = 'parts-tree';
@@ -75,8 +82,10 @@ function focusTree(event: Event): void {
  * Move down); the buttons that sat above the tree for it, and for Add and Delete, are gone. While a change is on its way every control that would start another is `aria-disabled` and keeps the focus (AQP-343). There is no arrow-key navigation: Tab moves from row to row, to each arrow and to the buttons of a row, and Enter on a row opens its form (PM
  * ruling). All of it is the screen's: every rule is the server's, and what the tree shows is what the server last answered.
  */
-export function TreePanel({ tree, editable, onOpen, opensOnPress = false, missingIds, framed = true, headAction }: TreePanelProps) {
-  const { nodes, selected, busy } = tree;
+export function TreePanel({ tree, editable, onOpen, opensOnPress = false, missingIds, framed = true, headAction, review, calculating = null }: TreePanelProps) {
+  const { nodes, selected } = tree;
+  // A change is on its way, or the review's Recalculate is running: the buttons that would start another are not offered (ED-31).
+  const busy = tree.busy || calculating !== null;
   // Rule P (AQP-419, DEF-076): a press in the tree never moves a row between its pointer-down and its end, so the toolbars in view at the pointer-down are held until the click has run.
   useEffect(() => attachPressHold(document, window, TREE_ID), []);
   const deleteDialog = useLazyComponent<DeletePartDialogProps>(loadDeleteDialog, tree.deleting !== null);
@@ -85,7 +94,7 @@ export function TreePanel({ tree, editable, onOpen, opensOnPress = false, missin
   const [closed, setClosed] = useState<ReadonlySet<string>>(() => new Set());
   const toggle = (id: string): void => setClosed((current) => (current.has(id) ? new Set([...current].filter((other) => other !== id)) : new Set([...current, id])));
   // While a change is on its way the buttons that would start another are not offered, and once the line above the tree is on screen they are described by it (AQP-343, DL-340).
-  const describedBy = tree.waiting ? TREE_CHANGING_ID : undefined;
+  const describedBy = tree.waiting || calculating !== null ? TREE_CHANGING_ID : undefined;
   // The tree could not be read (the first time, or after a change that nothing answered): the Notice takes the tree's place, and after a change that nothing answered the focus goes to its button.
   const notKnown = tree.problem?.kind === 'unconfirmed';
   const retry = useRef<HTMLButtonElement>(null);
@@ -151,9 +160,9 @@ export function TreePanel({ tree, editable, onOpen, opensOnPress = false, missin
           nodes={nodes}
           closed={closed}
           onToggle={toggle}
-          renderRow={(part, kindLabel) => (
+          renderRow={review?.renderRow ?? ((part, kindLabel) => (
             <TreeNode part={part} kindLabel={kindLabel} selected={part.id === selected?.id} missing={missingIds?.has(part.id) ?? false} onChoose={choose} takesFocus={tree.wantsFocus} />
-          )}
+          ))}
           {...(editable ? { renderToolbar: (part: PartItem, kindLabel: string, place: SiblingPlace) => (
                 <RowActions part={part} kindLabel={kindLabel} onAdd={tree.addUnder} onDelete={tree.askDelete} {...stepsAt(place)} onMoveTo={tree.moveTo} busy={busy} describedBy={describedBy} showing={tree.deleteOpen && tree.deleting?.id === part.id} holdsPart={holdingPart.has(part.id)} />
               ),
@@ -162,8 +171,14 @@ export function TreePanel({ tree, editable, onOpen, opensOnPress = false, missin
         {/* The foot: a hairline, "Add main assembly" under it, and then the two legends (DEF-081 items 13 and 14). */}
         <div data-tree-foot="" className="flex flex-col gap-s-3 border-t border-border pt-s-3">
           {editable ? addMainAssembly : null}
-          <TreeLegend />
-          <StatusLegend />
+          {review === undefined ? (
+            <>
+              <TreeLegend />
+              <StatusLegend />
+            </>
+          ) : (
+            review.legends
+          )}
         </div>
       </>
     );
@@ -171,9 +186,9 @@ export function TreePanel({ tree, editable, onOpen, opensOnPress = false, missin
 
   const content = (
     <div className="flex min-w-0 flex-col gap-s-3">
-      {tree.waiting ? (
+      {tree.waiting || calculating !== null ? (
         <p id={TREE_CHANGING_ID} className="text-body text-ink-2">
-          {TREE_CHANGING}
+          {tree.waiting ? TREE_CHANGING : calculating}
         </p>
       ) : null}
       {tree.problem === null || tree.problem.kind === 'unconfirmed' ? null : (
@@ -186,13 +201,14 @@ export function TreePanel({ tree, editable, onOpen, opensOnPress = false, missin
         {tree.announcement}
       </p>
       {DeleteDialog === null ? null : (
-        <DeleteDialog target={tree.deleting} open={tree.deleteOpen} deleting={busy} onConfirm={() => void tree.confirmDelete()} onCancel={tree.cancelDelete} onCloseAutoFocus={focusTree} />
+        <DeleteDialog target={tree.deleting} open={tree.deleteOpen} deleting={tree.busy} onConfirm={() => void tree.confirmDelete()} onCancel={tree.cancelDelete} onCloseAutoFocus={focusTree} />
       )}
     </div>
   );
 
   // The head: "Parts tree" on the left and the number of rows on the right, once the tree is known (DEF-081 item 10).
   const count = nodes === null ? null : <span className="ml-auto text-label text-ink-3">{treeRowsLabel(nodes.length)}</span>;
+  if (review !== undefined) return content;
   if (!framed) {
     return (
       <div className="flex min-w-0 flex-col gap-s-3">
