@@ -554,3 +554,43 @@ Met: cleared on Keep editing, after the leave goes ahead, and on mount and unmou
 - Open questions: none
 - Risks raised: none new in the product; QLT-845-35 blocks the run of record
 - Recommended next agent: developer (lane 1) for -35 and u5b; QA or the orchestrator for the `estimate-cleared` tablet comparison; lane 3 for Firefox and WebKit
+
+## Round 10 (posted 2026-11-28, on f3e1a0e9)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the combined security-and-quality review, §9 (2)) |
+| Commits reviewed | `6b410a3f` (QLT-845-35 test double; -31 trims; the c2 fix `heading = queued ?? inFlight ?? step?.target`), `f3e1a0e9` (DL-492 "Reload the page"; ux revision 2 texts; `data-input-held-reload`; QA's Recalculate-with-no-leave unit cases): the delta `7325f0bb..f3e1a0e9` |
+| Ruling read | DL-492 (records-u) |
+| PR review | [#845 review 6098317790](https://github.com/sankumar76/Accucut-Quotation/pull/845#pullrequestreview-6098317790) (COMMENT, single-token, `commit_id` f3e1a0e9). Inline: QLT-845-36 `leave-guard.ts:462` (4727373356), -31 `leave-guard-history.spec.ts:793` (4727373357). Label `review:quality-changes-requested` kept |
+| **Verdict** | **REQUEST CHANGES. New: 0 Blocker, 0 Critical, 0 Major, 0 Minor, 1 Info (QLT-845-36).** Fixed: QLT-845-35. Open: QLT-845-31 (Major, u5a-Prepared at the budget), QLT-845-23 (Major, lane 3), QLT-845-33 (Minor, master) |
+
+### Checks run
+| Check | Result |
+|---|---|
+| CI 46151202121 on `f3e1a0e9` | **success.** Stage 6 has no Errors line. Unit 12,199 + 18,080 tests. E2E shards: 627 / 627 / 633 / 625 passed; flaky 1 / 0 / 5 / 1 |
+| Leave-guard attempt-1 failures (passed on retry) | `:165`, `:204`, `:219` [tablet] at 30.3 to 30.5 s, the first three tests of their worker (cold start). `:793` u5a-Prepared [mobile] at 32.9 s, then 31.9 s. Every other case passed on attempt 1 at three widths |
+| DL-479 (5) | Not met: `approve.spec.ts:312` [desktop] failed attempt 1 (32.5 s), then passed; for master |
+| `estimate-cleared:82`, `:153` | Green on attempt 1 at three widths (tablet 14.4 / 16.4 s). With QA's history (Jira 13676), the 7325f0bb reds were that shard's load |
+| Probe 8 (`probe8/probe8.test.ts`, the real guard from f3e1a0e9, traversals delivered late) | A press on the row on screen during a step off is taken; the page ends on 1.1 with one guard entry and Back asks. A press on the step's own target goes to Next and still converges on row 1 |
+| DL-404, security, NFR-002 | No change; no secret, route, role, figure or auth change |
+
+### Judgements
+- **The c2 fix cannot take a link it should not.** Other pages are as before; `#` links are deferred; other rows, the row on screen included, are taken; the step's own target goes to Next harmlessly (probe 8).
+- **DL-492 is met:** `location.replace` of the in-flight href with its `#`; it converges with Next's fallback; the label "Reload the page"; u5b and u5b-plain assert the final row, the length, editable within 2.5 s and the failed held read. QLT-845-36 (Info) covers the `win.location.href` fallback.
+- **The u5b split lost no assertion that matters** (the key stream stays in u5a; "u5b, after the load" covers the typing tail). The Prepared u5a asking once is acceptable.
+- **PR body:** the new u6 paragraph is correct; the older bullet ("armed on a Draft exactly as on a Prepared one") should be struck.
+
+### Findings
+| ID | Severity | File:line (f3e1a0e9) | Issue | Impact | Suggested fix | Test |
+|----|----------|-----------|-------|--------|---------------|------|
+| QLT-845-36 | Info | `src/lib/estimates/leave-guard.ts:462` | The Reload target falls back to `win.location.href` (with `#row-inputs`) when no write is in flight | That would be a fragment navigation (the -29 shape). Reachable only if the notice shows while only a step holds the fields (at most `STEP_GRACE_MS`) | `location.reload()` or the step's target in that case, or hide the button | Unit: notice shown, then a step off, then the press is a load |
+| QLT-845-31 | Major (test; narrowed) | `tests/e2e/leave-guard-history.spec.ts:793` | u5a-Prepared failed attempt 1 at [mobile] (32.9 s); 26.7 s desktop, 28.1 s tablet | Attempt-1 reds in the run of record | Drop the key stream from the Prepared variant (the Draft twin keeps it) | u5a-Prepared under about 22 s at every width |
+
+### Hand-off (round 10)
+- Status: COMPLETE
+- Artefacts written/updated: this section (not committed)
+- Jira / GitHub updates: review 6098317790 with 2 inline comments; label kept; Jira AQP-506 comment 13681
+- Open questions: none
+- Risks raised: none new
+- Recommended next agent: developer (lane 1) for u5a-Prepared and the PR-body bullet; master for DL-479 (5) `approve.spec.ts:312` and QLT-845-33; lane 3 for the Firefox and WebKit run (QLT-845-23)
