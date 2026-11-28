@@ -245,41 +245,82 @@ Master's DL-487 withdraws option A and rules option C. 8b07927d stays, and the b
 
 Verdict unchanged: **REQUEST CHANGES**. Round 4 reviews the C commits.
 
-## Round 4 — DRAFT, NOT POSTED (paused for the PC reboot, pause 11, 2026-11-28)
-> This draft has not been posted to GitHub or Jira. The posting review must cover `8b07927d` to lane 1's DL-488 head. The only thing posted so far is the QLT-845-19 early warning, sent to the orchestrator as an agent message.
+## Round 4 (posted 2026-11-28, on 9598c101)
 
-**State at pause**
-- Reviewed: `8b07927d..5e07cae3` (option C) and `5e07cae3..9598c101` (the c2 fix).
-- **Not yet reviewed:** the DL-488 head.
-- CI 46125984043 on `5e07cae3`: **cancelled** by concurrency. Only shard 4 [desktop] ran: 613 passed, 1 failed (c2 `:229` at `:243`: no dialog, `/queue`).
-- CI 46127541282 on `9598c101`: at pause, Stages 1 to 11b and shards 1, 2 and 3 **succeeded**; shard 4 was still running. Read it again on resume, but note that it is no longer the head.
-- Local: `vitest run tests/unit/leave-guard`: 84 passed at `5e07cae3` and 85 at `9598c101`.
-- The scratch probe (in the session scratchpad, `probe4/stuck-pending.test.ts`, which may be lost in the reboot) ran against the real `installLeaveGuard`, with a router model that discards superseded navigations and signals only on a change. Sequence: unarmed, row 1 link, then row 1.1 link, settle, type, Back. Result: `{entriesAfterTyping: 2, asked: 0, at: /queue}` at **both** `5e07cae3` and `9598c101`.
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the combined security-and-quality review, §9 (2)) |
+| Commits reviewed | `8b07927d..5e07cae3` (DL-487 option C) and `5e07cae3..9598c101` (the c2 fix: `settlePending`, and `onClick` taking a link while a write is owed). The verdict covers the whole `8b07927d..9598c101`. 0 behind `master` (compare: behind 0, ahead 14) |
+| Why now | Posted at the delivery lead's request on the pushed head after the restart (pause 11). Lane 1's DL-488 head (local WIP `cfe350fd`, not pushed) is **not** reviewed here; it is round 5 |
+| PR review | [#845 review 6097036884](https://github.com/sankumar76/Accucut-Quotation/pull/845#pullrequestreview-6097036884) (COMMENT, single-token, `commit_id` 9598c101). Inline comments: QLT-845-19 `leave-guard.ts:290` (4726421586), -23 `:336` (4726421587), -20 `:239` (4726421588), -21 `leave-guard-history.spec.ts:260` (4726421591), -22 `leave-guard.ts:274` (4726421593). Label `review:quality-changes-requested` kept (already present) |
+| **Verdict** | **REQUEST CHANGES. New: 1 Blocker (QLT-845-19), 0 Critical, 1 Major (QLT-845-23, provisional), 3 Minor (QLT-845-20, -21, -22), 0 Info.** §9 (2): the Blocker is fixed before merge. DL-488 (A) rules its shape |
 
-**Draft findings (QLT-845-19 onward)**
-| ID | Severity | Where (at `9598c101`) | Finding | Status to re-check on the DL-488 head |
-|---|---|---|---|---|
-| QLT-845-19 | **Blocker** (data loss) | `leave-guard.ts:290` (`onPageOwnLink`), `:200` (`tryArm`), `:371` (stale exception); `leave-guard.tsx:85-87` | The arming wait (`pending`) can outlive the router. A superseded row link that ends on the current address means Next discards the first navigation (`app-router-instance.js:151-156`) and the path and query do not change, so `committed()` never runs. Typing is then unguarded, and Back leaves with no question. `9598c101` closes the armed path, not the unarmed one. The class, by reading: (a) the unarmed superseded link; (b) a prevented-default link that never navigates; (c) a redirect to the stale address; (d) a traversal clears `pending` but not `shown`; (e) the end of `STEP_GRACE_MS` does not re-run `tryArm`. Lane 1 has since reproduced the class red in its model (14 of 49, including the invariant "typed ⇒ armed at idle") | Fixed only if the walk asserts "typed ⇒ armed at idle" under discard, a link to the current address, a non-navigating handler, a stale redirect and Forward before a commit, **and** an E2E (start clean, hold row 1's `_rsc`, press row 1 then row 1.1, release, type, Back → dialog) is green on attempt 1 at three widths |
-| QLT-845-20 | Minor | `leave-guard.ts:75`, `:342-346` | A late landing of the guard's own step (after `STEP_GRACE_MS`) is read as a Back; on a clean page `history.back()` then leaves. The timer arms nothing and swallows nothing | Keep the landing marker until the next popstate; re-run `tryArm` at the end of the step |
-| QLT-845-21 | Minor | `leave-guard-history.spec.ts:260` | c3b never reaches the stale forward entry (Back to Q, then Forward to P), and its assertion is loose | Assert the row; add a Forward made directly from P |
-| QLT-845-22 | Minor | `leave-guard.ts:274`, `:301-302`, `:307`, `:313`, `:356` | Literal `\`` in comments (an edit artefact) | Restore the plain backticks |
+### Checks run
+| Check | Result |
+|---|---|
+| CI 46127541282 on `9598c101` | **success.** Jobs: Stages 1 to 11b (11m33s; unit 558 files / 11,994 tests and 734 files / 17,875 tests passed), E2E shard 1 (616 passed), shard 2 (615 passed), shard 3 (625 passed, 1 flaky), shard 4 (610 passed, 4 flaky; finished after the pause), "Stages 1 to 11" gate passed |
+| `leave-guard-history.spec.ts` in that run | **84 of 84 passed on attempt 1** (28 cases × mobile, tablet, desktop; no retry): the DEF-149 describe `:297` to `:351`, c1 `:202`, `:217`, c2 `:229`, c3a/b `:249`, `:260`, (vii) `:454`, (ix) `:472`, R1 `:566`, `:580`, PF-23 and PF-24 |
+| DL-479 (5) | `approve-override.spec.ts:230` and `approve.spec.ts:312` passed on attempt 1 at three widths. **`approve-override.spec.ts:314` [desktop] failed attempt 1 (30.2 s) and passed on retry: not met.** For master (DL-487 (4)(b) lets master rule only on `approve.spec.ts:312`). Also flaky and outside this diff: `estimate-form-sections.spec.ts:172`, `:209`, `:223`, `:245` [desktop] (the DEF-085 family, by my reading) |
+| The green run and the verdict | No CI case reaches QLT-845-19's sequence (an unarmed row link overtaken by a link to the row on screen). So QLT-845-19 is a Blocker that CI does not catch, and the fully green run does not change the verdict |
+| Probe (scratch, not committed) | `probe4/stuck-pending.test.ts` survived the reboot (previous session's scratchpad). Re-run today against `leave-guard.ts`, `save-gate.ts` and `leave-registry.ts` extracted from `9598c101` with `git show` (lane 1's worktree holds the DL-488 WIP, so it was not used): `{entriesAfterTyping: 2, asked: 0, at: /queue}`. The same result was recorded at `5e07cae3` before the pause. Lane 1's model reproduces the class (14 of 49 sequences fail "typed ⇒ armed at idle"; the walk fails in 4 of 4 variants) |
+| Why the c2 fix does not close it | Traced at `9598c101`: `onPageOwnLink` (`:290`) sets `pending` but not `shown`. So the second click is compared with `shown` (`:261`), the old row, and is not taken. Next discards the first navigation and settles on the old row, `committed()` never fires, `settlePending()` never matches, and `tryArm` (`:200`) refuses for good |
+| Local unit | `vitest run tests/unit/leave-guard`: 84 passed at `5e07cae3`, 85 at `9598c101` (before the pause) |
+| DL-404 | No wait, budget, time-out, retry or Playwright-configuration change in the diff |
+| Security | No secret and no real data (invented codes and texts); no route, role check, figure or auth change; NFR-002 not touched |
 
-**Closed carry-overs:** QLT-845-12 (the length check after the first save's 200, equal after typing), QLT-845-13 (exactly once, 4 variants), QLT-845-17 (`TYPED` stored on the part whose `slNo` is the row on screen). QLT-845-14, -15, -16 and -18 are removed with A (grep clean). **QLT-845-09, -10, -11:** re-read on the head's CI.
+### Carry-overs
+| ID | Status | Evidence |
+|---|---|---|
+| QLT-845-12 (Major) | **Fixed** | Spec `:97` to `:109` (length at the link after the first save's 200, equal after typing) and `:115` to `:125` (unchanged after Back and "Keep editing"). Green on attempt 1 at three widths |
+| QLT-845-13 (Major) | **Fixed** | Exactly one ask per sequence (`toHaveLength(1)`, 4 variants), no blanket exception |
+| QLT-845-17 (Minor) | **Fixed** | `expectStoredOnTheWayOut` asserts that the save carried `TYPED`, that the stored part's `slNo` is the row on screen, and that the stored values hold `TYPED` (`:49` to `:62`) |
+| QLT-845-14, -15, -16, -18 | **Removed with A** | `git grep` at `9598c101`: no `captureRunsFirst`, `BOUNCE_GRACE_MS`, `guardAddress` or `onPopStateText`; no dead code |
+| QLT-845-09, -10, -11 | **Still fixed on C** | Green on attempt 1 at three widths in 46127541282 |
+| QLT-845-03 (Minor) | Not fixed | No `follow-up` issue opened yet |
 
-**DL-487 checklist (draft):** (2)(i) met in the code, but QLT-845-19. (2)(ii) met. (2)(iii) unit yes, E2E no (-21). (2)(iv) armed path only at `9598c101`. (2)(v) met. (2)(vi) met. (3) met. (4)(a) met, with model gaps now red in lane 1's model. (4)(b) pending on the head. (4)(c) lane 3, relayed: Firefox 159 at 1366: 28 passed, 2 failed (c2, and (viii) Save-draft `:427`). WebKit 27.2 at 360: 20 passed, 10 failed; at 1366: 22 passed, 8 failed. c2 red in all three engines.
+### DL-487 checklist at `9598c101`
+| Term | Result |
+|---|---|
+| (2)(i) push only on a matching address | Met in the code (`:200` to `:201`); its liveness fails (QLT-845-19) |
+| (2)(ii) `router.replace` only after the step lands, matched on the address | Met (`:333` to `:336`); a late landing is read as a Back (QLT-845-20) |
+| (2)(iii) the stale forward entry is harmless, with a case | Unit: yes. E2E: no (QLT-845-21) |
+| (2)(iv) two quick links resolve to the last one | Armed path met (c2 green at three widths); the unarmed overtaken path is QLT-845-19 |
+| (2)(v) no wait, budget, time-out or retry change | Met |
+| (2)(vi) the keepers | Met; the engine-order case `:276` to `:293` records `browser.version()` and asserts no value |
+| (3) bounce, probe and `captureRunsFirst()` removed | Met |
+| (4)(a) unit model, both orders and both timings | Met; its gaps are now red in lane 1's model (DL-488 (3)(a)) |
+| (4)(b) Chromium run of record | `leave-guard-history` 84 of 84 on attempt 1; DL-479 (5) not met (`approve-override.spec.ts:314` [desktop]) |
+| (4)(c) Firefox and WebKit | Lane 3 at `5e07cae3`, relayed: Firefox 159 at 1366 px: 28 passed, 2 failed (c2, (viii) Save draft `:427`). WebKit 27.2 at 360 px: 20 passed, 10 failed; at 1366 px: 22 passed, 8 failed. c2 was red in all three engines at `5e07cae3`. Lane 3 re-runs at `9598c101` today |
+| 0 behind `master` | Met |
 
-**RSC-fallback finding (to write up as QLT-845-23 on the head; draft severity Major):**
-- On `5e07cae3`, most WebKit reds are preceded by `Failed to fetch RSC payload … ?row=1#row-inputs. Falling back to browser navigation. TypeError: Load failed`. QA's `master` control (51502650) never shows this line. So it is most likely caused by C's step-off traversal while a fetch is in flight.
-- **My reading:** the guard already takes the click in the capture phase on `document`, before Next's `Link` handler (React's listeners sit on the root, below `document`). So Next starts **no click fetch** before the step-off. The in-flight fetch is most likely Next's **prefetch** (viewport, hover or touchstart), which the navigation then reuses. WebKit kills it during the `go(-1)`. **A capture-phase `preventDefault` on the link element would therefore not help.** The test that settles it is `prefetch={false}` on guarded tree links (or a trace showing a `Next-Router-Prefetch` request aborted at the step-off), on WebKit 360.
-- **Text safety after a fallback:** Next's fallback for a `replace` is `location.replace` (`app-router.js:254-262`), so no history entry is added. While the page is dirty, `onBeforeUnload` asks with the browser's own prompt (Playwright dismisses it automatically, which matches the "stays on the estimate" reds). For a real person, nothing typed is lost unless they confirm the browser's prompt. The costs are a full reload and possibly a second question. So it is DEF-149-class (Sev-2/3 shape), not Sev-1. Still, a product reload on a row link in Safari is a defect to fix before G8.
+### New findings
+| ID | Severity | File:line (at `9598c101`) | Issue | Impact | Suggested fix | Test that would catch it |
+|----|----------|-----------|-------|--------|---------------|--------------------------|
+| QLT-845-19 | **Blocker** (data loss) | `src/lib/estimates/leave-guard.ts:290` (`onPageOwnLink`), `:261` (`heading` from `shown`), `:200` (`tryArm`), `:329`, `:371`; `leave-guard.tsx:85-87` | `pending` can outlive the router. An unarmed row link overtaken by a link to the row on screen: Next discards the first navigation (`app-router-instance.js:151-156`), the path and query do not change, `committed()` never runs, `settlePending()` never matches, and `tryArm` refuses for good. The same class by reading: a prevented-default link that never navigates; a redirect to the stale address; a traversal that clears `pending` but not `shown`; the end of `STEP_GRACE_MS` with no re-arm | Typing is unguarded. Back leaves to the queue with no question, and the unsaved text is lost. CI does not reach the sequence | DL-488 (A): F's floor (an owed write never blocks arming; `tryArm` re-run when a step ends and on every traversal), M's link handling, and the input-inert invariant | DL-488 (3): the model oracle at every state; E2E u2 (start clean, hold row 1's `_rsc`, press row 1 then row 1.1, release, type, Back → dialog; "Keep editing" keeps 1.1 and the text; "Leave" lands exactly on the page before) on attempt 1 at three widths |
+| QLT-845-23 | Major (provisional) | `src/lib/estimates/leave-guard.ts:336` (`retarget` inside the step-off's `popstate`) | On WebKit at `5e07cae3`, most reds come after `Failed to fetch RSC payload … ?row=1#row-inputs. Falling back to browser navigation. TypeError: Load failed`; QA's `master` control (51502650) never shows it. `5e07cae3..9598c101` does not touch the step-off path. **Cause open:** the click fetch is ruled out (the guard takes the click on `document` in the capture phase, before Next's `Link`), and prefetch is unlikely (`prefetch={false}` at `review-tree.tsx:79`, from #800, confirmed by me and by lane 3). **That withdraws my draft's prefetch reading and its `prefetch={false}` test.** The aborted request may be the navigation's own RSC fetch or another one | Next's fallback for a `replace` is `location.replace`: a full reload of the estimate page after a row link in Safari. While the page is dirty, `onBeforeUnload` asks with the browser's own prompt, so nothing typed is lost unless the person confirms it. DEF-149 class (Sev-2/3 shape), not Sev-1; to fix before G8 | Place the aborted request with a WebKit trace (lane 3). If it is the guard's own write, change when it starts; the ordering is for master against DL-487 (2)(ii) | The DEF-149 describe and c1 to c3 on WebKit at 360 and 1366 px: no fallback line in the console, `performance.getEntriesByType('navigation').length === 1` |
+| QLT-845-20 | Minor | `src/lib/estimates/leave-guard.ts:239` (the marker dropped by the timer), `:75`, `:342-346` | A landing of the guard's own step after `STEP_GRACE_MS` has `here === armedFor`, so it is read as a Back; on a clean page `history.back()` leaves the page. Nothing re-runs `tryArm` | Rare; nothing typed lost on a clean page, but an exit nobody asked for | Keep the landing marker until the next `popstate`; re-run `tryArm` when the step ends (DL-488 (2)(i)) | Unit: step, timer fires, landing arrives → no `history.back()` |
+| QLT-845-21 | Minor | `tests/e2e/leave-guard-history.spec.ts:260` | c3b goes Back to Q and Forward to P, never to the stale forward entry; `/estimates/<code>` plus a visible form would pass on the wrong row | DL-487 (2)(iii) is not tested end to end | A Forward made directly from P with the row, the address, no dialog and the length asserted; c3b asserts `?row=1` | The cases, three widths |
+| QLT-845-22 | Minor | `src/lib/estimates/leave-guard.ts:274`, `:301-302`, `:307`, `:313`, `:356` | Literal backslash-backticks in comments (an edit artefact) | Noise in the module's explanation | Plain backticks | — (style; reviewer-standards) |
 
-**Lane 1's named risks (draft answers):**
-- (1) The stale forward entry: accepted, DL-487 (2)(iii).
-- (2) A stuck wait: yes, typing is then unguarded; that is QLT-845-19.
+### Lane 1's named risks (answers sent before the pause, unchanged)
+- (1) The stale forward entry: accepted, DL-487 (2)(iii); the test gap is QLT-845-21.
+- (2) A stuck wait: yes, typing is then unguarded. That is QLT-845-19.
 - (3) The island while dirty: #811's to close.
 - (4) The step-off flash: cosmetic while the row drawn is the row on screen.
-- F/M advice (sent to the orchestrator): both. Use F's floor (an owed write never blocks arming) with `tryArm` re-run at the end of the step and on every traversal, plus M's taking of every same-path link while a write is owed. Two conditions:
-  - F's repair flash (one traversal plus one RSC round trip of the old row) is real narrow data loss. It needs a model case, and ideally the form should be busy during a repair.
-  - `ensureAddressed`'s "clean" must mean "nothing unsaved in the row on screen", or the -08 shape returns.
+- F/M advice: both, folded into DL-488. F's repair flash is a narrow data-loss window (DL-488 (2)(iv) now closes it with the input-inert rule), and `ensureAddressed`'s "clean" must mean nothing unsaved in the row on screen (DL-488 (2)(iii)).
 
-**Left to do on resume:** review the DL-488 head (delta from `9598c101`, and the whole `8b07927d..head` for the verdict); read its CI run of record at three widths on attempt 1 (the DEF-149 describe, c1 to c3, the unarmed superseded-link E2E, -09, -10, -11, DL-479 (5)); check the (a) and (c) invariants in the walk; take in lane 3's WebKit and Firefox reruns and QA's control. Then post one COMMENT review (inline comments from QLT-845-19), keep `review:quality-changes-requested` unless everything is closed, replace this DRAFT with the final Round 4 section, and post the Jira AQP-506 hand-off.
+### Issues for other roles
+- **developer (lane 1):** QLT-845-19 under DL-488. QLT-845-20 to -22 in the same push. QLT-845-03's `follow-up` issue.
+- **lane 3:** WebKit traces at `9598c101` (and on the DL-488 head) to name the aborted request for QLT-845-23.
+- **master:** DL-479 (5) on this run: `approve-override.spec.ts:314` [desktop] failed attempt 1. And QLT-845-23's ordering, if the trace points at the guard's own write.
+
+### Next round
+Round 5 reviews lane 1's DL-488 head: the delta from `9598c101`, and the whole `8b07927d..head` for the verdict. It checks DL-488 (3) (the oracle, u2, u3, u4, c2, the input-inert invariant), lane 3's WebKit and Firefox reruns and traces (QLT-845-23), QA's `master` control, and the run of record at three widths on attempt 1.
+
+### Hand-off (round 4)
+- Status: COMPLETE
+- Artefacts written/updated: this section (not committed; the orchestrator commits records-u)
+- Jira / GitHub updates: [#845 review 6097036884](https://github.com/sankumar76/Accucut-Quotation/pull/845#pullrequestreview-6097036884) with 5 inline comments; label `review:quality-changes-requested` kept; Jira AQP-506 comment 13651
+- Open questions: none
+- Risks raised: QLT-845-19 (typed text lost after an overtaken row link; CI does not catch it), QLT-845-23 (a full reload on a row link in WebKit)
+- Recommended next agent: developer (lane 1) for DL-488; then reviewer-quality round 5
