@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Response } from '@playwright/test';
+import { expect, test, type Page, type Response, type TestInfo } from '@playwright/test';
 
 import { CLEARED, CLEARED_NOTICE_TITLE, TREE_CLEARED_LINE } from '../../src/components/features/estimate-review/review-texts';
 import { INPUT_HELD_LINE, INPUT_STUCK_BUTTON, INPUT_STUCK_LINE, INPUT_STUCK_SENTENCE } from '../../src/components/features/estimate-workspace/estimate-texts';
@@ -343,6 +343,26 @@ async function typedBackKeepAndLeave(page: Page, row: string, withHash = true): 
   await expect(page).toHaveURL(/\/queue$/);
 }
 
+/** The notice and its button after 5 s, outside the form and before it (UX ruling leave-guard-slow-row-notice R1 to R3). */
+async function expectTheNotice(page: Page, formWidth: number): Promise<void> {
+  await expect(page.locator('[data-input-held-slow]')).toBeVisible();
+  // UX ruling R4: the notice does not take a column of its own beside the form (the form's card is a flex row on the Engineer's page), so the form keeps its width; R5: the button is its own width, not the notice's.
+  const formBox = await page.locator('form[data-part-form]').boundingBox();
+  expect(Math.abs((formBox?.width ?? 0) - formWidth), 'the form keeps its width when the notice comes').toBeLessThanOrEqual(1);
+  const noticeBox = await page.locator('[data-input-held-region] > div').boundingBox();
+  const buttonBox = await page.locator('[data-input-held-stay]').boundingBox();
+  expect(buttonBox?.width ?? Infinity, 'the button is not as wide as the notice').toBeLessThan((noticeBox?.width ?? 0) - 40);
+  await expect(page.locator('[data-input-held-slow]')).toHaveText(INPUT_STUCK_SENTENCE);
+  await expect(page.locator('[data-input-held-region] + form[data-part-form]')).toHaveCount(1);
+  await expect(page.locator('p[data-input-held-line]')).toHaveText(INPUT_STUCK_LINE);
+  await expect(page.locator('[data-input-held-stay]')).toBeVisible();
+  await expect(page.locator('[data-input-held-stay]')).toHaveText(INPUT_STUCK_BUTTON);
+  // The notice carries no live role of its own: the one polite line is the only live voice.
+  await expect(page.locator('[data-input-held-region] [role="alert"]')).toHaveCount(0);
+  await expect(page.locator('form[data-part-form]')).toHaveAttribute('aria-busy', 'true');
+  await expect(description(page)).toHaveAttribute('readonly', '');
+}
+
 /** A key every 500 ms through a hold of about `ms`: no character is accepted into the box (it is read-only), and the focus stays where it is. */
 async function keysThroughTheHold(page: Page, ms: number): Promise<void> {
   const before = await description(page).inputValue();
@@ -356,19 +376,7 @@ async function keysThroughTheHold(page: Page, ms: number): Promise<void> {
 
 test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still owed', () => {
   test('u2 (the unarmed superseded link): clean page, row 1\'s read held, row 1 pressed, then row 1.1 (the row on screen), released, typed: Back asks, Keep editing keeps row 1.1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, false);
-    await openedClean(page, code);
-    const held = await holdRowRead(page, '1');
-    await chooseRow(page, '1');
-    await held.reached;
-    // The row on screen is still 1.1: the link back to it is pressed before row 1 has been drawn (the guard takes it and writes it once row 1 has landed).
-    await chooseRow(page, '1.1');
-    held.release();
-    await expect(page).toHaveURL(/row=1\.1#row-inputs$/);
-    await expect(page.locator('#part-form-title')).toContainText('1.1');
-    // The hold ends with the write, not by its 5 s fail-open end (QLT-845-24): the real links end in `#row-inputs`, so the link back to the row on screen has to be taken by the guard like any other.
-    await expect(description(page)).toBeEditable({ timeout: 2500 });
-    await typedBackKeepAndLeave(page, '1.1');
+    await u2Case(page, testInfo, false);
   });
 
   test('u3: with row 1\'s read held, no key is accepted into the form (readonly and aria-readonly, never disabled), the form is busy, and the one polite line is said; once it has landed, typing in row 1 is guarded', async ({ page }, testInfo) => {
@@ -443,43 +451,8 @@ test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still o
 });
 
 test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and a failed save before a row change', () => {
-  /** The notice and its button after 5 s, outside the form and before it (UX ruling leave-guard-slow-row-notice R1 to R3). */
-  async function expectTheNotice(page: Page, formWidth: number): Promise<void> {
-    await expect(page.locator('[data-input-held-slow]')).toBeVisible();
-    // UX ruling R4: the notice does not take a column of its own beside the form (the form's card is a flex row on the Engineer's page), so the form keeps its width; R5: the button is its own width, not the notice's.
-    const formBox = await page.locator('form[data-part-form]').boundingBox();
-    expect(Math.abs((formBox?.width ?? 0) - formWidth), 'the form keeps its width when the notice comes').toBeLessThanOrEqual(1);
-    const noticeBox = await page.locator('[data-input-held-region] > div').boundingBox();
-    const buttonBox = await page.locator('[data-input-held-stay]').boundingBox();
-    expect(buttonBox?.width ?? Infinity, 'the button is not as wide as the notice').toBeLessThan((noticeBox?.width ?? 0) - 40);
-    await expect(page.locator('[data-input-held-slow]')).toHaveText(INPUT_STUCK_SENTENCE);
-    await expect(page.locator('[data-input-held-region] + form[data-part-form]')).toHaveCount(1);
-    await expect(page.locator('p[data-input-held-line]')).toHaveText(INPUT_STUCK_LINE);
-    await expect(page.locator('[data-input-held-stay]')).toBeVisible();
-    await expect(page.locator('[data-input-held-stay]')).toHaveText(INPUT_STUCK_BUTTON);
-    // The notice carries no live role of its own: the one polite line is the only live voice.
-    await expect(page.locator('[data-input-held-region] [role="alert"]')).toHaveCount(0);
-    await expect(page.locator('form[data-part-form]')).toHaveAttribute('aria-busy', 'true');
-    await expect(description(page)).toHaveAttribute('readonly', '');
-  }
-
   test('u5a: row 1\'s read held for about 6.5 s: a key every 500 ms is accepted into no box, the notice shows after 5 s; after the release the row is editable within 2.5 s, typing is guarded, Back asks, Keep editing keeps row 1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, false);
-    await openedClean(page, code);
-    const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
-    const held = await holdRowRead(page, '1');
-    await chooseRow(page, '1');
-    await held.reached;
-    await keysThroughTheHold(page, 6500);
-    await expectTheNotice(page, formWidth);
-    held.release();
-    await expect(page).toHaveURL(/row=1#row-inputs$/);
-    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
-    await expect(description(page)).toBeEditable({ timeout: 2500 });
-    // No key of the stream reached row 1's box either, and the notice went with the hold (R3).
-    await expect(description(page)).not.toHaveValue(/Z/);
-    await expect(page.locator('[data-input-held-slow]')).toHaveCount(0);
-    await typedBackKeepAndLeave(page, '1');
+    await u5aCase(page, testInfo, false);
   });
 
   // DL-490 (QLT-845-29). After a tree row link the address ends in `#row-inputs`, and `location.replace` of that address with itself is a fragment navigation, not a load: the document stays, Next ignores the
@@ -734,6 +707,75 @@ test.describe('DL-491 u6a, u6b, u6c (QLT-845-23): the review\'s refresh of the p
   });
 });
 
+// The cases whose set-up is the Prepared estimate (the real shape of DEF-149, DL-434: a Lead edits a Prepared estimate and its figures clear) and the same cases on a Draft estimate, which has no Engineer sign-in, no Calculate and
+// no first-save read to wait for, so the file fits the desktop shard (QLT-845-31). Each Draft case keeps its meaning because what it asserts is the history, the guard and the typed text, none of which depends on the
+// figures being current; the Prepared variants of the three core shapes are in the describe below.
+async function u2Case(page: Page, testInfo: TestInfo, prepared: boolean): Promise<void> {
+  const { code } = await assignedEstimate(page, testInfo, prepared);
+  await openedClean(page, code);
+  const held = await holdRowRead(page, '1');
+  await chooseRow(page, '1');
+  await held.reached;
+  // The row on screen is still 1.1: the link back to it is pressed before row 1 has been drawn (the guard takes it and writes it once row 1 has landed).
+  await chooseRow(page, '1.1');
+  held.release();
+  await expect(page).toHaveURL(/row=1\.1#row-inputs$/);
+  await expect(page.locator('#part-form-title')).toContainText('1.1');
+  // The hold ends with the write, not by its 5 s fail-open end (QLT-845-24): the real links end in `#row-inputs`, so the link back to the row on screen has to be taken by the guard like any other.
+  await expect(description(page)).toBeEditable({ timeout: 2500 });
+  await typedBackKeepAndLeave(page, '1.1');
+}
+
+async function u5aCase(page: Page, testInfo: TestInfo, prepared: boolean): Promise<void> {
+  const { code } = await assignedEstimate(page, testInfo, prepared);
+  await openedClean(page, code);
+  const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
+  const held = await holdRowRead(page, '1');
+  await chooseRow(page, '1');
+  await held.reached;
+  await keysThroughTheHold(page, 6500);
+  await expectTheNotice(page, formWidth);
+  held.release();
+  await expect(page).toHaveURL(/row=1#row-inputs$/);
+  await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+  await expect(description(page)).toBeEditable({ timeout: 2500 });
+  // No key of the stream reached row 1's box either, and the notice went with the hold (R3).
+  await expect(description(page)).not.toHaveValue(/Z/);
+  await expect(page.locator('[data-input-held-slow]')).toHaveCount(0);
+  await typedBackKeepAndLeave(page, '1');
+}
+
+async function saveDraftCase(page: Page, testInfo: TestInfo, prepared: boolean, twice: boolean): Promise<void> {
+  const { code } = await assignedEstimate(page, testInfo, prepared);
+  const allowSaves = await typedInTheSecondRow(page, code, prepared);
+  if (twice) await backTwiceAsks(page);
+  else await page.evaluate(() => window.history.back());
+  if (!twice) await expect(leaveDialog(page)).toBeVisible();
+  // The answer of the save is waited for (QLT-845-07), as the other "Save draft and leave" cases do: the listener is made before the saves are let through, and the landing is read after it.
+  const row = await rowOnScreen(page);
+  const saved = savedAnswer(page);
+  allowSaves();
+  await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
+  await expectStoredOnTheWayOut(page, await saved, row);
+  await expect(page).toHaveURL(/\/queue$/);
+}
+
+test.describe('DL-434: the same three core cases on a Prepared estimate (the real shape of DEF-149: a Lead edits a Prepared estimate and its figures clear)', () => {
+  test('u2 on a Prepared estimate: the unarmed superseded link, then Back asks, Keep editing keeps row 1.1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
+    await u2Case(page, testInfo, true);
+  });
+
+  // The Prepared variant goes through the first save's read (the settle wait of DL-482 (7)) and asks once, not twice: the Draft variant above asks twice, and the second Back adds nothing to this case.
+  test('"Save draft and leave" saves what was typed and leaves the page, on a Prepared estimate', async ({ page }, testInfo) => {
+    await saveDraftCase(page, testInfo, true, false);
+  });
+
+  test('u5a on a Prepared estimate: the hold of row 1\'s read for about 6.5 s, no key accepted, the notice, the release, typing guarded, Back asks', async ({ page }, testInfo) => {
+    await u5aCase(page, testInfo, true);
+  });
+});
+
+
 // Evidence for the pull request and for NFR-019, recorded with the browser's version: whether a listener added to the window with `capture: true` runs before one added without it in this browser. No code of the product
 // depends on the answer (DL-487: option A, which did, was withdrawn); this only records it, so a later reader sees what each engine does. It asserts nothing about the value.
 test.describe('engine order of window listeners (evidence only)', () => {
@@ -799,16 +841,7 @@ test.describe('DEF-149: Back after a link to another row of the same page', () =
   });
 
   test('"Save draft and leave" saves what was typed and leaves the page', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, false);
-    const allowSaves = await typedInTheSecondRow(page, code, false);
-    await backTwiceAsks(page);
-    // The answer of the save is waited for (QLT-845-07), as the other "Save draft and leave" cases do: the listener is made before the saves are let through, and the landing is read after it.
-    const row = await rowOnScreen(page);
-    const saved = savedAnswer(page);
-    allowSaves();
-    await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
-    await expectStoredOnTheWayOut(page, await saved, row);
-    await expect(page).toHaveURL(/\/queue$/);
+    await saveDraftCase(page, testInfo, false, true);
   });
 
   test('"Keep editing" keeps the guard armed: the page stays, the text stays, and a later Back asks again', async ({ page }, testInfo) => {
