@@ -91,3 +91,60 @@
 - Open questions: none
 - Risks raised: none new
 - Recommended next agent: developer (lane 1) for note 8's fragment links; then reviewer-quality for the delta
+
+---
+
+## Round 2 (delta `64ca41ba..38859d2b`, 2026-11-28)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the combined security-and-quality review, §9 (2)) |
+| Commits reviewed | `4d016e1b`, `5c8a3af0`, `0a608796`, `70f72820`, `8b762cbf`, `c6127270`, **`38859d2b`** (head). The `master` merge `e2bf0dab` brings #843 (`part-picture.tsx`, `estimate-picture.spec.ts`), which was reviewed on `master` and is not reviewed again here |
+| PR review | [#845 review 6096438356](https://github.com/sankumar76/Accucut-Quotation/pull/845#pullrequestreview-6096438356) (COMMENT, single-token); replies in the QLT-845-01 and -07 threads; label `review:quality-changes-requested` kept |
+| **Verdict** | **REQUEST CHANGES. New: 1 Blocker (QLT-845-08), 0 Critical, 2 Major (QLT-845-09, -10), 1 Minor (QLT-845-11), 0 Info.** §9 (2): the Blocker is fixed before merge |
+
+### Round 1 findings and DL-476 note 8
+| ID / case | Status | Evidence |
+|---|---|---|
+| QLT-845-01 | **Fixed** | the length code is removed; `go(-2)` is kept with the invariant stated (`leave-guard.ts:237-240`); `tests/unit/leave-guard-writers.test.ts`. The invariant counts entries but does not keep the page's own entry at the address shown (QLT-845-08) |
+| QLT-845-02 | **Fixed** | `replace={guarded}` (`review-tree.tsx:77`), `guarded={editable}`; `tests/unit/review-tree-replace.test.ts`; E2E `:118` and `:128` pass on attempt 1 at three widths, exact `/queue$` |
+| QLT-845-03 | **Not fixed** (no follow-up issue open) | Minor, not a merge condition |
+| QLT-845-07 | **Fixed** (the listener starts before `allowSaves`, `:189-190`) | the case (now `:184`) is red for QLT-845-08's reason |
+| QLT-845-04, -05, -06 | -06 accepted (ux PF-23); -04 and -05 unchanged | — |
+| (vii) | **Not proven**: QLT-845-10 | red at three widths, both choices |
+| (viii) | **Fixed** | `:254`, both choices, three widths, attempt 1 |
+| (ix) | **Fixed**, with a weak assertion (QLT-845-11) | `:298`, both choices, three widths |
+| (x) | **Holds** | `rates-changed.spec.ts:263`, `:295`, `:325`, `:353` and `partform-placeholder.spec.ts` (5 cases) are unchanged and pass on attempt 1 at three widths |
+| (xi), PF-23a/b, PF-24a/c, hash after refresh | **Green** | `:267`, `:313`, `:326`, `:340`, `:381`, three widths, attempt 1 |
+
+### Check (b): Back and Forward after `replaceState(null, '', …)`
+- **Code reading: met.** In Next 16.4.5 (`aqp-398/node_modules/next/dist/client/components/app-router.js`), a `null` state has no `__NA`, so the patched `replaceState` (`:302-312`) runs `copyNextJsInternalHistoryState` (`:128-140`). That copies `__NA` and `__PRIVATE_NEXTJS_INTERNALS_TREE` from the current entry (the one being rewritten) and records the address with `navigator.restore` (`:277-281`). On `popstate`, `handlePopState` (`:61-72`) sees `__NA` and calls `traverse` (soft), not `location.reload()`. The guard is installed only by the lazily loaded form, after `AppRouter`'s effect has patched `history`. This confirms the earlier reviewer's reading of `:61-71` and `:128-139`.
+- **Test: not met (QLT-845-09).** `:360` is wrong by construction: `/queue` and the estimate are two `page.goto` documents. Back is shown only indirectly, by (xi) `:267`: the app's own dialog shows the typed text after Back. Nothing proves Forward.
+
+### New findings
+| ID | Severity | File:line | Issue | Impact | Suggested fix | Test that would catch it |
+|----|----------|-----------|-------|--------|---------------|--------------------------|
+| QLT-845-08 | **Blocker** | `src/lib/estimates/leave-guard.ts:183` (since `b804c6f2`); with `part-form.tsx:118`, `save-gate.ts:17`, Next `app-router.js:61-72` | While the guard is armed, a same-path row link keeps `armedFor` and replaces only the guard's entry, so the page's own entry keeps the old `?row=`. Back after typing lands there. The guard asks, but Next traverses to the old row at the same time, the new row's `Fields` unmount, and the gate drops their unsaved marks | **Typed text is lost with no choice made.** "Keep editing" shows the old row, "Save draft and leave" saves nothing, and a later Back leaves without asking. The Lead's and the Admin's editable review, at all three widths. **This branch only:** `master` clears `armedFor` on every guard-taken link (`leave-guard.ts:145` on `master`). My round 1 answer ("typed text survives Back: yes") was wrong; the earlier greens most likely raced the traversal (inference, not run) | Make the page's own entry carry the new row: on an armed same-path link, step off the guard's entry first (`history.back()`, marked as the guard's own traversal), then `navigate(href, true)`, and re-arm on the next keystroke; or DL-476's R2 for this path (master rules which) | lane 1's red `tests/unit/leave-guard-visible-row.test.ts`; `backTwiceAsks` `:90` on attempt 1 at three widths with no wait added; a "Save draft and leave" case that asserts the server's stored value for the new row |
+| QLT-845-09 | Major | `tests/e2e/leave-guard-history.spec.ts:360-377` | The marker cannot survive Back across two `page.goto` documents. The case is red at three widths and says nothing about the product; Forward is not proven | DL-481 (2)'s required case is missing; the data-loss path rests on a code reading alone | Keep both entries in one document: from `/queue`, **click** the task link (`queue-list.tsx:78`, a Next `Link`), jump, Back (marker, `/queue$`), Forward (marker, `#main$`, form visible); and jump, type (saves failing), Back (dialog, `TYPED`, marker) | the case itself, three widths |
+| QLT-845-10 | Major | `tests/e2e/leave-guard-history.spec.ts:285-287` | `armed()` saves on a Prepared estimate and waits for `TREE_CLEARED_LINE` (`out-of-date` only, `review-tree.tsx:139`), but the notice renders only when `current` (`rates-changed-notice.tsx:25`). The green at `c6127270` was a race | Case (vii) is not proven | Arm without a successful save (`failSaves` before the first keystroke), so the figures stay current | the case itself, three widths, both choices |
+| QLT-845-11 | Minor | `tests/e2e/leave-guard-history.spec.ts:303-306` | (ix) asserts that the strip link is visible, not the heading's focus or an unchanged address | A regression in PF-24b's focus would pass | `toBeFocused()` on the target, and `page.url()` unchanged | — |
+
+### CI: run 46117009843 on `38859d2b` (finished, failure)
+- Stages 1 to 11b and shard 2 passed. Shards 1, 3 and 4 failed; "Stages 1 to 11" failed at its gate only.
+- `leave-guard-history`: `:164` [mobile], `:176` [mobile, tablet], `:184` [all], `:196` [mobile, desktop; flaky tablet], each at `:90`, are **product (QLT-845-08)**. `:281` [all, both choices] at `:287` is **test (QLT-845-10)**. `:360` [all] at `:372` is **test (QLT-845-09)**. Every other case in the file passed on attempt 1 at three widths.
+- **DL-479 (5):** `approve-override.spec.ts:230`, `:314` and `approve.spec.ts:312` passed on attempt 1 at [desktop] (and at mobile and tablet).
+- `estimate-form-sections.spec.ts:137`, `:149`, `:172`, `:209` [desktop] were flaky. The file is untouched by this PR (the DEF-085 family, by my reading).
+- **DL-404:** `38859d2b` swaps a response wait for a wait on the commit's visible effect, with the default expect time-out, and makes no budget, time-out or retry change. It exposes -08 and does not mask it.
+- **Security:** no secret or real data; no route, role check or figure (NFR-002 and auth are not touched).
+
+### Issues for other roles
+- **developer (lane 1):** QLT-845-08 (Blocker), -09 and -10 (Major), and -11 (Minor) in the same push; open the `follow-up` issue for QLT-845-03.
+- **master:** DL-481 (1) attributes `:172`'s signature to DEF-150 ("not DEF-149's mechanism, does not depend on #845"). QLT-845-08 explains it as #845's own. The DEF-150 waits in #845 may not be needed; DEF-150 on `master` is still to be reproduced by QA. Also: the route for -08's fix (the guard stepping off its entry, or R2).
+
+### Hand-off (round 2)
+- Status: COMPLETE
+- Artefacts written/updated: this section (not committed)
+- Jira / GitHub updates: PR #845 review 6096438356 and 2 thread replies; Jira AQP-506 comment
+- Open questions: none
+- Risks raised: QLT-845-08 (typed-text loss on this branch)
+- Recommended next agent: developer (lane 1) for QLT-845-08 to -11; master for the -08 route and DL-481 (1); then reviewer-quality round 3 on the delta

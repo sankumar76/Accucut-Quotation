@@ -8,13 +8,37 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-28, orchestrator)", then "Daily update (2026-11-27, orchestrator)", then "Daily update (2026-11-25, orchestrator)", then "Resume point (2026-11-24, pause 10, orchestrator)", then "Daily update (2026-11-24, after pause 9, orchestrator)", then "Resume point (2026-11-24, pause 9, orchestrator)", then "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-28, later, orchestrator)", then "Daily update (2026-11-28, orchestrator)", then "Daily update (2026-11-27, orchestrator)", then "Daily update (2026-11-25, orchestrator)", then "Resume point (2026-11-24, pause 10, orchestrator)", then "Daily update (2026-11-24, after pause 9, orchestrator)", then "Resume point (2026-11-24, pause 9, orchestrator)", then "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **25 Nov: G8 recommendation about Mon 7 Dec, range 6 to 9 Dec; merge cut-off end of Wed 2 Dec for every PR except #727 (Thu 3 Dec, DL-395); freeze from #727's push reading; final regression about 4 to 6 Dec (release plan 0.44).** Before: G8 recommendation target about 6 Dec 2026, range 5 to 8 Dec, freeze about 3 Dec, all agreed scope kept (DL-307, delivery lead, 2026-11-22; replaces DL-298's provisional 4 Dec). Date triggers: ~~28 Nov Q-18 (DL-309)~~ withdrawn (DL-378); freeze AC-8 (DL-310) and #476 (DL-308); G8 condition list DL-314** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-28 by orchestrator (daily update); master's DL-396 to DL-480 in between |
+| Last updated       | 2026-11-28 (later) by orchestrator; master's DL-396 to DL-482 in between |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-28, later, orchestrator)
+
+> This section wins over the earlier 28 Nov update below for anything it names. Rulings DL-481 (amended) and DL-482 are in the decision log; RISK-039 in the risk register.
+
+**Disk:** C: was full this morning (all lanes held). The coordinator removed the finished `prof-*` worktrees and `aqp-505` (junctions unlinked first) and ran `git worktree prune`; C: about 8 GB free. `docker builder prune` freed about 9.5 GB inside Docker but not on C: (Docker's disk file does not shrink); compacting it is for the delivery lead, after the Sunday demo rebuild. **`aqp-398` must stay while `aqp-506` and `aqp-506-lane1` junction their `node_modules` to it** (rmdir each junction before removing its worktree). Coordinator rules: lean builds, at most about 3 build worktrees, delete a worktree only after its PR merges and with the coordinator's OK. GitHub MCP comments get 403; PR comments go through `gh` (no 403 so far).
+
+**master = 51502650**, unchanged.
+
+**Open code PRs:**
+- **#845** (AQP-506, DEF-149; lane 1, worktree `aqp-506-lane1`): head 38859d2b, CI 46117009843 red (17 failures, all `leave-guard-history.spec.ts`). Round 2 combined review: REQUEST CHANGES, **QLT-845-08 Blocker** (stale page entry: Back renders the old row and the new row's typed text is lost; branch only, since b804c6f2), QLT-845-09/-10 Major (test), -11 Minor; follow-up #849 for QLT-845-03. **DL-482:** fix with option A (capture-phase bounce) plus a mandatory listener-order fail-safe to master's text-safe path; Firefox and WebKit local proof before merge by end of Tue 1 Dec (NFR-019); **switch to C** if the order check fails, a non-Chromium run is red for a product reason, or A's Chromium run of record is not green by **end of Mon 30 Nov**. Local: tsc and the Playwright-listing unit tests pass; `sweep-summary.test.ts` times out locally (outside the diff; CI green): hardening follow-up.
+- **#847** (AQP-507, DEF-150; lane 2): combined review REQUEST CHANGES (QLT-01 Blocker, -02/-03 Major). **On hold (DL-482)**: no push, no `leave-guard.ts` change. Lane 2 runs a tests-only do-not-merge probe PR from master by **end of Mon 30 Nov**: red resumes #847, green closes it and returns DEF-150 to #811's island.
+- **#811** (AQP-488; lane 2): body refreshed; waits for #845. **Merge order now #845, then #811 (DL-482).** DL-480 (5) question still stands for end of Tue 1 Dec.
+- **#836** (AQP-441; lane 3): CI 46114666801 green; interleaved head/base timing proof running (base build rebuilt after lost `.next/node_modules` links).
+
+**Defects:** **DEF-152** (AQP-508, GitHub #848) logged then corrected: Sev-1 on #845's branch only, not reproduced on master (QA, 2 variants, desktop), must-fix inside #845, off the G8 blocking list. **DEF-150** not reproduced on master (19 runs, AQP-507 comment 13625): Sev-3 provisional, its master widening, Sev-1 route, Wed 2 Dec deadline and G8 question suspended (DL-482).
+
+**Pre-G8 list adds:** **G8-C-DEF152-IOS** (real iPhone or iPad check of the leave guard after a row link and Back); **G8-C-DEF150-PROD** (DEF-150 cases on a production build, three widths). Steps written by QA in the test plan.
+
+**Demo:** rebuilt only by the coordinator on Sun 29 Nov evening at latest master; then QA runs one Excel download and one timed Lead approval. No agent touches `accucut-demo` before that.
+
+**Housekeeping pending (permission-denied for QA; coordinator to run):** `docker stop qa150-db && docker rm -v qa150-db`; QA's `def150-*` scratch specs, `playwright.qa150.config.ts` and `qa-out/def150/` in `qa-u2` (keep `def150-c.spec.ts` until lane 2 has copied it, and the four older untracked files); scratchpad `qa150` after a junction check. Also later: `aqp-506-lane1/node_modules.old-caches`; lane 2's stopped `aqp507-db`.
+
+**Records:** combined reviews in `docs/06-reviews/AQP-507/combined.md` and `docs/06-reviews/final-cr01/pr-845-combined.md` (round 2). The A/B/C design-point text for #847 was lost before it was posted; not reconstructed.
 
 ## Daily update (2026-11-28, orchestrator)
 
