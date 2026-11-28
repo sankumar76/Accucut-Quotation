@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Response } from '@playwright/test';
 
 import { TREE_CLEARED_LINE } from '../../src/components/features/estimate-review/review-texts';
+import { INPUT_HELD_LINE } from '../../src/components/features/estimate-workspace/estimate-texts';
 
 import { assignedEstimate } from './support/assigned-estimate';
 import { changePrivateMaterial, E2E_ENGINEER, insertPrivateMaterial } from './support/auth';
@@ -175,7 +176,7 @@ test.describe('DEF-149: a row link pressed before anything is typed', () => {
   });
 });
 
-test.describe('DL-482 (7), DL-487 c1: a row link pressed as soon as the first save is answered (no wait for the page\x27s read), then typing at once', () => {
+test.describe('DL-482 (7), DL-487 c1: a row link pressed as soon as the first save is answered (no wait for the page\'s read), then typing at once', () => {
   // The person's timing: the page asks to read itself again 300 ms after the first save of a Prepared estimate (DEF-150, unconfirmed), and a Lead can press a row link inside that time and start typing as soon as the box
   // is editable. The set-ups elsewhere in this file wait for that read as a settle wait; these cases do not wait for it, so what the person can do is covered whichever way DEF-150 goes.
   async function linkedAndTypedAtOnce(page: Page, code: string): Promise<void> {
@@ -257,17 +258,160 @@ test.describe('DL-487 c2, c3: two quick row links; Back and Forward with nothing
     await expect(leaveDialog(page)).toHaveCount(0);
   });
 
-  test('c3b: a row link, then Back and Forward with nothing typed: an estimate page of this task is shown with its form, with no question and nothing lost', async ({ page }, testInfo) => {
+  test('c3b (QLT-845-21): a row link, then Back and Forward with nothing typed: the page entry shows the row of the link with its form and no question; a Forward made directly from it reaches the guard\'s old entry, which shows an estimate row of this task, with no question and nothing lost', async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, true);
     await armed(page, code);
     await chooseRow(page, '1');
     await expect(page).toHaveURL(/row=1#row-inputs$/);
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
     await page.evaluate(() => window.history.back());
     await expect(page).toHaveURL(/\/queue$/);
     await page.evaluate(() => window.history.forward());
-    await expect(page).toHaveURL(new RegExp('/estimates/' + code));
+    // P, the page's own entry: the row of the link, not the stale row the guard's entry carries.
+    await expect(page).toHaveURL(/row=1#row-inputs$/);
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
     await expect(page.locator('form[data-part-form]')).toBeVisible();
     await expect(leaveDialog(page)).toHaveCount(0);
+    // A Forward made directly from P: the stale entry of the guard that lay ahead (DL-487 (2) (iii)); it is a row of this page, drawn with its form.
+    await page.evaluate(() => window.history.forward());
+    await expect(page).toHaveURL(new RegExp('/estimates/' + code + '\\?row=1\\.1'));
+    await expect(page.locator('#part-form-title')).toContainText('1.1');
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    await expect(leaveDialog(page)).toHaveCount(0);
+  });
+});
+
+/** A clean page: the row opened from the queue, nothing typed, so the guard is not armed. */
+async function openedClean(page: Page, code: string, row = '1.1'): Promise<void> {
+  await page.goto('/queue');
+  await page.goto('/estimates/' + code + `?row=${row}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#part-form-title')).toContainText(row);
+  await expect(page.locator('form[data-part-form]')).toBeVisible();
+  await expect(description(page)).toBeEditable();
+}
+
+/**
+ * Holds the page's read of one row (its `_rsc` request) until `release()`, so a link to that row has been pressed and its write is still owed. `reached` is settled when the request is held. The hold is the
+ * set-up of DL-488 u2 to u4; it adds no wait to the page and changes no budget (DL-404).
+ */
+async function holdRowRead(page: Page, row: string): Promise<{ readonly release: () => void; readonly reached: Promise<void> }> {
+  let release: () => void = () => undefined;
+  const opened = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let reach: () => void = () => undefined;
+  const reached = new Promise<void>((resolve) => {
+    reach = resolve;
+  });
+  await page.route(
+    (url) => url.pathname.startsWith('/estimates/') && url.searchParams.has('_rsc') && url.searchParams.get('row') === row,
+    async (route) => {
+      reach();
+      await opened;
+      await route.continue();
+    },
+  );
+  return { release, reached };
+}
+
+/** Text that cannot be saved is typed in the row on screen, Back asks with the text still there, "Keep editing" keeps the row and the text, and "Leave without saving" lands exactly on the queue. */
+async function typedBackKeepAndLeave(page: Page, row: string): Promise<void> {
+  await failSaves(page);
+  await description(page).fill(TYPED);
+  await description(page).blur();
+  await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+  await page.evaluate(() => window.history.back());
+  await expect(leaveDialog(page)).toBeVisible();
+  await expect(descriptionBehindDialog(page)).toHaveValue(TYPED);
+  await leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(leaveDialog(page)).toHaveCount(0);
+  await expect(description(page)).toHaveValue(TYPED);
+  await expect(page).toHaveURL(new RegExp(`row=${row.replace('.', '\\.')}#row-inputs$`));
+  await expect(page.locator('#part-form-title')).toContainText(row);
+  await page.evaluate(() => window.history.back());
+  await expect(leaveDialog(page)).toBeVisible();
+  await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+  await expect(page).toHaveURL(/\/queue$/);
+}
+
+test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still owed', () => {
+  test('u2 (the unarmed superseded link): clean page, row 1\'s read held, row 1 pressed, then row 1.1 (the row on screen), released, typed: Back asks, Keep editing keeps row 1.1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await openedClean(page, code);
+    const held = await holdRowRead(page, '1');
+    await chooseRow(page, '1');
+    await held.reached;
+    // The row on screen is still 1.1: the link back to it is pressed before row 1 has been drawn (the guard takes it and writes it once row 1 has landed).
+    await chooseRow(page, '1.1');
+    held.release();
+    await expect(page).toHaveURL(/row=1\.1#row-inputs$/);
+    await expect(page.locator('#part-form-title')).toContainText('1.1');
+    await expect(description(page)).toBeEditable();
+    await typedBackKeepAndLeave(page, '1.1');
+  });
+
+  test('u3: with row 1\'s read held, no key is accepted into the form (readonly and aria-readonly, never disabled), the form is busy, and the one polite line is said; once it has landed, typing in row 1 is guarded', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await openedClean(page, code);
+    const held = await holdRowRead(page, '1');
+    await chooseRow(page, '1');
+    await held.reached;
+    const form = page.locator('form[data-part-form]');
+    await expect(description(page)).toHaveAttribute('readonly', '');
+    await expect(description(page)).toHaveAttribute('aria-readonly', 'true');
+    await expect(description(page)).not.toBeDisabled();
+    await expect(form).toHaveAttribute('aria-busy', 'true');
+    // A person types into the held box: the focus is there (readonly keeps it) and every key is refused, not accepted and then dropped.
+    const before = await description(page).inputValue();
+    await description(page).focus();
+    await page.keyboard.type(TYPED);
+    await expect(description(page)).toHaveValue(before);
+    // 300 ms or more: the one polite line (UX ruling on AQP-506).
+    await expect(form.locator('p[role="status"]').filter({ hasText: INPUT_HELD_LINE })).toHaveCount(1);
+    held.release();
+    await expect(page).toHaveURL(/row=1#row-inputs$/);
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    await expect(description(page)).toBeEditable();
+    await expect(form).not.toHaveAttribute('aria-busy', 'true');
+    await typedBackKeepAndLeave(page, '1');
+  });
+
+  test('u4 (the old part\'s save in flight during a row change): the link waits for the save, the row changes when it has landed, typing in the new row is guarded, and nothing is lost', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await armed(page, code);
+    let finish: () => void = () => undefined;
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    let reach: () => void = () => undefined;
+    const reached = new Promise<void>((resolve) => {
+      reach = resolve;
+    });
+    await page.route(
+      (url) => isPatchOfInputs(url.toString(), 'PATCH'),
+      async (route) => {
+        if (route.request().method() === 'PATCH') {
+          reach();
+          await finished;
+        }
+        await route.continue();
+      },
+    );
+    await description(page).fill('Invented text, second save');
+    await description(page).blur();
+    await reached;
+    await chooseRow(page, '1');
+    // The page waits for the save in flight before it lets the link through: row 1.1 is still shown.
+    await expect(page.locator('#part-form-title')).toContainText('1.1');
+    finish();
+    await expect(page).toHaveURL(/row=1#row-inputs$/);
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    await expect(description(page)).toBeEditable();
+    await failSaves(page);
+    await description(page).fill(TYPED);
+    await description(page).blur();
+    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+    await backTwiceAsks(page);
   });
 });
 

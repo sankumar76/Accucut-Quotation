@@ -100,6 +100,8 @@ function fakePage() {
       location.on = 'guard';
       history.ahead = false;
     },
+    // The guard marks its own entry again before it steps off it (a write of the router takes the mark away): the same address, and the state it has plus the mark.
+    replaceState: (state: unknown) => void (history.state = state as typeof history.state),
     back: () => void (history.backs += 1),
     go: (delta: number) => {
       history.gone.push(delta);
@@ -291,15 +293,17 @@ describe('DEF-149, QLT-845-08 (DL-487): a link to another row of the same page, 
     expect(history.pushed).toBe(1);
   });
 
-  it('nothing is pushed while the address is not the row on screen\'s: the keystroke waits for the router\'s commit, and is pushed then', () => {
+  it('an owed write never blocks arming (DL-488 (i)): the fields are held while the router has not written the row, and a key that gets through anyway is guarded at once; the write that lands later is the repair\'s', () => {
     const page = fakePage();
     const gate = createSaveGate();
+    const held: boolean[] = [];
     const handle = installLeaveGuard({
       env: page.env,
       gate,
       ask: () => undefined,
       // The router asked to replace has not committed yet.
       navigate: () => undefined,
+      onInputHeld: (now) => void held.push(now),
     });
     gate.mark(PART, 'field-j', true);
     gate.mark(PART, 'field-j', false);
@@ -307,9 +311,11 @@ describe('DEF-149, QLT-845-08 (DL-487): a link to another row of the same page, 
     const event = new Event('click', { cancelable: true });
     Object.defineProperties(event, Object.fromEntries(Object.entries(linkClick(anchor('/estimates/Q-2026-0001?row=1.2'))).map(([name, value]) => [name, { value }])));
     page.doc.dispatchEvent(event);
-    // The step off has landed on the page\'s own entry; the router has not written the row\'s address on it yet.
+    // The step off has landed on the page\'s own entry; the router has not written the row\'s address on it yet: the form is told to hold its fields (DL-488 (iv)).
+    expect(held).toEqual([true]);
+    // A key that got through (the end of the hold on the fields): the entry is pushed at once, on the address the page has (the row on screen's), and an owed write does not stop it.
     gate.mark(PART, 'field-j', true);
-    expect(page.history.pushed).toBe(1);
+    expect(page.history.pushed).toBe(2);
     page.location.pageHref = 'http://portal.test/estimates/Q-2026-0001?row=1.2';
     handle.committed();
     expect(page.history.pushed).toBe(2);
