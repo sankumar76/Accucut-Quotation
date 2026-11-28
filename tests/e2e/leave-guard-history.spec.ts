@@ -80,12 +80,45 @@ async function backTwiceAsks(page: Page): Promise<void> {
 }
 
 test.describe('DEF-149: Back after a link to another row of the same page', () => {
+  // The landing address is exact: the page before the estimate page is the queue, so a way out that goes one entry too far (to the page before the queue) is a failure and not "the page is left" (DL-476 note 7).
+  test('Back, then "Leave without saving": the queue, and no entry further back', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await typedInTheSecondRow(page, code);
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+    await expect(page).toHaveURL(/\/queue$/);
+  });
+
+  test('Back, Back again with the dialog up, then "Leave without saving": the queue, not the entry before it (the overshoot)', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await typedInTheSecondRow(page, code);
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+    await expect(page).toHaveURL(/\/queue$/);
+  });
+
+  test('Back, then "Save draft and leave": the queue, and the typed text is saved first', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    const allowSaves = await typedInTheSecondRow(page, code);
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    allowSaves();
+    const saved = savedAnswer(page);
+    await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
+    expect((await saved).status(), 'the typed text is saved on the way out').toBe(200);
+    await expect(page).toHaveURL(/\/queue$/);
+  });
+
   test('"Leave without saving" leaves the page: the one before is shown', async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, true);
     await typedInTheSecondRow(page, code);
     await backTwiceAsks(page);
     await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
-    await expect(page).toHaveURL(/\/queue/);
+    await expect(page).toHaveURL(/\/queue$/);
   });
 
   test('"Save draft and leave" saves what was typed and leaves the page', async ({ page }, testInfo) => {
@@ -94,7 +127,7 @@ test.describe('DEF-149: Back after a link to another row of the same page', () =
     await backTwiceAsks(page);
     allowSaves();
     await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
-    await expect(page).toHaveURL(/\/queue/);
+    await expect(page).toHaveURL(/\/queue$/);
   });
 
   test('"Keep editing" keeps the guard armed: the page stays, the text stays, and a later Back asks again', async ({ page }, testInfo) => {
