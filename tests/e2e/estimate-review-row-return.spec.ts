@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { assignedEstimate } from './support/assigned-estimate';
 import { isPatchOfInputs } from './support/part-form';
+import { openTreePanel, reviewButton } from './support/review-tree';
+import { DEVELOPMENT_URL } from './support/servers';
 
 /**
  * DL-470 (3): the Lead's page is seeded with the open row's data (DEF-141, #827) and editable (DEF-131, #806). **A row that is edited, left, and opened again shows what was saved, and the next save is accepted.** The
@@ -88,5 +90,106 @@ test.describe('The island follows the address and the leave guard still asks', (
     await expect(leaveDialog(page)).toBeVisible();
     await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
     await expect(page).toHaveURL(/\/queue/);
+  });
+
+  /** The island has replaced the first paint and the open row's form is ready to be typed in. */
+  async function ready(page: Page): Promise<void> {
+    await expect(page.locator('[data-review-tree-reserve]')).toHaveCount(0);
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    await expect(description(page)).toBeEnabled();
+  }
+
+  /** The saves that cannot go through: what is typed after this stays typed and not saved (the gate is dirty). */
+  async function failSaves(page: Page): Promise<void> {
+    await page.route((url) => isPatchOfInputs(url.toString(), 'PATCH'), (route) => (route.request().method() === 'PATCH' ? route.abort() : route.continue()));
+  }
+
+  /** Back is pressed with the guard armed and text typed and not saved: the dialog asks with the row and the text still on the screen (QLT-811-01). */
+  async function backAsksWithTheTextStill(page: Page, title: RegExp, typed: string): Promise<void> {
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await expect(page.locator('#part-form-title')).toHaveText(title);
+    await expect(description(page)).toHaveValue(typed);
+    await leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(leaveDialog(page)).toHaveCount(0);
+    await expect(page.locator('#part-form-title')).toHaveText(title);
+    await expect(description(page)).toHaveValue(typed);
+    // And a second Back asks again and leaves, without the text having been dropped before the page went.
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await expect(description(page)).toHaveValue(typed);
+    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+    await expect(page).toHaveURL(/\/queue/);
+  }
+
+  test('QLT-811-01: a row is added (and opens) with the guard armed, text is typed in it, Back asks with that row and its text still on the screen', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await page.goto('/queue');
+    await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#part-form-title')).toHaveText(/^1\.1 ·/);
+    await ready(page);
+    // Edit row 1.1 and let it save: the guard armed itself while the value was unsaved and stays armed.
+    const saved = savedAnswer(page);
+    await description(page).fill(FIRST);
+    await description(page).blur();
+    expect((await saved).status(), 'the first save').toBe(200);
+    // Add a part under row 1 (it opens), by the "+" of the row.
+    await chooseRow(page, '1');
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    await failSaves(page);
+    await openTreePanel(page);
+    await reviewButton(page, 'Add under', '1').focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('menuitem', { name: /^(Part|Sub-part)$/ }).click();
+    await expect(page.locator('#part-form-title')).toHaveText(/^1\.2 ·/);
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    await description(page).fill('Typed and not saved');
+    await description(page).blur();
+    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+    await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed and not saved');
+  });
+
+  test('QLT-811-01: a row is moved so that the open row is renumbered, text is typed, Back asks with that part and its text still on the screen', async ({ page }, testInfo) => {
+    const { code, estimateId } = await assignedEstimate(page, testInfo, true);
+    const headers = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
+    const tree = (await (await page.request.get(DEVELOPMENT_URL + '/api/v1/estimates/' + estimateId + '/tree')).json()) as { nodes: ReadonlyArray<{ id: string; slNo: string }> };
+    const main = tree.nodes.find((node) => node.slNo === '1');
+    const second = await page.request.post(DEVELOPMENT_URL + '/api/v1/estimates/' + estimateId + '/nodes', { headers, data: { parentId: main?.id ?? null, nodeKind: 'PART' } });
+    expect(second.status(), 'a second part under row 1').toBe(201);
+    await page.goto('/queue');
+    await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#part-form-title')).toHaveText(/^1\.1 ·/);
+    await ready(page);
+    const saved = savedAnswer(page);
+    await description(page).fill(FIRST);
+    await description(page).blur();
+    expect((await saved).status(), 'the first save').toBe(200);
+    // Move row 1.1 down: it is renumbered 1.2 and stays the open part.
+    await failSaves(page);
+    await openTreePanel(page);
+    await reviewButton(page, 'Move', '1.1').focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('menuitem', { name: 'Move down', exact: true }).click();
+    await expect(page.locator('#part-form-title')).toHaveText(/^1\.2 ·/);
+    await description(page).fill('Typed after the move');
+    await description(page).blur();
+    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+    await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed after the move');
+  });
+
+  test('QLT-811-02: with nothing typed, the address moves the island: a new address for row 1.1, then Back shows row 1, then Forward shows row 1.1', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await page.goto('/estimates/' + code + '?row=1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    await ready(page);
+    await page.evaluate(() => window.history.pushState(null, '', '?row=1.1#row-inputs'));
+    await expect(page.locator('#part-form-title')).toHaveText(/^1\.1 ·/);
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    await page.goBack();
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    await page.goForward();
+    await expect(page.locator('#part-form-title')).toHaveText(/^1\.1 ·/);
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
   });
 });

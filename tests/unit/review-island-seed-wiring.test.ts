@@ -24,9 +24,9 @@ describe('the island and the seed', () => {
     // The seed is the first row's data as drawn; once any other row is shown it is dropped for good (state, set during the render), so the first row form, mounted again, starts from the server.
     expect(ISLAND).toMatch(/const \[seedKept, setSeedKept\] = useState\(true\)/);
     expect(ISLAND).toMatch(/if \(seedKept && firstSeed !== undefined && shown !== null && shown\.id !== firstSeed\.partId\) setSeedKept\(false\)/);
-    expect(ISLAND).toMatch(/const formSeed = seedKept && treeFromSeed \? firstSeed : undefined/);
+    expect(ISLAND).toMatch(/const formSeed = seedKept && tree\.fromSeed \? firstSeed : undefined/);
     // ARC-811-01: the form starts from the seed only when the tree came from it.
-    expect(ISLAND).toMatch(/const \[treeFromSeed\] = useState\(\(\) => formSeedOf\(firstSeed, estimateId\) !== undefined\)/);
+    expect(ISLAND).not.toContain('formSeedOf');
     // A page drawn again hands a new seed; the island keeps the first one (state), so a row chosen through the address never feeds the form a snapshot taken at that moment.
     expect(ISLAND).toMatch(/const \[firstSeed\] = useState\(seed\)/);
     expect(ISLAND).toMatch(/seed: firstSeed/);
@@ -36,7 +36,10 @@ describe('the island and the seed', () => {
   it('DL-470 (3), DL-465: a row named by the address (a link the leave guard took, Back) is opened by the island as a press on it would', () => {
     // After a save the leave guard holds the click and navigates with the router, so the row link's own handler never runs: the island follows the address instead.
     expect(ISLAND).toMatch(/const rowParam = useSearchParams\(\)\.get\('row'\)/);
-    expect(ISLAND).toMatch(/if \(rowParam !== seenRow\) \{[\s\S]*?choose\(named\.id\)/);
+    expect(ISLAND).toMatch(/if \(rowParam !== seenRow\) \{[\s\S]*?choose\(named\)/);
+    // QLT-811-01: not while something is typed and not saved; the open row's number goes back into the address instead.
+    expect(ISLAND).toMatch(/rowNamedByAddress\(rowParam, items, selectedId, reviewSaveGate\.isDirty\(\)\)/);
+    expect(ISLAND).toMatch(/rowParam === shownSlNo \|\| !reviewSaveGate\.isDirty\(\)\) return;\s+window\.history\.replaceState\(window\.history\.state, '', addressWithRow\(window\.location\.href, shownSlNo\)\)/);
   });
 
   it('SEC-836-03: no mounted form goes from locked to editable (Unlock, Restore): the page swaps element types, so the form mounts again with the new page\'s own seed, and the island\'s form is editable from its mount', () => {

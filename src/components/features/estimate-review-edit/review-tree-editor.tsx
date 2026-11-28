@@ -8,10 +8,10 @@ import { TreeLegend } from '@/components/shared/tree-legend';
 import { rowNameOf } from '@/lib/estimates/row-name';
 import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import { createClearedRefresh } from '@/lib/estimates/cleared-refresh';
-import { addressWithRow, formSeedOf, joinRows, removedElsewhere, type OpenRow } from '@/lib/estimates/review-tree-edit';
+import { addressWithRow, joinRows, removedElsewhere, rowNamedByAddress, type OpenRow } from '@/lib/estimates/review-tree-edit';
 import { withoutFilled } from '@/lib/estimates/calculate-missing';
 import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
-import { reviewBlocked, reviewCalculating } from '@/lib/estimates/review-save-gate';
+import { reviewBlocked, reviewCalculating, reviewSaveGate } from '@/lib/estimates/review-save-gate';
 import type { PartItem } from '@/lib/estimates/tree-client';
 import type { EstimateStatus } from '@/lib/estimate/state-machine';
 import type { CostNode, CostsView } from '@/server/views/schemas/costs';
@@ -119,8 +119,7 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
   const [seedKept, setSeedKept] = useState(true);
   if (seedKept && firstSeed !== undefined && shown !== null && shown.id !== firstSeed.partId) setSeedKept(false);
   // ... and only when the tree itself came from the seed (ARC-811-01): a tree the browser refused is read from the server later, and that read moves the revision a save carries under the seed's older values.
-  const [treeFromSeed] = useState(() => formSeedOf(firstSeed, estimateId) !== undefined);
-  const formSeed = seedKept && treeFromSeed ? firstSeed : undefined;
+  const formSeed = seedKept && tree.fromSeed ? firstSeed : undefined;
   // The row last chosen by a press on the tree: only then does the form take the focus and the tree fold under 1024 px (a row just added or the neighbour after a delete is not a choice, `PartReview.byPress`).
   const [pressedId, setPressedId] = useState<string | null>(null);
   const choose = (id: string): void => {
@@ -129,12 +128,13 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
     tree.select(id);
   };
   // The address names another row than the island's own write did (a link followed through the leave guard, Back, Forward): the island opens that row, as a press on it would. Its own write is the same row, so it changes nothing.
+  // Not while something is typed and not saved (QLT-811-01): opening another row would unmount the form that holds it, so the open row stays and the effect below puts its number back in the address.
   const rowParam = useSearchParams().get('row');
   const [seenRow, setSeenRow] = useState(rowParam);
   if (rowParam !== seenRow) {
     setSeenRow(rowParam);
-    const named = rowParam === null ? undefined : items.find((item) => item.slNo === rowParam);
-    if (named !== undefined && named.id !== selectedId) choose(named.id);
+    const named = rowNamedByAddress(rowParam, items, selectedId, reviewSaveGate.isDirty());
+    if (named !== null) choose(named);
   }
   const missingFields = new Set(blocked?.find((part) => part.nodeId === selectedId)?.fields.map((field) => field.fieldId));
   const renderRow = (part: PartItem, kindLabel: string) => (
@@ -159,6 +159,13 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
     written.current = shownSlNo;
     window.history.replaceState(window.history.state, '', addressWithRow(window.location.href, shownSlNo));
   }, [shownSlNo]);
+
+  // Back from the leave guard's extra entry restores the older `?row=` of the page's own entry while text is typed and not saved: the open row's number goes back into the address, so the dialog the guard asks with has the row and the
+  // text on the screen (QLT-811-01). A row opened by the island itself (an add, a move that renumbers, a delete fallback) is written by the effect above; this one only mends what a traversal changed.
+  useEffect(() => {
+    if (rowParam === null || shownSlNo === null || rowParam === shownSlNo || !reviewSaveGate.isDirty()) return;
+    window.history.replaceState(window.history.state, '', addressWithRow(window.location.href, shownSlNo));
+  }, [rowParam, shownSlNo]);
 
   const selectedName = shown === null ? '' : `${shown.slNo} ${rowNameOf(shown.label, nodeKindLabel(shown, items))}`;
   const rowLine = shown === null ? null : <ReviewRowLine code={code} node={costOf(shown)} state={state} letters={letters} warned={warnedIds.has(shown.id)} />;

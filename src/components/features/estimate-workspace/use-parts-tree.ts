@@ -340,6 +340,8 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
     nodes,
     loadFailed,
     selected,
+    /** The tree on screen is the page's seed, not a read of the server (the one predicate: the seed names this estimate and the reader accepts its tree). Only the review's island asks, to hand its form the seed only with a tree that came from it (ARC-811-01). */
+    fromSeed: seeded !== null,
     /** The row that was chosen, by its ID, even before the tree is read (the island's first paint draws the page's rows). */
     selectedId,
     busy,

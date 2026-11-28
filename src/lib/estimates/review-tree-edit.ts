@@ -1,5 +1,4 @@
-import type { PartFormSeed } from './part-form-seed';
-import { parseTreeAnswer, type PartItem } from './tree-client';
+import type { PartItem } from './tree-client';
 
 /**
  * The plain rules of the review's editing island (DEF-131 stage 2T; UX ruling `lead-admin-edit-inputs-2026-11-27.md` 4.7): which figures a row of the tree the island holds has, the address of the chosen row and what to
@@ -42,9 +41,11 @@ export function removedElsewhere(open: OpenRow | null, tree: ReadonlyArray<PartI
 }
 
 /**
- * The seed the island's form may start from (ARC-811-01): the page's seed, **only when its tree is one the browser accepts** for this estimate, which is the tree the island then holds (`usePartsTree`). A form that started
- * from the seed's values while the tree was read from the server later would send saves with the tree's newer revision under the seed's older values, so with no tree from the seed the form reads its own part.
+ * The row the island opens because the address names it (a link taken through the leave guard, Back, Forward), or null for "stay where it is" (QLT-811-01): the address names no row of the tree, names the open row, or
+ * **something is typed and not saved** (`dirty`). Opening another row unmounts the form that holds the text, so a dirty island keeps its row and puts the row's number back in the address instead.
  */
-export function formSeedOf(seed: PartFormSeed | undefined, estimateId: string): PartFormSeed | undefined {
-  return seed !== undefined && seed.estimateId === estimateId && parseTreeAnswer(seed.tree) !== null ? seed : undefined;
+export function rowNamedByAddress(rowParam: string | null, items: ReadonlyArray<{ readonly id: string; readonly slNo: string }>, selectedId: string | null, dirty: boolean): string | null {
+  if (rowParam === null || dirty) return null;
+  const named = items.find((item) => item.slNo === rowParam);
+  return named !== undefined && named.id !== selectedId ? named.id : null;
 }
