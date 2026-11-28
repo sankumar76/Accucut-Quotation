@@ -398,3 +398,41 @@ Round 5 reviews lane 1's DL-488 head: the delta from `9598c101`, and the whole `
 - Open questions: none
 - Risks raised: QLT-845-25 (silent drop on a slow row write), QLT-845-24 (5 s frozen form)
 - Recommended next agent: master for QLT-845-25 and the two proof items; then developer (lane 1); then reviewer-quality round 6
+
+## Round 6 (posted 2026-11-28, on 5e113882)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the combined security-and-quality review, §9 (2)) |
+| Commits reviewed | `37c07707` (-24, -26, -28), `f8c090b6` (DL-489 and the ux ruling), `5e113882` (test-only, +7/-1): the delta `b2e4b8f5..5e113882`. Superseded by `8b4ae587` before posting (round 7) |
+| Ruling read | DL-489 (records-u 80cce07f), the ux ruling `leave-guard-slow-row-notice-2026-11-28.md` (64220855, R1 to R3); ux R4/R5 (PR comment 7238523972) cited |
+| PR review | [#845 review 6097621935](https://github.com/sankumar76/Accucut-Quotation/pull/845#pullrequestreview-6097621935) (COMMENT, single-token, `commit_id` 5e113882). Inline: QLT-845-29 `leave-guard.ts:451` (4726848016), -30 `leave-guard-history.spec.ts:329` (4726848021), -31 `:573` (4726848024). Early warning for -29 sent to the orchestrator before posting; master ruled it in DL-490. Label `review:quality-changes-requested` kept |
+| **Verdict** | **REQUEST CHANGES. New: 1 Blocker (QLT-845-29), 0 Critical, 1 Major (QLT-845-31, test), 1 Minor (QLT-845-30, test), 0 Info.** Fixed: -24, -26, -28; -27 closed by DL-489 (E); -25 fixed for the timer and reopened through -29; -23 provisional |
+
+### Checks run
+| Check | Result |
+|---|---|
+| Probe 6 (`probe6/probe6.test.ts`, the real guard from f8c090b6 = 5e113882's product files) | u2 with real hrefs: the guard takes the second link, the hold ends when row 1 lands, Back asks. Slow write: held, notice, nothing accepted at 5.001 s and 30 s; after the landing guarded, Back asks. Stay without `#`: a load. **Stay with `#`: no load, `held: false`, a key accepted, 3 entries, then the late write lands on the guard's entry** |
+| Browser (scratch Playwright `r6probe/replace-hash.cjs`, Chromium 156) | `location.replace(location.href)` with `#`: the marker survives, 1 navigation entry, `popstate` with state null. Without `#`: a full load. Firefox and WebKit are not installed locally |
+| CI 46139743041 on `5e113882` | Cancelled (superseded). Stages 1 to 11b passed. Shard 2 cancelled. Shard 1: 620 passed, 1 failed. Shard 3: 628 passed, 1 failed, 1 flaky. Shard 4: 617 passed, 2 failed |
+| Failures | u5b `:469` at three widths, both attempts, at `:329` (expects `#row-inputs$`, got `?row=1.1`): test (-30), not the -29 path. "Save draft and leave" `:573`: desktop both attempts (31.2 s, 33.0 s), tablet flaky (31.9 s, then 29.8 s), the 30 s test time-out in `expectStoredOnTheWayOut`: test at the time budget (-31) |
+| Green on attempt 1 at three widths | DEF-149 (other cases), c1, c2, c3a, c3b, u2 (2.5 s bound), u3, u4, u5a, u4f, R1/PF; DL-479 (5) `approve-override.spec.ts:230`, `:314`, `approve.spec.ts:312` |
+| DL-404, security, NFR-002 | No change to budgets or configuration; no secret, route, role, figure or auth change |
+
+### Findings
+| ID | Severity | File:line (5e113882) | Issue | Impact | Suggested fix | Test |
+|----|----------|-----------|-------|--------|---------------|------|
+| QLT-845-29 | **Blocker** | `src/lib/estimates/leave-guard.ts:451`, `:528-531` | `location.replace(location.href)` at an address with `#` (every address after a tree row link) is a fragment navigation. Its `popstate` (null state; Next ignores it) is taken as a traversal, so the hold ends while the write is owed | A key is accepted and dropped when the late write lands. -25's loss, reached through DL-489's button. u5b (started without `#`) cannot see it, and the PR body's item 3 does not hold; it is a browser route to a repair | `location.reload()`, or `replace` without the `#` (DL-490); a same-address, null-state `popstate` while a write is owed does not end the hold | Unit writer "Stay at an address with `#`"; u5b from a row link |
+| QLT-845-30 | Minor (test) | `tests/e2e/leave-guard-history.spec.ts:329` (`typedBackKeepAndLeave`) | Expects `#row-inputs$` after a load of `?row=1.1` | u5b red at three widths for a test reason | Allow the `#` to be absent, or pass the address in | u5b, u5b-plain |
+| QLT-845-31 | Major (test) | `tests/e2e/leave-guard-history.spec.ts:573` | "Save draft and leave" times out at 30 s (desktop both attempts, tablet flaky); the describe runs at 23 to 30 s | A required case red when CI is slow; DL-404 forbids widening | Shorten or split; read the desktop retry trace first to rule out a hold | The case with headroom at three widths |
+
+### QLT-845-23 (lane 3, b2e4b8f5, WebKit 360; relayed)
+u2 3/3, u3 3/3, c2 1/3. The aborted request is a navigation RSC fetch for `?row=1.1` (`RSC: 1`, no prefetch). It starts 270 to 390 ms after the test's Back and is cancelled by the guard's Leave `go(-2)` 180 to 320 ms later, not by the step-off. Candidate source (lane 1): ReviewForm's `router.refresh()` 300 ms after a first save or rename. Provisional until the fetch stacks arrive; DL-491 is round 7's.
+
+### Hand-off (round 6)
+- Status: COMPLETE
+- Artefacts written/updated: this section (not committed)
+- Jira / GitHub updates: review 6097621935 with 3 inline comments; label kept; Jira AQP-506 comment 13667
+- Open questions: none
+- Risks raised: QLT-845-29 (silent loss through "Stay on this row")
+- Recommended next agent: reviewer-quality round 7 on 8b4ae587 (DL-490, DL-491)
