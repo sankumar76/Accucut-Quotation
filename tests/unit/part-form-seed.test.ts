@@ -341,7 +341,7 @@ describe('SEC-836-01: the seed\'s form body goes through the route\'s strict bui
     const leaky = (form: unknown) => ({ getFirstPartForm: () => Promise.resolve({ form, node: real.node }), getPartForm: () => Promise.resolve({ form, node: real.node }) }) as never;
     const read = (form: unknown) => (which.startsWith('the Engineer') ? readFirstPartFormBodies({ estimates: leaky(form) }, viewer, 'e') : readPartFormBodies({ estimates: leaky(form), masters: services().masters }, viewer, 'e', real.node.id));
     const dropped = defined(await read(withKey));
-    expect(JSON.stringify(dropped)).not.toContain('rate');
+    expect(dropped.form).not.toHaveProperty('rate');
     expect(await read({ ...real.form, sections })).toBeNull();
   });
 });

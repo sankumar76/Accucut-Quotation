@@ -255,7 +255,8 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     releaseValues();
     await formIsDrawn(page);
     const secondAfter = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
-    expect(Math.abs(secondAfter - secondBefore), `the second wait: the form area changed from ${String(secondBefore)} to ${String(secondAfter)} px`).toBeLessThanOrEqual(ENGINEER_MOVE_AT_MOST_PX);  });
+    expect(Math.abs(secondAfter - secondBefore), `the second wait: the form area changed from ${String(secondBefore)} to ${String(secondAfter)} px`).toBeLessThanOrEqual(ENGINEER_MOVE_AT_MOST_PX);
+  });
 
   test("PF-14e: with reduced motion the ghost's grey blocks do not move", async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, false);
