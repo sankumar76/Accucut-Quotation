@@ -594,3 +594,45 @@ Met: cleared on Keep editing, after the leave goes ahead, and on mount and unmou
 - Open questions: none
 - Risks raised: none new
 - Recommended next agent: developer (lane 1) for u5a-Prepared and the PR-body bullet; master for DL-479 (5) `approve.spec.ts:312` and QLT-845-33; lane 3 for the Firefox and WebKit run (QLT-845-23)
+
+## Round 11 (posted 2026-11-28, on db63b4cf)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the combined security-and-quality review, §9 (2)) |
+| Commits reviewed | `2bb2b478` (QLT-845-36), `db63b4cf` (the Prepared u5a stream at 5.5 s): the delta `f3e1a0e9..db63b4cf`. **DL-493 diff condition confirmed:** exactly `src/lib/estimates/leave-guard.ts`, `tests/unit/leave-guard-writers.test.ts` and `tests/e2e/leave-guard-history.spec.ts` (+20 / -2) |
+| Rulings read | DL-493 (records-u f0395974; Jira 13682, note (6) Jira 13685); DL-479 (12)(d); DL-491 addendum (7)(a) |
+| PR review | [#845 review 6098494449](https://github.com/sankumar76/Accucut-Quotation/pull/845#pullrequestreview-6098494449) (COMMENT, single-token, `commit_id` db63b4cf). Inline: QLT-845-31 `leave-guard-history.spec.ts:204` (4727516566). Label `review:quality-changes-requested` kept. **A newer head, `0cea7005`, was pushed while this round ran:** test-only, `leave-guard-history.spec.ts` +17 / -2 (the Prepared u5a's tail as its own case). It is not reviewed here |
+| **Verdict** | **REQUEST CHANGES. New: 0 Blocker, 0 Critical, 0 Major, 0 Minor, 0 Info.** Fixed: QLT-845-36. Closed for #845: QLT-845-33 (DL-491 addendum (7)(a)). **No product Blocker, Critical or Major is open except QLT-845-23** (lane 3). The run of record does not qualify (QLT-845-31, test only, and `estimate-cleared:82` outside the diff) |
+
+### Checks run
+| Check | Result |
+|---|---|
+| CI 46154368631 on `db63b4cf` | Failure. Stages 1 to 11b passed (12,200 + 18,081 tests, no Errors line). Shards 1, 2 and 4 passed. Shard 3: 631 passed, 1 failed (`estimate-cleared.spec.ts:82` [desktop], both attempts), 6 flaky |
+| #845's named cases (DL-493) | Not met. `:165`, `:204`, `:219` [tablet] failed attempt 1 at 30.3 to 30.4 s (workers 5 to 7, shard 3's first wave right after setup, all within 0.15 s), then passed at 25.9 / 24.9 / 27.3 s. DL-493 conditions: (1) not met (no other spec failed in the window; the concurrent `:155` passed), (2) QA's, (3) met, (4) met. Every other case passed attempt 1 at three widths, including the Prepared u5a `:794` (22.9 / 17.0 / 25.6 s) |
+| `estimate-cleared:82`, `:153` | `:82` [desktop] red on both attempts, `:153` [desktop] flaky. Outside the diff; the Recalculate press does its own `router.refresh()`. On `master` (46107720288, 46102411465, 46097887385) these run at 21.7 to 27.4 s at desktop and tablet: a near-budget `master` case on a slow shard. For QA or master |
+| DL-479 (5) | Not a bar (DL-479 (12)(d)). `approve-override.spec.ts:314` and `approve.spec.ts:312` [desktop] attempt-1 reds logged for DEF-144 |
+| DL-404, security, NFR-002 | No change; no secret, route, role, figure or auth change |
+
+### Judgements
+- **QLT-845-36 is fixed** (the step's target, or the path and query without the `#`; both are loads). Residual note: a press back to the row on screen during a step, with the notice up.
+- **DL-493 note (6), the repair step with the button pressed: unreachable, as master reads it.** The notice needs `tooLong && held`. `tooLong` comes only from a write in flight for 5 s and clears when the hold ends. A repair step needs no write, no step and nothing queued, and `settled()` always turns a queued link into a write or a link step. Only a same-frame click before React redraws remains, and that is theoretical. Stripping the `#` is not owed.
+- **The Prepared u5a at 5.5 s is sound** (the notice is polled and persists; the Draft u5a keeps 6.5 s).
+
+### What is left before `review:quality-approved`
+1. QLT-845-23: lane 3's Firefox and WebKit run (WebKit 360 and 1366 px, Firefox 1366 px, attempt 1; exactly one fallback line in u5b and u5b-plain, zero elsewhere).
+2. A run of record that meets DL-493 for #845's named cases: shard 3's first wave needs headroom (QLT-845-31), or master rules.
+3. A green job: `estimate-cleared:82` [desktop] (outside the diff; a rerun or a `master` item, QA or master decide).
+
+### Findings
+| ID | Severity | File:line (db63b4cf) | Issue | Impact | Suggested fix | Test |
+|----|----------|-----------|-------|--------|---------------|------|
+| QLT-845-31 | Major (test; narrowed to the first wave) | `tests/e2e/leave-guard-history.spec.ts:204` (with `:165`, `:219`) | Shard 3's first three tablet cases miss attempt 1 on a common start-up stall, two runs in a row; 25 to 27 s on a warm retry | Run of record does not qualify under DL-493 | Warm a Lead review page (row link, save, part read-back) in `auth.setup`, or reorder, or cut set-up; no time-out change | The three cases on attempt 1 in the first wave, two runs |
+
+### Hand-off (round 11)
+- Status: COMPLETE
+- Artefacts written/updated: this section (not committed)
+- Jira / GitHub updates: review 6098494449 with 1 inline comment; label kept; Jira AQP-506 comment 13688
+- Open questions: none
+- Risks raised: none new
+- Recommended next agent: lane 1 or QA for the first-wave headroom (round 12 reviews `0cea7005` and what follows); QA for the snapshots and the `estimate-cleared` `master` comparison; lane 3 for Firefox and WebKit; master if a ruling is needed
