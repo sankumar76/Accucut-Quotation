@@ -435,8 +435,14 @@ test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still o
 
 test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and a failed save before a row change', () => {
   /** The notice and its button after 5 s, outside the form and before it (UX ruling leave-guard-slow-row-notice R1 to R3). */
-  async function expectTheNotice(page: Page): Promise<void> {
+  async function expectTheNotice(page: Page, formWidth: number): Promise<void> {
     await expect(page.locator('[data-input-held-slow]')).toBeVisible();
+    // UX ruling R4: the notice does not take a column of its own beside the form (the form's card is a flex row on the Engineer's page), so the form keeps its width; R5: the button is its own width, not the notice's.
+    const formBox = await page.locator('form[data-part-form]').boundingBox();
+    expect(Math.abs((formBox?.width ?? 0) - formWidth), 'the form keeps its width when the notice comes').toBeLessThanOrEqual(1);
+    const noticeBox = await page.locator('[data-input-held-region] > div').boundingBox();
+    const buttonBox = await page.locator('[data-input-held-stay]').boundingBox();
+    expect(buttonBox?.width ?? Infinity, 'the button is not as wide as the notice').toBeLessThan((noticeBox?.width ?? 0) - 40);
     await expect(page.locator('[data-input-held-slow]')).toHaveText(INPUT_STUCK_SENTENCE);
     await expect(page.locator('[data-input-held-region] + form[data-part-form]')).toHaveCount(1);
     await expect(page.locator('p[data-input-held-line]')).toHaveText(INPUT_STUCK_LINE);
@@ -451,11 +457,12 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
   test('u5a: row 1\'s read held for about 6.5 s: a key every 500 ms is accepted into no box, the notice shows after 5 s; after the release the row is editable within 2.5 s, typing is guarded, Back asks, Keep editing keeps row 1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, true);
     await openedClean(page, code);
+    const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
     const held = await holdRowRead(page, '1');
     await chooseRow(page, '1');
     await held.reached;
     await keysThroughTheHold(page, 6500);
-    await expectTheNotice(page);
+    await expectTheNotice(page, formWidth);
     held.release();
     await expect(page).toHaveURL(/row=1#row-inputs$/);
     await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
@@ -469,11 +476,12 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
   test('u5b: the same hold, then "Stay on this row": one full load of the current address (a marker on window is gone), row 1.1 stays, the history is not longer, row 1 is not drawn; typing then is guarded, and Back asks with the text kept', async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, true);
     await openedClean(page, code);
+    const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
     const held = await holdRowRead(page, '1');
     await chooseRow(page, '1');
     await held.reached;
     await keysThroughTheHold(page, 5500);
-    await expectTheNotice(page);
+    await expectTheNotice(page, formWidth);
     const lengthBefore = await historyLength(page);
     await page.evaluate(() => Reflect.set(window, '__sameDocument', true));
     await page.locator('[data-input-held-stay]').click();
