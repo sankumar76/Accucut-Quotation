@@ -297,10 +297,19 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
         ))}
       </div>
       <p role="status" className="sr-only">
-        {inputHeld.shown ? INPUT_HELD_LINE : review?.chosen === true ? review.showing : values.announcement}
+        {review?.chosen === true ? review.showing : values.announcement}
       </p>
     </form>
   );
   // The treatments the page handed over reach the control that needs them, deep in the form, through this context (DEF-141).
-  return <TreatmentSeedContext value={seed?.treatments}>{drawn}</TreatmentSeedContext>;
+  // The one polite line of a hold of 300 ms or more is a live region of its own, **outside the form**: the form is `aria-busy` while it is held, and a region inside a busy one may not be announced (QLT-845-26). It is on the page
+  // from the first paint, so it speaks when its words change.
+  return (
+    <TreatmentSeedContext value={seed?.treatments}>
+      {drawn}
+      <p role="status" data-input-held-line="" className="sr-only">
+        {inputHeld.shown ? INPUT_HELD_LINE : ''}
+      </p>
+    </TreatmentSeedContext>
+  );
 }

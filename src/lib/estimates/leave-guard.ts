@@ -120,6 +120,8 @@ interface AnchorFacts {
   readonly href: string;
   readonly target: string;
   readonly hasAttribute: (name: string) => boolean;
+  /** The attribute as written in the page (`href` is the address it resolves to). An element has it; a plain object of a test may not. */
+  readonly getAttribute?: (name: string) => string | null;
 }
 
 function isAnchor(value: unknown): value is AnchorFacts {
@@ -140,6 +142,17 @@ function anchorOf(target: unknown): AnchorFacts | null {
   if (typeof target !== 'object' || target === null || !('closest' in target) || typeof target.closest !== 'function') return null;
   const found: unknown = target.closest('a[href]');
   return isAnchor(found) ? found : null;
+}
+
+/**
+ * Whether the link is written as a jump to a place on this page: its `href` as written starts with a `#` (the skip link, the rates-changed notice, the section strip, the Calculate summary). The tree's row links are
+ * written with the whole address, `?row=<Sl. No>#row-inputs`, so a link back to the row on screen has the same path and query as the page and a `#`, and is still a link to a row (QLT-845-24). Null when the link cannot say.
+ */
+function writtenAsPlaceOnPage(target: unknown): boolean | null {
+  const anchor = anchorOf(target);
+  if (anchor === null || typeof anchor.getAttribute !== 'function') return null;
+  const written = anchor.getAttribute('href');
+  return written === null ? null : written.startsWith('#');
 }
 
 /** What a click event says, read without assuming it is a mouse event: anything that is not a left click reads as button -1 and so never leaves. */
@@ -365,8 +378,12 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
     // every link to another row itself (DL-488 (ii)), so the last link pressed is the one that is written; it compares the link with the row the page is heading for, not with the address the entry still has.
     if (!dirty && armedFor === null && inFlight === null && queued === null && step === null) return;
     const heading = queued ?? inFlight;
-    // A link to a place on this page (a `#` on the address that is current) is not a link to another row, whatever row is being written: `onFragmentClick` does it, when the write has settled.
-    if (heading !== null && fragmentLinkOf(clickFactsOf(event), win.location) !== null) return;
+    // A link to a place on this page is not a link to another row, whatever row is being written: `onFragmentClick` does it, when the write has settled. It is told by how it is written (`#main`), not by its address: a row
+    // link written `?row=1.1#row-inputs` resolves to the page's own path and query and a `#` too, and when the row it names is the one on screen it is the link back to it (QLT-845-24).
+    if (heading !== null) {
+      const placeOnPage = writtenAsPlaceOnPage(event.target);
+      if (placeOnPage === true || (placeOnPage === null && fragmentLinkOf(clickFactsOf(event), win.location) !== null)) return;
+    }
     const reference = heading === null ? win.location : { href: new URL(heading, win.location.href).href, origin: win.location.origin };
     const href = leavingLinkOf(clickFactsOf(event), reference);
     if (href === null) return;

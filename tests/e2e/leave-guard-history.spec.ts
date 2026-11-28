@@ -346,7 +346,8 @@ test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still o
     held.release();
     await expect(page).toHaveURL(/row=1\.1#row-inputs$/);
     await expect(page.locator('#part-form-title')).toContainText('1.1');
-    await expect(description(page)).toBeEditable();
+    // The hold ends with the write, not by its 5 s fail-open end (QLT-845-24): the real links end in `#row-inputs`, so the link back to the row on screen has to be taken by the guard like any other.
+    await expect(description(page)).toBeEditable({ timeout: 2500 });
     await typedBackKeepAndLeave(page, '1.1');
   });
 
@@ -367,7 +368,9 @@ test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still o
     await page.keyboard.type(TYPED);
     await expect(description(page)).toHaveValue(before);
     // 300 ms or more: the one polite line (UX ruling on AQP-506).
-    await expect(form.locator('p[role="status"]').filter({ hasText: INPUT_HELD_LINE })).toHaveCount(1);
+    // The line is a live region outside the busy form (QLT-845-26), so a screen reader is not holding it back.
+    await expect(page.locator('p[data-input-held-line]')).toHaveText(INPUT_HELD_LINE);
+    await expect(form.locator('p[data-input-held-line]')).toHaveCount(0);
     held.release();
     await expect(page).toHaveURL(/row=1#row-inputs$/);
     await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);

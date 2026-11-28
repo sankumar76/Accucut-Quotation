@@ -20,8 +20,18 @@ import { createSaveGate } from '@/lib/estimates/save-gate';
 const BEFORE = 'http://portal.test/queue';
 const PAGE = 'http://portal.test/estimates/Q-2026-0001';
 const PART = '00000000-0000-4000-8000-0000000000d1';
-const ROW_LINK = '/estimates/Q-2026-0001?row=1.2';
-const OTHER_LINK = '/estimates/Q-2026-0001?row=1.4';
+/**
+ * The addresses the links of the tree carry. **The real ones end in `#row-inputs`** (`review-tree.tsx`: `?row=<Sl. No>#row-inputs`), so a link back to the row on screen has the same path and query as the page and
+ * differs only by that `#` (QLT-845-24); the cases run with that shape and without a `#`. `setUp` sets them for the variant.
+ */
+const links = { row: '', other: '', page: '' };
+const setLinks = (hash: boolean): void => {
+  const suffix = hash ? '#row-inputs' : '';
+  links.row = `/estimates/Q-2026-0001?row=1.2${suffix}`;
+  links.other = `/estimates/Q-2026-0001?row=1.4${suffix}`;
+  links.page = `/estimates/Q-2026-0001${suffix}`;
+};
+setLinks(true);
 
 /** The path and query of an address: what makes it "the row on screen". A `#` does not. */
 const pathSearch = (href: string): string => {
@@ -62,16 +72,18 @@ interface Variant {
   readonly order: Order;
   /** When the router's deferred `replaceState` lands: at once, or only after the next keystroke. */
   readonly timing: Timing;
+  /** Whether the links of the tree end in `#row-inputs`, as the real ones do (the default), or carry no `#`. */
+  readonly hash?: boolean;
   /** Traversals (`go`) are queued and made when the test settles them, so something can happen while one is on its way. */
   readonly queued?: boolean;
 }
 
-const VARIANTS: ReadonlyArray<Variant> = [
-  { order: 'next-first', timing: 'at-once' },
-  { order: 'guard-first', timing: 'at-once' },
-  { order: 'next-first', timing: 'after-keystroke' },
-  { order: 'guard-first', timing: 'after-keystroke' },
-];
+const VARIANTS: ReadonlyArray<Variant> = [true, false].flatMap((hash) => [
+  { order: 'next-first', timing: 'at-once', hash } as const,
+  { order: 'guard-first', timing: 'at-once', hash } as const,
+  { order: 'next-first', timing: 'after-keystroke', hash } as const,
+  { order: 'guard-first', timing: 'after-keystroke', hash } as const,
+]);
 const DEFAULT: Variant = VARIANTS[0] as Variant;
 
 function browser(variant: Variant) {
@@ -205,12 +217,19 @@ function browser(variant: Variant) {
   /** The router's own navigation, as the guard and the page's links reach it: `replace` keeps the entry count (its commit lands now or after the next keystroke), `push` adds one. */
   // The address the next write of the router ends at when a navigation is redirected (a redirect to the address the page had).
   const redirect: { next: string | null } = { next: null };
+  // A write that was asked for and will never land the way it was asked (discarded, redirected, a traversal that never comes, a handler that never navigates): the hold on the fields may then end only by its fail-open end.
+  const lost = { any: false };
   const router = {
     replace: (asked: string) => {
       const href = redirect.next ?? asked;
+      if (href !== asked) lost.any = true;
       redirect.next = null;
       if (variant.timing === 'at-once') commit(href);
-      else deferred.push(() => commit(href));
+      else {
+        // Next discards a navigation that another one overtakes (`app-router-instance.js`): only the last write that is waiting lands, and a link the guard did not take is how one overtakes another.
+        deferred.splice(0);
+        deferred.push(() => commit(href));
+      }
     },
     push: (href: string) => {
       entries.splice(index + 1);
@@ -229,7 +248,8 @@ function browser(variant: Variant) {
    */
   function click(href: string, own?: (event: { preventDefault: () => void }) => void): void {
     const absolute = new URL(href, entries[index]).href;
-    const anchorFacts = { href: absolute, target: '', hasAttribute: () => false };
+    // `getAttribute('href')` is the href as written in the page (`#main` for a link to a place on the page), as in the browser.
+    const anchorFacts = { href: absolute, target: '', hasAttribute: () => false, getAttribute: (name: string) => (name === 'href' ? href : null) };
     let stopped = false;
     const event = new Event('click', { cancelable: true });
     Object.defineProperties(event, {
@@ -276,7 +296,13 @@ function browser(variant: Variant) {
     },
     pendingCommits: () => deferred.length,
     /** The router drops a navigation that was asked for and never writes it (React drops a transition that another one overtakes, a redirect, a navigation that is abandoned): the first write that was waiting never lands. */
-    discardFirstWrite: () => void deferred.shift(),
+    discardFirstWrite: () => {
+      lost.any = true;
+      deferred.shift();
+    },
+    /** A write that was owed and will never come: a handler that prevented the default and never navigated. */
+    markLost: () => void (lost.any = true),
+    lostWrites: () => lost.any,
     redirect,
     /** The traversals that were queued are made, in order. */
     settle: () => {
@@ -286,7 +312,10 @@ function browser(variant: Variant) {
     /** From now on traversals wait to be settled (or not). */
     setQueued: (queued: boolean) => void (queuedNow = queued),
     /** A traversal whose landing never comes. */
-    dropQueuedTraversals: () => void traversals.splice(0),
+    dropQueuedTraversals: () => {
+      lost.any = true;
+      traversals.splice(0);
+    },
     /** The timers that are due after `upTo` ms (all of them when it is left out) run. The one that ends the hold on the fields is a fail-open for a write that never comes, so a case that has a write still on its way must not run it. */
     runTimers: (upTo = Infinity) => {
       const due = timers.filter((timer) => timer.ms <= upTo);
@@ -298,6 +327,7 @@ function browser(variant: Variant) {
 
 /** One page with the guard on it: the writers and the person's typing and Back. */
 function setUp(variant: Variant = DEFAULT) {
+  setLinks(variant.hash ?? true);
   page.active = null;
   page.elements = new Map([
     ['main', element(false)],
@@ -353,7 +383,7 @@ type Setup = ReturnType<typeof setUp>;
 /** The core writers of a history entry on the page, as the page does it; every sequence of up to three of them is walked. */
 const WRITERS: ReadonlyArray<readonly [string, (s: Setup) => void]> = [
   // The Lead's row link: a Next link with `replace`; the guard takes it when it is armed (it steps off its entry and then replaces the page's own), and otherwise the page's handler replaces.
-  ['a row link', (s) => s.click(ROW_LINK, (event) => (event.preventDefault(), s.router.replace(ROW_LINK)))],
+  ['a row link', (s) => s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)))],
   // The island's rewrite of `?row=` after an add.
   ['the island rewrite', (s) => s.history.replaceState(s.history.state, '', '?row=1.3')],
   // The skip link and the rates-changed link: plain anchors, no handler.
@@ -364,20 +394,26 @@ const WRITERS: ReadonlyArray<readonly [string, (s: Setup) => void]> = [
   [
     'two quick row links, the first overtaken by the second',
     (s) => {
-      s.click(ROW_LINK, (event) => (event.preventDefault(), s.router.replace(ROW_LINK)));
-      s.click(PAGE, (event) => (event.preventDefault(), s.router.replace(PAGE)));
+      s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
+      s.click(links.page, (event) => (event.preventDefault(), s.router.replace(links.page)));
       s.discardFirstWrite();
     },
   ],
   // A link whose own handler prevents the default and never navigates.
-  ['a row link whose handler prevents the default and never navigates', (s) => s.click(ROW_LINK, (event) => event.preventDefault())],
+  [
+    'a row link whose handler prevents the default and never navigates',
+    (s) => {
+      s.markLost();
+      s.click(links.row, (event) => event.preventDefault());
+    },
+  ],
   // A navigation the router redirects to the address the page had.
   [
     'a row link whose navigation is redirected to the address the page had',
     (s) => {
       // A redirect belongs to a navigation: a link to the address the router is on is no navigation (its `replace` commits nothing), so there is nothing to redirect.
-      if (pathSearch(new URL(ROW_LINK, PAGE).href) !== s.screen.path) s.redirect.next = PAGE;
-      s.click(ROW_LINK, (event) => (event.preventDefault(), s.router.replace(ROW_LINK)));
+      if (pathSearch(new URL(links.row, PAGE).href) !== s.screen.path) s.redirect.next = PAGE;
+      s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
     },
   ],
 ];
@@ -391,7 +427,7 @@ const MORE_WRITERS: ReadonlyArray<readonly [string, (s: Setup) => void]> = [
     'a step off whose landing never comes and ends by STEP_GRACE_MS',
     (s) => {
       s.setQueued(true);
-      s.click(ROW_LINK, (event) => (event.preventDefault(), s.router.replace(ROW_LINK)));
+      s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
       s.dropQueuedTraversals();
       s.runTimers(STEP_GRACE_MS);
       s.setQueued(false);
@@ -402,7 +438,7 @@ const MORE_WRITERS: ReadonlyArray<readonly [string, (s: Setup) => void]> = [
     'a step off whose landing comes after STEP_GRACE_MS',
     (s) => {
       s.setQueued(true);
-      s.click(ROW_LINK, (event) => (event.preventDefault(), s.router.replace(ROW_LINK)));
+      s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
       s.runTimers(STEP_GRACE_MS);
       s.setQueued(false);
       s.settle();
@@ -415,7 +451,7 @@ const MORE_WRITERS: ReadonlyArray<readonly [string, (s: Setup) => void]> = [
   [
     'a late write of the router onto the current entry',
     (s) => {
-      s.router.replace(ROW_LINK);
+      s.router.replace(links.row);
       s.flush();
     },
   ],
@@ -425,16 +461,16 @@ const MORE_WRITERS: ReadonlyArray<readonly [string, (s: Setup) => void]> = [
   [
     'two quick row links to rows of their own',
     (s) => {
-      s.click(ROW_LINK, (event) => (event.preventDefault(), s.router.replace(ROW_LINK)));
-      s.click(OTHER_LINK, (event) => (event.preventDefault(), s.router.replace(OTHER_LINK)));
+      s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
+      s.click(links.other, (event) => (event.preventDefault(), s.router.replace(links.other)));
     },
   ],
   [
     'three quick row links',
     (s) => {
-      s.click(ROW_LINK, (event) => (event.preventDefault(), s.router.replace(ROW_LINK)));
-      s.click(OTHER_LINK, (event) => (event.preventDefault(), s.router.replace(OTHER_LINK)));
-      s.click(PAGE, (event) => (event.preventDefault(), s.router.replace(PAGE)));
+      s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
+      s.click(links.other, (event) => (event.preventDefault(), s.router.replace(links.other)));
+      s.click(links.page, (event) => (event.preventDefault(), s.router.replace(links.page)));
     },
   ],
 ];
@@ -448,6 +484,8 @@ function check(s: Setup, label: string): void {
   // While a deferred write or a traversal is still on its way the entries are in step with what has been committed, not with what is asked for.
   if (idle) expect(pathSearch(s.entries[s.pageIndex] ?? ''), `${label}: the page's own entry carries the row on screen`).toBe(s.screen.path);
   // At idle, something typed means the guard is armed: its entry is on top of the page's own and the person is on it (the class of QLT-845-19).
+  // The hold on the fields ends when the writes have landed, not by its fail-open end: the fail-open end is for a write that never comes (QLT-845-24: a link the guard did not take left the hold for 5 s).
+  if (idle && !s.lostWrites()) expect(s.inert(), `${label}: the hold ended with the writes`).toBe(false);
   if (s.form.typed && idle) expect(s.index(), `${label}: something is typed, so the guard is armed`).toBeGreaterThanOrEqual(2);
 }
 
@@ -638,10 +676,13 @@ function walk(variant: Variant, list: ReadonlyArray<readonly [string, (s: Setup)
   return checked;
 }
 
-/** A walk takes 0.5 to 2 s on its own; the default 5 s is too close when the whole suite runs in parallel on a busy machine. It bounds the walk, not what it checks. */
+/**
+ * The 399-sequence walk (1533 runs of a few ms each) takes 1.4 to 2.2 s on its own, in each of the 8 variants, and took 5.2 to 5.4 s when the whole suite ran in parallel on a loaded machine, past the default 5 s
+ * (QLT-845-28). 30 s is about 5 times the loaded figure and 14 times the quiet one: it bounds the walk and changes nothing it checks.
+ */
 const WALK_TIMEOUT_MS = 30_000;
 
-describe.each(VARIANTS)('DEF-149 (R1), QLT-845-08, QLT-845-19: whatever the page writes, the guard keeps its invariants, nothing is accepted and then dropped, and the way out lands on the page before ($order, router writes $timing)', (variant) => {
+describe.each(VARIANTS)('DEF-149 (R1), QLT-845-08, QLT-845-19: whatever the page writes, the guard keeps its invariants, nothing is accepted and then dropped, and the way out lands on the page before ($order, router writes $timing, links with # $hash)', (variant) => {
   it.each(WRITERS)('%s, alone, then the first keystroke: the oracle holds', (_name, write) => {
     const s = setUp(variant);
     write(s);
@@ -685,7 +726,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     s.save();
     return s;
   };
-  const rowLink = (s: Setup, href = ROW_LINK) => s.click(href, (event) => (event.preventDefault(), s.router.replace(href)));
+  const rowLink = (s: Setup, href = links.row) => s.click(href, (event) => (event.preventDefault(), s.router.replace(href)));
 
   it('c1: a key pressed straight after a row link, before the router has written it, is refused; once it has, typing is guarded: Back asks, the text is there and the address is the row\'s', () => {
     const s = armedAndSaved({ order: 'next-first', timing: 'after-keystroke' });
@@ -698,7 +739,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     s.flush();
     expect(s.inert()).toBe(false);
     expect(s.violations).toEqual([]);
-    expect(pathSearch(s.at() ?? '')).toBe(pathSearch(new URL(ROW_LINK, PAGE).href));
+    expect(pathSearch(s.at() ?? '')).toBe(pathSearch(new URL(links.row, PAGE).href));
     expect(s.type()).toBe(true);
     expect(s.index()).toBe(2);
     expect(s.above()).toBe(1);
@@ -708,13 +749,13 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
   it('c2: two row links in quick succession (the first step off has not landed) resolve to the last one, and nothing is accepted meanwhile', () => {
     const s = armedAndSaved({ order: 'next-first', timing: 'at-once', queued: true });
     rowLink(s);
-    rowLink(s, OTHER_LINK);
+    rowLink(s, links.other);
     expect(s.pendingTraversals()).toBe(1);
     expect(s.inert()).toBe(true);
     expect(s.type()).toBe(false);
     s.settle();
     s.flush();
-    expect(s.screen.path).toBe(pathSearch(new URL(OTHER_LINK, PAGE).href));
+    expect(s.screen.path).toBe(pathSearch(new URL(links.other, PAGE).href));
     expect(pathSearch(s.entries[s.pageIndex] ?? '')).toBe(s.screen.path);
     expect(s.type()).toBe(true);
     expect(s.violations).toEqual([]);
@@ -725,7 +766,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
   it('c2 as Firefox ran it: two row links, the second back to the row the page was opened on: the guard takes the second (DL-488 (ii)), writes it when the first has landed, the router ends where it started, and the guard arms on the first key accepted', () => {
     const s = armedAndSaved({ order: 'next-first', timing: 'after-keystroke' });
     rowLink(s);
-    rowLink(s, PAGE);
+    rowLink(s, links.page);
     expect(s.inert()).toBe(true);
     s.flush();
     expect(s.pendingCommits()).toBe(0);
@@ -739,7 +780,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
   it('c2 as Firefox ran it, the first write overtaken and never landing: the router ends where it started and says nothing; the fields are held until the guard\'s fail-open end, and the guard then arms on the first key accepted', () => {
     const s = armedAndSaved({ order: 'next-first', timing: 'after-keystroke' });
     rowLink(s);
-    rowLink(s, PAGE);
+    rowLink(s, links.page);
     s.discardFirstWrite();
     s.flush();
     expect(s.pendingCommits()).toBe(0);
@@ -755,7 +796,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
   it('u2 (the reviewer\'s case): a clean page, never armed; row 1\'s link, then at once the current row\'s: the guard takes the second link (DL-488 (ii)) and writes it once the first has landed, so Next never discards the first; typing is guarded', () => {
     const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
     rowLink(s);
-    rowLink(s, PAGE);
+    rowLink(s, links.page);
     expect(s.inert()).toBe(true);
     expect(s.type()).toBe(false);
     s.flush();
@@ -769,7 +810,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
   it('u2 with the router discarding the first navigation (QLT-845-19 as the reviewer\'s probe had it): the router ends where it started and says nothing, the fields are held until the guard\'s fail-open end, and typing is then guarded', () => {
     const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
     rowLink(s);
-    rowLink(s, PAGE);
+    rowLink(s, links.page);
     s.discardFirstWrite();
     s.flush();
     expect(s.type()).toBe(false);
@@ -807,7 +848,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
   it('a write that lands on the guard\'s entry is repaired as soon as nothing is unsaved in the row on screen, even while another part\'s save is in flight; nothing can be typed meanwhile', () => {
     const s = armedAndSaved({ order: 'next-first', timing: 'at-once' });
     s.holdSave();
-    s.router.replace(ROW_LINK);
+    s.router.replace(links.row);
     expect(pathSearch(s.entries[s.pageIndex] ?? '')).toBe(s.screen.path);
     expect(s.type()).toBe(true);
     backOracle(s, 'late write with a save in flight');
@@ -815,7 +856,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
 
   it('an owed write never blocks arming, and the lock on the fields ends by itself if the write never comes (a link that goes nowhere)', () => {
     const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
-    s.click(ROW_LINK, (event) => event.preventDefault());
+    s.click(links.row, (event) => event.preventDefault());
     expect(s.inert()).toBe(true);
     expect(s.type()).toBe(false);
     // The fail-open end of the lock: the fields accept input again, and the first key arms the guard.
@@ -869,7 +910,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     s.history.go(1);
     expect(s.asked).toHaveLength(0);
     expect(s.form.lost).toBe(false);
-    expect(s.screen.path).toBe(pathSearch(new URL(ROW_LINK, PAGE).href));
+    expect(s.screen.path).toBe(pathSearch(new URL(links.row, PAGE).href));
     expect(s.violations).toEqual([]);
   });
 
