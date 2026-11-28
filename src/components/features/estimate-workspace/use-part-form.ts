@@ -485,14 +485,15 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   }
 
   /**
-   * The person's own move of this part (QLT-839-04, follow-up 840): the tree hands over the revision of the move's own answer. A move raises the part's revision by one and changes none of its values, so,
-   * like a picture, it is one of the form's own saves and is taken when it is exactly one ahead of the revision the form holds. It is taken in turn, after every save already asked for, so the next save is
-   * not refused 409 for a revision the person's own move made (and a value typed without leaving its field is not lost to a re-read that a page leave cannot wait for). An answer further ahead says that somebody
-   * else wrote too: it is not taken, and the next save is answered 409 and read again.
+   * The person's own move of this part (QLT-839-04, QLT-841-01): the tree hands over the revision the move was sent with (`sent`) and the one its own answer gave (`revision`). A move that wrote raises the part's
+   * revision by one and changes none of its values, so it is one of the form's own saves, but only when it is PROVEN to be: `revision` is exactly `sent` plus one (a move that wrote nothing answers the revision it was sent
+   * with, when somebody else had already put the rows in that order), and `sent` is the revision of the values this form holds (a row that was one ahead of the form says somebody else wrote too, and the form has not
+   * seen their values). It is taken in turn, after every save already asked for, so the next save is not refused 409 for a revision the person's own move made (and a value typed without leaving its field is not lost to
+   * a re-read that a page leave cannot wait for). Anything else is not taken: the next save is answered 409 and read again.
    */
-  function ownMoved(revision: number): void {
+  function ownMoved(move: { readonly sent: number; readonly revision: number }): void {
     void inTurn(async () => {
-      if (revision === revisionRef.current + ONE_WRITE) revisionRef.current = revision;
+      if (move.revision === move.sent + ONE_WRITE && move.sent === revisionRef.current) revisionRef.current = move.revision;
     });
   }
 

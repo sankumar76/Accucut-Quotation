@@ -244,7 +244,7 @@ describe('QLT-839-04 (follow-up #840): the tree hands the form the move\'s own a
     // The move: the part's revision goes up by one, its values do not change. The tree is read again and hands the form the revision of the move's own answer.
     partServer.changeElsewhere({});
     treeReadAgain(row);
-    form.ownMoved(partServer.revision);
+    form.ownMoved({ sent: 1, revision: partServer.revision });
     hook.render();
     form.setText('c', '5');
     form.commit(C);
@@ -254,12 +254,27 @@ describe('QLT-839-04 (follow-up #840): the tree hands the form the move\'s own a
     expect(partServer.inputs).toEqual({ a: '1.00', b: '1.00', c: '5.00' });
   });
 
+  it('QLT-841-01 (a): a move that wrote nothing (somebody else had already put the rows in that order) answers the revision it was sent with, which is one ahead of the form: it is not adopted, the next save is refused 409 and the other person\'s A is kept', async () => {
+    const { gate, hook } = await open();
+    const form = hook.render();
+    partServer.changeElsewhere({ a: '9.00' });
+    // The row shows 2; the move is sent with 2 and the server, which has nothing to move, answers 2.
+    form.ownMoved({ sent: 2, revision: 2 });
+    form.setText('c', '5');
+    form.commit(C);
+    await gate.settle();
+    expect(partServer.sent[0]).toEqual({ revision: 1, values: { c: '5.00' } });
+    gate.flush('draft');
+    await gate.settle();
+    expect(partServer.inputs).toEqual({ a: '9.00', b: '1.00', c: '5.00' });
+  });
+
   it('own move, then a value typed without leaving the field and the page closes: the one save that goes out on the leave carries the new revision and keeps the value (it is not refused 409 and left to a re-read that cannot survive the page)', async () => {
     const { gate, hook, row } = await open();
     const form = hook.render();
     partServer.changeElsewhere({});
     treeReadAgain(row);
-    form.ownMoved(partServer.revision);
+    form.ownMoved({ sent: 1, revision: partServer.revision });
     hook.render();
     form.setText('c', '5');
     gate.flush('leave');
@@ -269,12 +284,13 @@ describe('QLT-839-04 (follow-up #840): the tree hands the form the move\'s own a
     expect(partServer.inputs).toEqual({ a: '1.00', b: '1.00', c: '5.00' });
   });
 
-  it('an answer two or more ahead (somebody else changed the part as well) is not adopted: the next save is refused 409 and the other person\'s A is kept', async () => {
+  it('QLT-841-01 (c): a move sent with a row that was one ahead of the form (somebody else wrote, the form has not seen it) is not adopted: the next save is refused 409 and the other person\'s A is kept', async () => {
     const { gate, hook } = await open();
     const form = hook.render();
+    // Somebody else changes A (the row shows 2), then this person moves the row: it is sent with 2 and answered 3.
     partServer.changeElsewhere({ a: '9.00' });
     partServer.changeElsewhere({});
-    form.ownMoved(partServer.revision);
+    form.ownMoved({ sent: 2, revision: partServer.revision });
     form.setText('c', '5');
     form.commit(C);
     await gate.settle();
@@ -283,11 +299,12 @@ describe('QLT-839-04 (follow-up #840): the tree hands the form the move\'s own a
     expect(hook.render().texts['a']).toBe('9.00');
   });
 
-  it('an answer that is not ahead (the revision the form holds, or an older one) changes nothing', async () => {
+  it('an answer that is not one ahead of what the move was sent with changes nothing', async () => {
     const { gate, hook } = await open();
     const form = hook.render();
-    form.ownMoved(1);
-    form.ownMoved(0);
+    form.ownMoved({ sent: 1, revision: 1 });
+    form.ownMoved({ sent: 1, revision: 0 });
+    form.ownMoved({ sent: 1, revision: 3 });
     form.setText('c', '5');
     form.commit(C);
     await gate.settle();
@@ -301,7 +318,7 @@ describe('QLT-839-04 (follow-up #840): the tree hands the form the move\'s own a
     form.setText('c', '5');
     form.commit(C);
     // The move's answer comes while that save is on its way. The server holds 1 until the save lands (2), then the move raises it to 3.
-    form.ownMoved(3);
+    form.ownMoved({ sent: 2, revision: 3 });
     release();
     await gate.settle();
     expect(partServer.sent).toEqual([{ revision: 1, values: { c: '5.00' } }]);

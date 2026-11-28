@@ -154,7 +154,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
     takeOwnMove.current = values.ownMoved;
   });
   useEffect(() => {
-    if (moved !== null) takeOwnMove.current(moved.revision);
+    if (moved !== null) takeOwnMove.current(moved);
   }, [moved]);
   const title = useRef<HTMLHeadingElement>(null);
   // The Engineer's form draws its own title; the review's is drawn on the server above the form, and this form is labelled by it.
