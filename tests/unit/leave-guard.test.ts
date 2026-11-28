@@ -191,6 +191,66 @@ describe('AC-4: a link inside the portal', () => {
   });
 });
 
+describe('DEF-149: a link to another row of the same page leaves the extra entry on top and the guard armed', () => {
+  const ROW = anchor('/estimates/Q-2026-0001?row=1.2');
+
+  it('replaces the extra entry and does not push a second one when something is typed again', () => {
+    const { click, navigated, history, typeSomething, saveIt } = setUp();
+    typeSomething();
+    saveIt();
+    expect(history.pushed).toBe(1);
+    click(ROW);
+    expect(navigated).toEqual(['replace /estimates/Q-2026-0001?row=1.2']);
+    // The router replaced the extra entry; the page is the same and so is its one extra entry: typing again must not stack another.
+    typeSomething();
+    expect(history.pushed).toBe(1);
+  });
+
+  it('after an add (a row opened with the extra entry on top) and typing, Back asks and the way out is two steps back, once', () => {
+    const { click, history, typeSomething, saveIt, pressBack, asked } = setUp();
+    typeSomething();
+    saveIt();
+    click(ROW);
+    typeSomething();
+    pressBack();
+    expect(asked).toHaveLength(1);
+    asked[0]?.proceed();
+    expect(history.gone).toEqual([-2]);
+    expect(history.pushed).toBe(2);
+  });
+
+  it('a link to another page takes the guard away with it: nothing stays armed for the page that follows', () => {
+    const { click, history, typeSomething, saveIt } = setUp();
+    typeSomething();
+    saveIt();
+    click(anchor('/audit'));
+    typeSomething();
+    expect(history.pushed).toBe(2);
+  });
+
+  it('two row links in a row and then Back: still one extra entry, and the way out is two steps back', () => {
+    const { click, history, typeSomething, saveIt, pressBack, asked } = setUp();
+    typeSomething();
+    saveIt();
+    click(anchor('/estimates/Q-2026-0001?row=1.2'));
+    click(anchor('/estimates/Q-2026-0001?row=1.3'));
+    typeSomething();
+    expect(history.pushed).toBe(1);
+    pressBack();
+    asked[0]?.proceed();
+    expect(history.gone).toEqual([-2]);
+  });
+
+  it('"Keep editing" keeps the guard armed: a later Back asks again', () => {
+    const { typeSomething, pressBack, asked } = setUp();
+    typeSomething();
+    pressBack();
+    asked[0]?.cancel();
+    pressBack();
+    expect(asked).toHaveLength(2);
+  });
+});
+
 describe('AC-4: the back button', () => {
   it('puts one extra entry on the history when something first becomes unsaved, and not another while it stays so', () => {
     const { history, typeSomething, saveIt } = setUp();

@@ -142,7 +142,9 @@ export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOption
     event.stopImmediatePropagation();
     const go = (): void => {
       const replace = armedFor !== null;
-      armedFor = null;
+      // A link to another row of this same page is taken by the router and the guard stays on the page, with its extra entry still on top (replaced, not left behind): it stays armed, so what is typed next does not put a
+      // second extra entry on the history, which the traversal of a later Back (two steps back) does not count (DEF-149). A link to another page takes the guard away with it.
+      if (new URL(href, win.location.href).pathname !== new URL(win.location.href).pathname) armedFor = null;
       navigate(href, replace);
     };
     if (dirty) ask({ proceed: go, cancel: () => undefined });

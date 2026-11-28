@@ -86,6 +86,8 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
   function leave(): void {
     if (request === null) return;
     show(null);
+    // The typing is given up by the person's choice: nothing of it is unsaved from here, so a row opened by the address, or a page, is not held back by it.
+    gate.discardUnsaved();
     go(request);
   }
 

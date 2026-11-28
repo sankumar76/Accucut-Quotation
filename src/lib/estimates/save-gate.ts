@@ -16,6 +16,8 @@ export interface SaveGate {
   readonly mark: (partId: string, fieldId: string, unsaved: boolean) => void;
   /** The part is not on the screen (or was read again): what was typed into it is gone, so nothing of it is unsaved any more. The page asks before it lets a part with unsaved values go (`leave-guard.tsx`). */
   readonly forget: (partId: string) => void;
+  /** The person chose "Leave without saving": what is typed and not saved is given up, so nothing of it is unsaved any more and the page that follows (another row, another page) is not held back by it (DEF-149). Saves in flight are untouched. */
+  readonly discardUnsaved: () => void;
   /** Waits until no save is in flight; true when no field shows an unsaved value. Never rejects. */
   readonly settle: () => Promise<boolean>;
   /** A save is in flight, or a field shows a value that is not saved: leaving the page now could lose typing. */
@@ -67,6 +69,11 @@ export function createSaveGate(): SaveGate {
       const dropped = [...unsaved].filter((key) => key.startsWith(`${partId}/`));
       for (const key of dropped) unsaved.delete(key);
       if (dropped.length > 0) notify();
+    },
+    discardUnsaved() {
+      if (unsaved.size === 0) return;
+      unsaved.clear();
+      notify();
     },
     async settle() {
       // A save that finishes can queue nothing new, but one typed while this waits is waited for too.
