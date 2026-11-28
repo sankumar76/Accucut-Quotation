@@ -229,3 +229,18 @@
 - Open questions: none
 - Risks raised: QLT-845-18 (A unreachable in Chromium; DEF-149 open there), QLT-845-14 (a swallowed real Back after a lost step), QLT-845-16 (narrow race)
 - Recommended next agent: master, for the fix-shape re-ruling (QLT-845-18); then developer (lane 1)
+
+### Round 3 addendum: DL-487 (option A withdrawn, option C ruled)
+Master's DL-487 withdraws option A and rules option C. 8b07927d stays, and the bounce and the probe are removed in new commits. The round 3 findings now stand as follows:
+
+| ID | Status under DL-487 | Carries to C as |
+|---|---|---|
+| QLT-845-18 (Critical) | **Resolved by the ruling** (A withdrawn). DL-487 accepts the evidence | The five -08 Leave cases (`:199`, `:208`, `:219`, `:231`, `:239`) must be green on attempt 1 at three widths on C |
+| QLT-845-14 (Major), -15 (Minor), -16 (Minor) | **Superseded by DL-487** (the bounce, `BOUNCE_GRACE_MS` and the "unknown address" match go with A) | Nothing. Round 4 checks that they are removed and leave no dead code |
+| QLT-845-12 (Major) | **Carries over, re-aimed** | A test must show that C's mechanism ran, not the old fallback: under C's arm-on-a-matching-address invariant, assert the history length and the address of the entry the guard arms on, after the row link and after the first keystroke in the new row, at three widths |
+| QLT-845-13 (Major, test) | **Carries over** | Exactly one ask per sequence in `leave-guard-writers.test.ts`, with any exception named and justified. No blanket "once or twice" |
+| QLT-845-17 (Minor) | **Carries over** | The Save-draft read-back must assert the typed text of the row on screen |
+| QLT-845-09, -10, -11 | **Fixed** (green on attempt 1 at three widths in run 46122561641) | Must stay green on C |
+| E2E additions at 8b07927d (no-wait `:164`, `backTwiceAsks` length and address, `expectStoredOnTheWayOut`, R1 `:465`, `:479`) | Kept | Round 4 re-reads them against C |
+
+Verdict unchanged: **REQUEST CHANGES**. Round 4 reviews the C commits.
