@@ -6,7 +6,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
 import { PartsTreeList } from '@/components/shared/parts-tree-list';
-import { TREE_FOOT } from '@/components/shared/tree-chrome';
 import { TreeLegend } from '@/components/shared/tree-legend';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -170,7 +169,7 @@ export function TreePanel({ tree, editable, onOpen, opensOnPress = false, missin
             } : {})}
         />
         {/* The foot: a hairline, "Add main assembly" under it, and then the two legends (DEF-081 items 13 and 14). */}
-        <div data-tree-foot="" className={TREE_FOOT}>
+        <div data-tree-foot="" className="flex flex-col gap-s-3 border-t border-border pt-s-3">
           {editable ? addMainAssembly : null}
           {review === undefined ? (
             <>

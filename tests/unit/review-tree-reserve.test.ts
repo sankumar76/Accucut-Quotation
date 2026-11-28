@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { ReviewTree } from '@/components/features/estimate-review/review-tree';
-import { TOOLBAR_RESERVE, TOOLBAR_SLOT, TREE_FOOT } from '@/components/shared/tree-chrome';
+import { TOOLBAR_RESERVE, TREE_FOOT } from '@/components/shared/tree-chrome';
 import type { CostsView } from '@/server/views/schemas/costs';
 
 import { defined } from '../support/defined';
@@ -44,7 +44,7 @@ describe('PF-20: the first paint of an editable tree reserves the island\'s room
       expect(reserve).not.toMatch(/\b(id|role|tabindex|href)=/);
     }
     // The toolbar slot is the list's own, and the reserve inside it holds the finger's line under the selected row.
-    expect(markup).toContain(TOOLBAR_SLOT);
+    expect(markup).toContain('relative col-start-2 min-w-0 mouse:min-h-(--tree-slot-h)');
     expect(markup).toContain(TOOLBAR_RESERVE);
   });
 
@@ -66,10 +66,9 @@ describe('PF-20: the first paint of an editable tree reserves the island\'s room
     expect(markup).not.toContain(TREE_FOOT);
   });
 
-  it('the reserve and the editing tree read the one set of class strings (tree-chrome.ts), so they cannot drift (PF-4 rule)', () => {
-    expect(read('src/components/shared/parts-tree-list.tsx')).toContain("from '@/components/shared/tree-chrome'");
-    expect(read('src/components/shared/parts-tree-list.tsx')).not.toMatch(/const TOOLBAR_SLOT = /);
-    expect(read('src/components/features/estimate-workspace/tree-panel.tsx')).toMatch(/data-tree-foot="" className=\{TREE_FOOT\}/);
+  it('the reserve and the editing tree draw the same strings (the first load cannot take a module for them, so this test is the guard against drift)', () => {
+    expect(read('src/components/shared/parts-tree-list.tsx')).toContain("const TOOLBAR_SLOT = 'relative col-start-2 min-w-0 mouse:min-h-(--tree-slot-h)';");
+    expect(read('src/components/features/estimate-workspace/tree-panel.tsx')).toContain('<div data-tree-foot="" className="' + TREE_FOOT + '">');
     expect(read('src/components/features/estimate-review/review-tree.tsx')).toMatch(/className=\{TREE_FOOT\}/);
     expect(read('src/components/shared/tree-chrome.ts')).not.toMatch(/^import /m);
   });

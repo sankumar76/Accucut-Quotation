@@ -23,9 +23,18 @@ describe('the island and the seed', () => {
   it('DL-470 (3): the form gets the page seed only until another row is shown; the first row opened again is read from the server, never from the snapshot', () => {
     // The seed is the first row's data as drawn; once any other row is shown it is dropped for good (state, set during the render), so the first row form, mounted again, starts from the server.
     expect(ISLAND).toMatch(/const \[seedKept, setSeedKept\] = useState\(true\)/);
-    expect(ISLAND).toMatch(/if \(seedKept && seed !== undefined && shown !== null && shown\.id !== seed\.partId\) setSeedKept\(false\)/);
-    expect(ISLAND).toMatch(/const formSeed = seedKept \? seed : undefined/);
+    expect(ISLAND).toMatch(/if \(seedKept && firstSeed !== undefined && shown !== null && shown\.id !== firstSeed\.partId\) setSeedKept\(false\)/);
+    expect(ISLAND).toMatch(/const formSeed = seedKept \? firstSeed : undefined/);
+    // A page drawn again hands a new seed; the island keeps the first one (state), so a row chosen through the address never feeds the form a snapshot taken at that moment.
+    expect(ISLAND).toMatch(/const \[firstSeed\] = useState\(seed\)/);
+    expect(ISLAND).toMatch(/seed: firstSeed/);
     // The tree hook starts from the page's tree once and reads its seed at mount only (use-parts-tree.ts), so the same rule needs nothing there.
+  });
+
+  it('DL-470 (3), DL-465: a row named by the address (a link the leave guard took, Back) is opened by the island as a press on it would', () => {
+    // After a save the leave guard holds the click and navigates with the router, so the row link's own handler never runs: the island follows the address instead.
+    expect(ISLAND).toMatch(/const rowParam = useSearchParams\(\)\.get\('row'\)/);
+    expect(ISLAND).toMatch(/if \(rowParam !== seenRow\) \{[\s\S]*?choose\(named\.id\)/);
   });
 
   it('DEF-145, DL-465: the page draws ONE ghost on the server, for the page\'s own editable; the first paint\'s form and the island\'s form both get it, so the swap moves nothing', () => {

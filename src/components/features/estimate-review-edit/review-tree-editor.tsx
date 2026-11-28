@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type ReactNode } from 'react';
 
 import { PartsTreeList } from '@/components/shared/parts-tree-list';
@@ -85,7 +85,9 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
   };
 
   const first = nodes.find((node) => node.slNo === selectedSlNo) ?? nodes[0] ?? null;
-  const tree = usePartsTree(estimateId, refresh, { initialSelectedId: first?.id ?? null, onWrote: wrote, seed });
+  // The seed of the page as it was first drawn: a page drawn again (a row chosen in the address, a refresh) hands a new one, which is never used (the open row is the island's, from here on).
+  const [firstSeed] = useState(seed);
+  const tree = usePartsTree(estimateId, refresh, { initialSelectedId: first?.id ?? null, onWrote: wrote, seed: firstSeed });
   // The server said no to a change (the estimate is approved, quoted or ignored now): the page is drawn again, and it then draws the read-only tree and the words that say why.
   const refused = tree.problem?.kind === 'refused';
   useEffect(() => {
@@ -115,8 +117,8 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
   // The page's seed is the first row's data **as it was drawn**. Once another row is shown it is dropped for good: that row opened again is read from the server (what was saved, with its revision), never from the snapshot, which
   // would show the values from before the edit and send the next save with a stale revision (DL-470 (3)). Worked out during the render, as the open row is below.
   const [seedKept, setSeedKept] = useState(true);
-  if (seedKept && seed !== undefined && shown !== null && shown.id !== seed.partId) setSeedKept(false);
-  const formSeed = seedKept ? seed : undefined;
+  if (seedKept && firstSeed !== undefined && shown !== null && shown.id !== firstSeed.partId) setSeedKept(false);
+  const formSeed = seedKept ? firstSeed : undefined;
   // The row last chosen by a press on the tree: only then does the form take the focus and the tree fold under 1024 px (a row just added or the neighbour after a delete is not a choice, `PartReview.byPress`).
   const [pressedId, setPressedId] = useState<string | null>(null);
   const choose = (id: string): void => {
@@ -124,6 +126,14 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
     if (id !== selectedId) setPressedId(id);
     tree.select(id);
   };
+  // The address names another row than the island's own write did (a link followed through the leave guard, Back, Forward): the island opens that row, as a press on it would. Its own write is the same row, so it changes nothing.
+  const rowParam = useSearchParams().get('row');
+  const [seenRow, setSeenRow] = useState(rowParam);
+  if (rowParam !== seenRow) {
+    setSeenRow(rowParam);
+    const named = rowParam === null ? undefined : items.find((item) => item.slNo === rowParam);
+    if (named !== undefined && named.id !== selectedId) choose(named.id);
+  }
   const missingFields = new Set(blocked?.find((part) => part.nodeId === selectedId)?.fields.map((field) => field.fieldId));
   const renderRow = (part: PartItem, kindLabel: string) => (
     <TreeRow node={costOf(part)} kindLabel={kindLabel} state={state} code={code} warned={warnedIds.has(part.id)} selected={part.id === selectedId} missing={missingIds.has(part.id)} onChoose={choose} takesFocus={tree.wantsFocus} />

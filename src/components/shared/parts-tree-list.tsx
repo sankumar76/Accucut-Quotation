@@ -2,7 +2,6 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { Icon } from '@/components/shared/icon';
-import { TOOLBAR_SLOT } from '@/components/shared/tree-chrome';
 import { cn } from '@/lib/cn';
 import { nodeKindLabel, type NodeKind } from '@/lib/estimate/node-kinds';
 import { branchesOf, siblingPlacesOf, type Branch, type SiblingPlace } from '@/lib/estimates/tree-moves';
@@ -100,6 +99,14 @@ interface BranchItemProps<T extends PartsTreeItem> {
   readonly closed: ReadonlySet<string> | undefined;
   readonly onToggle: ((id: string) => void) | undefined;
 }
+
+/**
+ * The toolbar slot of a row: the second line of the row's grid, in the link's column, so it is under the name and never over it. It is `relative`, so the clipped toolbar of a row that is not shown (`sr-only`, absolutely
+ * placed) stays at the foot of its own row. **For a mouse the slot has a fixed least height, `--tree-slot-h` (40 px; 48 px below 1024 px), whether the toolbar is in view or not** (DEF-129, DEF-132; UX ruling
+ * tree-toolbar-no-shift-2026-11-27): the toolbar fills it when it shows, so showing or hiding it moves no row and the pointer can go down from one row onto the next one's link without anything sliding under it. A finger
+ * has no reserved slot: its toolbar is on the selected row alone.
+ */
+const TOOLBAR_SLOT = 'relative col-start-2 min-w-0 mouse:min-h-(--tree-slot-h)';
 
 /** The place of a row the list has no place for. Never reached (every row of the list has one); a row with neither Move up nor Move down is the safe answer if it ever were. */
 const ONLY_CHILD: SiblingPlace = { index: 0, count: 1 };
