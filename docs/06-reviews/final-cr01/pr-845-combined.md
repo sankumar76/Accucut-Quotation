@@ -483,3 +483,74 @@ u2 3/3, u3 3/3, c2 1/3. The aborted request is a navigation RSC fetch for `?row=
 - Open questions: none
 - Risks raised: QLT-845-32 (stale figures shown as current on the Lead's review after a way out)
 - Recommended next agent: developer (lane 1) for -32 and -31 (already pushing); master for -33; lane 3 for the Firefox and WebKit u5b trace; then reviewer-quality round 8
+
+## Round 8 (posted 2026-11-28, on cb559904)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the combined security-and-quality review, §9 (2)) |
+| Commits reviewed | `03bed4ab` (QLT-845-32: a one-leave flag, `createReviewRefresh`, `LeaveRequest.samePage`), `4ecdccc9` (u6d asserts the tiles and the tree), `cb559904` (c3b on a Draft estimate): the delta `8b4ae587..cb559904` |
+| PR review | [#845 review 6097833922](https://github.com/sankumar76/Accucut-Quotation/pull/845#pullrequestreview-6097833922) (COMMENT, single-token, `commit_id` cb559904). Inline: QLT-845-34 `leave-after-refresh.ts:24` (4727037641). Early warning for -34 sent to the orchestrator before posting. Label `review:quality-changes-requested` kept |
+| **Verdict** | **REQUEST CHANGES. New: 0 Blocker, 0 Critical, 0 Major, 1 Minor (QLT-845-34), 0 Info.** Fixed: QLT-845-32. Open: QLT-845-31 (Major, test budget), QLT-845-23 (Major, lane 3), QLT-845-33 (Minor, for master) |
+
+### Checks run
+| Check | Result |
+|---|---|
+| CI 46143929862 on `cb559904` | **success.** Unit 12,190 + 18,071 tests. E2E shards: 1: 625 passed. 2: 624 passed. 3 [tablet]: 631 passed, 4 flaky. 4: 623 passed |
+| `leave-guard-history.spec.ts` | Every case passed at three widths. One attempt-1 failure: `:164` [tablet] (Save draft and leave, before typing), 32.2 s on the 30 s time-out, then 25.8 s. u6d `:675` 11.0 / 14.7 / 21.7 s and c3b `:261` 14.5 / 24.5 / 25.4 s, both attempt 1. Tablet was the slow shard (u5b 28.6 s, `:768` 27.9 s) |
+| DL-479 (5) | **Not met:** `approve-override.spec.ts:314` and `approve.spec.ts:312` [desktop] failed attempt 1 (30.3 s, 30.2 s), then passed. For master |
+| DL-404, security, NFR-002 | No budget or configuration change. No secret, route, role, figure or auth change. The Engineer view is unchanged |
+
+### QLT-845-32 close terms
+Met: cleared on Keep editing, after the leave goes ahead, and on mount and unmount. The unit "leave, navigate away, come back" and its siblings are present. u6d is green on attempt 1 at three widths, on the soft-navigation path with a marker, asserting the tiles and the tree. Red first by reading is enough: the old fault was deterministic module state. c3b on Draft still meets QLT-845-21.
+
+### Findings
+| ID | Severity | File:line (cb559904) | Issue | Impact | Suggested fix | Test |
+|----|----------|-----------|-------|--------|---------------|------|
+| QLT-845-34 | Minor | `src/lib/estimates/leave-after-refresh.ts:24` (`afterLeaveChosen`), called after `go(chosen)` in `leave-guard.tsx` `leave()` | For an away leave the flag is cleared before the traversal lands. Owed refreshes are dropped, but a new `refresh()` in that window (a save answer during the traversal) arms the 300 ms timer | `router.refresh()` can start mid-traversal if the review has not unmounted within 300 ms: QLT-845-23's WebKit race. A wrong landing, no text lost | Away leave: keep the flag until the guard is removed; clear at once only when `samePage`; if an away leave does not leave, clear on the next `popstate` or commit | Unit: away leave, then `refresh()` before dispose starts nothing; an away leave that never unmounts, then the next landed rename, refreshes |
+
+### Hand-off (round 8)
+- Status: COMPLETE
+- Artefacts written/updated: this section (not committed)
+- Jira / GitHub updates: review 6097833922 with 1 inline comment; label kept; Jira AQP-506 comment 13671
+- Open questions: none
+- Risks raised: none new (QLT-845-34 is narrow)
+- Recommended next agent: developer (lane 1), whose next head (3ee7fd47 Draft move, 1f50a04f Prepared variants, 7325f0bb -34 fix) is round 9; master for DL-479 (5) and -33; lane 3 for the Firefox and WebKit u5b trace
+
+## Round 9 (posted 2026-11-28, on 7325f0bb)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the combined security-and-quality review, §9 (2)) |
+| Commits reviewed | `3ee7fd47` (21 cases moved to Draft), `1f50a04f` (Prepared variants of u2, "Save draft and leave", u5a), `7325f0bb` (QLT-845-34): the delta `cb559904..7325f0bb` |
+| PR review | [#845 review 6097979880](https://github.com/sankumar76/Accucut-Quotation/pull/845#pullrequestreview-6097979880) (COMMENT, single-token, `commit_id` 7325f0bb). Inline: QLT-845-35 `tests/unit/leave-guard.test.ts:308` (4727160228), -31 `leave-guard-history.spec.ts:483` (4727160236). Label `review:quality-changes-requested` kept |
+| **Verdict** | **REQUEST CHANGES. New: 1 Blocker (QLT-845-35, broken tests, a one-line fix), 0 Critical, 0 Major, 0 Minor, 0 Info.** Fixed: QLT-845-34. Open: QLT-845-31 (Major, narrowed to u5b and u5a-Prepared), QLT-845-23 (Major, lane 3), QLT-845-33 (Minor, master) |
+
+### Checks run
+| Check | Result |
+|---|---|
+| CI 46146112433 on `7325f0bb` | **Failure.** Stage 6 (unit) exit 1: 12,192 tests passed with 1 unhandled error, `TypeError: doc.getElementById is not a function` from `leave-guard.test.ts:308` (QLT-845-35). E2E: shard 1: 627 passed. Shard 2: 622 passed, 2 failed, 2 flaky (28.2 min). Shard 3: 637 passed. Shard 4: 622 passed, 1 failed, 3 flaky |
+| E2E failures | u5b `:483` [desktop], both attempts, 30.1 s / 37.6 s (QLT-845-31). `estimate-cleared.spec.ts:82` and `:153` [tablet], both attempts at the 30 s time-out: outside the diff by file, but in the review's refresh code; every tablet `estimate-cleared` case took 13 to 30 s on that shard. Read a trace or compare with `master` before calling it a flake |
+| Leave-guard times | Moved cases at [desktop]: 13.8 to 26.3 s. Prepared u2 22.0 / 15.7 / 13.9 s, Save draft 21.1 / 20.4 / 14.3 s, u5a 27.9 / 25.3 / 17.2 s. Every case passed on attempt 1 at three widths except u5b [desktop] |
+| DL-479 (5) | Met |
+| DL-404, security, NFR-002 | No budget or configuration change. No secret, route, role, figure or auth change |
+
+### QLT-845-34 and the Draft move
+- **QLT-845-34 is fixed:** an away leave keeps the flag set (`setLeaving(true, true)`). `stillHere` clears it on a landing or commit of this page, or a click. Removal clears it.
+- **The Draft move keeps every moved case's meaning.** Prepared coverage stays where the figures matter: c1, Prepared u2, Prepared Save draft, Prepared u5a, u6d, (vii), and the refresh-then-`#` case.
+- **Lane 1's stated reason for u6a to u6c needs correcting.** On Draft, `wrote()` refreshes only after a landed rename, not after every save. The u6 cases use renames, so they still exercise -23.
+- **The Prepared Save draft asking on one Back is acceptable** (the overshoot is figure-independent and stays on Draft).
+
+### Findings
+| ID | Severity | File:line (7325f0bb) | Issue | Impact | Suggested fix | Test |
+|----|----------|-----------|-------|--------|---------------|------|
+| QLT-845-35 | **Blocker** (broken tests) | `tests/unit/leave-guard.test.ts:308` | `click(anchor('#main'))` reaches `jumpToFragment`; `fakePage().doc` has no `getElementById`, so the listener throws and Vitest fails Stage 6 on the unhandled error | The unit stage of the run of record is red | Use a row-link click, or give the fake doc `getElementById` returning null | Stage 6 green, no unhandled errors |
+| QLT-845-31 | Major (test budget; narrowed) | `tests/e2e/leave-guard-history.spec.ts:483` (u5b), u5a-Prepared | u5b red at [desktop] both attempts; u5a-Prepared at 27.9 s | Red on budget | Split u5b's after-reload half; trim u5a-Prepared; no time-out change | u5b, u5b-plain, u5a-Prepared under about 22 s at [desktop] |
+
+### Hand-off (round 9)
+- Status: COMPLETE
+- Artefacts written/updated: this section (not committed)
+- Jira / GitHub updates: review 6097979880 with 2 inline comments; label kept; Jira AQP-506 comment 13673
+- Open questions: none
+- Risks raised: none new in the product; QLT-845-35 blocks the run of record
+- Recommended next agent: developer (lane 1) for -35 and u5b; QA or the orchestrator for the `estimate-cleared` tablet comparison; lane 3 for Firefox and WebKit
