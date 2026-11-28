@@ -293,6 +293,22 @@ describe('DEF-149, QLT-845-08 (DL-487): a link to another row of the same page, 
     expect(history.pushed).toBe(1);
   });
 
+  it('QLT-845-34: after a way out that takes the person away has been sent (the flag is set, going away), a landing or a commit on this page, or a click, says the person is still here and clears it; a landing on another page does not', () => {
+    const { gate, location, win, click, handle } = setUp();
+    gate.setLeaving(true, true);
+    // The way out's own traversal lands on another page: nothing is cleared.
+    location.forced = 'http://portal.test/queue';
+    win.dispatchEvent(new Event('popstate'));
+    expect(gate.isLeaving()).toBe(true);
+    location.forced = null;
+    // A commit of this page: the way out did not go anywhere.
+    handle.committed();
+    expect(gate.isLeaving()).toBe(false);
+    gate.setLeaving(true, true);
+    click(anchor('#main'));
+    expect(gate.isLeaving()).toBe(false);
+  });
+
   it('QLT-845-32: a request made by a link says whether it keeps the person on this page: a link to another row does, a link to another page does not', () => {
     const { click, typeSomething, asked } = setUp();
     typeSomething();

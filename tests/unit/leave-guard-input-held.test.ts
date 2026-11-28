@@ -184,7 +184,7 @@ describe('QLT-845-32 (DL-491 addendum (7)): the leave flag lasts for one leave o
   const same = { proceed: () => undefined, cancel: () => undefined, samePage: true } as const;
   const away = { proceed: () => undefined, cancel: () => undefined } as const;
 
-  it('it is cleared once the way out has been sent, whether the person stays on the page (a link to another row) or goes', () => {
+  it('a way out that keeps the person on the page clears it once it has been sent; one that takes them away keeps it set until the guard goes (QLT-845-34: nothing may start mid-traversal)', () => {
     const gate = createSaveGate();
     gate.setLeaving(true);
     afterLeaveChosen(gate, same);
@@ -192,9 +192,13 @@ describe('QLT-845-32 (DL-491 addendum (7)): the leave flag lasts for one leave o
     expect(gate.isLeaveAway()).toBe(false);
     gate.setLeaving(true);
     afterLeaveChosen(gate, away);
-    expect(gate.isLeaving()).toBe(false);
+    expect(gate.isLeaving()).toBe(true);
     expect(gate.isLeaveAway()).toBe(true);
-    // The next leave starts afresh.
+    // The guard going (the page unmounts) gives the gate back clear, and the next leave starts afresh.
+    const release = holdGateForGuard(gate);
+    release();
+    expect(gate.isLeaving()).toBe(false);
+    expect(gate.isLeaveAway()).toBe(false);
     gate.setLeaving(true);
     expect(gate.isLeaveAway()).toBe(false);
   });
@@ -229,6 +233,10 @@ describe('QLT-845-32 (DL-491 addendum (7)): the leave flag lasts for one leave o
         afterLeaveChosen(gate, away);
         vi.advanceTimersByTime(1000);
         expect(first.count, 'the refresh that was owed is dropped when the leave takes the person away').toBe(0);
+        // A save that was in flight answers mid-traversal and asks for a refresh: nothing starts (QLT-845-34).
+        page.refresh();
+        vi.advanceTimersByTime(1000);
+        expect(first.count, 'a refresh asked for during the traversal starts nothing').toBe(0);
         page.dispose();
         // The person comes back (a later visit, with no full load): the guard takes the gate clear, and the next rename's refresh runs.
         const release = holdGateForGuard(gate);
@@ -239,6 +247,30 @@ describe('QLT-845-32 (DL-491 addendum (7)): the leave flag lasts for one leave o
         expect(second.count).toBe(1);
         again.dispose();
         release();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('an away leave that never unmounts (the way out did not go anywhere): once the guard sees the person is still on the page, the next landed rename\'s refresh runs', () => {
+      vi.useFakeTimers();
+      try {
+        const gate = createSaveGate();
+        const state = runs();
+        const page = createReviewRefresh(gate, state.run, 300);
+        gate.setLeaving(true);
+        afterLeaveChosen(gate, away);
+        page.refresh();
+        vi.advanceTimersByTime(1000);
+        expect(state.count).toBe(0);
+        // The guard says the person is still here (a popstate or a commit of this page, or a click): the flag is cleared and what was owed runs.
+        gate.setLeaving(false);
+        vi.advanceTimersByTime(300);
+        expect(state.count).toBe(1);
+        page.refresh();
+        vi.advanceTimersByTime(300);
+        expect(state.count).toBe(2);
+        page.dispose();
       } finally {
         vi.useRealTimers();
       }

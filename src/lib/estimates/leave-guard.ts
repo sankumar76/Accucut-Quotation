@@ -399,6 +399,7 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
   };
 
   const onClick: Listener = (event) => {
+    stillHere();
     const dirty = gate.isDirty();
     // With the extra history entry on top, even a clean page takes the click: the link then replaces that entry instead of stacking on it, so a later Back has no dead press (review SQR-03). While a write is owed the guard drives
     // every link to another row itself (DL-488 (ii)), so the last link pressed is the one that is written; it compares the link with the row the page is heading for, not with the address the entry still has.
@@ -500,8 +501,14 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
     }
   };
 
+  // A way out that takes the person away has been sent and the page is still here: it did not go anywhere (QLT-845-34), so what was held back for it ends. A landing on another page is the way out itself.
+  const stillHere = (): void => {
+    if (gate.isLeaveAway() && onThisPage()) gate.setLeaving(false);
+  };
+
   const onPopState: Listener = () => {
     const here = win.location.href;
+    stillHere();
     // A `popstate` of an entry that has no state of its own is not one Next answers (`app-router.js` ignores it: nothing is drawn): a fragment navigation of the document, or a replace of the same address with a `#`
     // (QLT-845-29). While a write is owed it ends nothing: it does not settle the write, drop what was queued, or arm.
     if ((inFlight !== null || queued !== null) && step === null && (typeof win.history.state !== 'object' || win.history.state === null)) return;
@@ -574,6 +581,7 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
    */
   const committed = (): void => {
     if (!onThisPage() || step !== null) return;
+    stillHere();
     shown = pathSearchOf(win.location.href);
     if (armedFor === null && markOf(win.history.state) === null) knownPage = win.location.href;
     // The router has written an address of this page. The write that was owed is over when it is the address asked for (`settleInFlight`), and also when it is another one (a redirect is an event too, DL-489 (3) (i)),

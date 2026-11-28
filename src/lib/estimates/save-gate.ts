@@ -41,7 +41,10 @@ export interface SaveGate {
    */
   readonly setLeaving: (leaving: boolean, goingAway?: boolean) => void;
   readonly isLeaving: () => boolean;
-  /** The leave that was set has gone ahead and takes the person off this page (`go(-n)`, a link to another page): what was held back for it is dropped, not run (QLT-845-32). Reset by the next `setLeaving(true)`. */
+  /**
+   * The leave that was set has been sent and takes the person off this page (`go(-n)`, a link to another page): the flag stays set while the traversal is in flight, so nothing starts meanwhile, and what was held back for
+   * it is dropped, not run (QLT-845-32, QLT-845-34). The guard going, or the guard seeing the person is still on the page, clears both.
+   */
   readonly isLeaveAway: () => boolean;
   readonly subscribeLeaving: (listener: () => void) => () => void;
   /** The review's refresh of the page is in flight (the transition's `isPending`, DL-491 (c)). */
@@ -139,8 +142,7 @@ export function createSaveGate(): SaveGate {
     },
     stayOnThisRow: () => stayOffer?.(),
     setLeaving(next, goingAway = false) {
-      if (next) leaveAway = false;
-      else leaveAway = goingAway;
+      leaveAway = goingAway;
       if (next === leaving) return;
       leaving = next;
       for (const listener of [...leavingListeners]) listener();

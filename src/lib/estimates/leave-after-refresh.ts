@@ -16,12 +16,13 @@ export async function proceedAfterRefresh(gate: SaveGate, proceed: () => void, m
 }
 
 /**
- * The leave flag lasts for one leave only (DL-491 addendum (7), QLT-845-32): it is cleared once the way out has been sent (`go(-n)`, the navigation). A way out that keeps the person on this page (a link to another row)
- * lets the review's refresh run what it owed; one that takes them away drops it, since the page that asked for it is going (nothing starts while the traversal is in flight). The guard's removal clears it too
- * (`holdGateForGuard`).
+ * The leave flag lasts for one leave only (DL-491 addendum (7), QLT-845-32): a way out that keeps the person on this page (a link to another row) clears it once it has been sent, and the review's refresh runs what it
+ * owed. A way out that takes them away keeps it set while the traversal is in flight, so no refresh starts meanwhile, not even one a save that was in flight asks for as it answers (QLT-845-34), and what was owed is
+ * dropped. It is cleared when the guard goes (`holdGateForGuard`), or when the guard sees the person is still on this page (a landing or a commit of this page, or a click), in case the way out did not go anywhere.
  */
 export function afterLeaveChosen(gate: SaveGate, request: LeaveRequest): void {
-  gate.setLeaving(false, request.samePage !== true);
+  if (request.samePage === true) gate.setLeaving(false);
+  else gate.setLeaving(true, true);
 }
 
 /**
