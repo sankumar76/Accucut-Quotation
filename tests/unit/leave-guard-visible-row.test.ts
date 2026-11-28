@@ -1,18 +1,17 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { BOUNCE_GRACE_MS, captureRunsFirst, installLeaveGuard, type LeaveEnv } from '@/lib/estimates/leave-guard';
+import { installLeaveGuard, type LeaveEnv, type LeaveGuardHandle } from '@/lib/estimates/leave-guard';
 import type { LeaveRequest } from '@/lib/estimates/leave-registry';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
 /**
- * DEF-149 / QLT-845-08 (AQP-506; DL-482): **after Back asks and the person keeps editing, the page still shows the row they were typing in, with what they typed.** The guard's own entry is the one a row link replaces
- * while the guard is armed; the page's own entry below it keeps the address of the row the person opened first. Next's router also hears the Back (a `popstate`) and renders the address it lands on, which unmounts
- * the form of the row being typed in. This test models that second listener: the router renders the row of the address the history is at, and a form that is rendered for another row starts again from what is saved
- * (what was typed is gone). **What it shows and what it does not:** it shows what the guard does with the history and with the event (it stops the router from seeing the traversal to the page's own entry); that the
- * real router draws a stale row on such a traversal is shown by the end-to-end cases of `leave-guard-history.spec.ts`. The window of the model runs listeners added with `capture: true` first and honours
- * `stopImmediatePropagation`, as an engine that follows the DOM specification does; the order probe and the text-safe path of an engine that does not are tried below. Invented addresses only.
+ * DEF-149 / QLT-845-08 (AQP-506; DL-487): **after Back asks and the person keeps editing, the page still shows the row they were typing in, with what they typed.** A link to another row, pressed while the guard is
+ * armed, used to replace only the guard's own entry; the page's own entry below it kept the address of the row the person opened first, and a Back that landed on it made Next's router draw that row, which unmounts the
+ * form of the row being typed in. Now the guard steps off its entry, has the router write the row's address onto the page's own entry, and pushes a fresh entry only once the router has committed it.
+ * **What this shows and what it does not:** its router is modelled (it draws the row of the address a traversal lands on, and tells the guard when it has committed one); the end-to-end cases of
+ * `leave-guard-history.spec.ts` are the reading at a real router and a real browser. It runs under both orders of the `popstate` listeners, because nothing in the guard depends on which runs first.
  *
- * This case was RED before the guard swallowed the traversal: `expected { row: '1.1', typed: null } to deeply equal { row: '1', typed: '…' }`.
+ * Before the fix this case was RED: `expected { row: '1.1', typed: null } to deeply equal { row: '1', typed: '…' }`. Invented addresses only.
  */
 
 const QUEUE = 'http://portal.test/queue';
@@ -27,97 +26,87 @@ const rowOf = (address: string): string => new URL(address).searchParams.get('ro
 
 type PopListener = (event: Event) => void;
 
-function setUp({ captureFirst }: { readonly captureFirst: boolean | undefined }) {
+function setUp(order: 'next-first' | 'guard-first') {
   const entries = [QUEUE, FIRST_ROW];
   let index = 1;
-  const timers: Array<() => void> = [];
-  // The traversals made so far, and the one whose `popstate` never reaches the page (an event lost), counted from the next one.
-  let traversals = 0;
-  let lostTraversal: number | null = null;
+  const popstate: PopListener[] = [];
+  const clickListeners: Array<(event: Event) => void> = [];
+  const bubbleListeners: Array<(event: Event) => void> = [];
+  const guardRef: { current: LeaveGuardHandle | undefined } = { current: undefined };
 
-  // A window that runs the listeners of the capture phase first and stops at `stopImmediatePropagation`.
-  const popstate = { capture: [] as PopListener[], bubble: [] as PopListener[] };
-  const registered: Array<{ readonly type: string; readonly capture: boolean }> = [];
-  const dispatchPopstate = (): void => {
-    const event = new Event('popstate');
-    let stopped = false;
-    Object.defineProperty(event, 'stopImmediatePropagation', { value: () => void (stopped = true) });
-    for (const listener of [...popstate.capture, ...popstate.bubble]) if (!stopped) listener(event);
-  };
-  const win = {
-    addEventListener: (type: string, listener: PopListener, capture?: boolean) => {
-      registered.push({ type, capture: capture === true });
-      if (type === 'popstate') (capture === true ? popstate.capture : popstate.bubble).push(listener);
-    },
-    removeEventListener: (type: string, listener: PopListener, capture?: boolean) => {
-      if (type !== 'popstate') return;
-      const list = capture === true ? popstate.capture : popstate.bubble;
-      const at = list.indexOf(listener);
-      if (at >= 0) list.splice(at, 1);
-    },
-    setTimeout: (handler: () => void) => void timers.push(handler),
-  };
-  const history = {
-    state: { __NA: true },
-    pushState: () => {
-      entries.splice(index + 1);
-      entries.push(entries[index] ?? FIRST_ROW);
-      index += 1;
-    },
-    replaceState: (_state: unknown, _title: string, url: string) => void (entries[index] = new URL(url, entries[index]).href),
-    back: () => void history.go(-1),
-    go: (delta: number) => {
-      index = Math.max(0, Math.min(entries.length - 1, index + delta));
-      traversals += 1;
-      if (lostTraversal === traversals) return;
-      dispatchPopstate();
-    },
-  };
   const location = {
     get href() {
       return entries[index] ?? FIRST_ROW;
     },
     origin: 'http://portal.test',
   };
-  const clickListeners: Array<(event: Event) => void> = [];
-  const doc = {
-    addEventListener: (type: string, listener: (event: Event) => void, useCapture?: boolean) => void (type === 'click' && useCapture === true ? clickListeners.push(listener) : undefined),
-    removeEventListener: () => undefined,
-    getElementById: () => null,
-    activeElement: null,
-  };
-  const env = { win: Object.assign(win, { location, history }), doc } as unknown as LeaveEnv;
 
-  /** What the person sees: the row the router rendered and the text typed in it and not saved. A form rendered for another row starts again, so the text typed in the row before is gone. */
+  /** What the person sees: the row the router drew and the text typed in it and not saved. A form drawn for another row starts again, so the text typed in the row before is gone. */
   const form = { row: rowOf(FIRST_ROW), typed: null as string | null };
+  const gate = createSaveGate();
   const drawn: string[] = [];
-  const render = (): void => {
+  const draw = (): void => {
     drawn.push(location.href);
     const row = rowOf(location.href);
     if (row !== form.row) {
       form.row = row;
       form.typed = null;
+      gate.mark(PART, 'field-j', false);
     }
   };
-  // Next's router is registered first, and renders the address a traversal lands on.
-  win.addEventListener('popstate', render);
+
+  const win = {
+    addEventListener: (type: string, listener: PopListener) => void (type === 'popstate' ? popstate.push(listener) : undefined),
+    removeEventListener: () => undefined,
+    setTimeout: () => undefined,
+    location,
+    history: {
+      state: { __NA: true },
+      pushState: () => {
+        entries.splice(index + 1);
+        entries.push(entries[index] ?? FIRST_ROW);
+        index += 1;
+      },
+      replaceState: (_state: unknown, _title: string, url: string) => void (entries[index] = new URL(url, entries[index]).href),
+      back: () => void win.history.go(-1),
+      go: (delta: number) => {
+        const target = Math.max(0, Math.min(entries.length - 1, index + delta));
+        if (target === index) return;
+        index = target;
+        const event = new Event('popstate');
+        for (const listener of order === 'next-first' ? popstate : [...popstate].reverse()) listener(event);
+        guardRef.current?.committed();
+      },
+    },
+  };
+  // Next's router listens first, and draws the address a traversal lands on.
+  win.addEventListener('popstate', draw);
+  const doc = {
+    addEventListener: (type: string, listener: (event: Event) => void, useCapture?: boolean) => {
+      if (type === 'click') (useCapture === true ? clickListeners : bubbleListeners).push(listener);
+    },
+    removeEventListener: () => undefined,
+    getElementById: () => null,
+    activeElement: null,
+  };
+  const env = { win, doc } as unknown as LeaveEnv;
+
   const router = {
     replace: (href: string) => {
       entries[index] = new URL(href, entries[index]).href;
-      render();
+      draw();
+      guardRef.current?.committed();
     },
     push: (href: string) => {
       entries.splice(index + 1);
       entries.push(new URL(href, entries[index]).href);
       index += 1;
-      render();
+      draw();
+      guardRef.current?.committed();
     },
   };
-
-  const gate = createSaveGate();
   const asked: LeaveRequest[] = [];
-  installLeaveGuard({ env, gate, ask: (request) => void asked.push(request), navigate: (href, replace) => (replace ? router.replace(href) : router.push(href)), ...(captureFirst === undefined ? {} : { captureFirst }) });
-  const installed = registered.length;
+  guardRef.current = installLeaveGuard({ env, gate, ask: (request) => void asked.push(request), navigate: (href, replace) => (replace ? router.replace(href) : router.push(href)) });
 
   function clickRowLink(href: string): void {
     const anchor = { href: new URL(href, location.href).href, target: '', hasAttribute: () => false };
@@ -134,7 +123,10 @@ function setUp({ captureFirst }: { readonly captureFirst: boolean | undefined })
     });
     for (const listener of clickListeners) if (!stopped) listener(event);
     // A click the guard did not take is the page's own link: the tree's row links replace.
-    if (!stopped) router.replace(href);
+    if (stopped) return;
+    event.preventDefault();
+    router.replace(href);
+    for (const listener of bubbleListeners) listener(event);
   }
 
   return {
@@ -142,7 +134,6 @@ function setUp({ captureFirst }: { readonly captureFirst: boolean | undefined })
     asked,
     entries,
     drawn,
-    registered: () => registered.slice(0, installed),
     at: () => location.href,
     clickRowLink,
     type: (text: string) => {
@@ -153,10 +144,8 @@ function setUp({ captureFirst }: { readonly captureFirst: boolean | undefined })
       form.typed = null;
       gate.mark(PART, 'field-j', false);
     },
-    back: () => history.go(-1),
-    /** The nth traversal from now on is made, but its `popstate` never reaches the page. */
-    losePopstateOfTraversal: (nth: number) => void (lostTraversal = traversals + nth),
-    runTimers: () => timers.splice(0).forEach((timer) => timer()),
+    back: () => win.history.go(-1),
+    forward: () => win.history.go(1),
   };
 }
 
@@ -169,136 +158,68 @@ function typedInTheSecondRow(s: ReturnType<typeof setUp>): void {
   s.type(TYPED);
 }
 
-afterEach(() => vi.unstubAllGlobals());
-
-describe('QLT-845-08: "Keep editing" after a row link pressed while the guard is armed', () => {
+describe.each(['next-first', 'guard-first'] as const)('QLT-845-08: "Keep editing" after a row link pressed while the guard is armed (%s)', (order) => {
   it('shows the row the person was typing in, with the text they typed; the address is that row\'s and no entry was added or removed', () => {
-    const s = setUp({ captureFirst: true });
+    const s = setUp(order);
     typedInTheSecondRow(s);
-    const entriesBefore = [...s.entries];
+    const entriesBefore = s.entries.length;
+    const drawnBefore = s.drawn.length;
     s.back();
     expect(s.asked).toHaveLength(1);
     s.asked[0]?.cancel();
     expect({ row: s.form.row, typed: s.form.typed }).toEqual({ row: '1', typed: TYPED });
     expect(s.at()).toBe(SECOND_ROW);
-    expect(s.entries).toEqual(entriesBefore);
-    // Next's router never saw the traversal to the page's own entry (nor the guard's step forward): it drew the row link only.
-    expect(s.drawn).toEqual([SECOND_ROW]);
+    expect(s.entries).toHaveLength(entriesBefore);
+    // The Back landed on the page\'s own entry, which has the row on screen\'s address: the router drew that row and no other.
+    expect(s.drawn.slice(drawnBefore).every((address) => rowOf(address) === '1')).toBe(true);
   });
 
   it('a second Back with the dialog up asks again, and "Leave" lands on the page before (two steps back from the guard\'s entry)', () => {
-    const s = setUp({ captureFirst: true });
+    const s = setUp(order);
     typedInTheSecondRow(s);
     s.back();
+    s.asked[0]?.cancel();
     s.back();
-    expect(s.asked.length).toBeGreaterThanOrEqual(2);
+    expect(s.asked).toHaveLength(2);
     expect(s.form).toEqual({ row: '1', typed: TYPED });
-    s.asked[s.asked.length - 1]?.proceed();
+    s.asked[1]?.proceed();
     expect(s.at()).toBe(QUEUE);
   });
 
-  it('with nothing unsaved by then, the Back is passed on from the page\'s own entry and lands on the page before, with no question and without drawing the earlier row', () => {
-    const s = setUp({ captureFirst: true });
+  it('with nothing unsaved by then, the Back is passed on and lands on the page before, with no question and without drawing the earlier row', () => {
+    const s = setUp(order);
     typedInTheSecondRow(s);
     s.save();
+    const drawnBefore = s.drawn.length;
     s.back();
     expect(s.asked).toHaveLength(0);
     expect(s.at()).toBe(QUEUE);
-    expect(s.drawn).toEqual([SECOND_ROW, QUEUE]);
+    expect(s.drawn.slice(drawnBefore).some((address) => rowOf(address) === '1.1')).toBe(false);
   });
 
-  it('the guard\'s own step forward is matched on the address it lands on: if its event never comes, the next real Back is asked about, not swallowed as the guard\'s own', () => {
-    const s = setUp({ captureFirst: true });
-    typedInTheSecondRow(s);
-    // The Back is heard and swallowed; the guard steps forward (the second traversal) and that event is lost.
-    s.losePopstateOfTraversal(2);
-    s.back();
-    expect(s.asked).toHaveLength(1);
-    expect(s.at()).toBe(SECOND_ROW);
-    // A real Back now lands on the page's own entry, which is not the address the guard's step was to land on.
-    s.back();
-    expect(s.asked).toHaveLength(2);
-    s.asked[1]?.cancel();
-    expect({ row: s.form.row, typed: s.form.typed }).toEqual({ row: '1', typed: TYPED });
-  });
-
-  it('where the guard\'s entry and the page\'s own have the same address, the wait for a lost step ends by itself, so a later real Back is asked about too', () => {
-    const s = setUp({ captureFirst: true });
+  it('a row link pressed while the guard is armed gives the page\'s own entry the row\'s address (the entry below the guard\'s is not the earlier row\'s)', () => {
+    const s = setUp(order);
+    s.type(FIRST);
+    s.save();
+    // QLT-845-12: nothing is unsaved at the link, so the history length read here is the guard's own (the page's entry and the guard's on top), and a guard that forgot its entry at the link and pushed another on the
+    // next keystroke (the fault of DEF-149) would make it one longer.
+    const lengthAtTheLink = s.entries.length;
+    s.clickRowLink(SECOND_ROW_LINK);
+    expect(rowOf(s.entries[1] ?? '')).toBe('1');
     s.type(TYPED);
-    s.losePopstateOfTraversal(2);
-    s.back();
-    expect(s.asked).toHaveLength(1);
-    // The same address cannot tell the guard's step from a real Back, so the wait runs out first (BOUNCE_GRACE_MS).
-    s.runTimers();
-    s.back();
-    expect(s.asked).toHaveLength(2);
-    expect(BOUNCE_GRACE_MS).toBeGreaterThan(0);
-  });
-});
-
-describe('DL-482 (3): the order probe and the text-safe path', () => {
-  it('where a capture listener does not run first, the guard takes master\'s path: the typed text survives Back and "Keep editing"', () => {
-    const s = setUp({ captureFirst: false });
-    typedInTheSecondRow(s);
-    s.back();
-    expect(s.asked).toHaveLength(1);
-    s.asked[0]?.cancel();
-    expect({ row: s.form.row, typed: s.form.typed }).toEqual({ row: '1', typed: TYPED });
-    expect(s.registered().filter((listener) => listener.type === 'popstate' && listener.capture)).toHaveLength(0);
+    expect(s.entries).toHaveLength(lengthAtTheLink);
+    expect(rowOf(s.entries[2] ?? '')).toBe('1');
   });
 
-  it('where a capture listener runs first, the guard listens to popstate in the capture phase', () => {
-    const s = setUp({ captureFirst: true });
-    expect(s.registered().filter((listener) => listener.type === 'popstate' && listener.capture)).toHaveLength(1);
-  });
-
-  it('the probe is made on a detached target and answers true only when the capture listener ran first', () => {
-    const order = (captureFirst: boolean) =>
-      class {
-        private readonly listeners: Array<{ readonly fn: () => void; readonly capture: boolean }> = [];
-        addEventListener(_type: string, fn: () => void, capture?: boolean) {
-          this.listeners.push({ fn, capture: capture === true });
-        }
-        dispatchEvent() {
-          const sorted = captureFirst ? [...this.listeners].sort((a, b) => Number(b.capture) - Number(a.capture)) : this.listeners;
-          for (const { fn } of sorted) fn();
-          return true;
-        }
-      };
-    vi.stubGlobal('EventTarget', order(true));
-    expect(captureRunsFirst()).toBe(true);
-    vi.stubGlobal('EventTarget', order(false));
-    expect(captureRunsFirst()).toBe(false);
-    vi.stubGlobal(
-      'EventTarget',
-      class {
-        constructor() {
-          throw new Error('no EventTarget constructor');
-        }
-      },
-    );
-    expect(captureRunsFirst()).toBe(false);
-  });
-
-  it('left out, the choice is the probe\'s: a failing probe gives the text-safe path', () => {
-    vi.stubGlobal(
-      'EventTarget',
-      class {
-        private readonly seen: Array<() => void> = [];
-        addEventListener(_type: string, fn: () => void) {
-          this.seen.push(fn);
-        }
-        dispatchEvent() {
-          for (const fn of this.seen) fn();
-          return true;
-        }
-      },
-    );
-    const s = setUp({ captureFirst: undefined });
-    expect(s.registered().filter((listener) => listener.type === 'popstate' && listener.capture)).toHaveLength(0);
-    typedInTheSecondRow(s);
+  it('Forward after the Back that left, with nothing typed, shows a row of this page and loses nothing', () => {
+    const s = setUp(order);
+    s.type(FIRST);
+    s.save();
+    s.clickRowLink(SECOND_ROW_LINK);
     s.back();
-    s.asked[0]?.cancel();
-    expect({ row: s.form.row, typed: s.form.typed }).toEqual({ row: '1', typed: TYPED });
+    expect(s.at()).toBe(QUEUE);
+    s.forward();
+    expect(s.at()).toContain('/estimates/Q-2026-0001');
+    expect(s.form.typed).toBeNull();
   });
 });

@@ -12,10 +12,10 @@ import type { SaveGate } from './save-gate';
  *   guard's `go(-2)` counts (DEF-149). While the guard is installed, whatever the state of the page, it takes such a click when no handler of the page has: it replaces the `#` of the address (no entry) and moves scroll and
  *   focus to the target as the browser would. A link whose own handler already took the click (it prevented the default, as the form's section strip and the calculate summary do) is left alone: it pushes nothing.
  * - **The back button:** a browser does not let a page cancel it, so while something is unsaved the guard puts one extra entry of the same address on top of the history. Back then lands on the page's
- *   own entry and the guard asks. A link to another row of the page replaces the guard's entry and not the page's own, so the page's own entry can have the address of an earlier row: the guard then listens in the
- *   capture phase, keeps Next's router from drawing that row (it would unmount the row being typed in), and steps forward onto its own entry again before it asks, so Back asks again (QLT-845-08, DL-482). Where an engine
- *   does not run a capture listener first, the guard takes `master`'s path (see `captureRunsFirst`). When nothing is unsaved, the same press is passed on, so a person who saved is not made to press Back twice. This
- *   needs `history.state` to be Next.js's own entry, which it is on every page the router drew.
+ *   own entry and the guard asks; the entry is put back at once, so Back asks again. When nothing is unsaved by then, the same press is passed on, so a person who saved is not made to press Back twice. This needs
+ *   `history.state` to be Next.js's own entry, which it is on every page the router drew. **The page's own entry must have the address of the row on screen**, or Next's router would draw another row on that Back and
+ *   unmount the one being typed in (QLT-845-08): a link to another row of the page, pressed while the guard's entry is on top, steps off that entry (`go(-1)`), has the router `replace` the page's own entry, and the next
+ *   keystroke pushes a fresh guard entry, and only when the current address is the row on screen's (DL-487). Nothing in this depends on which `popstate` listener runs first.
  *
  * What it cannot catch, and says so: a jump over several history entries from the browser's history menu, which no page can intercept. The prompt on tab close still covers a close.
  */
@@ -63,36 +63,16 @@ export interface LeaveGuardOptions {
   readonly ask: (request: LeaveRequest) => void;
   /** Takes the person to a link inside the portal: the router's `push`, or its `replace` when the guard's extra history entry is on top, so that entry is not left behind. */
   readonly navigate: (href: string, replace: boolean) => void;
-  /**
-   * Whether a listener added with `capture: true` on the window runs before one added without it (DL-482 (3)). The guard's way of keeping Next's router from drawing the page's own history entry depends on it.
-   * Left out, it is probed in this engine with `captureRunsFirst()`. A test passes it to try both paths.
-   */
-  readonly captureFirst?: boolean;
 }
 
 /** How long the page lets a full load through after the person chose to sign out: long enough for the request, short enough that a failed one leaves the page guarded again. */
 export const FULL_LOAD_GRACE_MS = 5_000;
 
-/** How long the guard's own step forward (after it swallowed a Back) is waited for. The step is matched on the address it lands on; this only ends the wait if its event never comes, so a later real Back is never swallowed. */
-export const BOUNCE_GRACE_MS = 1_000;
-
 /**
- * Whether, in this engine, a capture-phase listener runs before a bubble-phase one on the same target (DL-482 (3)). It is probed on a detached event target, so no handler of the page (Next's router among them)
- * ever sees the event: a non-capture listener is added first, a capture listener second, and one event is dispatched. Every engine that follows the current DOM specification runs the capture one first.
- * An engine without `EventTarget` as a constructor, or one that throws, answers false: the guard then takes the text-safe path.
+ * How long the guard waits for its own step off its entry to land (DL-487 (2) (ii)). The step is matched on the address it lands on; this only ends the wait if its event never comes, so a later press of the person's is
+ * never taken for the guard's own. It does not move the page: the link that asked for the step is dropped and the page stays as it is. Nothing the guard does to the history waits on a timer.
  */
-export function captureRunsFirst(): boolean {
-  try {
-    const order: string[] = [];
-    const probe = new EventTarget();
-    probe.addEventListener('order-probe', () => void order.push('bubble'));
-    probe.addEventListener('order-probe', () => void order.push('capture'), true);
-    probe.dispatchEvent(new Event('order-probe'));
-    return order[0] === 'capture';
-  } catch {
-    return false;
-  }
-}
+export const STEP_GRACE_MS = 1_000;
 
 interface ClickFacts {
   readonly target: unknown;
@@ -157,12 +137,6 @@ export function fragmentLinkOf(click: ClickFacts, location: { readonly href: str
   return `${to.pathname}${to.search}${to.hash}`;
 }
 
-/** Whether a click is on a plain link to an address on this same page, with or without a `#`. */
-function fragmentOrSameLinkOf(click: ClickFacts, location: { readonly href: string; readonly origin: string }): boolean {
-  const link = plainLinkOf(click, location);
-  return link !== null && link.to.origin === location.origin && link.to.pathname === link.here.pathname && link.to.search === link.here.search;
-}
-
 /** A left click, with no key held, on a link that opens in this frame and does not download: the link's address and the page's, or null. */
 function plainLinkOf(click: ClickFacts, location: { readonly href: string; readonly origin: string }): { readonly to: URL; readonly here: URL } | null {
   if (click.button !== 0 || click.metaKey || click.ctrlKey || click.shiftKey || click.altKey) return null;
@@ -180,25 +154,40 @@ export interface LeaveGuardHandle {
   readonly remove: () => void;
   /** Lets one full page load through, for a person who has just chosen to sign out: the browser's own prompt would be a second question. It lapses after `FULL_LOAD_GRACE_MS`, so a sign-out that fails leaves the page guarded again. */
   readonly allowFullLoad: () => void;
+  /** The router has committed an address: called from an effect on its path and query (`leave-guard.tsx`). The guard learns which row is on screen, and pushes its entry only when the current address is that row's. */
+  readonly committed: () => void;
 }
 
 /** Puts the guard on the page. */
-export function installLeaveGuard({ env, gate, ask, navigate, captureFirst = captureRunsFirst() }: LeaveGuardOptions): LeaveGuardHandle {
+export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOptions): LeaveGuardHandle {
   const { win, doc } = env;
-  // The address the extra history entry was made for, while there is one on top; null while the person is on the page's own entry. It is also the address of the page's OWN entry, which a Back from the guard's lands on.
+  // The path of this page: the guard acts only on addresses of it.
+  const pagePath = new URL(win.location.href).pathname;
+  const pathSearchOf = (href: string): string => {
+    const url = new URL(href, win.location.href);
+    return url.pathname + url.search;
+  };
+  const onThisPage = (): boolean => new URL(win.location.href).pathname === pagePath;
+  // The row on screen, as the path and query of its address: what the router committed last (`committed()`), or the address the guard has just asked it for. A `#` is not part of it.
+  let shown = pathSearchOf(win.location.href);
+  // The address of the page's OWN entry while the guard's entry is on top of it; null while there is none.
   let armedFor: string | null = null;
-  // The address the guard's own entry has now (a link to another row of this page replaces it), as far as the guard knows it: what its own step forward after a swallowed Back is expected to land on. Null when a handler of
-  // the page may have rewritten it without the guard seeing (a link it did not take): the step is then recognised as the next `popstate` after it, and the wait still ends by itself.
-  let guardAddress: string | null = null;
-  // Set while the guard's own `go(1)` (after it swallowed a Back) is on its way; the landing is matched on the address when it is known, and the wait ends by itself (BOUNCE_GRACE_MS).
-  let bouncing: { readonly landing: string | null } | null = null;
+  // The guard's step off its entry onto the page's own, made when a link to another row is pressed while the guard is armed (DL-487): where the step must land, and the address to give the page's own entry from there.
+  let step: { target: string; readonly landing: string } | null = null;
+  // The router has been asked to write `target` (path and query) onto the page's own entry and has not committed it yet; `stale` is the address that entry still has until it does.
+  let pending: { readonly target: string; readonly stale: string } | null = null;
   let letFullLoadThrough = false;
 
-  const arm = (): void => {
-    if (armedFor !== null) return;
+  /**
+   * Puts the guard's entry on the history, when something is unsaved and there is none. **It pushes only when the current address has the path and query of the row on screen** (DL-487 (2) (i)): a push made while the
+   * router still has a write to land on the page's own entry would put the guard's entry on an address that is not the row's, and Next's deferred write would then land on it. A keystroke that finds the addresses apart marks
+   * the form dirty all the same; the push waits for the router's commit (`committed()`), an event of the router and not a timer.
+   */
+  const tryArm = (): void => {
+    if (armedFor !== null || step !== null || pending !== null || !gate.isDirty() || !onThisPage()) return;
+    if (pathSearchOf(win.location.href) !== shown) return;
     win.history.pushState(win.history.state, '');
     armedFor = win.location.href;
-    guardAddress = armedFor;
   };
 
   const onBeforeUnload: Listener = (event) => {
@@ -208,31 +197,80 @@ export function installLeaveGuard({ env, gate, ask, navigate, captureFirst = cap
     Reflect.set(event, 'returnValue', '');
   };
 
+  /** Asks the router to write `target` onto the entry that is current now, which is the page's own: from then until it commits, the guard pushes nothing. */
+  const retarget = (target: string): void => {
+    pending = { target: pathSearchOf(target), stale: pending?.stale ?? pathSearchOf(win.location.href) };
+    shown = pending.target;
+    navigate(target, true);
+  };
+
+  /**
+   * Gives the page's own entry the address `target`, which is the row that is on screen or about to be (QLT-845-08, DL-487). While the guard's entry is on top, the router would write only that top entry, and the page's own
+   * entry below it would keep the address of an earlier row: a Back would land on it and Next's router would draw that row and unmount the one being typed in. So the guard steps off its entry first (`go(-1)`, which lands
+   * on the page's own entry; the row Next draws there is the row on screen, and nothing is unsaved at that moment), and only when that step has landed (matched on the address, an event, not a timer) does it ask the router to
+   * `replace` the page's own entry. The guard's old entry stays ahead of it until the next push, which cuts it. A second link pressed before the step has landed just changes where it ends up.
+   */
+  const readdress = (target: string): void => {
+    if (step !== null) {
+      step.target = target;
+      return;
+    }
+    if (armedFor === null) {
+      retarget(target);
+      return;
+    }
+    const marker = { target, landing: armedFor };
+    step = marker;
+    // Only ends the wait if the landing never comes, so a later press of the person's is never taken for the guard's own step; it moves nothing (the link is dropped, the page stays as it is).
+    win.setTimeout(() => {
+      if (step === marker) step = null;
+    }, STEP_GRACE_MS);
+    win.history.go(-1);
+  };
+
+  /** The page's own entry has an address other than the row on screen (the island rewrote the guard's entry, say): it is given the row's, as for a link, once nothing is unsaved. */
+  const ensureAddressed = (): void => {
+    if (armedFor === null || step !== null || pending !== null) return;
+    if (pathSearchOf(armedFor) === shown) return;
+    // The step off would draw the page's own entry over what is typed.
+    if (gate.isDirty()) return;
+    const here = new URL(win.location.href);
+    readdress(here.pathname + here.search + here.hash);
+  };
+
   const onClick: Listener = (event) => {
     const dirty = gate.isDirty();
     // With the extra history entry on top, even a clean page takes the click: the link then replaces that entry instead of stacking on it, so a later Back has no dead press (review SQR-03).
     if (!dirty && armedFor === null) return;
     const href = leavingLinkOf(clickFactsOf(event), win.location);
-    if (href === null) {
-      // A plain link to this same address, or to a place on it, that the guard does not take here: a handler of the page may replace the guard's entry with it, so its address is not known to the guard any more.
-      if (armedFor !== null && fragmentOrSameLinkOf(clickFactsOf(event), win.location)) guardAddress = null;
-      return;
-    }
+    if (href === null) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     const go = (): void => {
-      const replace = armedFor !== null;
-      const there = new URL(href, win.location.href);
-      // A link to another row of this same page is taken by the router and the guard stays on the page, with its extra entry still on top (replaced, not left behind): it stays armed, so what is typed next does not put a
-      // second extra entry on the history, which the traversal of a later Back (two steps back) does not count (DEF-149). A link to another page takes the guard away with it.
-      // Without the capture-first order (DL-482 (3)) the guard cannot keep the router from drawing the page's own entry, which still has the old row's address, so it takes `master`'s path: it forgets its entry, and what is
-      // typed next puts a new one on top. A Back then lands on an entry with the row on screen and asks with the text still there; only the way out is less exact (DEF-149's lesser fault).
-      if (there.pathname !== new URL(win.location.href).pathname || !captureFirst) armedFor = null;
-      else guardAddress = there.href;
-      navigate(href, replace);
+      if (new URL(href, win.location.href).pathname !== pagePath) {
+        // A link to another page takes the guard away with it: the guard's entry, if it is on top, is the one that is replaced.
+        const replace = armedFor !== null;
+        armedFor = null;
+        navigate(href, replace);
+        return;
+      }
+      // A link to another row of this same page: the page's own entry is given the new row's address (see \`readdress\`), so what is typed next meets one guard entry above an entry with the row on screen (DEF-149, QLT-845-08).
+      readdress(href);
     };
     if (dirty) ask({ proceed: go, cancel: () => undefined });
     else go();
+  };
+
+  /**
+   * A link to another row of this page that the page took itself (the tree's row links when the guard is not armed: Next's `Link` prevents the default and asks the router to `replace`): the router now owes a write onto the
+   * page's own entry, and Next makes it when the new row is committed, on whatever entry is current then. A keystroke before that must not push the guard's entry, or the write would land on it and leave the page's own entry
+   * with the old row (QLT-845-08). So the guard records the write as owed, as for a link it took, and pushes nothing until the router commits (`committed()`, or any traversal, which ends the wait).
+   */
+  const onPageOwnLink: Listener = (event) => {
+    if (armedFor !== null || step !== null || !event.defaultPrevented) return;
+    const href = leavingLinkOf(clickFactsOf(event), win.location);
+    if (href === null || new URL(href, win.location.href).pathname !== pagePath) return;
+    pending = { target: pathSearchOf(href), stale: pending?.stale ?? pathSearchOf(win.location.href) };
   };
 
   // A link to another place on this page, which no handler of the page took (it did not prevent the default): the browser would push an entry for it, so it is done here without one (DEF-149, R1). This runs after
@@ -243,20 +281,19 @@ export function installLeaveGuard({ env, gate, ask, navigate, captureFirst = cap
     const address = fragmentLinkOf(clickFactsOf(event), win.location);
     if (address === null) return;
     event.preventDefault();
-    // `null`, not the entry's own state: Next's patched `replaceState` hands a call that carries its own state (`__NA`) straight to the browser and does not record the address, so a page read again later (a
-    // `router.refresh()` after a save) wrote the router's last known address over this one and the `#` was lost. A call with no state of its own is recorded as the router's address, with its state added.
+    // \`null\`, not the entry's own state: Next's patched \`replaceState\` hands a call that carries its own state (\`__NA\`) straight to the browser and does not record the address, so a page read again later (a
+    // \`router.refresh()\` after a save) wrote the router's last known address over this one and the \`#\` was lost. A call with no state of its own is recorded as the router's address, with its state added.
     win.history.replaceState(null, '', address);
-    if (armedFor !== null) guardAddress = win.location.href;
     jumpToFragment(address.slice(address.indexOf('#') + 1));
   };
 
-  /** Scroll to the target of a `#` and give it the focus, as the browser does: a target that cannot take the focus by itself is given `tabindex="-1"` for as long as it has it, and so is where the next Tab starts. */
+  /** Scroll to the target of a \`#\` and give it the focus, as the browser does: a target that cannot take the focus by itself is given \`tabindex="-1"\` for as long as it has it, and so is where the next Tab starts. */
   const jumpToFragment = (fragment: string): void => {
     let id = fragment;
     try {
       id = decodeURIComponent(fragment);
     } catch {
-      // A `#` that is not valid percent-encoding names the element by its text as it is.
+      // A \`#\` that is not valid percent-encoding names the element by its text as it is.
     }
     const target = doc.getElementById(id);
     if (target === null) return;
@@ -269,27 +306,37 @@ export function installLeaveGuard({ env, gate, ask, navigate, captureFirst = cap
     }
   };
 
-  /**
-   * The text-safe path, used where a capture listener does not run first (DL-482 (3)): `master`'s own handling of a Back from the guard's entry. It lands on the page's own entry, the guard asks, and it puts its entry
-   * back. The guard has forgotten its entry at every link it took (see `onClick`), so what was typed in the row on screen is on an entry with that row's address and Next's router draws nothing else.
-   */
-  const onPopStateText: Listener = () => {
+  const onPopState: Listener = () => {
+    const here = win.location.href;
+    // A traversal ends the wait for a write the page's own link asked of the router: the router answers the traversal, not the link.
+    if (step === null) pending = null;
+    if (step !== null) {
+      const { target, landing } = step;
+      step = null;
+      if (here === landing) {
+        // The guard's own step off has landed on the page's own entry. The guard's entry lies ahead of it now, and the router is asked to write the row's address onto this entry; the next push cuts the old one.
+        armedFor = null;
+        retarget(target);
+        return;
+      }
+      // It landed anywhere else, so the person pressed Back or Forward as well: the step is over, and this press is handled as any other.
+    }
     // Only the press of Back from our own entry lands on the same address; any other traversal is somebody else's.
-    if (armedFor === null || win.location.href !== armedFor) return;
+    if (armedFor === null || here !== armedFor) return;
     armedFor = null;
     // Nothing is unsaved any more (it was saved while the entry was up): the press is passed on, so the person is not made to press Back twice.
     if (!gate.isDirty()) {
       win.history.back();
       return;
     }
-    arm();
+    tryArm();
     ask({
       // From the entry put back, two steps are the page's own entry and the one before it. The guard no longer waits for a Back, so the traversal that follows is not asked about again.
       proceed: () => {
         armedFor = null;
-        // Two steps, as a held invariant and not a guess: the guard's own entry is the only one above the page's entry. A Back lands on the page's own entry and the push above truncates what was forward of it, so the
-        // history is the page's entry and this one whatever was done on the page. No writer stacks an entry on the page's own: a link to another row of this page replaces one (the router's `replace`, and the tree's row links,
-        // which replace too), the island's address rewrite is `replaceState`, and a link to a place on this page is done by `onFragmentClick` without an entry.
+        // Two steps, as a held invariant and not a guess: the guard's own entry is the only one above the page's entry, and the page's own entry has the address of the row on screen. A Back lands on the page's own entry and the
+        // push above truncates what was forward of it, so the history is the page's entry and this one whatever was done on the page. No writer stacks an entry on the page's own: a link to another row of this page gives
+        // the page's own entry its address (\`readdress\`), the island's address rewrite does the same through \`committed()\`, and a link to a place on this page is done by \`onFragmentClick\` without an entry.
         win.history.go(-2);
       },
       cancel: () => undefined,
@@ -297,68 +344,39 @@ export function installLeaveGuard({ env, gate, ask, navigate, captureFirst = cap
   };
 
   /**
-   * The way of the guard when a capture listener runs first (DL-482 (2)), QLT-845-08. The page's own entry keeps the address of the row the person opened first, because a link to another row replaces only the guard's
-   * entry on top. A Back from the guard's entry therefore lands on an address that is not the row on screen, and Next's own `popstate` handler would draw that row: the form of the row being typed in would unmount and its
-   * unsaved marks would go. So this listener runs first (the window, `capture: true`) and stops the event for the one traversal it owns, so Next's router never sees it; the guard steps forward again (`go(1)`) onto its
-   * own entry, which has the address of the row on screen, and asks. Nothing is drawn, nothing is unmounted, and no entry is added or removed: the history stays the page's entry and the guard's, so "Leave" is still two
-   * steps back from the guard's entry. The address bar shows the old row for the moment the step takes; nothing else does.
-   *
-   * The guard's own step forward is recognised by the address it lands on, and its wait ends by itself: a landing anywhere else is handled as an ordinary Back, so an event that never comes cannot leave a later press swallowed.
+   * The router has committed an address (the page tells the guard from an effect on the router's path and query): the row on screen is the one the current address has. A commit of the address the page's own entry still has
+   * while the guard has a write on its way to that entry is the router's restore of the entry the guard stepped onto, and is not the row asked for.
    */
-  const onPopStateFirst: Listener = (event) => {
-    const here = win.location.href;
-    if (bouncing !== null) {
-      const { landing } = bouncing;
-      bouncing = null;
-      if (landing === null || here === landing) {
-        event.stopImmediatePropagation();
-        return;
-      }
+  const committed = (): void => {
+    if (!onThisPage() || step !== null) return;
+    const here = pathSearchOf(win.location.href);
+    if (pending !== null) {
+      if (here === pending.stale && here !== pending.target) return;
+      pending = null;
     }
-    // Only the press of Back from our own entry lands on the page's own address; any other traversal is somebody else's and is left to Next.
-    if (armedFor === null || here !== armedFor) return;
-    event.stopImmediatePropagation();
-    // Nothing is unsaved any more (it was saved while the entry was up): the press is passed on from the page's own entry, so the person is not made to press Back twice.
-    if (!gate.isDirty()) {
-      armedFor = null;
-      win.history.back();
-      return;
-    }
-    const marker = { landing: guardAddress };
-    bouncing = marker;
-    win.setTimeout(() => {
-      if (bouncing === marker) bouncing = null;
-    }, BOUNCE_GRACE_MS);
-    win.history.go(1);
-    ask({
-      // From the guard's entry, two steps are the page's own entry and the one before it: the history is the page's entry and the guard's whatever was done on the page. No writer stacks an entry on the page's own: a
-      // link to another row of this page replaces one (the router's `replace`, and the tree's row links, which replace too), the island's address rewrite is `replaceState`, and a link to a place on this page is done
-      // by `onFragmentClick` without an entry. A Back that was swallowed above leaves the history as it was.
-      proceed: () => {
-        armedFor = null;
-        win.history.go(-2);
-      },
-      cancel: () => undefined,
-    });
+    shown = here;
+    ensureAddressed();
+    tryArm();
   };
 
   const unsubscribe = gate.subscribe(() => {
-    if (gate.isDirty()) arm();
+    tryArm();
+    ensureAddressed();
   });
   win.addEventListener('beforeunload', onBeforeUnload);
-  // Capture phase when it runs first (above), so the guard decides before Next's router sees a Back; otherwise `master`'s text-safe handling.
-  const onPopState = captureFirst ? onPopStateFirst : onPopStateText;
-  win.addEventListener('popstate', onPopState, captureFirst);
+  win.addEventListener('popstate', onPopState);
   doc.addEventListener('click', onClick, true);
   doc.addEventListener('click', onFragmentClick);
+  doc.addEventListener('click', onPageOwnLink);
 
   return {
     remove: () => {
       unsubscribe();
       win.removeEventListener('beforeunload', onBeforeUnload);
-      win.removeEventListener('popstate', onPopState, captureFirst);
+      win.removeEventListener('popstate', onPopState);
       doc.removeEventListener('click', onClick, true);
       doc.removeEventListener('click', onFragmentClick);
+      doc.removeEventListener('click', onPageOwnLink);
     },
     allowFullLoad: () => {
       letFullLoadThrough = true;
@@ -366,5 +384,6 @@ export function installLeaveGuard({ env, gate, ask, navigate, captureFirst = cap
         letFullLoadThrough = false;
       }, FULL_LOAD_GRACE_MS);
     },
+    committed,
   };
 }

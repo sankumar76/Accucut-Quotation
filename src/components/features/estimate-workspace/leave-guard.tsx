@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { installLeaveGuard, type LeaveGuardHandle } from '@/lib/estimates/leave-guard';
@@ -25,6 +25,9 @@ export interface LeaveGuardProps {
  */
 export function LeaveGuard({ gate }: LeaveGuardProps) {
   const router = useRouter();
+  // The address the router has committed: the guard pushes its history entry only when the current address is the row on screen's (QLT-845-08, DL-487), so it is told when this changes.
+  const pathname = usePathname();
+  const search = useSearchParams().toString();
   const [request, setRequest] = useState<LeaveRequest | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -77,6 +80,11 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
       installed.current = null;
     };
   }, [gate, ask, router]);
+
+  // After the router commits an address its history write has been made, so the guard reads the address it has then. Declared after the effect above: on mount the guard is installed first.
+  useEffect(() => {
+    installed.current?.committed();
+  }, [pathname, search]);
 
   function keep(): void {
     request?.cancel();
