@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { assignedEstimate } from './support/assigned-estimate';
+import { changePrivateMaterial, E2E_ENGINEER, insertPrivateMaterial } from './support/auth';
+import { signInAs } from './support/calculated-estimate';
 import { isPatchOfInputs } from './support/part-form';
 
 /**
@@ -171,8 +173,11 @@ test.describe('DEF-149: Back after a link to another row of the same page', () =
     const { code } = await assignedEstimate(page, testInfo, true);
     const allowSaves = await typedInTheSecondRow(page, code);
     await backTwiceAsks(page);
+    // The answer of the save is waited for (QLT-845-07), as the other "Save draft and leave" cases do: the listener is made before the saves are let through, and the landing is read after it.
+    const saved = savedAnswer(page);
     allowSaves();
     await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
+    expect((await saved).status(), 'the typed text is saved on the way out').toBe(200);
     await expect(page).toHaveURL(/\/queue$/);
   });
 
@@ -186,5 +191,153 @@ test.describe('DEF-149: Back after a link to another row of the same page', () =
     await page.evaluate(() => window.history.back());
     await expect(leaveDialog(page)).toBeVisible();
     await expect(page).toHaveURL(/\/estimates\//);
+  });
+});
+
+/**
+ * DL-476 note 8, R1: **a link to a place on the page adds no history entry while the guard is installed.** The browser pushes one for it (the skip link `#main`, the rates-changed notice's `#review-calculate`), and the
+ * guard's way out (two steps back from its own entry) then lands on the page itself. The guard does such a jump itself: it replaces the `#` of the address and moves scroll and focus (`leave-guard.ts`, `onFragmentClick`).
+ * Each case lands on the exact address of the page before (`/queue`), with both choices of the dialog. Cases (vii) to (ix) of the ruling, and the one it did not name: a jump made while the page was still clean, before
+ * the first keystroke (an entry made then would sit under the guard's entry). The person ledger is still +0 (the set-up's Lead and Engineer; the material of (vii) is not a person).
+ */
+
+const CHOICES = ['Leave without saving', 'Save draft and leave'] as const;
+
+/** The page's history length: a jump that added an entry would show here. */
+const historyLength = (page: Page): Promise<number> => page.evaluate(() => window.history.length);
+
+/** Opens the estimate from the queue (so the queue is the page before it), edits a field and leaves it: saved, and the guard has armed itself and stays armed. */
+async function armed(page: Page, code: string, row: string | null = '1.1'): Promise<void> {
+  await page.goto('/queue');
+  await page.goto('/estimates/' + code + (row === null ? '' : `?row=${row}`), { waitUntil: 'domcontentloaded' });
+  if (row !== null) await expect(page.locator('#part-form-title')).toContainText(row);
+  await expect(page.locator('form[data-part-form]')).toBeVisible();
+  await expect(description(page)).toBeEnabled();
+  const saved = savedAnswer(page);
+  await description(page).fill(FIRST);
+  await description(page).blur();
+  expect((await saved).status(), 'the first save').toBe(200);
+}
+
+/** After a jump: text that cannot be saved is typed, Back asks with the text still there, and the chosen way out lands on the page before. */
+async function typeBackAndLeave(page: Page, choice: (typeof CHOICES)[number]): Promise<void> {
+  const allow = await failSaves(page);
+  await description(page).fill(TYPED);
+  await description(page).blur();
+  await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+  await page.evaluate(() => window.history.back());
+  await expect(leaveDialog(page)).toBeVisible();
+  await expect(descriptionBehindDialog(page)).toHaveValue(TYPED);
+  allow();
+  const saved = choice === 'Save draft and leave' ? savedAnswer(page) : null;
+  await leaveDialog(page).getByRole('button', { name: choice, exact: true }).click();
+  if (saved !== null) expect((await saved).status(), 'the typed text is saved on the way out').toBe(200);
+  await expect(page).toHaveURL(/\/queue$/);
+}
+
+for (const choice of CHOICES) {
+  test.describe(`DEF-149 (R1): a link to a place on the page, then Back and "${choice}"`, () => {
+    test('(viii) the skip link, with the guard armed: no entry is added, and the way out is the queue', async ({ page }, testInfo) => {
+      const { code } = await assignedEstimate(page, testInfo, true);
+      await armed(page, code);
+      const before = await historyLength(page);
+      // The skip link is the first stop of the page; the Description field has the focus after the save, so the link is given the focus here and pressed with Enter.
+      await page.evaluate(() => (document.querySelector('a[href="#main"]') as HTMLElement | null)?.focus());
+      await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(/#main$/);
+      expect(await historyLength(page), 'the jump added no history entry').toBe(before);
+      await typeBackAndLeave(page, choice);
+    });
+
+    test('(xi) the skip link while the page is still clean, then the first keystroke: no entry sits under the guard\'s, and the way out is the queue', async ({ page }, testInfo) => {
+      const { code } = await assignedEstimate(page, testInfo, true);
+      await page.goto('/queue');
+      await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('#part-form-title')).toContainText('1.1');
+      await expect(description(page)).toBeEnabled();
+      const before = await historyLength(page);
+      await page.evaluate(() => (document.querySelector('a[href="#main"]') as HTMLElement | null)?.focus());
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(/#main$/);
+      expect(await historyLength(page), 'the jump added no history entry').toBe(before);
+      await typeBackAndLeave(page, choice);
+    });
+
+    test('(vii) the rates-changed notice\'s link, pressed with Enter with the guard armed: Recalculate has the focus, the address ends #review-calculate, no entry is added, and the way out is the queue', async ({ page }, testInfo) => {
+      const materialId = await insertPrivateMaterial({ pricePerKg: '137.37', specificGravity: '7.37', scrapRate: '27.37' });
+      const { code } = await assignedEstimate(page, testInfo, true, materialId);
+      await changePrivateMaterial(materialId, { pricePerKg: '9137.73', specificGravity: '7.37', scrapRate: '27.37' });
+      await armed(page, code);
+      const notice = page.getByRole('status').filter({ hasText: 'Rates changed since this was calculated.' });
+      await expect(notice).toBeVisible();
+      const link = notice.getByRole('link', { name: 'Recalculate' });
+      const before = await historyLength(page);
+      await link.focus();
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(/#review-calculate$/);
+      await expect(page.locator('#review-calculate')).toBeFocused();
+      expect(await historyLength(page), 'the jump added no history entry').toBe(before);
+      await typeBackAndLeave(page, choice);
+    });
+
+    test('(ix) the Engineer\'s page, armed, a section-strip link: no entry is added, the section\'s heading has the focus, and the way out is the queue', async ({ page }, testInfo) => {
+      const { code } = await assignedEstimate(page, testInfo, false);
+      await signInAs(page, E2E_ENGINEER);
+      await armed(page, code, null);
+      const before = await historyLength(page);
+      const strip = page.locator('[data-section-strip] a').nth(1);
+      await strip.click();
+      expect(await historyLength(page), 'the jump added no history entry').toBe(before);
+      await expect(page.locator('[data-section-strip] a').nth(1)).toBeVisible();
+      await typeBackAndLeave(page, choice);
+    });
+  });
+}
+
+test.describe('PF-23, PF-24 (ux ruling, section 11): the behaviour of the links', () => {
+  test('PF-23a: three rows chosen by their links, then Back with nothing typed, shows the page before the review and not the previous row', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await page.goto('/queue');
+    await page.goto('/estimates/' + code, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    for (const row of ['1', '1.1', '1']) {
+      await chooseRow(page, row);
+      await expect(page).toHaveURL(new RegExp(`row=${row.replace('.', '\\.')}#row-inputs$`));
+    }
+    await page.evaluate(() => window.history.back());
+    await expect(page).toHaveURL(/\/queue$/);
+  });
+
+  test('PF-23b: a Ctrl-click on a row link opens it in a new tab, and this page\'s address is unchanged', async ({ page, context }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    const here = page.url();
+    const open = await treePanel(page).evaluate((panel) => (panel as HTMLDetailsElement).open);
+    if (!open) await treePanel(page).locator('summary').click();
+    const opened = context.waitForEvent('page');
+    await rowLink(page, '1').click({ modifiers: ['Control'] });
+    const tab = await opened;
+    await expect(tab).toHaveURL(/row=1#row-inputs$/);
+    expect(page.url(), 'this page\'s address is unchanged').toBe(here);
+  });
+
+  test('PF-24a and PF-24c: the skip link with Enter, then Tab: focus is inside main, the address ends #main and the history is no longer; with nothing unsaved Back leaves with no question', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await page.goto('/queue');
+    await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    const before = await historyLength(page);
+    await page.evaluate(() => (document.querySelector('a[href="#main"]') as HTMLElement | null)?.focus());
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/#main$/);
+    expect(await historyLength(page), 'the jump added no history entry').toBe(before);
+    await page.keyboard.press('Tab');
+    const inMain = await page.evaluate(() => document.activeElement instanceof Element && document.activeElement.closest('main') !== null && document.activeElement.getAttribute('href') !== '#main');
+    expect(inMain, 'the next Tab lands on something inside main').toBe(true);
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toHaveCount(0);
+    await expect(page).toHaveURL(/\/queue$/);
   });
 });
