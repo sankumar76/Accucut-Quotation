@@ -149,6 +149,25 @@ describe('usePartValues: the part\'s values', () => {
     expect(partServer.sent[0]).toEqual({ revision: 1, values: { a: '2.00' } });
   });
 
+  it('QLT-836-01: a seed whose revision is not the tree\'s is not the form\'s start: the part is read from the server, and the save carries the revision of the values shown', async () => {
+    // The values are revision 1 (the invented server's), the tree row (what a save is sent with) says 2: the part moved on between the two reads.
+    const atOne = seed({ part: { ...PART_BODY, revision: 1, inputs: [{ fieldId: FIELD_ID, value: '1.00' }] } });
+    const view = renderHook(usePartValues, props({ seed: atOne, part: { id: PART_ID, slNo: '1', revision: 2 } }));
+    expect(view.render().stored.status).toBe('loading');
+    await flush();
+    expect(loads.part).toHaveBeenCalledTimes(1);
+    // The same revision on both: the seed starts the form and nothing is read (the test above), and a save is sent with that revision.
+    loads.part.mockClear();
+    const gate = createSaveGate();
+    const same = renderHook(usePartValues, props({ seed: atOne, part: { id: PART_ID, slNo: '1', revision: 1 }, gate }));
+    const form = same.render();
+    form.setText('a', '6');
+    form.commit(field(FIELD_ID));
+    await gate.settle();
+    expect(loads.part).not.toHaveBeenCalled();
+    expect(partServer.sent[0]).toEqual({ revision: 1, values: { a: '6.00' } });
+  });
+
   it('reads from the server when the seed names another part, when it is absent, and when its part body is refused', async () => {
     for (const given of [seed({ partId: 'another' }), undefined, seed({ part: { id: PART_ID } })]) {
       loads.part.mockClear();
