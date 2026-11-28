@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { installLeaveGuard, STEP_GRACE_MS, type LeaveGuardHandle } from '@/lib/estimates/leave-guard';
-import { proceedAfterRefresh } from '@/lib/estimates/leave-after-refresh';
+import { afterLeaveChosen, holdGateForGuard, proceedAfterRefresh } from '@/lib/estimates/leave-after-refresh';
 import { registerLeaveGuard, type LeaveRequest } from '@/lib/estimates/leave-registry';
 import { saveDraft } from '@/lib/estimates/save-draft';
 import type { SaveGate } from '@/lib/estimates/save-gate';
@@ -84,7 +84,10 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
     const withdraw = registerLeaveGuard(ask);
     // The notice of a row write owed for 5 s is the form's (it sits before the form); its button comes back here, through the gate (DL-489).
     const withdrawStay = gate.offerStay(() => handle.stayOnThisRow());
+    // The gate may be one object for the whole session: it is given to this guard clear, and given back clear (QLT-845-32).
+    const giveBack = holdGateForGuard(gate);
     return () => {
+      giveBack();
       withdrawStay();
       withdraw();
       handle.remove();
@@ -115,6 +118,7 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
         // The typing is given up by the person's choice: nothing of it is unsaved from here, so a row opened by the address, or a page, is not held back by it.
         gate.discardUnsaved();
         go(chosen);
+        afterLeaveChosen(gate, chosen);
       },
       STEP_GRACE_MS,
       setSaving,

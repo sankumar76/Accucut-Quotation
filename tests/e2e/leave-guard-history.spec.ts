@@ -670,6 +670,33 @@ test.describe('DL-491 u6a, u6b, u6c (QLT-845-23): the review\'s refresh of the p
     refresh.release();
   });
 
+  test('u6d (QLT-845-32): "Leave without saving" to the queue, the estimate opened again by its link with no full load, a row renamed: the page reads itself again, so the figures are cleared and the new name shows (the leave flag did not outlive the leave)', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await openedFromTheQueue(page, code);
+    const allow = await failSaves(page);
+    await description(page).fill(TYPED);
+    await description(page).blur();
+    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+    await expect(page).toHaveURL(QUEUE_OF_TASK);
+    allow();
+    // The estimate is opened again by the queue's own link: the same document, so the gate of the review is the same object as on the first visit.
+    await page.locator(`a[href="/estimates/${encodeURIComponent(code)}"]:visible`).first().click();
+    await expect(page).toHaveURL(/\/estimates\/[^/?#]+$/);
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    expect(await markerIsSet(page), 'the estimate was opened again by the router and not by a load').toBe(true);
+    const RENAMED = 'Invented new name of the row';
+    const saved = savedAnswer(page);
+    await description(page).fill(RENAMED);
+    await description(page).blur();
+    expect((await saved).status(), 'the new name is saved').toBe(200);
+    // The refresh that the save asks for ran: the figures are cleared (the line that says so) and the tree's row has the new name.
+    await pageRead(page);
+    await expect(treePanel(page)).toContainText(RENAMED);
+  });
+
   test('u6c: the same, with "Save draft and leave": the draft is saved, the way out waits for the refresh for at most 1 s, and it lands exactly on the queue by a soft navigation', async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, true);
     await openedFromTheQueue(page, code);

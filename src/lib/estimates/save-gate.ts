@@ -39,8 +39,10 @@ export interface SaveGate {
    * A leave is under way (DL-491 (a), QLT-845-23): the leave dialog is open or a way out was chosen. The review's refresh of the page (`router.refresh()`, whose fetch a Leave would otherwise cut in the middle) starts
    * nothing while it is set, and runs what it owed when the person chooses to keep editing.
    */
-  readonly setLeaving: (leaving: boolean) => void;
+  readonly setLeaving: (leaving: boolean, goingAway?: boolean) => void;
   readonly isLeaving: () => boolean;
+  /** The leave that was set has gone ahead and takes the person off this page (`go(-n)`, a link to another page): what was held back for it is dropped, not run (QLT-845-32). Reset by the next `setLeaving(true)`. */
+  readonly isLeaveAway: () => boolean;
   readonly subscribeLeaving: (listener: () => void) => () => void;
   /** The review's refresh of the page is in flight (the transition's `isPending`, DL-491 (c)). */
   readonly setRefreshing: (refreshing: boolean) => void;
@@ -69,6 +71,7 @@ export function createSaveGate(): SaveGate {
   let holdTooLong = false;
   let stayOffer: (() => void) | null = null;
   let leaving = false;
+  let leaveAway = false;
   const leavingListeners = new Set<() => void>();
   let refreshing = false;
   const refreshListeners = new Set<() => void>();
@@ -135,12 +138,15 @@ export function createSaveGate(): SaveGate {
       };
     },
     stayOnThisRow: () => stayOffer?.(),
-    setLeaving(next) {
+    setLeaving(next, goingAway = false) {
+      if (next) leaveAway = false;
+      else leaveAway = goingAway;
       if (next === leaving) return;
       leaving = next;
       for (const listener of [...leavingListeners]) listener();
     },
     isLeaving: () => leaving,
+    isLeaveAway: () => leaveAway,
     subscribeLeaving(listener) {
       leavingListeners.add(listener);
       return () => void leavingListeners.delete(listener);

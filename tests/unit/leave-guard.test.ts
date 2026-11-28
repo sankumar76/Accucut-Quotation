@@ -293,6 +293,14 @@ describe('DEF-149, QLT-845-08 (DL-487): a link to another row of the same page, 
     expect(history.pushed).toBe(1);
   });
 
+  it('QLT-845-32: a request made by a link says whether it keeps the person on this page: a link to another row does, a link to another page does not', () => {
+    const { click, typeSomething, asked } = setUp();
+    typeSomething();
+    click(anchor('/estimates/Q-2026-0001?row=1.2'));
+    click(anchor('/audit'));
+    expect(asked.map((request) => request.samePage === true)).toEqual([true, false]);
+  });
+
   it('an owed write never blocks arming (DL-488 (i)): the fields are held while the router has not written the row, and a key that gets through anyway is guarded at once; the write that lands later is the repair\'s', () => {
     const page = fakePage();
     const gate = createSaveGate();

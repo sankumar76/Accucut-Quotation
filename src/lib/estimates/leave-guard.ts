@@ -426,7 +426,7 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
       // A link to another row of this same page: the page's own entry is given the new row's address (see `readdress`), so what is typed next meets one guard entry above an entry with the row on screen (DEF-149, QLT-845-08).
       readdress(href);
     };
-    if (dirty) ask({ proceed: go, cancel: () => undefined });
+    if (dirty) ask({ proceed: go, cancel: () => undefined, samePage: new URL(href, win.location.href).pathname === pagePath });
     else go();
   };
 

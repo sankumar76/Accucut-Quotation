@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { FieldRenderer, type FieldRendererProps } from '@/components/features/estimate-workspace/field-renderer';
 import type { FormField } from '@/lib/estimates/form-client';
+import { afterLeaveChosen, holdGateForGuard } from '@/lib/estimates/leave-after-refresh';
+import { createReviewRefresh } from '@/lib/estimates/review-refresh';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
 /**
@@ -175,5 +177,131 @@ describe('DL-491: the gate says a leave is under way and a refresh of the page i
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('QLT-845-32 (DL-491 addendum (7)): the leave flag lasts for one leave only, on a gate that outlives the page', () => {
+  const same = { proceed: () => undefined, cancel: () => undefined, samePage: true } as const;
+  const away = { proceed: () => undefined, cancel: () => undefined } as const;
+
+  it('it is cleared once the way out has been sent, whether the person stays on the page (a link to another row) or goes', () => {
+    const gate = createSaveGate();
+    gate.setLeaving(true);
+    afterLeaveChosen(gate, same);
+    expect(gate.isLeaving()).toBe(false);
+    expect(gate.isLeaveAway()).toBe(false);
+    gate.setLeaving(true);
+    afterLeaveChosen(gate, away);
+    expect(gate.isLeaving()).toBe(false);
+    expect(gate.isLeaveAway()).toBe(true);
+    // The next leave starts afresh.
+    gate.setLeaving(true);
+    expect(gate.isLeaveAway()).toBe(false);
+  });
+
+  it('a guard takes the gate clear and gives it back clear: a flag a former page left set is not carried into the next visit', () => {
+    const gate = createSaveGate();
+    gate.setLeaving(true);
+    const release = holdGateForGuard(gate);
+    expect(gate.isLeaving()).toBe(false);
+    gate.setLeaving(true);
+    release();
+    expect(gate.isLeaving()).toBe(false);
+  });
+
+  describe('the review\'s refresh (createReviewRefresh) across a leave, a visit elsewhere and a return', () => {
+    const runs = (): { count: number; run: () => void } => {
+      const state = { count: 0, run: () => void (state.count += 1) };
+      return state;
+    };
+
+    it('leave, navigate away, come back: the next rename\'s refresh runs', () => {
+      vi.useFakeTimers();
+      try {
+        const gate = createSaveGate();
+        const first = runs();
+        const page = createReviewRefresh(gate, first.run, 300);
+        // A rename's refresh is waiting when the person opens the leave dialog and chooses to leave.
+        page.refresh();
+        gate.setLeaving(true);
+        vi.advanceTimersByTime(1000);
+        expect(first.count, 'nothing starts while the leave is under way').toBe(0);
+        afterLeaveChosen(gate, away);
+        vi.advanceTimersByTime(1000);
+        expect(first.count, 'the refresh that was owed is dropped when the leave takes the person away').toBe(0);
+        page.dispose();
+        // The person comes back (a later visit, with no full load): the guard takes the gate clear, and the next rename's refresh runs.
+        const release = holdGateForGuard(gate);
+        const second = runs();
+        const again = createReviewRefresh(gate, second.run, 300);
+        again.refresh();
+        vi.advanceTimersByTime(300);
+        expect(second.count).toBe(1);
+        again.dispose();
+        release();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('even if a page never gave the flag back, the next guard clears it on the way in and the refresh runs', () => {
+      vi.useFakeTimers();
+      try {
+        const gate = createSaveGate();
+        gate.setLeaving(true);
+        holdGateForGuard(gate);
+        const next = runs();
+        const page = createReviewRefresh(gate, next.run, 300);
+        page.refresh();
+        vi.advanceTimersByTime(300);
+        expect(next.count).toBe(1);
+        page.dispose();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('"Keep editing" runs the refresh that was owed, once; a way out that keeps the person on the page does too', () => {
+      vi.useFakeTimers();
+      try {
+        const gate = createSaveGate();
+        const state = runs();
+        const page = createReviewRefresh(gate, state.run, 300);
+        page.refresh();
+        gate.setLeaving(true);
+        page.refresh();
+        gate.setLeaving(false);
+        vi.advanceTimersByTime(300);
+        expect(state.count).toBe(1);
+        page.refresh();
+        gate.setLeaving(true);
+        afterLeaveChosen(gate, same);
+        vi.advanceTimersByTime(300);
+        expect(state.count).toBe(2);
+        page.dispose();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('asked many times it runs once, and a disposed page runs nothing', () => {
+      vi.useFakeTimers();
+      try {
+        const gate = createSaveGate();
+        const state = runs();
+        const page = createReviewRefresh(gate, state.run, 300);
+        page.refresh();
+        page.refresh();
+        page.refresh();
+        vi.advanceTimersByTime(300);
+        expect(state.count).toBe(1);
+        page.refresh();
+        page.dispose();
+        vi.advanceTimersByTime(1000);
+        expect(state.count).toBe(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

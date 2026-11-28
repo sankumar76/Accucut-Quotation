@@ -1,3 +1,4 @@
+import type { LeaveRequest } from './leave-registry';
 import type { SaveGate } from './save-gate';
 
 /**
@@ -12,4 +13,22 @@ export async function proceedAfterRefresh(gate: SaveGate, proceed: () => void, m
     onWaiting(false);
   }
   proceed();
+}
+
+/**
+ * The leave flag lasts for one leave only (DL-491 addendum (7), QLT-845-32): it is cleared once the way out has been sent (`go(-n)`, the navigation). A way out that keeps the person on this page (a link to another row)
+ * lets the review's refresh run what it owed; one that takes them away drops it, since the page that asked for it is going (nothing starts while the traversal is in flight). The guard's removal clears it too
+ * (`holdGateForGuard`).
+ */
+export function afterLeaveChosen(gate: SaveGate, request: LeaveRequest): void {
+  gate.setLeaving(false, request.samePage !== true);
+}
+
+/**
+ * A guard takes the gate for as long as it is on the page and gives it back clear (QLT-845-32): the Lead's review gate is one object for the whole session, so a flag a former page left set would hold the next review's
+ * refresh back for good (the tiles and the tree would keep figures that are no longer current). Answers the way to give it back.
+ */
+export function holdGateForGuard(gate: SaveGate): () => void {
+  gate.setLeaving(false);
+  return () => gate.setLeaving(false);
 }

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
 import { createClearedRefresh } from '@/lib/estimates/cleared-refresh';
+import { createReviewRefresh, type ReviewRefresh } from '@/lib/estimates/review-refresh';
 import { reviewSaveGate } from '@/lib/estimates/review-save-gate';
 
 import { Autosave } from './autosave';
@@ -40,60 +41,34 @@ export function ReviewForm({ review, editable, ...props }: ReviewFormProps) {
   // The polite line said once for a change from current to cleared; set from the save's callback and read by the status below.
   const [announcement, setAnnouncement] = useState('');
   const cleared = useRef(createClearedRefresh());
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // A refresh that was asked for while the person was asked or leaving, and runs when they keep editing (DL-491 (a)); a rename whose save has not landed yet (DL-491 (b)).
-  const owedRefresh = useRef(false);
+  // A rename whose save has not landed yet (DL-491 (b)).
   const nameOwed = useRef(false);
   const canEdit = editable && refused === null;
 
   // The page says whether its figures are current each time it is drawn: after a Recalculate the next edit asks for a refresh again.
   useEffect(() => cleared.current.sync(review.figuresCurrent), [review.figuresCurrent]);
-  useEffect(
-    () => () => {
-      if (timer.current !== null) clearTimeout(timer.current);
-    },
-    [],
-  );
-
   // The refresh that is in flight is told to the gate, so a way out waits for it (DL-491 (c), QLT-845-23).
   useEffect(() => {
     reviewSaveGate.setRefreshing(refreshing);
   }, [refreshing]);
   useEffect(() => () => reviewSaveGate.setRefreshing(false), []);
 
-  const refresh = useCallback((): void => {
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = null;
-    // While the person is asked or leaving no refresh starts, and none that was waiting fires in the middle of a Leave (DL-491 (a)).
-    if (reviewSaveGate.isLeaving()) {
-      owedRefresh.current = true;
-      return;
-    }
-    timer.current = setTimeout(() => {
-      timer.current = null;
-      startRefresh(() => router.refresh());
-    }, REFRESH_QUIET_MS);
-  }, [router]);
-
-  // A leave begins: the refresh that was waiting is held back. "Keep editing" ends it, and the refresh that was owed runs.
-  useEffect(
-    () =>
-      reviewSaveGate.subscribeLeaving(() => {
-        if (reviewSaveGate.isLeaving()) {
-          if (timer.current !== null) {
-            clearTimeout(timer.current);
-            timer.current = null;
-            owedRefresh.current = true;
-          }
-          return;
-        }
-        if (owedRefresh.current) {
-          owedRefresh.current = false;
-          refresh();
-        }
-      }),
-    [refresh],
-  );
+  // The latest `run` is read when the timer fires, so the scheduler is made once.
+  const run = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    run.current = (): void => startRefresh(() => router.refresh());
+  });
+  // Made after the mount (a subscription is a side effect), and given back with the page.
+  const scheduler = useRef<ReviewRefresh | null>(null);
+  useEffect(() => {
+    const made = createReviewRefresh(reviewSaveGate, () => run.current(), REFRESH_QUIET_MS);
+    scheduler.current = made;
+    return () => {
+      made.dispose();
+      scheduler.current = null;
+    };
+  }, []);
+  const refresh = useCallback((): void => scheduler.current?.refresh(), []);
 
   /** A field that names the row was left with a new text: the tree's row takes the name from the server when the save has landed, not before (DL-491 (b)); a failed save arms no refresh. */
   const named = useCallback((): void => {
