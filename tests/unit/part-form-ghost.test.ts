@@ -243,6 +243,13 @@ describe('where the ghost stands in (PF-1, PF-7, PF-11)', () => {
     expect(read).toContain('Choose a part');
   });
 
+  it('PF-7, QLT-836-06: with the tree unread and no ghost (a fault, or no rows) the three bars stand in, never "Choose a part"', () => {
+    const html = renderToStaticMarkup(createElement(PartForm, { estimateId: 'e', part: null, editable: true, nodes: null, treeUnread: true }));
+    expect(html).toContain(FORM_LOADING);
+    expect(html).toContain('role="status"');
+    expect(html).not.toContain('Choose a part');
+  });
+
   it('PF-1: with a part chosen the form shows the ghost it was handed while the definition is read, and the three bars when it was handed none', () => {
     const part = { id: 'p', slNo: '1.1', revision: 0 };
     const withGhost = renderToStaticMarkup(createElement(PartForm, { estimateId: 'e', part, editable: true, nodes: null, ghost: GHOST }));

@@ -94,6 +94,8 @@ test.describe('AC-1, AC-6: the sections, their headers, the strip and the placeh
       await expect(page.getByRole('textbox', { name: new RegExp(`^Excel column ${letter}\\s+${name}`) })).toHaveCount(1);
       await expect(control(page, letter)).toBeVisible();
     }
+    // QLT-836-09: still none at the end of the case (a read made when a card mounts, such as the treatments, would show here).
+    expect(formDataReads).toEqual([]);
   });
 
   test('AC-1: the counts follow what is typed: a value filled in and left raises "n of m", and a wrong one does not count', async ({ page }, testInfo) => {

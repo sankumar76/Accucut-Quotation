@@ -95,7 +95,14 @@ export interface UsePartValuesProps {
 export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onNamed, onServerIgnored, onLocked, onWrote, gate, seed }: UsePartValuesProps) {
   const partId = part.id;
   // The part's values as a page handed them over (the Lead's review, DEF-141): the form starts with them and reads nothing; a read after that (a conflict, Try again) goes to the server as ever.
-  const [seeded] = useState(() => (seed !== undefined && seed.estimateId === estimateId && seed.partId === part.id ? parsePartInputs(seed.part) : null));
+  const [seeded] = useState(() => {
+    if (seed === undefined || seed.estimateId !== estimateId || seed.partId !== part.id) return null;
+    const parsed = parsePartInputs(seed.part);
+    // The values shown and the revision a save sends must be one snapshot (architect note section 5 item 4; DEF-085, QLT-836-01): the revision of a save is the tree row's (`part.revision`), which the browser may have read
+    // after the page was drawn. A seed older than that row is read from the server instead, or a save would be accepted over a value the person never saw. A form nobody can save (`editable` false) sends no revision, so the Lead's
+    // read-only review keeps its seed whatever its placeholder revision is.
+    return parsed !== null && (!editable || parsed.revision === part.revision) ? parsed : null;
+  });
   const [stored, setStored] = useState<Loaded<PartInputs>>(seeded === null ? LOADING : { status: 'ready', value: seeded });
   const [texts, setTexts] = useState<Readonly<Record<string, string>>>(seeded === null ? {} : seeded.inputs);
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});

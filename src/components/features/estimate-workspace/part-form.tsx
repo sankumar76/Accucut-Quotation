@@ -80,7 +80,15 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
     if (shown) onShown?.();
   }, [shown, onShown]);
 
-  if (part === null) return treeUnread && ghost !== undefined ? ghost : <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_NO_PART}</p>;
+  // The three bars stand in for a ghost the page could not draw (a fault, or no rows): while the tree is unread, never the untrue "Choose a part" (PF-7).
+  const bars = (
+    <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
+      <Skeleton className="h-(--control-h)" />
+      <Skeleton className="h-(--control-h)" />
+      <Skeleton className="h-(--control-h)" />
+    </div>
+  );
+  if (part === null) return treeUnread ? (ghost ?? bars) : <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_NO_PART}</p>;
   if (definition.form.status === 'failed') {
     return (
       <Notice tone="danger" title={FORM_LOAD_FAILED_TITLE}>
@@ -103,14 +111,7 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
     );
   }
   if (definition.form.status === 'loading' || Fields === null) {
-    if (ghost !== undefined) return ghost;
-    return (
-      <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
-        <Skeleton className="h-(--control-h)" />
-        <Skeleton className="h-(--control-h)" />
-        <Skeleton className="h-(--control-h)" />
-      </div>
-    );
+    return ghost ?? bars;
   }
 
   return (

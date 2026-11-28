@@ -13,6 +13,22 @@ import type { Page } from '@playwright/test';
  *
  * Loud on purpose: `rewriteFlightText` throws unless it found and rewrote exactly one body; in the page the error is left in `self.__flightFormRewrite` and the flight data is left untouched, and every case that uses this
  * asserts that the helper said "rewrote" and that the card is drawn (`openFormWithChoice`). A change of Next's payload turns the cases red, never silently green. Both halves are unit-tested (`tests/unit/flight-form.test.ts`).
+ *
+ * Limits, so a later case does not lean on them (QLT-836-08): the hook holds every flight chunk until `DOMContentLoaded`, so hydration cannot start early under it; it does not escape a card string that starts with `import type { Page } from '@playwright/test';
+
+/**
+ * Adds a card to the part form's definition as the Engineer's page carries it, for the E2E cases whose subject is a form the real registry does not have (DEF-085, DL-469, DL-470 (2) (iii)).
+ *
+ * Why it exists: the Engineer's page hands its form the definition as a prop (`seed.form`, the body `GET /estimates/{id}/form` answers), so it no longer reads `/form` from the browser, and a case can no longer
+ * change what the form shows by answering that route itself. The registry is shared by all three projects and its versions are global, so a case cannot add a field for real either. What is left is the prop as it
+ * travels: the server component's props are serialised into the page's `self.__next_f.push([1, "..."])` scripts (the flight data), where the seed is plain inline JSON.
+ *
+ * How: not by answering the document (a document that the test fulfils is treated by the browser as coming from another address space, and its own requests to the server are then blocked, so the page never starts),
+ * but by an init script that sits where Next's client reads the flight data: it holds the chunks until the document is loaded, joins the text, rewrites the one form body, and hands Next the whole as the first chunk,
+ * in order. The finding is **by the body's own shape** (`sections` and `lastSavedAt`), never by a chunk id, a module path or a row number, so a change of the bundler's references does not matter.
+ *
+ * Loud on purpose: `rewriteFlightText` throws unless it found and rewrote exactly one body; in the page the error is left in `self.__flightFormRewrite` and the flight data is left untouched, and every case that uses this
+ * asserts that the helper said "rewrote" and that the card is drawn (`openFormWithChoice`). (flight reads it as a reference); and it acts on a hard load of the page only, not on a soft navigation's own RSC fetch.
  */
 
 /** What is read and written of the form body: the sections and the time of the last write. */
@@ -87,6 +103,10 @@ export function installFlightFormHook(card: Record<string, unknown>, rewrite: (t
     let handed = [...held];
     if (texts.length > 0) {
       try {
+        // The stream is ordered: text chunks are joined into the first one only when no other kind of chunk (a binary row) sits between them, or the later text would move ahead of it.
+        const firstAt = held.indexOf(texts[0] as unknown[]);
+        const lastAt = held.indexOf(texts[texts.length - 1] as unknown[]);
+        if (held.slice(firstAt, lastAt + 1).some((item) => !texts.includes(item))) throw new Error('flight-form: a chunk that is not text sits between text chunks; joining them would reorder the stream');
         const joined = texts.map((item) => item[1] as string).join('');
         const text = rewrite(joined, (form) => ({ ...form, sections: [...form.sections, card] }));
         const first = texts[0];

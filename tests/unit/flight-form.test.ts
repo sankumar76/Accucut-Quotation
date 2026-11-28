@@ -113,6 +113,16 @@ describe('the hook: held until the document is loaded, then handed to Next in or
     expect(String(page.flag())).toMatch(/exactly one form body/);
   });
 
+  it('QLT-836-07: is loud and reorders nothing when a chunk that is not text sits between text chunks (joining them would move the later text ahead of it)', () => {
+    const page = pageOf();
+    const cut = text.indexOf('lastSavedAt') + 3;
+    page.push([0], [1, text.slice(0, cut)], [3, 'YmluYXJ5'], [1, text.slice(cut)]);
+    page.load();
+    const { read } = page.nextStarts();
+    expect(read).toEqual([[0], [1, text.slice(0, cut)], [3, 'YmluYXJ5'], [1, text.slice(cut)]]);
+    expect(String(page.flag())).toMatch(/not text sits between text chunks/);
+  });
+
   it('takes no part in a page that never sends flight text', () => {
     const bare = pageOf();
     bare.push([0]);

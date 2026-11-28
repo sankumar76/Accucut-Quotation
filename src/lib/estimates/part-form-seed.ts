@@ -5,7 +5,7 @@
  * `treatment-options-client.ts`), so the shapes are the same and nothing is added. They are plain data, so a server component may hand them over.
  *
  * A seed is the start of the form, not its life: the form reads it once for the part it names, and a read after that (Try again, a conflict, a part chosen that the seed does not name) goes to the
- * server as it always did. The part's values in it are for that part's **first showing** only (`use-seed-of-first-part.ts`): once another part has been shown they are read from the server, because the Engineer edits.
+ * server as it always did. The part's values in it are for that part's **first showing** only (`part-form.tsx`, `left`): once another part has been shown they are read from the server, because the Engineer edits; and a form that can be saved uses them only when their revision is the tree row's (`use-part-form.ts`).
  */
 export interface PartFormSeed {
   readonly estimateId: string;

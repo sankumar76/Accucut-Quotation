@@ -211,6 +211,11 @@ describe('getPartForm is getForm and getNode in one read (the combined read of D
     const labelsOf = (view: typeof form): string[] => view.sections.flatMap((section) => section.fields).map((field) => field.label);
     expect(labelsOf(both.form)).toContain('Frozen invented label');
     expect(labelsOf(await harness.estimateService.getForm(lead, id))).not.toContain('Frozen invented label');
+    // QLT-836-03: the Engineer's combined read of the first row goes through the same frozen branch (an Engineer opens an approved estimate).
+    const first = defined(await service.getFirstPartForm(lead, id));
+    expect(asJson(first.form)).toEqual(asJson(form));
+    expect(asJson(first.node)).toEqual(asJson(node));
+    expect(labelsOf(first.form)).toContain('Frozen invented label');
   });
 
   it('refuses as they refuse (NFR-001): another Engineer, an unknown estimate and an unknown part are the same not-found, with the same words', async () => {
@@ -319,5 +324,24 @@ describe('the Engineer\'s seed helpers (DEF-085, DL-469)', () => {
     expect(await readFirstPartFormBodies(broken, viewer, id)).toBeNull();
     const logged = await import('@/lib/logger');
     expect(JSON.stringify(vi.mocked(logged.logger.warn).mock.calls)).not.toContain('invented-host');
+  });
+});
+
+describe('SEC-836-01: the seed\'s form body goes through the route\'s strict builder (a later field on the service\'s form cannot reach the page\'s payload)', () => {
+  const viewer = { id: 'u', role: 'ENGINEER' } as const;
+
+  async function realFirst() {
+    return defined(await harness.estimateService.getFirstPartForm({ id: harness.idOf.ENGINEER, role: 'ENGINEER' }, estimate().id));
+  }
+
+  it.each(['the Engineer\'s first row', 'the Lead\'s chosen row'])('drops an extra top-level key and refuses an extra key in a field, for %s', async (which) => {
+    const real = await realFirst();
+    const withKey = { ...real.form, rate: '1.00' };
+    const sections = real.form.sections.map((section, index) => (index === 0 ? { ...section, fields: section.fields.map((field, at) => (at === 0 ? { ...field, formulaText: 'secret' } : field)) } : section));
+    const leaky = (form: unknown) => ({ getFirstPartForm: () => Promise.resolve({ form, node: real.node }), getPartForm: () => Promise.resolve({ form, node: real.node }) }) as never;
+    const read = (form: unknown) => (which.startsWith('the Engineer') ? readFirstPartFormBodies({ estimates: leaky(form) }, viewer, 'e') : readPartFormBodies({ estimates: leaky(form), masters: services().masters }, viewer, 'e', real.node.id));
+    const dropped = defined(await read(withKey));
+    expect(JSON.stringify(dropped)).not.toContain('rate');
+    expect(await read({ ...real.form, sections })).toBeNull();
   });
 });
