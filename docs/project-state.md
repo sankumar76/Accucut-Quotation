@@ -8,13 +8,38 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-27, orchestrator)", then "Daily update (2026-11-25, orchestrator)", then "Resume point (2026-11-24, pause 10, orchestrator)", then "Daily update (2026-11-24, after pause 9, orchestrator)", then "Resume point (2026-11-24, pause 9, orchestrator)", then "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-28, orchestrator)", then "Daily update (2026-11-27, orchestrator)", then "Daily update (2026-11-25, orchestrator)", then "Resume point (2026-11-24, pause 10, orchestrator)", then "Daily update (2026-11-24, after pause 9, orchestrator)", then "Resume point (2026-11-24, pause 9, orchestrator)", then "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **25 Nov: G8 recommendation about Mon 7 Dec, range 6 to 9 Dec; merge cut-off end of Wed 2 Dec for every PR except #727 (Thu 3 Dec, DL-395); freeze from #727's push reading; final regression about 4 to 6 Dec (release plan 0.44).** Before: G8 recommendation target about 6 Dec 2026, range 5 to 8 Dec, freeze about 3 Dec, all agreed scope kept (DL-307, delivery lead, 2026-11-22; replaces DL-298's provisional 4 Dec). Date triggers: ~~28 Nov Q-18 (DL-309)~~ withdrawn (DL-378); freeze AC-8 (DL-310) and #476 (DL-308); G8 condition list DL-314** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-27 by orchestrator (daily update); master's DL-396 to DL-475 in between |
+| Last updated       | 2026-11-28 by orchestrator (daily update); master's DL-396 to DL-480 in between |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-28, orchestrator)
+
+> This section wins over the 27 Nov update below for anything it names. Rulings DL-476 notes 6 to 8, DL-477 to DL-480 are in the decision log.
+
+**`master` = 51502650** (#843 PF-22). Merged since 27 Nov: **#839** (AQP-505, DEF-148 Sev-1 fix, e64cc034; DEF-148 closed by QA on that push), **#841** (#840 follow-ups QLT-839-03/-04/-08, 43b02a11), **#843** (G8-C-PICNAME control part, 51502650). Master push 51502650 was red on `approve-override:314` [desktop] both attempts: ruled slow CI runners, not product (DL-479 notes 9 to 12; QA A/B and shard read). DEF-140 and DEF-144 reopened as Sev-3 Test (load); they close on two qualifying master pushes or master accepts them at G8. DEF-145 closed. RISK-031 open at 9, 0 of 2.
+
+**Open code PRs (merge cut-off end of Wed 2 Dec):**
+- **#845** (AQP-506, DEF-149 leave-guard fix, Sev-2 on master since #806; lane 1, taken over from lane 2): DL-476 notes 6 to 8, R1 (fragment links take no history entry), row links `replace` on editable pages only (PF-23), PF-24. Head e2bf0dab plus local 70f72820; combined review in progress.
+- **#836** (AQP-441, Engineer tree seed and ghost; lane 3): 4ae54c5f fully green, 193,291 B (+148 B). Review round 3 APPROVE WITH COMMENTS; architect conforms (note v1.4). Local fix commit (SEC-836-04, ARC-836-05 to -07, QLT-836-13) to push; timed proof running now.
+- **#811** (AQP-488, DEF-131 stage 2T, the Lead's tree edit; the inputs edit is #806, already on master; lane 2): DL-477 option A failed (TBT +17.5 % at 1 row, +25.0 % at 53 rows), so **DL-478 B applies** (the delivery lead's written acceptance). Red at 0aa7cc65 in its own island guard cases: data-loss shape, a #811 merge blocker; fix built on a head that has merged #845. **Pre-written delivery-lead question if no fix in sight by end of Tue 1 Dec (DL-480 (5)):** A ship R1 without the tree edit (recommended), B hold G8.
+
+**Fresh numbers for the delivery lead (information, not a question, DL-480 (1)):** five quiet interleaved pairs on #811's lever head 2bb92dec against master: TBT median +17.5 % at Prepared 1 row (777 / 913 ms) and +25.0 % at 53 rows (1,102 / 1,377 ms); longest task not shorter (627 / 741 ms); the first action still faster than master. Master treats the 53-row figure as covered by the B acceptance.
+
+**Pre-G8 list adds:**
+- **G8-C-PRF811-NFR9** (DL-478, active): reviewer-performance reads the Lead's review page (Prepared, 1 and 53 rows) on the NFR-009 reference profile at the release head, median of 5; TBT over 200 ms or LCP over 2 s goes back to the delivery lead before the G8 recommendation.
+- **G8-C-831** (DL-478, active): #831 first named item after G8, dated by the product-manager; order against G8-C-FIRSTLOAD-194 proposed by the PM.
+- **G8-C-PICNAME:** control part met (#843); Lead-page 8 px part closes on #811's run of record.
+- **DEF-140, DEF-144:** Sev-3 Test (load), close on DL-460 re-read or master's written acceptance at G8.
+- **Post-G8 items:** Lead first paint shows values (G8-C-LEADVALUES); harmonise row links on Approved/Quoted/Ignored reviews (PF-23); Engineer tree rows pressed before hydration (PF-25, figure to be measured); follow-ups #842 (PRF-811-05/-06).
+- **User notes line (for the product-manager):** "Back leaves the review page; it does not step back through the rows you looked at."
+
+**Interim rule R21 (DL-479 note 12):** one checked re-run of a PR shard whose only red is `approve-override:230`/`:314` or `approve:312` with the post-approve stall signature at draw 1.3 or more; master pushes never re-run.
+
+**Housekeeping for the delivery lead:** `npm ci` in the main checkout (its `next` is 16.4.3 against the lockfile's 16.4.5, dev server only; G8-C-NEXTADV no action); idle container `aqp448-db`; QA's scratch `repro148` and `def149.env`; branch `fix/AQP-505-followups-840`; lane 3's `prof836-*` worktrees after its proof (junctioned, unlink before removing).
 
 ## Daily update (2026-11-27, orchestrator)
 
