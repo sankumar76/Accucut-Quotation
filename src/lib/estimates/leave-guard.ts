@@ -8,6 +8,9 @@ import type { SaveGate } from './save-gate';
  * - **A closed tab, a reload, a link to another site:** the browser's own prompt (`beforeunload`). The text of that prompt is the browser's; nothing can change it.
  * - **A link inside the portal:** the click is stopped in the capture phase, before Next.js's link sees it, and the person is asked; if they go, `navigate` takes them there. While the extra history entry
  *   below is on top, the link **replaces** it (also on a clean page), so the history is not left with two entries of the same address.
+ * - **A link to another place on this page (`#main`, `#review-calculate`, a section of the form):** the browser pushes a history entry of its own for it, and an entry stacked on the page's own one is one more than the
+ *   guard's `go(-2)` counts (DEF-149). While the guard is installed, whatever the state of the page, it takes such a click when no handler of the page has: it replaces the `#` of the address (no entry) and moves scroll and
+ *   focus to the target as the browser would. A link whose own handler already took the click (it prevented the default, as the form's section strip and the calculate summary do) is left alone: it pushes nothing.
  * - **The back button:** a browser does not let a page cancel it, so while something is unsaved the guard puts one extra entry of the same address on top of the history. Back then lands on the page's
  *   own entry (the same address, so Next.js keeps the page and what is typed in it) and the guard asks; the entry is put back at once, so Back asks again. When nothing is unsaved by then, the same
  *   press is passed on, so a person who saved is not made to press Back twice. This needs `history.state` to be Next.js's own entry, which it is on every page the router drew.
@@ -25,10 +28,30 @@ interface Target {
 export interface LeaveEnv {
   readonly win: Target & {
     readonly location: { readonly href: string; readonly origin: string };
-    readonly history: { readonly state: unknown; readonly pushState: (state: unknown, title: string) => void; readonly back: () => void; readonly go: (delta: number) => void };
+    readonly history: {
+      readonly state: unknown;
+      readonly pushState: (state: unknown, title: string) => void;
+      readonly replaceState: (state: unknown, title: string, url: string) => void;
+      readonly back: () => void;
+      readonly go: (delta: number) => void;
+    };
     readonly setTimeout: (handler: () => void, ms: number) => unknown;
   };
-  readonly doc: Target;
+  readonly doc: Target & {
+    /** The element a `#` names, or null. */
+    readonly getElementById: (id: string) => FragmentTarget | null;
+    /** The element with the focus now. */
+    readonly activeElement: unknown;
+  };
+}
+
+/** What a jump to a `#` does with its target: scroll to it and give it the focus, as the browser does for a link to a place on the page. */
+export interface FragmentTarget {
+  readonly scrollIntoView: () => void;
+  readonly focus: (options: { readonly preventScroll: boolean }) => void;
+  readonly setAttribute: (name: string, value: string) => void;
+  readonly removeAttribute: (name: string) => void;
+  readonly addEventListener: (type: string, listener: () => void, options: { readonly once: boolean }) => void;
 }
 
 export interface LeaveGuardOptions {
@@ -90,19 +113,32 @@ function clickFactsOf(event: Event): ClickFacts {
  * or downloads, another site, the same address, or only a different `#`.
  */
 export function leavingLinkOf(click: ClickFacts, location: { readonly href: string; readonly origin: string }): string | null {
+  const link = plainLinkOf(click, location);
+  if (link === null) return null;
+  const { to, here } = link;
+  if (to.origin !== location.origin || (to.pathname === here.pathname && to.search === here.search)) return null;
+  return `${to.pathname}${to.search}${to.hash}`;
+}
+
+/** The address (path, query and `#`) of a plain click on a link to another place on THIS page: the same path and query, with a `#`. Null for anything else, including a link to the same address with no `#`. */
+export function fragmentLinkOf(click: ClickFacts, location: { readonly href: string; readonly origin: string }): string | null {
+  const link = plainLinkOf(click, location);
+  if (link === null) return null;
+  const { to, here } = link;
+  if (to.origin !== location.origin || to.pathname !== here.pathname || to.search !== here.search || to.hash === '') return null;
+  return `${to.pathname}${to.search}${to.hash}`;
+}
+
+/** A left click, with no key held, on a link that opens in this frame and does not download: the link's address and the page's, or null. */
+function plainLinkOf(click: ClickFacts, location: { readonly href: string; readonly origin: string }): { readonly to: URL; readonly here: URL } | null {
   if (click.button !== 0 || click.metaKey || click.ctrlKey || click.shiftKey || click.altKey) return null;
   const anchor = anchorOf(click.target);
   if (anchor === null || anchor.hasAttribute('download') || (anchor.target !== '' && anchor.target !== '_self')) return null;
-  let to: URL;
-  let here: URL;
   try {
-    to = new URL(anchor.href, location.href);
-    here = new URL(location.href);
+    return { to: new URL(anchor.href, location.href), here: new URL(location.href) };
   } catch {
     return null;
   }
-  if (to.origin !== location.origin || (to.pathname === here.pathname && to.search === here.search)) return null;
-  return `${to.pathname}${to.search}${to.hash}`;
 }
 
 export interface LeaveGuardHandle {
@@ -151,6 +187,37 @@ export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOption
     else go();
   };
 
+  // A link to another place on this page, which no handler of the page took (it did not prevent the default): the browser would push an entry for it, so it is done here without one (DEF-149, R1). This runs after
+  // the page's own handlers (a listener on the document, in the bubbling phase), so a link whose handler prevents the default, and does its own scrolling, is not touched. It runs whatever the state of the page: an
+  // entry pushed while the page was clean would sit under the guard's entry when the person starts to type, and the way out would then land on the page itself.
+  const onFragmentClick: Listener = (event) => {
+    if (event.defaultPrevented) return;
+    const address = fragmentLinkOf(clickFactsOf(event), win.location);
+    if (address === null) return;
+    event.preventDefault();
+    win.history.replaceState(win.history.state, '', address);
+    jumpToFragment(address.slice(address.indexOf('#') + 1));
+  };
+
+  /** Scroll to the target of a `#` and give it the focus, as the browser does: a target that cannot take the focus by itself is given `tabindex="-1"` for as long as it has it, and so is where the next Tab starts. */
+  const jumpToFragment = (fragment: string): void => {
+    let id = fragment;
+    try {
+      id = decodeURIComponent(fragment);
+    } catch {
+      // A `#` that is not valid percent-encoding names the element by its text as it is.
+    }
+    const target = doc.getElementById(id);
+    if (target === null) return;
+    target.scrollIntoView();
+    target.focus({ preventScroll: true });
+    if (doc.activeElement !== target) {
+      target.setAttribute('tabindex', '-1');
+      target.focus({ preventScroll: true });
+      target.addEventListener('blur', () => target.removeAttribute('tabindex'), { once: true });
+    }
+  };
+
   const onPopState: Listener = () => {
     // Only the press of Back from our own entry lands on the same address; any other traversal is somebody else's.
     if (armedFor === null || win.location.href !== armedFor) return;
@@ -166,7 +233,8 @@ export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOption
       proceed: () => {
         armedFor = null;
         // Two steps, as a held invariant and not a guess: the guard's own entry is the only one above the page's entry. A Back lands on the page's own entry and the push above truncates what was forward of it, so the
-        // history is the page's entry and this one whatever was done on the page; a link to another row of this page replaces an entry and never stacks one (the router's `replace`, and the tree's row links, which replace too).
+        // history is the page's entry and this one whatever was done on the page. No writer stacks an entry on the page's own: a link to another row of this page replaces one (the router's `replace`, and the tree's row links,
+        // which replace too), the island's address rewrite is `replaceState`, and a link to a place on this page is done by `onFragmentClick` without an entry.
         win.history.go(-2);
       },
       cancel: () => undefined,
@@ -179,6 +247,7 @@ export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOption
   win.addEventListener('beforeunload', onBeforeUnload);
   win.addEventListener('popstate', onPopState);
   doc.addEventListener('click', onClick, true);
+  doc.addEventListener('click', onFragmentClick);
 
   return {
     remove: () => {
@@ -186,6 +255,7 @@ export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOption
       win.removeEventListener('beforeunload', onBeforeUnload);
       win.removeEventListener('popstate', onPopState);
       doc.removeEventListener('click', onClick, true);
+      doc.removeEventListener('click', onFragmentClick);
     },
     allowFullLoad: () => {
       letFullLoadThrough = true;
