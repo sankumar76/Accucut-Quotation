@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { assignedEstimate } from './support/assigned-estimate';
+import { isPatchOfInputs } from './support/part-form';
 
 /**
  * DL-470 (3): the Lead's page is seeded with the open row's data (DEF-141, #827) and editable (DEF-131, #806). **A row that is edited, left, and opened again shows what was saved, and the next save is accepted.** The
@@ -57,5 +58,35 @@ test.describe('DL-470 (3): a row opened again shows what was saved', () => {
     const answer = await second;
     expect(answer.status(), 'the second save (409 would be a stale revision)').toBe(200);
     await expect(description(page)).toHaveValue(SECOND);
+  });
+});
+
+test.describe('The island follows the address and the leave guard still asks', () => {
+  /** What the guard says and its two answers (the Engineer's own cases hold the words: estimate-save.spec.ts). */
+  const leaveDialog = (page: Page) => page.getByRole('alertdialog', { name: 'Leave without saving?' });
+
+  test('Back with a value typed and not saved asks "Leave without saving?", keeps the typed value and the open row after "Keep editing", and leaves after "Leave without saving"', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await page.goto('/queue');
+    await page.goto('/estimates/' + code);
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    // A save that cannot go through keeps the value typed and not saved, which is what arms the guard.
+    await page.route((url) => isPatchOfInputs(url.toString(), 'PATCH'), (route) => (route.request().method() === 'PATCH' ? route.abort() : route.continue()));
+    await description(page).fill(FIRST);
+    await description(page).blur();
+    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await expect(page).toHaveURL(new RegExp('/estimates/' + code));
+    await leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(leaveDialog(page)).toHaveCount(0);
+    await expect(description(page)).toHaveValue(FIRST);
+    await expect(page.locator('#part-form-title')).toContainText('1');
+
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+    await expect(page).toHaveURL(/\/queue/);
   });
 });
