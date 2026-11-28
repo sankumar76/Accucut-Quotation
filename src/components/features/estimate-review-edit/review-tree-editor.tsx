@@ -8,7 +8,7 @@ import { TreeLegend } from '@/components/shared/tree-legend';
 import { rowNameOf } from '@/lib/estimates/row-name';
 import { nodeKindLabel } from '@/lib/estimate/node-kinds';
 import { createClearedRefresh } from '@/lib/estimates/cleared-refresh';
-import { addressWithRow, joinRows, removedElsewhere, type OpenRow } from '@/lib/estimates/review-tree-edit';
+import { addressWithRow, formSeedOf, joinRows, removedElsewhere, type OpenRow } from '@/lib/estimates/review-tree-edit';
 import { withoutFilled } from '@/lib/estimates/calculate-missing';
 import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
 import { reviewBlocked, reviewCalculating } from '@/lib/estimates/review-save-gate';
@@ -118,7 +118,9 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
   // would show the values from before the edit and send the next save with a stale revision (DL-470 (3)). Worked out during the render, as the open row is below.
   const [seedKept, setSeedKept] = useState(true);
   if (seedKept && firstSeed !== undefined && shown !== null && shown.id !== firstSeed.partId) setSeedKept(false);
-  const formSeed = seedKept ? firstSeed : undefined;
+  // ... and only when the tree itself came from the seed (ARC-811-01): a tree the browser refused is read from the server later, and that read moves the revision a save carries under the seed's older values.
+  const [treeFromSeed] = useState(() => formSeedOf(firstSeed, estimateId) !== undefined);
+  const formSeed = seedKept && treeFromSeed ? firstSeed : undefined;
   // The row last chosen by a press on the tree: only then does the form take the focus and the tree fold under 1024 px (a row just added or the neighbour after a delete is not a choice, `PartReview.byPress`).
   const [pressedId, setPressedId] = useState<string | null>(null);
   const choose = (id: string): void => {

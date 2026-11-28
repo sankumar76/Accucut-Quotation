@@ -61,7 +61,7 @@ export const PICTURE_ZONE_HEIGHT_HELD = 'h-[132px] md:h-[116px]';
 /**
  * The least height the read-only form's picture box takes while the page is one a Lead or an Admin can correct (PF-19, DL-465): the read-only box is the thumbnail alone (74 px), the island's editable box is
  * `PICTURE_ZONE_HEIGHT_UNHINTED` (`_HELD` when a picture is held), and the swap must not move the page. Set on the block that holds the form (`#row-inputs`), so no prop reaches the form's code and nothing is added to the first load.
- * Written out here because Tailwind reads class names as written; `form-layout.test.ts` derives each from the height above, so they cannot drift.
+ * Written out here because Tailwind reads class names as written; `picture-zone-reserve.test.ts` derives each from the height above, so they cannot drift.
  */
 export const PICTURE_ZONE_RESERVE = '[&_[data-picture-zone]]:min-h-[146px] md:[&_[data-picture-zone]]:min-h-[114px]';
 export const PICTURE_ZONE_RESERVE_HELD = '[&_[data-picture-zone]]:min-h-[132px] md:[&_[data-picture-zone]]:min-h-[116px]';

@@ -6,6 +6,7 @@ import { usePartValues, type UsePartValuesProps } from '@/components/features/es
 import { TreatmentSeedContext, useTreatmentOptions } from '@/components/features/estimate-workspace/use-treatment-options';
 import type { FormField } from '@/lib/estimates/form-client';
 import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
+import { formSeedOf } from '@/lib/estimates/review-tree-edit';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
 import { renderHook } from '../support/hook-harness';
@@ -175,6 +176,24 @@ describe('usePartValues: the part\'s values', () => {
     expect(first.stored.status).toBe('ready');
     expect(first.texts).toEqual({ a: '4.00' });
     expect(loads.part).not.toHaveBeenCalled();
+  });
+
+  it('ARC-811-01: when the tree seed is refused the island\'s form gets no seed: the tree is read from the server, the form reads its part, and nothing is started from older values', async () => {
+    const refused = seed({ tree: { nodes: 'x' } });
+    expect(formSeedOf(refused, 'e')).toBeUndefined();
+    expect(formSeedOf(seed({ tree: undefined }), 'e')).toBeUndefined();
+    expect(formSeedOf(seed({ estimateId: 'another' }), 'e')).toBeUndefined();
+    expect(formSeedOf(undefined, 'e')).toBeUndefined();
+    expect(formSeedOf(seed(), 'e')).toEqual(seed());
+
+    // The island's pair: the tree hook (given the page's seed, which it refuses) and the form (given what the island hands it).
+    const trees = renderHook((estimateId: string) => usePartsTree(estimateId, undefined, { seed: refused }), 'e');
+    expect(trees.render().nodes).toBeNull();
+    const form = renderHook(usePartValues, props({ seed: formSeedOf(refused, 'e') }));
+    expect(form.render().stored.status).toBe('loading');
+    await flush();
+    expect(loads.tree).toHaveBeenCalledTimes(1);
+    expect(loads.part).toHaveBeenCalledTimes(1);
   });
 
   it('reads from the server when the seed names another part, when it is absent, and when its part body is refused', async () => {

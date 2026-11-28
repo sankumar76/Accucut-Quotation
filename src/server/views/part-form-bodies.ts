@@ -7,8 +7,8 @@ import { materialOptionsResponseSchema, treatmentOptionsResponseSchema } from '.
 import { nodeDetailSchema, partsTreeSchema } from './schemas/tree';
 
 /**
- * The four answers the part form reads (`GET /estimates/{id}/form`, `GET /estimates/{id}/nodes/{nodeId}`, `GET /options/materials`, `GET /options/treatments`), built **in one place**, so the four routes and the
- * Lead's review page (DEF-141: the page hands the same four answers to the form as props, so the browser does not fetch them after hydration) send the same bodies, through the same strict schemas, with no added
+ * The answers the part form and the tree read (`GET /estimates/{id}/form`, `GET /estimates/{id}/nodes/{nodeId}`, `GET /options/materials`, `GET /options/treatments` and `GET /estimates/{id}/tree`), built **in one place**, so the routes and the
+ * Lead's review page (DEF-141: the page hands the same answers to the form and the island's tree as props, so the browser does not fetch them after hydration) send the same bodies, through the same strict schemas, with no added
  * field (NFR-002). Each function takes what the service answered and returns the schema's own parse of it; a value that nothing declared fails closed, as it does in a route.
  */
 

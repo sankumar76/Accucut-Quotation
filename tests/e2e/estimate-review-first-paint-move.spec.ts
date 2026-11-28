@@ -70,6 +70,8 @@ async function checkSwap(page: Page, code: string, label: string): Promise<void>
   await expect(page.locator('form[data-part-form]')).toBeVisible();
   await expect(page.locator('[data-part-ghost]')).toHaveCount(0);
   await expect(page.locator('[data-review-tree-reserve]').first()).toBeAttached();
+  // PF-21d, content first: the read-only form shows the part's values (a saved value is on the page), not a placeholder.
+  expect(await page.locator('form[data-part-form] input').evaluateAll((controls) => controls.filter((control) => (control as HTMLInputElement).value !== '').length), 'a saved value is on the page at the read-only stage').toBeGreaterThan(0);
   await within('when the read-only form replaced the ghost');
   await pictureControlHere(page);
   await within('once the read-only picture control had arrived');
@@ -105,6 +107,8 @@ test.describe('PF-18 to PF-21: the first paint holds the island\'s room', () => 
       expect(await page.evaluate(() => window.matchMedia('(hover: hover) and (pointer: fine)').matches), 'this window has a mouse').toBe(true);
       await checkSwap(page, code, 'Prepared, mouse at 768');
     } finally {
+      // A script still on its way when the test ends must not be answered into a closed context (`route.fetch: Request context disposed`).
+      await context.unrouteAll({ behavior: 'ignoreErrors' });
       await context.close();
     }
   });

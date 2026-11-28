@@ -24,7 +24,9 @@ describe('the island and the seed', () => {
     // The seed is the first row's data as drawn; once any other row is shown it is dropped for good (state, set during the render), so the first row form, mounted again, starts from the server.
     expect(ISLAND).toMatch(/const \[seedKept, setSeedKept\] = useState\(true\)/);
     expect(ISLAND).toMatch(/if \(seedKept && firstSeed !== undefined && shown !== null && shown\.id !== firstSeed\.partId\) setSeedKept\(false\)/);
-    expect(ISLAND).toMatch(/const formSeed = seedKept \? firstSeed : undefined/);
+    expect(ISLAND).toMatch(/const formSeed = seedKept && treeFromSeed \? firstSeed : undefined/);
+    // ARC-811-01: the form starts from the seed only when the tree came from it.
+    expect(ISLAND).toMatch(/const \[treeFromSeed\] = useState\(\(\) => formSeedOf\(firstSeed, estimateId\) !== undefined\)/);
     // A page drawn again hands a new seed; the island keeps the first one (state), so a row chosen through the address never feeds the form a snapshot taken at that moment.
     expect(ISLAND).toMatch(/const \[firstSeed\] = useState\(seed\)/);
     expect(ISLAND).toMatch(/seed: firstSeed/);
