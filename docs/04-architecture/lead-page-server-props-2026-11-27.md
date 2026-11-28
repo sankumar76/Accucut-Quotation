@@ -115,7 +115,18 @@ DL-455 step 2 has #811's island reuse the server-drawn data and get `/tree` as p
 
 Everything else conforms. For #836: rules 1 to 6, the new rule 7 and section 5a. For #811: section 5 items 1 to 5 and the new item 6, PF-19, PF-20 and the three stages of section 5c. The performance terms (PRF-811-02 to -04, DL-463, DL-469 (d)) belong to the performance lens and are not graded here.
 
-## 6. Change log
+## 5f. Re-read at #836 4ae54c5f (the tree-seed delta) and #811 0aa7cc65 (v1.4, 2026-11-28)
+
+- **DEF-148 (#839, on `master`) now meets the second sentence of rule 8 by design.** A save sends the revision of the values the form holds (the seed's, the load's or its own), and never the tree row's. So a later `/tree` read no longer moves the revision under older values. Section 5b's sentence "the later `/tree` read moves `part.revision` (and `revisionRef`)" describes the code before #839. With #839, a stale seed is refused with a 409 and goes down the conflict path. The check at mount, `!editable || parsed.revision === part.revision`, saves that 409 and shows the newest values. **Rule 8 holds for both seeds.**
+- **Status of the v1.3 findings.** Resolved: ARC-836-01 (the guard, and its two tests in `part-form-seeded-reads.test.ts`), ARC-836-02 (the `leaky` test) and ARC-811-01 (#811 hands the form its seed only when `tree.fromSeed` is true, shape (i)). ARC-836-03 is resolved except that the frozen-registry case does not compare `tree` (ARC-836-05).
+- **Section 5d at 4ae54c5f.** Three files are byte-identical to #811 at 0aa7cc65: `part-form-bodies.ts` (`treeBody`), `tree-client.ts` (`parseTreeAnswer`) and `use-parts-tree.ts` (the `seed` option, `fromSeed`, and #841's `onDone(answer, direct)`, which both branches take from `master`). `getFirstPartForm` adds to #811's service without changing it: one listing, `tree = viewsOf`, and `node = partDetailOf(tree[0])`. The tree is sent in every Engineer state (`seedOf(…, true)`), and the grid test compares the tree with `getTree`. **Item 1 holds.**
+
+| ID | Severity | Finding | Fix |
+|---|---|---|---|
+| ARC-836-05 | Minor | The frozen-registry case (`part-form-seed.test.ts:216`) compares `form` and `node` but not `tree`. The tree's names and completeness come from the frozen registry too (section 5d item 7) | Add `expect(asJson(first.tree)).toEqual(asJson(await getTree(lead, id)))` |
+| ARC-836-06 | Minor | `use-part-form.ts`'s seed guard is the same logic as #811's (d71e62fa), but in different text (`parsed` against `given`, and another comment). The second PR to merge will get a conflict on those lines, and two texts of one guard go against DL-469 (4) (ii)'s "never a second copy" | #836 takes #811's lines exactly (or the second to merge keeps the first's text). Either way the conflict resolves to one copy with the same logic |
+| ARC-836-07 | Info | `src/lib/estimates/part-form-seed.ts`'s doc comment differs from #811's | The second to merge keeps one text |
+
 
 | Version | Date | Change |
 |---|---|---|
@@ -123,3 +134,4 @@ Everything else conforms. For #836: rules 1 to 6, the new rule 7 and section 5a.
 | 1.1 | 2026-11-27 | Re-read at 0793b7d5 (DL-457). Section 2 rule 2 gains "Combined reads": allowed in the service, from shared private steps, with a JSON equivalence test. Section 5 item 3: #811's tree comes from the same combined read (`{ form, node, tree }`), not a third access check. ARC-827-07 (Minor): `getNode` and `getPartForm` repeat the node assembly, so share a private `partDetailOf` |
 | 1.2 | 2026-11-28 | Section 5a: server-drawn placeholders (DEF-145). Stage 11b counts JavaScript only. The Engineer's page may hand `PartForm` a server-rendered ghost built from `getForm` through `formBody`, like `cards`. Seeding the Engineer's form is master's decision |
 | 1.3 | 2026-11-27 | DL-469 supersedes section 2 rule 7 and the last term of section 5a: the Engineer's form is seeded by `getFirstPartForm`, and the ghost comes from the seed. New rule 8: values and the revision a save sends are one snapshot (QLT-836-01), with how it applies to each seed (section 5b). The Lead's three-stage first paint and the PF-19 and PF-20 reserves (section 5c). PRF-811-08 accepted. One `treeBody()`, and #836's tree seed built on #811 (section 5d). Conformance of #836 at fcab064f and #811 at b8934a57 (section 5e). The section 4 line gains the revision term and the Engineer's seed |
+| 1.4 | 2026-11-28 | Section 5f: re-read at #836 4ae54c5f and #811 0aa7cc65. DEF-148 (#839) meets rule 8's second sentence by design. ARC-836-01, -02 and ARC-811-01 are resolved. Section 5d item 1 holds (three files identical to #811's). New: ARC-836-05 (Minor, the frozen case's tree), ARC-836-06 (Minor, the guard in two texts) and ARC-836-07 (Info) |
