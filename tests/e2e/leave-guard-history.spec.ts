@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { TREE_CLEARED_LINE } from '../../src/components/features/estimate-review/review-texts';
+
 import { assignedEstimate } from './support/assigned-estimate';
 import { changePrivateMaterial, E2E_ENGINEER, insertPrivateMaterial } from './support/auth';
 import { signInAs } from './support/calculated-estimate';
@@ -29,10 +31,11 @@ const savedAnswer = (page: Page) => page.waitForResponse((response) => response.
 
 /**
  * The page reads itself again a short while after the first save of a Prepared estimate (`review-form.tsx`: the save takes its figures to cleared, then `router.refresh()`). Next writes the router's address into the
- * current history entry when that read commits, so a link pressed before it has committed can be undone by it. The cases wait for that read, by its answer, before the next step (QLT-845-07); that a row link pressed in
- * the quiet period is undone by it is reported as its own finding.
+ * current history entry when that read commits, so a link pressed before it has committed can be undone by it. The cases wait for the read to have COMMITTED before the next step (QLT-845-07): not for its answer, which
+ * arrives before the page is drawn, but for what the read draws, the tree's line that says the figures are cleared. **DEF-150** is the defect behind it: a row link pressed in the quiet period after a save is undone by
+ * that read. Lane 2 fixes it in its own PR; when it lands its proof removes these waits. They are in the set-ups only, wait on an event and not on a timer, and no assertion of the guard depends on them.
  */
-const pageRead = (page: Page) => page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).searchParams.has('_rsc'));
+const pageRead = (page: Page) => expect(page.getByText(TREE_CLEARED_LINE)).toBeVisible();
 
 /** Below 1024 px the tree is a foldable panel: it is opened before a row is chosen. */
 async function chooseRow(page: Page, row: string): Promise<void> {
@@ -61,11 +64,11 @@ async function typedInTheSecondRow(page: Page, code: string): Promise<() => void
   await expect(page.locator('form[data-part-form]')).toBeVisible();
   await expect(description(page)).toBeEnabled();
   const saved = savedAnswer(page);
-  const read = pageRead(page);
   await description(page).fill(FIRST);
   await description(page).blur();
   expect((await saved).status(), 'the first save').toBe(200);
-  await read;
+  // DEF-150: the row link is pressed after the page's own read has committed, or that read undoes it.
+  await pageRead(page);
   await chooseRow(page, '1');
   await expect(page).toHaveURL(/row=1#row-inputs$/);
   await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
@@ -223,12 +226,11 @@ async function armed(page: Page, code: string, row: string | null = '1.1', prepa
   await expect(page.locator('form[data-part-form]')).toBeVisible();
   await expect(description(page)).toBeEnabled();
   const saved = savedAnswer(page);
-  // A Prepared estimate reads itself again after its first save; a Draft does not.
-  const read = prepared ? pageRead(page) : null;
   await description(page).fill(FIRST);
   await description(page).blur();
   expect((await saved).status(), 'the first save').toBe(200);
-  if (read !== null) await read;
+  // DEF-150: a Prepared estimate reads itself again after its first save and draws the line that says its figures are cleared; what is pressed next waits for that read. A Draft does not read itself again.
+  if (prepared) await pageRead(page);
 }
 
 /** After a jump: text that cannot be saved is typed, Back asks with the text still there, and the chosen way out lands on the page before. */
@@ -354,6 +356,27 @@ test.describe('PF-23, PF-24 (ux ruling, section 11): the behaviour of the links'
   });
 });
 
+test.describe('R1: the # a jump writes is a real entry of the router', () => {
+  test('Back and Forward through the entry the jump rewrote are soft navigations: Next keeps its router state, and nothing is loaded again', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await page.goto('/queue');
+    await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    // A value on the window is gone after a full load, so it shows whether a traversal reloaded the page.
+    await page.evaluate(() => Reflect.set(window, '__stillTheSamePage', true));
+    await page.evaluate(() => (document.querySelector('a[href="#main"]') as HTMLElement | null)?.focus());
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/#main$/);
+    await page.evaluate(() => window.history.back());
+    await expect(page).toHaveURL(/\/queue$/);
+    expect(await page.evaluate(() => Reflect.get(window, '__stillTheSamePage')), 'Back was a soft navigation').toBe(true);
+    await page.evaluate(() => window.history.forward());
+    await expect(page).toHaveURL(/\/estimates\/[^/]+\?row=1\.1#main$/);
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    expect(await page.evaluate(() => Reflect.get(window, '__stillTheSamePage')), 'Forward into the rewritten entry was a soft navigation').toBe(true);
+  });
+});
+
 test.describe('R1: the # a jump writes survives the page being read again', () => {
   test('the skip link, then a save that makes the page read itself again (router.refresh): the address still ends #main, with the row', async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, true);
@@ -365,14 +388,13 @@ test.describe('R1: the # a jump writes survives the page being read again', () =
     await page.evaluate(() => (document.querySelector('a[href="#main"]') as HTMLElement | null)?.focus());
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/#main$/);
-    // The first save of a Prepared estimate takes its figures to cleared, and the page then reads itself again (`review-form.tsx`: a refresh a short while after the save). That is a fetch of the page's data.
-    const read = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).searchParams.has('_rsc'));
+    // The first save of a Prepared estimate takes its figures to cleared, and the page then reads itself again (`review-form.tsx`: a refresh a short while after the save).
     const saved = savedAnswer(page);
     await description(page).fill(FIRST);
     await description(page).blur();
     expect((await saved).status(), 'the save').toBe(200);
-    await read;
-    // Let the page take what the read brought, then the address must be as the jump left it.
+    // The read has COMMITTED when the page draws what it brought: the tree's line that says the figures are cleared. Only then is the address read, so it cannot pass before the router has written its own.
+    await pageRead(page);
     await expect(description(page)).toHaveValue(FIRST);
     await expect(page).toHaveURL(/row=1\.1.*#main$/);
   });
