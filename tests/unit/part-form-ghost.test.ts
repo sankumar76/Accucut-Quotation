@@ -3,9 +3,9 @@ import { fileURLToPath } from 'node:url';
 
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { engineerGhost } from '@/app/(portal)/estimates/[code]/engineer-ghost';
+import { engineerGhostFrom } from '@/app/(portal)/estimates/[code]/engineer-ghost';
 import { FORM_LOADING, FORM_LOCKED } from '@/components/features/estimate-workspace/estimate-texts';
 import { PartForm } from '@/components/features/estimate-workspace/part-form';
 import { ghostOf, PartFormGhost } from '@/components/features/estimate-workspace/part-form-ghost';
@@ -14,10 +14,6 @@ import type { FormField, FormView } from '@/lib/estimates/form-client';
 
 import { defined } from '../support/defined';
 
-vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
-// `formBody` is the route's own strict builder, held to its schema by `part-form-seed.test.ts`; here it passes the fixture through so the ghost's own rules are what is tested.
-vi.mock('@/server/views/part-form-bodies', () => ({ formBody: (body: unknown) => body }));
-const { logger } = await import('@/lib/logger');
 
 /**
  * DEF-145 (AQP-502): the part form's loading ghost, `rulings/partform-placeholder-shape-2026-11-28.md`. These tests are the ruling's PF-n rules that a unit can hold; the heights and the movement of `#review-actions`
@@ -215,18 +211,23 @@ describe('the ghost\'s place in the code (PF-4, PF-6)', () => {
     expect(code('src/components/shared/form-layout.ts')).not.toMatch(/\bimport\b/);
   });
 
-  it('PF-6: the page hands the ghost down as an element, the Lead\'s from the seed it already built and the Engineer\'s from the form definition through the route\'s own builder', () => {
+  it('PF-6, DEF-085: the page hands the ghost down as an element, the Lead\'s from the seed it already built and the Engineer\'s from the bodies of its own seed, with no read of the form\'s definition of its own (DL-471)', () => {
     expect(code('src/components/features/estimate-review/estimate-review.tsx')).toContain('ghostOf(');
     const engineer = code('src/app/(portal)/estimates/[code]/engineer-ghost.tsx');
-    expect(engineer).toContain('formBody(');
-    expect(engineer).toContain('getForm(');
-    // DL-471: the Engineer's page makes no read of the form's definition and draws no ghost; `engineer-ghost.tsx` is the builder the page's combined read will use.
-    expect(code('src/app/(portal)/estimates/[code]/page.tsx')).not.toContain('engineerGhost');
-    expect(code('src/app/(portal)/estimates/[code]/page.tsx')).not.toContain('getForm');
+    expect(engineer).toContain('ghostOf(');
+    // The builder takes the bodies the page already holds and reads nothing: no service and no `getForm`.
+    expect(engineer).not.toContain('getForm');
+    expect(engineer).not.toContain('@/server/');
+    const page = code('src/app/(portal)/estimates/[code]/page.tsx');
+    expect(page).toContain('engineerGhostFrom(');
+    expect(page).not.toContain('getForm');
+    expect(page).toContain('readFirstPartFormBodies(');
   });
 
-  it('PF-6, DL-455 (3)(a): the Engineer\'s form is not seeded', () => {
-    expect(code('src/app/(portal)/estimates/[code]/page.tsx')).not.toContain('seed');
+  it('PF-6, DEF-085 (DL-469, which reverses DL-455 (3)(a)): the Engineer\'s form is seeded from the same read as its ghost', () => {
+    const page = code('src/app/(portal)/estimates/[code]/page.tsx');
+    expect(page).toContain('seed={seed}');
+    expect(page).toContain('ghost={ghost}');
   });
 });
 
@@ -242,6 +243,13 @@ describe('where the ghost stands in (PF-1, PF-7, PF-11)', () => {
     expect(read).toContain('Choose a part');
   });
 
+  it('PF-7, QLT-836-06: with the tree unread and no ghost (a fault, or no rows) the three bars stand in, never "Choose a part"', () => {
+    const html = renderToStaticMarkup(createElement(PartForm, { estimateId: 'e', part: null, editable: true, nodes: null, treeUnread: true }));
+    expect(html).toContain(FORM_LOADING);
+    expect(html).toContain('role="status"');
+    expect(html).not.toContain('Choose a part');
+  });
+
   it('PF-1: with a part chosen the form shows the ghost it was handed while the definition is read, and the three bars when it was handed none', () => {
     const part = { id: 'p', slNo: '1.1', revision: 0 };
     const withGhost = renderToStaticMarkup(createElement(PartForm, { estimateId: 'e', part, editable: true, nodes: null, ghost: GHOST }));
@@ -252,23 +260,28 @@ describe('where the ghost stands in (PF-1, PF-7, PF-11)', () => {
   });
 });
 
-describe('engineerGhost (PF-6, PF-15)', () => {
+describe('engineerGhostFrom (PF-6, PF-7, PF-15, DEF-085)', () => {
   const wire = { sections: FORM.sections.map((section) => ({ ...section, fields: section.fields.map((entry) => ({ ...entry, visibleWhen: entry.visibleWhen })) })), lastSavedAt: null };
-  const viewer = { id: 'u', role: 'ENGINEER' } as const;
 
-  it('draws the ghost from the definition the service answers, with the locked notice when the Engineer cannot edit and none when they can', async () => {
-    const estimates = { getForm: () => Promise.resolve(wire) } as never;
-    const editable = renderToStaticMarkup(defined(await engineerGhost(estimates, viewer, 'e', { status: 'DRAFT', ignored: false })));
+  it('draws the ghost from the bodies it is given, with the locked notice when the Engineer cannot edit and none when they can', () => {
+    const editable = renderToStaticMarkup(defined(engineerGhostFrom({ form: wire }, { status: 'DRAFT', ignored: false })));
     expect(editable).toContain('data-part-ghost');
     expect(editable).not.toContain(FORM_LOCKED);
-    const locked = renderToStaticMarkup(defined(await engineerGhost(estimates, viewer, 'e', { status: 'APPROVED', ignored: false })));
+    const locked = renderToStaticMarkup(defined(engineerGhostFrom({ form: wire }, { status: 'APPROVED', ignored: false })));
     expect(locked).toContain(FORM_LOCKED);
+    const ignored = renderToStaticMarkup(defined(engineerGhostFrom({ form: wire }, { status: 'DRAFT', ignored: true })));
+    expect(ignored).toContain(FORM_LOCKED);
   });
 
-  it('a read that fails draws no ghost (the bars stand in) and logs the kind of the fault only', async () => {
-    const estimates = { getForm: () => Promise.reject(new TypeError('secret detail of the estimate')) } as never;
-    expect(await engineerGhost(estimates, viewer, 'e', { status: 'DRAFT', ignored: false })).toBeUndefined();
-    expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain('secret detail');
-    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith({ errorName: 'TypeError', errorCode: undefined }, expect.stringContaining('loading ghost'));
+  it('draws no ghost (the three bars stand in) when the page holds no bodies (a read failed, or the estimate has no rows), and for a body the reader refuses', () => {
+    expect(engineerGhostFrom(null, { status: 'DRAFT', ignored: false })).toBeUndefined();
+    expect(engineerGhostFrom({ form: { sections: 'x', lastSavedAt: null } }, { status: 'DRAFT', ignored: false })).toBeUndefined();
+  });
+
+  it('PF-7: handed to the form with the tree unread, it is what the form area shows, and "Choose a part" is not', () => {
+    const ghost = engineerGhostFrom({ form: wire }, { status: 'DRAFT', ignored: false });
+    const unread = renderToStaticMarkup(createElement(PartForm, { estimateId: 'e', part: null, editable: true, nodes: null, ghost, treeUnread: true }));
+    expect(unread).toContain('data-part-ghost');
+    expect(unread).not.toContain('Choose a part');
   });
 });

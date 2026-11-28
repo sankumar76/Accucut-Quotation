@@ -12,7 +12,7 @@ import { PART_ID, partServer } from '../support/part-server';
 
 /**
  * DEF-141 (DL-455 2 (b)): the Lead's review page hands the part form its definition, the materials, the part's values and the treatments as props, so the form reads **nothing** from the server to start, and every
- * read after that (Try again, a conflict, a part the seed does not name, the Engineer's form, which has no seed) is a read from the server as ever. A new set of props after `router.refresh()` does not wipe what was
+ * read after that (Try again, a conflict, a part the seed does not name, a page that had no seed) is a read from the server as ever. A new set of props after `router.refresh()` does not wipe what was
  * typed: the seed is the start of the form, not its life. The hooks run with no DOM (`tests/support/hook-harness.ts`); the readers are the real ones, the server is an invented one. Invented ids only.
  */
 
@@ -82,7 +82,7 @@ describe('useFormDefinition: the definition and the materials', () => {
     expect(loads.materials).toHaveBeenCalledTimes(1);
   });
 
-  it('reads from the server with no seed (the Engineer\'s form), with a seed of another estimate, and with a body the reader refuses', async () => {
+  it('reads from the server with no seed (a page whose read failed), with a seed of another estimate, and with a body the reader refuses', async () => {
     for (const given of [undefined, seed({ estimateId: 'another' }), seed({ form: { sections: 'x', lastSavedAt: null } }), seed({ materials: { options: 5 } })]) {
       loads.form.mockClear();
       loads.materials.mockClear();
@@ -116,6 +116,27 @@ describe('usePartValues: the part\'s values', () => {
     await flush();
     expect(first.stored.status).toBe('ready');
     expect(first.texts).toEqual({ a: '4.00' });
+    expect(loads.part).not.toHaveBeenCalled();
+  });
+
+  it('QLT-836-01: a form that can be saved uses the seed only when its revision is the tree row\'s; an older seed is read from the server, so a save never goes over a value the person did not see', async () => {
+    // The page read the part at revision 3 (the seed); by the time the tree was read in the browser the part was at revision 4 (a Lead's edit, or the Engineer's other tab).
+    const older = renderHook(usePartValues, props({ seed: seed(), part: { id: PART_ID, slNo: '1', revision: 4 } }));
+    expect(older.render().stored.status).toBe('loading');
+    await flush();
+    expect(loads.part).toHaveBeenCalledTimes(1);
+    // The same revision: one snapshot, so the seed is used and nothing is read.
+    loads.part.mockClear();
+    const same = renderHook(usePartValues, props({ seed: seed(), part: { id: PART_ID, slNo: '1', revision: 3 } }));
+    expect(same.render().stored.status).toBe('ready');
+    await flush();
+    expect(loads.part).not.toHaveBeenCalled();
+  });
+
+  it('QLT-836-01: a form nobody can save keeps its seed whatever the revision of the row is (the Lead\'s read-only review sends no revision)', async () => {
+    const view = renderHook(usePartValues, props({ editable: false, seed: seed(), part: { id: PART_ID, slNo: '1', revision: 0 } }));
+    expect(view.render().stored.status).toBe('ready');
+    await flush();
     expect(loads.part).not.toHaveBeenCalled();
   });
 

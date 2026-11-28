@@ -63,6 +63,8 @@ const row = (page: Page) => tree(page).getByRole('link').filter({ has: page.loca
 /** The Engineer opens part 1.1 (the form shows the tree's first row, the Main Assembly, until another is chosen) and waits until its values are read. */
 async function openPart(page: Page, world: World): Promise<void> {
   await page.goto(`/estimates/${world.code}`);
+  // The page draws the tree's rows from its seed (DEF-085), so they are on the screen before the page's code has run, and a press on one then does nothing: the form is the sign that the page is live.
+  await expect(partForm(page)).toBeVisible();
   await showTree(page);
   const read = page.waitForResponse((response) => response.url().endsWith(`/nodes/${world.partId}`) && response.request().method() === 'GET');
   await row(page).click();

@@ -47,7 +47,7 @@ export interface PartFormProps {
   readonly onShown?: () => void;
   /** The Lead's and the Admin's read-only view (AQP-488, DEF-131 Stage 1), with `editable` false: the same form with the review look. Absent for the Engineer. */
   readonly review?: PartReview | undefined;
-  /** The form's data as the page handed it over (the Lead's review, DEF-141): the definition, the materials, the part's values and the treatments, as the routes send them. The form then reads nothing from the server to start. Absent for the Engineer. */
+  /** The form's data as the page handed it over (the Lead's review, DEF-141): the definition, the materials, the part's values and the treatments, as the routes send them. The form then reads nothing from the server to start (the Engineer's page too, DEF-085). Absent when the page's reads failed. */
   readonly seed?: PartFormSeed | undefined;
   /**
    * The loading ghost, **drawn on the server** and handed in as an element, as `cards` and `notice` are, so none of its code is in the first load (DEF-145, PF-6): the form without its values, in the form's own cards and rows (`PartFormGhost`).
@@ -66,6 +66,9 @@ export interface PartFormProps {
  */
 export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, ownMove, onNamed, onServerIgnored, missing, gate, onShown, review, seed, ghost, treeUnread = false }: PartFormProps) {
   const definition = useFormDefinition(estimateId, seed);
+  // The part's values in the seed are for the first showing of that part only (the Engineer edits): once another part has been shown, the first is read from the server again (DEF-085).
+  const [left, setLeft] = useState(false);
+  if (!left && seed !== undefined && part !== null && part.id !== seed.partId) setLeft(true);
   // A row was chosen after the page was drawn (the review's view): the form's title takes the focus, the choice is said once and the tree folds. The first paint does none of it.
   const [seen, setSeen] = useState(part?.id);
   const [chosen, setChosen] = useState(false);
@@ -80,7 +83,15 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
     if (shown) onShown?.();
   }, [shown, onShown]);
 
-  if (part === null) return treeUnread && ghost !== undefined ? ghost : <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_NO_PART}</p>;
+  // The three bars stand in for a ghost the page could not draw (a fault, or no rows): while the tree is unread, never the untrue "Choose a part" (PF-7).
+  const bars = (
+    <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
+      <Skeleton className="h-(--control-h)" />
+      <Skeleton className="h-(--control-h)" />
+      <Skeleton className="h-(--control-h)" />
+    </div>
+  );
+  if (part === null) return treeUnread ? (ghost ?? bars) : <p className="min-w-0 flex-1 text-body text-ink-2">{FORM_NO_PART}</p>;
   if (definition.form.status === 'failed') {
     return (
       <Notice tone="danger" title={FORM_LOAD_FAILED_TITLE}>
@@ -103,14 +114,7 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
     );
   }
   if (definition.form.status === 'loading' || Fields === null) {
-    if (ghost !== undefined) return ghost;
-    return (
-      <div role="status" aria-label={FORM_LOADING} className="flex min-w-0 flex-1 flex-col gap-s-3">
-        <Skeleton className="h-(--control-h)" />
-        <Skeleton className="h-(--control-h)" />
-        <Skeleton className="h-(--control-h)" />
-      </div>
-    );
+    return ghost ?? bars;
   }
 
   return (
@@ -133,7 +137,7 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
       missing={missing}
       gate={gate}
       review={review === undefined ? undefined : { ...review, chosen }}
-      seed={seed}
+      seed={left && seed !== undefined ? { ...seed, part: null } : seed}
     />
   );
 }

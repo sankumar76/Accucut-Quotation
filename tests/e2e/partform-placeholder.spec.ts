@@ -8,6 +8,7 @@ import { assignedEstimate } from './support/assigned-estimate';
 import { changePrivateMaterial, E2E_ENGINEER, insertPrivateMaterial } from './support/auth';
 import { signInAs } from './support/calculated-estimate';
 import { holdFieldsChunk } from './support/hold-fields-chunk';
+import { showTree, tree } from './support/part-form';
 import { DEVELOPMENT_URL } from './support/servers';
 
 /**
@@ -31,11 +32,6 @@ const ENGINEER_MOVE_AT_MOST_PX = 24;
 /** The top of the element in the document (not the screen), so a scroll does not count as a move. */
 async function documentTop(locator: Locator): Promise<number> {
   return locator.evaluate((element) => element.getBoundingClientRect().top + window.scrollY);
-}
-
-/** The bottom of the page's main region in the document: what the form's height pushes. */
-async function mainBottom(page: Page): Promise<number> {
-  return page.locator('main').first().evaluate((element) => element.getBoundingClientRect().bottom + window.scrollY);
 }
 
 /** PF-1, PF-9: the ghost is the one busy status region of the form area, drawn in the first paint. */
@@ -201,42 +197,62 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     });
   }
 
-  test("the Engineer's workspace, while the part's values are read (the second wait): the page under the form moves no more than 24 px (PF-15) when the form replaces its ghost", async ({ page }, testInfo) => {
-    // The Engineer's first wait keeps the placeholder it had (the page makes no read of the form's definition, DL-471); the ghost is the second wait, drawn from the client's own read of the definition while the part's values are on their way.
-    const { code } = await assignedEstimate(page, testInfo, false);
+  test("the Engineer's workspace, whole load (PF-6, PF-7, PF-15), and the second wait of another row (PF-14f): the ghost is on the screen from the first paint, before the page's code has run, 'Choose a part' is not, and the form area moves no more than 24 px when the form replaces it", async ({ page }, testInfo) => {
+    // DEF-085 (DL-469, DL-470) seeds the Engineer's form and its tree with the first row, and the page draws the ghost from the same bodies, so the first wait is the server's ghost and there is no read left before the form is drawn:
+    // the tree is no longer read from the browser (this case used to hold that read). What is held here is the page's own code (its scripts), so the ghost the server drew is what is on the screen until the code runs, and the swap is measured when it is released.
+    const { code, estimateId } = await assignedEstimate(page, testInfo, false);
     await signInAs(page, E2E_ENGINEER);
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
     let held = 0;
+    await page.route(/\/_next\/static\/.*\.js(\?.*)?$/, async (route) => {
+      held += 1;
+      await gate;
+      await route.continue();
+    });
+    // 'commit': the document is there; its scripts are held, so the load event is not waited for.
+    await page.goto(`/estimates/${code}`, { waitUntil: 'commit' });
+    await expect.poll(() => held, { message: "the page's scripts are being held" }).toBeGreaterThan(0);
+    // PF-6: drawn by the server, so it is there while the page's own code has not run; PF-7: the ghost and not the untrue "Choose a part".
+    await placeholderIsShown(page);
+    await expect(page.getByText('Choose a part')).toHaveCount(0);
+    const areaBefore = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
+    release();
+    await formIsDrawn(page);
+    // PF-14f, PF-15: the ghost is a new part's shape (the definition's defaults, never the saved values, as PF-15 rules), so the form area changes by at most 24 px (one wrapped status line plus the 8 px) over the whole load.
+    const areaAfter = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
+    expect(Math.abs(areaAfter - areaBefore), `the form area changed from ${String(areaBefore)} to ${String(areaAfter)} px`).toBeLessThanOrEqual(ENGINEER_MOVE_AT_MOST_PX);
+    // QLT-836-04: the second wait (the part's values are read, `PartFields`) is still there on every row but the seeded one, and its swap is measured too: the estimate gets a second row with the request the "+" sends
+    // (no person), the page is drawn again, the second row is chosen with its `/nodes/{id}` read held, and the form area moves by at most the same 24 px when its form replaces the ghost.
+    const added = await page.request.post(`/api/v1/estimates/${estimateId}/nodes`, { headers: { origin: DEVELOPMENT_URL }, data: { parentId: null, nodeKind: 'MAIN_ASSEMBLY' } });
+    expect(added.status()).toBe(201);
+    await page.reload();
+    await formIsDrawn(page);
+    let releaseValues: () => void = () => undefined;
+    const valuesGate = new Promise<void>((resolve) => {
+      releaseValues = resolve;
+    });
+    let valuesHeld = 0;
     await page.route(/\/api\/v1\/estimates\/[^/]+\/nodes\/[^/]+$/, async (route) => {
       if (route.request().method() !== 'GET') {
         await route.continue();
         return;
       }
-      held += 1;
-      await gate;
+      valuesHeld += 1;
+      await valuesGate;
       await route.continue();
     });
-    // The tree is read after the page is up; on a phone it is in a drawer that is not drawn, so its arrival is the answer of its read, not a row on the screen.
-    const treeRead = page.waitForResponse((response) => response.request().method() === 'GET' && /\/api\/v1\/estimates\/[^/]+\/tree$/.test(new URL(response.url()).pathname));
-    await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
-    await expect.poll(() => held, { message: "the part's values read is being held" }).toBeGreaterThan(0);
+    await showTree(page);
+    await tree(page).locator('a[data-part-id]').nth(1).click();
+    await expect.poll(() => valuesHeld, { message: "the second row's values read is being held" }).toBeGreaterThan(0);
     await expect(page.locator('[data-part-ghost]')).toBeVisible();
-
-    // The tree's own arrival (its skeleton rows become its rows) moves the page too and is not what is measured here (PF-14f): the tree is read first, then the form's swap is.
-    await treeRead;
-    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-    const before = await mainBottom(page);
-    const areaBefore = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
-    release();
+    const secondBefore = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
+    releaseValues();
     await formIsDrawn(page);
-    const after = await mainBottom(page);
-    expect(Math.abs(after - before), `the end of the page moved from ${String(before)} to ${String(after)} px`).toBeLessThanOrEqual(ENGINEER_MOVE_AT_MOST_PX);
-    // PF-14f, PF-15: a new part's ghost is the form's shape, so the form area changes by at most 24 px (one wrapped status line plus the 8 px).
-    const areaAfter = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
-    expect(Math.abs(areaAfter - areaBefore), `the form area changed from ${String(areaBefore)} to ${String(areaAfter)} px`).toBeLessThanOrEqual(24);
+    const secondAfter = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
+    expect(Math.abs(secondAfter - secondBefore), `the second wait: the form area changed from ${String(secondBefore)} to ${String(secondAfter)} px`).toBeLessThanOrEqual(ENGINEER_MOVE_AT_MOST_PX);
   });
 
   test("PF-14e: with reduced motion the ghost's grey blocks do not move", async ({ page }, testInfo) => {

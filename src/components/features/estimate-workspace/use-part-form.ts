@@ -98,7 +98,11 @@ export interface UsePartValuesProps {
 export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onNamed, onServerIgnored, onLocked, onWrote, gate, seed }: UsePartValuesProps) {
   const partId = part.id;
   // The part's values as a page handed them over (the Lead's review, DEF-141): the form starts with them and reads nothing; a read after that (a conflict, Try again) goes to the server as ever.
-  const [seeded] = useState(() => (seed !== undefined && seed.estimateId === estimateId && seed.partId === part.id ? parsePartInputs(seed.part) : null));
+  // The seed's values start the form only when the seed's revision is the row's (`part.revision`) at mount; otherwise the part is read from the server (QLT-836-01). A form that cannot save keeps its seed whatever the row says.
+  const [seeded] = useState(() => {
+    const given = seed !== undefined && seed.estimateId === estimateId && seed.partId === part.id ? parsePartInputs(seed.part) : null;
+    return given !== null && (!editable || given.revision === part.revision) ? given : null;
+  });
   const [stored, setStored] = useState<Loaded<PartInputs>>(seeded === null ? LOADING : { status: 'ready', value: seeded });
   const [texts, setTexts] = useState<Readonly<Record<string, string>>>(seeded === null ? {} : seeded.inputs);
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});

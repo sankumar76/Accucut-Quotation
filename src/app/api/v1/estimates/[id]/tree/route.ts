@@ -1,5 +1,6 @@
 import { getEstimateService } from '@/server/composition';
 import { withRoute } from '@/server/http/with-route';
+import { treeBody } from '@/server/views/part-form-bodies';
 import { estimateIdParamsSchema, partsTreeSchema } from '@/server/views/schemas';
 
 /**
@@ -12,5 +13,5 @@ export const GET = withRoute({
   method: 'GET',
   params: estimateIdParamsSchema,
   output: partsTreeSchema,
-  handler: async ({ user, params }) => ({ nodes: [...(await getEstimateService().getTree({ id: user.id, role: user.role }, params.id))] }),
+  handler: async ({ user, params }) => treeBody(await getEstimateService().getTree({ id: user.id, role: user.role }, params.id)),
 });

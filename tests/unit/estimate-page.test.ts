@@ -4,8 +4,8 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { engineerGhost } from '@/app/(portal)/estimates/[code]/engineer-ghost';
 import { FORM_LOADING, FORM_LOCKED, sectionLinkText } from '@/components/features/estimate-workspace/estimate-texts';
+import { PartFields } from '@/components/features/estimate-workspace/part-fields';
 import { SURFACE_HINT } from '@/components/features/estimate-workspace/surface-texts';
 import * as layout from '@/components/shared/form-layout';
 import { Notice } from '@/components/shared/notice';
@@ -14,6 +14,7 @@ import { SURFACE_LABEL, SURFACE_NONE_SELECTED } from '@/components/features/esti
 import { QTY_PER_ASSY_HINT } from '@/lib/estimate/quantity-hint';
 import { parseForm, parsePartInputs } from '@/lib/estimates/form-client';
 import { sectionProgress, shownSections } from '@/lib/estimates/form-shown';
+import { formBody } from '@/server/views/part-form-bodies';
 
 import { CUSTOMER_RECIPE_ID } from '../support/customer-canary';
 import { defined } from '../support/defined';
@@ -37,6 +38,8 @@ vi.mock('next/navigation', async () => {
 vi.mock('next/server', () => ({ connection: () => Promise.resolve() }));
 vi.mock('@/lib/logger', () => ({ logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('react', async (importOriginal) => ({ ...(await importOriginal<typeof import('react')>()), cache: <T>(fn: T): T => fn }));
+// The part's values are "on their way" for the scan of the Engineer's second wait (SEC-833-10): only `usePartValues` is replaced, so the real `PartFields` draws what it draws in that wait.
+vi.mock('@/components/features/estimate-workspace/use-part-form', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/components/features/estimate-workspace/use-part-form')>()), usePartValues: () => ({ stored: { status: 'loading' } }) }));
 vi.mock('@/server/composition', async () => {
   const { harness: shared } = await import('../support/session-harness');
   return { getAuthOptions: () => ({}), getUserRepository: () => shared.users, getEstimateService: () => shared.estimateService, getEstimateReviewService: () => shared.estimateReviewService, getDownloadMarkerService: () => shared.downloadMarkerService, getCostDetailsService: () => shared.costDetailsService, getMastersService: () => shared.mastersService };
@@ -219,12 +222,13 @@ describe('AC-5: who may open it', () => {
 });
 
 describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () => {
-  it('DL-471: the Engineer page makes no read of the form definition and draws no form ghost (its first wait keeps the placeholder it had)', async () => {
+  // DL-471 kept the Engineer's page from adding a read of the form's definition for its ghost; DEF-085 (DL-469) gives the page that definition once, in the combined read of its seed, and the ghost is drawn from it.
+  it('DL-469, DL-471: the Engineer page draws its first-wait ghost from the bodies of its seed, with no read of the form\'s definition of its own', async () => {
     harness.signInAs('ENGINEER');
     const read = vi.spyOn(harness.estimateService, 'getForm');
     const html = await open(CODE);
     expect(read).not.toHaveBeenCalled();
-    expect(html).not.toContain('data-part-ghost');
+    expect(html).toContain('data-part-ghost');
     read.mockRestore();
   });
 
@@ -312,9 +316,10 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
     async function theGhostAndItsAllowedTexts(): Promise<{ readonly ghost: string; readonly allowed: ReadonlyArray<string> }> {
       harness.signInAs('ENGINEER');
       estimate().customerId = CUSTOMER_RECIPE_ID;
-      // The Engineer's page draws no ghost of its own (DL-471: it makes no read of the form's definition); the ghost is built here by its builder from the Engineer's own definition, as the page's combined read will build it.
+      // The ghost is the one the Engineer's page really hands to the workspace (its `ghost` prop, as drawn from the seed's bodies), so a change to what the page draws reaches the scan (SEC-833-10).
       const viewer = { id: harness.idOf.ENGINEER, role: 'ENGINEER' } as const;
-      const element = await engineerGhost(harness.estimateService, viewer, estimate().id, { status: estimate().status, ignored: false });
+      const page = (await EstimatePage({ params: Promise.resolve({ code: CODE }), searchParams: Promise.resolve({}) })) as { props: { ghost?: unknown } };
+      const element = page.props.ghost;
       const ghost = renderToStaticMarkup(defined(element) as never);
       expect(ghost, 'the builder draws the ghost').not.toBe('');
       const form = await harness.estimateService.getForm(viewer, estimate().id);
@@ -335,6 +340,30 @@ describe('AC-6 (NFR-002): no rate, cost or formula on the Engineer\'s page', () 
       const { ghost, allowed } = await theGhostAndItsAllowedTexts();
       expect(strictViolations(ghost, allowed, classTokensOfTheCode())).toEqual([]);
       expect(allowed.length, 'the definition has texts to compare with').toBeGreaterThan(8);
+    });
+
+    it('DEF-085: the Engineer\'s first-wait ghost is a new part\'s shape and shows no value the Engineer saved and no count made from one: a typed value changes nothing in it', async () => {
+      const { ghost: empty } = await theGhostAndItsAllowedTexts();
+      const form = await harness.estimateService.getForm({ id: harness.idOf.ENGINEER, role: 'ENGINEER' }, estimate().id);
+      const typedField = defined(form.sections.flatMap((section) => section.fields).find((field) => field.rule.type === 'number'));
+      defined(harness.estimateWorld.nodes[0]).inputs = { [typedField.id]: '4242.42' };
+      const { ghost: withValue } = await theGhostAndItsAllowedTexts();
+      expect(withValue).toBe(empty);
+      expect(withValue).not.toContain('4242');
+      expect(withValue).toMatch(/0 of \d+/);
+    });
+
+    it('SEC-833-10: the Engineer\'s second wait, drawn by the real PartFields while the part\'s values are on their way, passes the same scan, so what PartFields hands to the ghost is pinned as drawn', async () => {
+      const { allowed } = await theGhostAndItsAllowedTexts();
+      const viewer = { id: harness.idOf.ENGINEER, role: 'ENGINEER' } as const;
+      const form = defined(parseForm(formBody(await harness.estimateService.getForm(viewer, estimate().id))));
+      const noop = (): void => undefined;
+      const props = { estimateId: estimate().id, part: { id: estimate().id, slNo: '1', revision: 1 }, nodes: null, form, materials: { status: 'loading' as const }, lastSavedAt: null, onWrote: noop, onReadMaterialsAgain: noop };
+      const editable = renderToStaticMarkup(createElement(PartFields, { ...props, editable: true }));
+      expect(editable, 'the real PartFields draws the ghost in its second wait').toContain('data-part-ghost');
+      expect(strictViolations(editable, allowed, classTokensOfTheCode())).toEqual([]);
+      const locked = renderToStaticMarkup(createElement(PartFields, { ...props, editable: false }));
+      expect(strictViolations(locked, [...allowed, FORM_LOCKED], classTokensOfTheCode(true), NOTICE_ALLOWANCE)).toEqual([]);
     });
 
     it('no word of the old scan is a class token of the code, with or without the notice\'s files (a class value is checked by token)', () => {
@@ -578,16 +607,59 @@ describe('DEF-141 (DL-455): the Lead\'s review hands the part form its data as p
     expect(Object.keys(seed?.['form'] as object).sort()).toEqual(['lastSavedAt', 'sections']);
   });
 
-  it('the Engineer\'s page reads none of it: no seed, and no read of the option lists for the form', async () => {
+  // DEF-085 (DL-469) replaces the old rule "the Engineer's page reads none of it": the Engineer's form is seeded too, from the same services as the same viewer, with the same four bodies.
+  it('the Engineer\'s page hands its form the same four bodies, for the first row of the tree: the estimate, the part, and nothing else', async () => {
+    harness.signInAs('ENGINEER');
+    const seed = (await props(CODE))['seed'] as Record<string, unknown> | undefined;
+    expect(seed).toBeDefined();
+    expect(Object.keys(defined(seed)).sort()).toEqual(['estimateId', 'form', 'materials', 'part', 'partId', 'treatments', 'tree']);
+    expect(seed?.['estimateId']).toBe(estimate().id);
+    expect(seed?.['partId']).toBe(estimate().id);
+    expect(Object.keys(seed?.['form'] as object).sort()).toEqual(['lastSavedAt', 'sections']);
+    // DL-470: the tree is the body `GET /estimates/{id}/tree` answers, in every state of the estimate.
+    for (const status of ['DRAFT', 'PREPARED', 'APPROVED'] as const) {
+      estimate().status = status;
+      const own = defined((await props(CODE))['seed'] as Record<string, unknown> | undefined);
+      const rows = await harness.estimateService.getTree({ id: harness.idOf.ENGINEER, role: 'ENGINEER' }, estimate().id);
+      expect(JSON.parse(JSON.stringify(own['tree'])), status).toEqual({ nodes: JSON.parse(JSON.stringify(rows)) });
+    }
+  });
+
+  it('the Engineer\'s page reads once: one combined read of the first row, and each option list once, never the two separate reads of the routes', async () => {
     const materials = vi.spyOn(harness.mastersService, 'listMaterialOptions');
     const treatments = vi.spyOn(harness.mastersService, 'listTreatmentOptions');
+    const first = vi.spyOn(harness.estimateService, 'getFirstPartForm');
+    const form = vi.spyOn(harness.estimateService, 'getForm');
+    const node = vi.spyOn(harness.estimateService, 'getNode');
     harness.signInAs('ENGINEER');
-    const own = await props(CODE);
-    expect(own['seed']).toBeUndefined();
-    expect(materials).not.toHaveBeenCalled();
-    expect(treatments).not.toHaveBeenCalled();
-    materials.mockRestore();
-    treatments.mockRestore();
+    await props(CODE);
+    expect(materials).toHaveBeenCalledTimes(1);
+    expect(treatments).toHaveBeenCalledTimes(1);
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(form).not.toHaveBeenCalled();
+    expect(node).not.toHaveBeenCalled();
+    for (const spy of [materials, treatments, first, form, node]) spy.mockRestore();
+  });
+
+  it('the Engineer\'s seed names no more than the Lead\'s: the same four bodies as the Lead is handed for the same row', async () => {
+    harness.signInAs('ENGINEER');
+    const own = defined((await props(CODE))['seed'] as Record<string, unknown> | undefined);
+    harness.signInAs('LEAD');
+    const lead = defined((await props(CODE))['seed'] as Record<string, unknown> | undefined);
+    // The Engineer's seed also carries the tree (DL-470: the Engineer's tree hook starts from it); everything else is the Lead's, body for body.
+    const { tree, ...rest } = own;
+    expect(tree).toBeDefined();
+    expect(JSON.parse(JSON.stringify(rest))).toEqual(JSON.parse(JSON.stringify(lead)));
+  });
+
+  it('an Engineer\'s estimate with no rows, or a fault in a read, gives no seed (the form reads from the server) and the page still draws', async () => {
+    harness.signInAs('ENGINEER');
+    const broken = vi.spyOn(harness.estimateService, 'getFirstPartForm').mockRejectedValue(new Error('invented fault'));
+    expect((await props(CODE))['seed']).toBeUndefined();
+    expect(await open(CODE)).toContain('data-form-area');
+    broken.mockResolvedValue(null);
+    expect((await props(CODE))['seed']).toBeUndefined();
+    broken.mockRestore();
   });
 
   it.each(['LEAD', 'ADMIN'] as const)('as %s the revision a save is sent with comes from the part answer the seed carries: no second read of the part (DEF-131 stage 2)', async (role) => {

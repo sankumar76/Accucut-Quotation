@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route, type TestInfo } from '@playwright/test';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 import { CUSTOMER_CANARIES } from '../support/customer-canary';
 import { canaryTaskCodeFor } from '../support/estimate-recipe';
@@ -6,6 +6,7 @@ import { defined } from '../support/defined';
 
 import { ensureCanaryCustomers, ensureCanaryMaterials, setCanaryCustomer, useFreshAddress } from './support/auth';
 import { horizontalOverflow, waitUntilHydrated } from './support/design-system';
+import { addCardToTheFormBody } from './support/flight-form';
 import { expectFormAccessible, isPatchOfInputs, leastFieldHeight, partForm, signInAsNewEngineer, waitForForm } from './support/part-form';
 
 /**
@@ -15,7 +16,7 @@ import { expectFormAccessible, isPatchOfInputs, leastFieldHeight, partForm, sign
  * written out here and not imported.
  *
  * **The registry is not changed here.** The three projects share one database, and a real insert would add a mandatory input that every other spec's Calculate would meet (the reason `insert-field.spec.ts`
- * answers its save itself). So the form's answer is read from the real server and **one section is added to it by the test** (a card 09 with one choice field of invented IDs), and the one save and the one
+ * answers its save itself). So the form's body that the server's own page carries (the Engineer's form is seeded, DEF-085) is **changed by the test** (`flight-form.ts`: a card 09 with one choice field of invented IDs, added by shape, loud if it cannot), and the one save and the one
  * Calculate that name that field are answered by the test; everything else goes to the real server. What the server does with a real choice (the stored text, the 422, the record and the file) is
  * `tests/integration/estimates/choice-input.test.ts`, and what it sends an Engineer is `tests/security/engineer-choice-section.test.ts`. Each test has its own person, one page and at most one axe scan.
  * Every name and ID is invented.
@@ -40,20 +41,19 @@ const choice = (page: Page) => page.locator(`#part-field-${FIELD_ID}`);
 const card = (page: Page) => page.getByRole('region', { name: '09 Invented Finishing' });
 const strip = (page: Page) => page.getByRole('navigation', { name: 'Sections of the form' });
 
-/** The real form of the server, with one card added by the test: section 09 with a choice field. */
-async function answerFormWithChoice(route: Route): Promise<void> {
-  const response = await route.fetch();
-  const body = (await response.json()) as { sections: unknown[] };
-  body.sections.push({
-    id: SECTION_ID,
-    number: 9,
-    name: 'Invented Finishing',
-    shortName: 'Finishing',
-    columnRange: 'AY',
-    fields: [{ id: FIELD_ID, letter: 'AY', label: LABEL, kind: 'input', unit: null, hint: HINT, defaultValue: null, required: true, editable: true, visibleWhen: null, rule: { type: 'choice', options: [...OPTIONS] } }],
-  });
-  await route.fulfill({ status: response.status(), contentType: 'application/json', body: JSON.stringify(body) });
-}
+/**
+ * The card the test adds to the real form: section 09 with one choice field. The Engineer's page hands its form the definition as a prop (DEF-085, DL-469), so the form is no longer read from `/form` and a case
+ * cannot answer that route; `addCardToTheFormBody` writes the card into the form body that the page carries (`support/flight-form.ts`: found by its shape, loud if it cannot). Only the first load of the page is
+ * changed; every later read goes to the real server. Never skipped: `openFormWithChoice` asserts that the card is drawn before a case goes on (DL-470 (2) (iii)).
+ */
+const CHOICE_CARD = {
+  id: SECTION_ID,
+  number: 9,
+  name: 'Invented Finishing',
+  shortName: 'Finishing',
+  columnRange: 'AY',
+  fields: [{ id: FIELD_ID, letter: 'AY', label: LABEL, kind: 'input', unit: null, hint: HINT, defaultValue: null, required: true, editable: true, visibleWhen: null, rule: { type: 'choice', options: [...OPTIONS] } }],
+};
 
 /** A save that names the choice is answered by the test (and recorded); any other save goes to the real server. */
 async function answerChoiceSave(page: Page): Promise<{ readonly sent: Array<Record<string, string>> }> {
@@ -78,9 +78,15 @@ async function openFormWithChoice(page: Page, testInfo: TestInfo): Promise<{ rea
   await ensureCanaryMaterials();
   const owner = await signInAsNewEngineer(page, testInfo);
   await setCanaryCustomer(owner.id, ALPHA_CUSTOMER_ID);
-  await page.route('**/api/v1/estimates/*/form', answerFormWithChoice);
-  await page.goto(`/estimates/${canaryTaskCodeFor(owner.id)}`);
+  const path = `/estimates/${canaryTaskCodeFor(owner.id)}`;
+  await addCardToTheFormBody(page, CHOICE_CARD);
+  await page.goto(path);
+  // The helper says whether it found and rewrote the one form body in the page's flight data. When it could not, its own words are the failure here, not a form that never shows the card.
+  await expect.poll(() => page.evaluate(() => (self as unknown as { __flightFormRewrite?: string }).__flightFormRewrite), "the helper rewrote the page's form body").toBe('rewrote');
   await waitForForm(page);
+  // Before any case goes on: the card the helper wrote into the page is on the screen. If the page's payload ever stops carrying the form the way the helper reads it, this fails here (and the helper throws), never later.
+  await expect(card(page), 'the card the test added to the page').toBeVisible();
+  await expect(choice(page), 'the choice field the test added to the page').toHaveCount(1);
   return owner;
 }
 

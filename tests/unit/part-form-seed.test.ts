@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { readListBodies, readPartFormBodies, seedOf, type SeedServices } from '@/app/(portal)/estimates/[code]/part-form-seed';
+import { readFirstPartFormBodies, readListBodies, readPartFormBodies, seedOf, type SeedServices } from '@/app/(portal)/estimates/[code]/part-form-seed';
 import { parseForm, parseMaterials, parsePartInputs } from '@/lib/estimates/form-client';
 import { parseTreatmentOptions } from '@/lib/estimates/treatment-options-client';
-import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody } from '@/server/views/part-form-bodies';
+import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody, treeBody } from '@/server/views/part-form-bodies';
 
 import { createEstimateService } from '@/server/services/estimate-service';
 
@@ -38,6 +41,7 @@ const { GET: getForm } = await import('@/app/api/v1/estimates/[id]/form/route');
 const { GET: getNode } = await import('@/app/api/v1/estimates/[id]/nodes/[nodeId]/route');
 const { GET: getMaterials } = await import('@/app/api/v1/options/materials/route');
 const { GET: getTreatments } = await import('@/app/api/v1/options/treatments/route');
+const { GET: getTree } = await import('@/app/api/v1/estimates/[id]/tree/route');
 
 const estimate = () => defined(harness.estimateWorld.estimates[0]);
 const request = (path: string): Request => new Request(`${ORIGIN}${path}`, { method: 'GET', headers: { origin: ORIGIN } });
@@ -148,9 +152,10 @@ describe('getPartForm is getForm and getNode in one read (the combined read of D
   it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('answers exactly what getForm and getNode answer, as %s', async (role) => {
     const id = estimate().id;
     const viewer = { id: harness.idOf[role], role };
-    const [form, node, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getPartForm(viewer, id, id)]);
+    const [form, node, tree, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getTree(viewer, id), harness.estimateService.getPartForm(viewer, id, id)]);
     expect(asJson(both.form)).toEqual(asJson(form));
     expect(asJson(both.node)).toEqual(asJson(node));
+    expect(asJson(both.tree)).toEqual(asJson(tree));
   });
 
   it('answers the same in every state of the estimate, and with a value typed into the part', async () => {
@@ -211,6 +216,13 @@ describe('getPartForm is getForm and getNode in one read (the combined read of D
     const labelsOf = (view: typeof form): string[] => view.sections.flatMap((section) => section.fields).map((field) => field.label);
     expect(labelsOf(both.form)).toContain('Frozen invented label');
     expect(labelsOf(await harness.estimateService.getForm(lead, id))).not.toContain('Frozen invented label');
+    // QLT-836-03: the Engineer's combined read of the first row goes through the same frozen branch (an Engineer opens an approved estimate).
+    const first = defined(await service.getFirstPartForm(lead, id));
+    expect(asJson(first.form)).toEqual(asJson(form));
+    expect(asJson(first.node)).toEqual(asJson(node));
+    expect(labelsOf(first.form)).toContain('Frozen invented label');
+    // ARC-836-05: and the tree it carries is the one `getTree` answers, in the same frozen branch.
+    expect(asJson(first.tree)).toEqual(asJson(await service.getTree(lead, id)));
   });
 
   it('refuses as they refuse (NFR-001): another Engineer, an unknown estimate and an unknown part are the same not-found, with the same words', async () => {
@@ -234,5 +246,194 @@ describe('getPartForm is getForm and getNode in one read (the combined read of D
     const formRefusal = await harness.estimateService.getForm(stranger, id).then(() => null, (error: unknown) => error);
     const combinedRefusal = await harness.estimateService.getPartForm(stranger, id, id).then(() => null, (error: unknown) => error);
     expect((combinedRefusal as Error).constructor).toBe((formRefusal as Error).constructor);
+  });
+});
+
+describe('getFirstPartForm is getForm and getNode of the first row of the tree, in one read (the Engineer\'s seed, DEF-085, DL-469)', () => {
+  const asJson = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+
+  it('answers exactly what getForm and getNode answer for the first row of getTree, for every role in every state, ignored or not: the whole grid', async () => {
+    const id = estimate().id;
+    const sections = (await harness.estimateService.getForm({ id: harness.idOf.LEAD, role: 'LEAD' }, id)).sections;
+    const typedField = defined(sections.flatMap((section) => section.fields).find((field) => field.rule.type === 'number'));
+    defined(harness.estimateWorld.nodes[0]).inputs = { [typedField.id]: '3' };
+    for (const role of ['ENGINEER', 'LEAD', 'ADMIN'] as const) {
+      for (const status of ['DRAFT', 'PREPARED', 'APPROVED', 'QUOTED'] as const) {
+        for (const ignored of [false, true]) {
+          estimate().status = status;
+          estimate().ignoredAt = ignored ? new Date('2026-11-27T10:00:00.000Z') : null;
+          const viewer = { id: harness.idOf[role], role };
+          const tree = await harness.estimateService.getTree(viewer, id);
+          const first = defined(tree[0]);
+          const [form, node, firstOf] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, first.id), harness.estimateService.getFirstPartForm(viewer, id)]);
+          const answer = defined(firstOf);
+          expect(asJson(answer.form), `${role} ${status} ignored=${String(ignored)}`).toEqual(asJson(form));
+          expect(asJson(answer.node), `${role} ${status} ignored=${String(ignored)}`).toEqual(asJson(node));
+          expect(answer.node.id).toBe(first.id);
+          // DL-470: the tree the page hands the tree hook is the one `getTree` answers (one listing, no per-row read).
+          expect(asJson(answer.tree), `${role} ${status} ignored=${String(ignored)} tree`).toEqual(asJson(tree));
+        }
+      }
+    }
+  });
+
+  it('names the first row of the tree when there are several, not another', async () => {
+    const id = estimate().id;
+    const second = '00000000-0000-4000-8000-0000000000a2';
+    harness.estimateWorld.nodes.push({ id: second, estimateId: id, parentId: id, sortIndex: 0, revision: 1, inputs: {} });
+    const viewer = { id: harness.idOf.ENGINEER, role: 'ENGINEER' as const };
+    const tree = await harness.estimateService.getTree(viewer, id);
+    expect(tree.length).toBe(2);
+    expect(defined(await harness.estimateService.getFirstPartForm(viewer, id)).node.id).toBe(defined(tree[0]).id);
+  });
+
+  it('answers null for an estimate that has no rows, and refuses as getForm refuses (NFR-001): another Engineer and an unknown estimate are the same not-found', async () => {
+    const id = estimate().id;
+    const engineer = { id: harness.idOf.ENGINEER, role: 'ENGINEER' as const };
+    harness.estimateWorld.nodes.splice(0, harness.estimateWorld.nodes.length);
+    expect(await harness.estimateService.getFirstPartForm(engineer, id)).toBeNull();
+    const stranger = { id: harness.idOf.LEAD, role: 'ENGINEER' as const };
+    const unknown = '00000000-0000-4000-8000-00000000dead';
+    for (const [viewer, estimateId] of [
+      [stranger, id],
+      [engineer, unknown],
+    ] as const) {
+      const direct = await harness.estimateService.getForm(viewer, estimateId).then(() => null, (error: unknown) => error);
+      const combined = await harness.estimateService.getFirstPartForm(viewer, estimateId).then(() => null, (error: unknown) => error);
+      expect(direct).not.toBeNull();
+      expect((combined as Error).constructor).toBe((direct as Error).constructor);
+      expect((combined as Error).message).toBe((direct as Error).message);
+    }
+  });
+});
+
+describe('the Engineer\'s seed helpers (DEF-085, DL-469)', () => {
+  it('the first row\'s bodies equal what the form and node routes answer to the Engineer, as JSON, and name the row', async () => {
+    harness.signInAs('ENGINEER');
+    const id = estimate().id;
+    const viewer = { id: harness.idOf.ENGINEER, role: 'ENGINEER' as const };
+    const [formResponse, nodeResponse] = await Promise.all([getForm(request(`/api/v1/estimates/${id}/form`), forEstimate(id)), getNode(request(`/api/v1/estimates/${id}/nodes/${id}`), forNode(id, id))]);
+    expect(formResponse.status).toBe(200);
+    expect(nodeResponse.status).toBe(200);
+    const first = defined(await readFirstPartFormBodies({ estimates: harness.estimateService }, viewer, id));
+    expect(first.partId).toBe(id);
+    expect(JSON.parse(JSON.stringify(first.form))).toEqual(await formResponse.json());
+    expect(JSON.parse(JSON.stringify(first.part))).toEqual(await nodeResponse.json());
+    const lists = defined(await readListBodies(services()));
+    const seed = defined(seedOf(id, first.partId, lists, first));
+    expect(Object.keys(seed).sort()).toEqual(['estimateId', 'form', 'materials', 'part', 'partId', 'treatments']);
+  });
+
+  it('gives no seed for an estimate with no rows or when the read fails, and logs the kind of the fault only', async () => {
+    const id = estimate().id;
+    const viewer = { id: harness.idOf.ENGINEER, role: 'ENGINEER' as const };
+    harness.estimateWorld.nodes.splice(0, harness.estimateWorld.nodes.length);
+    expect(await readFirstPartFormBodies({ estimates: harness.estimateService }, viewer, id)).toBeNull();
+    const broken = { estimates: { getFirstPartForm: () => Promise.reject(new TypeError('connection refused to invented-host')) } };
+    expect(await readFirstPartFormBodies(broken, viewer, id)).toBeNull();
+    const logged = await import('@/lib/logger');
+    expect(JSON.stringify(vi.mocked(logged.logger.warn).mock.calls)).not.toContain('invented-host');
+  });
+});
+
+describe('SEC-836-01: the seed\'s form body goes through the route\'s strict builder (a later field on the service\'s form cannot reach the page\'s payload)', () => {
+  const viewer = { id: 'u', role: 'ENGINEER' } as const;
+
+  async function realFirst() {
+    return defined(await harness.estimateService.getFirstPartForm({ id: harness.idOf.ENGINEER, role: 'ENGINEER' }, estimate().id));
+  }
+
+  it.each(['the Engineer\'s first row', 'the Lead\'s chosen row'])('drops an extra top-level key and refuses an extra key in a field, for %s', async (which) => {
+    const real = await realFirst();
+    const withKey = { ...real.form, rate: '1.00' };
+    const sections = real.form.sections.map((section, index) => (index === 0 ? { ...section, fields: section.fields.map((field, at) => (at === 0 ? { ...field, formulaText: 'secret' } : field)) } : section));
+    const leaky = (form: unknown) => ({ getFirstPartForm: () => Promise.resolve({ form, node: real.node, tree: real.tree }), getPartForm: () => Promise.resolve({ form, node: real.node, tree: real.tree }) }) as never;
+    const read = (form: unknown) => (which.startsWith('the Engineer') ? readFirstPartFormBodies({ estimates: leaky(form) }, viewer, 'e') : readPartFormBodies({ estimates: leaky(form), masters: services().masters }, viewer, 'e', real.node.id));
+    const dropped = defined(await read(withKey));
+    expect(dropped.form).not.toHaveProperty('rate');
+    expect(await read({ ...real.form, sections })).toBeNull();
+  });
+
+  // SEC-836-04: the tree goes through `treeBody` too, so a row that carries a figure the schema does not name (a rate) gives no seed at all and nothing of it reaches the page's payload (NFR-002).
+  it.each(['the Engineer\'s first row', 'the Lead\'s chosen row'])('refuses a tree row that carries a rate, for %s', async (which) => {
+    const real = await realFirst();
+    const planted = real.tree.map((row, index) => (index === 0 ? { ...row, unitRate: '1.00' } : row));
+    const leaky = { getFirstPartForm: () => Promise.resolve({ form: real.form, node: real.node, tree: planted }), getPartForm: () => Promise.resolve({ form: real.form, node: real.node, tree: planted }) } as never;
+    const read = which.startsWith('the Engineer') ? readFirstPartFormBodies({ estimates: leaky }, viewer, 'e') : readPartFormBodies({ estimates: leaky, masters: services().masters }, viewer, 'e', real.node.id);
+    expect(await read).toBeNull();
+    // The same rows without the planted figure are accepted: the refusal is the figure's, not the shape's.
+    const clean = { getFirstPartForm: () => Promise.resolve({ form: real.form, node: real.node, tree: real.tree }), getPartForm: () => Promise.resolve({ form: real.form, node: real.node, tree: real.tree }) } as never;
+    const accepted = which.startsWith('the Engineer') ? await readFirstPartFormBodies({ estimates: clean }, viewer, 'e') : await readPartFormBodies({ estimates: clean, masters: services().masters }, viewer, 'e', real.node.id);
+    expect(defined(accepted).tree).toEqual({ nodes: JSON.parse(JSON.stringify(real.tree)) });
+  });
+});
+
+describe('DL-484: one treeBody, built for the route, the Engineer\'s seed and the Lead\'s island', () => {
+  const routeSource = readFileSync(fileURLToPath(new URL('../../src/app/api/v1/estimates/[id]/tree/route.ts', import.meta.url)), 'utf8');
+  const asJson = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+
+  /** A second row under the first, so the tree is more than one row and a reading order is shown. */
+  function withSecondRow(): void {
+    const id = estimate().id;
+    harness.estimateWorld.nodes.push({ id: '00000000-0000-4000-8000-0000000000d1', estimateId: id, parentId: id, sortIndex: 0, nodeKind: 'PART', revision: 1, inputs: {} } as never);
+  }
+
+  it('the route builds its answer by treeBody over the service\'s tree, not by a body of its own', () => {
+    expect(routeSource).toMatch(/import \{ treeBody \} from '@\/server\/views\/part-form-bodies';/);
+    expect(routeSource).toMatch(/handler: async \(\{ user, params \}\) => treeBody\(await getEstimateService\(\)\.getTree\(/);
+    expect(routeSource).not.toMatch(/\{ nodes: \[/);
+  });
+
+  it('names the three that build it in treeBody\'s doc, so the next reader knows who else a change reaches', () => {
+    const source = readFileSync(fileURLToPath(new URL('../../src/server/views/part-form-bodies.ts', import.meta.url)), 'utf8');
+    const doc = defined(/\/\*\*[^\n]*\*\/\s*\nexport function treeBody/.exec(source), 'treeBody doc')[0];
+    expect(doc).toMatch(/One builder, three users:\*\* the route, the Engineer's page .* and the Lead's review page /);
+    expect(doc).not.toMatch(/of its own/);
+  });
+
+  it('the route\'s answer, treeBody over getTree and the seed\'s tree are one and the same, for every role in every state, ignored or not', async () => {
+    withSecondRow();
+    const id = estimate().id;
+    for (const role of ['ENGINEER', 'LEAD', 'ADMIN'] as const) {
+      for (const status of ['DRAFT', 'PREPARED', 'APPROVED', 'QUOTED'] as const) {
+        for (const ignored of [false, true]) {
+          const where = `${role} ${status} ignored=${String(ignored)}`;
+          estimate().status = status;
+          estimate().ignoredAt = ignored ? new Date('2026-11-27T10:00:00.000Z') : null;
+          harness.signInAs(role);
+          const viewer = { id: harness.idOf[role], role };
+          const response = await getTree(request(`/api/v1/estimates/${id}/tree`), forEstimate(id));
+          expect(response.status, where).toBe(200);
+          const answered = await response.json();
+          const built = treeBody(await harness.estimateService.getTree(viewer, id));
+          const first = defined(await readFirstPartFormBodies({ estimates: harness.estimateService }, viewer, id), where);
+          const chosen = defined(await readPartFormBodies(services(), viewer, id, id), where);
+          expect((answered as { nodes: unknown[] }).nodes, where).toHaveLength(2);
+          expect(asJson(built), where).toEqual(answered);
+          expect(asJson(first.tree), where).toEqual(answered);
+          expect(asJson(chosen.tree), where).toEqual(answered);
+        }
+      }
+    }
+  });
+
+  // SEC-836-04 on the route: a row that carries a figure the schema does not name (a rate) is refused by `treeBody` before it can leave, and nothing of it is in the answer (NFR-002).
+  it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('the route refuses a tree row that carries a rate, as %s, and the planted figure is not in what it answers', async (role) => {
+    harness.signInAs(role);
+    const id = estimate().id;
+    const real = await harness.estimateService.getTree({ id: harness.idOf[role], role }, id);
+    const planted = real.map((row, index) => (index === 0 ? { ...row, unitRate: '4242.42' } : row));
+    const spy = vi.spyOn(harness.estimateService, 'getTree').mockResolvedValueOnce(planted as never);
+    try {
+      const refused = await getTree(request(`/api/v1/estimates/${id}/tree`), forEstimate(id));
+      expect(refused.status).toBe(500);
+      expect(await refused.text()).not.toContain('4242.42');
+    } finally {
+      spy.mockRestore();
+    }
+    // The same rows without the planted figure are answered: the refusal is the figure's, not the shape's.
+    const accepted = await getTree(request(`/api/v1/estimates/${id}/tree`), forEstimate(id));
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toEqual(asJson(treeBody(real)));
   });
 });

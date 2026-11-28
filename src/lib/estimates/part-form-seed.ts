@@ -5,7 +5,7 @@
  * `treatment-options-client.ts`), so the shapes are the same and nothing is added. They are plain data, so a server component may hand them over.
  *
  * A seed is the start of the form, not its life: the form reads it once for the part it names, and a read after that (Try again, a conflict, a part chosen that the seed does not name) goes to the
- * server as it always did. The Engineer's workspace passes none.
+ * server as it always did. The Engineer's page also hands a seed (DEF-085, DL-469): its first part, with the tree.
  */
 export interface PartFormSeed {
   readonly estimateId: string;
@@ -15,4 +15,6 @@ export interface PartFormSeed {
   readonly part: unknown;
   readonly materials: unknown;
   readonly treatments: unknown;
+  /** The body of `GET /estimates/{id}/tree`, for the Lead's editing island (DEF-131 stage 2T), built by the same `treeBody` as the route. Absent where the page draws no island: the read-only tree is drawn from the costs. */
+  readonly tree?: unknown;
 }

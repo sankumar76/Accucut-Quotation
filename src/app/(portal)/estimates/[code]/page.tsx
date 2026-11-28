@@ -6,10 +6,12 @@ import { EstimateWorkspace } from '@/components/features/estimate-workspace/esti
 import { TaskCards } from '@/components/features/estimate-workspace/task-cards';
 import { assertNever } from '@/lib/assert-never';
 import { formatIst, systemClock } from '@/lib/time';
-import { getEstimateService } from '@/server/composition';
+import { getEstimateService, getMastersService } from '@/server/composition';
 import { authorizePage } from '@/server/http/page-access';
 import { pageMetadata } from '@/lib/page-metadata';
 
+import { engineerGhostFrom } from './engineer-ghost';
+import { readFirstPartFormBodies, readListBodies, seedOf } from './part-form-seed';
 
 /** No task code and no customer name in the tab title (architecture section 8, FR-089). */
 export const metadata = pageMetadata(ESTIMATE_META_TITLE, ESTIMATE_META_DESCRIPTION);
@@ -59,7 +61,14 @@ export default async function EstimatePage({ params, searchParams }: PageProps) 
   // An allow-list by name, closed by `assertNever`: a fourth role added one day gets no branch here until someone decides (it fails to compile) and never the review's figures (NFR-002).
   switch (user.role) {
     case 'ENGINEER': {
-      // The Engineer's first wait keeps the placeholder it had: the form's ghost would need a read of the form's definition here, which this page does not make and which DEF-145 must not add (DL-471). Its second wait, while the part's values are read, is the ghost, drawn in the lazy chunk from the client's own read of the definition (`PartFields`); the first wait takes it from the page too once one read gives it.
+      // The form's data as props (DEF-085, DL-469): the same four answers the form read from the browser after hydration, read from the same services as this viewer and built by the same code as the routes
+      // (`part-form-bodies.ts`), so the same shapes with no added field. The form shows the first row of the tree until another is chosen, so that is the row the seed names. A fault gives no seed.
+      const services = { estimates: getEstimateService(), masters: getMastersService() };
+      const viewer = { id: user.id, role: user.role };
+      const [lists, first] = await Promise.all([readListBodies(services), readFirstPartFormBodies(services, viewer, workspace.estimateId)]);
+      const seed = first === null ? undefined : seedOf(workspace.estimateId, first.partId, lists, first, true);
+      // The form's loading ghost, from the same two bodies, so no read is added for it (DEF-145, PF-6, PF-7): drawn on the server and handed in as an element, as the cards are.
+      const ghost = engineerGhostFrom(first, { status: workspace.status, ignored: ignored !== null });
       // The Engineer's notice of an ignored task is a server component with no script, handed in as an element: drawn at first paint, outside the client form (UX 12944 section 4).
       return (
         <EstimateWorkspace
@@ -69,6 +78,8 @@ export default async function EstimatePage({ params, searchParams }: PageProps) 
           ignored={ignored !== null}
           notice={ignored === null ? undefined : <EngineerIgnoredNotice ignored={ignored} />}
           cards={<TaskCards view={header} />}
+          ghost={ghost}
+          seed={seed}
         />
       );
     }

@@ -4,11 +4,11 @@ import { inputEntriesOf } from '@/lib/estimate/part-view';
 
 import { formResponseSchema } from './schemas/form';
 import { materialOptionsResponseSchema, treatmentOptionsResponseSchema } from './schemas/options';
-import { nodeDetailSchema } from './schemas/tree';
+import { nodeDetailSchema, partsTreeSchema } from './schemas/tree';
 
 /**
- * The four answers the part form reads (`GET /estimates/{id}/form`, `GET /estimates/{id}/nodes/{nodeId}`, `GET /options/materials`, `GET /options/treatments`), built **in one place**, so the four routes and the
- * Lead's review page (DEF-141: the page hands the same four answers to the form as props, so the browser does not fetch them after hydration) send the same bodies, through the same strict schemas, with no added
+ * The answers the part form and the tree read (`GET /estimates/{id}/form`, `GET /estimates/{id}/nodes/{nodeId}`, `GET /options/materials`, `GET /options/treatments` and `GET /estimates/{id}/tree`), built **in one place**, so the routes and the
+ * Lead's review page (DEF-141: the page hands the same answers to the form and the island's tree as props, so the browser does not fetch them after hydration) send the same bodies, through the same strict schemas, with no added
  * field (NFR-002). Each function takes what the service answered and returns the schema's own parse of it; a value that nothing declared fails closed, as it does in a route.
  */
 
@@ -28,4 +28,9 @@ export function materialOptionsBody(options: z.input<typeof materialOptionsRespo
 
 export function treatmentOptionsBody(options: z.input<typeof treatmentOptionsResponseSchema>['options']): z.output<typeof treatmentOptionsResponseSchema> {
   return treatmentOptionsResponseSchema.parse({ options });
+}
+
+/** The parts tree as `GET /estimates/{id}/tree` answers it: the rows in reading order, with no figure (NFR-002). **One builder, three users:** the route, the Engineer's page (the tree hook's seed) and the Lead's review page (the tree island's seed) all build it here, through the one strict schema, so a field the schema does not name leaves none of them. */
+export function treeBody(tree: ReadonlyArray<z.input<typeof partsTreeSchema>['nodes'][number]>): z.output<typeof partsTreeSchema> {
+  return partsTreeSchema.parse({ nodes: [...tree] });
 }

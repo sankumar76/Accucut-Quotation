@@ -94,8 +94,18 @@ describe('AC-5: an APPROVED estimate reads its form from the version of its calc
     const { service, asked } = setUp(estimate('APPROVED'));
     await service.getForm(engineer, ESTIMATE);
     await service.getNode(engineer, ESTIMATE, PART);
-    // The form, then the part twice: the values by the version, and the name the tree row carries (AQP-446), which is read from the estimate's own version too.
-    expect(asked).toEqual([VERSION_ONE, VERSION_ONE, VERSION_ONE]);
+    // The form, then the part: its values and the name its tree row carries (AQP-446) are both built with the one document of the estimate's own version (DEF-141 step 2: `getNode` reads it once, where it used to read it
+    // twice). Every read is of the same version; what changed is how many times it is asked for.
+    expect(asked).toEqual([VERSION_ONE, VERSION_ONE]);
+  });
+
+  it('the combined read (getPartForm: the form, the part and the tree) asks for the same version, once, and answers what the three reads answer', async () => {
+    const { service, asked } = setUp(estimate('APPROVED'));
+    const both = await service.getPartForm(engineer, ESTIMATE, PART);
+    expect(asked).toEqual([VERSION_ONE]);
+    expect(JSON.stringify(both.form)).toEqual(JSON.stringify(await service.getForm(engineer, ESTIMATE)));
+    expect(JSON.stringify(both.node)).toEqual(JSON.stringify(await service.getNode(engineer, ESTIMATE, PART)));
+    expect(JSON.stringify(both.tree)).toEqual(JSON.stringify(await service.getTree(engineer, ESTIMATE)));
   });
 
   it('answers the Engineer with no version number and no version ID: the same two keys as for a Draft', async () => {

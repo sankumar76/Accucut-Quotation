@@ -8,6 +8,7 @@ import { blockedSummary, CALCULATE_MESSAGE } from '@/lib/estimate/calculate-word
 import { canEditInputs } from '@/lib/estimate/can-edit-inputs';
 import { isLocked, type EstimateStatus } from '@/lib/estimate/state-machine';
 import { askToLeave } from '@/lib/estimates/leave-registry';
+import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
 import type { AutosaveProps } from './autosave';
@@ -83,11 +84,13 @@ export interface EstimateWorkspaceProps {
   readonly notice?: ReactNode;
   /** SCR-05's customer and folder cards, **server-rendered** (`TaskCards`) and handed in as an element for the same reason: their code is not in the client bundle (NFR-009; the ceiling of PRD 0.58). */
   readonly cards?: ReactNode;
-  /** The form's loading ghost, **server-rendered** like `cards` and handed in as an element, so none of its code is in the client bundle (DEF-145, PF-6, NFR-009): the form area shows it from the first paint until the form replaces it, while the tree is read and while the form's code and values arrive. Absent when the server could not draw one. */
+  /** The form's loading ghost, **server-rendered** like `cards` and handed in as an element, so none of its code is in the client bundle (DEF-145, PF-6, NFR-009): the form area shows it from the first paint until the form replaces it (PF-7: also while the tree is read). Built by the page from the form body that the seed carries, so there is no second read. */
   readonly ghost?: ReactNode;
+  /** The part form's data as the page handed it over (DEF-085, DL-469): the definition, the materials, the first row's values and the treatments, as the routes send them, so the form reads none of them from the server to start. Type only: no code. */
+  readonly seed?: PartFormSeed | undefined;
 }
 
-export function EstimateWorkspace({ header, estimateId, userId, ignored = false, notice, cards, ghost }: EstimateWorkspaceProps) {
+export function EstimateWorkspace({ header, estimateId, userId, ignored = false, notice, cards, ghost, seed }: EstimateWorkspaceProps) {
   // The status is the server's: it starts as the page was rendered and becomes PREPARED when Calculate says it did.
   const [status, setStatus] = useState<EstimateStatus>(header.status);
   // A save, an auto-save or a Calculate was refused 409 because the estimate was ignored while the Engineer worked (CR-01 item 7D): the page turns read-only on the spot, stops its timer and says so in one alert.
@@ -97,7 +100,7 @@ export function EstimateWorkspace({ header, estimateId, userId, ignored = false,
   // This page is the Engineer's (a Lead or an Admin sees the short header until SCR-06), so the Engineer's rule is the one asked. The Ignored layer is the page's, as the server rendered it, and the server's 409 above.
   const editable = canEditInputs({ status, ignored: frozen }, 'ENGINEER');
   // The tree lives here: the form beside it is for the part chosen in it, and a save of the form gives the tree the part's new revision.
-  const tree = usePartsTree(estimateId, serverIgnored);
+  const tree = usePartsTree(estimateId, serverIgnored, { seed });
   // The width of the tree's column (FR-112): set as `--tree-w` on the form area below, which the column, the drawing region and this file's own clamp read.
   const [treeWidth, attachWorkspace] = useTreeWidth(userId);
   // The tree-width controls (handle, Tree width menu) are fetched only once the form has shown, or there is nothing to show it for: the form comes first on a slow network and on a cold development server (DEF-085).
@@ -191,7 +194,7 @@ export function EstimateWorkspace({ header, estimateId, userId, ignored = false,
             <CardTitle id={FORM_AREA_TITLE_ID}>{FORM_AREA_TITLE}</CardTitle>
           </CardHeader>
           <CardContent className={FORM_CARD_BODY}>
-            <PartForm estimateId={estimateId} part={selected} editable={editable} nodes={tree.nodes} ghost={ghost} treeUnread={tree.nodes === null && !tree.loadFailed} onSaved={saved} onChanged={tree.readAgain} ownMove={tree.ownMove} onNamed={tree.applyLabel} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} onShown={reportFormShown} />
+            <PartForm estimateId={estimateId} part={selected} editable={editable} nodes={tree.nodes} ghost={ghost} treeUnread={tree.nodes === null && !tree.loadFailed} onSaved={saved} onChanged={tree.readAgain} ownMove={tree.ownMove} onNamed={tree.applyLabel} onServerIgnored={serverIgnored} missing={selected === null ? noFields : (missingFields.get(selected.id) ?? noFields)} gate={saves} onShown={reportFormShown} seed={seed} />
           </CardContent>
         </Card>
         <div data-drawing-region="" aria-hidden="true" className={DRAWING_REGION} />
