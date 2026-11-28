@@ -29,11 +29,13 @@ function treeState(nodes: ReadonlyArray<PartItem> | null, over: Partial<PartsTre
   return {
     nodes,
     loadFailed: false,
+    fromSeed: false,
     selected: nodes?.[0] ?? null,
     selectedId: null,
     busy: false,
     waiting: false,
     movedFocus: null,
+    ownMove: null,
     problem: null,
     announcement: '',
     announce: noop,

@@ -489,6 +489,19 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   }
 
   /**
+   * The person's own move of this part (QLT-839-04, QLT-841-01): the tree hands over the revision the move was sent with (`sent`) and the one its own answer gave (`revision`). A move that wrote raises the part's
+   * revision by one and changes none of its values, so it is one of the form's own saves, but only when it is PROVEN to be: `revision` is exactly `sent` plus one (a move that wrote nothing answers the revision it was sent
+   * with, when somebody else had already put the rows in that order), and `sent` is the revision of the values this form holds (a row that was one ahead of the form says somebody else wrote too, and the form has not
+   * seen their values). It is taken in turn, after every save already asked for, so the next save is not refused 409 for a revision the person's own move made (and a value typed without leaving its field is not lost to
+   * a re-read that a page leave cannot wait for). Anything else is not taken: the next save is answered 409 and read again.
+   */
+  function ownMoved(move: { readonly sent: number; readonly revision: number }): void {
+    void inTurn(async () => {
+      if (move.revision === move.sent + ONE_WRITE && move.sent === revisionRef.current) revisionRef.current = move.revision;
+    });
+  }
+
+  /**
    * Save draft (STORY-05.08 AC-1, AC-5): leave every field again, as if the person had tabbed through the form. A field that is the same after normalisation sends nothing (AC-2); one still being typed in,
    * and one whose last save failed, is sent. A field the registry hides is left alone, as it is by every save. Not a second save path: each goes through `commit`. `auto` is the 30-second save: the same
    * fields, through `autosaveField`, and nothing at all while a conflict waits for the person to choose (STORY-05.10 AC-6). `leave` (the tab became hidden, or the page is being left; AC-7a to AC-7e) is `auto`
@@ -547,6 +560,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     resolveConflict,
     inTurn,
     pictureSaved,
+    ownMoved,
     readAgain: (): void => {
       setStored(LOADING);
       setAttempt((count) => count + 1);
