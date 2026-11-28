@@ -295,6 +295,23 @@ describe('AC-e: the answers that already gave feedback are unchanged', () => {
     expect(calls.load).toHaveBeenCalledTimes(1);
   });
 
+  it('QLT-839-04: hands the form the revision from the answer to its own move for the moved row, and nothing before a move', async () => {
+    const { state } = await open();
+    expect(state().ownMove).toBeNull();
+    calls.move.mockResolvedValue(ok(MOVED));
+    state().moveTo('p1', 0);
+    await tick(0);
+    expect(state().ownMove).toEqual({ id: 'p1', revision: 2 });
+  });
+
+  it('QLT-839-04: a move that was refused hands the form nothing', async () => {
+    const { state } = await open();
+    calls.move.mockResolvedValue(refused(409, 'TREE_CHANGED', 'The parts were changed.', { tree: OTHER }));
+    state().moveTo('p1', 0);
+    await tick(0);
+    expect(state().ownMove).toBeNull();
+  });
+
   it('shows the fresh tree with the usual notice for a 409 TREE_CHANGED', async () => {
     const { state } = await open();
     calls.move.mockResolvedValue(refused(409, 'TREE_CHANGED', 'The parts were changed.', { tree: OTHER }));

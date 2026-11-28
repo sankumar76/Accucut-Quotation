@@ -485,6 +485,18 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   }
 
   /**
+   * The person's own move of this part (QLT-839-04, follow-up #840): the tree hands over the revision of the move's own answer. A move raises the part's revision by one and changes none of its values, so,
+   * like a picture, it is one of the form's own saves and is taken when it is exactly one ahead of the revision the form holds. It is taken in turn, after every save already asked for, so the next save is
+   * not refused 409 for a revision the person's own move made (and a value typed without leaving its field is not lost to a re-read that a page leave cannot wait for). An answer further ahead says that somebody
+   * else wrote too: it is not taken, and the next save is answered 409 and read again.
+   */
+  function ownMoved(revision: number): void {
+    void inTurn(async () => {
+      if (revision === revisionRef.current + ONE_WRITE) revisionRef.current = revision;
+    });
+  }
+
+  /**
    * Save draft (STORY-05.08 AC-1, AC-5): leave every field again, as if the person had tabbed through the form. A field that is the same after normalisation sends nothing (AC-2); one still being typed in,
    * and one whose last save failed, is sent. A field the registry hides is left alone, as it is by every save. Not a second save path: each goes through `commit`. `auto` is the 30-second save: the same
    * fields, through `autosaveField`, and nothing at all while a conflict waits for the person to choose (STORY-05.10 AC-6). `leave` (the tab became hidden, or the page is being left; AC-7a to AC-7e) is `auto`
@@ -543,6 +555,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     resolveConflict,
     inTurn,
     pictureSaved,
+    ownMoved,
     readAgain: (): void => {
       setStored(LOADING);
       setAttempt((count) => count + 1);

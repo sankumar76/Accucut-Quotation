@@ -49,6 +49,12 @@ export interface DeleteTarget {
   readonly removedIds: ReadonlyArray<string>;
 }
 
+/** The person's own move of a row, with the revision the move's own answer gave that row (QLT-839-04). A new object for each move, so the form's effect runs once for it. */
+export interface OwnMove {
+  readonly id: string;
+  readonly revision: number;
+}
+
 const slNoOf = (nodes: ReadonlyArray<PartItem>, id: string | null): string => nodes.find((node) => node.id === id)?.slNo ?? '';
 
 /** The same rows in the same places, with the same numbers and revisions: nothing happened to the tree. */
@@ -111,6 +117,8 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
   const focusAfterAdd = useRef<string | null>(null);
   // The row that was moved, so that its move handle takes the focus once the tree is drawn in the new order (CR-01 item 3D, AC-8): a row that changes place in the page can lose the focus it had. A new object for every move, so the same row moved twice is two requests.
   const [movedFocus, setMovedFocus] = useState<{ readonly id: string } | null>(null);
+  // The person's own move of a row and the revision its answer gave that row (QLT-839-04): the open part's form takes it as one of its own saves, so its next save is not refused 409 for a revision this move made.
+  const [ownMove, setOwnMove] = useState<OwnMove | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -264,6 +272,8 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
       (signal) => movePart(estimateId, { nodeId: id, revision, parentId, index }, undefined, signal),
       (answer) => {
         setMovedFocus({ id });
+        const moved = answer.nodes.find((node) => node.id === id);
+        if (moved !== undefined) setOwnMove({ id, revision: moved.revision });
         setAnnouncement(renumberedMessage(slNoOf(answer.nodes, id)));
       },
       // A move always changes the part's number (it goes to another place among its siblings), so a part with the number it had was not moved.
@@ -326,6 +336,7 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void) {
     busy,
     waiting,
     movedFocus,
+    ownMove,
     problem,
     announcement,
     announce: setAnnouncement,

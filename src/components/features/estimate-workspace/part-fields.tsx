@@ -46,6 +46,7 @@ import { SurfaceTreatments } from './surface-treatments';
 import type { Loaded } from './use-form-definition';
 import { TreatmentSeedContext } from './use-treatment-options';
 import { usePartValues, type PartTarget, type SavedPart } from './use-part-form';
+import type { OwnMove } from './use-parts-tree';
 
 export interface PartFieldsProps {
   readonly estimateId: string;
@@ -58,6 +59,8 @@ export interface PartFieldsProps {
   readonly lastSavedAt: string | null;
   readonly onSaved?: ((saved: SavedPart) => void) | undefined;
   readonly onChanged?: (() => void) | undefined;
+  /** The person's own move of a row and the revision its answer gave it (QLT-839-04): taken by this form when it is for that row. */
+  readonly ownMove?: OwnMove | null | undefined;
   /** Description or Part No. was left with a new text: the tree's row takes the name (AQP-447). */
   readonly onNamed?: ((id: string, label: string) => void) | undefined;
   /** A save was refused because the estimate was ignored (CR-01 item 7D). */
@@ -124,7 +127,7 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
  * its number of fields, one to a row on a phone; the form is held to one card's least width, so a reserved region beside it takes a column with no redesign, UD-4), and every field from the server's definition. It is used under a key of the part's ID.
  * Each value is the person's until the field is left, and then the part's values are saved on their own (`usePartValues`).
  */
-export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing = NONE_MISSING, gate, review, seed }: PartFieldsProps) {
+export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, ownMove, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing = NONE_MISSING, gate, review, seed }: PartFieldsProps) {
   const allFields = form.sections.flatMap((section) => section.fields);
   const [ownGate] = useState(createSaveGate);
   const values = usePartValues({
@@ -144,6 +147,15 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
     gate: gate ?? ownGate,
     seed,
   });
+  // The person's own move of this part: its answer's revision is one of this form's own saves (QLT-839-04). Once for each move, by the move's own object.
+  const moved = ownMove?.id === part.id ? ownMove : null;
+  const takeOwnMove = useRef(values.ownMoved);
+  useEffect(() => {
+    takeOwnMove.current = values.ownMoved;
+  });
+  useEffect(() => {
+    if (moved !== null) takeOwnMove.current(moved.revision);
+  }, [moved]);
   const title = useRef<HTMLHeadingElement>(null);
   // The Engineer's form draws its own title; the review's is drawn on the server above the form, and this form is labelled by it.
   const titleElement = (): HTMLElement | null => title.current ?? document.getElementById(TITLE_ID);
