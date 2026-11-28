@@ -98,8 +98,9 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   const [seeded] = useState(() => {
     if (seed === undefined || seed.estimateId !== estimateId || seed.partId !== part.id) return null;
     const parsed = parsePartInputs(seed.part);
-    // The values shown and the revision a save sends must be one snapshot (architect note section 5 item 4; DEF-085, QLT-836-01): the revision of a save is the tree row's (`part.revision`), which the browser may have read
-    // after the page was drawn. A seed older than that row is read from the server instead, or a save would be accepted over a value the person never saw. A form nobody can save (`editable` false) sends no revision, so the Lead's
+    // The values shown should be the newest the page has (architect note section 5 item 4; DEF-085, QLT-836-01): the tree row's revision (`part.revision`), which the browser may have read
+    // after the page was drawn, can be newer than the seed. A seed older than that row is read from the server instead, so the person sees the newest values before the first save. A save sends the revision of the values the form holds (the seed's,
+    // the load's, its own saves'; DEF-148), never the row's, so a stale seed would be refused 409 anyway: this guard spares that 409. A form nobody can save (`editable` false) sends no revision, so the Lead's
     // read-only review keeps its seed whatever its placeholder revision is.
     return parsed !== null && (!editable || parsed.revision === part.revision) ? parsed : null;
   });
