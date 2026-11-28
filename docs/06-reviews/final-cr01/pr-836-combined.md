@@ -145,3 +145,55 @@ expect(JSON.stringify(first)).not.toContain('rate');
 - Status: COMPLETE (for everything except the tree seed, which will be reviewed as a delta)
 - Verdict: REQUEST CHANGES; 0 Blocker, 0 Critical, 1 Major, 7 Minor, 3 Info
 - Next: developer (lane 3) to fix QLT-836-01, then the Minors; re-review together with the tree-seed delta
+
+---
+
+# Round 2: re-review of the fix commit `484f55f2` (delta `fcab064f...484f55f2` only)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the §9 (2) combined review, round 2) |
+| Commit reviewed | **`484f55f29ad7a1872e85888124f105656d48ecf9`** (one commit on `fcab064f`: 10 files, +136 −15) |
+| Date | 2026-11-27 |
+| Checked against | architect note v1.3 (records-u `8e09ad10`): section 2 rule 8 (values and the revision a save sends are one snapshot) and section 5b |
+| **Verdict** | **APPROVE WITH COMMENTS.** **Open: 0 Blocker, 0 Critical, 0 Major, 3 Minor (QLT-836-02 deferred, QLT-836-05 part (c), QLT-836-10 new), 3 Info (SEC-836-03, QLT-836-11, QLT-836-12).** The Major is fixed. CI 46088953456 at `484f55f2` is all green. Merge still waits for the tree-seed delta and its review |
+
+## Checks run (round 2)
+
+| Check | Command / source | Result |
+|-------|------------------|--------|
+| Delta | `git diff fcab064f 484f55f2` | read in full |
+| Unit tests of the PR | the same 6 files, run in the lane's clean worktree `.claude/worktrees/aqp-441` at `484f55f2` | **6 files, 139 tests pass** (+6 new) |
+| Lint of the touched files | `eslint` on `use-part-form.ts`, `part-form.tsx`, `partform-placeholder.spec.ts`, `support/flight-form.ts` | clean |
+| CI | run 46088953456 at `484f55f2` | **All green.** Stages 1 to 11b (unit 554 files; unit, integration, security and acceptance 730 files); **Stage 11b `/estimates/[code]` 193,120 B** (−2 B on `fcab064f`; DL-468 194,000 B); four E2E shards (591, 592, 590 and 602 passed, none flaky). The new QLT-836-04 second-wait case (`partform-placeholder.spec.ts:200`) passed on the first attempt at mobile, tablet and desktop |
+
+## Previous findings
+
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| QLT-836-01 | Major | **Fixed** | `use-part-form.ts:98-105`: the seed is used only when `parsed.revision === part.revision`, or when `!editable`. This conforms to rule 8 and to section 5b's Engineer row ("a check when the form mounts is enough"; the Engineer's form mounts only after the tree is known) and its Lead stage-2 row (`editable={false}`: no save, so rule 8 is not engaged). `!editable` is evaluated once, at mount. That is safe today because no client path turns a mounted form from locked to editable: the Engineer's status changes only to PREPARED via Calculate, and #811's island mounts its own editable form (see SEC-836-03). Tests: an older seed reads once, an equal seed reads nothing, and a locked form keeps the seed. These are section 5b tests (1) and (2) |
+| SEC-836-01 | Minor | **Fixed** | `part-form-seed.test.ts`: for both `readFirstPartFormBodies` and `readPartFormBodies`, an extra top-level `rate` is dropped and an extra key in a field is refused (`null`). The mutant `form: first.form` now fails both. Nit in QLT-836-12 |
+| QLT-836-02 | Minor | **Not fixed: deferral accepted** | deferred to the tree-seed delta, where it is to be built on #811's `partDetailOf`. Still open; to be checked in the delta review |
+| QLT-836-03 | Minor | **Fixed** | the frozen-registry case now also asserts `getFirstPartForm`, both form and node, and the frozen label |
+| QLT-836-04 | Minor | **Fixed** (green at three widths, first attempt, in CI 46088953456) | `partform-placeholder.spec.ts:229-258`: a second row via the "+" request, a reload, `/nodes/{id}` held, the second row chosen, the ghost visible, and the form area measured at ≤ 24 px. The case structure is sound. |
+| QLT-836-05 | Minor | **Partly fixed** | (a) `lib/estimates/part-form-seed.ts:8` and (b) `partform-placeholder.spec.ts:227` are fixed. **(c) Not fixed:** the PR body still describes `useSeedOfFirstPart` (its line 11) and a new `use-seed-of-first-part.test.ts` (its line 17) |
+| QLT-836-06 | Minor | **Fixed** | `part-form.tsx:83-91`: `treeUnread ? (ghost ?? bars) : FORM_NO_PART`, and the bars are shared with the loading branch (no duplicate markup). Unit case in `part-form-ghost.test.ts` |
+| QLT-836-07 | Minor | **Fixed** | `flight-form.ts:106-109`: a non-text chunk between the first and last text chunk throws, so the page flag gets the error and the chunks go on unchanged. Unit case with `[3]` cut into the body |
+| QLT-836-08 | Info | **Not fixed correctly**, see QLT-836-10 | the "Limits" paragraph was added, but the doc comment is garbled |
+| QLT-836-09 | Info | **Fixed** | `estimate-form-sections.spec.ts:97-98`: asserted again at the end of the case |
+
+## New findings (round 2)
+
+| ID | Severity | File:line | Rule | Issue | Impact | Suggested fix |
+|----|----------|-----------|------|-------|--------|---------------|
+| QLT-836-10 | Minor | `tests/e2e/support/flight-form.ts:17-31` | Coding standards (comments state intent truthfully) | The QLT-836-08 paragraph is garbled. Line 17 stops mid-sentence at "starts with". Lines 18-31 are then a second copy of the file's own header (`import type { Page } …`, `/**`, the whole doc again) inside the same comment, and the end of the Limits sentence ("(flight reads it as a reference); and it acts on a hard load … only") is spliced onto line 31. This looks like a dollar sign eaten by the shell when the text was written. It compiles, and `installFlightFormHook.toString()` is unaffected | The helper's doc is the contract a later case reads. It now repeats itself and loses the limit it was meant to state | Rewrite lines 17-31 as one paragraph: the hook holds every flight chunk until `DOMContentLoaded`, so hydration cannot start early under it; it does not escape a card string that starts with a dollar sign (flight reads it as a reference); and it acts on a hard load of the page only, not on a soft navigation's own RSC fetch. Write it with the Edit tool, not a shell heredoc |
+| SEC-836-03 | Info | `src/components/features/estimate-workspace/use-part-form.ts:104` | Rule 8 | The `!editable` exemption is read at mount only. If a later change lets a mounted form turn editable (for example an unlock seen by `router.refresh()` without a remount), a seed from an older snapshot would be kept under a newer revision. Not reachable today | — | Add a one-line comment pinning "editable is fixed for the life of a mount", or exempt by `review !== undefined` instead of `!editable`. For #811 to weigh |
+| QLT-836-11 | Info | `tests/e2e/partform-placeholder.spec.ts:258` | formatting | The test's closing `});` sits on the assertion's line | — | Put `});` on its own line |
+| QLT-836-12 | Info | `tests/unit/part-form-seed.test.ts` (SEC-836-01 case) | test precision | `not.toContain('rate')` on the stringified bodies is a substring check. It passes today, but a definition text holding "rate" (for example "separate") would turn it red for the wrong reason | — | `expect(dropped.form).not.toHaveProperty('rate')` |
+
+**Rule 8, the generic half (Info, an issue for the solution-architect, not a #836 finding):** `usePartValues` moves `revisionRef` to `part.revision` whenever a later tree answer brings a newer row revision (after an add, a move or a delete). That is true of seeded and unseeded forms alike, and it is on master. Section 5b rightly scopes the Engineer's seed check to mount. The second sentence of rule 8 ("… reads the part again before it sends") would cover it if applied to every form, not only seeded ones.
+
+## Hand-off (round 2)
+- Status: COMPLETE for the delta
+- Verdict: APPROVE WITH COMMENTS. Open: 0 Blocker, 0 Critical, 0 Major, 3 Minor, 3 Info
+- Next: developer (lane 3): QLT-836-10 and the PR body (QLT-836-05 (c)) at the next push. QLT-836-02 is checked in the tree-seed delta review
