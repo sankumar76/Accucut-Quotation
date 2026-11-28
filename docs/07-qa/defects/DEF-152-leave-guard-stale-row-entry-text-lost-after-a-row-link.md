@@ -1,15 +1,15 @@
-# DEF-152: on the Lead's review, after a row link is pressed with the leave guard armed, Back shows no warning on master and the second row's typed text is lost; on #845 'Keep editing' shows the first row's text (Product; Sev-1; Jira AQP-508, GitHub #848)
+# DEF-152: on #845's branch (since b804c6f2), after a row link is pressed with the leave guard armed, 'Keep editing' shows the first row's text and the typing is gone (Product; Sev-1; on master not reproduced; Jira AQP-508, GitHub #848)
 
 | Field | Value |
 |-------|-------|
 | Story / AC | STORY-05.08 (AQP-316) AC-4: typed work is not lost on leaving the estimate page; the guard asks, and 'Keep editing' keeps the person on the page with the text |
-| Severity | **Sev-1 Critical, provisional on `master`** (test-plan scale: data loss): typed, unsaved text is dropped with no notice (`master`, by code reading) or after an explicit 'Keep editing' (#845, by CI). If a run on `master` shows the dialog and the text kept, the `master` part is Sev-3 and #845's part stays Sev-1 |
+| Severity | **Sev-1 Critical on #845's branch** (test-plan scale: data loss: typed, unsaved text dropped after an explicit 'Keep editing', CI run 46117009843). **CORRECTED 2026-11-28: NOT on `master`** (not reproduced by qa-u2: E1 and E2) |
 | Priority | P1; Jira Highest |
 | Type | **Product** |
-| Status | **Open, 2026-11-28.** A must-fix INSIDE #845 before merge (the coordinator's ruling); the `master` part needs the fix on `master` by the end of Wed 2 Dec. ON THE G8 BLOCKING LIST |
+| Status | **Open on #845's branch, 2026-11-28.** A must-fix INSIDE #845 before merge (the coordinator's ruling). **NOT on the G8 blocking list** (not on `master`); it becomes a `master` defect only if #845 merges with it. Earlier (superseded): found on `master` by code reading, on the G8 blocking list |
 | Jira / GitHub | [AQP-508](https://sankumar76.atlassian.net/browse/AQP-508) / [#848](https://github.com/sankumar76/Accucut-Quotation/issues/848) (labels bug, sev-1, ai-delivery; Jira also aiid-DEF-152, agent-qa-engineer, on-master, final-review). Linked 'relates to' AQP-506 (DEF-149). Searched first: JQL on `aiid-DEF-151`, `aiid-DEF-152`, 'stale entry': nothing; DEF-151 is unused (DL-479 note 8) |
 | Found by / date | lane 1 (code reading, and the E2E of #845), 2026-11-28; logged by qa-engineer on the orchestrator's relay of the coordinator's ruling |
-| Build / commit | **Found on `master` 51502650 by code reading (not run); on #845 head 38859d2b by CI run 46117009843** |
+| Build / commit | **#845's branch, head 38859d2b (CI run 46117009843); a regression since `b804c6f2` (QLT-845-08).** On `master` 51502650 NOT reproduced (qa-u2, desktop, dev server). Earlier (superseded): 'found on `master` by code reading' |
 | Environment | CI (`next dev`); invented data only |
 
 ## What the user sees
@@ -40,6 +40,9 @@ Inside #845 before merge; the `master` part on `master` by the end of Wed 2 Dec.
 | Fix in #845 (and on `master`) | developer (lane 1) | | |
 | QA's run on `master` of the steps | qa-engineer | | |
 | Verified | qa-engineer | | |
+
+## CORRECTION: on #845's branch, not on `master` (qa-engineer, 2026-11-28; test plan 0.3.172)
+**DEF-152 CORRECTED: it is on #845's branch, not on master (28 Nov 2026 UTC; qa-engineer; 0.3.172; the orchestrator's relay of the new QA agent's run, QA read the raw output).** The second QA agent (qa-u2) ran the steps on **master 51502650** (dev server, desktop 1366x768, one run per variant, '2 passed (1.4m)'), raw output `scratchpad\qa150\def150-out-fifth.txt`: **E1** (save in row 1.1, click row 1, type, Back): the leave dialog appears, and 'Keep editing' keeps the second row open with the typed text (history length 3, 4, 4, 5, 5; URL `?row=1#row-inputs` after the click and after Keep editing; dialog true after Back, false after Keep editing); **E2** (unsaved typing in 1.1, then another row): the dialog asks on the click; after 'Leave without saving', typing in row 1 and pressing Back, the dialog asks and 'Keep editing' keeps the typed text. **So the claim for master (lane 1's code reading: `armedFor` cleared, no dialog on Back, text lost) is NOT reproduced;** it matches the round 2 reviewer and lane 1's corrected reading: **the defect is a regression on #845's branch (since `b804c6f2`, QLT-845-08), not on master.** Limits: desktop only, development server, one run per variant. **Grade unchanged for #845's branch: Sev-1** (typed, unsaved text dropped after an explicit 'Keep editing', CI run 46117009843, head `38859d2b`: `leave-guard-history.spec.ts` :184 all three widths, :176, :196 and :164); Jira priority stays Highest; **a must-fix inside #845 before merge (the coordinator's ruling); NOT on the G8 blocking list (not on `master`); it becomes a `master` defect only if #845 merges with it; QA's own run on `master` is no longer needed.** The Jira label `on-master` is removed; AQP-508 and GitHub #848 carry the corrected title and body and a comment.
 
 ## Records
 Jira Bug AQP-508 and GitHub issue #848, created 2026-11-28 and cross-linked; related AQP-506 (DEF-149), AQP-507 (DEF-150), AQP-316, #845, AQP-1; test plan 0.3.171.
