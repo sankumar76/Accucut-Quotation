@@ -93,3 +93,43 @@ The client's own guards (the menu disables the ends, and a drop at the same plac
 - Status: COMPLETE on the code; CI on `8d2e5b8a` not yet read (not started when written)
 - Verdict: REQUEST CHANGES; 0 Blocker, 0 Critical, 1 Major, 2 Minor, 4 Info
 - Next: developer (lane 1) to fix QLT-841-01 (and QLT-841-02 if cheap); reviewer-quality to review that delta; orchestrator to read CI and Stage 11b
+
+---
+
+# Round 2: re-review of `98e9a43e` (delta `8d2e5b8a...98e9a43e` only)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the §9 (2) combined review, round 2) |
+| Commit reviewed | **`98e9a43eb89af534ff2e91de2f9623fe16c71716`** (one commit on `8d2e5b8a`: 6 files, +108 −25), 0 behind master `e64cc034` |
+| Date | 2026-11-27 |
+| **Verdict** | **APPROVE WITH COMMENTS on the code.** **Open: 0 Blocker, 0 Critical, 0 Major, 1 Minor (QLT-841-04, Stage 11b still to read), 5 Info (SEC-841-01, QLT-841-03, -05, -06, -07).** QLT-841-01 and QLT-841-02 are fixed. **Merge conditions:** (1) run of record 46100326250 on `98e9a43e` fully green; (2) its Stage 11b, as a delta over 193,081 B, plus #836's tree-seed delta, fits the ≈ 323 B left under 194,000 B. **When this round was written, run 46100326250 was in progress** (stages 1 to 11b and all four E2E shards running), so Stage 11b is not known. The orchestrator reads it |
+
+## Checks run (round 2)
+
+| Check | Result |
+|-------|--------|
+| Delta | `git diff 8d2e5b8a 98e9a43e`, read in full: `use-part-form.ts` (`ownMoved`), `use-parts-tree.ts` (`OwnMove`, `change`, `settle`, `settleAfterLimit`, `moveTo`), `part-fields.tsx` (one argument), the three test files |
+| Other `onDone` callers | `addUnder` and the delete keep their one-parameter callbacks. A shorter parameter list is assignable in TypeScript, and their behaviour is unchanged |
+| Unit tests at `98e9a43e` (read-only, lane 1's clean worktree) | `part-form-revision`, `part-picture-changed`, `use-parts-tree`, `own-move-wiring`, `parts-tree-card`, `tree-row-actions`, `use-part-values`, `part-form-seeded-reads`: **173 tests pass** |
+| CI | Run 46100326250 (`98e9a43e`): **in progress** at the time of writing |
+
+## Prior findings
+
+| ID | Prior | Status | Evidence |
+|----|-------|--------|----------|
+| QLT-841-01 | Major | **Fixed** | `use-part-form.ts:496`: `move.revision === move.sent + ONE_WRITE && move.sent === revisionRef.current`, taken in turn. `use-parts-tree.ts:280`: `const moved = direct ? … : undefined`, and `setOwnMove({ id, sent: revision, revision: moved.revision })` with `revision` the one sent. `settle` passes `direct` true (`:194`) and `settleAfterLimit` passes false (`:230`). Every row of round 1's table now resolves correctly: wrote, `sent === held` → adopted; no-op (`revision === sent`) → not adopted (case (a)); lost answer → nothing handed over (case (b), `use-parts-tree.test.ts`, which also checks that the landed path ran, "Part renumbered to 1.1"); row one ahead (`sent === held + 1`) → not adopted (case (c)); a save in flight → evaluated after it, `sent 2, revision 3` adopted after the save left 2. The rule is now exact, not probable: a direct 200 with `revision = sent + 1` proves this move wrote on state `sent`, and `sent === held` proves that state is the one whose values the form holds |
+| QLT-841-02 | Minor | **Fixed** | `own-move-wiring.test.ts`, 4 source-text cases. The `<PartForm>` tag must hold both `ownMove={tree.ownMove}` and `onChanged={tree.readAgain}`, so a conflict resolution that drops one is seen. `part-form.tsx` passes it down. The exact id filter line and the effect are pinned. The tree's direct-only line and `sent: revision` are pinned. Each mutant I named in round 1 now fails one of these |
+| QLT-841-04 | Minor | **Open, CI pending** | See the verdict |
+| QLT-841-03 | Info | unchanged | The remount replay is now also refused by `sent === held` |
+
+## New (round 2)
+
+| ID | Severity | File:line | Note |
+|----|----------|-----------|------|
+| QLT-841-07 | Info | `tests/unit/own-move-wiring.test.ts` | A source-text test pins exact strings, so a harmless reformat (Prettier reflowing the `<PartForm>` line, or a renamed local) turns it red. It fails safe and fits the project's other wiring tests (there is no DOM in the unit project). A render-level case would be sturdier if a DOM project is ever added. No action needed |
+
+## Hand-off (round 2)
+- Status: COMPLETE on the code. Run 46100326250 was in progress, so Stage 11b is not yet known
+- Verdict: APPROVE WITH COMMENTS; open 0 Blocker, 0 Critical, 0 Major, 1 Minor, 5 Info
+- Next: orchestrator reads run 46100326250. If it is green and Stage 11b's delta over 193,081 B plus #836's tree-seed delta is within ≈ 323 B, the merge can proceed under §9 (1). Whoever merges #836 after #841 keeps both `seed=…` and `ownMove={tree.ownMove}` (now pinned by `own-move-wiring.test.ts`)
