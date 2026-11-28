@@ -22,6 +22,9 @@ export const reviewNotice = (refused: 'locked' | 'ignored' | null, own: string):
 /** The page is drawn again at most this often after saves and renames, so a run of them is one read of the review (architecture note lead-admin-input-edit-2026-11-27, 6a A-7). */
 const REFRESH_QUIET_MS = 300;
 
+/** The address of the page as the browser has it now: where a refresh was asked for, and where it must still be when it goes (DEF-150). */
+const addressNow = (): string => `${window.location.pathname}${window.location.search}`;
+
 /**
  * The form the Lead's and the Admin's review draws (AQP-488): the Engineer's own `PartForm`, with the review look, in a module of its own so that what only the review needs is not in the Engineer's form. A row
  * chosen after the page was drawn takes the form's title (the choice is said once and the tree folds, `PartForm`); the first paint does none of it.
@@ -52,10 +55,15 @@ export function ReviewForm({ review, editable, ...props }: ReviewFormProps) {
     [],
   );
 
+  // A refresh never overwrites a navigation made after it was asked for (DEF-150): it is asked for at one address and goes only while the page is still there. A row link pressed in the quiet period draws the page for the new
+  // address itself, and a refresh sent for the old one would commit after it and put the earlier row back (Next writes the router's last address over the new one).
+  const asked = useRef<string | null>(null);
   const refresh = useCallback((): void => {
     if (timer.current !== null) clearTimeout(timer.current);
+    asked.current = addressNow();
     timer.current = setTimeout(() => {
       timer.current = null;
+      if (addressNow() !== asked.current) return;
       startRefresh(() => router.refresh());
     }, REFRESH_QUIET_MS);
   }, [router]);
