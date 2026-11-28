@@ -24,6 +24,13 @@ export interface SaveGate {
   readonly isDirty: () => boolean;
   /** A save is in flight (apart from whether something is unsaved): the 30-second tick is skipped while one is, and never queued (STORY-05.10 AC-7). */
   readonly isSaving: () => boolean;
+  /** A field shows a value that is not saved, whether or not a save is in flight: what is typed in the row on screen (the marks go when a part leaves the screen, `forget`), and nothing of another part's save (DL-488 (iii)). */
+  readonly hasUnsaved: () => boolean;
+  /** The leave guard says the form's fields must not accept input (a row write or a repair step is in flight, DL-488 (iv)), or that they may again. The part form takes it as its read-only state. */
+  readonly setInputHeld: (held: boolean) => void;
+  readonly isInputHeld: () => boolean;
+  /** Told when the hold on the fields changes. Answers the way to stop listening. */
+  readonly subscribeInputHeld: (listener: () => void) => () => void;
   /** Told after every change of what is dirty (never for a change that changes nothing). Answers the way to stop listening. */
   readonly subscribe: (listener: () => void) => () => void;
   /** A part form offers the way to send again what it shows (Save draft, STORY-05.08 AC-1; the 30-second save, STORY-05.10). It is told which of the two asks. Answers the way to withdraw it. */
@@ -39,6 +46,8 @@ export function createSaveGate(): SaveGate {
   const inFlight = new Set<Promise<unknown>>();
   const unsaved = new Set<string>();
   const listeners = new Set<() => void>();
+  const holdListeners = new Set<() => void>();
+  let inputHeld = false;
   const flushers = new Set<(mode: FlushMode) => void>();
   const keyOf = (partId: string, fieldId: string): string => `${partId}/${fieldId}`;
   const notify = (): void => {
@@ -82,6 +91,17 @@ export function createSaveGate(): SaveGate {
     },
     isDirty: () => inFlight.size > 0 || unsaved.size > 0,
     isSaving: () => inFlight.size > 0,
+    hasUnsaved: () => unsaved.size > 0,
+    setInputHeld(held) {
+      if (held === inputHeld) return;
+      inputHeld = held;
+      for (const listener of [...holdListeners]) listener();
+    },
+    isInputHeld: () => inputHeld,
+    subscribeInputHeld(listener) {
+      holdListeners.add(listener);
+      return () => void holdListeners.delete(listener);
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => void listeners.delete(listener);

@@ -18,6 +18,7 @@ import { formatIst } from '@/lib/time';
 import {
   FAILED_BODY,
   FORM_LOCKED,
+  INPUT_HELD_LINE,
   MISSING_CHOICE_MESSAGE,
   MISSING_NUMBER_MESSAGE,
   MISSING_OPTION_MESSAGE,
@@ -45,6 +46,7 @@ import { TREATMENT_MISSING_MESSAGE } from './surface-texts';
 import { SurfaceTreatments } from './surface-treatments';
 import type { Loaded } from './use-form-definition';
 import { TreatmentSeedContext } from './use-treatment-options';
+import { useInputHeld } from './use-input-held';
 import { usePartValues, type PartTarget, type SavedPart } from './use-part-form';
 import type { OwnMove } from './use-parts-tree';
 
@@ -130,6 +132,8 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
 export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, ownMove, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing = NONE_MISSING, gate, review, seed }: PartFieldsProps) {
   const allFields = form.sections.flatMap((section) => section.fields);
   const [ownGate] = useState(createSaveGate);
+  // The leave guard holds the fields while a row write or a repair step is in flight (DL-488 (iv)): read-only in the frame it says so, the shaded look and the polite line only after 300 ms.
+  const inputHeld = useInputHeld(gate ?? ownGate);
   const values = usePartValues({
     estimateId,
     part,
@@ -198,7 +202,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
   const missingNeeded = (field: FormField): boolean => missing.has(field.id) && textOf(field, values.texts).trim() === '';
   const hasMissing = (section: { readonly fields: ReadonlyArray<FormField> }): boolean => section.fields.some(missingNeeded);
   const drawn = (
-    <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, titleElement())} className={FORM_ROOT}>
+    <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} aria-busy={inputHeld.held || undefined} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, titleElement())} className={FORM_ROOT}>
       <div className={HEAD_LINES}>
         {review === undefined ? <PartHead partId={part.id} slNo={part.slNo} nodes={nodes} titleId={TITLE_ID} titleRef={title} /> : null}
         <PartProgress slNo={part.slNo} counts={sumProgress(progress.map(({ counts }) => counts))} />
@@ -281,6 +285,8 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
                   text={field.rule.type === 'derived' ? derivedText(field, part, values.texts, materials) : textOf(field, values.texts)}
                   error={values.errors[field.id]}
                   editable={editable}
+                  held={inputHeld.held}
+                  heldShown={inputHeld.shown}
                   materials={materials}
                   onChange={(text) => values.setText(field.id, text)}
                   onCommit={(override) => values.commit(field, override)}
@@ -291,7 +297,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
         ))}
       </div>
       <p role="status" className="sr-only">
-        {review?.chosen === true ? review.showing : values.announcement}
+        {inputHeld.shown ? INPUT_HELD_LINE : review?.chosen === true ? review.showing : values.announcement}
       </p>
     </form>
   );

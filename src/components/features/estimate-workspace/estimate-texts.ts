@@ -22,6 +22,9 @@ export const FORM_INTRO = 'Every field is needed to Calculate. Enter 0 where a p
 export const FORM_LOADING = 'Loading the form';
 export const FORM_LOAD_FAILED_TITLE = 'We could not load the form';
 export const FORM_NO_PART = 'Choose a part in the tree to fill in its form, or add the first one with "Add main assembly".';
+/** The one polite line said when the form's fields have been held for 300 ms or more while the row is written (DL-488 (iv), UX ruling on AQP-506): nothing is said for a shorter hold, and nothing on release. */
+export const INPUT_HELD_LINE = 'Saving the row. You can type again in a moment.';
+
 export const FORM_LOCKED = 'This estimate can no longer be changed.';
 export const lastSavedText = (when: string): string => `Last saved ${when}`;
 export const NOT_SAVED_YET = 'Nothing saved yet';

@@ -71,6 +71,10 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
       gate,
       ask,
       navigate: (href, replace) => (replace ? router.replace(href) : router.push(href)),
+      // Nothing is unsaved in the row on screen when no field shows a value that is not saved: a save of another part, in flight or failed, is not that (DL-488 (iii)).
+      rowDirty: () => gate.hasUnsaved(),
+      // The part form takes this as its read-only state, through the gate it shares (DL-488 (iv)).
+      onInputHeld: (held) => gate.setInputHeld(held),
     });
     installed.current = handle;
     const withdraw = registerLeaveGuard(ask);

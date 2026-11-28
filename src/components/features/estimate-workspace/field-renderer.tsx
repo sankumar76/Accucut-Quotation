@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import type { FormField as FormFieldView, MaterialChoice } from '@/lib/estimates/form-client';
+import { cn } from '@/lib/cn';
 import { lengthProblem } from '@/lib/estimates/form-values';
 
 import { MATERIAL_LOADING, MATERIAL_PLACEHOLDER, OPTION_PLACEHOLDER } from './estimate-texts';
@@ -28,6 +29,9 @@ export interface FieldRendererProps {
   readonly error: string | undefined;
   /** False once the estimate may no longer be changed by this person: every control is read-only. */
   readonly editable: boolean;
+  /** The leave guard holds the fields while the row is written (DL-488 (iv)): `readonly` and `aria-readonly`, as for a field that cannot be changed, but a field the person could type in keeps its look until `heldShown` (300 ms). */
+  readonly held?: boolean;
+  readonly heldShown?: boolean;
   readonly materials: Loaded<ReadonlyArray<MaterialChoice>>;
   readonly onChange: (text: string) => void;
   /** The person left the field, or chose from a list (then with the choice's text). */
@@ -42,6 +46,9 @@ export interface FieldRendererProps {
 /** The classes of the words "Not entered" in a box: italic, and `--ink-2` (4.5:1), not the faint `--ink-3` of a placeholder. */
 const NOT_ENTERED_LOOK = 'placeholder:italic placeholder:text-ink-2';
 
+/** What a field keeps while it is held for less than 300 ms: the look of an editable box, whatever its `readonly` says. */
+const HELD_QUIET_LOOK = 'read-only:border-solid read-only:bg-surface read-only:text-ink';
+
 export const controlIdOf = (field: Pick<FormFieldView, 'id'>): string => controlIdFor(field.id);
 
 /**
@@ -49,12 +56,15 @@ export const controlIdOf = (field: Pick<FormFieldView, 'id'>): string => control
  * "Accessibility"), the hint under it, the unit beside it, and the control the field's rule asks for: a number or a text box, the materials or the treatments as a drop-down, or, for a field that
  * follows something else (Sl. No., Material Considered), a read-only box with the shaded look. The surface-treatment flags are drawn together by `SurfaceTreatments`, never one by one here. Nothing here knows a field by its name: what it is and says comes from the server's form.
  */
-export function FieldRenderer({ field, missing, text, error, editable, materials, onChange, onCommit, review = false }: FieldRendererProps) {
+export function FieldRenderer({ field, missing, text, error, editable, held = false, heldShown = false, materials, onChange, onCommit, review = false }: FieldRendererProps) {
   const id = controlIdOf(field);
   const empty = review && field.rule.type !== 'derived' && text.trim() === '';
   const emptyId = `${id}-empty`;
   const placeholder = empty ? NOT_ENTERED : undefined;
-  const readOnly = !editable || !field.editable;
+  const readOnly = !editable || !field.editable || held;
+  const quiet = held && !heldShown && editable && field.editable;
+  const looks = cn(placeholder === undefined ? undefined : NOT_ENTERED_LOOK, quiet ? HELD_QUIET_LOOK : undefined);
+  const look = looks === '' ? {} : { className: looks };
   const mark = field.editable && editable ? 'true' : undefined;
   const tag = <ColumnTag letter={field.letter} kind={field.kind} />;
   const common = { name: field.id, [FIELD_MARK]: mark };
@@ -136,7 +146,8 @@ export function FieldRenderer({ field, missing, text, error, editable, materials
               readOnly={readOnly}
               aria-readonly={readOnly || undefined}
               enterKeyHint="next"
-              {...(placeholder === undefined ? {} : { placeholder, className: NOT_ENTERED_LOOK })}
+              {...(placeholder === undefined ? {} : { placeholder })}
+              {...look}
               value={text}
               onChange={(event) => onChange(event.target.value)}
               onBlur={() => onCommit()}
@@ -151,7 +162,8 @@ export function FieldRenderer({ field, missing, text, error, editable, materials
         value: text,
         autoComplete: 'off',
         enterKeyHint: 'next',
-        ...(placeholder === undefined ? {} : { placeholder, className: NOT_ENTERED_LOOK }),
+        ...(placeholder === undefined ? {} : { placeholder }),
+        ...look,
         onChange: (event: ChangeEvent<HTMLInputElement>) => onChange(event.target.value),
         onBlur: () => onCommit(),
       } as const;
