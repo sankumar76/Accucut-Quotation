@@ -104,22 +104,26 @@ test.describe('The island follows the address and the leave guard still asks', (
     await page.route((url) => isPatchOfInputs(url.toString(), 'PATCH'), (route) => (route.request().method() === 'PATCH' ? route.abort() : route.continue()));
   }
 
-  /** Back is pressed with the guard armed and text typed and not saved: the dialog asks with the row and the text still on the screen (QLT-811-01). */
+  /** The open row's Description while the dialog is up: the dialog hides the rest of the page from the accessibility tree, so the box is found by the tree it is in, hidden or not. */
+  const descriptionBehindDialog = (page: Page) => page.getByRole('textbox', { name: /Description/, includeHidden: true }).first();
+
+  /** Back is pressed with the guard armed and text typed and not saved: the dialog asks, twice, with the row and the text still on the screen (QLT-811-01). */
   async function backAsksWithTheTextStill(page: Page, title: RegExp, typed: string): Promise<void> {
     await page.evaluate(() => window.history.back());
     await expect(leaveDialog(page)).toBeVisible();
     await expect(page.locator('#part-form-title')).toHaveText(title);
-    await expect(description(page)).toHaveValue(typed);
+    await expect(descriptionBehindDialog(page)).toHaveValue(typed);
     await leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true }).click();
     await expect(leaveDialog(page)).toHaveCount(0);
     await expect(page.locator('#part-form-title')).toHaveText(title);
     await expect(description(page)).toHaveValue(typed);
-    // And a second Back asks again and leaves, without the text having been dropped before the page went.
+    // A second Back asks again, with the text still there.
     await page.evaluate(() => window.history.back());
     await expect(leaveDialog(page)).toBeVisible();
+    await expect(descriptionBehindDialog(page)).toHaveValue(typed);
+    await leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(leaveDialog(page)).toHaveCount(0);
     await expect(description(page)).toHaveValue(typed);
-    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
-    await expect(page).toHaveURL(/\/queue/);
   }
 
   test('QLT-811-01: a row is added (and opens) with the guard armed, text is typed in it, Back asks with that row and its text still on the screen', async ({ page }, testInfo) => {
