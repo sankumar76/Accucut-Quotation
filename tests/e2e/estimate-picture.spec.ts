@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
+import { defined } from '../support/defined';
 import { PLAIN_TEXT, pngOfSize, SVG_TEXT, smallWebp } from '../support/pictures';
 import { loadWorkbook, readXlsxParts } from '../support/xlsx-parts';
 
@@ -144,6 +145,35 @@ test.describe('AC-1, AC-3: the field and the three ways to add a picture', () =>
     await expect(zone(page).getByRole('button', { name: 'Choose a file' })).toBeVisible();
     // A part with no picture is whole (D-31): nothing is said about one.
     await expect(section(page).getByRole('alert')).toHaveCount(0);
+
+    // PF-22a (G8-C-PICNAME, UX ruling partform-placeholder-shape-2026-11-28 section 10, master's DL-474): a long file name is one line, cut with an ellipsis, and never changes the height of the box. Run on
+    // the person of this case, so it adds none. The server keeps at most 100 characters of a name (`MAX_FILE_NAME_LENGTH`), so a name of 200 characters is shown as the 100 it was stored as; `title` and `alt`
+    // hold that name whole. Wide letters, so the name is longer than the box at 1366 px too.
+    await choose(page, 'a.png', pngOfSize(130));
+    await expect(zone(page)).toContainText('a.png');
+    const oneLine = defined((await zone(page).boundingBox())?.height);
+    for (const [change, bytes] of [
+      [`${'W'.repeat(196)}.png`, pngOfSize(140)],
+      [`${'Wide Name '.repeat(20)}.png`, pngOfSize(150)],
+    ] as const) {
+      expect(change.length, 'the invented name has 200 characters').toBeGreaterThanOrEqual(200);
+      expect(await choose(page, change, bytes)).toBe(200);
+      const name = zone(page).locator('[title]');
+      await expect(name).toHaveCount(1);
+      // The name that was stored (a name over 100 characters is cut by the server), and its whole text in `title`, in the text, and in the thumbnail's `alt`.
+      const stored = defined(await name.getAttribute('title'));
+      expect(stored.length, 'a long name, as stored').toBeGreaterThan(60);
+      expect(stored.startsWith(change.slice(0, 20)), 'the stored name is the start of the one sent').toBe(true);
+      await expect(name).toHaveText(stored);
+      await expect(preview(page, stored)).toBeVisible();
+      // It is cut: the text is longer than its box, on one line (a line of the control's own height).
+      const cut = await name.evaluate((element) => ({ scroll: element.scrollWidth, client: element.clientWidth, overflow: getComputedStyle(element).textOverflow }));
+      expect(cut.scroll, 'the name is cut (scrollWidth over clientWidth)').toBeGreaterThan(cut.client);
+      expect(cut.overflow).toBe('ellipsis');
+      // The box is as high as with a one-line name, within 2 px, so the reserve of the form holds.
+      const height = defined((await zone(page).boundingBox())?.height);
+      expect(Math.abs(height - oneLine), `the box is ${String(height)} px high, a one-line name's is ${String(oneLine)} px`).toBeLessThanOrEqual(2);
+    }
   });
 
   test('AC-1: a copied picture is added by pasting (Ctrl+V), and a picture is added by dropping it on the field; a paste of text is left alone', async ({ page }, testInfo) => {
