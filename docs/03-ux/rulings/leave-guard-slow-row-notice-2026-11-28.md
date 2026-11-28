@@ -17,7 +17,7 @@ Confirmed, with **one required change (R1, Minor, one string)** and **two placem
 | Item | Text | Ruling |
 |---|---|---|
 | Notice | `This row is taking a while to open.` | **Confirmed as is.** Plain, no blame, present tense, one sentence, ends with a full stop (content rules, 6.0) |
-| Button | `Stay on this row` | **Confirmed as is.** Sentence case, a verb phrase that says what the person gets (this row stays). No rule in the spec asks otherwise |
+| Button | `Reload the page` (DL-492; was `Stay on this row`, see "Revision 2") | **Changed in Revision 2.** Sentence case, the spec's own words for this action. See below |
 | Polite line, 300 ms to 5 s | `Saving the row. You can type again in a moment.` | **R1 (required, Minor): `Opening the row. You can type again in a moment.`** |
 
 **Why R1.** The two messages describe one hold and must use one vocabulary. The notice says the row is *opening*, so the line before it cannot say *saving*. "Saving the row" is also not always true: the hold covers a row address being written and, in the Lead's review (SCR-06/07), a form that is read-only and saves nothing. Spec rule: a screen never says something it does not know (the "Nothing was changed" rule, 6.0 Error rows). "Opening the row" is true in every case that holds the fields. It is one constant, `INPUT_HELD_LINE`, and the only place the old words appear on the branch is `estimate-texts.ts:26` (no test spells them out). It does not hold the push; it can ride in the same head as the notice.
@@ -28,7 +28,7 @@ Confirmed, with **one required change (R1, Minor, one string)** and **two placem
 * **The button is the shared `Button`, `variant="secondary"`, default size**, under the sentence with `mt-s-2`, as the conflict notice does (`CONFLICT_KEEP_MINE`). `type="button"`.
 * **No new colour, class or token.** No spinner while it waits: the page is not working, it is waiting, and a spinner would say otherwise.
 * **After the press**, a second press does nothing (the full load is already starting). Use the Button's `loading` state **only on the path where the full load really starts**; if the leave dialog opens instead (DL-489 (3) (iii): the gate is not clean), the button stays as it was so the person can press it again after the dialog.
-* Test hooks, if wanted: `data-input-held-slow` on the notice and `data-input-held-stay` on the button, beside the existing `data-input-held-line`.
+* Test hooks, if wanted: `data-input-held-slow` on the notice and `data-input-held-reload` on the button, beside the existing `data-input-held-line`.
 
 ## (c) Where it sits and how it is announced
 
@@ -38,14 +38,14 @@ Confirmed, with **one required change (R1, Minor, one string)** and **two placem
 #row-inputs / the form's column
   <div data-input-held-region>           (no aria-busy; not inside the form)
      <p role="status" data-input-held-line class="sr-only">   (always in the DOM, from first paint)
-     <Notice tone="warn"> ... [Stay on this row] </Notice>   (only from 5 s)
+     <Notice tone="warn"> ... [Reload the page] </Notice>   (only from 5 s)
   </div>
   <form aria-busy ...>  head, progress, "Last saved", notices, section strip, 8 cards  </form>
 ```
 
 * **Why before.** The row's title is the first thing in the form, so the notice sits at the top of the same block as the fields it describes, in view when the row link has just scrolled to `#row-inputs`. After the form it would be below all eight cards, off screen on a phone, and a screen reader would reach it last. QLT-845-26's reason for leaving the form (a busy ancestor may hold back updates) is met by being a sibling, not by being the last one.
 * **Why the line is invisible.** The line stays visually hidden (`sr-only`). That is the spec's Loading pattern ("a visually hidden 'Loading …' in a polite live region", 6.0) and my ruling of 13645: the sighted person's signal from 300 ms is the shaded read-only fields. So there is **no visual position to get wrong for the line**; only its reading order matters, and "just before the form" is right: it is read, then the row title, then the fields.
-* **Announcement.** The polite `role="status"` `p` is the **only** live voice, and it is on the page from first paint, because a live region added with its text already in it is often not spoken. The notice itself carries **no live role** (the warn tone has none by default; do not set one). At 5 s the `p`'s text changes from the line to: **`This row is taking a while to open. Use Stay on this row to load it again.`** This is spoken once, politely; it also tells a screen-reader user a button exists, since focus does not go to it. Nothing is said on release (as before).
+* **Announcement.** The polite `role="status"` `p` is the **only** live voice, and it is on the page from first paint, because a live region added with its text already in it is often not spoken. The notice itself carries **no live role** (the warn tone has none by default; do not set one). At 5 s the `p`'s text changes from the line to: **`This row is taking a while to open. Press Reload the page to try again.`** This is spoken once, politely; it also tells a screen-reader user a button exists, since focus does not go to it. Nothing is said on release (as before).
 * **Focus never moves on its own.** Not to the notice, not to the button, not on appear or on release. The button is the first tab stop of the row's block (it comes before the form), so it is one Shift+Tab from the field the person is in, and it has the Button's visible focus ring (2.4.7, 2.4.11).
 * **Reading order check.** Browse mode reads: the hidden line, the notice and its button, then the form title and cards. The sentence is therefore read twice in browse mode at 5 s (once from the line, once from the notice). Accepted: it is a rare, short state, and removing either copy costs the announcement or the visible words.
 * **Shift.** The notice enters the flow once, at 5 s, and pushes the form down by its own height (about 56 px from 768 px, about 92 px at 360 px where the button wraps under the text; read from the classes, not measured). I rule this acceptable: it is a one-time change while every field is held, nothing is being typed, and the same block already grows when a lock or conflict notice arrives. On the Lead's page `#review-actions` sits below the two columns and moves by the same amount; it is not a gate and I do not ask for reserved space. When the row's data lands the notice goes and the row replaces it (the region empties with the hold).
@@ -64,7 +64,7 @@ They fit, if the notice **replaces** the line and never sits beside it:
 |---|---|---|---|
 | under 300 ms | read-only, **no visible change** | nothing | nothing |
 | 300 ms to 5 s | read-only, shaded as any read-only field | `Opening the row. You can type again in a moment.` (R1) | the shaded fields; no text |
-| 5 s on, held | still read-only; the shade stays | `This row is taking a while to open. Use Stay on this row to load it again.` (the line is replaced, not added) | the warn notice and the button |
+| 5 s on, held | still read-only; the shade stays | `This row is taking a while to open. Press Reload the page to try again.` (the line is replaced, not added) | the warn notice and the button |
 | released (data landed, or the button pressed and the page loaded) | editable at once | nothing | the notice goes with the hold |
 
 * The hidden line never says "you can type again in a moment" after 5 s, because after 5 s that sentence stops being a promise the screen can keep. The first line is a promise of seconds; the notice is the honest word that it is longer, with a way out.
@@ -87,7 +87,7 @@ They fit, if the notice **replaces** the line and never sits beside it:
 ## What lane 1 does (one head, no hold on the push)
 
 1. **R1:** `INPUT_HELD_LINE` becomes `Opening the row. You can type again in a moment.`
-2. Add `INPUT_HELD_SLOW = 'This row is taking a while to open.'`, `INPUT_HELD_STAY = 'Stay on this row'`, and the spoken text for the live `p` at 5 s (`This row is taking a while to open. Use Stay on this row to load it again.`).
+2. Add `INPUT_HELD_SLOW = 'This row is taking a while to open.'`, `INPUT_HELD_STAY = 'Reload the page'`, and the spoken text for the live `p` at 5 s (`This row is taking a while to open. Press Reload the page to try again.`).
 3. **R2:** the region is one wrapper placed directly before the `<form>` (a fragment or a wrapper with the form column's own classes; the form keeps `aria-busy`, the wrapper has none). The `p[data-input-held-line]` is in it from first paint.
 4. **R3:** the notice shows only while `held` is true and the 5 s mark has passed, and is built from `Notice tone="warn"` and `Button variant="secondary"` as in (b).
 5. Focus is never moved. The button never releases the hold first (DL-489 (3) (vi)).
@@ -104,10 +104,30 @@ At the pushed head, at 360, 768 and 1366 px: the line text is as in R1; the regi
 
 | Item | Result |
 |---|---|
-| R1 line text | Done. `INPUT_HELD_LINE` is `Opening the row. You can type again in a moment.`; the 5 s text (`INPUT_STUCK_LINE`) is `This row is taking a while to open. Use Stay on this row to load it again.`, as ruled. The `p[data-input-held-line]` is `role="status"`, `sr-only`, always in the DOM; `heldLine` is empty, the line, or the stuck line |
+| R1 line text | Done. `INPUT_HELD_LINE` is `Opening the row. You can type again in a moment.`; the 5 s text (`INPUT_STUCK_LINE`) is `This row is taking a while to open. Press Reload the page to try again.`, as ruled. The `p[data-input-held-line]` is `role="status"`, `sr-only`, always in the DOM; `heldLine` is empty, the line, or the stuck line |
 | R2 region before the form, no `aria-busy`, form keeps it | Done in the DOM (`part-fields.tsx:312-327`, `data-input-held-region`, then `{drawn}`) |
 | Notice `tone="warn"`, no live role; button secondary, default size, `mt-s-2` | Done (the `p` and the `Button` are the children) |
 | R3 lifetime and focus | Done: `tooLong` is `held && tooLong`, so the notice goes with the hold. No focus call anywhere in the path; `stayOnThisRow` calls `ask` and `location.replace` only |
 | `loading` on the reload path | Not built. It was "only if built" (I said a second press does nothing; a second `ask` finds the gate clean and calls `location.replace` again, which is harmless). Accepted, not required |
 | **R4 (new, Major, layout) the region is a flex item beside the form in the Engineer's workspace** | `estimate-workspace.tsx:68` `FORM_CARD_BODY = 'flex …'` is a **row**, and the form is `flex-1`. The new `div` is a sibling flex item, so when the notice appears it takes a column to the **left** of the form and squeezes it (empty, it is 0 wide, so nothing shows until 5 s). On the Lead's page the parent is a block, so it stacks as ruled. Fix: `PartForm` returns one wrapper `div` with `min-w-0 flex-1 flex flex-col` holding the region then the form (no `gap` on it, so the empty region adds no space); the Notice carries `mb-s-4` (the form's own 16 px gap). Read from the classes, not seen: the first CI screenshot or a measured box settles it |
 | **R5 (new, Minor, look)** the Button stretches the full width of the notice | `AlertDescription` is `flex flex-col`, so a bare Button is stretched. The conflict notice avoids it with `div.mt-s-2.flex.flex-wrap.gap-s-2`. Do the same (or `self-start`), so the button is its own width, 44 px high |
+
+## Revision 2 (DL-492, Jira AQP-506 comment 13677): the button now loads the row being opened
+
+Master's DL-492: the reload killed the slow read and Next's fallback landed on the row being opened, so "Stay on this row" promised the wrong row (lane 3's WebKit trace). The button now does a full load (`location.replace`) of **the row being opened**, the address of the write in flight. The words change; the look, the placement and R1 to R5 do not.
+
+| Item | Working text (DL-492) | Ruling |
+|---|---|---|
+| Notice | `This row is taking a while to open.` | **Confirmed.** It is still true and now promises nothing about which row |
+| Button | `Load the page again` | **Corrected to `Reload the page`.** The spec already uses "Reload the page" for this exact action on SCR-06 (the Recalculate error and the approve dialog: "Reload the page to see the latest figures"), so a person meets one phrase for one action. "Load the page again" is a second name for it, and its sense is the same. It does not promise a row, as DL-492 asks, and it is true after the change: the page is loaded again, at the row the person opened |
+| Live line at 5 s | `This row is taking a while to open. Use Load the page again to load it.` | **Corrected to `This row is taking a while to open. Press Reload the page to try again.`** The working line repeats "load" three times ("Use Load the page again to load it") and reads as a stutter in a screen reader. "Press <button name> to <do>" is the spec's own form ("Press Calculate", "Press Recalculate", 6.0 and SCR-06). It names the control exactly, so a person who tabs for it finds it by the name they heard. "Try again" is true: the row's read starts again |
+| Polite line, 300 ms to 5 s | `Opening the row. You can type again in a moment.` | **Unchanged** |
+
+**What else in this note the change touches, and what does not change**
+* **Look and placement (R2 to R5):** unchanged. Same `Notice tone="warn"`, same secondary default-size Button, same region before the form. The label is shorter ("Reload the page", 15 characters, against "Stay on this row", 16), so the button width and the 44 px height are as ruled.
+* **Test hook:** `data-input-held-stay` is now a misnomer. Rename it `data-input-held-reload` (and the constant `INPUT_HELD_STAY` to `INPUT_HELD_RELOAD`) if the tests are being touched anyway; not required, no user sees it.
+* **"Nothing typed is lost":** still true and still not said on screen.
+* **Where the person lands:** on the row they asked for. The notice, the button and the line all go when that page loads; focus follows the app's existing rule after a full load (the row title), which is not mine to change here.
+* **The leave dialog:** when something is unsaved in another part, the existing leave check asks first; the button's own words are not changed by that. The `loading` rule stands (only on the path where the load really starts).
+* **Words the Lead will not understand:** none added. No "write", "guard" or "navigation".
+* **One sentence for the spec** (next version, SCR-05 States, by reference SCR-06/07): "Row slow to open: after 5 s, a warn notice `This row is taking a while to open.` with `Reload the page`; the polite line becomes `This row is taking a while to open. Press Reload the page to try again.`"
