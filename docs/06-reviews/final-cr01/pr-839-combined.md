@@ -38,7 +38,7 @@
 | Unit tests at head (read-only, the lane's clean worktree `.claude/worktrees/aqp-505` at `ce2a8a05`, no file changed) | `vitest run tests/unit/part-form-revision.test.ts tests/unit/use-part-values.test.ts tests/unit/part-form-seeded-reads.test.ts tests/unit/estimate-autosave-part.test.ts` | **4 files, 88 tests pass** |
 | Red run | PR body: `00c47487` on master `46490f27`, 7 of 7 fail, with S1's A and B read back as `1.00` | Taken from the PR. I did not re-run the red head. The assertions would fail on master by reading (the effect copies `row.revision`) |
 | Merge with #836 / #811 | `git merge-tree --write-tree` of `ce2a8a05` with `484f55f2` and with `6601023c` | **Clean, no conflict.** Both results keep one guard (`(!editable \|\| parsed.revision === part.revision)`), `revisionRef = seeded === null ? part.revision : seeded.revision`, and no effect |
-| CI of record | run [46090427633](https://github.com/sankumar76/Accucut-Quotation/actions/runs/46090427633), head `ce2a8a05` | **Stages 1 to 11b: pass (8 m 31 s). Stage 12 E2E shards 1 to 4: still running when this report was written** (see the hand-off) |
+| CI of record | run [46090427633](https://github.com/sankumar76/Accucut-Quotation/actions/runs/46090427633), head `ce2a8a05` | **All green.** Stages 1 to 11b pass (8 m 31 s). Stage 12 E2E shards 1 to 4 pass (26 m 17 s, 19 m 55 s, 13 m 9 s, 18 m 40 s). The orchestrator reports Stage 11b at 193,081 B. The existing two-tab cases (`estimate-save.spec.ts` AC-5, AC-6) stay green with the effect removed |
 | Mutation (by reading) | Restore the effect: the S1, "row moved on" and seed cases fail. Adopt every picture answer: the "two or more ahead" case fails. Drop the load's `revisionRef` line: the load case fails (sends 1, then 2) | Each change in the fix is pinned by a test |
 | Servers | none started | — |
 
@@ -108,6 +108,7 @@
 - **solution-architect:** at the G8 records pass, rule 8's last clause ("a later read that changes the revision it would send … reads the part again") can say that after DEF-148 no read changes that revision, so the 409 is the arbiter. Section 5b's Lead row, shape (ii)'s "(and `revisionRef`)", no longer happens.
 
 ## Hand-off
-- Status: COMPLETE (review). CI E2E shards were still running when this was written; see the PR review for the final result
+- Status: COMPLETE (review of `ce2a8a05`; CI 46090427633 all green)
 - Verdict: REQUEST CHANGES; 0 Blocker, 0 Critical, 2 Major, 3 Minor, 3 Info
-- Next: developer (lane 3) to fix QLT-839-01 and QLT-839-02; reviewer-quality to re-review the delta
+- Open item that lane 3's coming commit closes: QLT-839-02 (b), the two-context E2E. **Get this expectation right:** the 409 notice appears only for a field that **both** sides changed. If A edits a field that B did not touch, A's first save gets a 409 and a silent re-read with **no** notice (AC-5). So the E2E must do one of two things. Either A edits one of B's fields, and the notice is expected. Or the E2E asserts no notice, with A's field stored and both of B's fields kept. Either way, it must check on the server that B's other field survives Save draft and a tab hide
+- Next: developer (lane 3) to fix QLT-839-01 and QLT-839-02 (a) and (b); reviewer-quality to re-review the delta as a short round 2
