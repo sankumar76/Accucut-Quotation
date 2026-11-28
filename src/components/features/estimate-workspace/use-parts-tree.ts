@@ -50,6 +50,16 @@ export interface DeleteTarget {
   readonly removedIds: ReadonlyArray<string>;
 }
 
+/**
+ * The person's own move of a row (QLT-839-04, QLT-841-01): the revision it was sent with and the one the move's own, direct answer gave that row. Never made from a tree read again after a lost answer. A new object
+ * for each move, so the form's effect runs once for it.
+ */
+export interface OwnMove {
+  readonly id: string;
+  readonly sent: number;
+  readonly revision: number;
+}
+
 const slNoOf = (nodes: ReadonlyArray<PartItem>, id: string | null): string => nodes.find((node) => node.id === id)?.slNo ?? '';
 
 /** The same rows in the same places, with the same numbers and revisions: nothing happened to the tree. */
@@ -123,6 +133,8 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
   const focusAfterAdd = useRef<string | null>(null);
   // The row that was moved, so that its move handle takes the focus once the tree is drawn in the new order (CR-01 item 3D, AC-8): a row that changes place in the page can lose the focus it had. A new object for every move, so the same row moved twice is two requests.
   const [movedFocus, setMovedFocus] = useState<{ readonly id: string } | null>(null);
+  // The person's own move of a row and the revision its answer gave that row (QLT-839-04): the open part's form takes it as one of its own saves, so its next save is not refused 409 for a revision this move made.
+  const [ownMove, setOwnMove] = useState<OwnMove | null>(null);
 
   useEffect(() => {
     if (seeded !== null && attempt === 0) return undefined;
@@ -164,10 +176,10 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
    * While a change is on its way the buttons that would start another are `aria-disabled` (`TreePanel`, `RowActions`), so a press is not offered; after `TREE_STATUS_DELAY_MS` the screen says what is going on
    * (`waiting`, and the same words in the live line). A call that still gets here during that time (a menu choice already made) is refused with that line on screen.
    */
-  async function change(send: (signal: AbortSignal) => Promise<Outcome<TreeAnswer>>, done: (answer: TreeAnswer) => void, landed: Landed): Promise<boolean> {
+  async function change(send: (signal: AbortSignal) => Promise<Outcome<TreeAnswer>>, done: (answer: TreeAnswer, direct: boolean) => void, landed: Landed): Promise<boolean> {
     if (inFlight.current) return false;
-    const onDone = (answer: TreeAnswer): void => {
-      done(answer);
+    const onDone = (answer: TreeAnswer, direct: boolean): void => {
+      done(answer, direct);
       options.onWrote?.();
     };
     inFlight.current = true;
@@ -193,10 +205,10 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
   }
 
   /** Shows what the server answered. */
-  function settle(outcome: Outcome<TreeAnswer>, onDone: (answer: TreeAnswer) => void): boolean {
+  function settle(outcome: Outcome<TreeAnswer>, onDone: (answer: TreeAnswer, direct: boolean) => void): boolean {
     if (outcome.status === 'ok') {
       setNodes(outcome.value.nodes);
-      onDone(outcome.value);
+      onDone(outcome.value, true);
       return true;
     }
     if (outcome.status === 'refused' && outcome.httpStatus === 409 && outcome.code === ESTIMATE_IGNORED_CODE && onServerIgnored !== undefined) {
@@ -221,7 +233,7 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
   }
 
   /** After a change that nothing answered: the tree as the server has it now, and what that says about the change (see `change`). */
-  async function settleAfterLimit(before: ReadonlyArray<PartItem>, onDone: (answer: TreeAnswer) => void, landed: Landed): Promise<boolean> {
+  async function settleAfterLimit(before: ReadonlyArray<PartItem>, onDone: (answer: TreeAnswer, direct: boolean) => void, landed: Landed): Promise<boolean> {
     const reread = await withinLimit((signal) => loadTree(estimateId, undefined, signal), openRequests.current);
     if (gone.current) return false;
     if (reread.value.status !== 'ok') {
@@ -232,7 +244,7 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
     setNodes(fresh);
     const answer = landed(fresh, before);
     if (answer !== null) {
-      onDone(answer);
+      onDone(answer, false);
       return true;
     }
     setProblem({ kind: sameTree(fresh, before) ? 'failed' : 'changed' });
@@ -279,8 +291,11 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
     const { revision, parentId, slNo } = row;
     void change(
       (signal) => movePart(estimateId, { nodeId: id, revision, parentId, index }, undefined, signal),
-      (answer) => {
+      (answer, direct) => {
         setMovedFocus({ id });
+        // Only the move's own answer proves that this move wrote: a tree read again after a lost answer shows a changed number, and not who changed it.
+        const moved = direct ? answer.nodes.find((node) => node.id === id) : undefined;
+        if (moved !== undefined) setOwnMove({ id, sent: revision, revision: moved.revision });
         setAnnouncement(renumberedMessage(slNoOf(answer.nodes, id)));
       },
       // A move always changes the part's number (it goes to another place among its siblings), so a part with the number it had was not moved.
@@ -340,11 +355,14 @@ export function usePartsTree(estimateId: string, onServerIgnored?: () => void, o
     nodes,
     loadFailed,
     selected,
+    /** The tree on screen is the page's seed, not a read of the server (the one predicate: the seed names this estimate and the reader accepts its tree). Only the review's island asks, to hand its form the seed only with a tree that came from it (ARC-811-01). */
+    fromSeed: seeded !== null,
     /** The row that was chosen, by its ID, even before the tree is read (the island's first paint draws the page's rows). */
     selectedId,
     busy,
     waiting,
     movedFocus,
+    ownMove,
     problem,
     announcement,
     announce: setAnnouncement,
