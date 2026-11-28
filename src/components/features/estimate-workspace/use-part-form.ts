@@ -30,6 +30,9 @@ export type PartProblem = OtherProblem | { readonly kind: 'conflict'; readonly f
 /** A save that finds the part changed reads it again and sends again what nobody else touched; a part that changes three times in a row is told to the person instead of looped on. */
 const MAX_REFRESHES = 2;
 
+/** A picture change that nobody else's write came between raises the part's revision by one (the server's rule, `image-service.ts`). */
+const ONE_WRITE = 1;
+
 /** The 409 codes of an estimate that is approved (`ESTIMATE_APPROVED_IS_LOCKED`, `state-machine.ts`) or no longer editable by this person (`ESTIMATE_NOT_EDITABLE`, `estimate-service.ts`): the server's words, read as codes. */
 const LOCKED_CODES: ReadonlyArray<string> = ['ESTIMATE_APPROVED_IS_LOCKED', 'ESTIMATE_NOT_EDITABLE'];
 
@@ -473,10 +476,10 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     return turn;
   }
 
-  /** A picture was added, replaced or removed: the part's revision moved by one, so the next save is sent with the new one, and the tree and Calculate's list are told with what the part holds. A revision further on than that is somebody else's change as well (DEF-148): the picture's save does not
+  /** A picture was added, replaced or removed: the part's revision moved by one, so the next save is sent with the new one, and the tree and Calculate's list are told with what the part holds. It is taken only when this request changed the picture (the same picture again is no write: the server answers the current revision) and is exactly one ahead; a revision further on is somebody else's change as well (DEF-148, QLT-839-01): the picture's save does not
    * show this form their values, so the revision of the values it holds stays, and the next save is answered 409 and read again. */
-  function pictureSaved(saved: { readonly revision: number; readonly completeness: Completeness }): void {
-    if (saved.revision <= revisionRef.current + 1) revisionRef.current = saved.revision;
+  function pictureSaved(saved: { readonly revision: number; readonly completeness: Completeness }, changed: boolean): void {
+    if (changed && saved.revision === revisionRef.current + ONE_WRITE) revisionRef.current = saved.revision;
     onWrote(systemClock.now().toISOString());
     reportSaved({ id: partId, revision: saved.revision, completeness: saved.completeness, inputs: heldRef.current });
   }

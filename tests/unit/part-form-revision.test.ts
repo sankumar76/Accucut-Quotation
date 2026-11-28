@@ -174,11 +174,11 @@ describe('DEF-148: the revision is the one of the values the form holds, from th
   });
 });
 
-describe('DEF-148: a picture change is one of the form\'s own saves only when it moved the revision by one', () => {
+describe('DEF-148: a picture change is one of the form\'s own saves only when it changed the picture and moved the revision by one', () => {
   it('a picture saved with the next revision (nobody else changed the part) is followed by a save with that revision', async () => {
     const { gate, hook } = await open();
     const form = hook.render();
-    form.pictureSaved({ revision: 2, completeness: 'PARTIAL' });
+    form.pictureSaved({ revision: 2, completeness: 'PARTIAL' }, true);
     partServer.changeElsewhere({});
     form.setText('c', '5');
     form.commit(C);
@@ -191,12 +191,48 @@ describe('DEF-148: a picture change is one of the form\'s own saves only when it
     const form = hook.render();
     partServer.changeElsewhere({ a: '9.00' });
     partServer.changeElsewhere({});
-    form.pictureSaved({ revision: partServer.revision, completeness: 'PARTIAL' });
+    form.pictureSaved({ revision: partServer.revision, completeness: 'PARTIAL' }, true);
     form.setText('c', '5');
     form.commit(C);
     await gate.settle();
     expect(partServer.sent[0]).toEqual({ revision: 1, values: { c: '5.00' } });
     expect(partServer.inputs).toEqual({ a: '9.00', b: '1.00', c: '5.00' });
     expect(hook.render().texts['a']).toBe('9.00');
+  });
+
+  it('QLT-839-01: the same picture sent again (no change; the server answers the current revision, one ahead after somebody else\'s change) is not adopted: the next save is answered 409, and Save draft sends nothing back over the other person\'s A and B', async () => {
+    const { gate, hook } = await open();
+    const form = hook.render();
+    partServer.changeElsewhere({ a: '9.00', b: '8.00' });
+    form.pictureSaved({ revision: partServer.revision, completeness: 'PARTIAL' }, false);
+    form.setText('c', '5');
+    form.commit(C);
+    await gate.settle();
+    expect(partServer.sent[0]).toEqual({ revision: 1, values: { c: '5.00' } });
+    gate.flush();
+    await gate.settle();
+    expect(partServer.inputs).toEqual({ a: '9.00', b: '8.00', c: '5.00' });
+  });
+});
+
+describe('DEF-148, DL-472 (4) (d): the person\'s own change to the open part (a move raises its revision, its values do not change) is followed by a save with no notice', () => {
+  it('QLT-839-02 (a): the save is refused 409 once, the part is read again, and the same value is sent with the new revision; no notice, the value is stored, and Save draft then sends nothing', async () => {
+    const { gate, hook, row } = await open();
+    const form = hook.render();
+    partServer.changeElsewhere({});
+    treeReadAgain(row);
+    hook.render();
+    form.setText('c', '5');
+    form.commit(C);
+    await gate.settle();
+    expect(partServer.sent).toEqual([
+      { revision: 1, values: { c: '5.00' } },
+      { revision: 2, values: { c: '5.00' } },
+    ]);
+    expect(hook.render().problem).toBeNull();
+    expect(partServer.inputs).toEqual({ a: '1.00', b: '1.00', c: '5.00' });
+    gate.flush();
+    await gate.settle();
+    expect(partServer.sent).toHaveLength(2);
   });
 });
