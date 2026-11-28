@@ -33,7 +33,7 @@ interface Target {
 
 export interface LeaveEnv {
   readonly win: Target & {
-    readonly location: { readonly href: string; readonly origin: string; readonly reload?: () => void };
+    readonly location: { readonly href: string; readonly origin: string; readonly replace?: (url: string) => void };
     readonly history: {
       readonly state: unknown;
       readonly pushState: (state: unknown, title: string) => void;
@@ -79,7 +79,7 @@ export interface LeaveGuardOptions {
   readonly onInputHeld?: (held: boolean) => void;
   /**
    * Told when a write of the router has been owed for `INPUT_HELD_MAX_MS` and the fields are still held, and again when the hold ends (DL-489). There is no time-out that lets a key into the row meanwhile: the page says
-   * the row is taking a while to open and offers "Stay on this row" (`stayOnThisRow` on the handle).
+   * the row is taking a while to open and offers "Reload the page" (`stayOnThisRow` on the handle).
    */
   readonly onHeldTooLong?: (tooLong: boolean) => void;
 }
@@ -96,7 +96,7 @@ export const STEP_GRACE_MS = 1_000;
 /**
  * How long a write of the router may be owed before the page says so (DL-489, QLT-845-25). **Nothing is released, armed or repaired by the time passing**: a key let in after any time would be typed into a row that the late
  * write then replaces. The hold ends only on an event (the write lands, the router writes another address, a traversal, the guard's next link, the page is left). A write that never comes (dropped, redirected to where the page
- * is, never asked for) says nothing to the guard, so the way out is the person's, "Stay on this row" (`stayOnThisRow`). 5 s is longer than a row's read on a slow phone.
+ * is, never asked for) says nothing to the guard, so the way out is the person's, "Reload the page" (`stayOnThisRow`). 5 s is longer than a row's read on a slow phone.
  */
 export const INPUT_HELD_MAX_MS = 5_000;
 
@@ -205,9 +205,9 @@ export interface LeaveGuardHandle {
   /** Takes the guard off the page. */
   readonly remove: () => void;
   /**
-   * "Stay on this row" (DL-489): a real load of the address that is current (`location.reload()`: no entry is added, and the load happens whether or not the address has a `#`), which cancels the slow read in every
-   * engine. `location.replace` of the same address is not a load when the address ends in `#row-inputs` (it is a fragment navigation: a `popstate` with no state, the document stays, and Next ignores it, QLT-845-29). It goes
-   * through the leave check like any other way out: with nothing unsaved the one load is let through, otherwise the person is asked. The hold on the fields is not released first; the page that loads is the answer.
+   * "Reload the page" (DL-492): a full load of the row that is being opened, the address of the write in flight with its `#` (`location.replace`, never `reload` or `assign`). Any unload cancels the held read, and Next
+   * then falls back to a hard navigation to that same address, so whichever navigation wins the person ends on that row after one load; no framework behaviour is relied on. That address differs from the current one in path
+   * or query, so it is always a real load (`replace` of the current address with a `#` is a fragment navigation, QLT-845-29). It goes through the leave check like any other way out; the hold on the fields is not released first.
    */
   readonly stayOnThisRow: () => void;
   /** Lets one full page load through, for a person who has just chosen to sign out: the browser's own prompt would be a second question. It lapses after `FULL_LOAD_GRACE_MS`, so a sign-out that fails leaves the page guarded again. */
@@ -246,12 +246,14 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
   // form's fields for as long as they are set, so nothing can be typed into a row that is about to be replaced.
   let inFlight: string | null = null;
   let queued: string | null = null;
+  // The address, as the link carried it (with its `#`), of the write in flight: what "Reload the page" loads (DL-492).
+  let inFlightHref: string | null = null;
   let inFlightMarker: object | null = null;
   // A link to a place on the page, pressed while a write is owed: the guard makes no history write then, and does it when the write has settled.
   let fragmentWaiting: string | null = null;
   let letFullLoadThrough = false;
   let held = false;
-  // A write has been owed for `INPUT_HELD_MAX_MS` and the fields are still held: the page says so and offers "Stay on this row".
+  // A write has been owed for `INPUT_HELD_MAX_MS` and the fields are still held: the page says so and offers "Reload the page".
   let tooLong = false;
 
   /** The form's fields do not accept input from a row link being taken until its write has committed, and while a repair step is in flight (DL-488 (iv)). */
@@ -280,6 +282,7 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
     traversedDuringHold = false;
     inFlightMarker = null;
     inFlight = null;
+    inFlightHref = null;
     if (queued !== null && step === null) {
       const next = queued;
       queued = null;
@@ -341,6 +344,7 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
     const marker = {};
     inFlightMarker = marker;
     inFlight = pathSearchOf(target);
+    inFlightHref = target;
     owedTooLong(marker);
     syncHeld();
     navigate(target, true);
@@ -444,17 +448,21 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
     const marker = {};
     inFlightMarker = marker;
     inFlight = pathSearchOf(href);
+    inFlightHref = href;
     owedTooLong(marker);
     syncHeld();
     // A write for the address the entry already has holds nothing (DL-489 (3) (i)).
     settleInFlight();
   };
 
-  /** "Stay on this row": see `LeaveGuardHandle.stayOnThisRow`. */
+  /** "Reload the page": see `LeaveGuardHandle.stayOnThisRow`. */
   const stayOnThisRow = (): void => {
+    // The row that is being opened (DL-492): the address of the write in flight, which is also where Next's own fallback goes when the load cancels the slow read, so both end on the same row after one load. It always
+    // differs from the current address in path or query (a write to the current address holds nothing), so it is a load and never a fragment navigation. A link queued behind it is not the one loaded.
+    const target = new URL(inFlightHref ?? win.location.href, win.location.href).href;
     ask({
-      // The page is loaded again (no entry is added). The load is the answer to the slow read: nothing typed can be lost, because nothing could be typed while the fields were held.
-      proceed: () => win.location.reload?.(),
+      // A full load of that row (no new entry). Nothing typed can be lost, because nothing could be typed while the fields were held.
+      proceed: () => win.location.replace?.(target),
       cancel: () => undefined,
       fullLoad: true,
     });

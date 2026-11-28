@@ -109,7 +109,7 @@ function browser(variant: Variant) {
   // What the page does when the row on screen changes: the form of the row that was there unmounts and its unsaved marks go (`part-form.tsx` key, `save-gate.ts`).
   const hooks = { unmounted: () => undefined as void };
 
-  // The addresses the page was loaded again at (`location.reload`, "Stay on this row"): the model draws nothing of it, the page that loads is a new one.
+  // The addresses the page was loaded at (`location.replace` of the row being opened, "Reload the page", or Next's fallback): the model draws nothing of it, the page that loads is a new one.
   const reloads: string[] = [];
   // Every call of the document's location, by name: the guard's button is a `reload()` and nothing else (DL-490 (4) (c)).
   const locationCalls: string[] = [];
@@ -311,10 +311,12 @@ function browser(variant: Variant) {
     entries,
     reloads,
     /**
-     * What `location.replace` of the address that is current does when the address ends in a `#` (the old "Stay on this row", QLT-845-29): a fragment navigation, not a load. The entry is replaced by one with no
+     * What `location.replace` of the address that is current does when the address ends in a `#` (the old "Reload the page", QLT-845-29): a fragment navigation, not a load. The entry is replaced by one with no
      * state, and a `popstate` fires for it, with no state; Next ignores it (nothing is drawn). The document stays.
      */
     fragmentReplace: () => fragmentNavigation(),
+    /** Next's own fallback when an unload cancels its held read: a hard navigation to the address it was asked for (QLT-845-23, DL-492). It is a load like the button's. */
+    nextFallback: (href: string): void => void reloads.push(new URL(href, entries[index]).href),
     /** A script's own `location.replace(location.href)`. */
     scriptReplace: () => location.replace(entries[index] ?? PAGE),
     /** A `popstate` at the same address with Next's own state: the document is where it was. */
@@ -407,7 +409,7 @@ function setUp(variant: Variant = DEFAULT) {
     navigate: (href, replace) => (replace ? model.router.replace(href) : model.router.push(href)),
     rowDirty: () => model.form.typed,
     onInputHeld: (held) => void (state.inert = held),
-    // DL-489: no fail-open end of the hold; after the time the form says the row is taking long and offers "Stay on this row".
+    // DL-489: no fail-open end of the hold; after the time the form says the row is taking long and offers "Reload the page".
     onHeldTooLong: (tooLong) => void (state.stuck = tooLong),
   });
   model.install(handle);
@@ -431,10 +433,10 @@ function setUp(variant: Variant = DEFAULT) {
       return true;
     },
     inert: () => state.inert,
-    /** The form says the row is taking a while to open and offers "Stay on this row". */
+    /** The form says the row is taking a while to open and offers "Reload the page". */
     stuck: () => state.stuck,
     /**
-     * The person presses "Stay on this row": the guard asks through the leave check, and with nothing unsaved the request goes through (the page's own `ask` lets it). Answers the addresses the page was loaded
+     * The person presses "Reload the page": the guard asks through the leave check, and with nothing unsaved the request goes through (the page's own `ask` lets it). Answers the addresses the page was loaded
      * again at, the full load that is the answer to the slow read.
      */
     pressStay: (): string[] => {
@@ -442,8 +444,8 @@ function setUp(variant: Variant = DEFAULT) {
       const callsBefore = model.locationCalls().length;
       handle.stayOnThisRow();
       asked[before]?.proceed();
-      // The button is `location.reload()` and nothing else: not `replace` (a fragment navigation on a `#row-inputs` address), not `assign` (it adds an entry).
-      expect(model.locationCalls().slice(callsBefore), 'the button calls location.reload() and nothing else').toEqual(['reload']);
+      // The button is `location.replace` of the row being opened and nothing else (DL-492): not `reload` (the old, which Next's fallback overrides), not `assign` (it adds an entry).
+      expect(model.locationCalls().slice(callsBefore), 'the button calls location.replace and nothing else').toEqual(['replace']);
       return model.reloads;
     },
     refused: () => state.refused,
@@ -626,7 +628,7 @@ function check(s: Setup, label: string): void {
   if (idle) expect(pathSearch(s.entries[s.pageIndex] ?? ''), `${label}: the page's own entry carries the row on screen`).toBe(s.screen.path);
   // At idle, something typed means the guard is armed: its entry is on top of the page's own and the person is on it (the class of QLT-845-19).
   // The hold on the fields ends when the writes have landed, not by its fail-open end: the fail-open end is for a write that never comes (QLT-845-24: a link the guard did not take left the hold for 5 s).
-  // The notice with "Stay on this row" is shown only while the fields are held.
+  // The notice with "Reload the page" is shown only while the fields are held.
   if (s.stuck()) expect(s.inert(), `${label}: the notice shows only while the fields are held`).toBe(true);
   if (idle && !s.lostWrites()) expect(s.inert(), `${label}: the hold ended with the writes`).toBe(false);
   if (s.form.typed && idle) expect(s.index(), `${label}: something is typed, so the guard is armed`).toBeGreaterThanOrEqual(2);
@@ -634,7 +636,7 @@ function check(s: Setup, label: string): void {
 
 /**
  * A key the person presses in the row on screen: refused while the form is busy (nothing is accepted and then dropped), and accepted once the router's write has landed. If the form is still busy when everything has
- * landed, the write never came: there is no fail-open end of the hold (QLT-845-25), the form says the row is taking a while to open, and the person presses "Stay on this row".
+ * landed, the write never came: there is no fail-open end of the hold (QLT-845-25), the form says the row is taking a while to open, and the person presses "Reload the page".
  */
 function typeWhenAllowed(s: Setup, label: string): boolean {
   if (s.type()) return true;
@@ -642,15 +644,19 @@ function typeWhenAllowed(s: Setup, label: string): boolean {
   s.settle();
   if (s.type()) return true;
   // Nothing is on its way and the fields are still held: a write that never came. No timer ends the hold, arms or repairs (DL-489). After the time the form says so, nothing is accepted meanwhile, and nothing was armed
-  // by the time passing; "Stay on this row" is a full load of the current address, and the hold is not released first. That load replaces the page, so the case ends there.
+  // by the time passing; "Reload the page" is a full load of the current address, and the hold is not released first. That load replaces the page, so the case ends there.
   const indexBefore = s.index();
   s.runTimers();
   expect(s.stuck(), `${label}: the form says the row is taking a while to open`).toBe(true);
   expect(s.type(), `${label}: still no key is accepted`).toBe(false);
   expect(s.index(), `${label}: the time passing armed nothing and moved nothing`).toBe(indexBefore);
   expect(s.form.typed, `${label}: nothing was typed, so a load loses nothing`).toBe(false);
+  const before = s.at();
   const loads = s.pressStay();
-  expect(loads.at(-1), `${label}: "Stay on this row" loads the address that is current`).toBe(s.at());
+  // A real load of another row of this page: the address of the write in flight, which differs from the current one in path or query.
+  const loaded = loads.at(-1) ?? '';
+  expect(new URL(loaded).pathname, `${label}: the button loads a row of this page`).toBe(new URL(before ?? PAGE).pathname);
+  expect(pathSearch(loaded), `${label}: the button loads the row being opened, not the current one`).not.toBe(pathSearch(before ?? PAGE));
   expect(s.inert(), `${label}: the hold is not released before the page loads`).toBe(true);
   return false;
 }
@@ -785,7 +791,7 @@ function walk(variant: Variant, list: ReadonlyArray<readonly [string, (s: Setup)
       // The order, the timing and the sequence are in the name of a failure, so it can be found again.
       const label = (): string => `[${variant.order}/${variant.timing} ${sequence.join(',')} @${String(typedAfter)}] ${names.join(', then ')}, typing after step ${String(typedAfter)}`;
       // A keystroke, saved at once (the field was left): the guard's entry stays on top, and what is written next meets it. If the form is busy the key is refused and tried again when the write has landed.
-      // The page was loaded again by "Stay on this row": the case ends there, with nothing lost (checked where the button is pressed).
+      // The page was loaded again by "Reload the page": the case ends there, with nothing lost (checked where the button is pressed).
       let loaded = false;
       const keystroke = (): void => {
         if (!typeWhenAllowed(s, label())) {
@@ -950,7 +956,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     backOracle(s, 'c2 in Firefox');
   });
 
-  it('c2 as Firefox ran it, the first write overtaken and never landing: the router ends where it started and says nothing; the fields stay held for as long as it takes, the form says the row is taking a while after 5 s, and "Stay on this row" loads the page again (DL-489)', () => {
+  it('c2 as Firefox ran it, the first write overtaken and never landing: the router ends where it started and says nothing; the fields stay held for as long as it takes, the form says the row is taking a while after 5 s, and "Reload the page" loads the page again (DL-489)', () => {
     const s = armedAndSaved({ order: 'next-first', timing: 'after-keystroke' });
     rowLink(s);
     rowLink(s, links.page);
@@ -962,7 +968,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     s.runTimers();
     expect(s.stuck()).toBe(true);
     expect(s.type()).toBe(false);
-    expect(s.pressStay()).toEqual([s.at()]);
+    expect(pathSearch(s.pressStay().at(-1) ?? '')).toBe(pathSearch(new URL(links.row, PAGE).href));
     // The hold is not released first: the page that loads is the answer.
     expect(s.inert()).toBe(true);
     expect(s.form.typed).toBe(false);
@@ -982,7 +988,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     backOracle(s, 'u2');
   });
 
-  it('u2 with the router discarding the first navigation (QLT-845-19 as the reviewer\'s probe had it): the router ends where it started and says nothing; no timer releases the fields or arms the guard, and "Stay on this row" loads the page again', () => {
+  it('u2 with the router discarding the first navigation (QLT-845-19 as the reviewer\'s probe had it): the router ends where it started and says nothing; no timer releases the fields or arms the guard, and "Reload the page" loads the page again', () => {
     const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
     rowLink(s);
     rowLink(s, links.page);
@@ -994,7 +1000,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     expect(s.type()).toBe(false);
     // Nothing was armed by the time passing.
     expect(s.index()).toBe(1);
-    expect(s.pressStay()).toEqual([s.at()]);
+    expect(pathSearch(s.pressStay().at(-1) ?? '')).toBe(pathSearch(new URL(links.row, PAGE).href));
     expect(s.inert()).toBe(true);
   });
 
@@ -1030,7 +1036,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     backOracle(s, 'late write with a save in flight');
   });
 
-  it('an owed write never blocks arming, and a write that never comes holds the fields until the person presses "Stay on this row", which loads the page again (a link that goes nowhere)', () => {
+  it('an owed write never blocks arming, and a write that never comes holds the fields until the person presses "Reload the page", which loads the page again (a link that goes nowhere)', () => {
     const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
     s.markLost();
     s.click(links.row, (event) => event.preventDefault());
@@ -1043,7 +1049,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     expect(s.inert()).toBe(true);
     expect(s.type()).toBe(false);
     expect(s.index()).toBe(1);
-    expect(s.pressStay()).toEqual([s.at()]);
+    expect(pathSearch(s.pressStay().at(-1) ?? '')).toBe(pathSearch(new URL(links.row, PAGE).href));
     expect(s.inert()).toBe(true);
   });
 
@@ -1070,13 +1076,13 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     }
   });
 
-  it('QLT-845-25: "Stay on this row" is a full load of the address that is current, through the leave check: it never releases the hold first, adds no entry, and with something typed it is asked about like any other way out', () => {
+  it('QLT-845-25: "Reload the page" is a full load of the address that is current, through the leave check: it never releases the hold first, adds no entry, and with something typed it is asked about like any other way out', () => {
     const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
     s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
     s.runTimers();
     expect(s.stuck()).toBe(true);
     const entriesBefore = s.entries.length;
-    expect(s.pressStay()).toEqual([s.at()]);
+    expect(pathSearch(s.pressStay().at(-1) ?? '')).toBe(pathSearch(new URL(links.row, PAGE).href));
     expect(s.inert()).toBe(true);
     expect(s.entries).toHaveLength(entriesBefore);
     expect(s.asked.at(-1)?.fullLoad).toBe(true);
@@ -1103,6 +1109,34 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     expect(s.type()).toBe(true);
     expect(s.form.lost).toBe(false);
     backOracle(s, 'a fragment-only replace while a write is owed');
+  });
+
+  it('DL-492: the button loads the row being opened (the in-flight link\'s address with its #), with a link queued behind it still that one, and never reload or assign', () => {
+    const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
+    s.history.replaceState(s.history.state, '', '#row-inputs');
+    s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
+    // A second link is queued behind the one in flight (the guard takes it).
+    s.click(links.other, (event) => (event.preventDefault(), s.router.replace(links.other)));
+    s.runTimers();
+    expect(s.stuck()).toBe(true);
+    const loads = s.pressStay();
+    expect(loads).toEqual([new URL(links.row, s.at()).href]);
+    expect(s.locationCalls().filter((call) => call !== 'replace')).toEqual([]);
+  });
+
+  it('DL-492: the button and Next\'s fallback race both ways round and end on the same row, with no new entry', () => {
+    for (const first of ['next', 'button'] as const) {
+      const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
+      s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
+      s.runTimers();
+      const entriesBefore = s.entries.length;
+      const row = new URL(links.row, s.at()).href;
+      if (first === 'next') s.nextFallback(links.row);
+      s.pressStay();
+      if (first === 'button') s.nextFallback(links.row);
+      expect(s.reloads, `${first} first: every load is the row being opened`).toEqual([row, row]);
+      expect(s.entries, `${first} first: no entry was added`).toHaveLength(entriesBefore);
+    }
   });
 
   it('a Forward before the router\'s write lands: the row on screen is the one the traversal landed on, the guard arms there, and Back asks', () => {

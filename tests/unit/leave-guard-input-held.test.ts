@@ -337,3 +337,56 @@ describe('QLT-845-32 (DL-491 addendum (7)): the leave flag lasts for one leave o
     });
   });
 });
+
+describe('QA\'s question on estimate-cleared:82 and :153: with no leave under way nothing here holds, delays or swallows the redraw after Recalculate', () => {
+  it('the review\'s refresh runs at once (after its quiet time) when no leave is under way, however often it is asked, and each ask after a run runs again', () => {
+    vi.useFakeTimers();
+    try {
+      const gate = createSaveGate();
+      let count = 0;
+      const page = createReviewRefresh(gate, () => void (count += 1), 300);
+      page.refresh();
+      vi.advanceTimersByTime(299);
+      expect(count).toBe(0);
+      vi.advanceTimersByTime(1);
+      expect(count).toBe(1);
+      page.refresh();
+      page.refresh();
+      vi.advanceTimersByTime(300);
+      expect(count).toBe(2);
+      page.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('what the Recalculate press waits on, \`settle()\`, does not read the leave flag, the away flag, the hold or the refresh state', async () => {
+    const gate = createSaveGate();
+    gate.setLeaving(true, true);
+    gate.setInputHeld(true);
+    gate.setHoldTooLong(true);
+    gate.setRefreshing(true);
+    await expect(gate.settle()).resolves.toBe(true);
+    gate.mark(PART, 'field-j', true);
+    await expect(gate.settle()).resolves.toBe(false);
+  });
+
+  it('the scheduler calls only its own \`run\`: it holds no other component\'s router.refresh(), so a refresh asked for elsewhere (the button\'s own) is never queued behind it', () => {
+    vi.useFakeTimers();
+    try {
+      const gate = createSaveGate();
+      const mine: string[] = [];
+      const page = createReviewRefresh(gate, () => void mine.push('review'), 300);
+      const others: string[] = [];
+      // The Recalculate button asks the router itself, at any time, whatever this scheduler is doing.
+      gate.setLeaving(true);
+      others.push('button');
+      page.refresh();
+      expect(others).toEqual(['button']);
+      expect(mine).toEqual([]);
+      page.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

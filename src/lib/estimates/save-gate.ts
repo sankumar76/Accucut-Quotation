@@ -29,10 +29,10 @@ export interface SaveGate {
   /** The leave guard says the form's fields must not accept input (a row write or a repair step is in flight, DL-488 (iv)), or that they may again. The part form takes it as its read-only state. */
   readonly setInputHeld: (held: boolean) => void;
   readonly isInputHeld: () => boolean;
-  /** The hold has lasted `INPUT_HELD_MAX_MS` with a write still owed: the page shows the notice with "Stay on this row", and the polite line gives way to it (DL-489). */
+  /** The hold has lasted `INPUT_HELD_MAX_MS` with a write still owed: the page shows the notice with "Reload the page", and the polite line gives way to it (DL-489). */
   readonly setHoldTooLong: (tooLong: boolean) => void;
   readonly isHoldTooLong: () => boolean;
-  /** The leave guard offers what "Stay on this row" does (a full load of the current address through the leave check, DL-489); the form's notice presses it. Answers the way to withdraw it. */
+  /** The leave guard offers what "Reload the page" does (a full load of the current address through the leave check, DL-489); the form's notice presses it. Answers the way to withdraw it. */
   readonly offerStay: (stay: () => void) => () => void;
   readonly stayOnThisRow: () => void;
   /**

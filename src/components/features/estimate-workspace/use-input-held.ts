@@ -10,7 +10,7 @@ export interface InputHeld {
   readonly held: boolean;
   /** The hold has lasted `INPUT_HELD_SHOWN_AFTER_MS` or more: the shaded read-only look and the polite line come now, not before. */
   readonly shown: boolean;
-  /** A write has been owed for `INPUT_HELD_MAX_MS` and the fields are still held (DL-489): the notice with "Stay on this row" is drawn, and the polite line gives way to it. */
+  /** A write has been owed for `INPUT_HELD_MAX_MS` and the fields are still held (DL-489): the notice with "Reload the page" is drawn, and the polite line gives way to it. */
   readonly tooLong: boolean;
 }
 

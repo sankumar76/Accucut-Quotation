@@ -310,6 +310,17 @@ describe('DEF-149, QLT-845-08 (DL-487): a link to another row of the same page, 
     expect(gate.isLeaving()).toBe(false);
   });
 
+  it('with no leave under way a click, a commit of this page and a landing on it leave the flags clear: they never set a leave, so the Recalculate redraw has nothing to wait for', () => {
+    const { gate, location, win, click, handle } = setUp();
+    expect(gate.isLeaving()).toBe(false);
+    click(anchor('/audit'));
+    handle.committed();
+    location.forced = null;
+    win.dispatchEvent(new Event('popstate'));
+    expect(gate.isLeaving()).toBe(false);
+    expect(gate.isLeaveAway()).toBe(false);
+  });
+
   it('QLT-845-32: a request made by a link says whether it keeps the person on this page: a link to another row does, a link to another page does not', () => {
     const { click, typeSomething, asked } = setUp();
     typeSomething();

@@ -350,18 +350,27 @@ async function expectTheNotice(page: Page, formWidth: number): Promise<void> {
   const formBox = await page.locator('form[data-part-form]').boundingBox();
   expect(Math.abs((formBox?.width ?? 0) - formWidth), 'the form keeps its width when the notice comes').toBeLessThanOrEqual(1);
   const noticeBox = await page.locator('[data-input-held-region] > div').boundingBox();
-  const buttonBox = await page.locator('[data-input-held-stay]').boundingBox();
+  const buttonBox = await page.locator('[data-input-held-reload]').boundingBox();
   expect(buttonBox?.width ?? Infinity, 'the button is not as wide as the notice').toBeLessThan((noticeBox?.width ?? 0) - 40);
   await expect(page.locator('[data-input-held-slow]')).toHaveText(INPUT_STUCK_SENTENCE);
   await expect(page.locator('[data-input-held-region] + form[data-part-form]')).toHaveCount(1);
   await expect(page.locator('p[data-input-held-line]')).toHaveText(INPUT_STUCK_LINE);
-  await expect(page.locator('[data-input-held-stay]')).toBeVisible();
-  await expect(page.locator('[data-input-held-stay]')).toHaveText(INPUT_STUCK_BUTTON);
+  await expect(page.locator('[data-input-held-reload]')).toBeVisible();
+  await expect(page.locator('[data-input-held-reload]')).toHaveText(INPUT_STUCK_BUTTON);
   // The notice carries no live role of its own: the one polite line is the only live voice.
   await expect(page.locator('[data-input-held-region] [role="alert"]')).toHaveCount(0);
   await expect(page.locator('form[data-part-form]')).toHaveAttribute('aria-busy', 'true');
   await expect(description(page)).toHaveAttribute('readonly', '');
 }
+
+/** The console lines of Next's hard-navigation fallback seen on this page (QLT-845-23). */
+const fallbacksOf = (page: Page): string[] => {
+  const lines: string[] = [];
+  page.on('console', (message) => {
+    if (message.text().includes('Falling back to browser navigation')) lines.push(message.text());
+  });
+  return lines;
+};
 
 /** A key every 500 ms through a hold of about `ms`: no character is accepted into the box (it is read-only), and the focus stays where it is. */
 async function keysThroughTheHold(page: Page, ms: number): Promise<void> {
@@ -455,8 +464,9 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
     await u5aCase(page, testInfo, false, true);
   });
 
-  // DL-490 (QLT-845-29). After a tree row link the address ends in `#row-inputs`, and `location.replace` of that address with itself is a fragment navigation, not a load: the document stays, Next ignores the
-  // `popstate` (no state), and the slow read goes on. "Stay on this row" is `location.reload()`, which is a load whatever the address.
+  // DL-492 (after DL-490, QLT-845-29): any unload cancels the held read, and Next then falls back to a hard navigation to the address it was asked for. The button therefore loads that same address, the row being
+  // opened (`location.replace` of the in-flight link's href), so whichever navigation wins the final document is that row after one load. The navigation type is not asserted: either racer may produce the document.
+  // A "Falling back to browser navigation" line is expected in u5b and u5b-plain after the press, recorded and not asserted; everywhere else the rule of zero stands (u6a to u6d).
 
   /** A page the Lead reached by a tree row link: opened on row 1, then row 1.1's link pressed, so the address ends `?row=1.1#row-inputs`. */
   async function reachedByRowLink(page: Page, code: string): Promise<void> {
@@ -467,58 +477,56 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
     await expect(description(page)).toBeEditable();
   }
 
-  /** The press of "Stay on this row" is a real load: the marker of the old document is gone, the navigation type is `reload`, the address and the history length are as they were, and the held read ended as failed. */
-  async function expectRealLoad(page: Page, held: { readonly failed: Promise<void> }, address: RegExp, lengthBefore: number): Promise<void> {
+  /** The button is a full load of the row that was being opened: the marker of the old document is gone, the address is row 1 (the hash may be kept or not), the title is row 1's, the history is no longer, and the held read ended as failed. */
+  async function expectLoadedTheRowBeingOpened(page: Page, held: { readonly failed: Promise<void> }, lengthBefore: number, testInfo: TestInfo, fallbacks: string[]): Promise<void> {
     await page.evaluate(() => Reflect.set(window, '__sameDocument', true));
-    await page.locator('[data-input-held-stay]').click();
+    await page.locator('[data-input-held-reload]').click();
     await page.waitForFunction(() => Reflect.get(window, '__sameDocument') !== true);
+    await expect(page).toHaveURL(/row=1(#row-inputs)?$/);
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
     await expect(page.locator('form[data-part-form]')).toBeVisible();
-    expect(await page.evaluate(() => (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming).type), 'a load of the current entry').toBe('reload');
-    await expect(page).toHaveURL(address);
     expect(await historyLength(page), 'the load added no entry').toBe(lengthBefore);
-    // The slow read of the other row ended with the document (no fixed wait: the event).
+    await expect(description(page)).toBeEditable({ timeout: 2500 });
     await held.failed;
+    // Recorded, not asserted (DL-492): Next's fallback runs in WebKit and Firefox when the load cancels the held read.
+    testInfo.annotations.push({ type: 'fallback-lines', description: String(fallbacks.length) });
   }
 
-  test('u5b: from a row link (the address ends #row-inputs): the hold, then "Stay on this row" is one real load of row 1.1 (marker gone, navigation type reload, address and history length unchanged, the held read aborted); typing then is guarded, and Back asks with the text kept', async ({ page }, testInfo) => {
+  test('u5b: from a row link (?row=1.1#row-inputs): the hold of row 1\'s read, then "Reload the page" is one full load of the row being opened (the marker is gone, ?row=1, title 1, history unchanged, editable within 2.5 s)', async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, false);
     await reachedByRowLink(page, code);
+    const fallbacks = fallbacksOf(page);
     const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
     const held = await holdRowRead(page, '1');
     await chooseRow(page, '1');
     await held.reached;
     // The notice comes 5 s after the press; u5a holds a key stream through the hold, so this case only waits for it.
     await expectTheNotice(page, formWidth);
-    await expectRealLoad(page, held, /row=1\.1#row-inputs$/, await historyLength(page));
+    await expectLoadedTheRowBeingOpened(page, held, await historyLength(page), testInfo, fallbacks);
     held.release();
-    await expect(page.locator('#part-form-title')).toContainText('1.1');
-    await expect(page.locator('#part-form-title')).not.toHaveText(/^1 ·/);
-    await expect(description(page)).toBeEditable();
-    await expect(page.locator('[data-input-held-slow]')).toHaveCount(0);
   });
 
-  // What u5b used to do after the load, on its own (QLT-845-31: the hold alone is 5 s, so the typing is not run behind it): a page loaded at an address ending `#row-inputs`, as the button leaves it, guards what is typed.
-  test('u5b, after the load: a page loaded at ?row=1.1#row-inputs guards typing: Back asks, Keep editing keeps row 1.1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, false);
-    await page.goto('/queue');
-    await page.goto(`/estimates/${code}?row=1.1#row-inputs`, { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('#part-form-title')).toContainText('1.1');
-    await expect(description(page)).toBeEditable();
-    await typedBackKeepAndLeave(page, '1.1');
-  });
-
-  test('u5b-plain: from a page opened by its address (no #): the same hold and the same real load', async ({ page }, testInfo) => {
+  test('u5b-plain: from a page opened by its address (?row=1.1, no #): the same hold and the same load of the row being opened', async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, false);
     await openedClean(page, code);
+    const fallbacks = fallbacksOf(page);
     const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
     const held = await holdRowRead(page, '1');
     await chooseRow(page, '1');
     await held.reached;
     await expectTheNotice(page, formWidth);
-    await expectRealLoad(page, held, /row=1\.1$/, await historyLength(page));
+    await expectLoadedTheRowBeingOpened(page, held, await historyLength(page), testInfo, fallbacks);
     held.release();
-    await expect(page.locator('#part-form-title')).toContainText('1.1');
+  });
+
+  // What u5b does after the load, on its own (QLT-845-31: the hold alone is 5 s, so the typing is not run behind it): a page loaded at an address ending `#row-inputs`, as the button leaves it, guards what is typed.
+  test('u5b, after the load: a page loaded at ?row=1#row-inputs guards typing: Back asks, Keep editing keeps row 1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await page.goto('/queue');
+    await page.goto(`/estimates/${code}?row=1#row-inputs`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
     await expect(description(page)).toBeEditable();
+    await typedBackKeepAndLeave(page, '1');
   });
 
   test('u5c (the route the reviewer found, probe 6): from a row link, with row 1\'s read held, a script\'s location.replace(location.href) is a fragment navigation: the fields stay read-only, no key of a stream (one per frame, over a second) is accepted, the guard pushes no entry; after the release row 1 is editable within 2.5 s, typing is guarded, and Back asks with the text kept', async ({ page }, testInfo) => {
@@ -595,14 +603,6 @@ test.describe('DL-491 u6a, u6b, u6c (QLT-845-23): the review\'s refresh of the p
     );
     return { release, reached, wasAsked: () => asked };
   }
-
-  const fallbacksOf = (page: Page): string[] => {
-    const lines: string[] = [];
-    page.on('console', (message) => {
-      if (message.text().includes('Falling back to browser navigation')) lines.push(message.text());
-    });
-    return lines;
-  };
 
   /** The landing is exact, the document is the same one (a soft navigation: the marker set on it is still there), and the router did not fall back to a hard navigation. */
   async function expectLeftSoftly(page: Page, fallbacks: string[]): Promise<void> {

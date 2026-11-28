@@ -322,7 +322,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
               <p data-input-held-slow="">{INPUT_STUCK_SENTENCE}</p>
               {/* Wrapped as the conflict notice wraps its buttons, so the button is its own width and not the notice's (UX ruling R5). */}
               <div className="mt-s-2 flex flex-wrap gap-s-2">
-                <Button type="button" variant="secondary" data-input-held-stay="" onClick={() => (gate ?? ownGate).stayOnThisRow()}>
+                <Button type="button" variant="secondary" data-input-held-reload="" onClick={() => (gate ?? ownGate).stayOnThisRow()}>
                   {INPUT_STUCK_BUTTON}
                 </Button>
               </div>
