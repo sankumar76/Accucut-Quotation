@@ -112,3 +112,52 @@
 - Verdict: REQUEST CHANGES; 0 Blocker, 0 Critical, 2 Major, 3 Minor, 3 Info
 - Open item that lane 3's coming commit closes: QLT-839-02 (b), the two-context E2E. **Get this expectation right:** the 409 notice appears only for a field that **both** sides changed. If A edits a field that B did not touch, A's first save gets a 409 and a silent re-read with **no** notice (AC-5). So the E2E must do one of two things. Either A edits one of B's fields, and the notice is expected. Or the E2E asserts no notice, with A's field stored and both of B's fields kept. Either way, it must check on the server that B's other field survives Save draft and a tab hide
 - Next: developer (lane 3) to fix QLT-839-01 and QLT-839-02 (a) and (b); reviewer-quality to re-review the delta as a short round 2
+
+---
+
+# Round 2: re-review of `09547614` (delta `ce2a8a05...09547614` only)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the §9 (2) combined review, round 2) |
+| Commit reviewed | **`09547614ac4c56a15a4c593d81dacbde993e039c`** (one commit on `ce2a8a05`: 4 files, +250 −9) |
+| Date | 2026-11-27 |
+| **Verdict** | **APPROVE WITH COMMENTS on the code.** **Open: 0 Blocker, 0 Critical, 0 Major, 4 Minor (QLT-839-03 and -04 as follow-ups, QLT-839-05 at the second squash, QLT-839-08 new), 4 Info (SEC-839-01, QLT-839-06, -09, -10).** Both Majors are fixed. **Merge condition:** CI fully green on `09547614`, including the new `part-form-revision-conflict.spec.ts` at three widths. **CI had not started its jobs when this round was written** (all five checks were pending), and my background wait was stopped because the PC was low on memory. The orchestrator reads the run of record before the squash |
+
+## Checks run (round 2)
+
+| Check | Result |
+|-------|--------|
+| Delta | `git diff ce2a8a05 09547614`: `part-picture.tsx` (+4 −3), `use-part-form.ts` (+6 −3), `part-form-revision.test.ts` (+38 −4), new `part-form-revision-conflict.spec.ts` (201 lines). Read in full, with `use-parts-tree.ts` (`settle`, `addUnder`) to check the E2E trigger |
+| Callers of the new signature | `git grep pictureSaved` at `09547614`: `part-fields.tsx:259` (`onChanged={values.pictureSaved}`, both arguments passed through), the three unit calls, and the stub in `review-look-part-fields.test.ts:33`. No other `PartPicture` consumer |
+| Unit tests at `09547614` (read-only, lane 3's worktree; its only local change is a line-ending artefact with no content diff) | `part-form-revision`, `use-part-values`, `part-form-seeded-reads`, `estimate-autosave-part`, `review-look-part-fields`: **5 files, 98 tests pass** |
+| E2E | Not run locally (no server; heavy browser tests go to CI under §9 (5)). Read in full |
+| CI | Pending at the time of writing (see the verdict) |
+
+## Prior findings
+
+| ID | Prior | Status | Evidence |
+|----|-------|--------|----------|
+| QLT-839-01 | Major | **Fixed** | `part-picture.tsx:126, 141`: `before = picture?.id ?? null` at the start of `change`, then `onChanged(result, (result.picture?.id ?? null) !== before)`. `use-part-form.ts:482`: `if (changed && saved.revision === revisionRef.current + ONE_WRITE)`, with `ONE_WRITE` named and explained (`:33-34`). The comparison is right for every case: replace (a new id), add (null → id), remove (id → null), and the same bytes again (the same id from the `sha256` dedupe, so `changed` is false). Where `changed` is false but the server did write (someone else replaced X with Y and this person sends X again, giving R+2), not adopting is safe. New case "QLT-839-01: the same picture sent again … is not adopted": the first save carries revision 1 (409), and after a Save draft the server holds B's A and B. That case is red against the round 1 code (`R+1 <= R+1` would adopt). See QLT-839-08 for the half that is not pinned |
+| QLT-839-02 (a) | Major | **Fixed** | New case "QLT-839-02 (a)": `changeElsewhere({})` (revision up, no value change), the tree is read again, C is saved. `sent` = revision 1, then revision 2. `problem` null, the server holds C `5.00`, and a later Save draft sends nothing (`toHaveLength(2)`) |
+| QLT-839-02 (b) | Major | **Fixed on the code; green run pending** | `part-form-revision-conflict.spec.ts`, two contexts, the three width projects. Case (i): A edits J, which B also changed. 409, the notice, A's `7.00` kept, K shows B's `4.00`. After Save draft and a tab hide, the server holds B's J and K, and exactly one save was sent. Case (ii): A edits L, which B did not touch. 409, no notice, J and K show B's values, L is stored, and exactly two saves were sent (the revision A held, then B's). The expectation I asked to have corrected is right in both cases |
+| QLT-839-03 | Minor | **Open, follow-up** (orchestrator to open the issue) | unchanged |
+| QLT-839-04 | Minor | **Accepted, follow-up** (PR body, Decisions) | unchanged |
+| QLT-839-05 | Minor | **Open, applies at the second squash** | #836 and #811 still carry the comment "a save sends the tree row's revision" |
+
+## The E2E trigger (lane 3's reasoning checked)
+
+**Confirmed.** An add would not reproduce the defect on the open part. `addUnder` (`use-parts-tree.ts:225-242`) calls `setSelectedId(answer.nodeId)`, so the new row becomes `selected`. `PartForm` is keyed by `part.id` (`part-form.tsx:115`), so the form for 1.1 unmounts, and the new row's form reads the part fresh. A **refused move** keeps the selection. `settle` (`:178-203`) takes `treeFromRefusal(outcome)` and calls `setNodes(fresh)`, so the same `PartForm` stays mounted while its `part` prop now shows B's newer revision. That is exactly the DEF-148 state. On master, the deleted effect would copy that revision, A's first save would be 200, and `expect(await status).toBe(409)` would fail. So the spec is red on master **by reading**. It was not run red (QLT-839-10). The refused move is also a real user path: any tree action on a part someone else just changed.
+
+## New findings (round 2)
+
+| ID | Severity | File:line | Issue | Impact | Suggested fix | Test |
+|----|----------|-----------|-------|--------|---------------|------|
+| QLT-839-08 | Minor | `src/components/features/estimate-workspace/part-picture.tsx:141` | The `changed` value is computed here, but no test pins it. The hook's unit cases pass `true` or `false` by hand. `estimate-picture.spec.ts` has no "same picture again after someone else's change" case. A mutant `onChanged(result, true)` survives every test and brings back QLT-839-01 | A later edit to `change()` could undo the Major fix without a red test | Add one component or unit case for `PictureControl`: hold a picture with id `x`, answer a put with `{ picture: { id: 'x' } }` and expect `onChanged(…, false)`; answer `{ picture: { id: 'y' } }` and expect `true`; answer a remove (`null`) and expect `true`. A follow-up issue is acceptable | That case |
+| QLT-839-09 | Info | `tests/e2e/part-form-revision-conflict.spec.ts:139-143` (`saveDraftAndHideTab`) | "A request made after both" (the materials fetch) shows the page is responsive, but not that the form's save queue has drained. The final `saves` equality is read after a further API round trip, so a late PATCH is very likely seen. But a regression that sends late could, in principle, pass | A small false-green window, not a flake | Optional: wait for `[data-draft-status]` or the alert first (case (ii) already does), then poll `saves` with `expect.poll` for a short, fixed count. No new time-out | — |
+| QLT-839-10 | Info | the same spec | The E2E was not run red on master. The red-by-reading argument is above. `test.setTimeout(60_000)` copies `estimate-save.spec.ts` and changes no suite budget (DL-404 holds). The ledger is +0 (DL-422), and every name and value is invented | — | None required | — |
+
+## Hand-off (round 2)
+- Status: COMPLETE on the code. The CI read of `09547614` is still to do: my wait was stopped for low memory, and I did not restart it
+- Verdict: APPROVE WITH COMMENTS; open 0 Blocker, 0 Critical, 0 Major, 4 Minor, 4 Info. Merge condition: CI fully green on `09547614`, including the new spec at three widths
+- Next: orchestrator reads CI 09547614 → if green, the merge can proceed under §9 (1). Follow-up issues for QLT-839-03, -04 and -08. QLT-839-05 at the second squash among #811, #836 and #839. QA verifies DEF-148 from the new unit and E2E cases
