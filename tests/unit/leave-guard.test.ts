@@ -72,21 +72,49 @@ describe('AC-4: which clicks leave the page', () => {
 function fakePage() {
   const win = new EventTarget();
   const doc = new EventTarget();
-  const history = { state: { __NA: true }, pushed: 0, backs: 0, gone: [] as number[], pushState: () => void (history.pushed += 1), back: () => void (history.backs += 1), go: (delta: number) => void history.gone.push(delta) };
+  // Where the history is: on the guard's own entry (its address is the row on screen, which a link to another row replaces) or on the page's own entry below it (the address the page was opened with). A test may also force an address.
+  const location = {
+    origin: ORIGIN,
+    on: 'guard' as 'guard' | 'page',
+    guardHref: HERE,
+    forced: null as string | null,
+    get href(): string {
+      return this.forced ?? (this.on === 'page' ? HERE : this.guardHref);
+    },
+    set href(value: string) {
+      this.forced = value;
+    },
+  };
+  const history = { state: { __NA: true }, pushed: 0, backs: 0, gone: [] as number[], pushState: () => void (history.pushed += 1), back: () => void (history.backs += 1), go: (delta: number) => {
+      history.gone.push(delta);
+      // The guard's own step forward (after it swallowed a Back) lands on its own entry: the browser fires the `popstate` of that landing.
+      if (delta === 1) {
+        location.on = 'guard';
+        win.dispatchEvent(new Event('popstate'));
+      }
+    },
+  };
   const timers: Array<() => void> = [];
   const env = {
-    win: Object.assign(win, { location: { href: HERE, origin: ORIGIN }, history, setTimeout: (handler: () => void) => timers.push(handler) }),
+    win: Object.assign(win, { location, history, setTimeout: (handler: () => void) => timers.push(handler) }),
     doc,
   } as unknown as LeaveEnv;
-  return { env, win, doc, history, timers };
+  return { env, win, doc, history, timers, location };
 }
 
-function setUp() {
+/** `captureFirst` is true by default: the order the guard counts on (DL-482 (3)); a case of the text-safe path passes false. */
+function setUp({ captureFirst = true }: { readonly captureFirst?: boolean } = {}) {
   const page = fakePage();
   const gate = createSaveGate();
   const asked: LeaveRequest[] = [];
   const navigated: string[] = [];
-  const handle = installLeaveGuard({ env: page.env, gate, ask: (request) => void asked.push(request), navigate: (href, replace) => void navigated.push(replace ? `replace ${href}` : `push ${href}`) });
+  const handle = installLeaveGuard({ env: page.env, gate, ask: (request) => void asked.push(request), navigate: (href, replace) => {
+      navigated.push(replace ? `replace ${href}` : `push ${href}`);
+      // The router replaced the guard's entry: that entry has the address of the link.
+      if (replace) page.location.guardHref = new URL(href, HERE).href;
+    },
+    captureFirst,
+  });
   const typeSomething = (): void => gate.mark(PART, 'field-j', true);
   const saveIt = (): void => gate.mark(PART, 'field-j', false);
   const click = (to: Anchor): Event => {
@@ -101,7 +129,11 @@ function setUp() {
     page.win.dispatchEvent(event);
     return event;
   };
-  const pressBack = (): void => void page.win.dispatchEvent(new Event('popstate'));
+  // A Back from the guard's entry lands on the page's own entry.
+  const pressBack = (): void => {
+    page.location.on = 'page';
+    page.win.dispatchEvent(new Event('popstate'));
+  };
   return { ...page, gate, asked, navigated, handle, typeSomething, saveIt, click, unload, pressBack };
 }
 
@@ -215,8 +247,9 @@ describe('DEF-149: a link to another row of the same page leaves the extra entry
     pressBack();
     expect(asked).toHaveLength(1);
     asked[0]?.proceed();
-    expect(history.gone).toEqual([-2]);
-    expect(history.pushed).toBe(2);
+    // The Back was swallowed and the guard stepped forward onto its own entry (1), so nothing was pushed again; leaving is two steps back from it.
+    expect(history.gone).toEqual([1, -2]);
+    expect(history.pushed).toBe(1);
   });
 
   it('a link to another page takes the guard away with it: nothing stays armed for the page that follows', () => {
@@ -238,7 +271,7 @@ describe('DEF-149: a link to another row of the same page leaves the extra entry
     expect(history.pushed).toBe(1);
     pressBack();
     asked[0]?.proceed();
-    expect(history.gone).toEqual([-2]);
+    expect(history.gone).toEqual([1, -2]);
   });
 
   it('"Keep editing" keeps the guard armed: a later Back asks again', () => {
@@ -261,23 +294,24 @@ describe('AC-4: the back button', () => {
     expect(history.pushed).toBe(1);
   });
 
-  it('asks on Back while something is unsaved, puts the entry back so Back asks again, and goes two steps back if the person leaves', () => {
+  // QLT-845-08 (DL-482): the guard no longer pushes its entry again on Back. It stops the Back before the router draws the page's own entry and steps forward onto its own entry (go(1)), so Back asks again.
+  it('asks on Back while something is unsaved, steps forward onto its own entry so Back asks again, and goes two steps back if the person leaves', () => {
     const { history, asked, typeSomething, pressBack } = setUp();
     typeSomething();
     pressBack();
     expect(asked).toHaveLength(1);
-    expect(history.pushed).toBe(2);
-    expect(history.gone).toEqual([]);
+    expect(history.pushed).toBe(1);
+    expect(history.gone).toEqual([1]);
     asked[0]?.proceed();
-    expect(history.gone).toEqual([-2]);
+    expect(history.gone).toEqual([1, -2]);
   });
 
-  it('stays on the page when the person chooses to keep editing: nothing is traversed', () => {
+  it('stays on the page when the person chooses to keep editing: nothing is traversed but the guard\x27s own step forward', () => {
     const { history, asked, typeSomething, pressBack } = setUp();
     typeSomething();
     pressBack();
     asked[0]?.cancel();
-    expect(history.gone).toEqual([]);
+    expect(history.gone).toEqual([1]);
     expect(history.backs).toBe(0);
   });
 

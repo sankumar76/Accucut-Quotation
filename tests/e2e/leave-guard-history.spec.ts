@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Response } from '@playwright/test';
 
 import { TREE_CLEARED_LINE } from '../../src/components/features/estimate-review/review-texts';
 
@@ -32,10 +32,24 @@ const savedAnswer = (page: Page) => page.waitForResponse((response) => response.
 /**
  * The page reads itself again a short while after the first save of a Prepared estimate (`review-form.tsx`: the save takes its figures to cleared, then `router.refresh()`). Next writes the router's address into the
  * current history entry when that read commits, so a link pressed before it has committed can be undone by it. The cases wait for the read to have COMMITTED before the next step (QLT-845-07): not for its answer, which
- * arrives before the page is drawn, but for what the read draws, the tree's line that says the figures are cleared. **DEF-150** is the defect behind it: a row link pressed in the quiet period after a save is undone by
- * that read. Lane 2 fixes it in its own PR; when it lands its proof removes these waits. They are in the set-ups only, wait on an event and not on a timer, and no assertion of the guard depends on them.
+ * arrives before the page is drawn, but for what the read draws, the tree's line that says the figures are cleared. **DL-482 (7): these are settle waits, not a fix.** Whether DEF-150 (a row link pressed in the quiet period after a save is undone by that read) is a defect on `master` is UNCONFIRMED: QA did not reproduce it at desktop and tablet, and the signature first put down to it (after Back and "Keep editing", the first row's text) was QLT-845-08. If DEF-150 is confirmed, its fix removes these waits; if not, they stay. They are in the set-ups only, wait on an event and not on a timer, and no assertion of the guard depends on them.
  */
 const pageRead = (page: Page) => expect(page.getByText(TREE_CLEARED_LINE)).toBeVisible();
+
+/**
+ * "Save draft and leave" saved what was typed (DL-482 (8) (a)): the save was answered 200, and the server, read back, holds every value the save carried. The text was typed in the row on screen when Back was pressed
+ * (QLT-845-08), so a row that Back had drawn instead, with its fields unmounted, would have left nothing to save.
+ */
+async function expectStoredOnTheWayOut(page: Page, answer: Response): Promise<void> {
+  expect(answer.status(), 'the typed text is saved on the way out').toBe(200);
+  const sent = answer.request().postDataJSON() as { readonly values: Readonly<Record<string, string>> };
+  const read = await page.request.get(new URL(answer.url()).pathname.replace(/\/inputs$/, ''));
+  expect(read.status(), 'the part is read back').toBe(200);
+  const stored = (await read.json()) as { readonly inputs: ReadonlyArray<{ readonly fieldId: string; readonly value: string }> };
+  const held = Object.fromEntries(stored.inputs.map((entry) => [entry.fieldId, entry.value]));
+  expect(Object.keys(sent.values).length, 'the save carried a value').toBeGreaterThan(0);
+  for (const [fieldId, value] of Object.entries(sent.values)) expect(held[fieldId], `the server holds ${fieldId}`).toBe(value);
+}
 
 /** Below 1024 px the tree is a foldable panel: it is opened before a row is chosen. */
 async function chooseRow(page: Page, row: string): Promise<void> {
@@ -67,7 +81,7 @@ async function typedInTheSecondRow(page: Page, code: string): Promise<() => void
   await description(page).fill(FIRST);
   await description(page).blur();
   expect((await saved).status(), 'the first save').toBe(200);
-  // DEF-150: the row link is pressed after the page's own read has committed, or that read undoes it.
+  // DL-482 (7), DEF-150 (UNCONFIRMED on master): a settle wait, not a fix. The row link is pressed after the page's own read has committed, so a read that lands late cannot be what this case measures. The no-wait case below covers the quick press.
   await pageRead(page);
   await chooseRow(page, '1');
   await expect(page).toHaveURL(/row=1#row-inputs$/);
@@ -82,12 +96,17 @@ async function typedInTheSecondRow(page: Page, code: string): Promise<() => void
 
 /** Back asks with the text still there; "Keep editing"; a second Back asks again. */
 async function backTwiceAsks(page: Page): Promise<void> {
+  const lengthBefore = await page.evaluate(() => window.history.length);
   await page.evaluate(() => window.history.back());
   await expect(leaveDialog(page)).toBeVisible();
   await expect(descriptionBehindDialog(page)).toHaveValue(TYPED);
   await leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true }).click();
   await expect(leaveDialog(page)).toHaveCount(0);
   await expect(description(page)).toHaveValue(TYPED);
+  // QLT-845-08: the row on screen is still the second row, whose address is the page's, and Back and "Keep editing" added no entry and took none away.
+  await expect(page).toHaveURL(/row=1#row-inputs$/);
+  await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+  expect(await page.evaluate(() => window.history.length), 'Back and "Keep editing" change no history entry').toBe(lengthBefore);
   await page.evaluate(() => window.history.back());
   await expect(leaveDialog(page)).toBeVisible();
   await expect(descriptionBehindDialog(page)).toHaveValue(TYPED);
@@ -134,8 +153,44 @@ test.describe('DEF-149: a row link pressed before anything is typed', () => {
     allowSaves();
     const saved = savedAnswer(page);
     await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
-    expect((await saved).status(), 'the typed text is saved on the way out').toBe(200);
+    await expectStoredOnTheWayOut(page, await saved);
     await expect(page).toHaveURL(/\/queue$/);
+  });
+});
+
+test.describe('DL-482 (7): a row link pressed as soon as the first save is answered (no wait for the page\'s read)', () => {
+  // The person\'s timing: the page asks to read itself again 300 ms after the first save of a Prepared estimate (DEF-150, unconfirmed), and a Lead can press a row link inside that time. The set-ups elsewhere in this
+  // file wait for that read as a settle wait; this case does not wait for it, so what the person can do is covered whichever way DEF-150 goes. It asserts the row asked for, the text typed in it and the history.
+  test('the new row\'s address and the typed text are there after Back and "Keep editing", and no history entry was added or taken away', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await page.goto('/queue');
+    await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#part-form-title')).toContainText('1.1');
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    await expect(description(page)).toBeEnabled();
+    const saved = savedAnswer(page);
+    await description(page).fill(FIRST);
+    await description(page).blur();
+    expect((await saved).status(), 'the first save').toBe(200);
+    // No wait for the page's read here: the row link is pressed at once.
+    await chooseRow(page, '1');
+    await expect(page).toHaveURL(/row=1#row-inputs$/);
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    await expect(description(page)).toBeEnabled();
+    await failSaves(page);
+    await description(page).fill(TYPED);
+    await description(page).blur();
+    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+    const lengthBefore = await historyLength(page);
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await expect(descriptionBehindDialog(page)).toHaveValue(TYPED);
+    await leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(leaveDialog(page)).toHaveCount(0);
+    await expect(description(page)).toHaveValue(TYPED);
+    await expect(page).toHaveURL(/row=1#row-inputs$/);
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    expect(await historyLength(page), 'Back and "Keep editing" change no history entry').toBe(lengthBefore);
   });
 });
 
@@ -169,7 +224,7 @@ test.describe('DEF-149: Back after a link to another row of the same page', () =
     allowSaves();
     const saved = savedAnswer(page);
     await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
-    expect((await saved).status(), 'the typed text is saved on the way out').toBe(200);
+    await expectStoredOnTheWayOut(page, await saved);
     await expect(page).toHaveURL(/\/queue$/);
   });
 
@@ -189,7 +244,7 @@ test.describe('DEF-149: Back after a link to another row of the same page', () =
     const saved = savedAnswer(page);
     allowSaves();
     await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
-    expect((await saved).status(), 'the typed text is saved on the way out').toBe(200);
+    await expectStoredOnTheWayOut(page, await saved);
     await expect(page).toHaveURL(/\/queue$/);
   });
 
@@ -229,13 +284,30 @@ async function armed(page: Page, code: string, row: string | null = '1.1', prepa
   await description(page).fill(FIRST);
   await description(page).blur();
   expect((await saved).status(), 'the first save').toBe(200);
-  // DEF-150: a Prepared estimate reads itself again after its first save and draws the line that says its figures are cleared; what is pressed next waits for that read. A Draft does not read itself again.
+  // DL-482 (7), DEF-150 (UNCONFIRMED on master): a settle wait, not a fix. A Prepared estimate reads itself again after its first save and draws the line that says its figures are cleared; what is pressed next waits for that read. A Draft does not read itself again.
   if (prepared) await pageRead(page);
 }
 
-/** After a jump: text that cannot be saved is typed, Back asks with the text still there, and the chosen way out lands on the page before. */
-async function typeBackAndLeave(page: Page, choice: (typeof CHOICES)[number]): Promise<void> {
+/**
+ * The guard is armed by typing that cannot be saved (QLT-845-10): no save goes through, so the page does not clear its figures and read itself again, and a notice that only a page with current figures draws (the
+ * rates-changed notice) stays. Answers the way to let the saves through again. No wait is added.
+ */
+async function armedUnsaved(page: Page, code: string, row = '1.1'): Promise<() => void> {
+  await page.goto('/queue');
+  await page.goto('/estimates/' + code + `?row=${row}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#part-form-title')).toContainText(row);
+  await expect(page.locator('form[data-part-form]')).toBeVisible();
+  await expect(description(page)).toBeEnabled();
   const allow = await failSaves(page);
+  await description(page).fill(FIRST);
+  await description(page).blur();
+  await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+  return allow;
+}
+
+/** After a jump: text that cannot be saved is typed, Back asks with the text still there, and the chosen way out lands on the page before. A case that armed the guard by failing saves already passes its way to let them through. */
+async function typeBackAndLeave(page: Page, choice: (typeof CHOICES)[number], alreadyFailing?: () => void): Promise<void> {
+  const allow = alreadyFailing ?? (await failSaves(page));
   await description(page).fill(TYPED);
   await description(page).blur();
   await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
@@ -245,7 +317,7 @@ async function typeBackAndLeave(page: Page, choice: (typeof CHOICES)[number]): P
   allow();
   const saved = choice === 'Save draft and leave' ? savedAnswer(page) : null;
   await leaveDialog(page).getByRole('button', { name: choice, exact: true }).click();
-  if (saved !== null) expect((await saved).status(), 'the typed text is saved on the way out').toBe(200);
+  if (saved !== null) await expectStoredOnTheWayOut(page, await saved);
   await expect(page).toHaveURL(/\/queue$/);
 }
 
@@ -282,7 +354,8 @@ for (const choice of CHOICES) {
       const materialId = await insertPrivateMaterial({ pricePerKg: '137.37', specificGravity: '7.37', scrapRate: '27.37' });
       const { code } = await assignedEstimate(page, testInfo, true, materialId);
       await changePrivateMaterial(materialId, { pricePerKg: '9137.73', specificGravity: '7.37', scrapRate: '27.37' });
-      await armed(page, code);
+      // QLT-845-10: the notice is drawn only while the figures are current, so the guard is armed by typing that is not saved (the figures stay), not by a save that clears them.
+      const allow = await armedUnsaved(page, code);
       const notice = page.getByRole('status').filter({ hasText: 'Rates changed since this was calculated.' });
       await expect(notice).toBeVisible();
       const link = notice.getByRole('link', { name: 'Recalculate' });
@@ -292,7 +365,7 @@ for (const choice of CHOICES) {
       await expect(page).toHaveURL(/#review-calculate$/);
       await expect(page.locator('#review-calculate')).toBeFocused();
       expect(await historyLength(page), 'the jump added no history entry').toBe(before);
-      await typeBackAndLeave(page, choice);
+      await typeBackAndLeave(page, choice, allow);
     });
 
     test('(ix) the Engineer\'s page, armed, a section-strip link: no entry is added, the section\'s heading has the focus, and the way out is the queue', async ({ page }, testInfo) => {
@@ -300,10 +373,15 @@ for (const choice of CHOICES) {
       await signInAs(page, E2E_ENGINEER);
       await armed(page, code, null, false);
       const before = await historyLength(page);
+      const addressBefore = page.url();
       const strip = page.locator('[data-section-strip] a').nth(1);
+      // QLT-845-11 (PF-24b): the link names its section's heading; its own handler moves the focus there and prevents the default, so the address does not change either.
+      const named = (await strip.getAttribute('href')) ?? '';
+      expect(named, 'the strip link names a heading on the page').toMatch(/^#.+/);
       await strip.click();
       expect(await historyLength(page), 'the jump added no history entry').toBe(before);
-      await expect(page.locator('[data-section-strip] a').nth(1)).toBeVisible();
+      await expect(page.locator(`[id="${named.slice(1)}"]`)).toBeFocused();
+      expect(page.url(), 'the strip writes no hash').toBe(addressBefore);
       await typeBackAndLeave(page, choice);
     });
   });
@@ -356,24 +434,65 @@ test.describe('PF-23, PF-24 (ux ruling, section 11): the behaviour of the links'
   });
 });
 
+/**
+ * QLT-845-09: the queue and the estimate are ONE document, or a value on the window cannot show whether a traversal loaded the page again. The queue is opened by its address (one load), a marker is set on its window, and
+ * the estimate is reached by pressing the task's link in the queue (a router push, no load). `?q=` makes the Lead's queue show this task whatever else the shared database holds.
+ */
+const MARKER = '__stillTheSamePage';
+const queueOf = (code: string): string => `/queue?q=${encodeURIComponent(code)}`;
+const QUEUE_OF_TASK = /\/queue\?q=[^#]+$/;
+const markerIsSet = (page: Page): Promise<unknown> => page.evaluate((name) => Reflect.get(window, name), MARKER);
+
+async function openedFromTheQueue(page: Page, code: string): Promise<void> {
+  await page.goto(queueOf(code));
+  const link = page.locator(`a[href="/estimates/${encodeURIComponent(code)}"]:visible`).first();
+  await expect(link).toBeVisible();
+  await page.evaluate((name) => Reflect.set(window, name, true), MARKER);
+  await link.click();
+  await expect(page).toHaveURL(/\/estimates\/[^/?#]+$/);
+  await expect(page.locator('form[data-part-form]')).toBeVisible();
+  expect(await markerIsSet(page), 'the estimate was opened by the router and not by a load').toBe(true);
+}
+
+/** The skip link, pressed with Enter: the guard rewrites the address with a `#` and adds no entry. */
+async function skipLinkJump(page: Page): Promise<void> {
+  await page.evaluate(() => (document.querySelector('a[href="#main"]') as HTMLElement | null)?.focus());
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#main$/);
+}
+
 test.describe('R1: the # a jump writes is a real entry of the router', () => {
   test('Back and Forward through the entry the jump rewrote are soft navigations: Next keeps its router state, and nothing is loaded again', async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, false);
-    await page.goto('/queue');
-    await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('form[data-part-form]')).toBeVisible();
-    // A value on the window is gone after a full load, so it shows whether a traversal reloaded the page.
-    await page.evaluate(() => Reflect.set(window, '__stillTheSamePage', true));
-    await page.evaluate(() => (document.querySelector('a[href="#main"]') as HTMLElement | null)?.focus());
-    await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/#main$/);
+    await openedFromTheQueue(page, code);
+    await skipLinkJump(page);
     await page.evaluate(() => window.history.back());
-    await expect(page).toHaveURL(/\/queue$/);
-    expect(await page.evaluate(() => Reflect.get(window, '__stillTheSamePage')), 'Back was a soft navigation').toBe(true);
+    await expect(page).toHaveURL(QUEUE_OF_TASK);
+    expect(await markerIsSet(page), 'Back out of the rewritten entry was a soft navigation').toBe(true);
     await page.evaluate(() => window.history.forward());
-    await expect(page).toHaveURL(/\/estimates\/[^/]+\?row=1\.1#main$/);
+    await expect(page).toHaveURL(/\/estimates\/[^/?#]+#main$/);
     await expect(page.locator('form[data-part-form]')).toBeVisible();
-    expect(await page.evaluate(() => Reflect.get(window, '__stillTheSamePage')), 'Forward into the rewritten entry was a soft navigation').toBe(true);
+    expect(await markerIsSet(page), 'Forward into the rewritten entry was a soft navigation').toBe(true);
+    expect(await page.evaluate(() => performance.getEntriesByType('navigation').length), 'one document load in all').toBe(1);
+  });
+
+  test('typed text and the guard survive Back out of the rewritten entry: the dialog asks, the text is behind it, nothing is loaded again, and "Keep editing" shows the text', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await openedFromTheQueue(page, code);
+    await skipLinkJump(page);
+    await expect(description(page)).toBeEnabled();
+    await failSaves(page);
+    await description(page).fill(TYPED);
+    await description(page).blur();
+    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await expect(descriptionBehindDialog(page)).toHaveValue(TYPED);
+    expect(await markerIsSet(page), 'Back to the guard was a soft navigation').toBe(true);
+    await leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true }).click();
+    await expect(leaveDialog(page)).toHaveCount(0);
+    await expect(description(page)).toHaveValue(TYPED);
+    expect(await markerIsSet(page), 'still the same document after "Keep editing"').toBe(true);
   });
 });
 
