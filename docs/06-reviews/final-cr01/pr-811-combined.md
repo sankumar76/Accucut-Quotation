@@ -104,3 +104,153 @@ The risks are on the performance and delivery side. One is now measured (the fir
 - `1f21da38` a comment; `48e34edc` a merge of #806 squash, with no PR-owned file changed by it; `0b2ab517` a test: every drop-down in the read-only case gets every check and the two-options guard is an assertion on the set (as on `master`; stricter than the previous filter).
 - **CI at `0b2ab517`:** Stages 1 to 11b pass (unit 555 files, 11,914 tests; 731 files, 17,795 tests with the security suite). **Stage 11b `/estimates/[code]` 193,516 B**, 16 B over the 193,500 B ceiling; `master` at `7aa23c44` reads 192,815 B. E2E shards running when I wrote this.
 - Open: PRF-811-02, -03, -04 (Major), -05, -06 (Minor), -07, -08 (Info). The proof table is not in the PR body yet.
+
+---
+
+## Round 2: combined security and quality, at `19ced41e` (delta from `0b2ab517`)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the combined security-and-quality review of CLAUDE.md §9 item 2: the Lead's edit path, and a story that can lose data) |
+| Review round | 2 |
+| Head | **`19ced41e`**, master `e64cc034` (#839, DEF-148) merged in at `d2ff5611`. The net diff against master is 52 files, +2,273 −349 |
+| Delta read | PR-owned commits `4d801179`, `9bcf78ee`, `1be495a3`, `b8934a57`, `3dcb5e49`, `f76e37b2`, `0eef00a9`, `6601023c`, `ff14a1b5` and `19ced41e`; the merges `e619fe48` (#835), `1631c42e` (#833) and `d2ff5611` (#839) were checked for PR-owned changes |
+| Reviewed against | DL-452 (3), DL-463, DL-465 (3), DL-468, DL-472 (4), DL-475; the architect's note `lead-page-server-props-2026-11-27.md` v1.3 (rule 8, sections 5b to 5e); the UX ruling `partform-placeholder-shape-2026-11-28.md` sections 9 and 10; `pr-836-combined.md` (QLT-836-01, SEC-836-03) and `pr-839-combined.md` (QLT-839-05); STORY-05.08 AC-4 to AC-6; NFR-001, NFR-002, NFR-009, NFR-010; coding standards §1, §3, §6 |
+| Date | 2026-11-27 |
+| **Verdict** | **REQUEST CHANGES.** **Open: 0 Blocker, 0 Critical, 2 Major (QLT-811-01 new; PRF-811-04 narrowed to the TBT term), 4 Minor (QLT-811-02, QLT-811-03, PRF-811-05, PRF-811-06), 4 Info (QLT-811-04, QLT-811-05, PRF-811-07, PRF-811-09).** No Blocker or Critical is open, so the §9 (2) stop does not apply. **PRF-811 Majors:** PRF-811-01 fixed (round 1); **PRF-811-02 fixed** at `6601023c` (193,635 B, under DL-468's 194,000 B), to be re-read at `19ced41e`; **PRF-811-03 fixed** (the move spec; 2 px measured locally); **PRF-811-04 open**: the reads and action-delay terms are met, the TBT term is not shown |
+
+### Summary
+
+**The save paths are sound after the #839 merge.** Every save sends the revision of the values the form holds. I found no stale-seed path in the form itself. `use-part-form.ts` holds exactly one seed guard and no effect that follows the tree. `formSeedOf` closes ARC-811-01. Unlock and Restore remount the form. No route, role check or Engineer-reachable answer changed in the delta (NFR-001, NFR-002 unchanged).
+
+**One new data-loss path (QLT-811-01, Major) comes from the address-following in `1be495a3`.** The island rewrites `?row=` with `history.replaceState` when it opens a row without a navigation: after an add (the new row opens), a move that renumbers the open row, a delete fallback, or a choice from the Calculate summary. While the leave guard is armed, that rewrite lands on the guard's extra history entry. The page's own entry below keeps the older `?row=`. Back then lands on an entry that the guard takes as its own (it compares the address it armed at), so it starts asking. Meanwhile Next.js restores that entry's search params and the island "follows" them to the other row. That unmounts the form that holds the typed, unsaved value. Either the dialog asks about text that is already gone, or `settle()` finds the gate clean and the guard leaves the page. Both outcomes break STORY-05.08 AC-4. I found this by reading the code; I did not reproduce it in a browser (no servers were started, as briefed). The one Back case in the PR covers only Back with no row change.
+
+**The reserves are correct.** They are inert, `aria-hidden`, hold nothing focusable or named, and are gone once the island draws. Unit and E2E tests pin all four.
+
+**Performance.** Reads after hydration are 0 in every state, and the action delay is better than master. The TBT term rests on two runs per side. One of master's two runs (2,100 ms, against 795 ms) came from the pass the PR body says started under CPU contention. Without it, the head is about +33 % against master. That is not "within 10 %", so PRF-811-04 stays open on that term alone (rerun, or master rules under DL-463). The server-render rise on Prepared and at 53 rows does not follow the added work: 201 rows, which carry the largest seed, are 3 % faster, and Approved, which has no island, is 29 % slower. I judge it noise, acceptable under NFR-010, with no fix before merge (PRF-811-09). The extra HTML is now measured at about 0.9 to 1.2 KB per row (PRF-811-05, follow-up).
+
+| Severity (open after this round) | Count |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 2 (QLT-811-01, PRF-811-04) |
+| Minor | 4 (QLT-811-02, QLT-811-03, PRF-811-05, PRF-811-06) |
+| Info | 4 (QLT-811-04, QLT-811-05, PRF-811-07, PRF-811-09) |
+
+### Checks run
+
+| Check | Source | Result |
+|-------|--------|--------|
+| Delta and net diff | `git diff origin/master...origin/fix/AQP-488-lead-edit-tree`; each PR-owned commit with `git show`; files read at `19ced41e` | done |
+| RISK-035 (the merge of #839) | `use-part-form.ts` at head; `git diff 6601023c d2ff5611`; `git diff origin/master 19ced41e -- part-picture.tsx part-form-revision.test.ts part-form-revision-conflict.spec.ts` | **one** `given.revision === part.revision` guard; no `[part.revision]` effect; #839's three files byte-identical to master |
+| CI at `6601023c` (run 46090649966) | job logs | Stages 1 to 11b pass: unit 558 files, 11,988 tests; with integration, security and acceptance 734 files, 17,869 tests (`role-matrix.test.ts` 490, `engineer-import-rule.test.ts` 1,608, the canary scan green). **Stage 11b `/estimates/[code]` 193,635 B.** E2E: shards 1 to 3 green; shard 4 red at `estimate-form-sections:149` [desktop] only (QA: the DEF-085 cold-start signature, test plan 0.3.157; not reachable from this diff by my read) |
+| CI at `19ced41e` (run 46098249999) | job list | **Stages 1 to 11b: success.** Its log, including the Stage 11b figure, cannot be read until the run finishes. The four E2E shards were still running when I wrote this |
+| Local tests | none | lane 2's worktree (`aqp-398`, at `19ced41e`) has untracked profiling files and is in use for the comparison on ports 3550 to 3599, so it is not clean. Per the brief, I relied on CI |
+
+### Focus 1: data integrity on the Lead's island
+
+| Path | Revision a save sends | Verdict |
+|------|-----------------------|---------|
+| Seed at mount (island's form) | `seeded.revision`, and only when `formSeed` is given (`seedKept && treeFromSeed`) and the guard passes (`editable` and `given.revision === part.revision`; `part.revision` is the seed tree's row, the same listing) | **Met** (rule 8, section 5b shape (i)) |
+| Tree seed refused | `formSeedOf` gives no seed; the form reads `/nodes/{id}` and the load sets `revisionRef` (`use-part-form.ts:157`, from #839) | **Met** (ARC-811-01 fixed, test 3 in `part-form-seeded-reads.test.ts`) |
+| First row opened again | `seedKept` is false after any other row is shown, so it reads | **Met** (DL-470 (3), E2E `estimate-review-row-return.spec.ts:30`) |
+| First row remounted with no other row shown | a stale seed is refused by the guard: `applySaved` raised the row's revision after any save | **Met** |
+| Own save, conflict re-read, picture | own answer; `reconcile`; `changed && saved.revision === revisionRef.current + ONE_WRITE` | **Met** (#839, unchanged by the merge) |
+| A tree re-read (move, Try again, someone else) | not taken: no effect follows `part.revision` any more. A stale revision fails safe with a 409 and `reconcile` | **Met** |
+| Unlock or Restore | the page swaps a bare fragment for a `ReviewEditShell` element, so React remounts the form with the new page's seed; `ReviewForm`'s `canEdit` only goes from true to false (`refused` is never cleared) | **Met** (SEC-836-03, pinned by structure) |
+| Back, Forward and row links against the leave guard | row links: the guard takes the click when it is armed or dirty and navigates with the router, so the history stays consistent. **Rows opened without a navigation while the guard is armed: not met** | **QLT-811-01** |
+
+### Focus 2: authorization (NFR-001, NFR-002)
+
+No route, service, role check or body builder changed in the delta. The only server-side change is the doc comment of `part-form-bodies.ts`, which now lists the five answers (ARC-811-02). The round 1 security table stands. The tree seed is sent only where the island is drawn (`treeActionsOffered` in `review-page.tsx`). The island is still loaded only from the Lead's and Admin's branch. The new shared files (`tree-chrome.ts`, with no import; the `form-layout.ts` constants; the `parts-tree-list.tsx` slot) carry class strings and words only, no figures. The role matrix, the Engineer import rule and the canary scan were green at `6601023c`. Nothing new reaches the Engineer.
+
+### Focus 3: the reserve blocks
+
+| Term (section 5c (a), PF-20.3) | Code | Test | Verdict |
+|---|---|---|---|
+| inert, `aria-hidden`, marked `data-review-tree-reserve` | `review-tree.tsx:78, 83` | `review-tree-reserve.test.ts:37-45` (rows + 1 reserves, each `inert=""` and `aria-hidden="true"`); E2E `reserveIsInert` | **Met** |
+| No focusable or named element | the toolbar reserve is an empty `div`; the foot reserve is `invisible` with a `span` (no `<button>`) | unit: no `id`, `role`, `tabindex`, `href`, no `<button`; E2E: none of `a, button, input, select, textarea, [tabindex], [id], [role]`; axe has no serious or critical finding | **Met** |
+| None when the tree cannot be edited | `edit ? … : {}` | unit "reserves nothing"; E2E PF-21f (Approved) | **Met** |
+| Gone when the island draws | the shell replaces `children` with the island | E2E `toHaveCount(0)` after the island's chunk is let go | **Met** |
+| Sizes from shared constants, copies guarded | `tree-chrome.ts`, `PICTURE_ZONE_RESERVE(_HELD)` | `review-tree-reserve.test.ts:69-74`, `picture-zone-reserve.test.ts` | **Met** |
+
+### Focus 4: performance (PRF-811 status, DL-463 terms)
+
+From the PR body (lane 2, local production builds, master `46490f27` against head `6601023c`):
+
+| Term | Master | Head | Reading |
+|------|--------|------|---------|
+| Reads after hydration (Draft, Prepared, Approved, 53, 201 rows) | 0 each | 0 each | **Met** |
+| Action delay, hydration minus idle (DL-463 (1)'s measure): Recalculate / Approve | 82 / 76 ms | 58 / 48 ms | **Met**, better by 24 / 28 ms. The row count is not stated (assumed 1 row) |
+| Lighthouse TBT, two runs | 2,100, 795 ms | 1,040, 1,071 ms | **Not shown.** The mean of two is −27 %, but master's 2,100 ms is 2.6 times its other run, and the body says master's pass began at 73 % CPU (the tail of a build). Against the clean run it is **+33 %**. No TBT at 53 or 201 rows |
+| Statements per render | 81, 75, 81, 72, 102 | identical | **Met** (DL-452 (3)) |
+| Server render, sequential median | 92, 67, 63, 80, 284 ms | 103, 133, 81, 113, 275 ms | **Noise, acceptable** (PRF-811-09) |
+| HTML bytes | 157,160 / 158,559 / 420,925 / 1,432,182 | +3,977 / +4,006 / +52,584 (+12.5 %) / +236,448 (+16.5 %) | PRF-811-05, measured: about 0.9 to 1.2 KB per row |
+| First load, Stage 11b | 193,080 B | 193,635 B (+555 B) | under 194,000 B (DL-468); 365 B left |
+
+**Is the server-render rise acceptable?** Yes, with no fix before merge. (a) The statements are identical, so there is no added query. (b) The added server work (a `treeBody` parse and the seed in the flight data) grows with the rows, but the largest seed (201 rows) is 9 ms *faster*. Approved, which gets no tree seed and no island, rose 18 ms (+29 %), which is what one noisy pass looks like. (c) 133 ms sequential is far inside NFR-010's 500 ms at 25 users. **Is the extra 4 KB of HTML on Prepared acceptable?** Yes. It is about 2.5 % of the document, it is not counted in Stage 11b, and it compresses on the wire. The per-row growth (+236 KB uncompressed at 201 rows) is the real cost and stays a follow-up (PRF-811-05).
+
+### Focus 5: test adequacy
+
+| Test | Judgement |
+|------|-----------|
+| `estimate-review-first-paint-move.spec.ts` | **Good.** The chunks are held by routes (deterministic, no wait). It measures at every stage against the first paint (ghost, read-only form with a saved value, island, picture control), for Draft and Prepared at the three widths, a fine pointer at 768 px, a held picture, and Approved at 2 px. Reserve inertness is checked with axe. DL-465 (3) (i)'s "Enter on the notice link" is not repeated with the island; it is not part of the move check that DL-465 (C) adds to #811 (Info, under PRF-811-03) |
+| Back case (`estimate-review-row-return.spec.ts:68`) | **Right for what it covers:** Back with no row change asks, "Keep editing" keeps the text and the row, and "Leave" leaves. **Missing:** Back after a row was opened without a navigation (QLT-811-01), and Back and Forward between two rows on the island, which the PR body says work (QLT-811-02) |
+| Seed tests (`part-form-seeded-reads.test.ts`) | **Good.** They drive the real hooks against the invented server: revision 1 against row 2 reads; equal revisions read nothing and the save carries revision 1; a locked form keeps its seed at revision 0; a refused tree seed gives the form no seed and both read once. One comment is wrong after #839 (QLT-811-04) |
+| `!editable` mount pin (`SEC-836-03`) | **Adequate as a structure pin.** It checks that the element types differ (fragment against shell), that the shell's form has `editable={false}`, and that the island's form has the literal `editable` (CRLF-tolerant since `19ced41e`). With `refused` never cleared in `ReviewForm`, no mounted form goes from locked to editable |
+
+### Focus 6: the RISK-035 merge
+
+Confirmed at `19ced41e`. `use-part-form.ts` holds **one** seed guard (`:102-105`, `given !== null && (!editable || given.revision === part.revision)`). #839's revision logic is intact: the load sets `revisionRef` (`:157`), `reconcile` (`:303`), the own save (`:360`) and the picture's `changed && … + ONE_WRITE` (`:486`). There is **no** tree-following effect (no `[part.revision]` dependency in the file). The guard's comment (`:101`) now states its own rule only ("the seed's revision is the row's at mount; otherwise … read"), so **QLT-839-05 is fixed on #811**. `PartTarget`'s doc and the ref comment (`:118-120`) state #839's rule. #839's `part-picture.tsx`, `part-form-revision.test.ts` and `part-form-revision-conflict.spec.ts` are identical to master.
+
+### Prior findings
+
+| ID | Severity | Status at `19ced41e` | Evidence |
+|----|----------|----------------------|----------|
+| PRF-811-01 | Major | **Fixed** (round 1) | — |
+| PRF-811-02 | Major | **Fixed at `6601023c`**; re-read at `19ced41e` | 193,635 B ≤ 194,000 B (DL-468 moved the ceiling). The head's Stage 11b passed its job; the figure is still to be read from the log, against the 194,000 B ceiling (#839 came in by the merge) |
+| PRF-811-03 | Major | **Fixed** | the move spec above; lane 2: +191 / +159 / +20 px before the reserve, 2 px after, every width, Draft and Prepared; green in its shard at `6601023c` |
+| PRF-811-04 | Major | **Open, narrowed to the TBT term** | reads (0) and action delay (−24 / −28 ms) met. TBT not shown (above). **Close by:** five interleaved Lighthouse pairs per state, on a quiet PC, at Prepared with 1 row and with 53 rows, giving the runs and the medians; closed if the median is within 10 %. Otherwise master rules under DL-463 ("a miss … comes to master before merge"). `useDeferredValue` (my round 1 option (b)) is not needed if the term is met |
+| PRF-811-05 | Minor | **Open, measured; follow-up** | +52.6 KB at 53 rows, +236 KB at 201 rows uncompressed. Pass the island only `{ id, count, figures }` (a `follow-up` issue) |
+| PRF-811-06 | Minor | **Open; follow-up** | `review-form.tsx:81-89` still refreshes on each rename; not measured |
+| PRF-811-07 | Info | Open | unchanged |
+| PRF-811-08 | Info | **Closed** | accepted in the architect's note v1.3 section 5c (e) |
+| ARC-811-01 | Minor | **Fixed** | `formSeedOf` (`review-tree-edit.ts:48-50`); `review-tree-editor.tsx:122-123`; test 3 |
+| ARC-811-02 | Info | **Fixed** | `part-form-bodies.ts` lists five answers; `form-layout.ts` names `picture-zone-reserve.test.ts` |
+| QLT-839-05 | Minor | **Fixed on #811** | Focus 6 |
+| SEC-836-03 | Info | **Closed** | Focus 5 |
+
+### New findings
+
+| ID | Severity | File:line | Rule / AC | Issue | Impact | Suggested fix | Test that would catch it |
+|----|----------|-----------|-----------|-------|--------|---------------|--------------------------|
+| QLT-811-01 | **Major** | `src/components/features/estimate-review-edit/review-tree-editor.tsx:132-138` (following) and `:155-161` (the `replaceState` write); `src/lib/estimates/leave-guard.ts` `onPopState` | STORY-05.08 AC-4 (nothing typed is lost on leaving); DL-470 (3) | The guard arms by pushing an extra entry of the address it sees, and stays armed after the gate is clean again. Later, a row opened **without a navigation** (an add, which opens the new row, `use-parts-tree.ts:249`; a move that renumbers the open row; a delete fallback; `Summary`'s `onChoosePart`) makes the island `replaceState` the **top** (extra) entry. The page's own entry keeps the older `?row=`. Back lands on that entry, which equals `armedFor`, so the guard asks (`ask` → `gate.settle()`). Next.js's own `popstate` restores that entry's search params, and the island's following code calls `choose()` on the row the old address names. That unmounts the form holding the typed, unsaved value (`gate.forget`). By reading, not reproduced | A natural sequence: open row 1.1, edit a field and leave it (saved, guard armed), press "+" on 1.1 (1.1.1 opens), type its Description, press Back. The typed text is lost and the page shows row 1.1. Either the dialog then asks about nothing, or `settle()` finds the gate clean and `go(-2)` leaves the page without asking. After a move, the "followed" row can be a **different part** that now holds the old number | Do not unmount a dirty form to follow the address. (1) In the following block, follow only when `!reviewSaveGate.isDirty()`. Otherwise keep the open row and put its number back in the address (`window.history.replaceState(window.history.state, '', addressWithRow(window.location.href, shownSlNo))`), so the dialog decides with the row and the text on screen. (2) Make "Leave without saving" from Back still land correctly when `go(-2)` stays on this page (for example, the guard drops the gate's marks before it traverses, or the island follows a traversal the guard itself made). Keep `seenRow`'s update as it is | E2E in `estimate-review-row-return.spec.ts` at the three widths: the sequence in the Impact column, then expect the dialog with 1.1.1 open and its text kept; "Keep editing" keeps both; Back and "Leave" leaves. Plus the same with a move of the open row. A unit case for the follow rule with a dirty gate |
+| QLT-811-02 | Minor | `tests/e2e/estimate-review-row-return.spec.ts:64-92`; `review-island-seed-wiring.test.ts:36-40` | DL-470 (3); test adequacy | The PR says "Back and Forward between rows work", and `1be495a3` was made for a CI failure, but the following is pinned only by a source regex. No browser case presses Back from `?row=1.1` to row 1 and Forward again on the island, clean | A regression in the following code (for example Next.js no longer syncing `replaceState` into `useSearchParams`) would pass CI | Add the clean Back and Forward case (row 1, then 1.1 by a press, then Back shows row 1 and its values, then Forward shows 1.1) to the same spec; it can share the setup with QLT-811-01's case | that case |
+| QLT-811-03 | Minor | `review-tree-editor.tsx:122`; `use-parts-tree.ts` (`seeded`); `review-tree-edit.ts:48-50` | rule 8 (section 5b shape (i)); coding standards §1 (no duplication) | "The form is seeded only if the tree was" depends on two separate copies of one predicate: `formSeedOf` (estimate match and `parseTreeAnswer(seed.tree) !== null`) and the hook's own `seeded` (the same two checks). They agree today. A later change to one (for example the hook also checking `nodes.length` or the first row) would seed the form with a tree read from the server, which is the ARC-811-01 hole again. The tree is also parsed twice per mount | Latent: the ARC-811-01 lost update could come back with no red test, because test 3 calls `formSeedOf` and the hook separately with the same refused input | Have `usePartsTree` say where its tree came from (for example `fromSeed: boolean`, set once with `seeded`), and derive `formSeed` from it: `seedKept && tree.fromSeed ? firstSeed : undefined`. `formSeedOf` can then go, or stay as the hook's own check | a hook case: a seed the hook refuses gives `fromSeed` false and the island's form no seed |
+| QLT-811-04 | Info | `tests/unit/part-form-seeded-reads.test.ts:154` | QLT-839-05; coding standards §8 | The comment calls the tree row "what a save is sent with". After #839 that is false: the row's revision is only the guard's check at mount | A reader learns the old rule | "the tree row (what the guard checks the seed against at mount) says 2" | — |
+| QLT-811-05 | Info | `review-tree-editor.tsx:169-177` (`reading`) | DL-465 (3); section 5c | When the tree seed is refused, the island draws `PartsTreeList` with no toolbar slot and no foot while it reads `/tree`, then `TreePanel` adds both, so `#review-actions` moves on that path. It is latent (`part-form-seed.test.ts` pins that the reader accepts the builder's tree) | A late move only if the seed is refused | Optional: pass the same reserve (`renderToolbar` and the foot) in the `reading` branch | — |
+| PRF-811-09 | Info | PR body, the DL-463 proof table | NFR-010; DL-452 (3) | The sequential server render rose on Prepared (67 to 133 ms) and at 53 rows (80 to 113 ms) in one pass. It does not follow the added work (201 rows: −9 ms; Approved, no island: +18 ms) | None found; within NFR-010 | Run the sequential render once more in PRF-811-04's rerun and record it. If Prepared is still more than 20 ms up, profile `treeBody`'s parse | — |
+
+### NFR impact
+
+| NFR | Risk | Findings |
+|-----|------|----------|
+| NFR-001 | **None found**; no route or check changed | — |
+| NFR-002 | **None found**; nothing new reaches the Engineer | — |
+| NFR-009 | **Low to medium**: first load 365 B under the ceiling; TBT not shown; HTML grows by about 1 KB per row | PRF-811-04, -05 |
+| NFR-010 | **Low**: identical statements; server render within noise | PRF-811-06, -09 |
+| STORY-05.08 AC-4 (unsaved work) | **Medium**: one reachable loss path | QLT-811-01 |
+
+### Issues for other roles
+- **developer (lane 2):** QLT-811-01 and its E2E case before merge; QLT-811-02 in the same spec; PRF-811-04's TBT rerun (and PRF-811-09's render in the same pass). QLT-811-03 now if cheap, else a `follow-up` issue. PRF-811-05 and PRF-811-06 as `follow-up` issues.
+- **orchestrator:** read Stage 11b's `/estimates/[code]` figure from run 46098249999 against 194,000 B, and the E2E shards, before the merge.
+- **master:** rule on the TBT term if the rerun misses it (DL-463).
+- **qa-engineer:** QLT-811-01's sequence is a candidate regression case for the final review (unsaved text with a row opened by an add or a move, then Back).
+
+### Hand-off
+- Status: COMPLETE
+- Artefacts written/updated: `docs/06-reviews/final-cr01/pr-811-combined.md` (round 2)
+- Jira / GitHub updates: PR #811 COMMENT review (round 2), replies on the PRF-811 threads; Jira AQP-488 comment
+- Open questions: none
+- Risks raised: none new (QLT-811-01 is a finding on this PR)
+- Recommended next agent: developer (lane 2) for QLT-811-01 and QLT-811-02 and the TBT rerun; then a short round 3 on the delta
