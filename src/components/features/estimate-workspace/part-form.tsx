@@ -16,6 +16,7 @@ import { partFormShown } from './tree-controls-ready';
 import { useFormDefinition } from './use-form-definition';
 import { useLazyComponent } from './use-lazy-component';
 import type { PartTarget, SavedPart } from './use-part-form';
+import type { OwnMove } from './use-parts-tree';
 
 /** The fields' code: a bare `import()` behind a type-only import above, so none of it is in the first load (NFR-009, ADR-016 E1). Asked for as soon as the form is on the page, in step with the two reads that gate it. */
 const loadFields = () => import('./part-fields').then((module) => module.PartFields);
@@ -32,6 +33,8 @@ export interface PartFormProps {
   readonly onSaved?: ((saved: SavedPart) => void) | undefined;
   /** The server says the part is not as the person saw it: the tree is read again. */
   readonly onChanged?: (() => void) | undefined;
+  /** The person's own move of a row and the revision its answer gave it: the open part's form takes it as one of its own saves (QLT-839-04). */
+  readonly ownMove?: OwnMove | null | undefined;
   /** Description or Part No. was left with a new text: the tree's row takes the name (AQP-447). */
   readonly onNamed?: ((id: string, label: string) => void) | undefined;
   /** A save was refused because the estimate was ignored (CR-01 item 7D): the page shows its alert. */
@@ -61,7 +64,7 @@ export interface PartFormProps {
  * nothing typed into one can land in another. Skeleton cards while it loads, a notice with "Try again" when it cannot be read. No rate, cost or formula is requested, held or drawn: the
  * server's form has none, and the materials are IDs and names.
  */
-export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, onNamed, onServerIgnored, missing, gate, onShown, review, seed, ghost, treeUnread = false }: PartFormProps) {
+export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged, ownMove, onNamed, onServerIgnored, missing, gate, onShown, review, seed, ghost, treeUnread = false }: PartFormProps) {
   const definition = useFormDefinition(estimateId, seed);
   // A row was chosen after the page was drawn (the review's view): the form's title takes the focus, the choice is said once and the tree folds. The first paint does none of it.
   const [seen, setSeen] = useState(part?.id);
@@ -122,6 +125,7 @@ export function PartForm({ estimateId, part, editable, nodes, onSaved, onChanged
       lastSavedAt={definition.lastSavedAt}
       onSaved={onSaved}
       onChanged={onChanged}
+      ownMove={ownMove}
       onNamed={onNamed}
       onServerIgnored={onServerIgnored}
       onWrote={definition.wrote}

@@ -40,6 +40,7 @@ function treeState(nodes: ReadonlyArray<PartItem> | null): PartsTreeState {
     busy: false,
     waiting: false,
     movedFocus: null,
+    ownMove: null,
     problem: null,
     announcement: '',
     announce: noop,

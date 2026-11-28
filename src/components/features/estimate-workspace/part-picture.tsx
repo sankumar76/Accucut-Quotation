@@ -127,8 +127,13 @@ function PictureControl({ field, estimateId, partId, held: initial, editable, in
     setBusy(kind);
     setProblem(null);
     // A file that cannot be read (taken away after it was chosen) is a failure like a lost connection, and never leaves the control stuck.
-    // In turn with the part's saves of values: the ones already asked for finish first, and the next is sent with the revision this change makes.
-    const result = await inTurn(run).catch(() => PICTURE_UPLOAD_FAILED_MESSAGE);
+    // In turn with the part's saves of values: the ones already asked for finish first, and the next is sent with the revision this change makes. The form is told inside the turn (QLT-839-03), so it has
+    // taken that revision before the next queued save starts: told after the turn, a save queued during the upload was sent with the revision from before it and refused 409 for nothing.
+    const result = await inTurn(async () => {
+      const answer = await run();
+      if (typeof answer !== 'string') onChanged(answer, (answer.picture?.id ?? null) !== before);
+      return answer;
+    }).catch(() => PICTURE_UPLOAD_FAILED_MESSAGE);
     working.current = false;
     setBusy(null);
     if (typeof result === 'string') {
@@ -138,7 +143,6 @@ function PictureControl({ field, estimateId, partId, held: initial, editable, in
     }
     setPicture(result.picture);
     setAnnouncement(said(result));
-    onChanged(result, (result.picture?.id ?? null) !== before);
   }
 
   /** The words for a refusal or a failure: the server's own for a refusal of the picture, and the sentence for a part that changed under the person. */

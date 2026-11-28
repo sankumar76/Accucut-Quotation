@@ -295,6 +295,36 @@ describe('AC-e: the answers that already gave feedback are unchanged', () => {
     expect(calls.load).toHaveBeenCalledTimes(1);
   });
 
+  it('QLT-839-04: hands the form the revision from the answer to its own move for the moved row, and nothing before a move', async () => {
+    const { state } = await open();
+    expect(state().ownMove).toBeNull();
+    calls.move.mockResolvedValue(ok(MOVED));
+    state().moveTo('p1', 0);
+    await tick(0);
+    // The row was sent with revision 1 and the direct answer gave it 2.
+    expect(state().ownMove).toEqual({ id: 'p1', sent: 1, revision: 2 });
+  });
+
+  it('QLT-841-01 (b): a move whose answer was lost and which the tree read again shows to have landed hands the form nothing (the re-read does not say who changed the number)', async () => {
+    const { state } = await open(ok(MOVED));
+    calls.move.mockImplementation(neverAnswers);
+    state().moveTo('p1', 0);
+    await tick(TREE_CHANGE_LIMIT_MS);
+    await tick(0);
+    const after = state();
+    expect(after.nodes).toEqual(MOVED);
+    expect(after.announcement).toBe('Part renumbered to 1.1');
+    expect(after.ownMove).toBeNull();
+  });
+
+  it('QLT-839-04: a move that was refused hands the form nothing', async () => {
+    const { state } = await open();
+    calls.move.mockResolvedValue(refused(409, 'TREE_CHANGED', 'The parts were changed.', { tree: OTHER }));
+    state().moveTo('p1', 0);
+    await tick(0);
+    expect(state().ownMove).toBeNull();
+  });
+
   it('shows the fresh tree with the usual notice for a 409 TREE_CHANGED', async () => {
     const { state } = await open();
     calls.move.mockResolvedValue(refused(409, 'TREE_CHANGED', 'The parts were changed.', { tree: OTHER }));
