@@ -186,6 +186,8 @@ describe('usePartValues: the part\'s values', () => {
     expect(fromSeed(undefined)).toBe(false);
 
     // The island's pair, as the island builds it: the tree hook refuses the seed, so the form is given none and reads its own part.
+    loads.tree.mockClear();
+    loads.part.mockClear();
     const refused = seed({ tree: { nodes: 'x' } });
     const trees = renderHook((estimateId: string) => usePartsTree(estimateId, undefined, { seed: refused }), 'e');
     const tree = trees.render();
@@ -193,7 +195,7 @@ describe('usePartValues: the part\'s values', () => {
     const form = renderHook(usePartValues, props({ seed: tree.fromSeed ? refused : undefined }));
     expect(form.render().stored.status).toBe('loading');
     await flush();
-    expect(loads.tree).toHaveBeenCalled();
+    expect(loads.tree).toHaveBeenCalledTimes(1);
     expect(loads.part).toHaveBeenCalledTimes(1);
   });
 

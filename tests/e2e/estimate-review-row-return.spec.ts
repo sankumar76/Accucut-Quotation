@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type TestInfo } from '@playwright/test';
 
 import { assignedEstimate } from './support/assigned-estimate';
 import { isPatchOfInputs } from './support/part-form';
@@ -99,16 +99,27 @@ test.describe('The island follows the address and the leave guard still asks', (
     await expect(description(page)).toBeEnabled();
   }
 
-  /** The saves that cannot go through: what is typed after this stays typed and not saved (the gate is dirty). */
-  async function failSaves(page: Page): Promise<void> {
-    await page.route((url) => isPatchOfInputs(url.toString(), 'PATCH'), (route) => (route.request().method() === 'PATCH' ? route.abort() : route.continue()));
+  /** The saves that cannot go through: what is typed after this stays typed and not saved (the gate is dirty). Answers the way to let them through again. */
+  async function failSaves(page: Page): Promise<() => void> {
+    let failing = true;
+    await page.route(
+      (url) => isPatchOfInputs(url.toString(), 'PATCH'),
+      (route) => (failing && route.request().method() === 'PATCH' ? route.abort() : route.continue()),
+    );
+    return () => {
+      failing = false;
+    };
   }
 
   /** The open row's Description while the dialog is up: the dialog hides the rest of the page from the accessibility tree, so the box is found by the tree it is in, hidden or not. */
   const descriptionBehindDialog = (page: Page) => page.getByRole('textbox', { name: /Description/, includeHidden: true }).first();
 
-  /** Back is pressed with the guard armed and text typed and not saved: the dialog asks, twice, with the row and the text still on the screen (QLT-811-01). */
-  async function backAsksWithTheTextStill(page: Page, title: RegExp, typed: string): Promise<void> {
+  /**
+   * Back is pressed with the guard armed and text typed and not saved: the dialog asks, with the row and the text still on the screen (QLT-811-01); "Keep editing" keeps the guard armed, so a second Back asks again; then
+   * the person leaves: "Leave without saving" goes to the page before, and "Save draft and leave" saves and goes there (DEF-149: the guard counted its entries wrongly once the island had rewritten the address). `finish` 'keep'
+   * stays on the page instead.
+   */
+  async function backAsksWithTheTextStill(page: Page, title: RegExp, typed: string, finish: 'keep' | 'leave' | 'save', allowSaves: () => void = () => undefined): Promise<void> {
     await page.evaluate(() => window.history.back());
     await expect(leaveDialog(page)).toBeVisible();
     await expect(page.locator('#part-form-title')).toHaveText(title);
@@ -121,36 +132,85 @@ test.describe('The island follows the address and the leave guard still asks', (
     await page.evaluate(() => window.history.back());
     await expect(leaveDialog(page)).toBeVisible();
     await expect(descriptionBehindDialog(page)).toHaveValue(typed);
-    await leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true }).click();
-    await expect(leaveDialog(page)).toHaveCount(0);
-    await expect(description(page)).toHaveValue(typed);
+    if (finish === 'keep') {
+      await leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true }).click();
+      await expect(leaveDialog(page)).toHaveCount(0);
+      await expect(description(page)).toHaveValue(typed);
+      return;
+    }
+    if (finish === 'save') {
+      allowSaves();
+      await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
+    } else {
+      await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+    }
+    await expect(page).toHaveURL(/\/queue/);
   }
 
-  test('QLT-811-01: a row is added (and opens) with the guard armed, text is typed in it, Back asks with that row and its text still on the screen', async ({ page }, testInfo) => {
+  /** Row 1.1 is edited and saved on a Prepared estimate opened by its address from the queue: the guard has armed itself and stays armed. */
+  async function openAndSaveARow(page: Page, testInfo: TestInfo): Promise<string> {
     const { code } = await assignedEstimate(page, testInfo, true);
     await page.goto('/queue');
     await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#part-form-title')).toHaveText(/^1\.1 ·/);
     await ready(page);
-    // Edit row 1.1 and let it save: the guard armed itself while the value was unsaved and stays armed.
     const saved = savedAnswer(page);
     await description(page).fill(FIRST);
     await description(page).blur();
     expect((await saved).status(), 'the first save').toBe(200);
-    // Add a part under row 1 (it opens), by the "+" of the row.
+    return code;
+  }
+
+  /** A part under row 1 by the "+" of the row (a menu: the Part item reads Sub-part once the row holds a part); the new row opens. */
+  async function addUnderRowOne(page: Page, slNo: string): Promise<void> {
+    await openTreePanel(page);
+    // The page may be drawn again under the open menu (the router's replace of a row link, a refresh after a change): the menu is opened again until the item can be pressed.
+    await expect(async () => {
+      await reviewButton(page, 'Add under', '1').focus();
+      await page.keyboard.press('Enter');
+      await page.getByRole('menuitem', { name: /^(Part|Sub-part)$/ }).click({ timeout: 4000 });
+    }).toPass({ timeout: 25_000 });
+    await expect(page.locator('#part-form-title')).toHaveText(new RegExp('^' + slNo.replace('.', '\\.') + ' ·'));
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+  }
+
+  /** Text typed in the open row whose save cannot go through. */
+  async function typeAndFail(page: Page, text: string): Promise<void> {
+    await description(page).fill(text);
+    await description(page).blur();
+    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+  }
+
+  test('DEF-149, QLT-811-01: a row is added with the guard armed, text is typed, Back asks with that row and its text, and "Leave without saving" leaves the page', async ({ page }, testInfo) => {
+    await openAndSaveARow(page, testInfo);
     await chooseRow(page, '1');
     await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
     await failSaves(page);
-    await openTreePanel(page);
-    await reviewButton(page, 'Add under', '1').focus();
-    await page.keyboard.press('Enter');
-    await page.getByRole('menuitem', { name: /^(Part|Sub-part)$/ }).click();
+    await addUnderRowOne(page, '1.2');
+    await typeAndFail(page, 'Typed and not saved');
+    await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed and not saved', 'leave');
+  });
+
+  test('DEF-149: the same steps, and "Save draft and leave" saves and leaves the page', async ({ page }, testInfo) => {
+    await openAndSaveARow(page, testInfo);
+    await chooseRow(page, '1');
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    const allowSaves = await failSaves(page);
+    await addUnderRowOne(page, '1.2');
+    await typeAndFail(page, 'Typed and saved on the way out');
+    await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed and saved on the way out', 'save', allowSaves);
+  });
+
+  test('DEF-149: two rows are added and a third is chosen before Back: Back asks, and "Leave without saving" still leaves the page', async ({ page }, testInfo) => {
+    await openAndSaveARow(page, testInfo);
+    await chooseRow(page, '1');
+    await addUnderRowOne(page, '1.2');
+    await addUnderRowOne(page, '1.3');
+    await chooseRow(page, '1.2');
     await expect(page.locator('#part-form-title')).toHaveText(/^1\.2 ·/);
-    await expect(page.locator('form[data-part-form]')).toBeVisible();
-    await description(page).fill('Typed and not saved');
-    await description(page).blur();
-    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
-    await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed and not saved');
+    await failSaves(page);
+    await typeAndFail(page, 'Typed after two adds');
+    await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed after two adds', 'leave');
   });
 
   test('QLT-811-01: a row is moved so that the open row is renumbered, text is typed, Back asks with that part and its text still on the screen', async ({ page }, testInfo) => {
@@ -171,14 +231,16 @@ test.describe('The island follows the address and the leave guard still asks', (
     // Move row 1.1 down: it is renumbered 1.2 and stays the open part.
     await failSaves(page);
     await openTreePanel(page);
-    await reviewButton(page, 'Move', '1.1').focus();
-    await page.keyboard.press('Enter');
-    await page.getByRole('menuitem', { name: 'Move down', exact: true }).click();
+    await expect(async () => {
+      await reviewButton(page, 'Move', '1.1').focus();
+      await page.keyboard.press('Enter');
+      await page.getByRole('menuitem', { name: 'Move down', exact: true }).click({ timeout: 4000 });
+    }).toPass({ timeout: 25_000 });
     await expect(page.locator('#part-form-title')).toHaveText(/^1\.2 ·/);
     await description(page).fill('Typed after the move');
     await description(page).blur();
     await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
-    await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed after the move');
+    await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed after the move', 'keep');
   });
 
   test('QLT-811-02: with nothing typed, the address moves the island: a new address for row 1.1, then Back shows row 1, then Forward shows row 1.1', async ({ page }, testInfo) => {

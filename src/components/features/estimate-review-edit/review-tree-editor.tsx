@@ -214,6 +214,7 @@ export function ReviewTreeEditor({ estimateId, code, status, state, letters, nod
             }}
             onNamed={tree.applyLabel}
             onChanged={tree.readAgain}
+            ownMove={tree.ownMove}
             review={{
               notice: inputsNotice(status, false, state),
               showing: showingInputs(shown.slNo, rowNameOf(shown.label, nodeKindLabel(shown, items)), true),
