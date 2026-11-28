@@ -197,3 +197,60 @@ expect(JSON.stringify(first)).not.toContain('rate');
 - Status: COMPLETE for the delta
 - Verdict: APPROVE WITH COMMENTS. Open: 0 Blocker, 0 Critical, 0 Major, 3 Minor, 3 Info
 - Next: developer (lane 3): QLT-836-10 and the PR body (QLT-836-05 (c)) at the next push. QLT-836-02 is checked in the tree-seed delta review
+
+---
+
+# Round 3: the tree-seed delta, `484f55f2...4ae54c5f`
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the §9 (2) combined review, round 3) |
+| Commit reviewed | **`4ae54c5fecc7341f965065799aa58b384adcf097`**. Own commits: `b5c1ae9c` (round-2 comments), `20f4c556` (guard comment), `a04331d5` (the tree seed), `4ae54c5f` (pinned-form, DEF-148 spec). Merges of master: `6a5d8abc` (#839), `3f5bc2b3` (#841), `b3d8fac8` (#843); I read their resolutions with `git show --remerge-diff`. 0 behind master `51502650` |
+| Date | 2026-11-28 |
+| Checked against | architect note v1.4 (records-u `819670e9`): section 2 rule 8, sections 5b, 5d and 5f (ARC-836-05 to -07); ux ruling section 12 (PF-25); RISK-035 |
+| **Verdict** | **APPROVE WITH COMMENTS.** **Open (mine): 0 Blocker, 0 Critical, 0 Major, 1 Minor (SEC-836-04), 2 Info (QLT-836-13, -14).** The architect's ARC-836-05 (Minor), ARC-836-06 (Minor) and ARC-836-07 (Info) stand as written; I agree with them and do not count them again. No Blocker, Critical or Major is open across the three rounds |
+
+## Checks run (round 3)
+
+| Check | Command / source | Result |
+|-------|------------------|--------|
+| Delta | `git show` of the four own commits; `git show --remerge-diff` of the three merges (conflicts in `estimate-workspace.tsx` and `use-parts-tree.ts` only, at #841's `ownMove` and `onDone(answer, direct)`) | read in full |
+| Copied code identical to #811 | `git diff d71e62fa 4ae54c5f -- use-parts-tree.ts part-form-bodies.ts tree-client.ts` | **no difference** in any of the three. `estimate-service.ts`: the only difference is #836's own `getFirstPartForm` and its signature; `partDetailOf`, `getNode` and `getPartForm` are #811's. `use-part-form.ts`: the same guard in different text (ARC-836-06). `lib/estimates/part-form-seed.ts`: doc comment only (ARC-836-07) |
+| Unit and security tests | 15 files, run in the lane's clean worktree `.claude/worktrees/aqp-441` at `4ae54c5f`: the PR's 6, plus `engineer-tree-seed`, `estimate/pinned-form`, `use-parts-tree`, `parts-tree-card`, `tree-row-actions`, `estimate-tree-route`, `security/download-marker-restricted`, `security/quoted-restricted`, `security/engineer-import-rule` | **15 files, 1,949 tests pass** |
+| CI | run 46111956024 at `4ae54c5f` | **success.** Stage 11b `/estimates/[code]` **193,291 B** (+148 B on master 193,143 B; DL-468 194,000 B, so 709 B left before #811). The four shards passed 592, 594, 592 and 602, with 1 flaky that is unrelated (`insert-field.spec.ts:235` [tablet], the Admin). The DEF-148 conflict spec passed at all three widths |
+| Servers | none started (the PC is kept quiet for lane 2) | — |
+
+## The focus points
+
+| # | Question | Finding |
+|---|----------|---------|
+| (1) | NFR-002: the tree seed carries no cost, rate or price | **Holds.** The tree body is `treeBody` → `partsTreeSchema` (strict). Each row is `id, parentId, slNo, label, nodeKind, completeness, revision`, and the label is the person's typed Description or Part No. (`partNameOf`). The schema is held to the Restricted-marker tests (`download-marker-restricted`, `quoted-restricted`). The seed's tree equals `getTree` as JSON for every role, state and ignored flag (the grid) and in DRAFT, PREPARED and APPROVED on the page (`estimate-page.test.ts`). The E2E canary scan reads the Engineer page's flight payload (green). The ghost's strict scan is unaffected: the tree is data, not ghost markup. **One gap:** nothing plants an extra key on the seed's tree rows, so `treeBody`'s wiring into the seed is not pinned (**SEC-836-04**, Minor), as SEC-836-01 was for the form |
+| (2) | Authorization of the tree read | **Holds.** The tree comes from the same `openForRead` / `mayOpen` call and the same `listNodes(id)` as the part and the form. There is no new read and no new route. The page seeds only from `getFirstPartForm`. The `getNode` refactor keeps `partIn` (the 404 for a foreign or unknown part) before `viewReaders`, and now uses the access-checked `id`. `pinned-form.test.ts` shows the same version, read once instead of twice (#811's identical change) |
+| (3) | Rule 8 for the tree seed, #839's revision logic and #841's `ownMove` intact (RISK-035) | **Holds.** The tree, the part body and the form come from **one** listing, so `part.revision` equals `seed.part.revision` by construction, and the mount guard passes without a read. After #839, `revisionRef` starts from the values it holds (`seeded.revision`, else the load's), and there is **no effect that follows `part.revision`**: one guard, no tree-following effect. `ownMoved` (`use-part-form.ts:502`) and `ownMove={tree.ownMove}` are carried through the merge resolution unchanged. The architect's 5f records the same reading |
+| (4) | `fromSeed`, and a refused or foreign seed falling back to `/tree` | **Holds.** `usePartsTree` takes the seed only when `seed.estimateId === estimateId` and `parseTreeAnswer` accepts it. Otherwise `nodes` starts `null` and `/tree` is read. `engineer-tree-seed.test.ts` covers no seed, another estimate, no tree and a refused tree (each reads once), a good seed (no read, first row selected with its revision), and `readAgain` (reads). `treeRead` starts `true` with a seed, so a later failed read reports "unconfirmed" as for a read tree. `fromSeed` is unused on #836 (#811's island reads it); it is part of the identical copy. When the tree seed is refused the part form waits for `/tree`, then mounts under the guard: correct |
+| (5) | The DEF-148 spec waiting for the live form | **A fair change, not a hidden fault.** With the seed the rows are in the server HTML, and a press before hydration follows the row's fragment `href` and chooses no row. That is exactly PF-25, ruled by the ux-expert (section 12) as acceptable for R1, post-G8, not a merge condition, with conditions (a) to (d). The spec's subject is the 409 path, not the pre-hydration window. `partForm` (`form[data-part-form]`) is drawn only by the client, so waiting for it is a true "page is live" signal. The placeholder case now holds `/_next/static/*.js` (`waitUntil: 'commit'`) instead of `/tree`, because no tree read is left; it still asserts the server ghost and no "Choose a part". PF-25 condition (c), the measured window, is still "not yet measured" in the PR body (**QLT-836-14**, Info: reported, not gated) |
+| (6) | The copied #811 code is identical | **Yes** for `use-parts-tree.ts`, `part-form-bodies.ts` and `tree-client.ts` (no diff against `d71e62fa`), and for `partDetailOf`, `getNode` and `getPartForm`. **Not** for the seed guard's text in `use-part-form.ts` (ARC-836-06) or the seed type's doc (ARC-836-07): same logic, different words, so the second PR to merge resolves a conflict there. One shared-file note for #811: QLT-836-13 |
+
+## Previous findings
+
+| ID | Prior severity | Status | Note |
+|----|----------------|--------|------|
+| QLT-836-02 | Minor | **Fixed** | `getFirstPartForm` builds the node with #811's `partDetailOf`; there is now one assembly for `getNode`, `getPartForm` and `getFirstPartForm` |
+| QLT-836-05 (c) | Minor | **Fixed** | The PR body no longer names `useSeedOfFirstPart` or `use-seed-of-first-part.test.ts` |
+| QLT-836-10 | Minor | **Fixed** | `b5c1ae9c`: one paragraph, with the dollar-sign limit stated |
+| SEC-836-03 | Info | **Rebuttal accepted** | The PR body explains why `editable` cannot turn true on a mounted Engineer form (status only becomes PREPARED; `refusedAsIgnored` only locks) |
+| QLT-836-11 | Info | **Fixed** | `});` is on its own line |
+| QLT-836-12 | Info | **Fixed** | `not.toHaveProperty('rate')` |
+
+## New findings (round 3)
+
+| ID | Severity | File:line | Rule | Issue | Impact | Suggested fix |
+|----|----------|-----------|------|-------|--------|---------------|
+| SEC-836-04 | Minor | `src/app/(portal)/estimates/[code]/part-form-seed.ts:83` | NFR-002; architect rule 1 | The seed's `tree` goes through `treeBody`, but nothing pins that. JSON equality with `getTree` holds while `PartView` has today's keys, and the mutant `tree: { nodes: first.tree }` compiles (the field is `unknown`) and passes the unit suite. A field later added to the service's `PartView` (for the Lead's costs view, say) would then reach the Engineer's flight payload | Defence in depth, the same as SEC-836-01 for the form. Today's code is right | Extend the SEC-836-01 `leaky` case: tree rows carrying `unitRate: '1.00'` → `readFirstPartFormBodies` and `readPartFormBodies` answer `null` (the strict schema refuses). One line each |
+| QLT-836-13 | Info | `src/server/views/part-form-bodies.ts:33` (shared with #811) | Architect rule 1 ("one builder per route answer, called by both") | `treeBody`'s doc says "the route and the Lead's review page both build it here". The `/tree` route does not call `treeBody`: it returns `{ nodes: [...getTree()] }` checked by `output: partsTreeSchema`. That is the same schema, so the same shape, but not the same builder | None today | For #811, which owns the file (to keep the copy identical): have the route's handler return `treeBody(await getTree(...))`, or correct the sentence. Not a change for #836 alone |
+| QLT-836-14 | Info | PR body, "Measured window" | PF-25 condition (c) | The pre-hydration window is "not yet measured" | — | Measure it with the timed proof (DL-469 (d)) on the production build at the slow-phone profile, and write the figure in the PR and the G8 note. Above about 3 s, PF-25 moves to option 2 as a first post-G8 item |
+
+## Hand-off (round 3)
+- Status: COMPLETE for the tree-seed delta
+- Verdict: APPROVE WITH COMMENTS. Open (mine): 0 Blocker, 0 Critical, 0 Major, 1 Minor, 2 Info; plus the architect's ARC-836-05 and -06 (Minor) and -07 (Info)
+- Next: developer (lane 3): SEC-836-04 and ARC-836-05 (two test lines), ARC-836-06/-07 resolved with lane 2 at merge, and the PF-25 measurement with the timed proof
