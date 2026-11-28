@@ -72,6 +72,7 @@ function TreeRow({
       {/* The first line is the link to this row's inputs (AQP-488): a soft navigation, so the tiles and the tree do not jump and no code is read again. Its name is the number and the name, "1.4 Top cover". */}
       <Link
         href={inputsHref(code, node.slNo)}
+        replace
         scroll={false}
         prefetch={false}
         // The name starts with the kind (the icon's own label) and then says what the text says, word for word, so what is seen is in the name (WCAG 2.5.3, axe label-content-name-mismatch): "Sub-Assembly 1.4 Top cover".

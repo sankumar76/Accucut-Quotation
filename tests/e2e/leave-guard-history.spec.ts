@@ -79,6 +79,52 @@ async function backTwiceAsks(page: Page): Promise<void> {
   await expect(descriptionBehindDialog(page)).toHaveValue(TYPED);
 }
 
+/**
+ * The row link is pressed **before anything is typed**, so the guard is not armed and the page's own link takes the click: it replaces the page's entry (the row links of the tree replace; they never stack an entry of the
+ * same page below the one the guard's push sits on). Then text is typed that cannot be saved, Back asks, and each way out lands on the page the test came from.
+ */
+async function typedAfterAnEarlyRowLink(page: Page, code: string): Promise<() => void> {
+  await page.goto('/queue');
+  await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#part-form-title')).toContainText('1.1');
+  await expect(page.locator('form[data-part-form]')).toBeVisible();
+  await expect(description(page)).toBeEnabled();
+  await chooseRow(page, '1');
+  await expect(page).toHaveURL(/row=1#row-inputs$/);
+  await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+  await expect(description(page)).toBeEnabled();
+  const allow = await failSaves(page);
+  await description(page).fill(TYPED);
+  await description(page).blur();
+  await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+  return allow;
+}
+
+test.describe('DEF-149: a row link pressed before anything is typed', () => {
+  test('Back, then "Leave without saving": the queue, not the earlier row of the same page', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await typedAfterAnEarlyRowLink(page, code);
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await expect(descriptionBehindDialog(page)).toHaveValue(TYPED);
+    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+    await expect(page).toHaveURL(/\/queue$/);
+  });
+
+  test('Back, then "Save draft and leave": the queue, with the typed text saved first', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    const allowSaves = await typedAfterAnEarlyRowLink(page, code);
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await expect(descriptionBehindDialog(page)).toHaveValue(TYPED);
+    allowSaves();
+    const saved = savedAnswer(page);
+    await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
+    expect((await saved).status(), 'the typed text is saved on the way out').toBe(200);
+    await expect(page).toHaveURL(/\/queue$/);
+  });
+});
+
 test.describe('DEF-149: Back after a link to another row of the same page', () => {
   // The landing address is exact: the page before the estimate page is the queue, so a way out that goes one entry too far (to the page before the queue) is a failure and not "the page is left" (DL-476 note 7).
   test('Back, then "Leave without saving": the queue, and no entry further back', async ({ page }, testInfo) => {

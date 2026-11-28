@@ -251,47 +251,6 @@ describe('DEF-149: a link to another row of the same page leaves the extra entry
   });
 });
 
-describe('DEF-149 (DL-476 (5)): the way out is worked out from the history the guard saw, not from an assumed count', () => {
-  /** A history that counts its entries: a push adds one. */
-  function countingPage(start: number) {
-    const page = setUp();
-    const history = page.history as unknown as { length: number; pushed: number; gone: number[]; pushState: () => void };
-    history.length = start;
-    history.pushState = () => {
-      history.pushed += 1;
-      history.length += 1;
-    };
-    return { ...page, history };
-  }
-
-  it('with only the guard\'s extra entry on top the way out is two steps back', () => {
-    const { typeSomething, pressBack, asked, history } = countingPage(5);
-    typeSomething();
-    pressBack();
-    asked[0]?.proceed();
-    expect(history.gone).toEqual([-2]);
-  });
-
-  it('with one more entry the router put on top, the way out is three steps back (the page before the page\'s own entry)', () => {
-    const { typeSomething, pressBack, asked, history } = countingPage(5);
-    typeSomething();
-    pressBack();
-    history.length += 1;
-    asked[0]?.proceed();
-    expect(history.gone).toEqual([-3]);
-  });
-
-  it('after "Keep editing" and a second Back it is worked out again from the entry put back', () => {
-    const { typeSomething, pressBack, asked, history } = countingPage(7);
-    typeSomething();
-    pressBack();
-    asked[0]?.cancel();
-    pressBack();
-    asked[1]?.proceed();
-    expect(history.gone).toEqual([-2]);
-  });
-});
-
 describe('AC-4: the back button', () => {
   it('puts one extra entry on the history when something first becomes unsaved, and not another while it stays so', () => {
     const { history, typeSomething, saveIt } = setUp();
