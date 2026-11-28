@@ -341,3 +341,27 @@ test.describe('PF-23, PF-24 (ux ruling, section 11): the behaviour of the links'
     await expect(page).toHaveURL(/\/queue$/);
   });
 });
+
+test.describe('R1: the # a jump writes survives the page being read again', () => {
+  test('the skip link, then a save that makes the page read itself again (router.refresh): the address still ends #main, with the row', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await page.goto('/queue');
+    await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#part-form-title')).toContainText('1.1');
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    await expect(description(page)).toBeEnabled();
+    await page.evaluate(() => (document.querySelector('a[href="#main"]') as HTMLElement | null)?.focus());
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/#main$/);
+    // The first save of a Prepared estimate takes its figures to cleared, and the page then reads itself again (`review-form.tsx`: a refresh a short while after the save). That is a fetch of the page's data.
+    const read = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).searchParams.has('_rsc'));
+    const saved = savedAnswer(page);
+    await description(page).fill(FIRST);
+    await description(page).blur();
+    expect((await saved).status(), 'the save').toBe(200);
+    await read;
+    // Let the page take what the read brought, then the address must be as the jump left it.
+    await expect(description(page)).toHaveValue(FIRST);
+    await expect(page).toHaveURL(/row=1\.1.*#main$/);
+  });
+});
