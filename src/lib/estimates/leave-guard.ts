@@ -33,7 +33,7 @@ interface Target {
 
 export interface LeaveEnv {
   readonly win: Target & {
-    readonly location: { readonly href: string; readonly origin: string; readonly replace?: (url: string) => void };
+    readonly location: { readonly href: string; readonly origin: string; readonly reload?: () => void };
     readonly history: {
       readonly state: unknown;
       readonly pushState: (state: unknown, title: string) => void;
@@ -205,8 +205,9 @@ export interface LeaveGuardHandle {
   /** Takes the guard off the page. */
   readonly remove: () => void;
   /**
-   * "Stay on this row" (DL-489): a full load of the address that is current (`location.replace`, so no entry is added), which cancels the slow read in every engine. It goes through the leave check like any other way out: with
-   * nothing unsaved the one load is let through, otherwise the person is asked. The hold on the fields is not released first; the page that loads is the answer.
+   * "Stay on this row" (DL-489): a real load of the address that is current (`location.reload()`: no entry is added, and the load happens whether or not the address has a `#`), which cancels the slow read in every
+   * engine. `location.replace` of the same address is not a load when the address ends in `#row-inputs` (it is a fragment navigation: a `popstate` with no state, the document stays, and Next ignores it, QLT-845-29). It goes
+   * through the leave check like any other way out: with nothing unsaved the one load is let through, otherwise the person is asked. The hold on the fields is not released first; the page that loads is the answer.
    */
   readonly stayOnThisRow: () => void;
   /** Lets one full page load through, for a person who has just chosen to sign out: the browser's own prompt would be a second question. It lapses after `FULL_LOAD_GRACE_MS`, so a sign-out that fails leaves the page guarded again. */
@@ -238,6 +239,8 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
   let late: { readonly landing: string } | null = null;
   // The path and query the guard's own step off has just landed on, until the page's effect has told the guard about it (`committed`): that is not the router answering the write that was asked for after it.
   let justLanded: string | null = null;
+  // A traversal was made while a write was owed (DL-490 (3)): a commit of another address that follows it is the traversal's draw, not the write's answer, so it is not read as a redirect.
+  let traversedDuringHold = false;
   // The path and query of the row the router has been asked for, a write it has not committed yet: ONE at a time (DL-488 follow-up: two router writes in flight overlap, and a traversal made while one is in flight is
   // what Next answers with a fall back to a full load in WebKit). A link pressed meanwhile only changes `queued`, and is written when the first has settled. Neither blocks the guard from arming (DL-488 (i)); they hold the
   // form's fields for as long as they are set, so nothing can be typed into a row that is about to be replaced.
@@ -274,6 +277,7 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
 
   /** The write that was in flight has ended (it landed, it was overtaken, or the person went elsewhere): the next one, if a link was pressed meanwhile, is written, and so is a jump to a place on the page. */
   const settled = (): void => {
+    traversedDuringHold = false;
     inFlightMarker = null;
     inFlight = null;
     if (queued !== null && step === null) {
@@ -445,10 +449,9 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
 
   /** "Stay on this row": see `LeaveGuardHandle.stayOnThisRow`. */
   const stayOnThisRow = (): void => {
-    const target = win.location.href;
     ask({
-      // The current address is loaded again (no entry is added). The load is the answer to the slow read: nothing typed can be lost, because nothing could be typed while the fields were held.
-      proceed: () => win.location.replace?.(target),
+      // The page is loaded again (no entry is added). The load is the answer to the slow read: nothing typed can be lost, because nothing could be typed while the fields were held.
+      proceed: () => win.location.reload?.(),
       cancel: () => undefined,
       fullLoad: true,
     });
@@ -499,6 +502,9 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
 
   const onPopState: Listener = () => {
     const here = win.location.href;
+    // A `popstate` of an entry that has no state of its own is not one Next answers (`app-router.js` ignores it: nothing is drawn): a fragment navigation of the document, or a replace of the same address with a `#`
+    // (QLT-845-29). While a write is owed it ends nothing: it does not settle the write, drop what was queued, or arm.
+    if ((inFlight !== null || queued !== null) && step === null && (typeof win.history.state !== 'object' || win.history.state === null)) return;
     const lateStep = late;
     late = null;
     if (step === null && lateStep !== null && here === lateStep.landing && !gate.isDirty()) {
@@ -525,10 +531,10 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
       }
       // It landed anywhere else, so the person pressed Back or Forward as well: the step is over, and this press is handled as any other.
     }
-    // Every other traversal: the router answers it, not a write the page's links owed (a queued link is dropped, the person went elsewhere), and the row on screen is the one it landed on.
-    queued = null;
-    fragmentWaiting = null;
-    settled();
+    // Every other traversal: the router answers it, and the row on screen is the one it landed on. **While a row write is owed it ends nothing** (DL-490 (3)): no traversal proves what the write will do (Next ignores
+    // some, and whether a restore discards a pending navigation is its own choice), so the write is neither settled nor dropped, the link queued behind it stays, and the fields stay held. If the traversal did cancel
+    // the write, the notice and its button recover it; if it did not, the write lands and ends the hold by its address.
+    if (inFlight !== null || queued !== null) traversedDuringHold = true;
     if (new URL(here).pathname === pagePath) shown = pathSearchOf(here);
     // A landing on an entry that carries the guard's mark, while the guard thinks it is on the page's own entry: it is on its own entry (the old one that lay ahead after a step off), above the page's own entry as last seen.
     if (armedFor === null && markOf(win.history.state) !== null) {
@@ -576,7 +582,7 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
     const ownLanding = justLanded;
     justLanded = null;
     settleInFlight();
-    if (inFlight !== null && at !== ownLanding) settled();
+    if (inFlight !== null && at !== ownLanding && !traversedDuringHold) settled();
     ensureAddressed();
     tryArm();
   };

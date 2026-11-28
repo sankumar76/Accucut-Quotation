@@ -294,7 +294,7 @@ async function openedClean(page: Page, code: string, row = '1.1'): Promise<void>
  * Holds the page's read of one row (its `_rsc` request) until `release()`, so a link to that row has been pressed and its write is still owed. `reached` is settled when the request is held. The hold is the
  * set-up of DL-488 u2 to u4; it adds no wait to the page and changes no budget (DL-404).
  */
-async function holdRowRead(page: Page, row: string): Promise<{ readonly release: () => void; readonly reached: Promise<void> }> {
+async function holdRowRead(page: Page, row: string): Promise<{ readonly release: () => void; readonly reached: Promise<void>; readonly failed: Promise<void> }> {
   let release: () => void = () => undefined;
   const opened = new Promise<void>((resolve) => {
     release = resolve;
@@ -303,19 +303,24 @@ async function holdRowRead(page: Page, row: string): Promise<{ readonly release:
   const reached = new Promise<void>((resolve) => {
     reach = resolve;
   });
-  await page.route(
-    (url) => url.pathname.startsWith('/estimates/') && url.searchParams.has('_rsc') && url.searchParams.get('row') === row,
-    async (route) => {
-      reach();
-      await opened;
-      await route.continue();
-    },
-  );
-  return { release, reached };
+  const isIt = (url: URL): boolean => url.pathname.startsWith('/estimates/') && url.searchParams.has('_rsc') && url.searchParams.get('row') === row;
+  // The held request ends as failed when the document that asked for it goes (a load): the event, not a wait.
+  const failed = new Promise<void>((resolve) => {
+    page.on('requestfailed', (request) => {
+      if (isIt(new URL(request.url()))) resolve();
+    });
+  });
+  await page.route(isIt, async (route) => {
+    reach();
+    await opened;
+    // The page may be gone by now (a load): the continue then has nothing to continue.
+    await route.continue().catch(() => undefined);
+  });
+  return { release, reached, failed };
 }
 
 /** Text that cannot be saved is typed in the row on screen, Back asks with the text still there, "Keep editing" keeps the row and the text, and "Leave without saving" lands exactly on the queue. */
-async function typedBackKeepAndLeave(page: Page, row: string): Promise<void> {
+async function typedBackKeepAndLeave(page: Page, row: string, withHash = true): Promise<void> {
   await failSaves(page);
   await description(page).fill(TYPED);
   await description(page).blur();
@@ -326,7 +331,8 @@ async function typedBackKeepAndLeave(page: Page, row: string): Promise<void> {
   await leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true }).click();
   await expect(leaveDialog(page)).toHaveCount(0);
   await expect(description(page)).toHaveValue(TYPED);
-  await expect(page).toHaveURL(new RegExp(`row=${row.replace('.', '\\.')}#row-inputs$`));
+  // A row a link took the page to has `#row-inputs` in its address; a page opened by its address and loaded again has none.
+  await expect(page).toHaveURL(new RegExp(`row=${row.replace('.', '\\.')}${withHash ? '#row-inputs' : ''}$`));
   await expect(page.locator('#part-form-title')).toContainText(row);
   await page.evaluate(() => window.history.back());
   await expect(leaveDialog(page)).toBeVisible();
@@ -473,7 +479,50 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
     await typedBackKeepAndLeave(page, '1');
   });
 
-  test('u5b: the same hold, then "Stay on this row": one full load of the current address (a marker on window is gone), row 1.1 stays, the history is not longer, row 1 is not drawn; typing then is guarded, and Back asks with the text kept', async ({ page }, testInfo) => {
+  // DL-490 (QLT-845-29). After a tree row link the address ends in `#row-inputs`, and `location.replace` of that address with itself is a fragment navigation, not a load: the document stays, Next ignores the
+  // `popstate` (no state), and the slow read goes on. "Stay on this row" is `location.reload()`, which is a load whatever the address.
+
+  /** A page the Lead reached by a tree row link: opened on row 1, then row 1.1's link pressed, so the address ends `?row=1.1#row-inputs`. */
+  async function reachedByRowLink(page: Page, code: string): Promise<void> {
+    await openedClean(page, code, '1');
+    await chooseRow(page, '1.1');
+    await expect(page).toHaveURL(/row=1\.1#row-inputs$/);
+    await expect(page.locator('#part-form-title')).toContainText('1.1');
+    await expect(description(page)).toBeEditable();
+  }
+
+  /** The press of "Stay on this row" is a real load: the marker of the old document is gone, the navigation type is `reload`, the address and the history length are as they were, and the held read ended as failed. */
+  async function expectRealLoad(page: Page, held: { readonly failed: Promise<void> }, address: RegExp, lengthBefore: number): Promise<void> {
+    await page.evaluate(() => Reflect.set(window, '__sameDocument', true));
+    await page.locator('[data-input-held-stay]').click();
+    await page.waitForFunction(() => Reflect.get(window, '__sameDocument') !== true);
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    expect(await page.evaluate(() => (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming).type), 'a load of the current entry').toBe('reload');
+    await expect(page).toHaveURL(address);
+    expect(await historyLength(page), 'the load added no entry').toBe(lengthBefore);
+    // The slow read of the other row ended with the document (no fixed wait: the event).
+    await held.failed;
+  }
+
+  test('u5b: from a row link (the address ends #row-inputs): the hold, then "Stay on this row" is one real load of row 1.1 (marker gone, navigation type reload, address and history length unchanged, the held read aborted); typing then is guarded, and Back asks with the text kept', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await reachedByRowLink(page, code);
+    const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
+    const held = await holdRowRead(page, '1');
+    await chooseRow(page, '1');
+    await held.reached;
+    await keysThroughTheHold(page, 5500);
+    await expectTheNotice(page, formWidth);
+    await expectRealLoad(page, held, /row=1\.1#row-inputs$/, await historyLength(page));
+    held.release();
+    await expect(page.locator('#part-form-title')).toContainText('1.1');
+    await expect(page.locator('#part-form-title')).not.toHaveText(/^1 ·/);
+    await expect(description(page)).toBeEditable();
+    await expect(page.locator('[data-input-held-slow]')).toHaveCount(0);
+    await typedBackKeepAndLeave(page, '1.1');
+  });
+
+  test('u5b-plain: from a page opened by its address (no #): the same hold and the same real load', async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, true);
     await openedClean(page, code);
     const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
@@ -482,19 +531,42 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
     await held.reached;
     await keysThroughTheHold(page, 5500);
     await expectTheNotice(page, formWidth);
-    const lengthBefore = await historyLength(page);
-    await page.evaluate(() => Reflect.set(window, '__sameDocument', true));
-    await page.locator('[data-input-held-stay]').click();
-    // The load is the answer: the marker of the old document goes with it.
-    await page.waitForFunction(() => Reflect.get(window, '__sameDocument') !== true);
+    await expectRealLoad(page, held, /row=1\.1$/, await historyLength(page));
     held.release();
-    await expect(page.locator('form[data-part-form]')).toBeVisible();
     await expect(page.locator('#part-form-title')).toContainText('1.1');
-    await expect(page.locator('#part-form-title')).not.toHaveText(/^1 ·/);
-    expect(await historyLength(page), 'the full load added no entry').toBe(lengthBefore);
     await expect(description(page)).toBeEditable();
-    await expect(page.locator('[data-input-held-slow]')).toHaveCount(0);
-    await typedBackKeepAndLeave(page, '1.1');
+    await typedBackKeepAndLeave(page, '1.1', false);
+  });
+
+  test('u5c (the route the reviewer found, probe 6): from a row link, with row 1\'s read held, a script\'s location.replace(location.href) is a fragment navigation: the fields stay read-only, no key of a stream (one per frame, over a second) is accepted, the guard pushes no entry; after the release row 1 is editable within 2.5 s, typing is guarded, and Back asks with the text kept', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await reachedByRowLink(page, code);
+    const held = await holdRowRead(page, '1');
+    await chooseRow(page, '1');
+    await held.reached;
+    await expect(description(page)).toHaveAttribute('readonly', '');
+    const lengthBefore = await historyLength(page);
+    await page.evaluate(() => {
+      Reflect.set(window, '__sameDocument', true);
+      window.location.replace(window.location.href);
+    });
+    // Nothing loaded: the marker is there. One key per animation frame for a second and a bit.
+    await description(page).focus();
+    const before = await description(page).inputValue();
+    for (let frame = 0; frame < 75; frame += 1) {
+      await page.keyboard.press('Z');
+      await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    }
+    expect(await page.evaluate(() => Reflect.get(window, '__sameDocument')), 'a fragment navigation loads nothing').toBe(true);
+    await expect(description(page)).toHaveAttribute('readonly', '');
+    await expect(description(page)).toHaveValue(before);
+    expect(await historyLength(page), 'the guard pushed no entry').toBe(lengthBefore);
+    held.release();
+    await expect(page).toHaveURL(/row=1#row-inputs$/);
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    await expect(description(page)).toBeEditable({ timeout: 2500 });
+    await expect(description(page)).not.toHaveValue(/Z/);
+    await typedBackKeepAndLeave(page, '1');
   });
 
   test('u4f: the old row\'s save fails, another row\'s link is pressed, the dialog asks, "Leave without saving" shows the new row; typing there (the save fails) is guarded: Back asks, Keep editing keeps the new row and the text, and Leave lands exactly on the queue', async ({ page }, testInfo) => {

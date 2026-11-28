@@ -108,16 +108,37 @@ function browser(variant: Variant) {
   // What the page does when the row on screen changes: the form of the row that was there unmounts and its unsaved marks go (`part-form.tsx` key, `save-gate.ts`).
   const hooks = { unmounted: () => undefined as void };
 
-  // The addresses the page was loaded again at (`location.replace`, "Stay on this row"): the model draws nothing of it, the page that loads is a new one.
+  // The addresses the page was loaded again at (`location.reload`, "Stay on this row"): the model draws nothing of it, the page that loads is a new one.
   const reloads: string[] = [];
+  // Every call of the document's location, by name: the guard's button is a `reload()` and nothing else (DL-490 (4) (c)).
+  const locationCalls: string[] = [];
   // Every traversal the guard or the test asked for: a repair or a step off is a `go(-1)`.
   const stepsMade: number[] = [];
+  // What a `location.replace` of the address that is current does when the address ends in a `#`: a fragment navigation, not a load. Set below, where the history and the listeners are.
+  let fragmentNavigation: () => void = () => undefined;
+  // The guard says the fields are held, which is a write owed or a step: set by `setUp`, so the model can say a push was made meanwhile.
+  const holding = { now: () => false };
   const location = {
     get href() {
       return entries[index] ?? PAGE;
     },
     origin: 'http://portal.test',
-    replace: (url: string): void => void reloads.push(url),
+    /** A load of the current entry: the end of the document. The model draws nothing more of it. */
+    reload: (): void => {
+      locationCalls.push('reload');
+      reloads.push(entries[index] ?? PAGE);
+    },
+    /**
+     * A replace with an address equal to the current one that has a `#` is a fragment navigation (the document stays, a `popstate` fires with no state); anything else is a load. **The model does not assume that
+     * `replace` loads** (DL-490 (4) (a)): that assumption hid QLT-845-29.
+     */
+    replace: (url: string): void => {
+      locationCalls.push('replace');
+      const target = new URL(url, entries[index]).href;
+      if (target === entries[index] && target.includes('#')) fragmentNavigation();
+      else reloads.push(target);
+    },
+    assign: (): void => void locationCalls.push('assign'),
   };
 
   /**
@@ -185,6 +206,8 @@ function browser(variant: Variant) {
       return states[index];
     },
     pushState: (state: unknown) => {
+      // No push while a write is owed or a step is on its way (DL-490 (4) (c)): nothing is typed that it could guard, and it would sit where the late write lands.
+      if (holding.now()) violations.push('an entry was pushed while the fields were held');
       // The guard pushes an entry only on top of an entry whose address is the row on screen (DL-487 (2) (i)).
       if (pathSearch(entries[index] ?? PAGE) !== screen.path) violations.push(`pushed on ${entries[index] ?? ''} while ${screen.path} is on screen`);
       // The same address again (the guard passes none), and what lay ahead is cut.
@@ -278,9 +301,37 @@ function browser(variant: Variant) {
     }
   }
 
+  fragmentNavigation = (): void => {
+    states[index] = null;
+    for (const listener of variant.order === 'next-first' ? popstate : [...popstate].reverse()) listener(new Event('popstate'));
+  };
+
   return {
     entries,
     reloads,
+    /**
+     * What `location.replace` of the address that is current does when the address ends in a `#` (the old "Stay on this row", QLT-845-29): a fragment navigation, not a load. The entry is replaced by one with no
+     * state, and a `popstate` fires for it, with no state; Next ignores it (nothing is drawn). The document stays.
+     */
+    fragmentReplace: () => fragmentNavigation(),
+    /** A script's own `location.replace(location.href)`. */
+    scriptReplace: () => location.replace(entries[index] ?? PAGE),
+    /** A `popstate` at the same address with Next's own state: the document is where it was. */
+    samePopstate: () => {
+      for (const listener of variant.order === 'next-first' ? popstate : [...popstate].reverse()) listener(new Event('popstate'));
+      signal();
+    },
+    /** A traversal to an entry of another row of this page (a Forward onto one that lay ahead), and back: made while a write is owed. */
+    otherRowAndBack: () => {
+      entries.splice(index + 1);
+      states.splice(index + 1);
+      entries.push(new URL(links.other, entries[index]).href);
+      states.push({ __NA: true });
+      history.go(1);
+      history.go(-1);
+    },
+    locationCalls: () => [...locationCalls],
+    holding,
     /** The traversals asked for so far (`history.go`). */
     stepsMade: () => [...stepsMade],
     history,
@@ -359,6 +410,7 @@ function setUp(variant: Variant = DEFAULT) {
     onHeldTooLong: (tooLong) => void (state.stuck = tooLong),
   });
   model.install(handle);
+  model.holding.now = () => state.inert;
   model.hooks.unmounted = () => gate.mark(PART, 'field-j', false);
   const pageIndex = 1;
   return {
@@ -385,8 +437,11 @@ function setUp(variant: Variant = DEFAULT) {
      */
     pressStay: (): string[] => {
       const before = asked.length;
+      const callsBefore = model.locationCalls().length;
       handle.stayOnThisRow();
       asked[before]?.proceed();
+      // The button is `location.reload()` and nothing else: not `replace` (a fragment navigation on a `#row-inputs` address), not `assign` (it adds an entry).
+      expect(model.locationCalls().slice(callsBefore), 'the button calls location.reload() and nothing else').toEqual(['reload']);
       return model.reloads;
     },
     refused: () => state.refused,
@@ -469,6 +524,47 @@ const MORE_WRITERS: ReadonlyArray<readonly [string, (s: Setup) => void]> = [
   ],
   // A link to the address the page is on (QLT-845-19, "a link to the current address"): the router's `replace` of an address it is on commits nothing and says nothing.
   ['a link to the address the page is on', (s) => s.click(s.at() ?? PAGE, (event) => (event.preventDefault(), s.router.replace(s.at() ?? PAGE)))],
+  // DL-490 (4) (b): while a write is owed, no popstate ends it, settles it, drops what was queued or releases the fields (a null-state one, a same-address one, one with Next's own state, a traversal to another row), and
+  // the button on a `#row-inputs` address is a real load. Each runs only where the fields are held: that is where it must end nothing.
+  [
+    'a null-state popstate at the same address while a write is owed (a script\'s location.replace of the current address with a #)',
+    (s) => {
+      if (!s.inert()) return;
+      const index = s.index();
+      s.fragmentReplace();
+      expect(s.inert(), 'the hold is not ended by a popstate with no state').toBe(true);
+      expect(s.index()).toBe(index);
+    },
+  ],
+  [
+    'a same-address popstate with Next\'s own state while a write is owed',
+    (s) => {
+      if (!s.inert()) return;
+      const index = s.index();
+      s.samePopstate();
+      expect(s.inert(), 'the hold is not ended by a popstate at the same address').toBe(true);
+      expect(s.index()).toBe(index);
+    },
+  ],
+  [
+    'a traversal to another row of this page and back while a write is owed',
+    (s) => {
+      if (!s.inert() || s.above() !== 0) return;
+      s.otherRowAndBack();
+      s.settle();
+      expect(s.inert(), 'the hold is not ended by a traversal').toBe(true);
+    },
+  ],
+  [
+    'the button pressed on the address a row link wrote (a #row-inputs address) while a write is owed',
+    (s) => {
+      if (!s.inert()) return;
+      s.runTimers();
+      expect(s.stuck()).toBe(true);
+      s.pressStay();
+      expect(s.inert(), 'the hold is not released before the page loads').toBe(true);
+    },
+  ],
   // DL-489 (3) (vi): a row write that lands after INPUT_HELD_MAX_MS (at 5.001 s, and at 30 s). The time passing releases nothing, arms nothing and repairs nothing: the notice shows while the fields are held, a key
   // is refused, and when the write lands the hold and the notice end. (The reviewer's probe 5 had a key accepted at 5.001 s, the guard arming on the row about to be replaced, and the write landing on its entry.)
   [
@@ -964,6 +1060,29 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     expect(s.inert()).toBe(true);
     expect(s.entries).toHaveLength(entriesBefore);
     expect(s.asked.at(-1)?.fullLoad).toBe(true);
+  });
+
+  it('QLT-845-29 (the reviewer\'s probe 6, result turned around): a replace of the current address that is only a fragment navigation (a popstate with no state) while a row write is owed ends nothing: the hold and the notice stay, no key is accepted, nothing is armed, and the write that lands later finds an unarmed guard', () => {
+    const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
+    // The address a tree row link wrote earlier ends in `#row-inputs`, which is what makes a replace of it a fragment navigation and not a load.
+    s.history.replaceState(s.history.state, '', '#row-inputs');
+    s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
+    s.runTimers();
+    expect(s.stuck()).toBe(true);
+    // The reviewer's probe 6 at f8c090b6: the old button, `location.replace(location.href)` on a `#row-inputs` address. The model treats it as the fragment navigation it is.
+    s.scriptReplace();
+    expect(s.reloads).toEqual([]);
+    expect(s.stuck()).toBe(true);
+    expect(s.inert()).toBe(true);
+    for (let key = 0; key < 5; key += 1) expect(s.type()).toBe(false);
+    expect(s.index()).toBe(1);
+    expect(s.stepsMade()).toEqual([]);
+    s.flush();
+    expect(s.inert()).toBe(false);
+    expect(s.stuck()).toBe(false);
+    expect(s.type()).toBe(true);
+    expect(s.form.lost).toBe(false);
+    backOracle(s, 'a fragment-only replace while a write is owed');
   });
 
   it('a Forward before the router\'s write lands: the row on screen is the one the traversal landed on, the guard arms there, and Back asks', () => {
