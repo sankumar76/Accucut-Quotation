@@ -331,3 +331,13 @@ A likely reason, which I have not verified: Next.js may not sync a `replaceState
 - Open questions: none
 - Risks raised: none new
 - Recommended next agent: orchestrator (CI and the medians), then this reviewer for a short PRF-811-04 close
+
+### Round 3 addendum: DL-476 (DEF-149)
+
+- **DL-476 supersedes QLT-811-07's view.** DEF-149 is **Sev-2** and a **#811 merge condition**, with the exception in DL-476 (4). I accept both. Sev-3 on the test-plan scale covers wrong wording, state or layout, not an AC choice that does nothing, so my grade was wrong on the scale's own words. QLT-811-07 is closed as superseded. **The open count for round 3 becomes 0 Blocker, 0 Critical, 2 Major (PRF-811-04; DEF-149 under DL-476), 1 Minor (QLT-811-06), 4 Info (QLT-811-05, QLT-811-08, PRF-811-07, PRF-811-09).**
+- **One point on the mechanism, for the fix (forwarded to master; it does not change the grade or the gating).** `history.replaceState` never adds an entry, so the island's `?row=` writes cannot by themselves make `go(-2)` land on the estimate page. By reading, the extra entry comes from the guard's own click path (`leave-guard.ts:138-146`). With the guard armed and the gate clean, a click on a same-page row link (`?row=` only) is taken, `armedFor` is set to null, and `router.replace` puts the new address on the guard's extra entry. The history then holds **two entries of the estimate page** (the page's own entry and the replaced one), and a later arm adds a third. `go(-2)` from the guard's next Back then lands on the page's own, earlier entry. Lane 2's add case has exactly this step (`chooseRow(page, '1')` after the save that armed the guard).
+- **This path is also on master** (not verified in a browser). Master's Lead page has had the same row links and the editable form with the guard since #806 (`estimate-review.tsx:227`, `LazyReviewForm`; `review-tree.tsx:73-74`). So DEF-149 may reproduce there with no island: edit a field and leave it, click another row's link, type, Back, "Leave without saving".
+- **For lane 2's fix and the proof:**
+  - (a) The guard's bookkeeping must survive its own `router.replace` of its entry. A marker held in the guard's `history.state` is lost when the router replaces that entry with its own state, so a marker-only count needs care.
+  - (b) DL-476 (5) (ii) ("a row chosen in the tree") must choose it **by the row link with the guard armed and the gate clean**, which is the step that makes the second entry.
+  - (c) QA could run the no-island steps above on master to settle where the defect comes from. That does not change where it is fixed.
