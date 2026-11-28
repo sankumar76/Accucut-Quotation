@@ -1,6 +1,6 @@
 import { expect, test, type Page, type Response } from '@playwright/test';
 
-import { TREE_CLEARED_LINE } from '../../src/components/features/estimate-review/review-texts';
+import { CLEARED, CLEARED_NOTICE_TITLE, TREE_CLEARED_LINE } from '../../src/components/features/estimate-review/review-texts';
 import { INPUT_HELD_LINE, INPUT_STUCK_BUTTON, INPUT_STUCK_LINE, INPUT_STUCK_SENTENCE } from '../../src/components/features/estimate-workspace/estimate-texts';
 
 import { assignedEstimate } from './support/assigned-estimate';
@@ -688,12 +688,21 @@ test.describe('DL-491 u6a, u6b, u6c (QLT-845-23): the review\'s refresh of the p
     await expect(page.locator('form[data-part-form]')).toBeVisible();
     expect(await markerIsSet(page), 'the estimate was opened again by the router and not by a load').toBe(true);
     const RENAMED = 'Invented new name of the row';
+    // The estimate is Prepared, so the Totals tiles show figures: what they show now is what the refresh has to take away.
+    const totals = page.getByRole('region', { name: 'Totals' });
+    await expect(totals).toBeVisible();
+    await expect(totals).not.toContainText(CLEARED);
+    const figuresBefore = await totals.innerText();
     const saved = savedAnswer(page);
     await description(page).fill(RENAMED);
     await description(page).blur();
     expect((await saved).status(), 'the new name is saved').toBe(200);
-    // The refresh that the save asks for ran: the figures are cleared (the line that says so) and the tree's row has the new name.
+    // The refresh that the save asks for ran. The line that says "cleared" is drawn from the save's own answer and shows even when the page was not read again, so it proves nothing here: the TILES are what shows it
+    // (the designed cleared state: "Cleared" and the notice), the old figures are gone, and the tree's row has the new name.
     await pageRead(page);
+    await expect(totals).toContainText(CLEARED);
+    await expect(page.getByText(CLEARED_NOTICE_TITLE)).toBeVisible();
+    expect(await totals.innerText(), 'the tiles no longer show the old figures').not.toBe(figuresBefore);
     await expect(treePanel(page)).toContainText(RENAMED);
   });
 
