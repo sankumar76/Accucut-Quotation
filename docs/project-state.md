@@ -8,13 +8,46 @@
 | Field              | Value                    |
 |--------------------|--------------------------|
 | Project            | Accucut Quotation Portal |
-| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-25, orchestrator)", then "Resume point (2026-11-24, pause 10, orchestrator)", then "Daily update (2026-11-24, after pause 9, orchestrator)", then "Resume point (2026-11-24, pause 9, orchestrator)", then "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
+| Current phase      | Fast track (CLAUDE.md §9), hardening window. Start at "Daily update (2026-11-27, orchestrator)", then "Daily update (2026-11-25, orchestrator)", then "Resume point (2026-11-24, pause 10, orchestrator)", then "Daily update (2026-11-24, after pause 9, orchestrator)", then "Resume point (2026-11-24, pause 9, orchestrator)", then "Daily update (2026-11-24, orchestrator)", then "Resume point (2026-11-23, pause 8, orchestrator)", then "Daily update (2026-11-23, later, orchestrator)", then "Daily update (2026-11-23, orchestrator, after pause 7)", then "Resume point (2026-11-23, pause 7, orchestrator)". Older: "Resume point (2026-11-17, pause)", "Resume point (2026-11-17, shutdown)", "Daily update (2026-11-16)", "Daily update (2026-11-15, later)", "Daily update (2026-11-15)", "Daily update (2026-11-14)" and the "Resume point (2026-11-13, session restart for the merge allow)" below |
 | Last gate passed   | G7 GO for AQP-275 (DL-195), merged as 8f66157 (push run 43256117830, 5 of 5, 3,200 / 5,564 / 822 / 24). Also: G6 GO AQP-142 (DL-184); G6 CONDITIONAL GO AQP-276 (DL-185) and AQP-81 (DL-191) |
 | Next gate          | G6 attempt 2 for AQP-81 and the AQP-142 F2 fix review, then G7 attempt 2 for AQP-142; AQP-276 measure (T6) after #297 merges (DL-180, DL-190) |
 | Current sprint     | Sprint 1 ("AQP Sprint 1", Jira id 37); **25 Nov: G8 recommendation about Mon 7 Dec, range 6 to 9 Dec; merge cut-off end of Wed 2 Dec for every PR except #727 (Thu 3 Dec, DL-395); freeze from #727's push reading; final regression about 4 to 6 Dec (release plan 0.44).** Before: G8 recommendation target about 6 Dec 2026, range 5 to 8 Dec, freeze about 3 Dec, all agreed scope kept (DL-307, delivery lead, 2026-11-22; replaces DL-298's provisional 4 Dec). Date triggers: ~~28 Nov Q-18 (DL-309)~~ withdrawn (DL-378); freeze AC-8 (DL-310) and #476 (DL-308); G8 condition list DL-314** |
 | Overall health     | 🟡 Amber (RISK-023 at 8: AQP-142 median 5:57, AQP-81 median 6:02; RISK-027 at 9 (Gitleaks incident, closed by branch deletion, DL-188); RISK-028 at 8 (unwrapped user names: DEF-030 fixed, DEF-031 in F2, DEF-034 open Sev-2, guard #348); no date adopted) |
-| Last updated       | 2026-11-25 by orchestrator (daily update); master's DL-379 to DL-395 and G8-C rows in between |
+| Last updated       | 2026-11-27 by orchestrator (daily update); master's DL-396 to DL-475 in between |
 | Jira Intake issue  | [AQP-1](https://sankumar76.atlassian.net/browse/AQP-1) |
+
+## Daily update (2026-11-27, orchestrator)
+
+> This section wins over the 25 Nov update below for anything it names. Decisions DL-448 to DL-475 since 25 Nov are in the decision log; this is the summary.
+
+**`master` = 46490f27** (#833, AQP-502 Done, DEF-145 placeholder; squashed at head a60b6bbd on PR run 46046676608, fully green attempt 1, 0 behind). Master push run 46080843592 and Windows 46080843595: success attempt 1. QA reading (test plan 0.3.151): shard 2 a ruled wave, so **not clean for RISK-031 (0 of 2)**; DEF-085 0 misses; `estimate-warning:63` attempt 1 at three widths (desktop 18.5 s, above the ten-push top of 15.3 s, on watch). Stage 11b `/estimates/[code]` 193,080 B against the 194,000 B limit (DL-468, last rise; trim G8-C-FIRSTLOAD-194, lane 1, by Fri 11 Dec).
+
+**Open code PRs (merge cut-off end of Wed 2 Dec):**
+- **#811** (AQP-488, lane 2, Lead tree island): b8934a57 fully green (run 46086931928), 193,611 B. The ux-expert passed PF-18 to PF-21 (ruling section 9). Local, to push after the DL-463 proof: the QLT-836-01 guard (lane 3's form), the Back-with-unsaved-changes case, ARC-811-01 (`formSeedOf`), ARC-811-02 comments, and the two ux harness and assertion items. Still to do: the proof report, then the combined review.
+- **#836** (AQP-441, lane 3, Engineer form seed and ghost): 484f55f2 has the review fixes for QLT-836-01 (Major), SEC-836-01 and QLT-836-03 to -09. CI and the review's round 2 are in progress. Still to do: the tree seed on #811's `treeBody()` (fallback after end of Mon 30 Nov), the timed proof after lane 2's, and the delta review. Stage 11b 193,122 B at fcab064f.
+- **DEF-148 fix** (AQP-505, #838, lane 3, new branch `fix/AQP-505-part-form-revision`, DL-472): red cases by end of Sat 28 Nov, PR by end of Mon 30 Nov, merged by end of Wed 2 Dec, with a combined review.
+
+**Byte budget under 194,000 B:** master 193,080; #811 share up to 193,850 on its own head; #836 +42. Whichever PR merges second must measure under 194,000 B on its merged head.
+
+**RISK-035:** #811, #836 and the DEF-148 fix all touch `use-part-form.ts`. They keep one guard, `parsed !== null && (!editable || parsed.revision === part.revision)` (DL-475), plus both PRs' seeded-read tests. The orchestrator checks the merged file before each later squash.
+
+**New today:**
+- **DEF-148** (AQP-505, #838): Sev-2, worked at Sev-1 priority; on the blocking list (DL-472).
+- **Architect note** `lead-page-server-props` v1.3 (records-u 8e09ad10): rule 8 on seed revisions, §5b to §5d.
+- **Ux rulings** PF-18 to PF-22, sections 9 and 10.
+- **DEF-145 close terms (DL-473):** close on the second clean `rates-changed:263` master push. The CLS readings go to the final review (G8-C-DEF145CLS).
+
+**Pre-G8 list adds (DL-474):**
+- G8-C-LEADVALUES: the Lead's first paint shows values. Post-G8; the product-manager adds a release-plan line by the G8 records pass.
+- G8-C-PICNAME: PF-22 is ruled. Lane 2 builds it in #811 or a small PR by end of Wed 2 Dec; if it misses, it goes to G8 open, not blocking.
+- G8-C-ENGGHOST: met if #836 merges by end of Wed 2 Dec.
+- G8-C-NEXTADV: reviewer-standards reads the Next.js advisories by end of Sun 29 Nov; no upgrade during the freeze.
+- G8-C-DEF145CLS: reviewer-performance, with the final review.
+**Blocking list adds:** DEF-148.
+
+**Possible delivery-lead decisions (asked only if triggered):**
+- If the DEF-148 fix misses Wed 2 Dec: (A) G8 waits for it, which master recommends; or (B) release with written acceptance and a one-editor-per-estimate rule.
+- If a Next.js advisory applies to production: (A) ship with written acceptance and upgrade after G8; (B) upgrade before the last merge; or (C) upgrade during the freeze and rerun the final regression.
 
 ## Daily update (2026-11-25, orchestrator)
 
