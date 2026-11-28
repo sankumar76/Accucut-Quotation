@@ -259,8 +259,10 @@ test.describe('DL-487 c2, c3: two quick row links; Back and Forward with nothing
   });
 
   test('c3b (QLT-845-21): a row link, then Back and Forward with nothing typed: the page entry shows the row of the link with its form and no question; a Forward made directly from it reaches the guard\'s old entry, which shows an estimate row of this task, with no question and nothing lost', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
-    await armed(page, code);
+    // A Draft estimate does not read itself again after its first save, so there is no settle wait to pay for: the case is two Forwards long, and the desktop shard runs it at about 1.5 times the mobile time (QLT-845-21).
+    // The case keeps its meaning: it needs a guard that is armed and clean, a row link, and the history of the page, none of which depends on the figures being current. The 30 s limit is not touched.
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await armed(page, code, '1.1', false);
     await chooseRow(page, '1');
     await expect(page).toHaveURL(/row=1#row-inputs$/);
     await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
