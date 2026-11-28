@@ -195,7 +195,9 @@ export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOption
     const address = fragmentLinkOf(clickFactsOf(event), win.location);
     if (address === null) return;
     event.preventDefault();
-    win.history.replaceState(win.history.state, '', address);
+    // `null`, not the entry's own state: Next's patched `replaceState` hands a call that carries its own state (`__NA`) straight to the browser and does not record the address, so a page read again later (a
+    // `router.refresh()` after a save) wrote the router's last known address over this one and the `#` was lost. A call with no state of its own is recorded as the router's address, with its state added.
+    win.history.replaceState(null, '', address);
     jumpToFragment(address.slice(address.indexOf('#') + 1));
   };
 
