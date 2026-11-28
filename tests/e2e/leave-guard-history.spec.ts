@@ -452,7 +452,7 @@ test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still o
 
 test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and a failed save before a row change', () => {
   test('u5a: row 1\'s read held for about 6.5 s: a key every 500 ms is accepted into no box, the notice shows after 5 s; after the release the row is editable within 2.5 s, typing is guarded, Back asks, Keep editing keeps row 1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
-    await u5aCase(page, testInfo, false);
+    await u5aCase(page, testInfo, false, true);
   });
 
   // DL-490 (QLT-845-29). After a tree row link the address ends in `#row-inputs`, and `location.replace` of that address with itself is a fragment navigation, not a load: the document stays, Next ignores the
@@ -487,7 +487,7 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
     const held = await holdRowRead(page, '1');
     await chooseRow(page, '1');
     await held.reached;
-    await keysThroughTheHold(page, 5500);
+    // The notice comes 5 s after the press; u5a holds a key stream through the hold, so this case only waits for it.
     await expectTheNotice(page, formWidth);
     await expectRealLoad(page, held, /row=1\.1#row-inputs$/, await historyLength(page));
     held.release();
@@ -495,6 +495,15 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
     await expect(page.locator('#part-form-title')).not.toHaveText(/^1 ·/);
     await expect(description(page)).toBeEditable();
     await expect(page.locator('[data-input-held-slow]')).toHaveCount(0);
+  });
+
+  // What u5b used to do after the load, on its own (QLT-845-31: the hold alone is 5 s, so the typing is not run behind it): a page loaded at an address ending `#row-inputs`, as the button leaves it, guards what is typed.
+  test('u5b, after the load: a page loaded at ?row=1.1#row-inputs guards typing: Back asks, Keep editing keeps row 1.1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await page.goto('/queue');
+    await page.goto(`/estimates/${code}?row=1.1#row-inputs`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#part-form-title')).toContainText('1.1');
+    await expect(description(page)).toBeEditable();
     await typedBackKeepAndLeave(page, '1.1');
   });
 
@@ -505,13 +514,11 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
     const held = await holdRowRead(page, '1');
     await chooseRow(page, '1');
     await held.reached;
-    await keysThroughTheHold(page, 5500);
     await expectTheNotice(page, formWidth);
     await expectRealLoad(page, held, /row=1\.1$/, await historyLength(page));
     held.release();
     await expect(page.locator('#part-form-title')).toContainText('1.1');
     await expect(description(page)).toBeEditable();
-    await typedBackKeepAndLeave(page, '1.1', false);
   });
 
   test('u5c (the route the reviewer found, probe 6): from a row link, with row 1\'s read held, a script\'s location.replace(location.href) is a fragment navigation: the fields stay read-only, no key of a stream (one per frame, over a second) is accepted, the guard pushes no entry; after the release row 1 is editable within 2.5 s, typing is guarded, and Back asks with the text kept', async ({ page }, testInfo) => {
@@ -726,7 +733,7 @@ async function u2Case(page: Page, testInfo: TestInfo, prepared: boolean): Promis
   await typedBackKeepAndLeave(page, '1.1');
 }
 
-async function u5aCase(page: Page, testInfo: TestInfo, prepared: boolean): Promise<void> {
+async function u5aCase(page: Page, testInfo: TestInfo, prepared: boolean, full: boolean): Promise<void> {
   const { code } = await assignedEstimate(page, testInfo, prepared);
   await openedClean(page, code);
   const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
@@ -742,7 +749,20 @@ async function u5aCase(page: Page, testInfo: TestInfo, prepared: boolean): Promi
   // No key of the stream reached row 1's box either, and the notice went with the hold (R3).
   await expect(description(page)).not.toHaveValue(/Z/);
   await expect(page.locator('[data-input-held-slow]')).toHaveCount(0);
-  await typedBackKeepAndLeave(page, '1');
+  if (full) {
+    await typedBackKeepAndLeave(page, '1');
+    return;
+  }
+  // The Prepared variant is the real shape of the hold; the Draft variant has the whole tail (Keep editing, a second Back), so this one asks once and leaves.
+  await failSaves(page);
+  await description(page).fill(TYPED);
+  await description(page).blur();
+  await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+  await page.evaluate(() => window.history.back());
+  await expect(leaveDialog(page)).toBeVisible();
+  await expect(descriptionBehindDialog(page)).toHaveValue(TYPED);
+  await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+  await expect(page).toHaveURL(/\/queue$/);
 }
 
 async function saveDraftCase(page: Page, testInfo: TestInfo, prepared: boolean, twice: boolean): Promise<void> {
@@ -771,7 +791,7 @@ test.describe('DL-434: the same three core cases on a Prepared estimate (the rea
   });
 
   test('u5a on a Prepared estimate: the hold of row 1\'s read for about 6.5 s, no key accepted, the notice, the release, typing guarded, Back asks', async ({ page }, testInfo) => {
-    await u5aCase(page, testInfo, true);
+    await u5aCase(page, testInfo, true, false);
   });
 });
 

@@ -901,6 +901,24 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     backOracle(s, 'c1');
   });
 
+  it('c2 as WebKit and Firefox ran it (lane 3: the second press lost): the second link is the row on screen, pressed while the step off for the first has not landed: the guard takes it and the page ends on it; the router never sees it', () => {
+    for (const timing of ['at-once', 'after-keystroke'] as const) {
+      const s = armedAndSaved({ order: 'next-first', timing, queued: true });
+      const rowOnScreen = s.screen.path;
+      rowLink(s);
+      expect(s.pendingTraversals()).toBe(1);
+      // The link back to the row on screen has the page's own path and query: it is compared with the row the guard is heading for (the step's target), not with the address the entry still has.
+      rowLink(s, links.page);
+      s.settle();
+      s.flush();
+      expect(s.screen.path, `${timing}: the second press is not lost`).toBe(rowOnScreen);
+      expect(pathSearch(s.entries[s.pageIndex] ?? '')).toBe(rowOnScreen);
+      expect(s.type()).toBe(true);
+      expect(s.violations).toEqual([]);
+      backOracle(s, `the second link is the row on screen, ${timing}`);
+    }
+  });
+
   it('c2: two row links in quick succession (the first step off has not landed) resolve to the last one, and nothing is accepted meanwhile', () => {
     const s = armedAndSaved({ order: 'next-first', timing: 'at-once', queued: true });
     rowLink(s);

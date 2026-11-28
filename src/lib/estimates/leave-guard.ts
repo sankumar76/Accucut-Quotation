@@ -404,7 +404,9 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
     // With the extra history entry on top, even a clean page takes the click: the link then replaces that entry instead of stacking on it, so a later Back has no dead press (review SQR-03). While a write is owed the guard drives
     // every link to another row itself (DL-488 (ii)), so the last link pressed is the one that is written; it compares the link with the row the page is heading for, not with the address the entry still has.
     if (!dirty && armedFor === null && inFlight === null && queued === null && step === null) return;
-    const heading = queued ?? inFlight;
+    // The row the page is heading for: the link queued behind the write, the write in flight, or the target of a step off that has not landed. A link back to the row on screen has the page's own path and query, so it must be
+    // compared with this and not with the address the entry still has, or the router would take it while the step is on its way and the press would be lost.
+    const heading = queued ?? inFlight ?? step?.target ?? null;
     // A link to a place on this page is not a link to another row, whatever row is being written: `onFragmentClick` does it, when the write has settled. It is told by how it is written (`#main`), not by its address: a row
     // link written `?row=1.1#row-inputs` resolves to the page's own path and query and a `#` too, and when the row it names is the one on screen it is the link back to it (QLT-845-24).
     if (heading !== null) {

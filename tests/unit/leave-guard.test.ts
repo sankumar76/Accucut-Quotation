@@ -305,7 +305,8 @@ describe('DEF-149, QLT-845-08 (DL-487): a link to another row of the same page, 
     handle.committed();
     expect(gate.isLeaving()).toBe(false);
     gate.setLeaving(true, true);
-    click(anchor('#main'));
+    // Any click of the person's on this page: a link to another page that nobody guards (nothing is unsaved, the guard is not armed), so the fake document needs nothing more.
+    click(anchor('/audit'));
     expect(gate.isLeaving()).toBe(false);
   });
 
