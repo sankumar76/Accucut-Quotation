@@ -324,3 +324,77 @@ Round 5 reviews lane 1's DL-488 head: the delta from `9598c101`, and the whole `
 - Open questions: none
 - Risks raised: QLT-845-19 (typed text lost after an overtaken row link; CI does not catch it), QLT-845-23 (a full reload on a row link in WebKit)
 - Recommended next agent: developer (lane 1) for DL-488; then reviewer-quality round 5
+
+## Round 5 (posted 2026-11-28, on b2e4b8f5)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the combined security-and-quality review, §9 (2)) |
+| Commits reviewed | `984ff6f1` (product) and `b2e4b8f5` (tests), the DL-488 head: the delta `9598c101..b2e4b8f5`, with the whole `8b07927d..b2e4b8f5` for the verdict. 0 behind `master` (compare: behind 0, ahead 16) |
+| Ruling read | DL-488 in full (records-u `docs/00-governance/decision-log.md`) |
+| PR review | [#845 review 6097382485](https://github.com/sankumar76/Accucut-Quotation/pull/845#pullrequestreview-6097382485) (COMMENT, single-token, `commit_id` b2e4b8f5). Inline: QLT-845-24 `leave-guard.ts:369` (4726703668), -25 `leave-guard.ts:95` (4726703672), -26 `part-fields.tsx:300` (4726703674), -27 `part-fields.tsx:288` (4726703677), -28 `leave-guard-writers.test.ts:642` (4726703681). Label `review:quality-changes-requested` kept |
+| **Verdict** | **REQUEST CHANGES. New: 0 Blocker, 0 Critical, 2 Major (QLT-845-24, -25), 2 Minor (QLT-845-26, -27), 1 Info (QLT-845-28).** Still open: QLT-845-23 (Major, provisional), QLT-845-03 (Minor). **QLT-845-19 (Blocker) is closed for the text loss**, so the §9 (2) stop no longer applies. Under §9 (3), the Majors are fixed before G8 |
+
+### Checks run
+| Check | Result |
+|---|---|
+| CI 46133939325 on `b2e4b8f5` | **success**, every job. Stages 1 to 11b (unit: 559 files / 12,058 tests and 735 files / 17,939 tests). E2E shard 1: 618 passed. Shard 2: 616 passed, 1 flaky. Shard 3: 628 passed. Shard 4: 617 passed. Gate passed. The only attempt-1 failure in the run: `remove-price.spec.ts:300` [mobile], outside the diff |
+| `leave-guard-history.spec.ts` | **93 of 93 on attempt 1** (31 cases × three widths; no retry): the DEF-149 describes, c1 `:203`, `:218`, c2 `:230`, c3a `:250`, c3b `:261`, u2 `:338`, u3 `:353`, u4 `:379`, (viii)/(xi)/(vii)/(ix) `:571` to `:616`, PF-23/24 `:636` to `:663`, R1 `:710`, `:724`, `:745` |
+| DL-479 (5) | **Met**: `approve-override.spec.ts:230`, `:314` and `approve.spec.ts:312` passed on attempt 1 at three widths |
+| u2 timing | 20.3, 20.2 and 17.0 s (desktop, mobile, tablet) against u3's 14.9, 16.5 and 11.5 s. That fits QLT-845-24's 5 s hold; it is not proof. The expect time-out (15 s, `playwright.config.ts:74`) is longer than the hold |
+| Probe 5 (scratch, not committed) | `probe5/probe5.test.ts` against `leave-guard.ts`, `save-gate.ts` and `leave-registry.ts` from `b2e4b8f5` (via `git show`), with timers modelled. u2 with `#row-inputs`: the second click goes to Next and is held 5000 ms, then Back asks. Without the hash: the guard takes it, held 0 ms, Back asks. A write slower than `INPUT_HELD_MAX_MS`: released at 5001 ms, a key accepted in the old row, the guard pushes, and the write lands on the guard's entry |
+| Code read | `leave-guard.ts` in full; `save-gate.ts`, `leave-guard.tsx`, `part-fields.tsx`, `field-renderer.tsx`, `use-input-held.ts`, `estimate-texts.ts` diffs; the walk (`sequencesOf`, `walk`, `check`, `typeWhenAllowed`, the writer lists); the E2E u2 to u4 and c3b; `inputsHref` (`review-tree.tsx:51`) |
+| DL-404 | No wait, budget, time-out, retry or configuration change, except the walk's own unit time-out (QLT-845-28) |
+| Security, NFR-002 | No secret or real data. No route, role check or auth change. The shared form gains a read-only hold, a look and one line of text; no figure, so the Engineer view shows no cost |
+
+### Round 4 findings
+| ID | Status | Evidence |
+|---|---|---|
+| QLT-845-19 (Blocker) | **Fixed for the text loss** | F's floor (`tryArm` `:266-277`); the walk's "typed ⇒ armed at idle" for every listed writer, in 4 variants; u2 green on attempt 1 at three widths. The residue is in the hold (QLT-845-24, -25) |
+| QLT-845-20 (Minor) | **Fixed** | `late` (`:453-465`). On a dirty page a late landing still asks: Info, safe |
+| QLT-845-21 (Minor) | **Fixed** | c3b reaches the guard's old entry from P; green on attempt 1 at three widths |
+| QLT-845-22 (Minor) | **Fixed** | 0 literal backslash-backticks (6 at `9598c101`) |
+| QLT-845-23 (Major, provisional) | **Open** | One write at a time and no step-off while a write is in flight (`:215-219`, `:323-327`) aim at it. Lane 3's WebKit traces are due (Docker was down) |
+
+### DL-488 checklist
+| Item | Result |
+|---|---|
+| (i) F's floor | Met. The `:271` skip is safe (typed text keeps `hasUnsaved` marks) |
+| (ii) M's link handling | **Not met for `#row-inputs` links** (QLT-845-24) |
+| (iii) "clean" = nothing unsaved in the row on screen | Met (`rowDirty: () => gate.hasUnsaved()`) |
+| (iv) input-inert, `readonly` + `aria-readonly`, `aria-busy`, 300 ms, polite line | Mostly met. Gaps: QLT-845-25 (fail-open), -26 (line inside the busy form), -27 (treatments and picture not held) |
+| (v) DL-487 invariants | Met in the walk's `check` and `backOracle` |
+| (3)(a) model | Met, except hash-less row links (-24) and no slow-write writer (-25) |
+| (3)(b) E2E | Green on attempt 1 at three widths. u4 is a save answered before the row change, not the hung-save trap. No repair keystroke stream. Both for master |
+| (3)(c) Firefox, WebKit | Waiting for lane 3 |
+
+### New findings
+| ID | Severity | File:line | Issue | Impact | Suggested fix | Test that would catch it |
+|----|----------|-----------|-------|--------|---------------|--------------------------|
+| QLT-845-24 | Major | `src/lib/estimates/leave-guard.ts:369`; `review-tree.tsx:51` | The `#` check uses `win.location`, not the row being written. Every tree link carries `#row-inputs`, so a link back to the current row while a write is owed is not taken. Next overtakes the owed write and the hold lasts until `INPUT_HELD_MAX_MS` | The form refuses every key for 5 s in u2's sequence. The first-key arming then depends on the fail-open timer (-25). The model's hrefs have no hash, so its u2 and c2-Firefox "the guard takes the second link" do not hold for the real links | `fragmentLinkOf(…, reference)` built from `heading`; the real `inputsHref` shape in the model's row links and in "a link to the address the page is on" | Model u2 and c2-Firefox with `#row-inputs`, no fail-open timer run. E2E u2 with an assertion time-out below `INPUT_HELD_MAX_MS` after release |
+| QLT-845-25 | Major (for master) | `src/lib/estimates/leave-guard.ts:95`, `:300-305`, `:401-406` | The hold ends at 5 s whether or not the write has landed | For a row write slower than 5 s, a key is accepted in the row about to be replaced and dropped when the write lands: DL-488 (iv)'s "never accepted and then dropped" fails, silently | Master chooses: (a) hold until an event ends the write (commit, traversal, the guard's next link, a redirect's commit), keeping the timer only for known-dropped writes; (b) on the late landing, ask or keep the old row; (c) a named residual with a longer bound and a reason | Model writer "a row write that lands after `INPUT_HELD_MAX_MS`" with the oracle's no-drop check; E2E: hold `_rsc` past the bound, type, release |
+| QLT-845-26 | Minor (for the ux-expert) | `src/components/features/estimate-workspace/part-fields.tsx:205`, `:299-301` | The `role="status"` line is inside the `<form aria-busy="true">` for exactly as long as it is shown | Assistive technology may hold the line back until the form is no longer busy, when it is already gone (WCAG 4.1.3) | `aria-busy` on the fields' grid, or the line outside the busy element | u3: the status element has no `[aria-busy="true"]` ancestor while the line shows |
+| QLT-845-27 | Minor | `part-fields.tsx:251-262`, `:267-278` (`held` reaches only `FieldRenderer`, `:288`) | Treatment toggles and the picture still accept input during a hold | Nothing is dropped (each saves at once), but it saves to the row leaving the screen, against DL-488 (iv) | Pass `held` and make both read-only while it is set | u3: a toggle during the hold changes and sends nothing |
+| QLT-845-28 | Info | `tests/unit/leave-guard-writers.test.ts:642` | The 30 s walk bound: justified (a finite walk, 1533 runs per variant; 1.4 to 1.9 s alone, 5.2 to 5.4 s under load). The comment says 0.5 to 2 s | — | 15 s with the measured figures, or split by length | — |
+
+### Lane 1's items
+1. -20 on a dirty page: accepted (Info).
+2. No repair keystroke stream: a repair can be triggered from the browser through -25's path. **For master.**
+3. u4: the E2E is a save answered before the row change, not the island rewrite with a hung save; the trap is in the unit cases only (`leave-guard-writers.test.ts:795`). **For master.**
+4. Residual risks: the fail-open is -25. The once-swallowed Back on a clean page is Info (a dead press, nothing lost). The unannounced late write is the walk's "late write" writer.
+5. The livelock skip: safe.
+6. Replaced tests: no guarantee weakened, except that the "takes the second link" cases rely on hash-less links (-24).
+
+### Issues for other roles
+- **developer (lane 1):** QLT-845-24 (with the model's hrefs), -27, -28 (preference), after master's -25 ruling. QLT-845-03's `follow-up` issue.
+- **master:** QLT-845-25 (the fail-open trade-off); lane 1's items 2 and 3; QLT-845-26 with the ux-expert (DL-488 (iv) names the form for `aria-busy`).
+- **ux-expert:** QLT-845-26.
+- **lane 3:** the WebKit traces for QLT-845-23, at `9598c101` or `b2e4b8f5` (one write at a time is new here).
+
+### Hand-off (round 5)
+- Status: COMPLETE (code and CI read; QLT-845-23 waits for lane 3 as an addendum)
+- Artefacts written/updated: this section (not committed)
+- Jira / GitHub updates: [#845 review 6097382485](https://github.com/sankumar76/Accucut-Quotation/pull/845#pullrequestreview-6097382485) with 5 inline comments; label kept; Jira AQP-506 comment 13655
+- Open questions: none
+- Risks raised: QLT-845-25 (silent drop on a slow row write), QLT-845-24 (5 s frozen form)
+- Recommended next agent: master for QLT-845-25 and the two proof items; then developer (lane 1); then reviewer-quality round 6
