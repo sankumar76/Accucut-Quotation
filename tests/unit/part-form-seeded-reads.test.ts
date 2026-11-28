@@ -168,6 +168,15 @@ describe('usePartValues: the part\'s values', () => {
     expect(partServer.sent[0]).toEqual({ revision: 1, values: { a: '6.00' } });
   });
 
+  it('a form that cannot save keeps its seed whatever the row\'s revision says (the locked review passes a placeholder 0) and reads nothing', async () => {
+    const view = renderHook(usePartValues, props({ seed: seed(), editable: false, part: { id: PART_ID, slNo: '1', revision: 0 } }));
+    const first = view.render();
+    await flush();
+    expect(first.stored.status).toBe('ready');
+    expect(first.texts).toEqual({ a: '4.00' });
+    expect(loads.part).not.toHaveBeenCalled();
+  });
+
   it('reads from the server when the seed names another part, when it is absent, and when its part body is refused', async () => {
     for (const given of [seed({ partId: 'another' }), undefined, seed({ part: { id: PART_ID } })]) {
       loads.part.mockClear();
