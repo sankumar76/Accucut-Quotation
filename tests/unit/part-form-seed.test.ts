@@ -148,9 +148,10 @@ describe('getPartForm is getForm and getNode in one read (the combined read of D
   it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('answers exactly what getForm and getNode answer, as %s', async (role) => {
     const id = estimate().id;
     const viewer = { id: harness.idOf[role], role };
-    const [form, node, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getPartForm(viewer, id, id)]);
+    const [form, node, tree, both] = await Promise.all([harness.estimateService.getForm(viewer, id), harness.estimateService.getNode(viewer, id, id), harness.estimateService.getTree(viewer, id), harness.estimateService.getPartForm(viewer, id, id)]);
     expect(asJson(both.form)).toEqual(asJson(form));
     expect(asJson(both.node)).toEqual(asJson(node));
+    expect(asJson(both.tree)).toEqual(asJson(tree));
   });
 
   it('answers the same in every state of the estimate, and with a value typed into the part', async () => {
@@ -263,6 +264,8 @@ describe('getFirstPartForm is getForm and getNode of the first row of the tree, 
           expect(asJson(answer.form), `${role} ${status} ignored=${String(ignored)}`).toEqual(asJson(form));
           expect(asJson(answer.node), `${role} ${status} ignored=${String(ignored)}`).toEqual(asJson(node));
           expect(answer.node.id).toBe(first.id);
+          // DL-470: the tree the page hands the tree hook is the one `getTree` answers (one listing, no per-row read).
+          expect(asJson(answer.tree), `${role} ${status} ignored=${String(ignored)} tree`).toEqual(asJson(tree));
         }
       }
     }
@@ -338,7 +341,7 @@ describe('SEC-836-01: the seed\'s form body goes through the route\'s strict bui
     const real = await realFirst();
     const withKey = { ...real.form, rate: '1.00' };
     const sections = real.form.sections.map((section, index) => (index === 0 ? { ...section, fields: section.fields.map((field, at) => (at === 0 ? { ...field, formulaText: 'secret' } : field)) } : section));
-    const leaky = (form: unknown) => ({ getFirstPartForm: () => Promise.resolve({ form, node: real.node }), getPartForm: () => Promise.resolve({ form, node: real.node }) }) as never;
+    const leaky = (form: unknown) => ({ getFirstPartForm: () => Promise.resolve({ form, node: real.node, tree: real.tree }), getPartForm: () => Promise.resolve({ form, node: real.node, tree: real.tree }) }) as never;
     const read = (form: unknown) => (which.startsWith('the Engineer') ? readFirstPartFormBodies({ estimates: leaky(form) }, viewer, 'e') : readPartFormBodies({ estimates: leaky(form), masters: services().masters }, viewer, 'e', real.node.id));
     const dropped = defined(await read(withKey));
     expect(dropped.form).not.toHaveProperty('rate');

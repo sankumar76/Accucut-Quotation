@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger';
 import type { PartFormSeed } from '@/lib/estimates/part-form-seed';
 import type { MastersService } from '@/server/services/masters-service';
 import type { EstimateService, EstimateViewer } from '@/server/services/estimate-service';
-import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody } from '@/server/views/part-form-bodies';
+import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody, treeBody } from '@/server/views/part-form-bodies';
 
 /**
  * What the Lead's review page hands to the part form as props (DEF-141, DL-455): the four answers the form used to fetch from the browser after hydration, which cost four round trips on every Lead page, queued
@@ -31,10 +31,11 @@ export interface ListBodies {
   readonly treatments: unknown;
 }
 
-/** The two answers of the row: the form's definition and the part. */
+/** The answers of the row: the form's definition, the part and the parts tree (all three from the one call). */
 export interface PartFormBodies {
   readonly form: unknown;
   readonly part: unknown;
+  readonly tree: unknown;
 }
 
 function logFault(what: string, error: unknown): void {
@@ -58,15 +59,15 @@ export async function readListBodies(services: SeedServices): Promise<ListBodies
  */
 export async function readPartFormBodies(services: SeedServices, viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<PartFormBodies | null> {
   try {
-    const { form, node } = await services.estimates.getPartForm(viewer, estimateId, nodeId);
-    return { form: formBody(form), part: nodeBody(node) };
+    const { form, node, tree } = await services.estimates.getPartForm(viewer, estimateId, nodeId);
+    return { form: formBody(form), part: nodeBody(node), tree: treeBody(tree) };
   } catch (error) {
     logFault('form definition and part', error);
     return null;
   }
 }
 
-/** The first row's two answers with the row they are for: the part the Engineer's form shows until another is chosen. */
+/** The first row's answers (the form's definition, the part and the tree) with the row they are for: the part the Engineer's form shows until another is chosen. */
 export interface FirstRowBodies extends PartFormBodies {
   readonly partId: string;
 }
@@ -79,7 +80,7 @@ export async function readFirstPartFormBodies(services: FirstRowServices, viewer
   try {
     const first = await services.estimates.getFirstPartForm(viewer, estimateId);
     if (first === null) return null;
-    return { partId: first.node.id, form: formBody(first.form), part: nodeBody(first.node) };
+    return { partId: first.node.id, form: formBody(first.form), part: nodeBody(first.node), tree: treeBody(first.tree) };
   } catch (error) {
     logFault('form definition and first part', error);
     return null;
@@ -87,7 +88,7 @@ export async function readFirstPartFormBodies(services: FirstRowServices, viewer
 }
 
 /** The seed for the row the review shows, or `undefined` (the form reads from the server) when any answer is missing. */
-export function seedOf(estimateId: string, partId: string, lists: ListBodies | null, row: PartFormBodies | null): PartFormSeed | undefined {
+export function seedOf(estimateId: string, partId: string, lists: ListBodies | null, row: PartFormBodies | null, withTree = false): PartFormSeed | undefined {
   if (lists === null || row === null) return undefined;
-  return { estimateId, partId, form: row.form, part: row.part, materials: lists.materials, treatments: lists.treatments };
+  return { estimateId, partId, form: row.form, part: row.part, materials: lists.materials, treatments: lists.treatments, ...(withTree ? { tree: row.tree } : {}) };
 }

@@ -100,7 +100,7 @@ export function EstimateWorkspace({ header, estimateId, userId, ignored = false,
   // This page is the Engineer's (a Lead or an Admin sees the short header until SCR-06), so the Engineer's rule is the one asked. The Ignored layer is the page's, as the server rendered it, and the server's 409 above.
   const editable = canEditInputs({ status, ignored: frozen }, 'ENGINEER');
   // The tree lives here: the form beside it is for the part chosen in it, and a save of the form gives the tree the part's new revision.
-  const tree = usePartsTree(estimateId, serverIgnored);
+  const tree = usePartsTree(estimateId, serverIgnored, { seed });
   // The width of the tree's column (FR-112): set as `--tree-w` on the form area below, which the column, the drawing region and this file's own clamp read.
   const [treeWidth, attachWorkspace] = useTreeWidth(userId);
   // The tree-width controls (handle, Tree width menu) are fetched only once the form has shown, or there is nothing to show it for: the form comes first on a slow network and on a cold development server (DEF-085).

@@ -66,7 +66,7 @@ export default async function EstimatePage({ params, searchParams }: PageProps) 
       const services = { estimates: getEstimateService(), masters: getMastersService() };
       const viewer = { id: user.id, role: user.role };
       const [lists, first] = await Promise.all([readListBodies(services), readFirstPartFormBodies(services, viewer, workspace.estimateId)]);
-      const seed = first === null ? undefined : seedOf(workspace.estimateId, first.partId, lists, first);
+      const seed = first === null ? undefined : seedOf(workspace.estimateId, first.partId, lists, first, true);
       // The form's loading ghost, from the same two bodies, so no read is added for it (DEF-145, PF-6, PF-7): drawn on the server and handed in as an element, as the cards are.
       const ghost = engineerGhostFrom(first, { status: workspace.status, ignored: ignored !== null });
       // The Engineer's notice of an ignored task is a server component with no script, handed in as an element: drawn at first paint, outside the client form (UX 12944 section 4).

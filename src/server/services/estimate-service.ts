@@ -196,16 +196,16 @@ export interface EstimateService {
   /** One part with what was typed into it (`GET /api/v1/estimates/{id}/nodes/{nodeId}`): 404 for an estimate or a part that is not there for this person. */
   getNode(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<PartDetail>;
   /**
-   * The form and one part together, for a page that hands both to the part form as props (DEF-141): **exactly what `getForm` and `getNode` answer**, for the same viewer, with the same refusals (404 for an estimate or a part
-   * that is not there for this person), but with one access check, one read of the configuration and one listing of the parts instead of two of each.
+   * The form, one part and the parts tree together, for a page that hands them to the part form and the tree as props (DEF-141): **exactly what `getForm`, `getNode` and `getTree` answer**, for the same viewer, with the same refusals
+   * (404 for an estimate or a part that is not there for this person), but with one access check, one read of the configuration and one listing of the parts instead of three of each.
    */
-  getPartForm(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<{ readonly form: EstimateForm; readonly node: PartDetail }>;
+  getPartForm(viewer: EstimateViewer, estimateId: string, nodeId: string): Promise<{ readonly form: EstimateForm; readonly node: PartDetail; readonly tree: PartsTree }>;
   /**
-   * The same pair for **the first row of the parts tree** (`getTree`'s first answer), for the Engineer's page, which hands the part form its data as props (DEF-085, DL-469): the form shows the first row until another is
-   * chosen, so the page needs no row to ask for. **Exactly what `getForm` and `getNode(first row)` answer**, for the same viewer, with the same refusals (404 for an estimate that is not this person's), with one access
+   * The same three for **the first row of the parts tree** (`getTree`'s first answer), for the Engineer's page, which hands the part form and the tree their data as props (DEF-085, DL-469): the form shows the first row until another is
+   * chosen, so the page needs no row to ask for. **Exactly what `getForm`, `getNode(first row)` and `getTree` answer**, for the same viewer, with the same refusals (404 for an estimate that is not this person's), with one access
    * check, one read of the configuration and one listing of the parts. `null` when the estimate has no rows.
    */
-  getFirstPartForm(viewer: EstimateViewer, estimateId: string): Promise<{ readonly form: EstimateForm; readonly node: PartDetail } | null>;
+  getFirstPartForm(viewer: EstimateViewer, estimateId: string): Promise<{ readonly form: EstimateForm; readonly node: PartDetail; readonly tree: PartsTree } | null>;
   /** Adds a part with empty inputs (`POST /api/v1/estimates/{id}/nodes`). 404, 409 not editable by this person, 422 `TREE_FULL` at `MAX_PARTS_PER_ESTIMATE` parts. Answers with the new part's ID and the tree. */
   addPart(viewer: EstimateViewer, estimateId: string, request: AddPartRequest, audit?: AuditContext): Promise<AddedPart>;
   /** Moves a part (`PUT .../nodes/{nodeId}`, `POST .../tree/move`). 404, 409 (not editable by this person, or a stale revision, with the tree), 422 under `parentId`. Answers with the tree. */
@@ -365,6 +365,17 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
     return { document, completenessOf: createCompletenessReader(current), nameOf: (typed) => partNameOf(document, typed) };
   };
 
+  /**
+   * One part with what was typed into it, from the parts already listed, the tree already built and the readers already made: what `getNode` and `getPartForm` answer, built in this one place. Of what is stored, only the
+   * values of fields of the form leave (ADR-008: the answer is built from an allow-list).
+   */
+  async function partDetailOf(estimateId: string, tree: PartsTree, records: ReadonlyArray<NodeRecord>, readers: ViewReaders, nodeId: string): Promise<PartDetail> {
+    const record = partIn(records, nodeId);
+    const view = tree.find((candidate) => candidate.id === record.id);
+    if (view === undefined) throw new NotFoundError();
+    return { ...view, inputs: inputs.visibleInputsOf(readers.document, record.inputs), picture: await pictures.pictureOf(estimateId, record.imageId) };
+  }
+
   // The trail of a Lead's or an Admin's writes to inputs, pictures and the tree (DEF-131 stage 2): written in each write's own transaction, so the write fails when the entry cannot be written.
   const traces = createInputChangeAudit({ audit, estimates, nodes, materials });
 
@@ -438,33 +449,30 @@ export function createEstimateService({ estimates, audit, nodes, images, transac
     },
 
     async getNode(viewer, estimateId, nodeId) {
-      const records = await nodes.listNodes(await openForRead(viewer, estimateId));
-      const record = partIn(records, nodeId);
-      const view = viewsOf(records, await viewReaders(estimateId)).find((candidate) => candidate.id === record.id);
-      if (view === undefined) throw new NotFoundError();
-      // Of what is stored, only the values of fields of the form leave (ADR-008: the answer is built from an allow-list).
-      return { ...view, inputs: await inputs.visibleInputs(estimateId, record.inputs), picture: await pictures.pictureOf(estimateId, record.imageId) };
+      const id = await openForRead(viewer, estimateId);
+      const records = await nodes.listNodes(id);
+      partIn(records, nodeId);
+      const readers = await viewReaders(id);
+      return partDetailOf(id, viewsOf(records, readers), records, readers, nodeId);
     },
 
     async getPartForm(viewer, estimateId, nodeId) {
       const id = await openForRead(viewer, estimateId);
       const [records, readers, written] = await Promise.all([nodes.listNodes(id), viewReaders(id), nodes.lastWrittenAt(id)]);
-      const record = partIn(records, nodeId);
-      const view = viewsOf(records, readers).find((candidate) => candidate.id === record.id);
-      if (view === undefined) throw new NotFoundError();
-      const node = { ...view, inputs: inputs.visibleInputsOf(readers.document, record.inputs), picture: await pictures.pictureOf(id, record.imageId) };
-      return { form: inputs.formOf(readers.document, written), node };
+      const tree = viewsOf(records, readers);
+      const node = await partDetailOf(id, tree, records, readers, nodeId);
+      return { form: inputs.formOf(readers.document, written), node, tree };
     },
 
     async getFirstPartForm(viewer, estimateId) {
       const id = await openForRead(viewer, estimateId);
       const [records, readers, written] = await Promise.all([nodes.listNodes(id), viewReaders(id), nodes.lastWrittenAt(id)]);
-      // The first row of the tree as `getTree` answers it (`viewsOf` is the tree's own order), and the record that row is: the part is then read exactly as `getPartForm` reads it.
-      const view = viewsOf(records, readers)[0];
-      if (view === undefined) return null;
-      const record = partIn(records, view.id);
-      const node = { ...view, inputs: inputs.visibleInputsOf(readers.document, record.inputs), picture: await pictures.pictureOf(id, record.imageId) };
-      return { form: inputs.formOf(readers.document, written), node };
+      // The first row of the tree as `getTree` answers it (`viewsOf` is the tree's own order): the part is then built exactly as `getPartForm` builds it (`partDetailOf`), and the tree is the one that was listed.
+      const tree = viewsOf(records, readers);
+      const first = tree[0];
+      if (first === undefined) return null;
+      const node = await partDetailOf(id, tree, records, readers, first.id);
+      return { form: inputs.formOf(readers.document, written), node, tree };
     },
 
     async addPart(viewer, estimateId, request, audit) {

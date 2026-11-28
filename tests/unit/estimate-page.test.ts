@@ -612,10 +612,17 @@ describe('DEF-141 (DL-455): the Lead\'s review hands the part form its data as p
     harness.signInAs('ENGINEER');
     const seed = (await props(CODE))['seed'] as Record<string, unknown> | undefined;
     expect(seed).toBeDefined();
-    expect(Object.keys(defined(seed)).sort()).toEqual(['estimateId', 'form', 'materials', 'part', 'partId', 'treatments']);
+    expect(Object.keys(defined(seed)).sort()).toEqual(['estimateId', 'form', 'materials', 'part', 'partId', 'treatments', 'tree']);
     expect(seed?.['estimateId']).toBe(estimate().id);
     expect(seed?.['partId']).toBe(estimate().id);
     expect(Object.keys(seed?.['form'] as object).sort()).toEqual(['lastSavedAt', 'sections']);
+    // DL-470: the tree is the body `GET /estimates/{id}/tree` answers, in every state of the estimate.
+    for (const status of ['DRAFT', 'PREPARED', 'APPROVED'] as const) {
+      estimate().status = status;
+      const own = defined((await props(CODE))['seed'] as Record<string, unknown> | undefined);
+      const rows = await harness.estimateService.getTree({ id: harness.idOf.ENGINEER, role: 'ENGINEER' }, estimate().id);
+      expect(JSON.parse(JSON.stringify(own['tree'])), status).toEqual({ nodes: JSON.parse(JSON.stringify(rows)) });
+    }
   });
 
   it('the Engineer\'s page reads once: one combined read of the first row, and each option list once, never the two separate reads of the routes', async () => {
@@ -639,7 +646,10 @@ describe('DEF-141 (DL-455): the Lead\'s review hands the part form its data as p
     const own = defined((await props(CODE))['seed'] as Record<string, unknown> | undefined);
     harness.signInAs('LEAD');
     const lead = defined((await props(CODE))['seed'] as Record<string, unknown> | undefined);
-    expect(JSON.parse(JSON.stringify(own))).toEqual(JSON.parse(JSON.stringify(lead)));
+    // The Engineer's seed also carries the tree (DL-470: the Engineer's tree hook starts from it); everything else is the Lead's, body for body.
+    const { tree, ...rest } = own;
+    expect(tree).toBeDefined();
+    expect(JSON.parse(JSON.stringify(rest))).toEqual(JSON.parse(JSON.stringify(lead)));
   });
 
   it('an Engineer\'s estimate with no rows, or a fault in a read, gives no seed (the form reads from the server) and the page still draws', async () => {

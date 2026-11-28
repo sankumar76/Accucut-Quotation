@@ -15,4 +15,6 @@ export interface PartFormSeed {
   readonly part: unknown;
   readonly materials: unknown;
   readonly treatments: unknown;
+  /** The body of `GET /estimates/{id}/tree`, for the Lead's editing island (DEF-131 stage 2T), built by the same `treeBody` as the route. Absent where the page draws no island: the read-only tree is drawn from the costs. */
+  readonly tree?: unknown;
 }

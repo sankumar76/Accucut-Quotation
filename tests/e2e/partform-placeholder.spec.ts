@@ -197,9 +197,9 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
     });
   }
 
-  test("the Engineer's workspace, whole load (PF-6, PF-7, PF-15), and the second wait of another row (PF-14f): the ghost is on the screen from the first paint while the tree is read, 'Choose a part' is not, and the form area moves no more than 24 px when the form replaces it", async ({ page }, testInfo) => {
-    // DEF-085 (DL-469) seeds the Engineer's form with its first row, and the page draws the ghost from the same bodies, so the first wait is the ghost (it was the three bars) and there is no second wait for the first row.
-    // The tree is the one read left before the form can be drawn: it is held here, so the first-wait ghost is what is on the screen, and released to measure the swap.
+  test("the Engineer's workspace, whole load (PF-6, PF-7, PF-15), and the second wait of another row (PF-14f): the ghost is on the screen from the first paint, before the page's code has run, 'Choose a part' is not, and the form area moves no more than 24 px when the form replaces it", async ({ page }, testInfo) => {
+    // DEF-085 (DL-469, DL-470) seeds the Engineer's form and its tree with the first row, and the page draws the ghost from the same bodies, so the first wait is the server's ghost and there is no read left before the form is drawn:
+    // the tree is no longer read from the browser (this case used to hold that read). What is held here is the page's own code (its scripts), so the ghost the server drew is what is on the screen until the code runs, and the swap is measured when it is released.
     const { code, estimateId } = await assignedEstimate(page, testInfo, false);
     await signInAs(page, E2E_ENGINEER);
     let release: () => void = () => undefined;
@@ -207,18 +207,15 @@ test.describe('DEF-145: the form replaces its placeholder and nothing under it m
       release = resolve;
     });
     let held = 0;
-    await page.route(/\/api\/v1\/estimates\/[^/]+\/tree$/, async (route) => {
-      if (route.request().method() !== 'GET') {
-        await route.continue();
-        return;
-      }
+    await page.route(/\/_next\/static\/.*\.js(\?.*)?$/, async (route) => {
       held += 1;
       await gate;
       await route.continue();
     });
-    await page.goto(`/estimates/${code}`, { waitUntil: 'domcontentloaded' });
-    await expect.poll(() => held, { message: 'the tree read is being held' }).toBeGreaterThan(0);
-    // PF-6: drawn by the server, so it is there while the page's own code has read nothing; PF-7: while the tree is unread, the ghost and not the untrue "Choose a part".
+    // 'commit': the document is there; its scripts are held, so the load event is not waited for.
+    await page.goto(`/estimates/${code}`, { waitUntil: 'commit' });
+    await expect.poll(() => held, { message: "the page's scripts are being held" }).toBeGreaterThan(0);
+    // PF-6: drawn by the server, so it is there while the page's own code has not run; PF-7: the ghost and not the untrue "Choose a part".
     await placeholderIsShown(page);
     await expect(page.getByText('Choose a part')).toHaveCount(0);
     const areaBefore = await page.locator('[data-form-area]').evaluate((element) => element.getBoundingClientRect().height);
