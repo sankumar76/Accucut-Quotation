@@ -44,7 +44,7 @@ describe('the island and the seed', () => {
     expect(REVIEW).toMatch(/\{editTree \? \(\s*(?:\/\/[^\n]*\n\s*)*<ReviewEditShell[\s\S]*?<\/ReviewEditShell>\s*\) : \(\s*columns\s*\)\}/);
     // The shell's first paint always draws the read-only form (editable={false}) and the island's form is editable by construction: neither takes the flag from state that can change while mounted.
     expect(REVIEW).toMatch(/<PartForm[\s\S]*?editable=\{false\}/);
-    expect(ISLAND).toMatch(/<ReviewForm[\s\S]*?\n\s+editable\n/);
+    expect(ISLAND).toMatch(/<ReviewForm[\s\S]*?\n\s+editable\r?\n/);
   });
 
   it('DEF-145, DL-465: the page draws ONE ghost on the server, for the page\'s own editable; the first paint\'s form and the island\'s form both get it, so the swap moves nothing', () => {
