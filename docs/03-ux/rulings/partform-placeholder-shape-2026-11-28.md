@@ -1,5 +1,7 @@
 # UX ruling: the shape of the part form's loading placeholder, so the page does not shift when the form arrives (DEF-145; master DL-465 (3))
 
+> **Status, 2026-11-28 (DL-471, DL-485):** the Engineer's first-wait ghost (PF-7 and the Engineer first-wait rows of PF-1 and PF-15) is post-G8 with the redesigned seed. R1's Engineer first wait is master's three-bar placeholder. The Engineer's second wait is the ghost.
+
 | Field | Value |
 |---|---|
 | Author / date | ux-expert, 2026-11-27 (file dated 28 Nov as asked; due end of Sat 28 Nov) |
