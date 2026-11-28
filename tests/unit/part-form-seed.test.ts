@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readFirstPartFormBodies, readListBodies, readPartFormBodies, seedOf, type SeedServices } from '@/app/(portal)/estimates/[code]/part-form-seed';
 import { parseForm, parseMaterials, parsePartInputs } from '@/lib/estimates/form-client';
 import { parseTreatmentOptions } from '@/lib/estimates/treatment-options-client';
-import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody } from '@/server/views/part-form-bodies';
+import { formBody, materialOptionsBody, nodeBody, treatmentOptionsBody, treeBody } from '@/server/views/part-form-bodies';
 
 import { createEstimateService } from '@/server/services/estimate-service';
 
@@ -38,6 +41,7 @@ const { GET: getForm } = await import('@/app/api/v1/estimates/[id]/form/route');
 const { GET: getNode } = await import('@/app/api/v1/estimates/[id]/nodes/[nodeId]/route');
 const { GET: getMaterials } = await import('@/app/api/v1/options/materials/route');
 const { GET: getTreatments } = await import('@/app/api/v1/options/treatments/route');
+const { GET: getTree } = await import('@/app/api/v1/estimates/[id]/tree/route');
 
 const estimate = () => defined(harness.estimateWorld.estimates[0]);
 const request = (path: string): Request => new Request(`${ORIGIN}${path}`, { method: 'GET', headers: { origin: ORIGIN } });
@@ -361,5 +365,75 @@ describe('SEC-836-01: the seed\'s form body goes through the route\'s strict bui
     const clean = { getFirstPartForm: () => Promise.resolve({ form: real.form, node: real.node, tree: real.tree }), getPartForm: () => Promise.resolve({ form: real.form, node: real.node, tree: real.tree }) } as never;
     const accepted = which.startsWith('the Engineer') ? await readFirstPartFormBodies({ estimates: clean }, viewer, 'e') : await readPartFormBodies({ estimates: clean, masters: services().masters }, viewer, 'e', real.node.id);
     expect(defined(accepted).tree).toEqual({ nodes: JSON.parse(JSON.stringify(real.tree)) });
+  });
+});
+
+describe('DL-484: one treeBody, built for the route, the Engineer\'s seed and the Lead\'s island', () => {
+  const routeSource = readFileSync(fileURLToPath(new URL('../../src/app/api/v1/estimates/[id]/tree/route.ts', import.meta.url)), 'utf8');
+  const asJson = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+
+  /** A second row under the first, so the tree is more than one row and a reading order is shown. */
+  function withSecondRow(): void {
+    const id = estimate().id;
+    harness.estimateWorld.nodes.push({ id: '00000000-0000-4000-8000-0000000000d1', estimateId: id, parentId: id, sortIndex: 0, nodeKind: 'PART', revision: 1, inputs: {} } as never);
+  }
+
+  it('the route builds its answer by treeBody over the service\'s tree, not by a body of its own', () => {
+    expect(routeSource).toMatch(/import \{ treeBody \} from '@\/server\/views\/part-form-bodies';/);
+    expect(routeSource).toMatch(/handler: async \(\{ user, params \}\) => treeBody\(await getEstimateService\(\)\.getTree\(/);
+    expect(routeSource).not.toMatch(/\{ nodes: \[/);
+  });
+
+  it('names the three that build it in treeBody\'s doc, so the next reader knows who else a change reaches', () => {
+    const source = readFileSync(fileURLToPath(new URL('../../src/server/views/part-form-bodies.ts', import.meta.url)), 'utf8');
+    const doc = defined(/\/\*\*[^\n]*\*\/\s*\nexport function treeBody/.exec(source), 'treeBody doc')[0];
+    expect(doc).toMatch(/One builder, three users:\*\* the route, the Engineer's page .* and the Lead's review page /);
+    expect(doc).not.toMatch(/of its own/);
+  });
+
+  it('the route\'s answer, treeBody over getTree and the seed\'s tree are one and the same, for every role in every state, ignored or not', async () => {
+    withSecondRow();
+    const id = estimate().id;
+    for (const role of ['ENGINEER', 'LEAD', 'ADMIN'] as const) {
+      for (const status of ['DRAFT', 'PREPARED', 'APPROVED', 'QUOTED'] as const) {
+        for (const ignored of [false, true]) {
+          const where = `${role} ${status} ignored=${String(ignored)}`;
+          estimate().status = status;
+          estimate().ignoredAt = ignored ? new Date('2026-11-27T10:00:00.000Z') : null;
+          harness.signInAs(role);
+          const viewer = { id: harness.idOf[role], role };
+          const response = await getTree(request(`/api/v1/estimates/${id}/tree`), forEstimate(id));
+          expect(response.status, where).toBe(200);
+          const answered = await response.json();
+          const built = treeBody(await harness.estimateService.getTree(viewer, id));
+          const first = defined(await readFirstPartFormBodies({ estimates: harness.estimateService }, viewer, id), where);
+          const chosen = defined(await readPartFormBodies(services(), viewer, id, id), where);
+          expect((answered as { nodes: unknown[] }).nodes, where).toHaveLength(2);
+          expect(asJson(built), where).toEqual(answered);
+          expect(asJson(first.tree), where).toEqual(answered);
+          expect(asJson(chosen.tree), where).toEqual(answered);
+        }
+      }
+    }
+  });
+
+  // SEC-836-04 on the route: a row that carries a figure the schema does not name (a rate) is refused by `treeBody` before it can leave, and nothing of it is in the answer (NFR-002).
+  it.each(['ENGINEER', 'LEAD', 'ADMIN'] as const)('the route refuses a tree row that carries a rate, as %s, and the planted figure is not in what it answers', async (role) => {
+    harness.signInAs(role);
+    const id = estimate().id;
+    const real = await harness.estimateService.getTree({ id: harness.idOf[role], role }, id);
+    const planted = real.map((row, index) => (index === 0 ? { ...row, unitRate: '4242.42' } : row));
+    const spy = vi.spyOn(harness.estimateService, 'getTree').mockResolvedValueOnce(planted as never);
+    try {
+      const refused = await getTree(request(`/api/v1/estimates/${id}/tree`), forEstimate(id));
+      expect(refused.status).toBe(500);
+      expect(await refused.text()).not.toContain('4242.42');
+    } finally {
+      spy.mockRestore();
+    }
+    // The same rows without the planted figure are answered: the refusal is the figure's, not the shape's.
+    const accepted = await getTree(request(`/api/v1/estimates/${id}/tree`), forEstimate(id));
+    expect(accepted.status).toBe(200);
+    expect(await accepted.json()).toEqual(asJson(treeBody(real)));
   });
 });

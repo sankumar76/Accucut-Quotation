@@ -30,7 +30,7 @@ export function treatmentOptionsBody(options: z.input<typeof treatmentOptionsRes
   return treatmentOptionsResponseSchema.parse({ options });
 }
 
-/** The parts tree as `GET /estimates/{id}/tree` answers it: the rows in reading order, with no figure (NFR-002). The Lead's review page (the tree island's seed) and the Engineer's page (the tree hook's seed) build it here, through the same strict schema as the route, which answers with the same `{ nodes }` of its own. */
+/** The parts tree as `GET /estimates/{id}/tree` answers it: the rows in reading order, with no figure (NFR-002). **One builder, three users:** the route, the Engineer's page (the tree hook's seed) and the Lead's review page (the tree island's seed) all build it here, through the one strict schema, so a field the schema does not name leaves none of them. */
 export function treeBody(tree: ReadonlyArray<z.input<typeof partsTreeSchema>['nodes'][number]>): z.output<typeof partsTreeSchema> {
   return partsTreeSchema.parse({ nodes: [...tree] });
 }
