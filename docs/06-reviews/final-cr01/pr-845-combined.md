@@ -636,3 +636,31 @@ Met: cleared on Keep editing, after the leave goes ahead, and on mount and unmou
 - Open questions: none
 - Risks raised: none new
 - Recommended next agent: lane 1 or QA for the first-wave headroom (round 12 reviews `0cea7005` and what follows); QA for the snapshots and the `estimate-cleared` `master` comparison; lane 3 for Firefox and WebKit; master if a ruling is needed
+
+## Round 12 (posted 2026-11-28, on 9ff52601, code only)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the combined security-and-quality review, §9 (2)) |
+| Commits reviewed | `0cea7005` (the Prepared u5a's tail is its own case), `9ff52601` (a warm-up of the Lead review page in `auth.setup.ts`, DL-494): the delta `db63b4cf..9ff52601`, test only (2 files, +29 / -2) |
+| PR review | [#845 review 6098763218](https://github.com/sankumar76/Accucut-Quotation/pull/845#pullrequestreview-6098763218) (COMMENT, single-token, `commit_id` 9ff52601). Inline: QLT-845-37 `tests/e2e/auth.setup.ts:62` (4727692919). Early warning sent to the orchestrator before posting. Label `review:quality-changes-requested` kept |
+| CI | 46160340260 on 9ff52601: **superseded** (cancelled by the -37 fix push), not read. The earlier 46156865242 on 0cea7005 was relayed as every #845 case green on attempt 1 at three widths, with Stage 11 red on `mail/no-duplicates.test.ts:56` (outside the diff); not read by me |
+| **Verdict** | **REQUEST CHANGES. New: 0 Blocker, 0 Critical, 1 Major (QLT-845-37, test infrastructure), 0 Minor, 0 Info.** The product is unchanged since db63b4cf. Open: QLT-845-23 (lane 3), QLT-845-31 (until a run shows the tablet trio on attempt 1), QLT-845-37 |
+
+### Judgements
+- **The split keeps every DL-489 assertion.** The Draft u5a runs the whole one-document sequence. On Prepared, the same-document hold, type and Back are in the Prepared u2; the new `:804` covers the Prepared tail on a fresh load; `:799` keeps the hold, the notice, the release, editable within 2.5 s and the notice gone.
+- **The warm-up masks no product first-load defect.** It removes only the dev server's on-demand compile. A cold browser load of the Lead review is still tested by `:804` and `:523` (`goto` a fresh `?row=1#row-inputs`) and by every `openedClean` case.
+- **Shared state:** one API-made task for the shared set-up Engineer (DL-422, +0 people), the same footprint as `assignedEstimate`'s existing callers. But see -37.
+
+### Findings
+| ID | Severity | File:line (9ff52601) | Issue | Impact | Suggested fix | Test |
+|----|----------|-----------|-------|--------|---------------|------|
+| QLT-845-37 | Major (test infrastructure) | `tests/e2e/auth.setup.ts:62` | The warm-up signs in as the E2E Lead (`assignedEstimate` → `signInAs`) without `ensureE2eUsers()`, in a fully parallel setup project (`playwright.config.ts:63`) | On a fresh CI database it can fail the setup project, and every width project is then skipped | `await ensureE2eUsers();` first (idempotent), or a dependent setup step | The setup project green with the warm-up run alone on an empty database |
+
+### Hand-off (round 12)
+- Status: COMPLETE (code only)
+- Artefacts written/updated: this section (not committed)
+- Jira / GitHub updates: review 6098763218 with 1 inline comment; label kept; Jira AQP-506 comment 13694
+- Open questions: none
+- Risks raised: QLT-845-37 (the whole E2E stage could be skipped)
+- Recommended next agent: developer (lane 1), already pushing -37; then reviewer-quality round 13 on that head and its run
