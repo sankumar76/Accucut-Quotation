@@ -1124,6 +1124,19 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     expect(s.locationCalls().filter((call) => call !== 'replace')).toEqual([]);
   });
 
+  it('DL-492 (reviewer, info): with a step off in flight and no write yet, the button loads the step\'s target, and with nothing in flight the current path and query without the #: never a fragment navigation', () => {
+    const s = armedAndSaved({ order: 'next-first', timing: 'after-keystroke', queued: true });
+    rowLink(s);
+    expect(s.pendingTraversals()).toBe(1);
+    expect(s.pressStay()).toEqual([new URL(links.row, s.at()).href]);
+    const t = setUp({ order: 'next-first', timing: 'after-keystroke' });
+    t.history.replaceState(t.history.state, '', '#row-inputs');
+    const loads = t.pressStay();
+    expect(loads).toHaveLength(1);
+    expect(new URL(loads[0] ?? '').hash).toBe('');
+    expect(loads[0]).not.toBe(t.at());
+  });
+
   it('DL-492: the button and Next\'s fallback race both ways round and end on the same row, with no new entry', () => {
     for (const first of ['next', 'button'] as const) {
       const s = setUp({ order: 'next-first', timing: 'after-keystroke' });

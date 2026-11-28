@@ -459,7 +459,11 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
   const stayOnThisRow = (): void => {
     // The row that is being opened (DL-492): the address of the write in flight, which is also where Next's own fallback goes when the load cancels the slow read, so both end on the same row after one load. It always
     // differs from the current address in path or query (a write to the current address holds nothing), so it is a load and never a fragment navigation. A link queued behind it is not the one loaded.
-    const target = new URL(inFlightHref ?? win.location.href, win.location.href).href;
+    // With no write in flight (a step off that has not landed, which lasts at most STEP_GRACE_MS): the step's target, and failing that the current path and query without the `#`, which is a load and never a fragment
+    // navigation (QLT-845-29).
+    const here = new URL(win.location.href);
+    const fallback = `${here.pathname}${here.search}`;
+    const target = new URL(inFlightHref ?? step?.target ?? fallback, win.location.href).href;
     ask({
       // A full load of that row (no new entry). Nothing typed can be lost, because nothing could be typed while the fields were held.
       proceed: () => win.location.replace?.(target),
