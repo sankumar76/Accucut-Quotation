@@ -83,7 +83,7 @@ async function failSaves(page: Page): Promise<() => void> {
 }
 
 /** Row 1.1 is opened by its address from the queue, edited and saved (the guard has armed itself and stays armed); then another row's link is pressed and text is typed there that cannot be saved. */
-async function typedInTheSecondRow(page: Page, code: string): Promise<() => void> {
+async function typedInTheSecondRow(page: Page, code: string, prepared = true): Promise<() => void> {
   await page.goto('/queue');
   await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#part-form-title')).toContainText('1.1');
@@ -94,7 +94,8 @@ async function typedInTheSecondRow(page: Page, code: string): Promise<() => void
   await description(page).blur();
   expect((await saved).status(), 'the first save').toBe(200);
   // DL-482 (7), DEF-150 (UNCONFIRMED on master): a settle wait, not a fix. The row link is pressed after the page's own read has committed, so a read that lands late cannot be what this case measures. The no-wait case below covers the quick press.
-  await pageRead(page);
+  // A Draft estimate does not read itself again after its first save, so there is nothing to settle (and no cleared line to wait for).
+  if (prepared) await pageRead(page);
   // QLT-845-12: nothing is unsaved at this moment (the first save was answered 200), so the history length read here is the guard's: the page's entry and the guard's entry on top.
   const lengthAtTheLink = await page.evaluate(() => window.history.length);
   await chooseRow(page, '1');
@@ -152,7 +153,7 @@ async function typedAfterAnEarlyRowLink(page: Page, code: string): Promise<() =>
 
 test.describe('DEF-149: a row link pressed before anything is typed', () => {
   test('Back, then "Leave without saving": the queue, not the earlier row of the same page', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code } = await assignedEstimate(page, testInfo, false);
     await typedAfterAnEarlyRowLink(page, code);
     await page.evaluate(() => window.history.back());
     await expect(leaveDialog(page)).toBeVisible();
@@ -162,7 +163,7 @@ test.describe('DEF-149: a row link pressed before anything is typed', () => {
   });
 
   test('Back, then "Save draft and leave": the queue, with the typed text saved first', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code } = await assignedEstimate(page, testInfo, false);
     const allowSaves = await typedAfterAnEarlyRowLink(page, code);
     await page.evaluate(() => window.history.back());
     await expect(leaveDialog(page)).toBeVisible();
@@ -228,8 +229,8 @@ test.describe('DL-482 (7), DL-487 c1: a row link pressed as soon as the first sa
 
 test.describe('DL-487 c2, c3: two quick row links; Back and Forward with nothing typed', () => {
   test('c2: two row links in quick succession resolve to the last one; typing there, Back and "Leave without saving" land exactly on the page before', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
-    await armed(page, code);
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await armed(page, code, '1.1', false);
     await chooseRow(page, '1');
     // The second link is pressed at once, without waiting for the first to be drawn.
     await rowLink(page, '1.1').click();
@@ -248,8 +249,8 @@ test.describe('DL-487 c2, c3: two quick row links; Back and Forward with nothing
   });
 
   test('c3a: a row link, then Back with nothing typed, lands exactly on the page before with no question', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
-    await armed(page, code);
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await armed(page, code, '1.1', false);
     await chooseRow(page, '1');
     await expect(page).toHaveURL(/row=1#row-inputs$/);
     await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
@@ -355,7 +356,7 @@ async function keysThroughTheHold(page: Page, ms: number): Promise<void> {
 
 test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still owed', () => {
   test('u2 (the unarmed superseded link): clean page, row 1\'s read held, row 1 pressed, then row 1.1 (the row on screen), released, typed: Back asks, Keep editing keeps row 1.1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code } = await assignedEstimate(page, testInfo, false);
     await openedClean(page, code);
     const held = await holdRowRead(page, '1');
     await chooseRow(page, '1');
@@ -371,7 +372,7 @@ test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still o
   });
 
   test('u3: with row 1\'s read held, no key is accepted into the form (readonly and aria-readonly, never disabled), the form is busy, and the one polite line is said; once it has landed, typing in row 1 is guarded', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code } = await assignedEstimate(page, testInfo, false);
     await openedClean(page, code);
     const held = await holdRowRead(page, '1');
     await chooseRow(page, '1');
@@ -403,8 +404,8 @@ test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still o
   });
 
   test('u4 (the slow-save case, not DL-488\'s trap: a row link waits for every save in flight): the link waits for the save, the row changes when it has landed, typing in the new row is guarded, and nothing is lost', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
-    await armed(page, code);
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await armed(page, code, '1.1', false);
     let finish: () => void = () => undefined;
     const finished = new Promise<void>((resolve) => {
       finish = resolve;
@@ -463,7 +464,7 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
   }
 
   test('u5a: row 1\'s read held for about 6.5 s: a key every 500 ms is accepted into no box, the notice shows after 5 s; after the release the row is editable within 2.5 s, typing is guarded, Back asks, Keep editing keeps row 1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code } = await assignedEstimate(page, testInfo, false);
     await openedClean(page, code);
     const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
     const held = await holdRowRead(page, '1');
@@ -507,7 +508,7 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
   }
 
   test('u5b: from a row link (the address ends #row-inputs): the hold, then "Stay on this row" is one real load of row 1.1 (marker gone, navigation type reload, address and history length unchanged, the held read aborted); typing then is guarded, and Back asks with the text kept', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code } = await assignedEstimate(page, testInfo, false);
     await reachedByRowLink(page, code);
     const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
     const held = await holdRowRead(page, '1');
@@ -525,7 +526,7 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
   });
 
   test('u5b-plain: from a page opened by its address (no #): the same hold and the same real load', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code } = await assignedEstimate(page, testInfo, false);
     await openedClean(page, code);
     const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
     const held = await holdRowRead(page, '1');
@@ -541,7 +542,7 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
   });
 
   test('u5c (the route the reviewer found, probe 6): from a row link, with row 1\'s read held, a script\'s location.replace(location.href) is a fragment navigation: the fields stay read-only, no key of a stream (one per frame, over a second) is accepted, the guard pushes no entry; after the release row 1 is editable within 2.5 s, typing is guarded, and Back asks with the text kept', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code } = await assignedEstimate(page, testInfo, false);
     await reachedByRowLink(page, code);
     const held = await holdRowRead(page, '1');
     await chooseRow(page, '1');
@@ -572,7 +573,7 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
   });
 
   test('u4f: the old row\'s save fails, another row\'s link is pressed, the dialog asks, "Leave without saving" shows the new row; typing there (the save fails) is guarded: Back asks, Keep editing keeps the new row and the text, and Leave lands exactly on the queue', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code } = await assignedEstimate(page, testInfo, false);
     await openedClean(page, code);
     await failSaves(page);
     await description(page).fill(FIRST);
@@ -633,7 +634,7 @@ test.describe('DL-491 u6a, u6b, u6c (QLT-845-23): the review\'s refresh of the p
   const partNo = (page: Page) => page.getByRole('textbox', { name: /Part No/ }).first();
 
   test('u6a: the row name is left with a text whose save fails: no refresh is asked for; Back, "Leave without saving" lands exactly on the queue by a soft navigation', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code } = await assignedEstimate(page, testInfo, false);
     await openedFromTheQueue(page, code);
     const fallbacks = fallbacksOf(page);
     const refresh = await holdPageRefresh(page, code);
@@ -651,7 +652,7 @@ test.describe('DL-491 u6a, u6b, u6c (QLT-845-23): the review\'s refresh of the p
   });
 
   test('u6b: the row name is saved (its refresh is asked for and held in flight), another field is left unsaved; Back, "Leave without saving": the way out waits for the refresh for at most 1 s and lands exactly on the queue by a soft navigation', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code } = await assignedEstimate(page, testInfo, false);
     await openedFromTheQueue(page, code);
     const fallbacks = fallbacksOf(page);
     const refresh = await holdPageRefresh(page, code);
@@ -709,7 +710,7 @@ test.describe('DL-491 u6a, u6b, u6c (QLT-845-23): the review\'s refresh of the p
   });
 
   test('u6c: the same, with "Save draft and leave": the draft is saved, the way out waits for the refresh for at most 1 s, and it lands exactly on the queue by a soft navigation', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code } = await assignedEstimate(page, testInfo, false);
     await openedFromTheQueue(page, code);
     const fallbacks = fallbacksOf(page);
     const refresh = await holdPageRefresh(page, code);
@@ -757,8 +758,8 @@ test.describe('engine order of window listeners (evidence only)', () => {
 test.describe('DEF-149: Back after a link to another row of the same page', () => {
   // The landing address is exact: the page before the estimate page is the queue, so a way out that goes one entry too far (to the page before the queue) is a failure and not "the page is left" (DL-476 note 7).
   test('Back, then "Leave without saving": the queue, and no entry further back', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
-    await typedInTheSecondRow(page, code);
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await typedInTheSecondRow(page, code, false);
     await page.evaluate(() => window.history.back());
     await expect(leaveDialog(page)).toBeVisible();
     await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
@@ -766,8 +767,8 @@ test.describe('DEF-149: Back after a link to another row of the same page', () =
   });
 
   test('Back, Back again with the dialog up, then "Leave without saving": the queue, not the entry before it (the overshoot)', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
-    await typedInTheSecondRow(page, code);
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await typedInTheSecondRow(page, code, false);
     await page.evaluate(() => window.history.back());
     await expect(leaveDialog(page)).toBeVisible();
     await page.evaluate(() => window.history.back());
@@ -777,8 +778,8 @@ test.describe('DEF-149: Back after a link to another row of the same page', () =
   });
 
   test('Back, then "Save draft and leave": the queue, and the typed text is saved first', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
-    const allowSaves = await typedInTheSecondRow(page, code);
+    const { code } = await assignedEstimate(page, testInfo, false);
+    const allowSaves = await typedInTheSecondRow(page, code, false);
     await page.evaluate(() => window.history.back());
     await expect(leaveDialog(page)).toBeVisible();
     allowSaves();
@@ -790,16 +791,16 @@ test.describe('DEF-149: Back after a link to another row of the same page', () =
   });
 
   test('"Leave without saving" leaves the page: the one before is shown', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
-    await typedInTheSecondRow(page, code);
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await typedInTheSecondRow(page, code, false);
     await backTwiceAsks(page);
     await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
     await expect(page).toHaveURL(/\/queue$/);
   });
 
   test('"Save draft and leave" saves what was typed and leaves the page', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
-    const allowSaves = await typedInTheSecondRow(page, code);
+    const { code } = await assignedEstimate(page, testInfo, false);
+    const allowSaves = await typedInTheSecondRow(page, code, false);
     await backTwiceAsks(page);
     // The answer of the save is waited for (QLT-845-07), as the other "Save draft and leave" cases do: the listener is made before the saves are let through, and the landing is read after it.
     const row = await rowOnScreen(page);
@@ -811,8 +812,8 @@ test.describe('DEF-149: Back after a link to another row of the same page', () =
   });
 
   test('"Keep editing" keeps the guard armed: the page stays, the text stays, and a later Back asks again', async ({ page }, testInfo) => {
-    const { code } = await assignedEstimate(page, testInfo, true);
-    await typedInTheSecondRow(page, code);
+    const { code } = await assignedEstimate(page, testInfo, false);
+    await typedInTheSecondRow(page, code, false);
     await backTwiceAsks(page);
     await leaveDialog(page).getByRole('button', { name: 'Keep editing', exact: true }).click();
     await expect(leaveDialog(page)).toHaveCount(0);
