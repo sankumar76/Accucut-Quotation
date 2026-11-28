@@ -19,6 +19,9 @@ import {
   FAILED_BODY,
   FORM_LOCKED,
   INPUT_HELD_LINE,
+  INPUT_STUCK_BUTTON,
+  INPUT_STUCK_LINE,
+  INPUT_STUCK_SENTENCE,
   MISSING_CHOICE_MESSAGE,
   MISSING_NUMBER_MESSAGE,
   MISSING_OPTION_MESSAGE,
@@ -302,14 +305,26 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
     </form>
   );
   // The treatments the page handed over reach the control that needs them, deep in the form, through this context (DEF-141).
-  // The one polite line of a hold of 300 ms or more is a live region of its own, **outside the form**: the form is `aria-busy` while it is held, and a region inside a busy one may not be announced (QLT-845-26). It is on the page
-  // from the first paint, so it speaks when its words change.
+  // The hold's region (UX ruling leave-guard-slow-row-notice, R1 to R3): in the page flow directly BEFORE the form, never inside it (the form is `aria-busy` while it is held, and a region inside a busy one may not be
+  // announced, QLT-845-26), and with no `aria-busy` of its own. It holds the one live voice, a polite line that is on the page from the first paint (so it speaks when its words change): from 300 ms the hold's line, from
+  // 5 s the sentence of the notice and the way out. The notice itself carries no live role, and is drawn only while the fields are held (DL-489). Focus never moves to it on its own.
+  const heldLine = inputHeld.tooLong ? INPUT_STUCK_LINE : inputHeld.shown ? INPUT_HELD_LINE : '';
   return (
     <TreatmentSeedContext value={seed?.treatments}>
+      <div data-input-held-region="">
+        <p role="status" data-input-held-line="" className="sr-only">
+          {heldLine}
+        </p>
+        {inputHeld.tooLong ? (
+          <Notice tone="warn">
+            <p data-input-held-slow="">{INPUT_STUCK_SENTENCE}</p>
+            <Button type="button" variant="secondary" className="mt-s-2" data-input-held-stay="" onClick={() => (gate ?? ownGate).stayOnThisRow()}>
+              {INPUT_STUCK_BUTTON}
+            </Button>
+          </Notice>
+        ) : null}
+      </div>
       {drawn}
-      <p role="status" data-input-held-line="" className="sr-only">
-        {inputHeld.shown ? INPUT_HELD_LINE : ''}
-      </p>
     </TreatmentSeedContext>
   );
 }

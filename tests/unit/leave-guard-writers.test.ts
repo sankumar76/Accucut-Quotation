@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { fragmentLinkOf, installLeaveGuard, STEP_GRACE_MS, type FragmentTarget, type LeaveEnv, type LeaveGuardHandle } from '@/lib/estimates/leave-guard';
+import { fragmentLinkOf, INPUT_HELD_MAX_MS, installLeaveGuard, STEP_GRACE_MS, type FragmentTarget, type LeaveEnv, type LeaveGuardHandle } from '@/lib/estimates/leave-guard';
 import type { LeaveRequest } from '@/lib/estimates/leave-registry';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
@@ -108,11 +108,14 @@ function browser(variant: Variant) {
   // What the page does when the row on screen changes: the form of the row that was there unmounts and its unsaved marks go (`part-form.tsx` key, `save-gate.ts`).
   const hooks = { unmounted: () => undefined as void };
 
+  // The addresses the page was loaded again at (`location.replace`, "Stay on this row"): the model draws nothing of it, the page that loads is a new one.
+  const reloads: string[] = [];
   const location = {
     get href() {
       return entries[index] ?? PAGE;
     },
     origin: 'http://portal.test',
+    replace: (url: string): void => void reloads.push(url),
   };
 
   /**
@@ -274,6 +277,7 @@ function browser(variant: Variant) {
 
   return {
     entries,
+    reloads,
     history,
     env,
     router,
@@ -338,7 +342,7 @@ function setUp(variant: Variant = DEFAULT) {
   const gate = createSaveGate();
   const asked: LeaveRequest[] = [];
   // DL-488 (iv): while the guard says the form is busy, no field accepts input. DL-488 (iii): the row on screen is dirty only when something is typed in it, not when another part's save is in flight or failed.
-  const state = { inert: false, refused: 0 };
+  const state = { inert: false, refused: 0, stuck: false };
   const handle = installLeaveGuard({
     env: model.env,
     gate,
@@ -346,6 +350,8 @@ function setUp(variant: Variant = DEFAULT) {
     navigate: (href, replace) => (replace ? model.router.replace(href) : model.router.push(href)),
     rowDirty: () => model.form.typed,
     onInputHeld: (held) => void (state.inert = held),
+    // DL-489: no fail-open end of the hold; after the time the form says the row is taking long and offers "Stay on this row".
+    onHeldTooLong: (tooLong) => void (state.stuck = tooLong),
   });
   model.install(handle);
   model.hooks.unmounted = () => gate.mark(PART, 'field-j', false);
@@ -366,6 +372,18 @@ function setUp(variant: Variant = DEFAULT) {
       return true;
     },
     inert: () => state.inert,
+    /** The form says the row is taking a while to open and offers "Stay on this row". */
+    stuck: () => state.stuck,
+    /**
+     * The person presses "Stay on this row": the guard asks through the leave check, and with nothing unsaved the request goes through (the page's own `ask` lets it). Answers the addresses the page was loaded
+     * again at, the full load that is the answer to the slow read.
+     */
+    pressStay: (): string[] => {
+      const before = asked.length;
+      handle.stayOnThisRow();
+      asked[before]?.proceed();
+      return model.reloads;
+    },
     refused: () => state.refused,
     /** A save of the part that was open before is in flight and never answers (the trap of QLT-845-19): the gate stays dirty, the row on screen is not. */
     holdSave: () => gate.track(new Promise(() => undefined)),
@@ -446,6 +464,26 @@ const MORE_WRITERS: ReadonlyArray<readonly [string, (s: Setup) => void]> = [
   ],
   // A link to the address the page is on (QLT-845-19, "a link to the current address"): the router's `replace` of an address it is on commits nothing and says nothing.
   ['a link to the address the page is on', (s) => s.click(s.at() ?? PAGE, (event) => (event.preventDefault(), s.router.replace(s.at() ?? PAGE)))],
+  // DL-489 (3) (vi): a row write that lands after INPUT_HELD_MAX_MS (at 5.001 s, and at 30 s). The time passing releases nothing, arms nothing and repairs nothing: the notice shows while the fields are held, a key
+  // is refused, and when the write lands the hold and the notice end. (The reviewer's probe 5 had a key accepted at 5.001 s, the guard arming on the row about to be replaced, and the write landing on its entry.)
+  [
+    'a row write that lands after INPUT_HELD_MAX_MS (5.001 s)',
+    (s) => {
+      s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
+      s.runTimers(INPUT_HELD_MAX_MS + 1);
+      if (s.inert()) expect(s.type()).toBe(false);
+      s.flush();
+    },
+  ],
+  [
+    'a row write that lands after 30 s',
+    (s) => {
+      s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
+      s.runTimers(30_000);
+      if (s.inert()) expect(s.type()).toBe(false);
+      s.flush();
+    },
+  ],
   // A write of the router that lands on whatever entry is current, which is the guard's when it is on top. It lands within the step: a write that nobody announced (no link was pressed) and that lands after a keystroke
   // redraws the row for any guard, and the guard cannot hold input for a write it was not told about (see the Dev Record, known limitations).
   [
@@ -485,28 +523,33 @@ function check(s: Setup, label: string): void {
   if (idle) expect(pathSearch(s.entries[s.pageIndex] ?? ''), `${label}: the page's own entry carries the row on screen`).toBe(s.screen.path);
   // At idle, something typed means the guard is armed: its entry is on top of the page's own and the person is on it (the class of QLT-845-19).
   // The hold on the fields ends when the writes have landed, not by its fail-open end: the fail-open end is for a write that never comes (QLT-845-24: a link the guard did not take left the hold for 5 s).
+  // The notice with "Stay on this row" is shown only while the fields are held.
+  if (s.stuck()) expect(s.inert(), `${label}: the notice shows only while the fields are held`).toBe(true);
   if (idle && !s.lostWrites()) expect(s.inert(), `${label}: the hold ended with the writes`).toBe(false);
   if (s.form.typed && idle) expect(s.index(), `${label}: something is typed, so the guard is armed`).toBeGreaterThanOrEqual(2);
 }
 
 /**
  * A key the person presses in the row on screen: refused while the form is busy (nothing is accepted and then dropped), and accepted once the router's write has landed. If the form is still busy when everything has
- * landed, the guard's fail-open end of the lock is what the person waits for.
+ * landed, the write never came: there is no fail-open end of the hold (QLT-845-25), the form says the row is taking a while to open, and the person presses "Stay on this row".
  */
-function typeWhenAllowed(s: Setup, label: string): void {
-  if (s.type()) return;
+function typeWhenAllowed(s: Setup, label: string): boolean {
+  if (s.type()) return true;
   s.flush();
   s.settle();
-  if (s.type()) return;
-  // Nothing is on its way and the fields are still held: a write that never came. The guard's fail-open end of the hold runs (a link it queued meanwhile is then written, and can itself be redirected or dropped, so
-  // this may take a few rounds).
-  for (let round = 0; round < 4; round += 1) {
-    s.runTimers();
-    s.flush();
-    s.settle();
-    if (s.type()) return;
-  }
-  expect(s.type(), `${label}: the form accepts input again`).toBe(true);
+  if (s.type()) return true;
+  // Nothing is on its way and the fields are still held: a write that never came. No timer ends the hold, arms or repairs (DL-489). After the time the form says so, nothing is accepted meanwhile, and nothing was armed
+  // by the time passing; "Stay on this row" is a full load of the current address, and the hold is not released first. That load replaces the page, so the case ends there.
+  const indexBefore = s.index();
+  s.runTimers();
+  expect(s.stuck(), `${label}: the form says the row is taking a while to open`).toBe(true);
+  expect(s.type(), `${label}: still no key is accepted`).toBe(false);
+  expect(s.index(), `${label}: the time passing armed nothing and moved nothing`).toBe(indexBefore);
+  expect(s.form.typed, `${label}: nothing was typed, so a load loses nothing`).toBe(false);
+  const loads = s.pressStay();
+  expect(loads.at(-1), `${label}: "Stay on this row" loads the address that is current`).toBe(s.at());
+  expect(s.inert(), `${label}: the hold is not released before the page loads`).toBe(true);
+  return false;
 }
 
 /**
@@ -639,13 +682,19 @@ function walk(variant: Variant, list: ReadonlyArray<readonly [string, (s: Setup)
       // The order, the timing and the sequence are in the name of a failure, so it can be found again.
       const label = (): string => `[${variant.order}/${variant.timing} ${sequence.join(',')} @${String(typedAfter)}] ${names.join(', then ')}, typing after step ${String(typedAfter)}`;
       // A keystroke, saved at once (the field was left): the guard's entry stays on top, and what is written next meets it. If the form is busy the key is refused and tried again when the write has landed.
+      // The page was loaded again by "Stay on this row": the case ends there, with nothing lost (checked where the button is pressed).
+      let loaded = false;
       const keystroke = (): void => {
-        typeWhenAllowed(s, label());
+        if (!typeWhenAllowed(s, label())) {
+          loaded = true;
+          return;
+        }
         s.save();
       };
       try {
         if (typedAfter === 0) keystroke();
         sequence.forEach((writer, step) => {
+          if (loaded) return;
           const [name, write] = list[writer] ?? list[0] ?? ['', () => undefined];
           names.push(name);
           // A write of the router that was waiting lands before the next writer acts (a keystroke may have come between).
@@ -661,7 +710,10 @@ function walk(variant: Variant, list: ReadonlyArray<readonly [string, (s: Setup)
           }
         });
         // The row on screen is typed in: a key is refused while the router's write is owed, and accepted when it has landed.
-        typeWhenAllowed(s, label());
+        if (loaded || !typeWhenAllowed(s, label())) {
+          checked += 1;
+          continue;
+        }
         s.flush();
         s.settle();
         check(s, `after ${names.join(', then ')} and typing`);
@@ -688,7 +740,7 @@ describe.each(VARIANTS)('DEF-149 (R1), QLT-845-08, QLT-845-19: whatever the page
     write(s);
     s.flush();
     s.settle();
-    typeWhenAllowed(s, 'the writer alone');
+    if (!typeWhenAllowed(s, 'the writer alone')) return;
     s.flush();
     s.settle();
     check(s, 'after the writer and the keystroke');
@@ -707,7 +759,7 @@ describe.each(VARIANTS)('DEF-149 (R1), QLT-845-08, QLT-845-19: whatever the page
     write(s);
     s.flush();
     s.settle();
-    typeWhenAllowed(s, 'the writer alone');
+    if (!typeWhenAllowed(s, 'the writer alone')) return;
     s.flush();
     s.settle();
     check(s, 'after the writer and the keystroke');
@@ -777,7 +829,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     backOracle(s, 'c2 in Firefox');
   });
 
-  it('c2 as Firefox ran it, the first write overtaken and never landing: the router ends where it started and says nothing; the fields are held until the guard\'s fail-open end, and the guard then arms on the first key accepted', () => {
+  it('c2 as Firefox ran it, the first write overtaken and never landing: the router ends where it started and says nothing; the fields stay held for as long as it takes, the form says the row is taking a while after 5 s, and "Stay on this row" loads the page again (DL-489)', () => {
     const s = armedAndSaved({ order: 'next-first', timing: 'after-keystroke' });
     rowLink(s);
     rowLink(s, links.page);
@@ -785,12 +837,14 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     s.flush();
     expect(s.pendingCommits()).toBe(0);
     expect(s.type()).toBe(false);
+    expect(s.stuck()).toBe(false);
     s.runTimers();
-    s.flush();
-    expect(s.type()).toBe(true);
-    expect(s.violations).toEqual([]);
-    expect(s.above()).toBe(1);
-    backOracle(s, 'c2 in Firefox, write dropped');
+    expect(s.stuck()).toBe(true);
+    expect(s.type()).toBe(false);
+    expect(s.pressStay()).toEqual([s.at()]);
+    // The hold is not released first: the page that loads is the answer.
+    expect(s.inert()).toBe(true);
+    expect(s.form.typed).toBe(false);
   });
 
   it('u2 (the reviewer\'s case): a clean page, never armed; row 1\'s link, then at once the current row\'s: the guard takes the second link (DL-488 (ii)) and writes it once the first has landed, so Next never discards the first; typing is guarded', () => {
@@ -807,7 +861,7 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     backOracle(s, 'u2');
   });
 
-  it('u2 with the router discarding the first navigation (QLT-845-19 as the reviewer\'s probe had it): the router ends where it started and says nothing, the fields are held until the guard\'s fail-open end, and typing is then guarded', () => {
+  it('u2 with the router discarding the first navigation (QLT-845-19 as the reviewer\'s probe had it): the router ends where it started and says nothing; no timer releases the fields or arms the guard, and "Stay on this row" loads the page again', () => {
     const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
     rowLink(s);
     rowLink(s, links.page);
@@ -815,11 +869,12 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     s.flush();
     expect(s.type()).toBe(false);
     s.runTimers();
-    s.flush();
-    expect(s.type()).toBe(true);
-    expect(s.violations).toEqual([]);
-    expect(s.index()).toBe(2);
-    backOracle(s, 'u2, first navigation discarded');
+    expect(s.stuck()).toBe(true);
+    expect(s.type()).toBe(false);
+    // Nothing was armed by the time passing.
+    expect(s.index()).toBe(1);
+    expect(s.pressStay()).toEqual([s.at()]);
+    expect(s.inert()).toBe(true);
   });
 
   it('u3: with the row\'s write held, no key is accepted into the form, and after the write lands typing in the new row is guarded', () => {
@@ -854,17 +909,55 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     backOracle(s, 'late write with a save in flight');
   });
 
-  it('an owed write never blocks arming, and the lock on the fields ends by itself if the write never comes (a link that goes nowhere)', () => {
+  it('an owed write never blocks arming, and a write that never comes holds the fields until the person presses "Stay on this row", which loads the page again (a link that goes nowhere)', () => {
     const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
+    s.markLost();
     s.click(links.row, (event) => event.preventDefault());
     expect(s.inert()).toBe(true);
     expect(s.type()).toBe(false);
-    // The fail-open end of the lock: the fields accept input again, and the first key arms the guard.
+    // No timer ends the hold (DL-489): the form says so after the time, the fields stay held, and nothing is armed.
+    expect(s.stuck()).toBe(false);
     s.runTimers();
-    expect(s.inert()).toBe(false);
-    expect(s.type()).toBe(true);
-    expect(s.index()).toBe(2);
-    backOracle(s, 'a link that goes nowhere');
+    expect(s.stuck()).toBe(true);
+    expect(s.inert()).toBe(true);
+    expect(s.type()).toBe(false);
+    expect(s.index()).toBe(1);
+    expect(s.pressStay()).toEqual([s.at()]);
+    expect(s.inert()).toBe(true);
+  });
+
+  it('QLT-845-25 (the reviewer\'s slow-write probe, result turned around): a row write that lands after INPUT_HELD_MAX_MS: the form says so and accepts nothing; when the write lands the hold and the notice end, the guard has pushed nothing on the row about to be replaced, and what is typed next is guarded and never dropped', () => {
+    for (const late of [INPUT_HELD_MAX_MS + 1, 30_000]) {
+      const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
+      s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
+      s.runTimers(late);
+      expect(s.stuck(), `${String(late)} ms: the notice is shown`).toBe(true);
+      for (let key = 0; key < 5; key += 1) expect(s.type(), `${String(late)} ms: no key is accepted`).toBe(false);
+      expect(s.form.typed).toBe(false);
+      // Nothing was armed on the row that is about to be replaced (the reviewer's probe: a key accepted at 5.001 s armed the guard, and the late write then landed on its entry).
+      expect(s.index()).toBe(1);
+      expect(s.violations).toEqual([]);
+      s.flush();
+      expect(s.stuck()).toBe(false);
+      expect(s.inert()).toBe(false);
+      expect(s.screen.path).toBe(pathSearch(new URL(links.row, PAGE).href));
+      expect(s.type()).toBe(true);
+      expect(s.index()).toBe(2);
+      expect(s.form.lost).toBe(false);
+      backOracle(s, `a slow write, landing after ${String(late)} ms`);
+    }
+  });
+
+  it('QLT-845-25: "Stay on this row" is a full load of the address that is current, through the leave check: it never releases the hold first, adds no entry, and with something typed it is asked about like any other way out', () => {
+    const s = setUp({ order: 'next-first', timing: 'after-keystroke' });
+    s.click(links.row, (event) => (event.preventDefault(), s.router.replace(links.row)));
+    s.runTimers();
+    expect(s.stuck()).toBe(true);
+    const entriesBefore = s.entries.length;
+    expect(s.pressStay()).toEqual([s.at()]);
+    expect(s.inert()).toBe(true);
+    expect(s.entries).toHaveLength(entriesBefore);
+    expect(s.asked.at(-1)?.fullLoad).toBe(true);
   });
 
   it('a Forward before the router\'s write lands: the row on screen is the one the traversal landed on, the guard arms there, and Back asks', () => {

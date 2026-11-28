@@ -29,6 +29,12 @@ export interface SaveGate {
   /** The leave guard says the form's fields must not accept input (a row write or a repair step is in flight, DL-488 (iv)), or that they may again. The part form takes it as its read-only state. */
   readonly setInputHeld: (held: boolean) => void;
   readonly isInputHeld: () => boolean;
+  /** The hold has lasted `INPUT_HELD_MAX_MS` with a write still owed: the page shows the notice with "Stay on this row", and the polite line gives way to it (DL-489). */
+  readonly setHoldTooLong: (tooLong: boolean) => void;
+  readonly isHoldTooLong: () => boolean;
+  /** The leave guard offers what "Stay on this row" does (a full load of the current address through the leave check, DL-489); the form's notice presses it. Answers the way to withdraw it. */
+  readonly offerStay: (stay: () => void) => () => void;
+  readonly stayOnThisRow: () => void;
   /** Told when the hold on the fields changes. Answers the way to stop listening. */
   readonly subscribeInputHeld: (listener: () => void) => () => void;
   /** Told after every change of what is dirty (never for a change that changes nothing). Answers the way to stop listening. */
@@ -48,6 +54,8 @@ export function createSaveGate(): SaveGate {
   const listeners = new Set<() => void>();
   const holdListeners = new Set<() => void>();
   let inputHeld = false;
+  let holdTooLong = false;
+  let stayOffer: (() => void) | null = null;
   const flushers = new Set<(mode: FlushMode) => void>();
   const keyOf = (partId: string, fieldId: string): string => `${partId}/${fieldId}`;
   const notify = (): void => {
@@ -98,6 +106,19 @@ export function createSaveGate(): SaveGate {
       for (const listener of [...holdListeners]) listener();
     },
     isInputHeld: () => inputHeld,
+    setHoldTooLong(tooLong) {
+      if (tooLong === holdTooLong) return;
+      holdTooLong = tooLong;
+      for (const listener of [...holdListeners]) listener();
+    },
+    isHoldTooLong: () => holdTooLong,
+    offerStay(stay) {
+      stayOffer = stay;
+      return () => {
+        if (stayOffer === stay) stayOffer = null;
+      };
+    },
+    stayOnThisRow: () => stayOffer?.(),
     subscribeInputHeld(listener) {
       holdListeners.add(listener);
       return () => void holdListeners.delete(listener);

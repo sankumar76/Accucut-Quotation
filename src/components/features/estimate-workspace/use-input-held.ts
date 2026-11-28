@@ -10,11 +10,14 @@ export interface InputHeld {
   readonly held: boolean;
   /** The hold has lasted `INPUT_HELD_SHOWN_AFTER_MS` or more: the shaded read-only look and the polite line come now, not before. */
   readonly shown: boolean;
+  /** A write has been owed for `INPUT_HELD_MAX_MS` and the fields are still held (DL-489): the notice with "Stay on this row" is drawn, and the polite line gives way to it. */
+  readonly tooLong: boolean;
 }
 
 /** What the leave guard says about the form's fields (DL-488 (iv)), read from the gate the guard and the form share. */
 export function useInputHeld(gate: SaveGate): InputHeld {
   const held = useSyncExternalStore(gate.subscribeInputHeld, gate.isInputHeld, () => false);
+  const tooLong = useSyncExternalStore(gate.subscribeInputHeld, gate.isHoldTooLong, () => false);
   const [lasted, setLasted] = useState(false);
   useEffect(() => {
     if (!held) return;
@@ -24,5 +27,5 @@ export function useInputHeld(gate: SaveGate): InputHeld {
       setLasted(false);
     };
   }, [held]);
-  return { held, shown: held && lasted };
+  return { held, shown: held && lasted, tooLong: held && tooLong };
 }

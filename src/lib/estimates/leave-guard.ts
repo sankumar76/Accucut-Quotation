@@ -33,7 +33,7 @@ interface Target {
 
 export interface LeaveEnv {
   readonly win: Target & {
-    readonly location: { readonly href: string; readonly origin: string };
+    readonly location: { readonly href: string; readonly origin: string; readonly replace?: (url: string) => void };
     readonly history: {
       readonly state: unknown;
       readonly pushState: (state: unknown, title: string) => void;
@@ -77,6 +77,11 @@ export interface LeaveGuardOptions {
    * shows it with the form's own read-only state; it is not the `inert` attribute and not `disabled`.
    */
   readonly onInputHeld?: (held: boolean) => void;
+  /**
+   * Told when a write of the router has been owed for `INPUT_HELD_MAX_MS` and the fields are still held, and again when the hold ends (DL-489). There is no time-out that lets a key into the row meanwhile: the page says
+   * the row is taking a while to open and offers "Stay on this row" (`stayOnThisRow` on the handle).
+   */
+  readonly onHeldTooLong?: (tooLong: boolean) => void;
 }
 
 /** How long the page lets a full load through after the person chose to sign out: long enough for the request, short enough that a failed one leaves the page guarded again. */
@@ -89,8 +94,9 @@ export const FULL_LOAD_GRACE_MS = 5_000;
 export const STEP_GRACE_MS = 1_000;
 
 /**
- * How long the form's fields are held at most while a write of the router is owed (DL-488 (iv)). It is a fail-open end for the hold on the fields only, and it arms and repairs nothing by itself: a write that was
- * dropped, redirected or never asked for says nothing to the guard, and fields that stayed held for ever would be worse than a key typed into a row that is replaced. 5 s is longer than a row's read on a slow phone.
+ * How long a write of the router may be owed before the page says so (DL-489, QLT-845-25). **Nothing is released, armed or repaired by the time passing**: a key let in after any time would be typed into a row that the late
+ * write then replaces. The hold ends only on an event (the write lands, the router writes another address, a traversal, the guard's next link, the page is left). A write that never comes (dropped, redirected to where the page
+ * is, never asked for) says nothing to the guard, so the way out is the person's, "Stay on this row" (`stayOnThisRow`). 5 s is longer than a row's read on a slow phone.
  */
 export const INPUT_HELD_MAX_MS = 5_000;
 
@@ -198,6 +204,11 @@ function plainLinkOf(click: ClickFacts, location: { readonly href: string; reado
 export interface LeaveGuardHandle {
   /** Takes the guard off the page. */
   readonly remove: () => void;
+  /**
+   * "Stay on this row" (DL-489): a full load of the address that is current (`location.replace`, so no entry is added), which cancels the slow read in every engine. It goes through the leave check like any other way out: with
+   * nothing unsaved the one load is let through, otherwise the person is asked. The hold on the fields is not released first; the page that loads is the answer.
+   */
+  readonly stayOnThisRow: () => void;
   /** Lets one full page load through, for a person who has just chosen to sign out: the browser's own prompt would be a second question. It lapses after `FULL_LOAD_GRACE_MS`, so a sign-out that fails leaves the page guarded again. */
   readonly allowFullLoad: () => void;
   /** The router has committed an address: called from an effect on its path and query (`leave-guard.tsx`). The guard learns which row is on screen, and pushes its entry only when the current address is that row's. */
@@ -205,7 +216,7 @@ export interface LeaveGuardHandle {
 }
 
 /** Puts the guard on the page. */
-export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => gate.isDirty(), onInputHeld = () => undefined }: LeaveGuardOptions): LeaveGuardHandle {
+export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => gate.isDirty(), onInputHeld = () => undefined, onHeldTooLong = () => undefined }: LeaveGuardOptions): LeaveGuardHandle {
   const { win, doc } = env;
   // The path of this page: the guard acts only on addresses of it.
   const pagePath = new URL(win.location.href).pathname;
@@ -225,6 +236,8 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
   let step: { target: string; readonly landing: string } | null = null;
   // A step whose landing did not come in `STEP_GRACE_MS`: where it would land, kept until the next `popstate`, so that a landing that is only late is not taken for the person's Back (QLT-845-20).
   let late: { readonly landing: string } | null = null;
+  // The path and query the guard's own step off has just landed on, until the page's effect has told the guard about it (`committed`): that is not the router answering the write that was asked for after it.
+  let justLanded: string | null = null;
   // The path and query of the row the router has been asked for, a write it has not committed yet: ONE at a time (DL-488 follow-up: two router writes in flight overlap, and a traversal made while one is in flight is
   // what Next answers with a fall back to a full load in WebKit). A link pressed meanwhile only changes `queued`, and is written when the first has settled. Neither blocks the guard from arming (DL-488 (i)); they hold the
   // form's fields for as long as they are set, so nothing can be typed into a row that is about to be replaced.
@@ -235,6 +248,8 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
   let fragmentWaiting: string | null = null;
   let letFullLoadThrough = false;
   let held = false;
+  // A write has been owed for `INPUT_HELD_MAX_MS` and the fields are still held: the page says so and offers "Stay on this row".
+  let tooLong = false;
 
   /** The form's fields do not accept input from a row link being taken until its write has committed, and while a repair step is in flight (DL-488 (iv)). */
   const syncHeld = (): void => {
@@ -242,6 +257,19 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
     if (now === held) return;
     held = now;
     onInputHeld(now);
+    if (!now && tooLong) {
+      tooLong = false;
+      onHeldTooLong(false);
+    }
+  };
+
+  /** The write the marker belongs to is still owed after `INPUT_HELD_MAX_MS`: the page says so. Nothing is settled, armed or repaired by the time passing (DL-489). */
+  const owedTooLong = (marker: object): void => {
+    win.setTimeout(() => {
+      if (inFlightMarker !== marker || tooLong) return;
+      tooLong = true;
+      onHeldTooLong(true);
+    }, INPUT_HELD_MAX_MS);
   };
 
   /** The write that was in flight has ended (it landed, it was overtaken, or the person went elsewhere): the next one, if a link was pressed meanwhile, is written, and so is a jump to a place on the page. */
@@ -297,9 +325,8 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
   };
 
   /**
-   * Asks the router to write `target` onto the entry that is current now, which is the page's own: the one write in flight. A write that changes neither the path nor the query has nothing to wait for. The end of the
-   * hold on the fields (`INPUT_HELD_MAX_MS`) is the one timer here, and only for that hold: a write that was dropped, redirected or never made says nothing to the guard, and fields held for ever would be worse than a key
-   * typed into a row that is replaced. It arms and repairs nothing by itself.
+   * Asks the router to write `target` onto the entry that is current now, which is the page's own: the one write in flight. A write that changes neither the path nor the query has nothing to wait for. The one timer here
+   * (`INPUT_HELD_MAX_MS`) only lets the page say that the write is taking a while; it ends no hold, arms nothing and repairs nothing (DL-489).
    */
   const retarget = (target: string): void => {
     if (inFlight !== null) {
@@ -310,12 +337,7 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
     const marker = {};
     inFlightMarker = marker;
     inFlight = pathSearchOf(target);
-    win.setTimeout(() => {
-      if (inFlightMarker !== marker) return;
-      settled();
-      tryArm();
-      ensureAddressed();
-    }, INPUT_HELD_MAX_MS);
+    owedTooLong(marker);
     syncHeld();
     navigate(target, true);
     settleInFlight();
@@ -415,13 +437,21 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
     const marker = {};
     inFlightMarker = marker;
     inFlight = pathSearchOf(href);
-    win.setTimeout(() => {
-      if (inFlightMarker !== marker) return;
-      settled();
-      tryArm();
-      ensureAddressed();
-    }, INPUT_HELD_MAX_MS);
+    owedTooLong(marker);
     syncHeld();
+    // A write for the address the entry already has holds nothing (DL-489 (3) (i)).
+    settleInFlight();
+  };
+
+  /** "Stay on this row": see `LeaveGuardHandle.stayOnThisRow`. */
+  const stayOnThisRow = (): void => {
+    const target = win.location.href;
+    ask({
+      // The current address is loaded again (no entry is added). The load is the answer to the slow read: nothing typed can be lost, because nothing could be typed while the fields were held.
+      proceed: () => win.location.replace?.(target),
+      cancel: () => undefined,
+      fullLoad: true,
+    });
   };
 
   /** The `#` of a link to a place on this page is written to the address, with no entry, and the target gets the scroll and the focus. */
@@ -487,6 +517,7 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
         // The guard's own step off has landed on the page's own entry. The guard's entry lies ahead of it now, and the router is asked to write the row's address onto this entry; the next push cuts the old one.
         armedFor = null;
         knownPage = here;
+        justLanded = pathSearchOf(here);
         retarget(target);
         syncHeld();
         tryArm();
@@ -539,7 +570,13 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
     if (!onThisPage() || step !== null) return;
     shown = pathSearchOf(win.location.href);
     if (armedFor === null && markOf(win.history.state) === null) knownPage = win.location.href;
+    // The router has written an address of this page. The write that was owed is over when it is the address asked for (`settleInFlight`), and also when it is another one (a redirect is an event too, DL-489 (3) (i)),
+    // **unless it is the address the guard's own step off has just landed on**: the page's effect tells the guard about that landing too, and the write the guard asked for after it is still owed.
+    const at = pathSearchOf(win.location.href);
+    const ownLanding = justLanded;
+    justLanded = null;
     settleInFlight();
+    if (inFlight !== null && at !== ownLanding) settled();
     ensureAddressed();
     tryArm();
   };
@@ -577,5 +614,6 @@ export function installLeaveGuard({ env, gate, ask, navigate, rowDirty = () => g
       }, FULL_LOAD_GRACE_MS);
     },
     committed,
+    stayOnThisRow,
   };
 }

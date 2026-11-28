@@ -114,3 +114,25 @@ describe('DL-488 (iv): a held field is read-only in the frame it is held, and lo
     expect(markup).toContain('aria-readonly="true"');
   });
 });
+
+describe('DL-489: the notice of a row write owed for 5 s, and the way out, travel through the same gate', () => {
+  it('"too long" is set and cleared by the guard and told to the listeners of the hold, and "Stay on this row" calls what the guard offered', () => {
+    const gate = createSaveGate();
+    let told = 0;
+    gate.subscribeInputHeld(() => void (told += 1));
+    expect(gate.isHoldTooLong()).toBe(false);
+    gate.setHoldTooLong(true);
+    gate.setHoldTooLong(true);
+    expect(gate.isHoldTooLong()).toBe(true);
+    expect(told).toBe(1);
+    const pressed: string[] = [];
+    const withdraw = gate.offerStay(() => void pressed.push('stay'));
+    gate.stayOnThisRow();
+    expect(pressed).toEqual(['stay']);
+    withdraw();
+    gate.stayOnThisRow();
+    expect(pressed).toEqual(['stay']);
+    gate.setHoldTooLong(false);
+    expect(told).toBe(2);
+  });
+});

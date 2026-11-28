@@ -75,10 +75,14 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
       rowDirty: () => gate.hasUnsaved(),
       // The part form takes this as its read-only state, through the gate it shares (DL-488 (iv)).
       onInputHeld: (held) => gate.setInputHeld(held),
+      onHeldTooLong: (tooLong) => gate.setHoldTooLong(tooLong),
     });
     installed.current = handle;
     const withdraw = registerLeaveGuard(ask);
+    // The notice of a row write owed for 5 s is the form's (it sits before the form); its button comes back here, through the gate (DL-489).
+    const withdrawStay = gate.offerStay(() => handle.stayOnThisRow());
     return () => {
+      withdrawStay();
       withdraw();
       handle.remove();
       installed.current = null;

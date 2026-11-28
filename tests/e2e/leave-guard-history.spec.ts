@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Response } from '@playwright/test';
 
 import { TREE_CLEARED_LINE } from '../../src/components/features/estimate-review/review-texts';
-import { INPUT_HELD_LINE } from '../../src/components/features/estimate-workspace/estimate-texts';
+import { INPUT_HELD_LINE, INPUT_STUCK_BUTTON, INPUT_STUCK_LINE, INPUT_STUCK_SENTENCE } from '../../src/components/features/estimate-workspace/estimate-texts';
 
 import { assignedEstimate } from './support/assigned-estimate';
 import { changePrivateMaterial, E2E_ENGINEER, insertPrivateMaterial } from './support/auth';
@@ -334,6 +334,17 @@ async function typedBackKeepAndLeave(page: Page, row: string): Promise<void> {
   await expect(page).toHaveURL(/\/queue$/);
 }
 
+/** A key every 500 ms through a hold of about `ms`: no character is accepted into the box (it is read-only), and the focus stays where it is. */
+async function keysThroughTheHold(page: Page, ms: number): Promise<void> {
+  const before = await description(page).inputValue();
+  await description(page).focus();
+  for (let elapsed = 0; elapsed < ms; elapsed += 500) {
+    await page.keyboard.press('Z');
+    await page.waitForTimeout(500);
+  }
+  await expect(description(page)).toHaveValue(before);
+}
+
 test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still owed', () => {
   test('u2 (the unarmed superseded link): clean page, row 1\'s read held, row 1 pressed, then row 1.1 (the row on screen), released, typed: Back asks, Keep editing keeps row 1.1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, true);
@@ -368,9 +379,13 @@ test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still o
     await page.keyboard.type(TYPED);
     await expect(description(page)).toHaveValue(before);
     // 300 ms or more: the one polite line (UX ruling on AQP-506).
-    // The line is a live region outside the busy form (QLT-845-26), so a screen reader is not holding it back.
+    // The line is the one live voice, in a region directly before the form and outside it, with no aria-busy of its own (QLT-845-26; UX ruling leave-guard-slow-row-notice R1, R2).
     await expect(page.locator('p[data-input-held-line]')).toHaveText(INPUT_HELD_LINE);
+    await expect(page.locator('[data-input-held-region] + form[data-part-form]')).toHaveCount(1);
+    await expect(page.locator('[data-input-held-region]')).not.toHaveAttribute('aria-busy', /.*/);
     await expect(form.locator('p[data-input-held-line]')).toHaveCount(0);
+    // Not yet 5 s: no notice (R3).
+    await expect(page.locator('[data-input-held-slow]')).toHaveCount(0);
     held.release();
     await expect(page).toHaveURL(/row=1#row-inputs$/);
     await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
@@ -379,7 +394,7 @@ test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still o
     await typedBackKeepAndLeave(page, '1');
   });
 
-  test('u4 (the old part\'s save in flight during a row change): the link waits for the save, the row changes when it has landed, typing in the new row is guarded, and nothing is lost', async ({ page }, testInfo) => {
+  test('u4 (the slow-save case, not DL-488\'s trap: a row link waits for every save in flight): the link waits for the save, the row changes when it has landed, typing in the new row is guarded, and nothing is lost', async ({ page }, testInfo) => {
     const { code } = await assignedEstimate(page, testInfo, true);
     await armed(page, code);
     let finish: () => void = () => undefined;
@@ -415,6 +430,79 @@ test.describe('DL-488 u2, u3, u4 (QLT-845-19): a row link whose write is still o
     await description(page).blur();
     await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
     await backTwiceAsks(page);
+  });
+});
+
+test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and a failed save before a row change', () => {
+  /** The notice and its button after 5 s, outside the form and before it (UX ruling leave-guard-slow-row-notice R1 to R3). */
+  async function expectTheNotice(page: Page): Promise<void> {
+    await expect(page.locator('[data-input-held-slow]')).toBeVisible();
+    await expect(page.locator('[data-input-held-slow]')).toHaveText(INPUT_STUCK_SENTENCE);
+    await expect(page.locator('[data-input-held-region] + form[data-part-form]')).toHaveCount(1);
+    await expect(page.locator('p[data-input-held-line]')).toHaveText(INPUT_STUCK_LINE);
+    await expect(page.locator('[data-input-held-stay]')).toBeVisible();
+    await expect(page.locator('[data-input-held-stay]')).toHaveText(INPUT_STUCK_BUTTON);
+    // The notice carries no live role of its own: the one polite line is the only live voice.
+    await expect(page.locator('[data-input-held-region] [role="alert"]')).toHaveCount(0);
+    await expect(page.locator('form[data-part-form]')).toHaveAttribute('aria-busy', 'true');
+    await expect(description(page)).toHaveAttribute('readonly', '');
+  }
+
+  test('u5a: row 1\'s read held for about 6.5 s: a key every 500 ms is accepted into no box, the notice shows after 5 s; after the release the row is editable within 2.5 s, typing is guarded, Back asks, Keep editing keeps row 1 and the text, Leave lands on the queue', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await openedClean(page, code);
+    const held = await holdRowRead(page, '1');
+    await chooseRow(page, '1');
+    await held.reached;
+    await keysThroughTheHold(page, 6500);
+    await expectTheNotice(page);
+    held.release();
+    await expect(page).toHaveURL(/row=1#row-inputs$/);
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    await expect(description(page)).toBeEditable({ timeout: 2500 });
+    // No key of the stream reached row 1's box either, and the notice went with the hold (R3).
+    await expect(description(page)).not.toHaveValue(/Z/);
+    await expect(page.locator('[data-input-held-slow]')).toHaveCount(0);
+    await typedBackKeepAndLeave(page, '1');
+  });
+
+  test('u5b: the same hold, then "Stay on this row": one full load of the current address (a marker on window is gone), row 1.1 stays, the history is not longer, row 1 is not drawn; typing then is guarded, and Back asks with the text kept', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await openedClean(page, code);
+    const held = await holdRowRead(page, '1');
+    await chooseRow(page, '1');
+    await held.reached;
+    await keysThroughTheHold(page, 5500);
+    await expectTheNotice(page);
+    const lengthBefore = await historyLength(page);
+    await page.evaluate(() => Reflect.set(window, '__sameDocument', true));
+    await page.locator('[data-input-held-stay]').click();
+    // The load is the answer: the marker of the old document goes with it.
+    await page.waitForFunction(() => Reflect.get(window, '__sameDocument') !== true);
+    held.release();
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    await expect(page.locator('#part-form-title')).toContainText('1.1');
+    await expect(page.locator('#part-form-title')).not.toHaveText(/^1 ·/);
+    expect(await historyLength(page), 'the full load added no entry').toBe(lengthBefore);
+    await expect(description(page)).toBeEditable();
+    await expect(page.locator('[data-input-held-slow]')).toHaveCount(0);
+    await typedBackKeepAndLeave(page, '1.1');
+  });
+
+  test('u4f: the old row\'s save fails, another row\'s link is pressed, the dialog asks, "Leave without saving" shows the new row; typing there (the save fails) is guarded: Back asks, Keep editing keeps the new row and the text, and Leave lands exactly on the queue', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await openedClean(page, code);
+    await failSaves(page);
+    await description(page).fill(FIRST);
+    await description(page).blur();
+    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+    await chooseRow(page, '1');
+    await expect(leaveDialog(page)).toBeVisible();
+    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+    await expect(page).toHaveURL(/row=1#row-inputs$/);
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    await expect(description(page)).toBeEditable();
+    await typedBackKeepAndLeave(page, '1');
   });
 });
 
