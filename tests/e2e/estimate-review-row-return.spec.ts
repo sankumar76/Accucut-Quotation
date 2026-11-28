@@ -89,7 +89,7 @@ test.describe('The island follows the address and the leave guard still asks', (
     await page.evaluate(() => window.history.back());
     await expect(leaveDialog(page)).toBeVisible();
     await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
-    await expect(page).toHaveURL(/\/queue/);
+    await expect(page).toHaveURL(/\/queue$/);
   });
 
   /** The island has replaced the first paint and the open row's form is ready to be typed in. */
@@ -144,34 +144,39 @@ test.describe('The island follows the address and the leave guard still asks', (
     } else {
       await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
     }
-    await expect(page).toHaveURL(/\/queue/);
+    await expect(page).toHaveURL(/\/queue$/);
   }
 
-  /** Row 1.1 is edited and saved on a Prepared estimate opened by its address from the queue: the guard has armed itself and stays armed. */
+  /**
+   * A Prepared estimate with a third row (made through the API, with no menu to drive: the menus of the tree are the Engineer's and are covered by their own cases), opened at row 1.1 by its address from the queue,
+   * edited and saved: the guard has armed itself and stays armed. Answers its code.
+   */
   async function openAndSaveARow(page: Page, testInfo: TestInfo): Promise<string> {
-    const { code } = await assignedEstimate(page, testInfo, true);
+    const { code, estimateId } = await assignedEstimate(page, testInfo, true);
+    const headers = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
+    const tree = (await (await page.request.get(DEVELOPMENT_URL + '/api/v1/estimates/' + estimateId + '/tree')).json()) as { nodes: ReadonlyArray<{ id: string; slNo: string }> };
+    const main = tree.nodes.find((node) => node.slNo === '1');
+    const third = await page.request.post(DEVELOPMENT_URL + '/api/v1/estimates/' + estimateId + '/nodes', { headers, data: { parentId: main?.id ?? null, nodeKind: 'PART' } });
+    expect(third.status(), 'a second part under row 1').toBe(201);
     await page.goto('/queue');
     await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#part-form-title')).toHaveText(/^1\.1 ·/);
     await ready(page);
     const saved = savedAnswer(page);
+    // The first save of a Prepared estimate clears its figures, and the island asks the page to be drawn again once: that answer is waited for (no sleep), so it cannot land under a menu opened next.
+    const drawnAgain = page.waitForResponse((response) => response.request().method() === 'GET' && response.url().includes('/estimates/' + code) && response.url().includes('_rsc='));
     await description(page).fill(FIRST);
     await description(page).blur();
     expect((await saved).status(), 'the first save').toBe(200);
+    await drawnAgain;
     return code;
   }
 
-  /** A part under row 1 by the "+" of the row (a menu: the Part item reads Sub-part once the row holds a part); the new row opens. */
-  async function addUnderRowOne(page: Page, slNo: string): Promise<void> {
-    await openTreePanel(page);
-    // The page may be drawn again under the open menu (the router's replace of a row link, a refresh after a change): the menu is opened again until the item can be pressed.
-    await expect(async () => {
-      await reviewButton(page, 'Add under', '1').focus();
-      await page.keyboard.press('Enter');
-      await page.getByRole('menuitem', { name: /^(Part|Sub-part)$/ }).click({ timeout: 4000 });
-    }).toPass({ timeout: 25_000 });
+  /** Another row is chosen by its link (the guard is armed, so it takes the click and the router replaces its entry); the open row's form is the new row's. */
+  async function chooseByLink(page: Page, slNo: string): Promise<void> {
+    await chooseRow(page, slNo);
     await expect(page.locator('#part-form-title')).toHaveText(new RegExp('^' + slNo.replace('.', '\\.') + ' ·'));
-    await expect(page.locator('form[data-part-form]')).toBeVisible();
+    await ready(page);
   }
 
   /** Text typed in the open row whose save cannot go through. */
@@ -181,66 +186,69 @@ test.describe('The island follows the address and the leave guard still asks', (
     await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
   }
 
-  test('DEF-149, QLT-811-01: a row is added with the guard armed, text is typed, Back asks with that row and its text, and "Leave without saving" leaves the page', async ({ page }, testInfo) => {
+  test('DEF-149, QLT-811-01: another row is chosen by its link with the guard armed, text is typed, Back asks with that row and its text, and "Leave without saving" leaves the page', async ({ page }, testInfo) => {
     await openAndSaveARow(page, testInfo);
-    await chooseRow(page, '1');
-    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    await chooseByLink(page, '1.2');
     await failSaves(page);
-    await addUnderRowOne(page, '1.2');
     await typeAndFail(page, 'Typed and not saved');
     await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed and not saved', 'leave');
   });
 
   test('DEF-149: the same steps, and "Save draft and leave" saves and leaves the page', async ({ page }, testInfo) => {
     await openAndSaveARow(page, testInfo);
-    await chooseRow(page, '1');
-    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    await chooseByLink(page, '1.2');
     const allowSaves = await failSaves(page);
-    await addUnderRowOne(page, '1.2');
     await typeAndFail(page, 'Typed and saved on the way out');
     await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed and saved on the way out', 'save', allowSaves);
   });
 
-  test('DEF-149: two rows are added and a third is chosen before Back: Back asks, and "Leave without saving" still leaves the page', async ({ page }, testInfo) => {
+  test('DEF-149: three rows are chosen by their links before Back: Back asks, and "Leave without saving" still leaves the page', async ({ page }, testInfo) => {
     await openAndSaveARow(page, testInfo);
-    await chooseRow(page, '1');
-    await addUnderRowOne(page, '1.2');
-    await addUnderRowOne(page, '1.3');
-    await chooseRow(page, '1.2');
-    await expect(page.locator('#part-form-title')).toHaveText(/^1\.2 ·/);
+    await chooseByLink(page, '1.2');
+    await chooseByLink(page, '1');
+    await chooseByLink(page, '1.2');
     await failSaves(page);
-    await typeAndFail(page, 'Typed after two adds');
-    await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed after two adds', 'leave');
+    await typeAndFail(page, 'Typed after three choices');
+    await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed after three choices', 'leave');
+  });
+
+  /** A part under row 1 by the "+" of the row (a menu: the Part item reads Sub-part once the row holds a part); the new row opens. */
+  async function addUnderRowOne(page: Page, slNo: string): Promise<void> {
+    await openTreePanel(page);
+    await reviewButton(page, 'Add under', '1').focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('menuitem', { name: /^(Part|Sub-part)$/ }).click();
+    await expect(page.locator('#part-form-title')).toHaveText(new RegExp('^' + slNo.replace('.', '\\.') + ' ·'));
+    await expect(page.locator('form[data-part-form]')).toBeVisible();
+  }
+
+  test('QLT-811-01: a row is added (and opens) with the guard armed, text is typed in it, Back asks with that row and its text, and "Leave without saving" leaves the page', async ({ page }, testInfo) => {
+    await openAndSaveARow(page, testInfo);
+    await chooseByLink(page, '1');
+    await failSaves(page);
+    await addUnderRowOne(page, '1.3');
+    await typeAndFail(page, 'Typed in the new row');
+    await backAsksWithTheTextStill(page, /^1\.3 ·/, 'Typed in the new row', 'leave');
   });
 
   test('QLT-811-01: a row is moved so that the open row is renumbered, text is typed, Back asks with that part and its text still on the screen', async ({ page }, testInfo) => {
-    const { code, estimateId } = await assignedEstimate(page, testInfo, true);
-    const headers = { origin: DEVELOPMENT_URL, 'content-type': 'application/json' };
-    const tree = (await (await page.request.get(DEVELOPMENT_URL + '/api/v1/estimates/' + estimateId + '/tree')).json()) as { nodes: ReadonlyArray<{ id: string; slNo: string }> };
-    const main = tree.nodes.find((node) => node.slNo === '1');
-    const second = await page.request.post(DEVELOPMENT_URL + '/api/v1/estimates/' + estimateId + '/nodes', { headers, data: { parentId: main?.id ?? null, nodeKind: 'PART' } });
-    expect(second.status(), 'a second part under row 1').toBe(201);
-    await page.goto('/queue');
-    await page.goto('/estimates/' + code + '?row=1.1', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('#part-form-title')).toHaveText(/^1\.1 ·/);
-    await ready(page);
-    const saved = savedAnswer(page);
-    await description(page).fill(FIRST);
-    await description(page).blur();
-    expect((await saved).status(), 'the first save').toBe(200);
-    // Move row 1.1 down: it is renumbered 1.2 and stays the open part.
+    await openAndSaveARow(page, testInfo);
     await failSaves(page);
     await openTreePanel(page);
-    await expect(async () => {
-      await reviewButton(page, 'Move', '1.1').focus();
-      await page.keyboard.press('Enter');
-      await page.getByRole('menuitem', { name: 'Move down', exact: true }).click({ timeout: 4000 });
-    }).toPass({ timeout: 25_000 });
+    await reviewButton(page, 'Move', '1.1').focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('menuitem', { name: 'Move down', exact: true }).click();
     await expect(page.locator('#part-form-title')).toHaveText(/^1\.2 ·/);
-    await description(page).fill('Typed after the move');
-    await description(page).blur();
-    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+    await typeAndFail(page, 'Typed after the move');
     await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed after the move', 'keep');
+  });
+
+  test('QLT-811-01: "Keep editing" after Back keeps the open row, its text and the guard (a later Back asks again)', async ({ page }, testInfo) => {
+    await openAndSaveARow(page, testInfo);
+    await chooseByLink(page, '1.2');
+    await failSaves(page);
+    await typeAndFail(page, 'Typed, then kept');
+    await backAsksWithTheTextStill(page, /^1\.2 ·/, 'Typed, then kept', 'keep');
   });
 
   test('QLT-811-02: with nothing typed, the address moves the island: a new address for row 1.1, then Back shows row 1, then Forward shows row 1.1', async ({ page }, testInfo) => {

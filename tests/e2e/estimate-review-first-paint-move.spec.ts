@@ -18,6 +18,8 @@ import { DEVELOPMENT_URL } from './support/servers';
  */
 
 const MOVE_AT_MOST_PX = 8;
+/** PF-22, G8-C-PICNAME: an invented file name of 200 characters, in wide letters, so it is longer than the picture box at every width. The server keeps the first 100 and the control shows one line, cut; the box is the one-line box the reserve was measured with. */
+const LONG_NAME = `${'W'.repeat(196)}.png`;
 /** Words only the island writes (`TREE_CLEARED_STATUS`, review-texts.ts): the script that holds them is the island's. */
 const ISLAND_MARKER = /The parts changed\. Every calculated figure is cleared/;
 
@@ -101,14 +103,15 @@ test.describe('PF-18 to PF-21: the first paint holds the island\'s room', () => 
   test('PF-21b: a mouse at 768 px (a fine pointer, the tree stacked above the form, a toolbar line under every row): the same bar', async ({ browser }, testInfo) => {
     test.skip(testInfo.project.name !== 'tablet', 'one window, 768 px, with a fine pointer: the projects with a touch screen are the other cases');
     const context = await browser.newContext({ viewport: { width: 768, height: 1024 }, hasTouch: false, baseURL: DEVELOPMENT_URL });
+    let page: Page | undefined;
     try {
-      const page = await context.newPage();
+      page = await context.newPage();
       const { code } = await assignedEstimate(page, testInfo, true);
       expect(await page.evaluate(() => window.matchMedia('(hover: hover) and (pointer: fine)').matches), 'this window has a mouse').toBe(true);
       await checkSwap(page, code, 'Prepared, mouse at 768');
     } finally {
-      // A script still on its way when the test ends must not be answered into a closed context (`route.fetch: Request context disposed`).
-      await context.unrouteAll({ behavior: 'ignoreErrors' });
+      // The route that holds the chunks is the page's, so it is the page that lets it go (a context's `unrouteAll` leaves it): a script still on its way when the test ends must not be answered into a closed context (`route.fetch: Request context disposed`).
+      await page?.unrouteAll({ behavior: 'ignoreErrors' });
       await context.close();
     }
   });
@@ -120,7 +123,7 @@ test.describe('PF-18 to PF-21: the first paint holds the island\'s room', () => 
     expect(first, 'the first row').toBeDefined();
     const put = await page.request.put(DEVELOPMENT_URL + '/api/v1/estimates/' + estimateId + '/nodes/' + (first?.id ?? '') + '/image', {
       headers: { origin: DEVELOPMENT_URL },
-      multipart: { file: { name: 'invented-part.png', mimeType: 'image/png', buffer: pngOfDimensions(64, 48) } },
+      multipart: { file: { name: LONG_NAME, mimeType: 'image/png', buffer: pngOfDimensions(64, 48) } },
     });
     expect(put.status(), "the Lead's picture is stored").toBeLessThan(300);
     await checkSwap(page, code, 'Draft with a picture');

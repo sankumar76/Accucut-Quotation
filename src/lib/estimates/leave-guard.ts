@@ -25,7 +25,7 @@ interface Target {
 export interface LeaveEnv {
   readonly win: Target & {
     readonly location: { readonly href: string; readonly origin: string };
-    readonly history: { readonly state: unknown; readonly pushState: (state: unknown, title: string) => void; readonly back: () => void; readonly go: (delta: number) => void };
+    readonly history: { readonly state: unknown; readonly length?: number; readonly pushState: (state: unknown, title: string) => void; readonly back: () => void; readonly go: (delta: number) => void };
     readonly setTimeout: (handler: () => void, ms: number) => unknown;
   };
   readonly doc: Target;
@@ -119,10 +119,21 @@ export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOption
   let armedFor: string | null = null;
   let letFullLoadThrough = false;
 
+  // How many entries the history held up to and including the page's own entry, as the guard saw it when it put its extra entry on top (the length right after the push, less the extra entry). The way out is worked out from it, not
+  // from an assumed count of entries: whatever the router put above the page's own entry since is then counted too (DEF-149, DL-476 (5)).
+  let ownLength: number | null = null;
+
   const arm = (): void => {
     if (armedFor !== null) return;
     win.history.pushState(win.history.state, '');
     armedFor = win.location.href;
+    ownLength = typeof win.history.length === 'number' ? win.history.length - 1 : null;
+  };
+
+  /** The step back from the top of the history to the entry before the page's own: two with only the guard's extra entry on top, more when the router put others there. */
+  const stepsOut = (): number => {
+    const length = win.history.length;
+    return ownLength !== null && typeof length === 'number' && length > ownLength ? ownLength - 1 - length : -2;
   };
 
   const onBeforeUnload: Listener = (event) => {
@@ -165,7 +176,7 @@ export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOption
       // From the entry put back, two steps are the page's own entry and the one before it. The guard no longer waits for a Back, so the traversal that follows is not asked about again.
       proceed: () => {
         armedFor = null;
-        win.history.go(-2);
+        win.history.go(stepsOut());
       },
       cancel: () => undefined,
     });
