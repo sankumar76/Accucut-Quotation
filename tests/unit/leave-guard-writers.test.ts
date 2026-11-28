@@ -98,8 +98,17 @@ function browser(variant: Variant) {
     origin: 'http://portal.test',
   };
 
-  /** The router has committed an address: the component of the guard tells it (`useEffect` on the router's path and query). */
-  const signal = (): void => (guard as { committed?: () => void } | undefined)?.committed?.();
+  /**
+   * The router has committed an address: the component of the guard tells it from an effect on the router's path and query, so **only when one of them has changed** from what the effect last saw. A commit that leaves
+   * the path and query as they were (the router ends where it started, or a write that only changes the `#`) says nothing to the guard.
+   */
+  let lastSeenByTheEffect = pathSearch(PAGE);
+  const signal = (): void => {
+    const now = pathSearch(location.href);
+    if (now === lastSeenByTheEffect) return;
+    lastSeenByTheEffect = now;
+    (guard as { committed?: () => void } | undefined)?.committed?.();
+  };
 
   const draw = (fromTraversal: boolean): void => {
     const here = pathSearch(location.href);
@@ -244,6 +253,8 @@ function browser(variant: Variant) {
       for (const land of deferred.splice(0)) land();
     },
     pendingCommits: () => deferred.length,
+    /** React drops a transition that another one overtakes: the first router write that was waiting never lands. */
+    supersedeFirstWrite: () => void deferred.shift(),
     /** The traversals that were queued are made, in order. */
     settle: () => {
       for (let next = traversals.shift(); next !== undefined; next = traversals.shift()) traverse(next);
@@ -540,6 +551,24 @@ describe('QLT-845-08 (DL-487): the cases the end-to-end set reads at the browser
     expect(s.violations).toEqual([]);
     expect(s.above()).toBe(1);
     expect(s.form.lost).toBe(false);
+  });
+
+  it('c2 as Firefox ran it: two row links, the second back to the row the page was opened on, the first write overtaken and never landing: the router ends where it started and says nothing, and the guard still arms on the next keystroke', () => {
+    const s = armedAndSaved({ order: 'next-first', timing: 'after-keystroke' });
+    s.click(ROW_LINK, (event) => (event.preventDefault(), s.router.replace(ROW_LINK)));
+    // The second link goes back to the address the page was opened on (what the entry has now), the write for the first is overtaken, and the router ends where it started: path and query unchanged, so the effect says nothing.
+    s.click(PAGE, (event) => (event.preventDefault(), s.router.replace(PAGE)));
+    s.supersedeFirstWrite();
+    s.flush();
+    expect(s.pendingCommits()).toBe(0);
+    s.type();
+    expect(s.violations).toEqual([]);
+    expect(s.above()).toBe(1);
+    s.history.back();
+    expect(s.asked).toHaveLength(1);
+    expect(s.form).toEqual({ typed: true, lost: false });
+    s.asked[0]?.proceed();
+    expect(s.at()).toBe(BEFORE);
   });
 
   it('c3a: a row link, then Back with nothing typed: the page before, with no question', () => {

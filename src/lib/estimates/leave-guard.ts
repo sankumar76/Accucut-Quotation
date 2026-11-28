@@ -179,11 +179,24 @@ export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOption
   let letFullLoadThrough = false;
 
   /**
+   * A write that was asked of the router has landed when the page's own entry has the address asked for, whether or not the router's effect said so: the effect speaks only when the path or the query changes, so a write
+   * that was overtaken by a later one, or that ends where the page started, says nothing (Firefox, c2). The entry is read when something asks to push, so the wait cannot outlast the write.
+   */
+  const settlePending = (): void => {
+    if (pending === null || step !== null) return;
+    const here = pathSearchOf(win.location.href);
+    if (here !== pending.target) return;
+    pending = null;
+    shown = here;
+  };
+
+  /**
    * Puts the guard's entry on the history, when something is unsaved and there is none. **It pushes only when the current address has the path and query of the row on screen** (DL-487 (2) (i)): a push made while the
    * router still has a write to land on the page's own entry would put the guard's entry on an address that is not the row's, and Next's deferred write would then land on it. A keystroke that finds the addresses apart marks
    * the form dirty all the same; the push waits for the router's commit (`committed()`), an event of the router and not a timer.
    */
   const tryArm = (): void => {
+    settlePending();
     if (armedFor !== null || step !== null || pending !== null || !gate.isDirty() || !onThisPage()) return;
     if (pathSearchOf(win.location.href) !== shown) return;
     win.history.pushState(win.history.state, '');
@@ -230,6 +243,7 @@ export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOption
 
   /** The page's own entry has an address other than the row on screen (the island rewrote the guard's entry, say): it is given the row's, as for a link, once nothing is unsaved. */
   const ensureAddressed = (): void => {
+    settlePending();
     if (armedFor === null || step !== null || pending !== null) return;
     if (pathSearchOf(armedFor) === shown) return;
     // The step off would draw the page's own entry over what is typed.
@@ -241,8 +255,11 @@ export function installLeaveGuard({ env, gate, ask, navigate }: LeaveGuardOption
   const onClick: Listener = (event) => {
     const dirty = gate.isDirty();
     // With the extra history entry on top, even a clean page takes the click: the link then replaces that entry instead of stacking on it, so a later Back has no dead press (review SQR-03).
-    if (!dirty && armedFor === null) return;
-    const href = leavingLinkOf(clickFactsOf(event), win.location);
+    // While a write is on its way to the page's own entry the guard takes a link to another row too, so the last link pressed is the one that is written (two quick links, c2); it compares the link with the row the page is
+    // heading for and not with the address the entry still has.
+    if (!dirty && armedFor === null && pending === null) return;
+    const heading = pending === null ? win.location : { href: new URL(shown, win.location.href).href, origin: win.location.origin };
+    const href = leavingLinkOf(clickFactsOf(event), heading);
     if (href === null) return;
     event.preventDefault();
     event.stopImmediatePropagation();
