@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ROUTE_MANIFEST } from '../../src/server/http/route-manifest';
 
 import { E2E_ADMIN, E2E_ENGINEER, E2E_LEAD, E2E_PASSWORD, ensureE2eAdmin, ensureE2eUsers, signInThroughThePage, useFreshAddress } from './support/auth';
+import { assignedEstimate } from './support/assigned-estimate';
 import { fillPath } from './support/canary-scan';
 import { waitUntilHydrated } from './support/design-system';
 import { ADMIN_STATE, DEVELOPMENT_URL, PRODUCTION_URL, SIGNED_IN_STATE } from './support/servers';
@@ -45,6 +46,18 @@ setup('create the E2E users and save a signed-in Lead', async ({ page, context }
   expect((await page.request.post(`${DEVELOPMENT_URL}/api/v1/tasks`, { headers, data: {} })).status()).toBe(422);
 
   await context.storageState({ path: SIGNED_IN_STATE });
+});
+
+/**
+ * The Lead's review page and its form (QLT-845-31, DL-494): the development server compiles `/estimates/[code]` and the form's chunks on the first request, and the first case of a worker that opens one paid for it and
+ * ran into its 30 s (the three leave-guard cases `:165`, `:204` and `:219` at tablet, twice in a row). One estimate (a task of the set-up Engineer, made through the API, no new person) is opened here, so no test pays.
+ */
+setup('warm the Lead review page and its form', async ({ page }, testInfo) => {
+  setup.setTimeout(SETUP_TIMEOUT);
+  await ensureE2eUsers(); // the set-up project runs in parallel: the users must exist before this test signs in the Lead (QLT-845-37)
+  const { code } = await assignedEstimate(page, testInfo, false);
+  await page.goto(`${DEVELOPMENT_URL}/estimates/${code}?row=1.1`, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('form[data-part-form]')).toBeVisible({ timeout: COMPILE_TIMEOUT });
 });
 
 /**

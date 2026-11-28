@@ -12,6 +12,8 @@ export interface LeaveRequest {
   readonly cancel: () => void;
   /** True when going is a full page load (Sign out), which the browser would warn about a second time. The guard lets that one load through once the person has chosen. */
   readonly fullLoad?: boolean;
+  /** True when going keeps the person on this page (a link to another row of it): the leave is over when `proceed` has run, so nothing is held back for it any longer (QLT-845-32). */
+  readonly samePage?: boolean;
 }
 
 type Ask = (request: LeaveRequest) => void;

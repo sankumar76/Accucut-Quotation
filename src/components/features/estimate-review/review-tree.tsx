@@ -57,6 +57,7 @@ function TreeRow({
   code,
   warned,
   selected,
+  guarded,
 }: {
   readonly node: CostNode;
   readonly kindLabel: string;
@@ -64,6 +65,7 @@ function TreeRow({
   readonly code: string;
   readonly warned: boolean;
   readonly selected: boolean;
+  readonly guarded: boolean;
 }) {
   // The row's name by the one rule (AQP-446): typed, else the kind's own name, muted, with the words for a screen reader. The "Cost details" link says it in plain words.
   const name = rowNameOf(node.name, kindLabel);
@@ -72,6 +74,7 @@ function TreeRow({
       {/* The first line is the link to this row's inputs (AQP-488): a soft navigation, so the tiles and the tree do not jump and no code is read again. Its name is the number and the name, "1.4 Top cover". */}
       <Link
         href={inputsHref(code, node.slNo)}
+        replace={guarded}
         scroll={false}
         prefetch={false}
         // The name starts with the kind (the icon's own label) and then says what the text says, word for word, so what is seen is in the name (WCAG 2.5.3, axe label-content-name-mismatch): "Sub-Assembly 1.4 Top cover".
@@ -114,13 +117,15 @@ export interface ReviewTreeProps {
   readonly state: CostsView['state'];
   readonly letters: CostsView['letters'];
   readonly nodes: CostsView['nodes'];
+  /** The page has the leave guard (the review while it is editable): a row link then replaces the page's entry, since the guard counts on its own entry being the only one above the page's (DEF-149, PF-23). Pages without the guard keep their own behaviour. */
+  readonly guarded?: boolean;
   /** The rows of the calculation's quantity warning (STORY-06.10): each carries the mark "Quantity 0". Empty while the figures are not current. */
   readonly warned: ReadonlySet<string>;
   /** The Sl. No of the row whose inputs are shown beside the tree (`aria-current`), or null for an estimate with no rows. */
   readonly selectedSlNo?: string | null;
 }
 
-export function ReviewTree({ code, state, letters, nodes, warned, selectedSlNo = null }: ReviewTreeProps) {
+export function ReviewTree({ code, state, letters, nodes, warned, selectedSlNo = null, guarded = false }: ReviewTreeProps) {
   const selected = selectedSlNo === null ? undefined : nodes.find((node) => node.slNo === selectedSlNo);
   const selectedName = selected === undefined ? '' : `${selected.slNo} ${rowNameOf(selected.name, nodeKindLabel(selected, nodes))}`;
   return (
@@ -139,7 +144,7 @@ export function ReviewTree({ code, state, letters, nodes, warned, selectedSlNo =
             <PartsTreeList
               label={TREE_TITLE}
               nodes={nodes}
-              renderRow={(node, kindLabel) => <TreeRow node={node} kindLabel={kindLabel} state={state} code={code} warned={warned.has(node.id)} selected={node.slNo === selectedSlNo} />}
+              renderRow={(node, kindLabel) => <TreeRow node={node} kindLabel={kindLabel} state={state} code={code} warned={warned.has(node.id)} selected={node.slNo === selectedSlNo} guarded={guarded} />}
             />
             <TreeLegend />
           </>

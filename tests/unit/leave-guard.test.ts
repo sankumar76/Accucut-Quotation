@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { installLeaveGuard, leavingLinkOf, type LeaveEnv } from '@/lib/estimates/leave-guard';
+import { installLeaveGuard, leavingLinkOf, type LeaveEnv, type LeaveGuardHandle } from '@/lib/estimates/leave-guard';
 import { askToLeave, mayLeave, registerLeaveGuard, type LeaveRequest } from '@/lib/estimates/leave-registry';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
@@ -68,17 +68,59 @@ describe('AC-4: which clicks leave the page', () => {
   });
 });
 
-/** A window and a document that are only event targets, with a history that remembers what was asked of it. */
+/**
+ * A window and a document that are only event targets, with a history of the page\'s own entry (P) and, once something is typed, the guard\'s entry (G) above it. A traversal fires its `popstate`; a push puts G on
+ * the address of P; a `replace` of the router writes the entry that is current; and the guard is told when the router has committed (`committed()`), as the page does from an effect.
+ */
 function fakePage() {
   const win = new EventTarget();
   const doc = new EventTarget();
-  const history = { state: { __NA: true }, pushed: 0, backs: 0, gone: [] as number[], pushState: () => void (history.pushed += 1), back: () => void (history.backs += 1), go: (delta: number) => void history.gone.push(delta) };
+  const location = {
+    origin: ORIGIN,
+    on: 'page' as 'page' | 'guard',
+    pageHref: HERE,
+    guardHref: HERE,
+    forced: null as string | null,
+    get href(): string {
+      return this.forced ?? (this.on === 'page' ? this.pageHref : this.guardHref);
+    },
+    set href(value: string) {
+      this.forced = value;
+    },
+  };
+  const history = {
+    state: { __NA: true },
+    pushed: 0,
+    backs: 0,
+    gone: [] as number[],
+    ahead: false,
+    pushState: () => {
+      history.pushed += 1;
+      location.guardHref = location.on === 'page' ? location.pageHref : location.guardHref;
+      location.on = 'guard';
+      history.ahead = false;
+    },
+    // The guard marks its own entry again before it steps off it (a write of the router takes the mark away): the same address, and the state it has plus the mark.
+    replaceState: (state: unknown) => void (history.state = state as typeof history.state),
+    back: () => void (history.backs += 1),
+    go: (delta: number) => {
+      history.gone.push(delta);
+      if (delta === -1 && location.on === 'guard') {
+        location.on = 'page';
+        history.ahead = true;
+        win.dispatchEvent(new Event('popstate'));
+      } else if (delta === 1 && location.on === 'page' && history.ahead) {
+        location.on = 'guard';
+        win.dispatchEvent(new Event('popstate'));
+      }
+    },
+  };
   const timers: Array<() => void> = [];
   const env = {
-    win: Object.assign(win, { location: { href: HERE, origin: ORIGIN }, history, setTimeout: (handler: () => void) => timers.push(handler) }),
+    win: Object.assign(win, { location, history, setTimeout: (handler: () => void) => timers.push(handler) }),
     doc,
   } as unknown as LeaveEnv;
-  return { env, win, doc, history, timers };
+  return { env, win, doc, history, timers, location };
 }
 
 function setUp() {
@@ -86,7 +128,23 @@ function setUp() {
   const gate = createSaveGate();
   const asked: LeaveRequest[] = [];
   const navigated: string[] = [];
-  const handle = installLeaveGuard({ env: page.env, gate, ask: (request) => void asked.push(request), navigate: (href, replace) => void navigated.push(replace ? `replace ${href}` : `push ${href}`) });
+  const handleRef: { current: LeaveGuardHandle | undefined } = { current: undefined };
+  const handle = installLeaveGuard({
+    env: page.env,
+    gate,
+    ask: (request) => void asked.push(request),
+    navigate: (href, replace) => {
+      navigated.push(replace ? `replace ${href}` : `push ${href}`);
+      // The router writes the entry that is current, and then commits: the page tells the guard.
+      if (replace) {
+        const address = new URL(href, HERE).href;
+        if (page.location.on === 'page') page.location.pageHref = address;
+        else page.location.guardHref = address;
+        handleRef.current?.committed();
+      }
+    },
+  });
+  handleRef.current = handle;
   const typeSomething = (): void => gate.mark(PART, 'field-j', true);
   const saveIt = (): void => gate.mark(PART, 'field-j', false);
   const click = (to: Anchor): Event => {
@@ -101,7 +159,11 @@ function setUp() {
     page.win.dispatchEvent(event);
     return event;
   };
-  const pressBack = (): void => void page.win.dispatchEvent(new Event('popstate'));
+  // A Back from the guard\'s entry lands on the page\'s own entry.
+  const pressBack = (): void => {
+    page.location.on = 'page';
+    page.win.dispatchEvent(new Event('popstate'));
+  };
   return { ...page, gate, asked, navigated, handle, typeSomething, saveIt, click, unload, pressBack };
 }
 
@@ -188,6 +250,133 @@ describe('AC-4: a link inside the portal', () => {
     expect(click(anchor('https://elsewhere.test/x')).defaultPrevented).toBe(false);
     expect(click(anchor('/estimates/Q-2026-0001')).defaultPrevented).toBe(false);
     expect(asked).toEqual([]);
+  });
+});
+
+describe('DEF-149, QLT-845-08 (DL-487): a link to another row of the same page, pressed while the guard is armed, steps off the guard\'s entry and gives the page\'s own entry the row\'s address', () => {
+  const ROW = anchor('/estimates/Q-2026-0001?row=1.2');
+
+  it('steps off the guard\'s entry (go(-1)), and only then has the router replace the page\'s own entry; typing again puts one fresh entry on top', () => {
+    const { click, navigated, history, location, typeSomething, saveIt } = setUp();
+    typeSomething();
+    saveIt();
+    expect(history.pushed).toBe(1);
+    click(ROW);
+    expect(history.gone).toEqual([-1]);
+    expect(navigated).toEqual(['replace /estimates/Q-2026-0001?row=1.2']);
+    // The page\'s own entry has the row\'s address now; the guard\'s old entry lies ahead of it, and the next push cuts it.
+    expect(location.pageHref).toBe('http://portal.test/estimates/Q-2026-0001?row=1.2');
+    typeSomething();
+    expect(history.pushed).toBe(2);
+    expect(location.guardHref).toBe(location.pageHref);
+  });
+
+  it('after an add (a row opened with the extra entry on top) and typing, Back asks and the way out is two steps back from the fresh entry, once', () => {
+    const { click, history, typeSomething, saveIt, pressBack, asked } = setUp();
+    typeSomething();
+    saveIt();
+    click(ROW);
+    typeSomething();
+    pressBack();
+    expect(asked).toHaveLength(1);
+    asked[0]?.proceed();
+    expect(history.gone).toEqual([-1, -2]);
+  });
+
+  it('a link to another page takes the guard away with it: nothing stays armed for the page that follows', () => {
+    const { click, history, typeSomething, saveIt } = setUp();
+    typeSomething();
+    saveIt();
+    click(anchor('/audit'));
+    typeSomething();
+    // The guard acts only on addresses of its own page: once the router has taken the address to another page, nothing is pushed on it (DL-487 (2) (i)).
+    expect(history.pushed).toBe(1);
+  });
+
+  it('QLT-845-34: after a way out that takes the person away has been sent (the flag is set, going away), a landing or a commit on this page, or a click, says the person is still here and clears it; a landing on another page does not', () => {
+    const { gate, location, win, click, handle } = setUp();
+    gate.setLeaving(true, true);
+    // The way out's own traversal lands on another page: nothing is cleared.
+    location.forced = 'http://portal.test/queue';
+    win.dispatchEvent(new Event('popstate'));
+    expect(gate.isLeaving()).toBe(true);
+    location.forced = null;
+    // A commit of this page: the way out did not go anywhere.
+    handle.committed();
+    expect(gate.isLeaving()).toBe(false);
+    gate.setLeaving(true, true);
+    // Any click of the person's on this page: a link to another page that nobody guards (nothing is unsaved, the guard is not armed), so the fake document needs nothing more.
+    click(anchor('/audit'));
+    expect(gate.isLeaving()).toBe(false);
+  });
+
+  it('with no leave under way a click, a commit of this page and a landing on it leave the flags clear: they never set a leave, so the Recalculate redraw has nothing to wait for', () => {
+    const { gate, location, win, click, handle } = setUp();
+    expect(gate.isLeaving()).toBe(false);
+    click(anchor('/audit'));
+    handle.committed();
+    location.forced = null;
+    win.dispatchEvent(new Event('popstate'));
+    expect(gate.isLeaving()).toBe(false);
+    expect(gate.isLeaveAway()).toBe(false);
+  });
+
+  it('QLT-845-32: a request made by a link says whether it keeps the person on this page: a link to another row does, a link to another page does not', () => {
+    const { click, typeSomething, asked } = setUp();
+    typeSomething();
+    click(anchor('/estimates/Q-2026-0001?row=1.2'));
+    click(anchor('/audit'));
+    expect(asked.map((request) => request.samePage === true)).toEqual([true, false]);
+  });
+
+  it('an owed write never blocks arming (DL-488 (i)): the fields are held while the router has not written the row, and a key that gets through anyway is guarded at once; the write that lands later is the repair\'s', () => {
+    const page = fakePage();
+    const gate = createSaveGate();
+    const held: boolean[] = [];
+    const handle = installLeaveGuard({
+      env: page.env,
+      gate,
+      ask: () => undefined,
+      // The router asked to replace has not committed yet.
+      navigate: () => undefined,
+      onInputHeld: (now) => void held.push(now),
+    });
+    gate.mark(PART, 'field-j', true);
+    gate.mark(PART, 'field-j', false);
+    expect(page.history.pushed).toBe(1);
+    const event = new Event('click', { cancelable: true });
+    Object.defineProperties(event, Object.fromEntries(Object.entries(linkClick(anchor('/estimates/Q-2026-0001?row=1.2'))).map(([name, value]) => [name, { value }])));
+    page.doc.dispatchEvent(event);
+    // The step off has landed on the page\'s own entry; the router has not written the row\'s address on it yet: the form is told to hold its fields (DL-488 (iv)).
+    expect(held).toEqual([true]);
+    // A key that got through (the end of the hold on the fields): the entry is pushed at once, on the address the page has (the row on screen's), and an owed write does not stop it.
+    gate.mark(PART, 'field-j', true);
+    expect(page.history.pushed).toBe(2);
+    page.location.pageHref = 'http://portal.test/estimates/Q-2026-0001?row=1.2';
+    handle.committed();
+    expect(page.history.pushed).toBe(2);
+  });
+
+  it('two row links, the second after the guard has stepped off: only the first is the guard\'s; typing then pushes one entry, and the way out is two steps back from it', () => {
+    const { click, history, typeSomething, saveIt, pressBack, asked } = setUp();
+    typeSomething();
+    saveIt();
+    click(anchor('/estimates/Q-2026-0001?row=1.2'));
+    click(anchor('/estimates/Q-2026-0001?row=1.3'));
+    typeSomething();
+    expect(history.pushed).toBe(2);
+    pressBack();
+    asked[0]?.proceed();
+    expect(history.gone).toEqual([-1, -2]);
+  });
+
+  it('"Keep editing" keeps the guard armed: a later Back asks again', () => {
+    const { typeSomething, pressBack, asked } = setUp();
+    typeSomething();
+    pressBack();
+    asked[0]?.cancel();
+    pressBack();
+    expect(asked).toHaveLength(2);
   });
 });
 

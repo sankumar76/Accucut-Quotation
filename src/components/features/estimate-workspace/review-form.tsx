@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
 import { createClearedRefresh } from '@/lib/estimates/cleared-refresh';
+import { createReviewRefresh, type ReviewRefresh } from '@/lib/estimates/review-refresh';
 import { reviewSaveGate } from '@/lib/estimates/review-save-gate';
 
 import { Autosave } from './autosave';
@@ -34,33 +35,52 @@ const REFRESH_QUIET_MS = 300;
  */
 export function ReviewForm({ review, editable, ...props }: ReviewFormProps) {
   const router = useRouter();
-  const [, startRefresh] = useTransition();
+  const [refreshing, startRefresh] = useTransition();
   // The server said no: the estimate is approved, quoted or ignored now. `null` while it is as the page drew it.
   const [refused, setRefused] = useState<'locked' | 'ignored' | null>(null);
   // The polite line said once for a change from current to cleared; set from the save's callback and read by the status below.
   const [announcement, setAnnouncement] = useState('');
   const cleared = useRef(createClearedRefresh());
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A rename whose save has not landed yet (DL-491 (b)).
+  const nameOwed = useRef(false);
   const canEdit = editable && refused === null;
 
   // The page says whether its figures are current each time it is drawn: after a Recalculate the next edit asks for a refresh again.
   useEffect(() => cleared.current.sync(review.figuresCurrent), [review.figuresCurrent]);
-  useEffect(
-    () => () => {
-      if (timer.current !== null) clearTimeout(timer.current);
-    },
-    [],
-  );
+  // The refresh that is in flight is told to the gate, so a way out waits for it (DL-491 (c), QLT-845-23).
+  useEffect(() => {
+    reviewSaveGate.setRefreshing(refreshing);
+  }, [refreshing]);
+  useEffect(() => () => reviewSaveGate.setRefreshing(false), []);
 
-  const refresh = useCallback((): void => {
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      timer.current = null;
-      startRefresh(() => router.refresh());
-    }, REFRESH_QUIET_MS);
-  }, [router]);
+  // The latest `run` is read when the timer fires, so the scheduler is made once.
+  const run = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    run.current = (): void => startRefresh(() => router.refresh());
+  });
+  // Made after the mount (a subscription is a side effect), and given back with the page.
+  const scheduler = useRef<ReviewRefresh | null>(null);
+  useEffect(() => {
+    const made = createReviewRefresh(reviewSaveGate, () => run.current(), REFRESH_QUIET_MS);
+    scheduler.current = made;
+    return () => {
+      made.dispose();
+      scheduler.current = null;
+    };
+  }, []);
+  const refresh = useCallback((): void => scheduler.current?.refresh(), []);
+
+  /** A field that names the row was left with a new text: the tree's row takes the name from the server when the save has landed, not before (DL-491 (b)); a failed save arms no refresh. */
+  const named = useCallback((): void => {
+    nameOwed.current = true;
+  }, []);
 
   const wrote = useCallback((): void => {
+    // A save landed: if it was the rename's, the page is read again for the new name (DL-491 (b)).
+    if (nameOwed.current) {
+      nameOwed.current = false;
+      refresh();
+    }
     if (!cleared.current.wrote(review.figuresCurrent)) return;
     setAnnouncement(SAVED_CLEARED_LINE);
     refresh();
@@ -79,7 +99,7 @@ export function ReviewForm({ review, editable, ...props }: ReviewFormProps) {
         editable={canEdit}
         gate={reviewSaveGate}
         onChanged={refresh}
-        onNamed={refresh}
+        onNamed={named}
         onServerIgnored={() => refuse('ignored')}
         review={{ ...review, notice, onWrote: wrote, onLocked: () => refuse('locked') }}
       />

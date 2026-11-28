@@ -216,7 +216,7 @@ export function EstimateReview({ header, estimateId, customer, costs, calculated
       {/* "How the total is built" is above the two columns at every width (UX ruling 2026-11-27 section 3.8; AQP-488): the tree and the row's inputs are the two columns below it. */}
       {state === 'current' ? <BuildTable letters={letters} nodes={nodes} totalPrice={totals === null ? null : totals.totalPrice} warned={warned} /> : null}
       <div data-review-columns="" className={TREE_COLUMN_LAYOUT}>
-        <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} selectedSlNo={selected === null ? null : selected.slNo} />
+        <ReviewTree code={header.code} state={state} letters={letters} nodes={nodes} warned={warned} selectedSlNo={selected === null ? null : selected.slNo} guarded={editable} />
         {selected === null || formProps === null ? null : (
           // The Engineer's own form, read-only (the same `PartForm`); nothing handed to it holds a figure: the rows are mapped down to where each sits, its number, its kind and its name, and the row line is drawn here (AQP-488).
           <div id="row-inputs" className="min-w-0 scroll-mt-[var(--sticky-top,var(--topbar-h))]">

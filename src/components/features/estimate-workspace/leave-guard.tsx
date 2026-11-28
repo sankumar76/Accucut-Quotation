@@ -1,9 +1,10 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { installLeaveGuard, type LeaveGuardHandle } from '@/lib/estimates/leave-guard';
+import { installLeaveGuard, STEP_GRACE_MS, type LeaveGuardHandle } from '@/lib/estimates/leave-guard';
+import { afterLeaveChosen, holdGateForGuard, proceedAfterRefresh } from '@/lib/estimates/leave-after-refresh';
 import { registerLeaveGuard, type LeaveRequest } from '@/lib/estimates/leave-registry';
 import { saveDraft } from '@/lib/estimates/save-draft';
 import type { SaveGate } from '@/lib/estimates/save-gate';
@@ -25,6 +26,9 @@ export interface LeaveGuardProps {
  */
 export function LeaveGuard({ gate }: LeaveGuardProps) {
   const router = useRouter();
+  // The address the router has committed: the guard pushes its history entry only when the current address is the row on screen's (QLT-845-08, DL-487), so it is told when this changes.
+  const pathname = usePathname();
+  const search = useSearchParams().toString();
   const [request, setRequest] = useState<LeaveRequest | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -56,6 +60,8 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
         asking.current?.cancel();
         askedFrom.current = document.activeElement;
         setSaveFailed(false);
+        // The review's refresh starts nothing while the person is asked or leaving (DL-491 (a)).
+        gate.setLeaving(true);
         show(next);
       });
     },
@@ -68,25 +74,55 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
       gate,
       ask,
       navigate: (href, replace) => (replace ? router.replace(href) : router.push(href)),
+      // Nothing is unsaved in the row on screen when no field shows a value that is not saved: a save of another part, in flight or failed, is not that (DL-488 (iii)).
+      rowDirty: () => gate.hasUnsaved(),
+      // The part form takes this as its read-only state, through the gate it shares (DL-488 (iv)).
+      onInputHeld: (held) => gate.setInputHeld(held),
+      onHeldTooLong: (tooLong) => gate.setHoldTooLong(tooLong),
     });
     installed.current = handle;
     const withdraw = registerLeaveGuard(ask);
+    // The notice of a row write owed for 5 s is the form's (it sits before the form); its button comes back here, through the gate (DL-489).
+    const withdrawStay = gate.offerStay(() => handle.stayOnThisRow());
+    // The gate may be one object for the whole session: it is given to this guard clear, and given back clear (QLT-845-32).
+    const giveBack = holdGateForGuard(gate);
     return () => {
+      giveBack();
+      withdrawStay();
       withdraw();
       handle.remove();
       installed.current = null;
     };
   }, [gate, ask, router]);
 
+  // After the router commits an address its history write has been made, so the guard reads the address it has then. Declared after the effect above: on mount the guard is installed first.
+  useEffect(() => {
+    installed.current?.committed();
+  }, [pathname, search]);
+
   function keep(): void {
     request?.cancel();
     show(null);
+    // The refresh that was held back runs now (DL-491 (a)).
+    gate.setLeaving(false);
   }
 
-  function leave(): void {
+  async function leave(): Promise<void> {
     if (request === null) return;
-    show(null);
-    go(request);
+    const chosen = request;
+    // A refresh of the page that is half way finishes first, for at most `STEP_GRACE_MS` (DL-491 (c)); the dialog shows its busy state meanwhile.
+    await proceedAfterRefresh(
+      gate,
+      () => {
+        show(null);
+        // The typing is given up by the person's choice: nothing of it is unsaved from here, so a row opened by the address, or a page, is not held back by it.
+        gate.discardUnsaved();
+        go(chosen);
+        afterLeaveChosen(gate, chosen);
+      },
+      STEP_GRACE_MS,
+      setSaving,
+    );
   }
 
   async function saveAndLeave(): Promise<void> {
@@ -95,7 +131,7 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
     setSaveFailed(false);
     const result = await saveDraft(gate);
     setSaving(false);
-    if (result.saved) leave();
+    if (result.saved) await leave();
     else setSaveFailed(true);
   }
 
@@ -105,7 +141,7 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
       saving={saving}
       saveFailed={saveFailed}
       onKeep={keep}
-      onLeave={leave}
+      onLeave={() => void leave()}
       onSaveAndLeave={() => void saveAndLeave()}
       onCloseAutoFocus={(event) => {
         // No trigger opened this dialog, so Radix has nowhere to return focus: it goes back to where the person was.

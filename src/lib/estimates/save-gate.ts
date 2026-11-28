@@ -16,12 +16,44 @@ export interface SaveGate {
   readonly mark: (partId: string, fieldId: string, unsaved: boolean) => void;
   /** The part is not on the screen (or was read again): what was typed into it is gone, so nothing of it is unsaved any more. The page asks before it lets a part with unsaved values go (`leave-guard.tsx`). */
   readonly forget: (partId: string) => void;
+  /** The person chose "Leave without saving": what is typed and not saved is given up, so nothing of it is unsaved any more and the page that follows (another row, another page) is not held back by it (DEF-149). Saves in flight are untouched. */
+  readonly discardUnsaved: () => void;
   /** Waits until no save is in flight; true when no field shows an unsaved value. Never rejects. */
   readonly settle: () => Promise<boolean>;
   /** A save is in flight, or a field shows a value that is not saved: leaving the page now could lose typing. */
   readonly isDirty: () => boolean;
   /** A save is in flight (apart from whether something is unsaved): the 30-second tick is skipped while one is, and never queued (STORY-05.10 AC-7). */
   readonly isSaving: () => boolean;
+  /** A field shows a value that is not saved, whether or not a save is in flight: what is typed in the row on screen (the marks go when a part leaves the screen, `forget`), and nothing of another part's save (DL-488 (iii)). */
+  readonly hasUnsaved: () => boolean;
+  /** The leave guard says the form's fields must not accept input (a row write or a repair step is in flight, DL-488 (iv)), or that they may again. The part form takes it as its read-only state. */
+  readonly setInputHeld: (held: boolean) => void;
+  readonly isInputHeld: () => boolean;
+  /** The hold has lasted `INPUT_HELD_MAX_MS` with a write still owed: the page shows the notice with "Reload the page", and the polite line gives way to it (DL-489). */
+  readonly setHoldTooLong: (tooLong: boolean) => void;
+  readonly isHoldTooLong: () => boolean;
+  /** The leave guard offers what "Reload the page" does (a full load of the current address through the leave check, DL-489); the form's notice presses it. Answers the way to withdraw it. */
+  readonly offerStay: (stay: () => void) => () => void;
+  readonly stayOnThisRow: () => void;
+  /**
+   * A leave is under way (DL-491 (a), QLT-845-23): the leave dialog is open or a way out was chosen. The review's refresh of the page (`router.refresh()`, whose fetch a Leave would otherwise cut in the middle) starts
+   * nothing while it is set, and runs what it owed when the person chooses to keep editing.
+   */
+  readonly setLeaving: (leaving: boolean, goingAway?: boolean) => void;
+  readonly isLeaving: () => boolean;
+  /**
+   * The leave that was set has been sent and takes the person off this page (`go(-n)`, a link to another page): the flag stays set while the traversal is in flight, so nothing starts meanwhile, and what was held back for
+   * it is dropped, not run (QLT-845-32, QLT-845-34). The guard going, or the guard seeing the person is still on the page, clears both.
+   */
+  readonly isLeaveAway: () => boolean;
+  readonly subscribeLeaving: (listener: () => void) => () => void;
+  /** The review's refresh of the page is in flight (the transition's `isPending`, DL-491 (c)). */
+  readonly setRefreshing: (refreshing: boolean) => void;
+  readonly isRefreshing: () => boolean;
+  /** Settles when no refresh is in flight, or after `maxMs`, whichever comes first. Never rejects. A way out waits on it, so a refresh that is half way is not cut by the traversal. */
+  readonly refreshEnded: (maxMs: number) => Promise<void>;
+  /** Told when the hold on the fields changes. Answers the way to stop listening. */
+  readonly subscribeInputHeld: (listener: () => void) => () => void;
   /** Told after every change of what is dirty (never for a change that changes nothing). Answers the way to stop listening. */
   readonly subscribe: (listener: () => void) => () => void;
   /** A part form offers the way to send again what it shows (Save draft, STORY-05.08 AC-1; the 30-second save, STORY-05.10). It is told which of the two asks. Answers the way to withdraw it. */
@@ -37,6 +69,15 @@ export function createSaveGate(): SaveGate {
   const inFlight = new Set<Promise<unknown>>();
   const unsaved = new Set<string>();
   const listeners = new Set<() => void>();
+  const holdListeners = new Set<() => void>();
+  let inputHeld = false;
+  let holdTooLong = false;
+  let stayOffer: (() => void) | null = null;
+  let leaving = false;
+  let leaveAway = false;
+  const leavingListeners = new Set<() => void>();
+  let refreshing = false;
+  const refreshListeners = new Set<() => void>();
   const flushers = new Set<(mode: FlushMode) => void>();
   const keyOf = (partId: string, fieldId: string): string => `${partId}/${fieldId}`;
   const notify = (): void => {
@@ -68,6 +109,11 @@ export function createSaveGate(): SaveGate {
       for (const key of dropped) unsaved.delete(key);
       if (dropped.length > 0) notify();
     },
+    discardUnsaved() {
+      if (unsaved.size === 0) return;
+      unsaved.clear();
+      notify();
+    },
     async settle() {
       // A save that finishes can queue nothing new, but one typed while this waits is waited for too.
       while (inFlight.size > 0) await Promise.all([...inFlight]);
@@ -75,6 +121,64 @@ export function createSaveGate(): SaveGate {
     },
     isDirty: () => inFlight.size > 0 || unsaved.size > 0,
     isSaving: () => inFlight.size > 0,
+    hasUnsaved: () => unsaved.size > 0,
+    setInputHeld(held) {
+      if (held === inputHeld) return;
+      inputHeld = held;
+      for (const listener of [...holdListeners]) listener();
+    },
+    isInputHeld: () => inputHeld,
+    setHoldTooLong(tooLong) {
+      if (tooLong === holdTooLong) return;
+      holdTooLong = tooLong;
+      for (const listener of [...holdListeners]) listener();
+    },
+    isHoldTooLong: () => holdTooLong,
+    offerStay(stay) {
+      stayOffer = stay;
+      return () => {
+        if (stayOffer === stay) stayOffer = null;
+      };
+    },
+    stayOnThisRow: () => stayOffer?.(),
+    setLeaving(next, goingAway = false) {
+      leaveAway = goingAway;
+      if (next === leaving) return;
+      leaving = next;
+      for (const listener of [...leavingListeners]) listener();
+    },
+    isLeaving: () => leaving,
+    isLeaveAway: () => leaveAway,
+    subscribeLeaving(listener) {
+      leavingListeners.add(listener);
+      return () => void leavingListeners.delete(listener);
+    },
+    setRefreshing(next) {
+      if (next === refreshing) return;
+      refreshing = next;
+      for (const listener of [...refreshListeners]) listener();
+    },
+    isRefreshing: () => refreshing,
+    refreshEnded(maxMs) {
+      if (!refreshing) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const timer = setTimeout(done, maxMs);
+        const stop = (): void => void refreshListeners.delete(onChange);
+        function onChange(): void {
+          if (!refreshing) done();
+        }
+        function done(): void {
+          clearTimeout(timer);
+          stop();
+          resolve();
+        }
+        refreshListeners.add(onChange);
+      });
+    },
+    subscribeInputHeld(listener) {
+      holdListeners.add(listener);
+      return () => void holdListeners.delete(listener);
+    },
     subscribe(listener) {
       listeners.add(listener);
       return () => void listeners.delete(listener);

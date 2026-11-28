@@ -18,6 +18,10 @@ import { formatIst } from '@/lib/time';
 import {
   FAILED_BODY,
   FORM_LOCKED,
+  INPUT_HELD_LINE,
+  INPUT_STUCK_BUTTON,
+  INPUT_STUCK_LINE,
+  INPUT_STUCK_SENTENCE,
   MISSING_CHOICE_MESSAGE,
   MISSING_NUMBER_MESSAGE,
   MISSING_OPTION_MESSAGE,
@@ -45,6 +49,7 @@ import { TREATMENT_MISSING_MESSAGE } from './surface-texts';
 import { SurfaceTreatments } from './surface-treatments';
 import type { Loaded } from './use-form-definition';
 import { TreatmentSeedContext } from './use-treatment-options';
+import { useInputHeld } from './use-input-held';
 import { usePartValues, type PartTarget, type SavedPart } from './use-part-form';
 import type { OwnMove } from './use-parts-tree';
 
@@ -130,6 +135,8 @@ function moveOnEnter(event: KeyboardEvent<HTMLFormElement>, title: HTMLElement |
 export function PartFields({ estimateId, part, editable, nodes, form, materials, lastSavedAt, onSaved, onChanged, ownMove, onNamed, onServerIgnored, onWrote, onReadMaterialsAgain, missing = NONE_MISSING, gate, review, seed }: PartFieldsProps) {
   const allFields = form.sections.flatMap((section) => section.fields);
   const [ownGate] = useState(createSaveGate);
+  // The leave guard holds the fields while a row write or a repair step is in flight (DL-488 (iv)): read-only in the frame it says so, the shaded look and the polite line only after 300 ms.
+  const inputHeld = useInputHeld(gate ?? ownGate);
   const values = usePartValues({
     estimateId,
     part,
@@ -198,7 +205,7 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
   const missingNeeded = (field: FormField): boolean => missing.has(field.id) && textOf(field, values.texts).trim() === '';
   const hasMissing = (section: { readonly fields: ReadonlyArray<FormField> }): boolean => section.fields.some(missingNeeded);
   const drawn = (
-    <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, titleElement())} className={FORM_ROOT}>
+    <form data-part-form="" data-part-id={part.id} noValidate aria-labelledby={TITLE_ID} aria-busy={inputHeld.held || undefined} onSubmit={(event) => event.preventDefault()} onKeyDown={(event) => moveOnEnter(event, titleElement())} className={FORM_ROOT}>
       <div className={HEAD_LINES}>
         {review === undefined ? <PartHead partId={part.id} slNo={part.slNo} nodes={nodes} titleId={TITLE_ID} titleRef={title} /> : null}
         <PartProgress slNo={part.slNo} counts={sumProgress(progress.map(({ counts }) => counts))} />
@@ -281,6 +288,8 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
                   text={field.rule.type === 'derived' ? derivedText(field, part, values.texts, materials) : textOf(field, values.texts)}
                   error={values.errors[field.id]}
                   editable={editable}
+                  held={inputHeld.held}
+                  heldShown={inputHeld.shown}
                   materials={materials}
                   onChange={(text) => values.setText(field.id, text)}
                   onCommit={(override) => values.commit(field, override)}
@@ -296,5 +305,32 @@ export function PartFields({ estimateId, part, editable, nodes, form, materials,
     </form>
   );
   // The treatments the page handed over reach the control that needs them, deep in the form, through this context (DEF-141).
-  return <TreatmentSeedContext value={seed?.treatments}>{drawn}</TreatmentSeedContext>;
+  // The hold's region (UX ruling leave-guard-slow-row-notice, R1 to R3): in the page flow directly BEFORE the form, never inside it (the form is `aria-busy` while it is held, and a region inside a busy one may not be
+  // announced, QLT-845-26), and with no `aria-busy` of its own. It holds the one live voice, a polite line that is on the page from the first paint (so it speaks when its words change): from 300 ms the hold's line, from
+  // 5 s the sentence of the notice and the way out. The notice itself carries no live role, and is drawn only while the fields are held (DL-489). Focus never moves to it on its own.
+  const heldLine = inputHeld.tooLong ? INPUT_STUCK_LINE : inputHeld.shown ? INPUT_HELD_LINE : '';
+  return (
+    <TreatmentSeedContext value={seed?.treatments}>
+      {/* One wrapper takes the form's place in the card (a flex row in the Engineer's workspace), so the region and the form are one column and the notice does not take a column of its own (UX ruling R4). */}
+      <div data-input-held-wrap="" className="flex min-w-0 flex-1 flex-col">
+        <div data-input-held-region="">
+          <p role="status" data-input-held-line="" className="sr-only">
+            {heldLine}
+          </p>
+          {inputHeld.tooLong ? (
+            <Notice tone="warn" className="mb-s-4">
+              <p data-input-held-slow="">{INPUT_STUCK_SENTENCE}</p>
+              {/* Wrapped as the conflict notice wraps its buttons, so the button is its own width and not the notice's (UX ruling R5). */}
+              <div className="mt-s-2 flex flex-wrap gap-s-2">
+                <Button type="button" variant="secondary" data-input-held-reload="" onClick={() => (gate ?? ownGate).stayOnThisRow()}>
+                  {INPUT_STUCK_BUTTON}
+                </Button>
+              </div>
+            </Notice>
+          ) : null}
+        </div>
+        {drawn}
+      </div>
+    </TreatmentSeedContext>
+  );
 }

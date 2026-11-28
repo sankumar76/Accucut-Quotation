@@ -104,3 +104,24 @@ describe('SQR-01: nothing is sent while a field shows a value that is not saved'
     await expect(gate.settle()).resolves.toBe(true);
   });
 });
+
+describe('DEF-149: discardUnsaved', () => {
+  it('clears what is typed and not saved, tells the listeners once, and leaves a save in flight alone', () => {
+    const gate = createSaveGate();
+    let told = 0;
+    gate.subscribe(() => void (told += 1));
+    gate.mark('p1', 'a', true);
+    gate.mark('p2', 'b', true);
+    told = 0;
+    gate.discardUnsaved();
+    expect(gate.isDirty()).toBe(false);
+    expect(told).toBe(1);
+    gate.discardUnsaved();
+    expect(told).toBe(1);
+    gate.track(new Promise<void>(() => undefined));
+    gate.mark('p1', 'a', true);
+    gate.discardUnsaved();
+    expect(gate.isDirty()).toBe(true);
+    expect(gate.isSaving()).toBe(true);
+  });
+});
