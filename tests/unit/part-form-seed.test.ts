@@ -217,6 +217,8 @@ describe('getPartForm is getForm and getNode in one read (the combined read of D
     expect(asJson(first.form)).toEqual(asJson(form));
     expect(asJson(first.node)).toEqual(asJson(node));
     expect(labelsOf(first.form)).toContain('Frozen invented label');
+    // ARC-836-05: and the tree it carries is the one `getTree` answers, in the same frozen branch.
+    expect(asJson(first.tree)).toEqual(asJson(await service.getTree(lead, id)));
   });
 
   it('refuses as they refuse (NFR-001): another Engineer, an unknown estimate and an unknown part are the same not-found, with the same words', async () => {
@@ -346,5 +348,18 @@ describe('SEC-836-01: the seed\'s form body goes through the route\'s strict bui
     const dropped = defined(await read(withKey));
     expect(dropped.form).not.toHaveProperty('rate');
     expect(await read({ ...real.form, sections })).toBeNull();
+  });
+
+  // SEC-836-04: the tree goes through `treeBody` too, so a row that carries a figure the schema does not name (a rate) gives no seed at all and nothing of it reaches the page's payload (NFR-002).
+  it.each(['the Engineer\'s first row', 'the Lead\'s chosen row'])('refuses a tree row that carries a rate, for %s', async (which) => {
+    const real = await realFirst();
+    const planted = real.tree.map((row, index) => (index === 0 ? { ...row, unitRate: '1.00' } : row));
+    const leaky = { getFirstPartForm: () => Promise.resolve({ form: real.form, node: real.node, tree: planted }), getPartForm: () => Promise.resolve({ form: real.form, node: real.node, tree: planted }) } as never;
+    const read = which.startsWith('the Engineer') ? readFirstPartFormBodies({ estimates: leaky }, viewer, 'e') : readPartFormBodies({ estimates: leaky, masters: services().masters }, viewer, 'e', real.node.id);
+    expect(await read).toBeNull();
+    // The same rows without the planted figure are accepted: the refusal is the figure's, not the shape's.
+    const clean = { getFirstPartForm: () => Promise.resolve({ form: real.form, node: real.node, tree: real.tree }), getPartForm: () => Promise.resolve({ form: real.form, node: real.node, tree: real.tree }) } as never;
+    const accepted = which.startsWith('the Engineer') ? await readFirstPartFormBodies({ estimates: clean }, viewer, 'e') : await readPartFormBodies({ estimates: clean, masters: services().masters }, viewer, 'e', real.node.id);
+    expect(defined(accepted).tree).toEqual({ nodes: JSON.parse(JSON.stringify(real.tree)) });
   });
 });

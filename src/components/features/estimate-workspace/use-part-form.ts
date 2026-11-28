@@ -98,14 +98,10 @@ export interface UsePartValuesProps {
 export function usePartValues({ estimateId, part, editable, fields, onSaved, onChanged, onNamed, onServerIgnored, onLocked, onWrote, gate, seed }: UsePartValuesProps) {
   const partId = part.id;
   // The part's values as a page handed them over (the Lead's review, DEF-141): the form starts with them and reads nothing; a read after that (a conflict, Try again) goes to the server as ever.
+  // The seed's values start the form only when the seed's revision is the row's (`part.revision`) at mount; otherwise the part is read from the server (QLT-836-01). A form that cannot save keeps its seed whatever the row says.
   const [seeded] = useState(() => {
-    if (seed === undefined || seed.estimateId !== estimateId || seed.partId !== part.id) return null;
-    const parsed = parsePartInputs(seed.part);
-    // The values shown should be the newest the page has (architect note section 5 item 4; DEF-085, QLT-836-01): the tree row's revision (`part.revision`), which the browser may have read
-    // after the page was drawn, can be newer than the seed. A seed older than that row is read from the server instead, so the person sees the newest values before the first save. A save sends the revision of the values the form holds (the seed's,
-    // the load's, its own saves'; DEF-148), never the row's, so a stale seed would be refused 409 anyway: this guard spares that 409. A form nobody can save (`editable` false) sends no revision, so the Lead's
-    // read-only review keeps its seed whatever its placeholder revision is.
-    return parsed !== null && (!editable || parsed.revision === part.revision) ? parsed : null;
+    const given = seed !== undefined && seed.estimateId === estimateId && seed.partId === part.id ? parsePartInputs(seed.part) : null;
+    return given !== null && (!editable || given.revision === part.revision) ? given : null;
   });
   const [stored, setStored] = useState<Loaded<PartInputs>>(seeded === null ? LOADING : { status: 'ready', value: seeded });
   const [texts, setTexts] = useState<Readonly<Record<string, string>>>(seeded === null ? {} : seeded.inputs);
