@@ -43,6 +43,8 @@ async function openAsLead(page: Page, testInfo: TestInfo, code: string, role: 'L
   const response = await page.goto(`/estimates/${code}`);
   expect(response?.status()).toBe(200);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Estimate ${code}`);
+  // A Draft or a Prepared estimate draws the read-only tree first and the editing island takes its place a moment later (AQP-488): what a case does to the tree (folds it, measures it) is done on the one that stays, so wait for the swap (the first paint holds a reserve that goes with it).
+  await expect(page.locator('[data-review-tree-reserve]')).toHaveCount(0);
 }
 
 const tiles = (page: Page) => page.getByRole('region', { name: 'Totals' });
