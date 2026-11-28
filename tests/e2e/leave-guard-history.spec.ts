@@ -734,6 +734,7 @@ async function u2Case(page: Page, testInfo: TestInfo, prepared: boolean): Promis
 }
 
 async function u5aCase(page: Page, testInfo: TestInfo, prepared: boolean, full: boolean): Promise<void> {
+  // `full`: the Draft twin, with the whole tail (type, Back, Keep editing, a second Back, Leave). Not `full`: the Prepared variant, which ends with the hold (the tail is "u5a, after the hold", QLT-845-31).
   const { code } = await assignedEstimate(page, testInfo, prepared);
   await openedClean(page, code);
   const formWidth = (await page.locator('form[data-part-form]').boundingBox())?.width ?? 0;
@@ -754,7 +755,11 @@ async function u5aCase(page: Page, testInfo: TestInfo, prepared: boolean, full: 
     await typedBackKeepAndLeave(page, '1');
     return;
   }
-  // The Prepared variant is the real shape of the hold; the Draft variant has the whole tail (Keep editing, a second Back), so this one asks once and leaves.
+  // The Prepared variant ends here: the tail that asks once and leaves is its own case below (QLT-845-31: no more than about 25 s on any shard).
+}
+
+/** Text that cannot be saved is typed in the row on screen, one Back asks with the text still there, and "Leave without saving" lands exactly on the queue. */
+async function typedAskedOnceAndLeft(page: Page): Promise<void> {
   await failSaves(page);
   await description(page).fill(TYPED);
   await description(page).blur();
@@ -791,8 +796,18 @@ test.describe('DL-434: the same three core cases on a Prepared estimate (the rea
     await saveDraftCase(page, testInfo, true, false);
   });
 
-  test('u5a on a Prepared estimate: the hold of row 1\'s read for about 6.5 s, no key accepted, the notice, the release, typing guarded, Back asks', async ({ page }, testInfo) => {
+  test('u5a on a Prepared estimate: the hold of row 1\'s read, no key accepted, the notice, the release: row 1 is editable within 2.5 s and the notice is gone', async ({ page }, testInfo) => {
     await u5aCase(page, testInfo, true, false);
+  });
+
+  // The tail of the Prepared u5a, on its own (QLT-845-31): the page a hold ends on is `?row=1#row-inputs`; on a Prepared estimate typing there is guarded and Back asks.
+  test('u5a, after the hold, on a Prepared estimate: row 1 at ?row=1#row-inputs guards typing: Back asks with the text kept, Leave lands on the queue', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await page.goto('/queue');
+    await page.goto(`/estimates/${code}?row=1#row-inputs`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#part-form-title')).toHaveText(/^1 ·/);
+    await expect(description(page)).toBeEditable();
+    await typedAskedOnceAndLeft(page);
   });
 });
 
