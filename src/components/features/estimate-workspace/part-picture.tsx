@@ -3,7 +3,6 @@
 import { Image as ImageIcon } from 'lucide-react';
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 
-import { BREAK_LONG_NAMES } from '@/components/shared/break-long-names';
 import { ColumnTag } from '@/components/shared/column-tag';
 import { Icon } from '@/components/shared/icon';
 import { Notice } from '@/components/shared/notice';
@@ -249,9 +248,13 @@ function PictureControl({ field, estimateId, partId, held: initial, editable, in
           {picture === null ? (
             <span className="text-body text-ink-2">{editable ? null : NO_PICTURE}</span>
           ) : (
-            <span className={cn('text-body font-semibold text-ink', BREAK_LONG_NAMES)}>
-              {picture.fileName}
-              <span className="font-normal text-ink-2">{` ${sizeText(picture.sizeBytes)}`}</span>
+            // One line whatever the name (PF-22): the name is cut with an ellipsis, its size is kept, so the box keeps the height that the reserve of the form was measured with. The cut name carries the full one
+            // as its `title` for a mouse; the thumbnail's `alt` holds it for a screen reader.
+            <span className="flex min-w-0 items-baseline gap-s-1 text-body font-semibold text-ink">
+              <span className="min-w-0 truncate" title={picture.fileName}>
+                {picture.fileName}
+              </span>
+              <span className="shrink-0 font-normal text-ink-2">{sizeText(picture.sizeBytes)}</span>
             </span>
           )}
           {editable ? (
