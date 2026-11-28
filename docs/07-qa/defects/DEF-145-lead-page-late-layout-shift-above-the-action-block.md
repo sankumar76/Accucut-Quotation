@@ -38,5 +38,8 @@ Unchanged: the `:263` failure stays counted as time-out mode for today's trigger
 | Delta review and the built-page check | reviewer-quality, ux-expert | | |
 | Verified: the move check at three widths and the Engineer's workspace, Stage 11b, CLS readings; `rates-changed:263` reads clean on two `master` pushes | qa-engineer | | |
 
+## Reading on `46490f27` (the squash of #833; qa-engineer, 2026-11-27; test plan 0.3.151)
+Met on `master`: the move check (8 px) at 360, 768 and 1366 px on Draft and Prepared and the Engineer's workspace case (`partform-placeholder.spec.ts`: 7 passing lines per width, all attempt 1); Stage 11b (`/estimates/[code]` 193,080 B against 194,000 B). Not yet met: the Lighthouse CLS reading per state before and after (reported, not gated; not in any CI log QA holds) and `rates-changed.spec.ts:263` clean on two `master` pushes that hold the fix (one so far, `46490f27`). **Status stays Open**; QA closes it on the next push that is clean for `:263` and the move check, with the CLS readings reported, unless master rules that this push suffices.
+
 ## Records
 Jira Bug AQP-502 and GitHub issue #832, created 2026-11-27 and cross-linked (Jira linked to AQP-488 and AQP-498). DL-464 (3), DL-465; test plan 0.3.141. Related: DEF-141 (closed), follow-up #831 (the deferred mount after G8).
