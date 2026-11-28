@@ -436,3 +436,50 @@ u2 3/3, u3 3/3, c2 1/3. The aborted request is a navigation RSC fetch for `?row=
 - Open questions: none
 - Risks raised: QLT-845-29 (silent loss through "Stay on this row")
 - Recommended next agent: reviewer-quality round 7 on 8b4ae587 (DL-490, DL-491)
+
+## Round 7 (posted 2026-11-28, on 8b4ae587)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (the combined security-and-quality review, §9 (2)) |
+| Commits reviewed | `3dea53c3` (ux R4, R5), `d9c09dec` (DL-490), `8b4ae587` (DL-491): the delta `5e113882..8b4ae587` |
+| Rulings read | DL-490 (records-u 60710dc0), DL-491 (c3fa0deb) |
+| PR review | [#845 review 6097733574](https://github.com/sankumar76/Accucut-Quotation/pull/845#pullrequestreview-6097733574) (COMMENT, single-token, `commit_id` 8b4ae587). Inline: QLT-845-32 `leave-guard.tsx:64` (4726941430), -33 `leave-guard.tsx:63` (4726941432), -31 `leave-guard-history.spec.ts:261` (4726941434). Early warning for -32 sent to the orchestrator before posting. Label `review:quality-changes-requested` kept |
+| **Verdict** | **REQUEST CHANGES. New: 0 Blocker, 0 Critical, 1 Major (QLT-845-32), 1 Minor (QLT-845-33, for master), 0 Info.** Fixed: -29, -30. Open: -31 (Major, test budget, widened), -23 (Major; DL-491 built, closes on lane 3's one-off) |
+
+### Checks run
+| Check | Result |
+|---|---|
+| Probe 7 (`probe7/probe7.test.ts`, the real guard from 8b4ae587) | u2 with real hrefs: the guard takes the second link, the hold ends on the landing, Back asks. Slow write: held with the notice at 5.001 s and 30 s, nothing accepted, guarded after the landing. Stay at both address shapes: `reload`, held, nothing accepted (-29 fixed). A null-state popstate during a hold: held, nothing accepted |
+| CI 46141468932 on `8b4ae587` | Failure. Stages 1 to 11b passed (12,183 + 18,064 unit tests). Shards 1 to 3 passed (624, 623, 634). Shard 4 [desktop]: 617 passed, 1 failed (c3b `:261`, both attempts, 30.1 s / 31.7 s, the test time-out at `:273`), 5 flaky (`:775` Keep editing at 30.2 s; `estimate-form-sections.spec.ts:223`, `:245`, `:266`, `:284`) |
+| Green on attempt 1 at three widths | DEF-149 describes; c1; c2; c3a; u2 `:355`, u3 `:371`, u4 `:403`, u5a `:463`, u5b `:507`, u5b-plain `:525`, u5c `:541`, u4f `:572`, u6a `:633`, u6b `:651`, u6c `:673`; R1/PF. DL-479 (5): `approve-override.spec.ts:230`, `:314`, `approve.spec.ts:312` |
+| "Save draft and leave" (5e113882 `:573` = 8b4ae587 `:762`) | 29.0 / 21.9 / 20.2 s (desktop, mobile, tablet). That is set-up and desktop-shard load, not a product wait: the only product wait is `proceedAfterRefresh` (at most 1 s, only while a refresh is in flight; u6c 17.9 / 12.4 / 9.7 s). The orchestrator's relayed 25.1 / 17.3 / 14.9 s belong to `:730` (the overshoot case) |
+| Lane 3, Firefox and WebKit at 8b4ae587 (relayed) | u5b and u5b-plain red 12/12 at `:500` (navigation type `navigate`, not `reload`). Firefox c2 red 2/3, u2 red 1/3. 0 fallback lines. Open until traced |
+| DL-404, security, NFR-002 | No budget or configuration change (`proceedAfterRefresh` reuses `STEP_GRACE_MS`). No secret, route, role, figure or auth change. The Engineer view is unchanged |
+
+### DL-490 / DL-491 checklists
+| Term | Result |
+|---|---|
+| DL-490 (2) `location.reload()` | Met |
+| DL-490 (3) no popstate ends an owed write | Met (`:505-507`, `:534-537`, `traversedDuringHold` at `:585`) |
+| DL-490 (4) the tests (model fragment navigation vs reload, writers, probe 6 inverted, u5b from a row link, u5b-plain, u5c) | Met in Chromium. Firefox and WebKit u5b are red (lane 3) |
+| DL-491 (b) arm after a landed save | Met |
+| DL-491 (a) leave flag | Dialog path met; **never cleared after a way out (-32)**; clean half not built (-33) |
+| DL-491 (c) Leave waits, capped at `STEP_GRACE_MS`, busy state | Met |
+| DL-491 (4) u6a to u6c | Green in Chromium; WebKit repeat and one-off pending (-23) |
+| ux R4, R5 | Built; the ux-expert checks |
+
+### Findings
+| ID | Severity | File:line (8b4ae587) | Issue | Impact | Suggested fix | Test |
+|----|----------|-----------|-------|--------|---------------|------|
+| QLT-845-32 | Major | `src/components/features/estimate-workspace/leave-guard.tsx:64` (set), `:104` (the only clear); `review-save-gate.ts:9` (module singleton); `review-form.tsx:68` | `setLeaving(true)` when the dialog opens; only "Keep editing" clears it. After a Leave or Save-draft-and-leave the flag stays true on the same page (a row link) and on later soft-navigated review pages | Every `ReviewForm.refresh()` is only owed: after a save that clears the figures, the tiles and the tree keep old figures as current; renames stay stale. A full load resets it, so E2E (each `goto`) misses it | Clear after `go(chosen)` when the page stays, and on `LeaveGuard` unmount; or a per-page flag | Unit: dialog-proceeded row change, then a landed rename, then the refresh runs; uninstall resets. E2E: row link via Leave, then a clearing edit shows cleared; `/queue`, then another estimate, the same |
+| QLT-845-33 | Minor (for master) | `leave-guard.tsx:56-58` (clean `go(next)`), the guard's clean Back | DL-491 (a)'s "or a clean Back or link is passed on" is not built | A refresh can still race a clean way out in WebKit: a wrong landing, no text lost. DL-491 (4) sends the clean variant to QA | Set the flag and await `proceedAfterRefresh` on the clean path, if (a) applies | u6a clean variant, in WebKit in the one-off |
+| QLT-845-31 | Major (test; widened) | `tests/e2e/leave-guard-history.spec.ts:261` and the describe | The desktop shard runs the file at 24 to 31 s per case; c3b red, `:775` flaky | The run of record is red on budget | Cut set-up per case; read c3b's desktop trace once to rule out a part read that does not finish after Forward | The file under about 20 s per case at [desktop] |
+
+### Hand-off (round 7)
+- Status: COMPLETE
+- Artefacts written/updated: this section (not committed)
+- Jira / GitHub updates: review 6097733574 with 3 inline comments; label kept; Jira AQP-506 comment 13669
+- Open questions: none
+- Risks raised: QLT-845-32 (stale figures shown as current on the Lead's review after a way out)
+- Recommended next agent: developer (lane 1) for -32 and -31 (already pushing); master for -33; lane 3 for the Firefox and WebKit u5b trace; then reviewer-quality round 8
