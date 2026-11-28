@@ -173,3 +173,30 @@ describe('DEF-148: the revision is the one of the values the form holds, from th
     expect(partServer.inputs).toEqual({ a: '4.00', b: '6.00', c: '5.00' });
   });
 });
+
+describe('DEF-148: a picture change is one of the form\'s own saves only when it moved the revision by one', () => {
+  it('a picture saved with the next revision (nobody else changed the part) is followed by a save with that revision', async () => {
+    const { gate, hook } = await open();
+    const form = hook.render();
+    form.pictureSaved({ revision: 2, completeness: 'PARTIAL' });
+    partServer.changeElsewhere({});
+    form.setText('c', '5');
+    form.commit(C);
+    await gate.settle();
+    expect(partServer.sent[0]).toEqual({ revision: 2, values: { c: '5.00' } });
+  });
+
+  it('a picture saved with a revision two or more ahead (somebody else changed the part too) leaves the revision of the held values: the next save is answered 409 and the other person\'s A is kept', async () => {
+    const { gate, hook } = await open();
+    const form = hook.render();
+    partServer.changeElsewhere({ a: '9.00' });
+    partServer.changeElsewhere({});
+    form.pictureSaved({ revision: partServer.revision, completeness: 'PARTIAL' });
+    form.setText('c', '5');
+    form.commit(C);
+    await gate.settle();
+    expect(partServer.sent[0]).toEqual({ revision: 1, values: { c: '5.00' } });
+    expect(partServer.inputs).toEqual({ a: '9.00', b: '1.00', c: '5.00' });
+    expect(hook.render().texts['a']).toBe('9.00');
+  });
+});

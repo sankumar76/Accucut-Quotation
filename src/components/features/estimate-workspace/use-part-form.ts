@@ -36,7 +36,7 @@ const LOCKED_CODES: ReadonlyArray<string> = ['ESTIMATE_APPROVED_IS_LOCKED', 'EST
 /** What a field holds when nothing is stored for it: its default (Fasteners: "None"), or nothing. A blank over a default is the default, so leaving the box alone changes nothing. */
 const standIn = (field: Pick<FormField, 'defaultValue'>, value: string | null): string | null => value ?? field.defaultValue;
 
-/** The part the form is for: the tree's own facts about it. Its `revision` is the one a save is sent with, so a move or a save keeps the tree and the form in step. */
+/** The part the form is for: the tree's own facts about it. Its `revision` is only the form's starting guess before its values are read: a save is sent with the revision of the values the form holds (the seed's, the load's, its own saves' and a conflict re-read's), never the row's (DEF-148). */
 export interface PartTarget {
   readonly id: string;
   readonly slNo: string;
@@ -108,10 +108,12 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   const [attempt, setAttempt] = useState(0);
   const [autosaveFailedAt, trail] = useAutosaveTrail();
 
-  // What a save reads when it runs, not when it was asked for: the text of every field, the values the server holds and the revision to send.
+  // What a save reads when it runs, not when it was asked for: the text of every field, the values the server holds and the revision of those values (DEF-148).
+  // The revision a save sends is the one of the values this form holds: the seed's, the load's, its own saves' and a conflict re-read's. It is never taken from the tree's row: a tree read that shows a newer
+  // revision for the part says somebody else changed it, and the save that follows must then be answered 409 and go through `reconcile`, not carry the new revision over values this form has not seen.
   const textsRef = useRef<Readonly<Record<string, string>>>(seeded === null ? {} : seeded.inputs);
   const heldRef = useRef<Readonly<Record<string, string>>>(seeded === null ? {} : seeded.inputs);
-  const revisionRef = useRef<number>(part.revision);
+  const revisionRef = useRef<number>(seeded === null ? part.revision : seeded.revision);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   // How many leaves (`gate.flush('leave')`: the tab hidden, the page left) have saves in the queue that are not yet run: while there is one, the saves that go out ask the browser to finish them even if the page goes away
   // (STORY-05.10 AC-7a, AC-7b). A count, not a flag, so the end of an earlier leave's queue does not take it from a later leave's saves.
@@ -122,10 +124,6 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
   const onItsWayRef = useRef(new Map<string, string>());
   // A number for each field, raised whenever a save of it is queued and whenever it falls into conflict: a save is sent only while it still holds the field's latest number.
   const ticketsRef = useRef(new Map<string, number>());
-
-  useEffect(() => {
-    revisionRef.current = part.revision;
-  }, [part.revision]);
 
   // What is typed here is gone with the form (it is read from the server when the part is chosen again), so nothing of it is unsaved once it is off the screen or read again.
   const live = useRef(true);
@@ -149,6 +147,7 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
         gate.forget(partId);
         trail.reset();
         heldRef.current = outcome.value.inputs;
+        revisionRef.current = outcome.value.revision;
         textsRef.current = outcome.value.inputs;
         completenessRef.current = outcome.value.completeness;
         setTexts(outcome.value.inputs);
@@ -474,9 +473,10 @@ export function usePartValues({ estimateId, part, editable, fields, onSaved, onC
     return turn;
   }
 
-  /** A picture was added, replaced or removed: the part's revision moved, so the next save is sent with the new one, and the tree and Calculate's list are told with what the part holds. */
+  /** A picture was added, replaced or removed: the part's revision moved by one, so the next save is sent with the new one, and the tree and Calculate's list are told with what the part holds. A revision further on than that is somebody else's change as well (DEF-148): the picture's save does not
+   * show this form their values, so the revision of the values it holds stays, and the next save is answered 409 and read again. */
   function pictureSaved(saved: { readonly revision: number; readonly completeness: Completeness }): void {
-    revisionRef.current = saved.revision;
+    if (saved.revision <= revisionRef.current + 1) revisionRef.current = saved.revision;
     onWrote(systemClock.now().toISOString());
     reportSaved({ id: partId, revision: saved.revision, completeness: saved.completeness, inputs: heldRef.current });
   }
