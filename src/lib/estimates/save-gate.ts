@@ -35,6 +35,18 @@ export interface SaveGate {
   /** The leave guard offers what "Stay on this row" does (a full load of the current address through the leave check, DL-489); the form's notice presses it. Answers the way to withdraw it. */
   readonly offerStay: (stay: () => void) => () => void;
   readonly stayOnThisRow: () => void;
+  /**
+   * A leave is under way (DL-491 (a), QLT-845-23): the leave dialog is open or a way out was chosen. The review's refresh of the page (`router.refresh()`, whose fetch a Leave would otherwise cut in the middle) starts
+   * nothing while it is set, and runs what it owed when the person chooses to keep editing.
+   */
+  readonly setLeaving: (leaving: boolean) => void;
+  readonly isLeaving: () => boolean;
+  readonly subscribeLeaving: (listener: () => void) => () => void;
+  /** The review's refresh of the page is in flight (the transition's `isPending`, DL-491 (c)). */
+  readonly setRefreshing: (refreshing: boolean) => void;
+  readonly isRefreshing: () => boolean;
+  /** Settles when no refresh is in flight, or after `maxMs`, whichever comes first. Never rejects. A way out waits on it, so a refresh that is half way is not cut by the traversal. */
+  readonly refreshEnded: (maxMs: number) => Promise<void>;
   /** Told when the hold on the fields changes. Answers the way to stop listening. */
   readonly subscribeInputHeld: (listener: () => void) => () => void;
   /** Told after every change of what is dirty (never for a change that changes nothing). Answers the way to stop listening. */
@@ -56,6 +68,10 @@ export function createSaveGate(): SaveGate {
   let inputHeld = false;
   let holdTooLong = false;
   let stayOffer: (() => void) | null = null;
+  let leaving = false;
+  const leavingListeners = new Set<() => void>();
+  let refreshing = false;
+  const refreshListeners = new Set<() => void>();
   const flushers = new Set<(mode: FlushMode) => void>();
   const keyOf = (partId: string, fieldId: string): string => `${partId}/${fieldId}`;
   const notify = (): void => {
@@ -119,6 +135,38 @@ export function createSaveGate(): SaveGate {
       };
     },
     stayOnThisRow: () => stayOffer?.(),
+    setLeaving(next) {
+      if (next === leaving) return;
+      leaving = next;
+      for (const listener of [...leavingListeners]) listener();
+    },
+    isLeaving: () => leaving,
+    subscribeLeaving(listener) {
+      leavingListeners.add(listener);
+      return () => void leavingListeners.delete(listener);
+    },
+    setRefreshing(next) {
+      if (next === refreshing) return;
+      refreshing = next;
+      for (const listener of [...refreshListeners]) listener();
+    },
+    isRefreshing: () => refreshing,
+    refreshEnded(maxMs) {
+      if (!refreshing) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const timer = setTimeout(done, maxMs);
+        const stop = (): void => void refreshListeners.delete(onChange);
+        function onChange(): void {
+          if (!refreshing) done();
+        }
+        function done(): void {
+          clearTimeout(timer);
+          stop();
+          resolve();
+        }
+        refreshListeners.add(onChange);
+      });
+    },
     subscribeInputHeld(listener) {
       holdListeners.add(listener);
       return () => void holdListeners.delete(listener);

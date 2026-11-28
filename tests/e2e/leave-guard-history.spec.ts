@@ -586,6 +586,115 @@ test.describe('DL-489 u5a, u5b, u4f (QLT-845-25): a row write that is slow, and 
   });
 });
 
+test.describe('DL-491 u6a, u6b, u6c (QLT-845-23): the review\'s refresh of the page and a Leave', () => {
+  /**
+   * The review's refresh (`router.refresh()`, 300 ms after a save that renamed the row or cleared the figures) is an `_rsc` fetch of the page's own address. It is held until `release()`, which the cases call after "Leave" is
+   * pressed: that is the refresh whose fetch a `go(-2)` would cut in the middle (WebKit cancels it, and Next's answer is a hard navigation to the address the page had). `reached()` says whether it was asked for.
+   */
+  async function holdPageRefresh(page: Page, code: string): Promise<{ readonly release: () => void; readonly reached: Promise<void>; readonly wasAsked: () => boolean }> {
+    let release: () => void = () => undefined;
+    const opened = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let asked = false;
+    let reach: () => void = () => undefined;
+    const reached = new Promise<void>((resolve) => {
+      reach = resolve;
+    });
+    await page.route(
+      (url) => url.pathname === `/estimates/${code}` && url.searchParams.has('_rsc'),
+      async (route) => {
+        asked = true;
+        reach();
+        await opened;
+        await route.continue().catch(() => undefined);
+      },
+    );
+    return { release, reached, wasAsked: () => asked };
+  }
+
+  const fallbacksOf = (page: Page): string[] => {
+    const lines: string[] = [];
+    page.on('console', (message) => {
+      if (message.text().includes('Falling back to browser navigation')) lines.push(message.text());
+    });
+    return lines;
+  };
+
+  /** The landing is exact, the document is the same one (a soft navigation: the marker set on it is still there), and the router did not fall back to a hard navigation. */
+  async function expectLeftSoftly(page: Page, fallbacks: string[]): Promise<void> {
+    await expect(page).toHaveURL(new RegExp(`${QUEUE_OF_TASK.source}`));
+    expect(await markerIsSet(page), 'a soft navigation: nothing was loaded').toBe(true);
+    expect(fallbacks, 'the router did not fall back to a hard navigation').toEqual([]);
+  }
+
+  const partNo = (page: Page) => page.getByRole('textbox', { name: /Part No/ }).first();
+
+  test('u6a: the row name is left with a text whose save fails: no refresh is asked for; Back, "Leave without saving" lands exactly on the queue by a soft navigation', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await openedFromTheQueue(page, code);
+    const fallbacks = fallbacksOf(page);
+    const refresh = await holdPageRefresh(page, code);
+    await failSaves(page);
+    await description(page).fill(TYPED);
+    await description(page).blur();
+    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+    await expectLeftSoftly(page, fallbacks);
+    refresh.release();
+    // A save that did not land arms no refresh (DL-491 (b)).
+    expect(refresh.wasAsked(), 'no refresh was asked for').toBe(false);
+  });
+
+  test('u6b: the row name is saved (its refresh is asked for and held in flight), another field is left unsaved; Back, "Leave without saving": the way out waits for the refresh for at most 1 s and lands exactly on the queue by a soft navigation', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await openedFromTheQueue(page, code);
+    const fallbacks = fallbacksOf(page);
+    const refresh = await holdPageRefresh(page, code);
+    const saved = savedAnswer(page);
+    await description(page).fill(FIRST);
+    await description(page).blur();
+    expect((await saved).status(), 'the name is saved').toBe(200);
+    // The refresh is asked for once the save has landed, and its fetch is in flight when the person leaves.
+    await refresh.reached;
+    await failSaves(page);
+    await partNo(page).fill(TYPED);
+    await partNo(page).blur();
+    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    await leaveDialog(page).getByRole('button', { name: 'Leave without saving', exact: true }).click();
+    await expectLeftSoftly(page, fallbacks);
+    refresh.release();
+  });
+
+  test('u6c: the same, with "Save draft and leave": the draft is saved, the way out waits for the refresh for at most 1 s, and it lands exactly on the queue by a soft navigation', async ({ page }, testInfo) => {
+    const { code } = await assignedEstimate(page, testInfo, true);
+    await openedFromTheQueue(page, code);
+    const fallbacks = fallbacksOf(page);
+    const refresh = await holdPageRefresh(page, code);
+    const saved = savedAnswer(page);
+    await description(page).fill(FIRST);
+    await description(page).blur();
+    expect((await saved).status(), 'the name is saved').toBe(200);
+    await refresh.reached;
+    const allow = await failSaves(page);
+    await partNo(page).fill(TYPED);
+    await partNo(page).blur();
+    await expect(page.getByRole('alert').filter({ hasText: 'The change was not saved' })).toBeVisible();
+    await page.evaluate(() => window.history.back());
+    await expect(leaveDialog(page)).toBeVisible();
+    allow();
+    const draft = savedAnswer(page);
+    await leaveDialog(page).getByRole('button', { name: 'Save draft and leave', exact: true }).click();
+    expect((await draft).status(), 'the draft is saved').toBe(200);
+    await expectLeftSoftly(page, fallbacks);
+    refresh.release();
+  });
+});
+
 // Evidence for the pull request and for NFR-019, recorded with the browser's version: whether a listener added to the window with `capture: true` runs before one added without it in this browser. No code of the product
 // depends on the answer (DL-487: option A, which did, was withdrawn); this only records it, so a later reader sees what each engine does. It asserts nothing about the value.
 test.describe('engine order of window listeners (evidence only)', () => {

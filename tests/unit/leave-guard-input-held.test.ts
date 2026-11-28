@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { FieldRenderer, type FieldRendererProps } from '@/components/features/estimate-workspace/field-renderer';
 import type { FormField } from '@/lib/estimates/form-client';
@@ -134,5 +134,46 @@ describe('DL-489: the notice of a row write owed for 5 s, and the way out, trave
     expect(pressed).toEqual(['stay']);
     gate.setHoldTooLong(false);
     expect(told).toBe(2);
+  });
+});
+
+describe('DL-491: the gate says a leave is under way and a refresh of the page is in flight', () => {
+  it('"leaving" is set and cleared by the page and told to its listeners only when it changes', () => {
+    const gate = createSaveGate();
+    let told = 0;
+    const stop = gate.subscribeLeaving(() => void (told += 1));
+    expect(gate.isLeaving()).toBe(false);
+    gate.setLeaving(true);
+    gate.setLeaving(true);
+    expect(gate.isLeaving()).toBe(true);
+    expect(told).toBe(1);
+    gate.setLeaving(false);
+    expect(told).toBe(2);
+    stop();
+    gate.setLeaving(true);
+    expect(told).toBe(2);
+  });
+
+  it('refreshEnded settles at once with no refresh in flight, when the refresh ends, and after the cap if it does not', async () => {
+    vi.useFakeTimers();
+    try {
+      const gate = createSaveGate();
+      await expect(gate.refreshEnded(1000)).resolves.toBeUndefined();
+      gate.setRefreshing(true);
+      let settled = 0;
+      void gate.refreshEnded(1000).then(() => void (settled += 1));
+      await vi.advanceTimersByTimeAsync(999);
+      expect(settled).toBe(0);
+      gate.setRefreshing(false);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(settled).toBe(1);
+      gate.setRefreshing(true);
+      void gate.refreshEnded(1000).then(() => void (settled += 1));
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(settled).toBe(2);
+      expect(gate.isRefreshing()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

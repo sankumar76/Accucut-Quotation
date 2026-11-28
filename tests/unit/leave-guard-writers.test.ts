@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { fragmentLinkOf, INPUT_HELD_MAX_MS, installLeaveGuard, STEP_GRACE_MS, type FragmentTarget, type LeaveEnv, type LeaveGuardHandle } from '@/lib/estimates/leave-guard';
 import type { LeaveRequest } from '@/lib/estimates/leave-registry';
+import { proceedAfterRefresh } from '@/lib/estimates/leave-after-refresh';
 import { createSaveGate } from '@/lib/estimates/save-gate';
 
 /**
@@ -416,6 +417,7 @@ function setUp(variant: Variant = DEFAULT) {
   return {
     ...model,
     handle,
+    gate,
     asked,
     pageIndex,
     /** A key pressed in the row on screen: refused, and not accepted and dropped, while the form is busy (the field is read-only then). Answers whether it was accepted. */
@@ -1155,5 +1157,60 @@ describe('QLT-845-08, QLT-845-19 (DL-487, DL-488): the cases the end-to-end set 
     expect(s.type()).toBe(true);
     expect(s.above()).toBe(1);
     expect(s.violations).toEqual([]);
+  });
+});
+
+describe('QLT-845-23 (DL-491): a refresh of the page in flight when "Leave" is chosen', () => {
+  it('the way out waits for the refresh to end, and then lands exactly on the page before', async () => {
+    const s = setUp({ order: 'next-first', timing: 'at-once' });
+    expect(s.type()).toBe(true);
+    // The review's refresh (`router.refresh()`) is in flight: its fetch is what a traversal would cut in the middle.
+    s.gate.setRefreshing(true);
+    s.history.back();
+    s.settle();
+    expect(s.asked).toHaveLength(1);
+    const leaving = proceedAfterRefresh(s.gate, () => s.asked[0]?.proceed(), STEP_GRACE_MS);
+    await Promise.resolve();
+    expect(s.stepsMade(), 'no traversal is made while the refresh is in flight').not.toContain(-2);
+    s.gate.setRefreshing(false);
+    await leaving;
+    s.settle();
+    expect(s.stepsMade()).toContain(-2);
+    expect(s.at(), '"Leave" lands on the page before').toBe(BEFORE);
+  });
+
+  it('a refresh that does not end holds the way out only for STEP_GRACE_MS (no new budget), and the way out then goes ahead', async () => {
+    vi.useFakeTimers();
+    try {
+      const s = setUp({ order: 'next-first', timing: 'at-once' });
+      expect(s.type()).toBe(true);
+      s.gate.setRefreshing(true);
+      s.history.back();
+      s.settle();
+      const waiting: boolean[] = [];
+      const leaving = proceedAfterRefresh(s.gate, () => s.asked[0]?.proceed(), STEP_GRACE_MS, (now) => void waiting.push(now));
+      await vi.advanceTimersByTimeAsync(STEP_GRACE_MS - 1);
+      expect(s.stepsMade()).not.toContain(-2);
+      expect(waiting).toEqual([true]);
+      await vi.advanceTimersByTimeAsync(1);
+      await leaving;
+      s.settle();
+      expect(waiting).toEqual([true, false]);
+      expect(s.at()).toBe(BEFORE);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('with no refresh in flight the way out goes ahead at once, with no wait and no busy state', async () => {
+    const s = setUp({ order: 'next-first', timing: 'at-once' });
+    expect(s.type()).toBe(true);
+    s.history.back();
+    s.settle();
+    const waiting: boolean[] = [];
+    await proceedAfterRefresh(s.gate, () => s.asked[0]?.proceed(), STEP_GRACE_MS, (now) => void waiting.push(now));
+    s.settle();
+    expect(waiting).toEqual([]);
+    expect(s.at()).toBe(BEFORE);
   });
 });

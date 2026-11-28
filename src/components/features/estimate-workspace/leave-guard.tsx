@@ -3,7 +3,8 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { installLeaveGuard, type LeaveGuardHandle } from '@/lib/estimates/leave-guard';
+import { installLeaveGuard, STEP_GRACE_MS, type LeaveGuardHandle } from '@/lib/estimates/leave-guard';
+import { proceedAfterRefresh } from '@/lib/estimates/leave-after-refresh';
 import { registerLeaveGuard, type LeaveRequest } from '@/lib/estimates/leave-registry';
 import { saveDraft } from '@/lib/estimates/save-draft';
 import type { SaveGate } from '@/lib/estimates/save-gate';
@@ -59,6 +60,8 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
         asking.current?.cancel();
         askedFrom.current = document.activeElement;
         setSaveFailed(false);
+        // The review's refresh starts nothing while the person is asked or leaving (DL-491 (a)).
+        gate.setLeaving(true);
         show(next);
       });
     },
@@ -97,14 +100,25 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
   function keep(): void {
     request?.cancel();
     show(null);
+    // The refresh that was held back runs now (DL-491 (a)).
+    gate.setLeaving(false);
   }
 
-  function leave(): void {
+  async function leave(): Promise<void> {
     if (request === null) return;
-    show(null);
-    // The typing is given up by the person's choice: nothing of it is unsaved from here, so a row opened by the address, or a page, is not held back by it.
-    gate.discardUnsaved();
-    go(request);
+    const chosen = request;
+    // A refresh of the page that is half way finishes first, for at most `STEP_GRACE_MS` (DL-491 (c)); the dialog shows its busy state meanwhile.
+    await proceedAfterRefresh(
+      gate,
+      () => {
+        show(null);
+        // The typing is given up by the person's choice: nothing of it is unsaved from here, so a row opened by the address, or a page, is not held back by it.
+        gate.discardUnsaved();
+        go(chosen);
+      },
+      STEP_GRACE_MS,
+      setSaving,
+    );
   }
 
   async function saveAndLeave(): Promise<void> {
@@ -113,7 +127,7 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
     setSaveFailed(false);
     const result = await saveDraft(gate);
     setSaving(false);
-    if (result.saved) leave();
+    if (result.saved) await leave();
     else setSaveFailed(true);
   }
 
@@ -123,7 +137,7 @@ export function LeaveGuard({ gate }: LeaveGuardProps) {
       saving={saving}
       saveFailed={saveFailed}
       onKeep={keep}
-      onLeave={leave}
+      onLeave={() => void leave()}
       onSaveAndLeave={() => void saveAndLeave()}
       onCloseAutoFocus={(event) => {
         // No trigger opened this dialog, so Radix has nowhere to return focus: it goes back to where the person was.
