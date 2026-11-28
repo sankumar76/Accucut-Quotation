@@ -254,3 +254,80 @@ Confirmed at `19ced41e`. `use-part-form.ts` holds **one** seed guard (`:102-105`
 - Open questions: none
 - Risks raised: none new (QLT-811-01 is a finding on this PR)
 - Recommended next agent: developer (lane 2) for QLT-811-01 and QLT-811-02 and the TBT rerun; then a short round 3 on the delta
+
+---
+
+## Round 3: combined security and quality, at `d71e62fa` (delta from `19ced41e`)
+
+| Field | Value |
+|-------|-------|
+| Reviewer | reviewer-quality (CLAUDE.md §9 item 2) |
+| Review round | 3 |
+| Head | **`d71e62fa`**. Master `43b02a11` (#841: QLT-839-04 and -08 follow-ups, the `ownMove` hand-over) merged in at `9bd23771` |
+| Delta read | `5726a1f6` (the QLT-811-01 to -04 fixes), `9bd23771` (the merge; its one conflict, `use-parts-tree.ts` `change()`, read with `git show --cc`), `d71e62fa` (test) |
+| Date | 2026-11-28 |
+| **Verdict** | **REQUEST CHANGES, held only on PRF-811-04's TBT term, pending lane 2's five interleaved pairs.** **Open: 0 Blocker, 0 Critical, 1 Major (PRF-811-04), 1 Minor (QLT-811-06, new), 5 Info (QLT-811-05, QLT-811-07, QLT-811-08, PRF-811-07, PRF-811-09).** PRF-811-05 and PRF-811-06 (Minor) are deferred to follow-up #842. **QLT-811-01 is fixed.** **PRF-811 Majors:** -01, -02 and -03 fixed; -04 open until the medians are in. **It becomes APPROVE WITH COMMENTS if:** the median TBT of the head is within 10 % of master `43b02a11`'s, and the run of record at `d71e62fa` is fully green with Stage 11b at or below 194,000 B |
+
+### Summary
+
+**QLT-811-01 is fixed, by construction.** `rowNamedByAddress` (`review-tree-edit.ts`) returns null while `reviewSaveGate.isDirty()`, so a dirty island never unmounts its form to follow the address. A second effect puts the open row's number back in the address, so the guard asks with the row and the text on screen. The unit table pins the rule. The two browser cases (an add, then a move that renumbers the open row, each with the guard armed, typed text, and Back twice with "Keep editing") pass at three widths on the branch. Lane 2 could not show them red without the fix, so they are regression pins, not proof of the fault.
+
+A likely reason, which I have not verified: Next.js may not sync a `replaceState` that carries its own history state into `useSearchParams`. If so, the island's own writes never move `rowParam`, and the mismatch needs an entry that the router itself made. Either way, the rule now holds whatever Next.js does.
+
+**The #841 merge is clean (RISK-035).** `use-part-form.ts` differs from master only by the one seed guard. `ownMoved` and its `ONE_WRITE` and `sent` checks are master's. `change()` keeps master's `onDone(answer, direct)` and the island's `onWrote` wrapper, which runs after every change that went through, direct or after the limit. `own-move-wiring.test.ts` is identical to master, and the Engineer's chain (`estimate-workspace.tsx` → `PartForm` → `PartFields`) is intact. **One gap:** the island's form is not handed `tree.ownMove`, so the Lead does not get #841's fix (QLT-811-06, Minor).
+
+**Authorization and NFR-002 are unchanged.** The delta touches no route, service, body or role check. The new code is client logic in the island's lazy chunk and one returned boolean in `usePartsTree`.
+
+| Severity (open after this round) | Count |
+|----------|-------|
+| Blocker | 0 |
+| Critical | 0 |
+| Major | 1 (PRF-811-04, pending the medians) |
+| Minor | 1 (QLT-811-06); plus PRF-811-05 and -06 deferred to #842 |
+| Info | 5 (QLT-811-05, -07, -08, PRF-811-07, -09) |
+
+### Checks run
+
+| Check | Source | Result |
+|-------|--------|--------|
+| Delta | `git show 5726a1f6`, `git show --cc 9bd23771`, `git show d71e62fa`; files at `d71e62fa` | read |
+| RISK-035 after #841 | `git diff origin/master d71e62fa` for `use-part-form.ts`, `own-move-wiring.test.ts`, `part-form.tsx`, `part-fields.tsx`, `estimate-workspace.tsx`, `part-form-revision.test.ts`, `use-parts-tree.test.ts` | only the seed guard differs in `use-part-form.ts` (plus #811's earlier `byPress` line in `part-fields.tsx`); the rest are identical to master |
+| CI at `19ced41e` (run 46098249999) | job log | **fully green**: unit 559 files; 735 files with the security suite; **Stage 11b `/estimates/[code]` 193,636 B**; E2E shards 1 to 4 green |
+| CI at `d71e62fa` (run 46103920056) | job list | **in progress** when this was written. For the orchestrator: Stage 11b at or below 194,000 B, and the three new `estimate-review-row-return.spec.ts` cases green at three widths |
+| Local runs | none | the PC is kept quiet for lane 2's TBT pairs |
+
+### Prior findings
+
+| ID | Severity | Status at `d71e62fa` | Evidence |
+|----|----------|----------------------|----------|
+| QLT-811-01 | Major | **Fixed** | `review-tree-edit.ts` `rowNamedByAddress` (null while dirty); `review-tree-editor.tsx:136` and the mend effect at `:163-168`; `review-address-follow.test.ts` (rule table); `estimate-review-row-return.spec.ts` add and move cases (regression pins, see Summary); a wiring pin in `review-island-seed-wiring.test.ts`. Keeping `seenRow` up to date means a dirty island does not follow later either, which is what DEF-149 shows on the island (QLT-811-07) |
+| QLT-811-02 | Minor | **Fixed** | the clean Back and Forward case: a synced entry made with `history.pushState(null, …)`, Back shows row 1, Forward shows 1.1. The entry is synthetic (the app makes such entries by router navigation), which is enough to pin the following |
+| QLT-811-03 | Minor | **Fixed** | `usePartsTree` returns `fromSeed: seeded !== null`; `formSeed = seedKept && tree.fromSeed ? firstSeed : undefined`; `formSeedOf` is gone and the tree is parsed once. Test: `fromSeed` true or false over the five seeds, and the island's pair. One assertion was loosened (QLT-811-08) |
+| QLT-811-04 | Info | **Fixed** | `part-form-seeded-reads.test.ts:154` |
+| QLT-811-05 | Info | Open (optional) | unchanged |
+| PRF-811-02 | Major | **Fixed, confirmed** | 193,636 B at `19ced41e`. Re-read at `d71e62fa` (#841 and `fromSeed` came in; expect a few bytes) |
+| PRF-811-04 | Major | **Open until lane 2's medians land** | **Closing rule:** five interleaved pairs, `d71e62fa` against master `43b02a11`, on a quiet PC, at Prepared with 1 row and with 53 rows. Give every run and the medians. Closed if the head's median TBT is within 10 % of master's at each. Otherwise it goes to master under DL-463. The other terms stay met (0 reads, action delay lower than master) |
+| PRF-811-05, -06 | Minor | **Deferred** to [#842](https://github.com/sankumar76/Accucut-Quotation/issues/842) | — |
+| PRF-811-07, -09 | Info | Open | unchanged |
+
+### New findings
+
+| ID | Severity | File:line | Rule / AC | Issue | Impact | Suggested fix | Test that would catch it |
+|----|----------|-----------|-----------|-------|--------|---------------|--------------------------|
+| QLT-811-06 | Minor | `src/components/features/estimate-review-edit/review-tree-editor.tsx:203-216` (`<ReviewForm>`) | QLT-839-04 (#841); STORY-05.10 AC-7a, AC-7b | #841 makes the person's own move of the open part one of the form's own saves, through `ownMove` from `usePartsTree`. The Engineer's workspace passes it (`ownMove={tree.ownMove}`, pinned by `own-move-wiring.test.ts`). The island's `ReviewForm`, whose props pass through to `PartForm` (`Omit<PartFormProps, 'review'>`), is not given it | On the Lead's island, after a move of the open part, the next save is a 409 and a re-read. It is fail-safe (no notice, no wrong write), but it costs a round trip, and a value typed without leaving its field can be lost on a page leave: the keepalive PATCH is refused 409 and the re-read does not survive the unload. That is QLT-839-04, which #841 fixed for the Engineer only | `ownMove={tree.ownMove}` on the island's `<ReviewForm>`, and one line in `review-island-seed-wiring.test.ts` (or `own-move-wiring.test.ts`) that pins it. In #811 if cheap (one prop and one pin); otherwise a follow-up | the wiring pin; optionally an island case: move the open part, then save, with exactly one PATCH and no 409 |
+| QLT-811-07 | Info | `src/lib/estimates/leave-guard.ts:153-166` (`go(-2)`); DEF-149 (AQP-506, #844) | STORY-05.08 AC-4 | Asked for a view: after an add on the island, Back twice, then "Leave without saving" does not leave (lane 2; QA has not run it) | **Fail-safe:** nothing typed is lost, nothing wrong is saved, and the person is not trapped (a link, or Back again, leaves) | **Not a #811 merge condition** in my view. (a) No data is lost and no wrong write happens. (b) The fault is in the shared guard's `go(-2)` arithmetic, which needs its own test-first fix (a guard unit case with the island's history, and the E2E case DEF-149 names). (c) #811's dirty-island rule now keeps the row and the text when that `go(-2)` lands on this page, which is the safe direction. **But it is reachable only on #811's surface**, so it belongs in the hardening window before G8, not after. I would grade it **Sev-3** (an AC fails in a narrow path, fail-safe, with a workaround); master rules | DEF-149's proposed tests |
+| QLT-811-08 | Info | `tests/unit/part-form-seeded-reads.test.ts:196` | DoD (tests not weakened) | `expect(loads.tree).toHaveBeenCalledTimes(1)` became `toHaveBeenCalled()`, because the new `fromSeed` checks above it also mount trees that read. The case no longer pins "the island's pair reads the tree once" | A double read on the refused-seed path would pass | `loads.tree.mockClear()` before the island's pair, and keep `toHaveBeenCalledTimes(1)` | — |
+
+### Issues for other roles
+- **developer (lane 2):** QLT-811-06 (one prop and a pin) in #811 if cheap; QLT-811-08 (one line).
+- **orchestrator:** read run 46103920056: Stage 11b at or below 194,000 B, the four E2E shards, and the three new row-return cases. Send lane 2's TBT medians for the PRF-811-04 close.
+- **master:** DEF-149's grade and owner. My view is in QLT-811-07: not a #811 merge condition; hardening before G8; Sev-3.
+- **qa-engineer:** DEF-149's steps on the branch when the PC is free.
+
+### Hand-off
+- Status: COMPLETE (PRF-811-04's close waits for lane 2's medians, CI's for run 46103920056)
+- Artefacts written/updated: `docs/06-reviews/final-cr01/pr-811-combined.md` (round 3)
+- Jira / GitHub updates: PR #811 COMMENT review (round 3), replies on the QLT-811 threads; Jira AQP-488 comment
+- Open questions: none
+- Risks raised: none new
+- Recommended next agent: orchestrator (CI and the medians), then this reviewer for a short PRF-811-04 close
